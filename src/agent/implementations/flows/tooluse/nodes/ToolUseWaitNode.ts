@@ -96,8 +96,8 @@ export class ToolUseWaitNode<C> extends Node<
     // site) formats and delivers after suspension, then decides whether to
     // resume immediately (a follow-up already raced into the queue) or
     // genuinely wait. This makes duplicate/skipped delivery structurally
-    // impossible and keeps every suspension symmetric, so the loop's
-    // interruptible always has a real boundary to register against.
+    // impossible and keeps every suspension symmetric, so the loop's interrupt
+    // handler always has a real boundary to attach against.
     if (isSubagent === true && !this.services.stopAfterCycle) {
       streamStatus.transitionToWaiting(streamId, 'wait', {
         trace: this.services.logger,
