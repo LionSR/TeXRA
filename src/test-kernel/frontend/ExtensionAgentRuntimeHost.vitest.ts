@@ -36,9 +36,6 @@ describe('extensionAgentRuntimeHost', () => {
     );
 
     try {
-      extensionAgentRuntimeHost.emit('setActiveStream', {
-        streamId: 'extension:progress' as StreamTabId,
-      });
       extensionAgentRuntimeHost.emit('updateToolEditApprovalBypassState', {
         streamId: 'extension:progress' as StreamTabId,
         bypassActive: true,
