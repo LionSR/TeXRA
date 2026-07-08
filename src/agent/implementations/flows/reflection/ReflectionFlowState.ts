@@ -7,7 +7,7 @@ import {
   ConversationRoundStateSnapshotSchema,
 } from '@agent/core/state/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/state/AgentWorkspaceState';
-import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
+import { ProviderMessageArraySchema } from '@agent/modelHandlers/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import {
   AgentFileLocationSchema,
@@ -17,7 +17,7 @@ import {
 } from '@shared/schemas';
 
 const RoundContextSchema = z.object({
-  messages: z.array(ProviderMessageSchema),
+  messages: ProviderMessageArraySchema,
   stateRoundSnapshot: ConversationRoundStateSnapshotSchema,
 });
 
@@ -31,7 +31,7 @@ export const ReflectionFlowStateSchema = z.object({
   context: RoundContextSchema.nullable(),
   outputLocation: AgentFileLocationSchema.nullable(),
 
-  conversation: z.array(ProviderMessageSchema),
+  conversation: ProviderMessageArraySchema,
   runStateSnapshot: AgentRunStateSnapshotSchema,
 
   roundStateSnapshots: z.array(ConversationRoundStateSnapshotSchema),

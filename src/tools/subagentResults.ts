@@ -32,6 +32,8 @@ import {
 } from './deliveryEnvelope';
 import type { DiffFileInfo } from './subagentDiffs';
 
+type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
+
 // ============================================================================
 // Formatting helpers
 // ============================================================================
@@ -532,10 +534,10 @@ export function buildSubagentResultMeta(
     diffsUnavailable?: string;
     wallTimeMs: number;
   },
-): ResultMeta {
-  const base: ResultMeta = {
+): SubagentResultMeta {
+  const base: SubagentResultMeta = {
+    producer: 'subagent',
     agentName,
-    category: result.category,
     outcome: result.outcome,
     success: result.outcome === 'completed',
     wallTimeMs: options.wallTimeMs,
@@ -546,35 +548,41 @@ export function buildSubagentResultMeta(
   if (result.category === 'workflow') {
     return {
       ...base,
-      outputs: result.outputs,
-      ...(result.compileFailures.length > 0 && {
-        compileFailures: result.compileFailures,
-      }),
-      ...(options.diffInfos &&
-        options.diffInfos.size > 0 && {
-          diffs: [...options.diffInfos.entries()].map(([path, info]) => ({
-            path,
-            diffRelPath: info.diffRelPath,
-            largeChange: info.largeChange,
-          })),
+      result: {
+        category: 'workflow',
+        outputs: result.outputs,
+        ...(result.compileFailures.length > 0 && {
+          compileFailures: result.compileFailures,
         }),
-      // Mirror the XML delivery's diffsUnavailable: a chaining consumer must
-      // distinguish "diff generation failed, read the outputs directly" from
-      // a clean no-diff result.
-      ...(options.diffsUnavailable !== undefined && {
-        diffsUnavailable: options.diffsUnavailable,
-      }),
+        ...(options.diffInfos &&
+          options.diffInfos.size > 0 && {
+            diffs: [...options.diffInfos.entries()].map(([path, info]) => ({
+              path,
+              diffRelPath: info.diffRelPath,
+              largeChange: info.largeChange,
+            })),
+          }),
+        // Mirror the XML delivery's diffsUnavailable: a chaining consumer must
+        // distinguish "diff generation failed, read the outputs directly" from
+        // a clean no-diff result.
+        ...(options.diffsUnavailable !== undefined && {
+          diffsUnavailable: options.diffsUnavailable,
+        }),
+      },
     };
   }
   return {
     ...base,
-    ...(result.lastResponse !== undefined && {
-      lastResponse: result.lastResponse,
-    }),
-    ...(result.touchedFiles !== undefined &&
-      result.touchedFiles.length > 0 && {
-        touchedFiles: [...result.touchedFiles],
+    result: {
+      category: 'toolUse',
+      ...(result.lastResponse !== undefined && {
+        lastResponse: result.lastResponse,
       }),
+      ...(result.touchedFiles !== undefined &&
+        result.touchedFiles.length > 0 && {
+          touchedFiles: [...result.touchedFiles],
+        }),
+    },
   };
 }
 
@@ -588,9 +596,15 @@ export function buildSubagentFailureResultMeta(
   agentName: string,
   result: AgentFlowResult | undefined,
   wallTimeMs: number,
-): ResultMeta {
+): SubagentResultMeta {
   if (!result) {
-    return { agentName, outcome: 'failed', success: false, wallTimeMs };
+    return {
+      producer: 'subagent',
+      agentName,
+      outcome: 'failed',
+      success: false,
+      wallTimeMs,
+    };
   }
   const meta = buildSubagentResultMeta(agentName, result, { wallTimeMs });
   return {
