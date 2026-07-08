@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { logConversationProgress, TraceEmitter } from '@agent/trace';
+import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { StreamTabId } from '@shared/schemas';
@@ -73,6 +74,49 @@ describe('conversationProgress session projection', () => {
       trace.domain({ key: 'conversationProgress', data: 'not an object' });
 
       expect(events).toHaveLength(0);
+    } finally {
+      detachAll();
+    }
+  });
+
+  it('validates todo and plan domain payloads before forwarding them', () => {
+    const streamId = 'stream:hub-test-4' as StreamTabId;
+    const { trace, events, detachAll } = setupHub(streamId);
+    const todos = [
+      {
+        content: 'Check the compactness lemma.',
+        status: 'pending' as const,
+        activeForm: 'Checking the compactness lemma.',
+      },
+    ];
+    const plan = {
+      objective: 'Check the compactness lemma and record the obstruction.',
+    };
+
+    try {
+      trace.domain({
+        key: toRunFactDomainKey('updateTodos'),
+        data: { streamId, todos: 'not an array' },
+      });
+      trace.domain({
+        key: toRunFactDomainKey('updatePlan'),
+        data: { streamId, plan: { objective: '' } },
+      });
+      expect(events).toHaveLength(0);
+
+      trace.domain({
+        key: toRunFactDomainKey('updateTodos'),
+        data: { streamId, todos },
+      });
+      trace.domain({
+        key: toRunFactDomainKey('updatePlan'),
+        data: { streamId, plan },
+      });
+
+      expect(events).toEqual([
+        { event: 'updateTodos', payload: { streamId, todos } },
+        { event: 'updatePlan', payload: { streamId, plan } },
+      ]);
     } finally {
       detachAll();
     }
