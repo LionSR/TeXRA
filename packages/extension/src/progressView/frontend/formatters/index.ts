@@ -4,14 +4,14 @@
  */
 
 // Local imports - formatter helpers
-import {
-  MESSAGE_TYPES,
-  type LogMessageData,
-  type MessageType,
-} from '@shared/schemas';
+import type { LogMessageData, MessageType } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { isObject } from '@utils/core';
-import { safeFormat, type FormatOptions } from './baseLogFormatter';
+import {
+  isStreamingTextLogMessage,
+  safeFormat,
+  type FormatOptions,
+} from './baseLogFormatter';
 import {
   formatBannerContentTemplate,
   formatContextManagementTemplate,
@@ -37,9 +37,11 @@ import {
   type FormatResult,
 } from './litTemplates';
 
+export { isStreamingTextLogMessage } from './baseLogFormatter';
+
 type TemplateFormatterFn = (
   message: LogMessageData,
-  options?: { defaultOpen?: boolean },
+  options?: { defaultOpen?: boolean; isRunning?: boolean },
 ) => FormatResult;
 
 /** Message types that auto-expand when defaultOpen is set. */
@@ -57,28 +59,6 @@ const NULLABLE_TYPES: Set<MessageType> = new Set([
   'contextManagement',
 ]);
 
-const STREAMING_TEXT_TYPES = new Set<string>([
-  MESSAGE_TYPES.THINKING,
-  MESSAGE_TYPES.SCRATCHPAD,
-  MESSAGE_TYPES.MODEL_RESPONSE,
-]);
-
-function isRunningData(data: unknown): boolean {
-  return (
-    data !== null &&
-    typeof data === 'object' &&
-    'status' in data &&
-    data.status === 'running'
-  );
-}
-
-export function isStreamingTextLogMessage(message: LogMessageData): boolean {
-  return (
-    STREAMING_TEXT_TYPES.has(message.messageType ?? '') &&
-    isRunningData(message.data)
-  );
-}
-
 /** Create an error fallback template when formatting fails. */
 function formatRenderError(label: string, errorMsg: string): TemplateResult {
   // prettier-ignore
@@ -87,7 +67,10 @@ function formatRenderError(label: string, errorMsg: string): TemplateResult {
 
 /** Wrap a formatter function with error handling for graceful degradation. */
 function wrapWithErrorHandling(
-  fn: (m: LogMessageData, opts?: { defaultOpen?: boolean }) => FormatResult,
+  fn: (
+    m: LogMessageData,
+    opts?: { defaultOpen?: boolean; isRunning?: boolean },
+  ) => FormatResult,
   label: string,
 ): TemplateFormatterFn {
   return (message, options) => {
@@ -170,11 +153,6 @@ export function formatLogEntry(
   logMessage: LogMessageData,
   options: FormatOptions = {},
 ): TemplateResult | typeof nothing {
-  if (isStreamingTextLogMessage(logMessage)) {
-    if (!logMessage.text.trim()) return nothing;
-    return formatDefaultLogMessageTemplate(logMessage) ?? nothing;
-  }
-
   const { messageType } = logMessage;
 
   // Determine if details should be open (undefined = no preference)
@@ -183,7 +161,14 @@ export function formatLogEntry(
     (options.defaultOpen && messageType && AUTO_EXPANDED_TYPES.has(messageType)
       ? true
       : undefined);
-  const templateOptions = { defaultOpen: isOpen };
+  // While the entry is still streaming in, skip markdown parsing (cheap
+  // per-chunk repaint) but keep the same banner shell — never fall back to
+  // the plain log-line template, or thinking blocks flash as generic info
+  // logs until the stream finalizes (#7276).
+  const templateOptions = {
+    defaultOpen: isOpen,
+    isRunning: isStreamingTextLogMessage(logMessage),
+  };
 
   const formatter = messageType ? TEMPLATE_FORMATTERS[messageType] : null;
 
