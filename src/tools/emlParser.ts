@@ -1,5 +1,6 @@
 // Third-party imports
 import PostalMime from 'postal-mime';
+import TurndownService from 'turndown';
 import type { Address, Attachment, Email } from 'postal-mime';
 
 /** An image extracted from the email (inline or attached). */
@@ -13,7 +14,7 @@ export interface EmlImageAttachment {
 }
 
 export interface EmlParseResult {
-  /** Human-readable plain-text representation of the email */
+  /** Human-readable representation of the email (plain text, or Markdown when falling back from an HTML-only body) */
   text: string;
   /** Image attachments extracted from the email */
   images: EmlImageAttachment[];
@@ -26,12 +27,17 @@ interface AttachmentPartition {
 
 const IMAGE_MIME_PREFIX = 'image/';
 
+const turndownService = new TurndownService({ headingStyle: 'atx' }).remove([
+  'style',
+  'script',
+]);
+
 /**
- * Parse an EML file's raw text content into a human-readable plain-text
- * representation, and extract any image attachments.
+ * Parse an EML file's raw text content into a human-readable representation,
+ * and extract any image attachments.
  *
  * Extracts key headers (From, To, CC, Subject, Date) and the text body.
- * When no plain-text part exists, falls back to a simplified version of the HTML body.
+ * When no plain-text part exists, falls back to a Markdown conversion of the HTML body.
  * Non-image attachment filenames are listed at the end of the text.
  */
 export async function parseEml(rawEml: string): Promise<EmlParseResult> {
@@ -78,7 +84,9 @@ function formatEmail(
   }
 
   // -- Body -----------------------------------------------------------------
-  const body = email.text ?? stripHtml(email.html ?? '');
+  // Falls back to a Markdown conversion of the HTML body (preserving lists,
+  // links, and emphasis) when no text/plain part exists.
+  const body = email.text ?? turndownService.turndown(email.html ?? '').trim();
   if (body.trim()) {
     sections.push(body.trim());
   }
@@ -151,30 +159,4 @@ function formatAddress(addr: Address): string {
     return addr.name ? `${addr.name}: ${members}` : members;
   }
   return addr.name ? `${addr.name} <${addr.address}>` : (addr.address ?? '');
-}
-
-/**
- * Minimal HTML-to-text conversion: strip tags and decode common entities.
- * This is intentionally lightweight — we only hit this path when no text/plain
- * part exists in the email.
- */
-function stripHtml(html: string): string {
-  return (
-    html
-      // Remove non-visible blocks before stripping tags so their text content
-      // (CSS rules, JS code) doesn't leak into the plain-text output.
-      .replaceAll(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replaceAll(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replaceAll(/<br\s*\/?>/gi, '\n')
-      .replaceAll(/<\/(?:p|div|tr|li|h[1-6])>/gi, '\n')
-      .replaceAll(/<[^>]+>/g, '')
-      .replaceAll(/&nbsp;/gi, ' ')
-      .replaceAll(/&lt;/gi, '<')
-      .replaceAll(/&gt;/gi, '>')
-      .replaceAll(/&quot;/gi, '"')
-      .replaceAll(/&#039;/gi, "'")
-      .replaceAll(/&amp;/gi, '&')
-      .replaceAll(/\n{3,}/g, '\n\n')
-      .trim()
-  );
 }
