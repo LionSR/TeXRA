@@ -45,6 +45,10 @@ export interface SetParentStreamPayload {
   parentStreamId: StreamTabId | null;
 }
 
+export interface RemoveStreamPayload {
+  streamId: StreamTabId;
+}
+
 export interface UpdateStreamStatusPayload {
   streamId: StreamTabId;
   status: StreamPhase;
