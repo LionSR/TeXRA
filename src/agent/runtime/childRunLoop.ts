@@ -2,20 +2,23 @@
 // tool-use subagents, native workflow subagents). Each turn source supplies an
 // AgentCliSessionStrategy-shaped ChildRunStrategy; this loop owns the parts
 // that were previously duplicated per driver: follow-up queue acquire/drain,
-// one interruptible registered for the child's whole lifetime, per-turn
-// delivery choreography (format → persist report → optional manifest →
-// deliver with wake), and the terminal call into the shared finalizer.
+// one run-handle interrupt target for the child's whole lifetime, per-turn
+// delivery choreography (format → persist report → optional manifest → deliver
+// with wake), and the terminal call into the shared finalizer.
 //
 // Host-agnostic, VS Code-free.
 
 import type { ResultMeta } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
-import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
+import type {
+  AgentExecutionHandle,
+  ExecutionInterruptHandler,
+} from '@agent/runtime/ExecutionHandle';
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { classifyAgentError, isAbortError } from '@common/errors';
@@ -156,7 +159,7 @@ export interface ChildRunStrategy<TTurn> {
 
   /**
    * Called in the finally block to release provider-owned registry entries.
-   * Runs after this loop unregisters its interrupt and follow-up queue state.
+   * Runs after this loop detaches its interrupt handler and follow-up queue state.
    */
   onSessionCleanup?(): void;
 }
@@ -175,7 +178,8 @@ export interface ChildRunLoopParams<TTurn> {
    * (agent-CLI: `createChildStream`'s own id; native: `getStreamTabId` — the
    * same formula `buildAgentLaunchContext` derives internally) — never
    * discovered mid-flight, so the loop can acquire the follow-up queue and
-   * register its interruptible before the first turn ever runs.
+   * attach its interrupt handler before the first turn ever runs when a handle
+   * already exists.
    */
   readonly childStreamId: StreamTabId;
   readonly parentStreamId: StreamTabId;
@@ -191,9 +195,9 @@ export interface ChildRunLoopParams<TTurn> {
 }
 
 /**
- * Interruptible registered with the InterruptRegistry for the child's whole
- * lifetime, so the stop button always finds a live target — including the
- * inter-turn WAITING gap, when no flow-owned interruptible is registered.
+ * Interrupt handler attached to the child's execution handle for the child's
+ * whole lifetime, so the stop button always finds a live target — including
+ * the inter-turn WAITING gap, when no flow-owned context is attached.
  *
  * Does NOT implement the session duck-type (no `session.appendFollowUp`), so
  * flow-only commands such as context compaction ignore it. Follow-ups route
@@ -201,15 +205,10 @@ export interface ChildRunLoopParams<TTurn> {
  * `session.followUps.enqueue()`.
  *
  * `interrupt()` additionally delegates into a live native turn's flow
- * context, when one is currently attached — `runToolUseFlow`'s own interrupt
- * registration for the SAME streamId is clobbered-then-cleared by every
- * native turn (register on start, unregister in its own `finally`, including
- * on WAITING), so during an active turn this loop's own registration in
- * `InterruptRegistry` is not what's live there; `handle.getToolUseFlow()` is
- * the one place a currently-running turn's real interrupt reaches, whether
- * this loop's own registration is the live one or not.
+ * context, when one is currently attached. `handle.getToolUseFlow()` is the
+ * one place a currently-running turn's real interrupt reaches.
  */
-class ChildRunInterruptible implements IInterruptible {
+class ChildRunInterruptible implements ExecutionInterruptHandler {
   private interrupted = false;
   private queue: FollowUpQueue | null = null;
   private turnAbortController: AbortController | null = null;
@@ -473,7 +472,16 @@ export function startChildRunLoop<TTurn>(
   const loop = new ChildRunInterruptible(runSession, childStreamId);
   const queue = runSession.followUps.acquire(childStreamId);
   loop.setQueue(queue);
-  runSession.interrupts.register(childStreamId, loop);
+  let attachedHandle: AgentExecutionHandle | undefined;
+  let detachLoopInterrupt: (() => void) | undefined;
+  const attachLoopInterrupt = (): void => {
+    const handle = runSession.executions.getAgentHandleByStream(childStreamId);
+    if (!handle || handle === attachedHandle) return;
+    detachLoopInterrupt?.();
+    attachedHandle = handle;
+    detachLoopInterrupt = handle.attachInterruptHandler(loop);
+  };
+  attachLoopInterrupt();
   activeChildRunLoops.add(childStreamId);
 
   const sessionStage = childStream
@@ -528,18 +536,8 @@ export function startChildRunLoop<TTurn>(
           abortController,
           startedAt,
         );
+        attachLoopInterrupt();
         if (attempt.kind === 'interrupted') break;
-
-        // Re-register the loop's own interruptible IMMEDIATELY once the turn
-        // settles, before any await below (deliverTurn's persist/deliver
-        // chain in particular). A native turn's own flow-owned interruptible
-        // unregisters this exact InterruptRegistry slot in its own `finally`
-        // the instant it returns (see runToolUseFlow), so re-registering
-        // must happen synchronously right here — not after delivery — or a
-        // stop/kill landing during delivery would find no live interruptible
-        // for this stream (the same interruptible-gap class PR-A/#7324
-        // closed for the old drivers).
-        runSession.interrupts.register(childStreamId, loop);
 
         const turn = attempt.kind === 'completed' ? attempt.turn : null;
         const err = attempt.kind === 'failed' ? attempt.err : null;
@@ -587,8 +585,8 @@ export function startChildRunLoop<TTurn>(
           break;
         }
 
-        // Interim turn continuing: the loop's interruptible is already
-        // registered (immediately above, the instant this turn settled) —
+        // Interim turn continuing: the loop's interrupt handler is already
+        // attached (immediately above, the instant this turn settled) —
         // just drain the next batch. A follow-up already raced into the
         // queue resumes immediately instead of genuinely waiting.
         childStream?.waitForInput();
@@ -602,8 +600,8 @@ export function startChildRunLoop<TTurn>(
         childStream?.beginTurn();
       }
     } finally {
+      detachLoopInterrupt?.();
       activeChildRunLoops.delete(childStreamId);
-      runSession.interrupts.unregister(childStreamId);
       runSession.followUps.release(childStreamId);
       strategy.onSessionCleanup?.();
       params.recordCost?.(latestCostUsd);
@@ -626,7 +624,7 @@ export function startChildRunLoop<TTurn>(
         // Two paths leave the most recently tracked handle for this stream
         // dangling, never finalized by its own flow:
         //   (1) the loop was interrupted between turns — ExecutionRegistry
-        //       .terminate() found this loop's own interruptible, called
+        //       .terminate() found this loop's own interrupt handler, called
         //       .interrupt(), and transitioned the stream to CANCELLED, but
         //       assumed a live flow would notice and self-finalize; nothing
         //       is running here, the loop was just blocked on a queue wait.

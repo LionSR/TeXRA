@@ -1,4 +1,4 @@
-import type { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
+import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
@@ -13,14 +13,14 @@ export interface ActiveCodexThread {
   childStreamId: StreamTabId;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
-  interrupts: InterruptRegistry;
+  executions: ExecutionRegistry;
 }
 
 export interface ActiveClaudeAgentSession {
   childStreamId: StreamTabId;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
-  interrupts: InterruptRegistry;
+  executions: ExecutionRegistry;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
   effort: ClaudeAgentEffort;

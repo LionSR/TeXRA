@@ -385,7 +385,7 @@ function startCodexLoop(params: {
         childStreamId,
         parentStreamId,
         executionId,
-        interrupts: session.interrupts,
+        executions: session.executions,
       });
     }
   };

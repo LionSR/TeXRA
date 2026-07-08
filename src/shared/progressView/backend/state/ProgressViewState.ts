@@ -166,11 +166,6 @@ export class ProgressViewState {
     });
   }
 
-  /** Drop interruptible handles whose stream sidecar was removed. */
-  pruneInterruptHandles(): void {
-    this.session.interrupts.retainOnly(this.snapshots.getTaskStateStreams());
-  }
-
   // -- Preferences ------------------------------------------------------------
 
   get activeStream(): ActiveStreamId {
@@ -341,8 +336,6 @@ export class ProgressViewState {
     if (this._prefs.get('activeStream') === stream) {
       this._prefs.update({ activeStream: this.topmostStreamTab() });
     }
-
-    this.pruneInterruptHandles();
   }
 
   async clearAll(): Promise<void> {
@@ -358,8 +351,6 @@ export class ProgressViewState {
     this._prefs.reset();
 
     await this.stores.deleteAll();
-
-    this.pruneInterruptHandles();
   }
 
   async load(): Promise<void> {
@@ -392,7 +383,6 @@ export class ProgressViewState {
     this.logger.info('[Persistence] Managers loaded');
 
     this.validateActiveStream();
-    this.pruneInterruptHandles();
 
     this.logger.info('[Persistence] State load complete');
   }

@@ -317,7 +317,6 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   try {
-    runSession.interrupts.register(streamId, flowContext);
     teardownSetup = onSetup?.(flowContext) ?? undefined;
     let flowRecord: FlowRecord | null = null;
     try {
@@ -471,7 +470,6 @@ export async function runToolUseFlow<C = unknown>(
       sessionLifecycle.dispose();
     }
     runSession.interactions.cancel({ streamId, cause: 'Run ended.' });
-    runSession.interrupts.unregister(streamId);
     for (const handler of switchedHandlers) {
       handler.dispose();
     }
