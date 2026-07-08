@@ -98,6 +98,7 @@ import {
 } from './desktopProgressFileActions.js';
 import {
   createDesktopProgressEventBridge,
+  type DesktopPresentationPayloads,
   type DesktopProgressEventBridge,
 } from './desktopProgressEventBridge.js';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
@@ -1005,7 +1006,22 @@ export class DesktopProgressBridge {
   ): void {
     if (event === 'addOutputFiles') return;
     this.backend.handleProgressEvent(event, payload);
-    this.progressEvents.onProgressEvent(event, payload);
+    switch (event) {
+      case 'requestEnsureProgressView':
+        this.progressEvents.onProgressEvent(
+          event,
+          payload as DesktopPresentationPayloads[typeof event],
+        );
+        return;
+      case 'requestShowError':
+        this.progressEvents.onProgressEvent(
+          event,
+          payload as DesktopPresentationPayloads[typeof event],
+        );
+        return;
+      default:
+        return;
+    }
   }
 
   private streamStateSnapshot(): Map<StreamTabId, StreamPhaseState> {

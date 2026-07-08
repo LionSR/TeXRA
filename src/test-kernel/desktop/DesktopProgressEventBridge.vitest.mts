@@ -1,7 +1,13 @@
 // Suites for packages/desktop DesktopProgressEventBridge (stream routing,
 // snapshot hydration, dispose guard).
 
+import { strict as assert } from 'node:assert';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentTrace } from '@agent/trace';
+import {
+  createDesktopProgressEventBridge,
+  type DesktopProgressEventBridgeOptions,
+} from '@desktop/main/desktopProgressEventBridge';
 import {
   AgentCategory,
   type RestoredStreamSnapshot,
@@ -9,14 +15,8 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-import { strict as assert } from 'node:assert';
-import type { AgentTrace } from '@agent/trace';
 import type { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
-import {
-  createDesktopProgressEventBridge,
-  type DesktopProgressEventBridgeOptions,
-} from '@desktop/main/desktopProgressEventBridge';
+import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 // ---------------------------------------------------------------------------
 // DesktopProgressEventBridge
@@ -384,68 +384,6 @@ describe('DesktopProgressEventBridge', () => {
   // ── Progress events ─────────────────────────────────────────────────────
 
   describe('onProgressEvent', () => {
-    it('ignores stream fact-shaped host events', async () => {
-      const upsert = vi.fn(async () => {});
-      const onGoalStateChanged = vi.fn();
-      const streamStatus = {
-        get: vi.fn(() => STREAM_PHASE.WAITING),
-        transition: vi.fn(() => true),
-      };
-
-      const bridge = createBridge({
-        onGoalStateChanged,
-        state: makeMockState({
-          streamLogs: createStreamLogs({
-            has: () => true,
-            getLastTimestamp: () => 3_000,
-          }),
-        }),
-        streamStatus,
-        streamSnapshotStore: createSnapshotStore({
-          hydrated: [createSnapshot({ streamId: 'task-stream' })],
-          upsert,
-        }),
-      });
-
-      try {
-        expect(bridge.hasRestoredStream('task-stream')).toBe(true);
-
-        bridge.onProgressEvent('setTaskState', {
-          streamId: 'task-stream',
-          taskState: undefined as any,
-        });
-        bridge.onProgressEvent('updateStreamStatus', {
-          streamId: 'task-stream',
-          status: STREAM_STATUS.RUNNING,
-          previousStatus: STREAM_PHASE.CANCELLED,
-        });
-        bridge.onProgressEvent('goalStateChanged', {
-          streamId: 'task-stream',
-        });
-
-        await settleMicrotasks();
-        expect(bridge.hasRestoredStream('task-stream')).toBe(true);
-        expect(upsert).not.toHaveBeenCalled();
-        expect(onGoalStateChanged).not.toHaveBeenCalled();
-      } finally {
-        bridge.dispose();
-      }
-    });
-
-    it('does not throw for unknown event types', () => {
-      const bridge = createBridge();
-
-      try {
-        expect(() =>
-          bridge.onProgressEvent('unknownEvent' as any, {
-            streamId: 'test',
-          }),
-        ).not.toThrow();
-      } finally {
-        bridge.dispose();
-      }
-    });
-
     it('routes window-local ensure-progress requests from runtime-host events', () => {
       const routeToProgress = vi.fn();
       const bridge = createBridge({ routeToProgress });
