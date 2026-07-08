@@ -263,7 +263,7 @@ export class ProgressWorkflowFileActionsController {
       .filter((info) => info.location.absolutePath === file)
       .map((info) => info.round);
     if (rounds.length === 0) return undefined;
-    const round = Math.max(...rounds);
+    const round = rounds.reduce((max, r) => Math.max(max, r));
 
     return { agent: config.agent, model: config.model, round };
   }
