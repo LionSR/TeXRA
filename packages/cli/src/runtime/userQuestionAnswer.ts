@@ -1,8 +1,8 @@
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 
 export function parseUserQuestionAnswer(
   raw: string,
-  question: ProgressEventPayloads['showUserQuestion']['questions'][number],
+  question: RuntimeInteractionEventPayloads['showUserQuestion']['questions'][number],
 ): string | string[] | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;

@@ -86,7 +86,7 @@ vi.mock('@platform/platform', () => ({
 }));
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import {
   clearApprovals,
   currentApproval,
@@ -134,7 +134,7 @@ function relayRetry(params: {
   streamId: string;
   provider?: string;
   message?: string;
-}): ProgressEventPayloads['showRetryRequest'] {
+}): RuntimeInteractionEventPayloads['showRetryRequest'] {
   return {
     streamId: params.streamId,
     operation: 'model request',
@@ -145,12 +145,12 @@ function relayRetry(params: {
       isRelayError: true,
       ...(params.provider ? { provider: params.provider } : {}),
     },
-  } as ProgressEventPayloads['showRetryRequest'];
+  } as RuntimeInteractionEventPayloads['showRetryRequest'];
 }
 
 function chatGptSubscriptionRetry(
   streamId: string,
-): ProgressEventPayloads['showRetryRequest'] {
+): RuntimeInteractionEventPayloads['showRetryRequest'] {
   return {
     streamId,
     operation: 'model request',
@@ -160,7 +160,7 @@ function chatGptSubscriptionRetry(
       exhaustionReason: 'chatgpt-subscription',
       provider: 'openai',
     },
-  } as ProgressEventPayloads['showRetryRequest'];
+  } as RuntimeInteractionEventPayloads['showRetryRequest'];
 }
 
 afterEach(() => {
@@ -275,7 +275,7 @@ describe('TUI retry approvals', () => {
           isRelayError: false,
           provider: 'openai',
         },
-      } as ProgressEventPayloads['showRetryRequest']);
+      } as RuntimeInteractionEventPayloads['showRetryRequest']);
 
       await vi.waitFor(() => {
         expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
