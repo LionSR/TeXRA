@@ -2,7 +2,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
 import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
-import { buildStreamTabInfo } from './streamTabInfo';
+import { buildStreamTabInfo, pickAgentCategory } from './streamTabInfo';
 import { compareByNewestCreationTime } from './streamOrdering';
 import type { ProgressViewState } from './state/ProgressViewState';
 
@@ -47,7 +47,7 @@ export function buildStreamInfo(
   const config = state.snapshots.getRunConfig(id);
 
   // Determine category and check filter
-  const rawCategory = config?.agentCategory ?? hints.agentCategory;
+  const rawCategory = pickAgentCategory(config, hints);
   const category = matchesFilter(rawCategory, filter);
   if (category === null) return null;
 

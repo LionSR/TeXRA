@@ -30,6 +30,21 @@ export interface StreamTabInfoInputs {
 }
 
 /**
+ * Single owner of the two-source `config`/`hints` agentCategory lookup shared
+ * by `buildStreamTabInfo`, `matchesFilter` (streamInfoUtils.ts), and
+ * `getStreamCategory` (ProgressEventHandler.ts). Live `config` wins over the
+ * fallback `hints`. Deliberately undefined-preserving (no default baked in)
+ * — `getStreamCategory` needs that variant; callers that want a concrete
+ * category layer `?? AgentCategory.Workflow` on top.
+ */
+export function pickAgentCategory(
+  config: Pick<AgentConfig, 'agentCategory'> | undefined,
+  hints: { agentCategory?: AgentCategory } | undefined,
+): AgentCategory | undefined {
+  return config?.agentCategory ?? hints?.agentCategory;
+}
+
+/**
  * Build a StreamTabInfo from already-resolved primitives. Host-neutral so
  * both the extension's progress view and the Electron desktop main can
  * emit identical metadata to the shared <stream-tab> renderer.
@@ -41,8 +56,7 @@ export interface StreamTabInfoInputs {
 export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { streamId, config, hints, creationTimestamp } = inputs;
 
-  const category =
-    config?.agentCategory ?? hints?.agentCategory ?? AgentCategory.Workflow;
+  const category = pickAgentCategory(config, hints) ?? AgentCategory.Workflow;
 
   const inputFile = config?.inputFiles?.[0] ?? hints?.inputFile ?? '';
   const rawAgentName = config?.agent ?? hints?.agent ?? streamId.split('@')[0];
