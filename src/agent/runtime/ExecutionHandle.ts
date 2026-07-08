@@ -40,6 +40,11 @@ export interface ExecutionHandle {
   readonly runtimeHost: AgentRuntimeHost;
 }
 
+/** Live run-owned capability that can receive a user stop request. */
+export interface ExecutionInterruptHandler {
+  interrupt(): void;
+}
+
 export interface LiveToolUseFlowContext {
   readonly ownerSession?: SessionHandle;
   readonly session: {
@@ -56,10 +61,9 @@ export interface LiveToolUseFlowContext {
   /**
    * Interrupt the live turn. Native child-run strategies use this to
    * delegate a child-run-loop-level interrupt into an in-flight tool-use
-   * turn — the loop's own interruptible is registered on `InterruptRegistry`
-   * for the child's whole lifetime, but only a live `flowContext` (attached
-   * via `attachToolUseFlow` for the duration of one turn) knows how to
-   * actually cancel the in-progress model/tool round.
+   * turn. A live `flowContext` is attached via `attachToolUseFlow` for the
+   * duration of one turn and knows how to cancel the in-progress model/tool
+   * round.
    */
   interrupt(): void;
 }
@@ -73,6 +77,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   readonly startedAt = Date.now();
   private _parentStreamId: StreamTabId;
   private _deliveryTargetStreamId: StreamTabId | undefined;
+  private interruptHandler?: ExecutionInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
   private waitingCleanups?: Set<() => void>;
 
@@ -161,16 +166,38 @@ export class AgentExecutionHandle implements ExecutionHandle {
     return this.toolUseFlowContext;
   }
 
+  attachInterruptHandler(handler: ExecutionInterruptHandler): () => void {
+    this.interruptHandler = handler;
+    return () => this.detachInterruptHandler(handler);
+  }
+
+  detachInterruptHandler(handler?: ExecutionInterruptHandler): void {
+    if (handler !== undefined && this.interruptHandler !== handler) return;
+    this.interruptHandler = undefined;
+  }
+
+  interrupt(): boolean {
+    const handler = this.interruptHandler;
+    if (handler) {
+      handler.interrupt();
+      return true;
+    }
+    const context = this.toolUseFlowContext;
+    if (!context) return false;
+    context.interrupt();
+    return true;
+  }
+
   /**
    * Register a teardown callback for when this handle is torn down while
    * suspended at WAITING — the live tool-use session and interrupt
-   * registration are already gone by then (`runToolUseFlow`'s `finally`
-   * unregisters them unconditionally on return, while the handle itself stays
-   * tracked so a later resume can find it). `ExecutionRegistry.terminate()`
+   * context is already gone by then (`runToolUseFlow`'s `finally` detaches
+   * it unconditionally on return, while the handle itself stays tracked so a
+   * later resume can find it). `ExecutionRegistry.terminate()`
    * runs these instead of the (now absent) live interrupt when a stop/kill
-   * targets a suspended subagent that has no loop-level interruptible
+   * targets a suspended subagent that has no loop-level interrupt handler
    * covering the gap (see `childRunLoop.ts`'s own whole-lifetime
-   * interruptible, which is the primary path for a loop-driven child).
+   * handler, which is the primary path for a loop-driven child).
    */
   registerWaitingCleanup(cleanup: () => void): void {
     (this.waitingCleanups ??= new Set()).add(cleanup);
@@ -213,6 +240,7 @@ export type AgentRunHandle = Pick<
   | 'result'
   | 'deliveryTargetStreamId'
   | 'registerWaitingCleanup'
+  | 'interrupt'
 >;
 
 /**

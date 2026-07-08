@@ -15,10 +15,6 @@ import {
   type StreamStatusMachine,
 } from '@agent/runtime/StreamStatusService';
 import {
-  SharedInterruptRegistry,
-  type InterruptRegistry,
-} from '@agent/runtime/InterruptRegistry';
-import {
   isInFlightStatus,
   isLiveElapsedStatus,
   projectRunOutcome,
@@ -140,7 +136,6 @@ export class ExecutionRegistry {
   private readonly disposeStatusListener: () => void;
   private readonly processOutput: ProcessOutputPoller;
   private readonly streamStatus: StreamStatusMachine;
-  private readonly interrupts: InterruptRegistry;
   private events: SessionEventHub | undefined;
   /**
    * Publishes a synthesized terminal `result` event to the owning session's
@@ -159,13 +154,11 @@ export class ExecutionRegistry {
   >();
 
   constructor({
-    interrupts = SharedInterruptRegistry,
     processOutput = new ProcessOutputPoller(),
     streamStatus = StreamStatusService,
     events = new SessionEventHub(),
     publishResult,
   }: {
-    readonly interrupts?: InterruptRegistry;
     readonly processOutput?: ProcessOutputPoller;
     readonly streamStatus?: StreamStatusMachine;
     readonly events?: SessionEventHub;
@@ -174,7 +167,6 @@ export class ExecutionRegistry {
       streamId: StreamTabId,
     ) => void;
   } = {}) {
-    this.interrupts = interrupts;
     this.processOutput = processOutput;
     this.streamStatus = streamStatus;
     this.attachSessionEvents(events, publishResult);
@@ -610,7 +602,7 @@ export class ExecutionRegistry {
       ? this.terminate(rootHandle, visited, {
           cascadeChildren: options.detachActiveChildren !== true,
         })
-      : this.interruptRegisteredStream(streamId, runtimeHost);
+      : false;
     if (stopped) {
       return { kind: 'interrupted', streamId, childPolicy };
     }
@@ -763,14 +755,12 @@ export class ExecutionRegistry {
       if (options.cascadeChildren === true) {
         this.interruptActiveChildren(handle.childStreamId, visited, options);
       }
-      const interruptible = this.interrupts.get(handle.childStreamId);
-      if (interruptible) {
-        interruptible.interrupt();
+      if (handle.interrupt()) {
         this.cancelStreamStatus(handle.childStreamId, handle);
         return true;
       }
       // No live interrupt context: a native subagent suspended at WAITING has
-      // already had its tool-use session disposed and interrupt unregistered
+      // already had its tool-use session disposed and interrupt handler detached
       // (runToolUseFlow's finally), while the handle stays tracked for resume
       // (runFlowWithLifecycle). Run its registered waiting-cleanup instead of
       // silently no-oping the kill.
@@ -789,7 +779,7 @@ export class ExecutionRegistry {
    * out of it via a resume that hasn't yet installed its own live context)
    * with no live interrupt context. Returns false (no-op) when the handle
    * never registered a waiting-cleanup — i.e. it isn't actually suspended,
-   * just momentarily between its own interrupt-unregister and untrack during
+   * just momentarily between its own interrupt-handler detach and untrack during
    * normal teardown — or when `streamStatus` shows neither state (see below).
    *
    * A registered waiting-cleanup alone does not prove the run is genuinely
@@ -889,19 +879,6 @@ export class ExecutionRegistry {
       'user-stop',
       this.streamStatusEmitOptions(handle),
     );
-  }
-
-  private interruptRegisteredStream(
-    streamId: StreamTabId,
-    runtimeHost: AgentRuntimeHost | undefined,
-  ): boolean {
-    const interruptible = this.interrupts.get(streamId);
-    if (!interruptible) return false;
-    interruptible.interrupt();
-    if (runtimeHost) {
-      this.cancelStreamStatus(streamId);
-    }
-    return true;
   }
 
   private addChangeCallback(executionId: string, cb: () => void): void {

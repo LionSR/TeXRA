@@ -119,9 +119,9 @@ export async function finalizeRunTerminal(
   const { handle, outcome } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
   // This run is terminating, not suspending: drop any waiting-cleanup
-  // registered on this handle before teardown unregisters the interrupt —
+  // registered on this handle before teardown detaches the interrupt handler —
   // otherwise ExecutionRegistry.terminate() could mistake this handle for a
-  // suspended one in the window between interrupt-unregister and untrack.
+  // suspended one in the window between interrupt-handler detach and untrack.
   // Defensive: this function's own WAITING branch never reaches
   // finalizeRunTerminal on the same call (it returns early), so there is no
   // live registration to clear in the common case — this guards a future
@@ -325,10 +325,10 @@ export async function runFlowWithLifecycle(
     if (isWaitingFlowResult(result)) {
       logger.debug(`Task suspended with outcome: ${result.outcome}`);
       // The handle stays tracked (correct for resume) but the live tool-use
-      // session and its interrupt registration are already gone by the time
+      // session and its interrupt handler are already gone by the time
       // this returns (runToolUseFlow's finally). Register a fallback so a
       // stop/kill during the suspended window still tears this down instead
-      // of ExecutionRegistry.terminate() finding no interruptible context and
+      // of ExecutionRegistry.terminate() finding no interrupt target and
       // no-oping — see AgentRunLifecycle/ExecutionRegistry issue #7287.
       const parentStageId = ctx.parentStage.id;
       handle.registerWaitingCleanup(() => {

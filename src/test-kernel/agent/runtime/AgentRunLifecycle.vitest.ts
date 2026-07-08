@@ -539,12 +539,12 @@ describe('runFlowWithLifecycle', () => {
         STREAM_STATUS.WAITING,
       );
 
-      // runToolUseFlow's finally unregisters this stream's interrupt but
+      // runToolUseFlow's finally detaches this stream's interrupt handler but
       // (post #7286) preserves the follow-up queue for WAITING — it does not
       // dispose the session — by the time a native subagent suspends at
       // WAITING (not reproduced by this fake runner, but true in production —
       // see runToolUseFlow.ts). Before the fix, SharedExecutionRegistry.kill()
-      // found no interruptible context for a suspended handle and silently
+      // found no interrupt target for a suspended handle and silently
       // no-opped, leaving the handle stuck registered forever. It must now
       // fall back to the waiting-cleanup registered above and actually tear
       // the execution down.

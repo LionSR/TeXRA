@@ -21,7 +21,7 @@ import {
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import type { IInterruptible } from '@agent/runtime/InterruptRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   RUN_OUTCOME,
@@ -131,23 +131,28 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
     }
   });
 
-  it('a flow-style interrupt registration lands in the run session only', () => {
+  it('a handle interrupt target lands in the run session only', () => {
     const sessionB = new SessionHandle();
+    const executionId = 'exec:iso-interrupt' as ExecutionId;
     const streamId = 'stream:iso-interrupt' as StreamTabId;
-    const interruptible: IInterruptible = { interrupt: vi.fn() };
+    const interrupt = vi.fn();
     try {
-      withRunContext(
-        createRunContext({
-          runtimeHost: createRecordingHost().host,
-          session: sessionB,
-        }),
-        () => {
-          currentSession().interrupts.register(streamId, interruptible);
-        },
+      const handle = new AgentExecutionHandle(
+        executionId,
+        streamId,
+        streamId,
+        'assistant',
+        'toolUse',
+        createRecordingHost().host,
       );
+      handle.attachInterruptHandler({ interrupt });
+      sessionB.executions.track(handle);
 
-      expect(sessionB.interrupts.get(streamId)).toBe(interruptible);
-      expect(defaultSession().interrupts.get(streamId)).toBeUndefined();
+      expect(sessionB.executions.kill(executionId)).toBe(true);
+      expect(interrupt).toHaveBeenCalledOnce();
+      expect(
+        defaultSession().executions.getHandle(executionId),
+      ).toBeUndefined();
     } finally {
       sessionB.dispose();
     }

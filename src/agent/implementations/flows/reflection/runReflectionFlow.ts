@@ -9,7 +9,6 @@ import {
 } from '@agent/output/outputState';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
@@ -182,13 +181,6 @@ export async function runReflectionFlow<C = unknown>(
       return canonical;
     });
 
-  const interruptible: IInterruptible = {
-    interrupt(): void {
-      input.onInterrupt?.();
-      runSession.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-    },
-  };
-
   setActiveRun(
     outputState,
     {
@@ -207,8 +199,6 @@ export async function runReflectionFlow<C = unknown>(
   const kv = getExecutionStore(executionId);
 
   try {
-    runSession.interrupts.register(streamId, interruptible);
-
     const flowRecord = await kv.read<FlowRecord>(flowKey(executionId));
     const validated = flowRecord?.shared
       ? ReflectionFlowStateSchema.safeParse(flowRecord.shared)
@@ -363,8 +353,6 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     runSession.interactions.cancel({ streamId, cause: 'Run ended.' });
-
-    runSession.interrupts.unregister(streamId);
   }
 
   const totalCostUsd =
