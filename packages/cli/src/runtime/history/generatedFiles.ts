@@ -7,6 +7,9 @@ import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { byStringProp, isObject } from '@utils/core';
+// toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
+// swap; safe here since the input is a workspace-relative path produced by
+// the storage directory walk below, not raw user input.
 import { toPosixPath } from '@utils/core/pathCore';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';

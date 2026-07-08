@@ -9,6 +9,9 @@ import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import { getRunDir } from '@utils/files';
+// toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
+// swap; safe here since these paths come from getSafeDocumentRelativePath /
+// path.relative on the workflow's own generated outputs, never user input.
 import { toPosixPath } from '@utils/core/pathCore';
 
 import { CliUsageError, type CliContext } from './cliContext';

@@ -8,6 +8,9 @@ import { tryPlatform } from '@platform/platform';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { unique } from '@utils/core';
+// toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
+// swap; safe at both call sites below since the input is always a relative
+// path already validated by isContainedRelativePath or path.relative.
 import { toPosixPath } from '@utils/core/pathCore';
 import type { Disposable } from '@platform/interfaces';
 import type { Stats } from 'node:fs';

@@ -8,7 +8,11 @@ import * as vscode from 'vscode';
 
 import { WorkspaceFS } from '@utils/files';
 
-/** Clamp a 1-based line number to a 0-based VS Code line index. */
+/**
+ * Clamp a 1-based line number to a 0-based VS Code line index. Floors first
+ * so a fractional line number degrades gracefully instead of producing a
+ * fractional index; a no-op for the integer line numbers every caller passes.
+ */
 function toZeroBasedLine(line: number): number {
   return Math.max(0, Math.floor(line) - 1);
 }
