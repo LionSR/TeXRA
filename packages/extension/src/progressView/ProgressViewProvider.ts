@@ -36,6 +36,7 @@ import {
 } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
+import type { ProgressBackendEventPayloads } from '@shared/progressView/backend/events/ProgressEventHandler';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
@@ -60,9 +61,6 @@ import { attachProgressBackendAppSignals } from './progressBackendAppSignals';
 import type { MainViewProvider } from '../MainViewProvider';
 
 const MAX_INQUIRY_THREAD_HYDRATION = 100;
-const SESSION_FACT_OWNED_EXTENSION_PROGRESS_EVENTS: ReadonlySet<string> =
-  new Set(['addOutputFiles', 'removeStream']);
-
 export type ProgressStreamRevealResult = 'revealed' | 'missing';
 
 /**
@@ -179,8 +177,10 @@ export class ProgressViewProvider
     );
     const detachExtensionProgressEvents = setExtensionProgressEventSink(
       (event, payload) => {
-        if (SESSION_FACT_OWNED_EXTENSION_PROGRESS_EVENTS.has(event)) return;
-        this.backend.handleProgressEvent(event, payload);
+        this.backend.handleProgressEvent(
+          event,
+          payload as ProgressBackendEventPayloads[typeof event],
+        );
       },
     );
     const detachRemoveStreamCleanup = defaultSession().events.subscribe(
