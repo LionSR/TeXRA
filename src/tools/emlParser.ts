@@ -27,6 +27,11 @@ interface AttachmentPartition {
 
 const IMAGE_MIME_PREFIX = 'image/';
 
+const turndownService = new TurndownService({ headingStyle: 'atx' }).remove([
+  'style',
+  'script',
+]);
+
 /**
  * Parse an EML file's raw text content into a human-readable representation,
  * and extract any image attachments.
@@ -79,7 +84,9 @@ function formatEmail(
   }
 
   // -- Body -----------------------------------------------------------------
-  const body = email.text ?? htmlToMarkdown(email.html ?? '');
+  // Falls back to a Markdown conversion of the HTML body (preserving lists,
+  // links, and emphasis) when no text/plain part exists.
+  const body = email.text ?? turndownService.turndown(email.html ?? '').trim();
   if (body.trim()) {
     sections.push(body.trim());
   }
@@ -152,20 +159,4 @@ function formatAddress(addr: Address): string {
     return addr.name ? `${addr.name}: ${members}` : members;
   }
   return addr.name ? `${addr.name} <${addr.address}>` : (addr.address ?? '');
-}
-
-const turndownService = new TurndownService({ headingStyle: 'atx' }).remove([
-  'style',
-  'script',
-]);
-
-/**
- * HTML-to-Markdown conversion via turndown, used only when no text/plain
- * part exists in the email. Rendering as Markdown rather than raw plain text
- * is a feature here: it preserves lists, links, and emphasis instead of
- * flattening them, and matches the html-to-Markdown fallback already used by
- * WebFetchTool for the same "readable representation" purpose.
- */
-function htmlToMarkdown(html: string): string {
-  return turndownService.turndown(html).trim();
 }
