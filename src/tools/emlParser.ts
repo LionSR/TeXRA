@@ -86,7 +86,9 @@ function formatEmail(
   // -- Body -----------------------------------------------------------------
   // Falls back to a Markdown conversion of the HTML body (preserving lists,
   // links, and emphasis) when no text/plain part exists.
-  const body = (email.text ?? turndownService.turndown(email.html ?? '')).trim();
+  const body = (
+    email.text ?? turndownService.turndown(email.html ?? '')
+  ).trim();
   if (body) {
     sections.push(body);
   }
