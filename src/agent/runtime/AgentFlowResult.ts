@@ -27,7 +27,7 @@ const AgentFlowMetaSchema = z.object({
   totalCostUsd: z.number().nonnegative().optional(),
 });
 
-export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
+const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('workflow'),
   outcome: RunOutcomeSchema,
   outputs: z.array(OutputFileSummarySchema),
@@ -36,7 +36,7 @@ export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
 
 export type WorkflowFlowResult = z.infer<typeof WorkflowFlowResultSchema>;
 
-export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
+const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('toolUse'),
   outcome: RunOutcomeSchema,
   lastResponse: z.string().optional(),
@@ -46,14 +46,14 @@ export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
 
 export type ToolUseFlowResult = z.infer<typeof ToolUseFlowResultSchema>;
 
-export const AgentFlowResultSchema = z.discriminatedUnion('category', [
+const AgentFlowResultSchema = z.discriminatedUnion('category', [
   WorkflowFlowResultSchema,
   ToolUseFlowResultSchema,
 ]);
 
 export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
 
-export const WaitingToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
+const WaitingToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('toolUse'),
   outcome: z.literal(STREAM_PHASE.WAITING),
   lastResponse: z.string().optional(),

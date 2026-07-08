@@ -26,8 +26,6 @@ export const UsageProviderSchema = z.enum([
   'unknown',
 ]);
 
-export type UsageProvider = z.infer<typeof UsageProviderSchema>;
-
 /**
  * Normalized usage statistics from any model provider.
  *

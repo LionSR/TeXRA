@@ -18,7 +18,7 @@ import { StreamStatusService } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
-export interface ResolvedResumeState {
+interface ResolvedResumeState {
   readonly runState: AgentConfig | TaskState;
   readonly executionId: ExecutionId;
   readonly parentStreamId?: StreamTabId;

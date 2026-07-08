@@ -37,7 +37,7 @@ import type {
  * Schema for a single web search result entry.
  * Normalized across all providers.
  */
-export const WebSearchResultEntrySchema = z.object({
+const WebSearchResultEntrySchema = z.object({
   /** URL of the search result */
   url: z.string(),
   /** Title of the page */
@@ -56,7 +56,7 @@ export type WebSearchResultEntry = z.infer<typeof WebSearchResultEntrySchema>;
 /**
  * Schema for unified web search result across all providers.
  */
-export const WebSearchResultSchema = z.object({
+const WebSearchResultSchema = z.object({
   /** The search query that was executed */
   query: z.string(),
   /** Search result entries */
@@ -80,7 +80,7 @@ export type WebSearchResult = z.infer<typeof WebSearchResultSchema>;
  * Schema for unified web fetch result.
  * Represents a single URL fetch performed by the Anthropic server-side tool.
  */
-export const WebFetchResultSchema = z.object({
+const WebFetchResultSchema = z.object({
   /** The URL that was fetched */
   url: z.string(),
   /** Title of the fetched document (if available) */
@@ -503,7 +503,7 @@ export function extractOpenAIWebSearchResults(
 /**
  * Extract domain from URL.
  */
-export function extractDomain(url: string): string {
+function extractDomain(url: string): string {
   const parsed = tryParseUrl(url);
   if (parsed) return parsed.hostname;
   // Contract: return '' for unparseable URLs. Log so malformed source data
