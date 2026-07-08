@@ -173,6 +173,7 @@ export class ProgressViewProvider
     this.detachHostInteractions = defaultSession().useHostInteractions(
       createExtensionHostInteractions({
         runtimeHost: extensionAgentRuntimeHost,
+        session: defaultSession(),
         getApprovalHandlers: () => this.approvalHandlers,
       }),
     );

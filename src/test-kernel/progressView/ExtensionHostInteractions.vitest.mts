@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 import type { StreamTabId } from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
@@ -66,20 +68,33 @@ function firstShowRequestId(show: ReturnType<typeof vi.fn>): string {
 function createInteractions(options?: {
   runtimeHost?: ReturnType<typeof createRuntimeHost>;
   handlers?: ApprovalRequestHandlerSet;
+  session?: SessionHandle;
 }) {
   return createExtensionHostInteractions({
     runtimeHost: options?.runtimeHost ?? createRuntimeHost(),
+    session: options?.session,
     getApprovalHandlers: () => options?.handlers ?? createHandlers(),
   });
+}
+
+function recordSessionEvents(session: SessionHandle): SessionEvent[] {
+  const events: SessionEvent[] = [];
+  session.events.subscribe((event) => events.push(event), {
+    scope: 'session',
+  });
+  return events;
 }
 
 describe('createExtensionHostInteractions', () => {
   it('shows and resolves plan approvals through existing handlers', async () => {
     const runtimeHost = createRuntimeHost();
     const handlers = createHandlers();
+    const session = new SessionHandle();
+    const sessionEvents = recordSessionEvents(session);
     const interactions = createInteractions({
       runtimeHost,
       handlers,
+      session,
     });
 
     const resultPromise = interactions.requestPlanApproval?.({
@@ -94,8 +109,13 @@ describe('createExtensionHostInteractions', () => {
       'requestEnsureProgressView',
       {},
     );
-    expect(runtimeHost.emit).toHaveBeenCalledWith('setActiveStream', {
-      streamId: 'stream-a',
+    expect(runtimeHost.emit).not.toHaveBeenCalledWith(
+      'setActiveStream',
+      expect.anything(),
+    );
+    expect(sessionEvents).toContainEqual({
+      scope: 'session',
+      event: { type: 'setActiveStream', payload: { streamId: 'stream-a' } },
     });
     expect(handlers.planApproval.show).toHaveBeenCalledWith({
       approvalId: 'plan-a',
