@@ -6,7 +6,7 @@ import {
   type ExtensionPresentationEventPayloads,
   isExtensionPresentationEvent,
 } from '@frontend/events/extensionPresentationEvents';
-import { emitExtensionProgressEvent } from '@frontend/events/extensionProgressEvents';
+import { emitExtensionInteractionEvent } from '@frontend/events/extensionInteractionEvents';
 import {
   isProgressBackendInteractionEvent,
   type ProgressBackendInteractionPayloads,
@@ -23,7 +23,7 @@ export const extensionAgentRuntimeHost: AgentRuntimeHost = {
       return;
     }
     if (isProgressBackendInteractionEvent(event)) {
-      emitExtensionProgressEvent(
+      emitExtensionInteractionEvent(
         event,
         payload as ProgressBackendInteractionPayloads[typeof event],
       );

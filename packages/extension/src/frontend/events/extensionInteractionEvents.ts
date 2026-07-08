@@ -3,15 +3,17 @@ import type {
   ProgressBackendInteractionPayloads,
 } from '@shared/progressView/backend/events/ProgressInteractionHandler';
 
-type ExtensionProgressEventSink = <K extends ProgressBackendInteractionEvent>(
+type ExtensionInteractionEventSink = <
+  K extends ProgressBackendInteractionEvent,
+>(
   event: K,
   payload: ProgressBackendInteractionPayloads[K],
 ) => void;
 
-let activeSink: ExtensionProgressEventSink | undefined;
+let activeSink: ExtensionInteractionEventSink | undefined;
 
-export function setExtensionProgressEventSink(
-  sink: ExtensionProgressEventSink,
+export function setExtensionInteractionEventSink(
+  sink: ExtensionInteractionEventSink,
 ): () => void {
   const previous = activeSink;
   activeSink = sink;
@@ -23,7 +25,7 @@ export function setExtensionProgressEventSink(
   };
 }
 
-export function emitExtensionProgressEvent<
+export function emitExtensionInteractionEvent<
   K extends ProgressBackendInteractionEvent,
 >(event: K, payload: ProgressBackendInteractionPayloads[K]): void {
   activeSink?.(event, payload);
