@@ -4,6 +4,39 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/core';
 
 /**
+ * Validate a configured helper-model choice against a candidate list, falling
+ * back to the candidate list's first entry, and finally to the built-in
+ * default, when the configured model isn't present in the list. The built-in
+ * default is always accepted as-is because it is used for internal auxiliary
+ * tasks, not user-facing generation.
+ *
+ * Single source of truth for the "validate against candidates, else fall
+ * back" precedence chain shared by {@link getHelperModelName} (below) and
+ * `SettingsModelSelectionController.getEffectiveHelperModel`. An empty
+ * `candidateModels` always falls through to `DEFAULT_HELPER_MODEL` here —
+ * this function does not implement "no restriction" semantics. A caller
+ * that wants an empty list to mean "accept the configured model as-is"
+ * must short-circuit before calling; see `getHelperModelName`'s
+ * `enabledModels.length === 0` check for that deliberate divergence.
+ */
+export function resolveEffectiveHelperModel(
+  configuredModel: string | undefined,
+  candidateModels: readonly string[],
+): string {
+  if (!isNonEmptyString(configuredModel)) {
+    return DEFAULT_HELPER_MODEL;
+  }
+
+  const resolved = configuredModel.trim();
+  if (resolved === DEFAULT_HELPER_MODEL) return resolved;
+
+  if (candidateModels.includes(resolved)) {
+    return resolved;
+  }
+  return candidateModels[0] ?? DEFAULT_HELPER_MODEL;
+}
+
+/**
  * Resolve the configured helper model name from global state.
  *
  * When the user has explicitly configured a helper model, validate it against
@@ -26,8 +59,12 @@ export function getHelperModelName(): string {
     GlobalStateKey.ENABLED_MODELS,
     [],
   );
-  if (enabledModels.length === 0 || enabledModels.includes(resolved)) {
+  // An empty/unset enabled-model list means "no restriction" here: accept the
+  // configured model as-is. This differs from the Settings UI, whose candidate
+  // list (`getVisibleModels()`) already substitutes `DEFAULT_MODELS` before it
+  // ever reaches `resolveEffectiveHelperModel`, so it never sees an empty list.
+  if (enabledModels.length === 0) {
     return resolved;
   }
-  return enabledModels[0];
+  return resolveEffectiveHelperModel(resolved, enabledModels);
 }
