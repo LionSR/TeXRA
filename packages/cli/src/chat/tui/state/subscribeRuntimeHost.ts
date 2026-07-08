@@ -416,8 +416,18 @@ export function attachTuiRunFactSubscription(
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'session') return;
-      if (sessionEvent.event.type === 'setParentStream') {
-        applyParentStream(sessionEvent.event.payload);
+      switch (sessionEvent.event.type) {
+        case 'setParentStream':
+          applyParentStream(sessionEvent.event.payload);
+          return;
+        case 'followUpSent':
+          // Active-session follow-ups enter the same queue before the wait node
+          // consumes them; refresh immediately so the status bar shows the
+          // pending message instead of only seeing the later drain event.
+          refreshQueuedFollowUps(sessionEvent.event.payload.streamId);
+          return;
+        default:
+          return;
       }
     },
     { scope: 'session' },
@@ -676,14 +686,6 @@ function applyToState<K extends ProgressEvent>(
       } else {
         appendGoalPausedTranscriptNotice(p);
       }
-      return;
-    }
-    case 'followUpSent': {
-      // Active-session follow-ups enter the same queue before the wait node
-      // consumes them; refresh immediately so the status bar shows the pending
-      // message instead of only seeing the later drain event.
-      const p = payload as ProgressEventPayloads['followUpSent'];
-      refreshQueuedFollowUps(p.streamId);
       return;
     }
     default:
