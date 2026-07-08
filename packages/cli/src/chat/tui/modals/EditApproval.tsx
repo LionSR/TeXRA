@@ -5,8 +5,10 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 import { ConfirmCard } from './ConfirmCard';
 import {
+  clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
   EDIT_DIFF_PADDING,
+  MIN_MODAL_CONTENT_WIDTH,
 } from '../ui/theme';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import {
@@ -27,7 +29,6 @@ const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 const EDIT_APPROVAL_FEEDBACK_MARGIN_ROWS = 1;
 const EDIT_APPROVAL_FEEDBACK_PREFIX_COLUMNS = 2;
 export const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
-const MIN_EDIT_DIFF_WIDTH = 20;
 const DEFAULT_EDIT_DIFF_ROWS = 30;
 const EDIT_APPROVAL_FEEDBACK_PLACEHOLDER = 'Why reject?';
 
@@ -64,7 +65,7 @@ export function editApprovalDiffRowsBudget({
     availableRows,
     columns,
     title,
-    minContentWidth: MIN_EDIT_DIFF_WIDTH,
+    minContentWidth: MIN_MODAL_CONTENT_WIDTH,
     defaultRows: DEFAULT_EDIT_DIFF_ROWS,
     compactMaxRows: COMPACT_DIFF_DISPLAY_LINES,
     spaciousFixedRows: EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
@@ -104,7 +105,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const [feedbackMode, setFeedbackMode] = useState(false);
   const [feedbackValue, setFeedbackValue] = useState('');
   const title = `Apply edit to ${props.request.path}?`;
-  const diffWidth = Math.max(MIN_EDIT_DIFF_WIDTH, columns - EDIT_DIFF_PADDING);
+  const diffWidth = clampModalWidth(columns - EDIT_DIFF_PADDING);
   const maxDiffLines = editApprovalDiffRowsBudget({
     availableRows: props.availableRows,
     columns,

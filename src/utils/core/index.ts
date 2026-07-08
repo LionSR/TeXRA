@@ -20,6 +20,7 @@ export {
   formatCompactDuration,
   formatCompactTokenCount,
   formatDuration,
+  formatWallTimeSeconds,
   serializeError,
 } from '../text/stringUtils';
 
