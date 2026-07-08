@@ -36,7 +36,6 @@ import {
   createModelHandler,
   createModelHandlerForCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
@@ -367,15 +366,17 @@ async function assembleAgentLaunchContext(
   session.events.assertRunSubscribersAttachedBeforeActivation(streamId);
   input.onBeforeActivation?.(streamId);
 
-  emitRuntimeEvent(
-    'setActiveStream',
-    {
-      streamId,
-      agentCategory: setting.agentCategory,
-      isRemote: isRemoteAgent(fullConfig.agent),
+  session.events.emit({
+    scope: 'session',
+    event: {
+      type: 'setActiveStream',
+      payload: {
+        streamId,
+        agentCategory: setting.agentCategory,
+        isRemote: isRemoteAgent(fullConfig.agent),
+      },
     },
-    session,
-  );
+  });
   onActivated(streamId);
 
   // Log the initial instruction as a user message so both workflow and
