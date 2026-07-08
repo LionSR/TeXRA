@@ -15,7 +15,7 @@
 const PASTE_CHAR_THRESHOLD = 800;
 const PASTE_MAX_INLINE_LINES = 2;
 
-export interface PastedTextEntry {
+interface PastedTextEntry {
   readonly id: number;
   readonly kind: 'text';
   readonly content: string;

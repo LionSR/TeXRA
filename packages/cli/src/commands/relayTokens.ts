@@ -37,8 +37,8 @@ import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-export const SETUP_TOKEN_DEFAULT_EXPIRES_DAYS = 30;
-export const SETUP_TOKEN_MAX_EXPIRES_DAYS = 365;
+const SETUP_TOKEN_DEFAULT_EXPIRES_DAYS = 30;
+const SETUP_TOKEN_MAX_EXPIRES_DAYS = 365;
 
 /** Parse --expires; returns undefined (with the reason) for invalid input. */
 export function parseSetupTokenExpiresDays(

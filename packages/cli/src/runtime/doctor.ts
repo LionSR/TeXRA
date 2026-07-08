@@ -33,9 +33,9 @@ import type { CliContext } from './cliContext';
 import type { CliStyle } from './style';
 import type { CliModelAccess } from './modelAccess';
 
-export type DoctorCheckStatus = 'pass' | 'warn' | 'fail' | 'skip';
+type DoctorCheckStatus = 'pass' | 'warn' | 'fail' | 'skip';
 
-export interface DoctorCheck {
+interface DoctorCheck {
   readonly id: string;
   readonly name: string;
   readonly status: DoctorCheckStatus;

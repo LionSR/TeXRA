@@ -7,7 +7,7 @@ import {
   isFinalTranscriptStatus,
 } from './transcript';
 
-export interface TranscriptFallbackAssistant {
+interface TranscriptFallbackAssistant {
   readonly text: string | undefined;
   readonly idPrefix: string;
 }
