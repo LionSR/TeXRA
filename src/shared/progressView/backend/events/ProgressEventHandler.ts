@@ -1,6 +1,7 @@
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
+import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
@@ -13,12 +14,10 @@ import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,
   ConversationProgressSchema,
-  ExtendedTokenUsageStatsSchema,
   UpdatePlanPayloadSchema,
   UpdateTodosPayloadSchema,
   type ConversationProgress,
   type GoalStatus,
-  type StorageKey,
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
@@ -107,10 +106,6 @@ function getDefaultProgressStreamControls(): ProgressStreamControls {
     superYoloBypass: false,
     goalActive: false,
   };
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
 }
 
 /** Applies host progress events to progress-view state and webview updates. */
@@ -421,7 +416,7 @@ export class ProgressEventHandler {
 
   handleRunFact(streamId: StreamTabId, event: AgentEvent): void {
     if (event.type === 'usage') {
-      const payload = this.toUpdateStreamUsagePayload(event.data, streamId);
+      const payload = toUpdateStreamUsagePayload(event.data, streamId);
       if (payload) this.handleProgressFact('updateStreamUsage', payload);
       return;
     }
@@ -530,26 +525,6 @@ export class ProgressEventHandler {
     payload: ProgressEventPayloads[K],
   ): void {
     this.handleProgressEvent(event, payload);
-  }
-
-  private toUpdateStreamUsagePayload(
-    data: unknown,
-    fallbackStreamId: StreamTabId,
-  ): ProgressEventPayloads['updateStreamUsage'] | undefined {
-    if (!isObject(data)) return undefined;
-    const storageKey = asString(data.storageKey);
-    if (!storageKey) return undefined;
-    const usage = ExtendedTokenUsageStatsSchema.safeParse(data.usage);
-    if (!usage.success) return undefined;
-
-    const streamId = asString(data.streamId) ?? fallbackStreamId;
-    const executionId = asString(data.executionId);
-    return {
-      streamId: streamId as StreamTabId,
-      storageKey: storageKey as StorageKey,
-      ...(executionId ? { executionId } : {}),
-      usage: usage.data,
-    };
   }
 
   private handleAddOutputFiles({
