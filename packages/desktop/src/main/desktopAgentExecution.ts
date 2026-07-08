@@ -63,9 +63,9 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
-import type {
-  ProgressBackendEvent,
-  ProgressBackendEventPayloads,
+import {
+  isProgressBackendInteractionEvent,
+  type ProgressBackendInteractionPayloads,
 } from '@shared/progressView/backend/events/ProgressEventHandler';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
@@ -1008,14 +1008,15 @@ export class DesktopProgressBridge {
     event: K,
     payload: AgentRuntimeEventPayloads[K],
   ): void {
-    if (!isRuntimePresentationEvent(event)) {
-      if (event === 'addOutputFiles') return;
+    if (isProgressBackendInteractionEvent(event)) {
       this.backend.handleProgressEvent(
-        event as ProgressBackendEvent,
-        payload as ProgressBackendEventPayloads[ProgressBackendEvent],
+        event,
+        payload as ProgressBackendInteractionPayloads[typeof event],
       );
       return;
     }
+
+    if (!isRuntimePresentationEvent(event)) return;
 
     switch (event) {
       case 'requestEnsureProgressView':
