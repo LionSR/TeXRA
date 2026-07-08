@@ -99,7 +99,11 @@ export function createDesktopGitHost(
       // Uses `git rev-parse --is-inside-work-tree` instead of
       // `existsSync('.git')` — the latter wrongly reports `false` from
       // subdirectories and misses worktrees/submodules where `.git` is a
-      // pointer file (bot review #3817).
+      // pointer file (bot review #3817). This shared probe times out at 5s
+      // (this file previously inlined its own 10s timeout) — intentional:
+      // 5s is still generous for a `rev-parse` round-trip, and using the
+      // same probe as every other host caller matters more than the extra
+      // slack.
       if (!(await isGitRepository(workspace))) {
         // Missing git, not a repo, etc. Don't surface via `onError` — this
         // is the steady-state for any non-git workspace.
