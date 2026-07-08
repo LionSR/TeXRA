@@ -32,7 +32,7 @@ export function migrateLegacyContextFileFields(input: unknown): unknown {
   const obj = { ...source };
 
   // Step 1: rename reference/auxiliary → context.
-  if (obj.contextFile === undefined || obj.contextFile === null) {
+  if (obj.contextFile == null) {
     if (isNonEmptyString(obj.referenceFile)) {
       obj.contextFile = obj.referenceFile;
     } else if (isNonEmptyString(obj.auxiliaryFile)) {
