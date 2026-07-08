@@ -54,6 +54,3 @@ export const MainViewExecuteInboundMessageSchema =
   MainViewExecuteMessageSchema.extend({
     command: z.literal(MAIN_VIEW_COMMANDS.EXECUTE),
   });
-export type MainViewExecuteInboundMessage = z.infer<
-  typeof MainViewExecuteInboundMessageSchema
->;

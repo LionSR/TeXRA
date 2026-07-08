@@ -23,7 +23,6 @@ export {
   MULTIPLE_DOCUMENT_FILE_TYPES,
   MultipleDocumentFileTypeSchema,
   type DocumentFileType,
-  type ExtendedDocumentFileType,
   type MultipleDocumentFileType,
 } from '../fileTypes';
 export * from './state';
