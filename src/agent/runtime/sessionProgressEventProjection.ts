@@ -24,7 +24,7 @@ export type ProjectedProgressEvent = {
   };
 }[ProgressEvent];
 
-export function emitProjectedProgressEvent(
+function emitProjectedProgressEvent(
   runtimeHost: AgentRuntimeHost,
   projected: ProjectedProgressEvent,
 ): void {
@@ -98,7 +98,7 @@ export function toUpdateStreamUsagePayload(
   };
 }
 
-export function projectSessionFactToProgressEvent(
+function projectSessionFactToProgressEvent(
   fact: SessionFact,
 ): ProjectedProgressEvent | undefined {
   switch (fact.type) {
@@ -244,10 +244,10 @@ const RUN_FACT_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
 /**
  * Subscribe to the run-scoped facts that project onto legacy progress
  * events, forwarding each successfully projected event to `onProjected`.
- * Shared by `attachSessionProgressEventProjection` and `ProgressBackend` so
- * their run-fact filter and projection can't silently diverge.
+ * Kept for compatibility consumers that still need the legacy progress-event
+ * surface, such as headless CLI output.
  */
-export function subscribeRunFactsAsProgressEvents(
+function subscribeRunFactsAsProgressEvents(
   events: SessionEventHub,
   onProjected: (projected: ProjectedProgressEvent) => void,
 ): () => void {

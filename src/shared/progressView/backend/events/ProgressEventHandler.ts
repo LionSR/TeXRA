@@ -1,6 +1,9 @@
-import type { AgentTrace } from '@agent/trace';
+import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
+import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
@@ -9,8 +12,11 @@ import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,
+  ConversationProgressSchema,
+  ExtendedTokenUsageStatsSchema,
   type ConversationProgress,
   type GoalStatus,
+  type StorageKey,
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
@@ -29,6 +35,7 @@ import {
   type StreamExecutionState,
 } from '@shared/progressView/backend/state/ProgressViewState';
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
+import { isObject } from '@utils/core';
 
 import { withEventErrorHandling } from './errorHandling';
 
@@ -81,12 +88,34 @@ type ProgressEventRegistrationMap = {
   [K in ProgressEvent]?: ProgressEventRegistration<K>;
 };
 
+export type ProgressFactNotification = {
+  [K in ProgressEvent]: {
+    readonly event: K;
+    readonly payload: ProgressEventPayloads[K];
+  };
+}[ProgressEvent];
+
+export const PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES: readonly AgentEvent['type'][] =
+  [
+    'domain',
+    'run.config',
+    'usage',
+    'status',
+    'stage.start',
+    'child.activity',
+    'process.output',
+  ];
+
 function getDefaultProgressStreamControls(): ProgressStreamControls {
   return {
     toolEditBypass: false,
     superYoloBypass: false,
     goalActive: false,
   };
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
 }
 
 /** Applies host progress events to progress-view state and webview updates. */
@@ -359,6 +388,147 @@ export class ProgressEventHandler {
       registration.context ?? `failed to handle ${event}`,
       () => registration.handle(payload),
     );
+  }
+
+  handleSessionFact(fact: SessionFact): ProgressFactNotification | undefined {
+    switch (fact.type) {
+      case 'goalStateChanged':
+        return this.handleProgressFact('goalStateChanged', fact.payload);
+      case 'inquiryThreadUpdated':
+        return this.handleProgressFact('inquiryThreadUpdated', fact.payload);
+      case 'clearMissingOutputs':
+        return this.handleProgressFact('clearMissingOutputs', fact.payload);
+      case 'updateQueuedFollowUps':
+        return this.handleProgressFact('updateQueuedFollowUps', fact.payload);
+      case 'followUpSent':
+        return undefined;
+      case 'setActiveStream':
+        return this.handleProgressFact('setActiveStream', fact.payload);
+      case 'updateStreamDescription':
+        return this.handleProgressFact('updateStreamDescription', fact.payload);
+      case 'updateStreamStatus':
+        return this.handleProgressFact('updateStreamStatus', fact.payload);
+      case 'setParentStream':
+        return this.handleProgressFact('setParentStream', fact.payload);
+      case 'removeStream':
+        return this.handleProgressFact('removeStream', fact.payload);
+    }
+  }
+
+  handleRunFact(
+    streamId: StreamTabId,
+    event: AgentEvent,
+  ): ProgressFactNotification | undefined {
+    if (event.type === 'usage') {
+      const payload = this.toUpdateStreamUsagePayload(event.data, streamId);
+      return payload
+        ? this.handleProgressFact('updateStreamUsage', payload)
+        : undefined;
+    }
+
+    if (event.type === 'run.config') {
+      return this.handleProgressFact('setTaskState', {
+        streamId: event.streamId,
+        executionId: event.executionId,
+        taskState: agentConfigToTaskState(event.config),
+      });
+    }
+
+    if (event.type === 'status') {
+      return this.handleProgressFact('updateStreamStatus', {
+        streamId: event.streamId,
+        status: event.phase,
+        cause: event.cause,
+        ...(event.previousPhase ? { previousStatus: event.previousPhase } : {}),
+        ...(event.substate ? { substate: event.substate } : {}),
+      });
+    }
+
+    if (event.type === 'domain') {
+      if (event.key === 'conversationProgress') {
+        const progress = ConversationProgressSchema.safeParse(event.data);
+        return progress.success
+          ? this.handleProgressFact('updateConversationProgress', {
+              streamId,
+              progress: progress.data,
+            })
+          : undefined;
+      }
+
+      const factName = fromRunFactDomainKey(event.key);
+      if (!factName || !isObject(event.data)) return undefined;
+      return this.handleProgressFact(
+        factName,
+        event.data as ProgressEventPayloads[typeof factName],
+      );
+    }
+
+    if (event.type === 'stage.start') {
+      if (event.kind !== 'round') return undefined;
+      return this.handleProgressFact('updateRoundStage', {
+        streamId,
+        roundStage: {
+          index: event.index ?? 0,
+          ...(event.total !== undefined && event.total > 0
+            ? { total: event.total }
+            : {}),
+        },
+      });
+    }
+
+    if (event.type === 'child.activity') {
+      if (event.kind === 'subagents') {
+        return this.handleProgressFact('updateActiveSubagents', {
+          parentStreamId: event.parentStreamId,
+          children: [...event.children],
+        });
+      }
+      if (event.kind === 'processes') {
+        return this.handleProgressFact('updateActiveProcesses', {
+          parentStreamId: event.parentStreamId,
+          processes: [...event.processes],
+        });
+      }
+    }
+
+    if (event.type === 'process.output') {
+      return this.handleProgressFact('updateProcessOutput', {
+        parentStreamId: event.parentStreamId,
+        executionId: event.executionId,
+        stdout: event.stdout,
+        stderr: event.stderr,
+      });
+    }
+
+    return undefined;
+  }
+
+  private handleProgressFact<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): ProgressFactNotification {
+    this.handleProgressEvent(event, payload);
+    return { event, payload } as ProgressFactNotification;
+  }
+
+  private toUpdateStreamUsagePayload(
+    data: unknown,
+    fallbackStreamId: StreamTabId,
+  ): ProgressEventPayloads['updateStreamUsage'] | undefined {
+    if (!isObject(data)) return undefined;
+    const storageKey = asString(data.storageKey);
+    if (!storageKey) return undefined;
+    const usage = ExtendedTokenUsageStatsSchema.safeParse(data.usage);
+    if (!usage.success) return undefined;
+
+    const streamId = asString(data.streamId) ?? fallbackStreamId;
+    const executionId = asString(data.executionId);
+    return {
+      streamId: streamId as StreamTabId,
+      storageKey: storageKey as StorageKey,
+      ...(executionId ? { executionId } : {}),
+      usage: usage.data,
+    };
   }
 
   private handleAddOutputFiles({
