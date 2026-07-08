@@ -50,7 +50,7 @@ export const MATH_OPERATORS = [
   'liminf',
 ];
 
-export const FENCED_LATEX_ENVIRONMENTS = [
+const FENCED_LATEX_ENVIRONMENTS = [
   'align',
   'align*',
   'aligned',
@@ -73,7 +73,7 @@ export const FENCED_LATEX_ENVIRONMENTS = [
   'smallmatrix',
 ];
 
-export const FENCED_LATEX_ENVIRONMENT_PATTERN =
+const FENCED_LATEX_ENVIRONMENT_PATTERN =
   FENCED_LATEX_ENVIRONMENTS.map(escapeRegExp).join('|');
 
 const LINE_BREAK_PATTERN = String.raw`\r?\n`;

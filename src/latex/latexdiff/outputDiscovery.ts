@@ -40,10 +40,7 @@ import { CHANNEL } from './service';
  * Recursively collect all `.tex` file paths under `dir`, returned as paths
  * relative to `dir` using forward slashes (e.g. `"chapters/main.tex"`).
  */
-export async function collectTexFiles(
-  dir: string,
-  prefix = '',
-): Promise<string[]> {
+async function collectTexFiles(dir: string, prefix = ''): Promise<string[]> {
   const fs = platform().fs;
   let entries: [string, number][];
   try {

@@ -40,7 +40,7 @@ export type UserAccessStatus = z.infer<typeof UserAccessStatusSchema>;
  * Schema for a single tier's model access configuration.
  * - models: Either "*" for all models, or an array of specific model names
  */
-export const TierModelsConfigSchema = z.object({
+const TierModelsConfigSchema = z.object({
   /** Model access: "*" for all models, or array of specific model names */
   models: z.union([z.literal('*'), z.array(z.string())]),
 });

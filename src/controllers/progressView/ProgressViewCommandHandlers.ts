@@ -34,7 +34,7 @@ export type ProgressViewFollowUpImage = NonNullable<
   SendFollowUpMessage['images']
 >[number];
 
-export interface ProgressViewFollowUpSubmission {
+interface ProgressViewFollowUpSubmission {
   stream: StreamTabId;
   text: string;
   mediaFiles?: readonly string[];

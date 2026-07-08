@@ -2,7 +2,7 @@ import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import type { UsageRoute } from '@shared/schemas';
 
-export type ProviderAuthMode = 'chatgpt-subscription';
+type ProviderAuthMode = 'chatgpt-subscription';
 
 export interface OpenAIResponseProviderCapabilities {
   readonly backgroundMode: 'base' | 'disabled';

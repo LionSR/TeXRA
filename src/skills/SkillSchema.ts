@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Local imports - utilities
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
-export const SKILL_NAME_MAX_LENGTH = 64;
+const SKILL_NAME_MAX_LENGTH = 64;
 export const SKILL_DESCRIPTION_MAX_LENGTH = 1024;
 
 export const SkillNameSchema = z
@@ -36,7 +36,7 @@ const SkillDescriptionSchema = z
     `Skill description must be at most ${SKILL_DESCRIPTION_MAX_LENGTH} characters`,
   );
 
-export const SkillFrontmatterSchema = z.looseObject({
+const SkillFrontmatterSchema = z.looseObject({
   name: SkillNameSchema,
   description: SkillDescriptionSchema,
 });
@@ -51,4 +51,3 @@ export const SkillSchema = z.strictObject({
 });
 
 export type Skill = z.infer<typeof SkillSchema>;
-export type SkillFrontmatter = z.infer<typeof SkillFrontmatterSchema>;

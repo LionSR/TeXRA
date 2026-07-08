@@ -18,12 +18,12 @@ import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
 import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 
-export interface ExtractResult {
+interface ExtractResult {
   success: boolean;
   error?: string;
 }
 
-export interface ExtractOptions {
+interface ExtractOptions {
   timeout?: number;
   channel?: string;
 }

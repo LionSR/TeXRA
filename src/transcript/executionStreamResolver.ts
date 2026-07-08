@@ -7,7 +7,7 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { StreamLogStore } from './StreamLogStore';
 
-export type PersistedStreamIdResolutionSource =
+type PersistedStreamIdResolutionSource =
   | 'executionMeta'
   | 'streamDataMeta'
   | 'streamDataSuffix'
