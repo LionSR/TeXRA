@@ -1,8 +1,10 @@
 import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import type { RuntimePresentationEventPayloads } from '@agent/runtime/runtimePresentationEvents';
 import type { HostInteractions } from './HostInteractions';
 
 export type AgentRuntimeEventPayloads = ProgressEventPayloads &
+  RuntimeInteractionEventPayloads &
   RuntimePresentationEventPayloads;
 
 export type AgentRuntimeEvent = keyof AgentRuntimeEventPayloads;
@@ -20,7 +22,7 @@ export type AgentRuntimeEvent = keyof AgentRuntimeEventPayloads;
  *   lifecycle (`setActiveStream`, `updateStreamStatus`, `updateStreamUsage`,
  *   `setTaskState`), output/compile tracking (`addOutputFiles`,
  *   `updateMissingOutputs`, `updateCompileFailures`, `clearMissingOutputs`),
- *   the `show*`/`resolve*` approval pairs, and conversation progress
+ *   interaction requests (`RuntimeInteractionEventPayloads`), and conversation progress
  *   (`updateTodos`/`updatePlan`/`updateConversationProgress`). See
  *   {@link ProgressEventPayloads} for the complete, authoritative enumeration.
  * - **Frontend-bound, ignorable** (`RuntimePresentationEventPayloads`):

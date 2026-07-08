@@ -2,10 +2,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
 import {
   WebviewBridge,
   type ProgressViewMessageSender,
@@ -14,6 +10,8 @@ import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import {
   PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES,
   ProgressEventHandler,
+  type ProgressBackendEvent,
+  type ProgressBackendEventPayloads,
   type GetProgressStreamControls,
   type ProgressEventSubscription,
   type UICallbacks,
@@ -142,9 +140,9 @@ export class ProgressBackend {
     };
   }
 
-  handleProgressEvent<K extends ProgressEvent>(
+  handleProgressEvent<K extends ProgressBackendEvent>(
     event: K,
-    payload: ProgressEventPayloads[K],
+    payload: ProgressBackendEventPayloads[K],
   ): void {
     // A run may still hold the host-channel emit closure that routes here after
     // this backend is disposed (e.g. a desktop window closed while the run keeps

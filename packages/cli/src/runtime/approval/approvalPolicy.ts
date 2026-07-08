@@ -1,4 +1,4 @@
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import {
   isChatGptSubscriptionLimitError,
@@ -46,13 +46,13 @@ export function hasCliApprovalDenied(context: CliContext): boolean {
 /** Whether the failed retry was a ChatGPT-subscription (Codex) usage limit, so
  *  the switch turns off the subscription preference rather than relay access. */
 export function isCliChatGptSubscriptionRetry(
-  payload: ProgressEventPayloads['showRetryRequest'],
+  payload: RuntimeInteractionEventPayloads['showRetryRequest'],
 ): boolean {
   return isChatGptSubscriptionLimitError(payload.errorDetails);
 }
 
 export function isCliApiSwitchableRetry(
-  payload: ProgressEventPayloads['showRetryRequest'],
+  payload: RuntimeInteractionEventPayloads['showRetryRequest'],
 ): boolean {
   const details = payload.errorDetails;
   if (!details) return false;
@@ -162,11 +162,12 @@ export function immediateDecision(
  *  and auto-approval modes should not burn the retry budget. */
 function isUnretryableRetryRequest(
   event: CliDecisionApprovalEvent,
-  payload: ProgressEventPayloads[CliDecisionApprovalEvent],
+  payload: RuntimeInteractionEventPayloads[CliDecisionApprovalEvent],
 ): boolean {
   if (event !== 'showRetryRequest') return false;
-  const details = (payload as ProgressEventPayloads['showRetryRequest'])
-    .errorDetails;
+  const details = (
+    payload as RuntimeInteractionEventPayloads['showRetryRequest']
+  ).errorDetails;
   if (!details) return false;
   if (isCredentialExhausted(details)) return true;
   if (details.statusCode === 401 || details.statusCode === 403) return true;
@@ -175,7 +176,7 @@ function isUnretryableRetryRequest(
 
 export function immediateDecisionForApproval(
   event: CliDecisionApprovalEvent,
-  payload: ProgressEventPayloads[CliDecisionApprovalEvent],
+  payload: RuntimeInteractionEventPayloads[CliDecisionApprovalEvent],
   context: CliContext,
 ): ApprovalDecision | undefined {
   if (isUnretryableRetryRequest(event, payload)) {
