@@ -24,8 +24,12 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 
-import { createRecordingHost } from '../progressTestUtils';
-import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
+import {
+  createRecordingHost,
+  recordSessionEvents,
+  runEventsOfType,
+  sessionFactPayloads,
+} from '../progressTestUtils';
 
 describe('executionRegistry', () => {
   it('owns process-output poller teardown', () => {
@@ -320,7 +324,7 @@ describe('executionRegistry', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
-    attachSessionProgressEventProjectionForTest(events, explicit.host);
+    const recorded = recordSessionEvents(events, { scope: 'session' });
     const registry = new ExecutionRegistry({
       streamStatus,
       events,
@@ -367,9 +371,7 @@ describe('executionRegistry', () => {
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(
-        explicit.events
-          .filter((event) => event.event === 'updateStreamStatus')
-          .map((event) => event.payload),
+        sessionFactPayloads(recorded.events, 'updateStreamStatus'),
       ).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -379,6 +381,7 @@ describe('executionRegistry', () => {
       );
     } finally {
       registry.dispose();
+      recorded.detach();
     }
   });
 
@@ -431,10 +434,7 @@ describe('executionRegistry', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      events,
-      explicit.host,
-    );
+    const recorded = recordSessionEvents(events, { scope: 'session' });
     const registry = new ExecutionRegistry({
       streamStatus,
       events,
@@ -482,16 +482,15 @@ describe('executionRegistry', () => {
       expect(
         registry.getAgentHandleByStream(grandchildStreamId)?.parentStreamId,
       ).toBe(grandchildStreamId);
-      expect(explicit.events).toContainEqual({
-        event: 'setParentStream',
-        payload: {
-          childStreamId: grandchildStreamId,
-          parentStreamId: null,
-        },
+      expect(
+        sessionFactPayloads(recorded.events, 'setParentStream'),
+      ).toContainEqual({
+        childStreamId: grandchildStreamId,
+        parentStreamId: null,
       });
     } finally {
       registry.dispose();
-      detachProjection();
+      recorded.detach();
     }
   });
 
@@ -499,10 +498,7 @@ describe('executionRegistry', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      events,
-      explicit.host,
-    );
+    const recorded = recordSessionEvents(events, { scope: 'session' });
     const registry = new ExecutionRegistry({
       streamStatus,
       events,
@@ -578,16 +574,15 @@ describe('executionRegistry', () => {
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBeUndefined();
       expect(streamStatus.get(grandchildStreamId)).toBeUndefined();
-      expect(explicit.events).toContainEqual({
-        event: 'setParentStream',
-        payload: {
-          childStreamId,
-          parentStreamId: null,
-        },
+      expect(
+        sessionFactPayloads(recorded.events, 'setParentStream'),
+      ).toContainEqual({
+        childStreamId,
+        parentStreamId: null,
       });
     } finally {
       registry.dispose();
-      detachProjection();
+      recorded.detach();
     }
   });
 
@@ -595,7 +590,7 @@ describe('executionRegistry', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
-    attachSessionProgressEventProjectionForTest(events, explicit.host);
+    const recorded = recordSessionEvents(events, { scope: 'session' });
     const registry = new ExecutionRegistry({ streamStatus, events });
     const streamId = 'ownerless-stop-policy-test' as StreamTabId;
 
@@ -610,11 +605,14 @@ describe('executionRegistry', () => {
         childPolicy: 'cascade',
       });
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-      expect(explicit.events.at(-1)?.payload).toMatchObject({
+      expect(
+        sessionFactPayloads(recorded.events, 'updateStreamStatus').at(-1),
+      ).toMatchObject({
         status: STREAM_PHASE.CANCELLED,
       });
     } finally {
       registry.dispose();
+      recorded.detach();
     }
   });
 
@@ -781,10 +779,7 @@ describe('executionRegistry', () => {
   it('projects handle updates from session events', () => {
     const explicit = createRecordingHost();
     const events = new SessionEventHub();
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      events,
-      explicit.host,
-    );
+    const recorded = recordSessionEvents(events);
     const registry = new ExecutionRegistry({ events });
     const executionId = 'exec-handle-runtime-host-test';
     const parentStreamId = 'parent-handle-runtime-host-test' as StreamTabId;
@@ -803,12 +798,9 @@ describe('executionRegistry', () => {
       registry.track(handle);
       registry.untrack(executionId);
 
-      expect(explicit.events.map((entry) => entry.event)).toEqual([
-        'updateActiveSubagents',
-        'setParentStream',
-        'updateActiveSubagents',
-      ]);
-      expect(explicit.events[0].payload).toMatchObject({
+      const childActivity = runEventsOfType(recorded.events, 'child.activity');
+      expect(childActivity[0]).toMatchObject({
+        kind: 'subagents',
         parentStreamId,
         children: [
           {
@@ -818,13 +810,20 @@ describe('executionRegistry', () => {
           },
         ],
       });
-      expect(explicit.events[2].payload).toEqual({
+      expect(
+        sessionFactPayloads(recorded.events, 'setParentStream'),
+      ).toContainEqual({
+        childStreamId,
+        parentStreamId,
+      });
+      expect(childActivity.at(-1)).toMatchObject({
+        kind: 'subagents',
         parentStreamId,
         children: [],
       });
     } finally {
       registry.dispose();
-      detachProjection();
+      recorded.detach();
     }
   });
 
@@ -1093,10 +1092,7 @@ describe('executionRegistry', () => {
   it('projects detach updates from session events', () => {
     const explicit = createRecordingHost();
     const events = new SessionEventHub();
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      events,
-      explicit.host,
-    );
+    const recorded = recordSessionEvents(events);
     const registry = new ExecutionRegistry({ events });
     const executionId = 'exec-detach-runtime-host-test';
     const parentStreamId = 'parent-detach-runtime-host-test' as StreamTabId;
@@ -1117,23 +1113,22 @@ describe('executionRegistry', () => {
       registry.detachActiveChildren(parentStreamId, explicit.host);
       expect(handle.deliveryTargetStreamId).toBeUndefined();
 
-      expect(explicit.events.map((entry) => entry.event)).toEqual([
-        'updateActiveSubagents',
-        'setParentStream',
-        'setParentStream',
-        'updateActiveSubagents',
-      ]);
-      expect(explicit.events[2].payload).toEqual({
+      expect(
+        sessionFactPayloads(recorded.events, 'setParentStream'),
+      ).toContainEqual({
         childStreamId,
         parentStreamId: null,
       });
-      expect(explicit.events[3].payload).toEqual({
+      expect(
+        runEventsOfType(recorded.events, 'child.activity').at(-1),
+      ).toMatchObject({
+        kind: 'subagents',
         parentStreamId,
         children: [],
       });
     } finally {
       registry.dispose();
-      detachProjection();
+      recorded.detach();
     }
   });
 
