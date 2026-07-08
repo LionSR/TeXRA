@@ -1,10 +1,6 @@
 // Barrel export for frontend agent utilities
+export { agentDirectories } from './AgentDirectoryManager';
 export {
-  AgentDirectoryManager,
-  agentDirectories,
-} from './AgentDirectoryManager';
-export {
-  AgentRegistrationSkipReason,
   getAgentRegistrationSkipReason,
   promptToAddAgentToConfig,
 } from './register';

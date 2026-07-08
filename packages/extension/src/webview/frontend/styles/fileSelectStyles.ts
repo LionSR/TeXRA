@@ -120,7 +120,7 @@ export const fileSelectLayoutStyles = css`
 `;
 
 /** Multiple files list styles. */
-export const multiFilesStyles = css`
+const multiFilesStyles = css`
   .multiple-files-container {
     display: flex;
     justify-content: space-between;
@@ -205,7 +205,7 @@ export const multiFilesStyles = css`
 
 /** Outline cue for the file-select button when document options are active.
  *  (The dropdown itself is a native <wa-dropdown>.) */
-export const dropdownStyles = css`
+const dropdownStyles = css`
   wa-button.has-options::part(base) {
     outline: var(--border-thin) solid
       var(--wa-color-brand-border-quiet, var(--wa-color-focus));

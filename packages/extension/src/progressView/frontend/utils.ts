@@ -4,7 +4,7 @@
  * Type for radio-group-like components that expose a value property.
  * Used for wa-radio-group / vscode-radio-group.
  */
-export type VSCodeValueElement = HTMLElement & { value?: string };
+type VSCodeValueElement = HTMLElement & { value?: string };
 
 /**
  * Extract value from a radio-group change event. Prefers the clicked

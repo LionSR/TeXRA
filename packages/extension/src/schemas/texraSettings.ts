@@ -50,7 +50,7 @@ export const TexraSettingsSchema = z
   })
   .prefault(DEFAULT_TEXRA_SETTINGS);
 
-export type TexraSettings = z.infer<typeof TexraSettingsSchema>;
+type TexraSettings = z.infer<typeof TexraSettingsSchema>;
 
 export const TEXRA_SETTING_PATHS = [
   ...CORE_SETTING_PATHS,
@@ -66,7 +66,7 @@ export const TEXRA_SETTING_KEYS = TEXRA_SETTING_PATHS.map(
 );
 const TEXRA_SETTING_KEY_SET = new Set<TexraSettingKey>(TEXRA_SETTING_KEYS);
 
-export interface TexraPackageConfigurationProperty {
+interface TexraPackageConfigurationProperty {
   type?: string;
   items?: unknown;
   additionalProperties?: unknown;
