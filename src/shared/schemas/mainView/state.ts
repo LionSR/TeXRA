@@ -34,12 +34,12 @@ export type SessionType = z.infer<typeof SessionTypeSchema>;
  * keeps the two field names in lockstep — historically a typo in either schema
  * would have silently broken option matching in only one picker.
  */
-export const PickerOptionBaseSchema = z.object({
+const PickerOptionBaseSchema = z.object({
   value: z.string(),
   label: z.string(),
 });
 
-export const ModelAvailabilityKindSchema = z.enum([
+const ModelAvailabilityKindSchema = z.enum([
   'included-access',
   'provider-key',
   'openrouter-key',
@@ -121,18 +121,18 @@ export type MainViewPersistedState = z.infer<
 // Banner State Schemas
 // ============================================================
 
-export const BannerStateSchema = z.object({
+const BannerStateSchema = z.object({
   visible: z.boolean(),
 });
 export type BannerState = z.infer<typeof BannerStateSchema>;
 
-export const ApiKeyBannerStateSchema = BannerStateSchema.extend({
+const ApiKeyBannerStateSchema = BannerStateSchema.extend({
   provider: z.string().nullish(),
   requiresKey: z.boolean().nullish(),
 });
 export type ApiKeyBannerState = z.infer<typeof ApiKeyBannerStateSchema>;
 
-export const AgentConfigBannerStateSchema = BannerStateSchema.extend({
+const AgentConfigBannerStateSchema = BannerStateSchema.extend({
   agentName: z.string().nullish(),
   customDirSet: z.boolean().nullish(),
 });
@@ -140,7 +140,7 @@ export type AgentConfigBannerState = z.infer<
   typeof AgentConfigBannerStateSchema
 >;
 
-export const DependencyBannerStateSchema = BannerStateSchema.extend({
+const DependencyBannerStateSchema = BannerStateSchema.extend({
   missingTools: z.array(z.string()).nullish(),
 });
 export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
@@ -149,7 +149,7 @@ export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 // File State Schemas
 // ============================================================
 
-export const FileSelectConfigSchema = z.object({
+const FileSelectConfigSchema = z.object({
   type: DocumentFileTypeSchema,
   label: z.string(),
   icon: z.string(),
@@ -162,23 +162,23 @@ export const FileSelectConfigSchema = z.object({
 });
 export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
 
-export const CheckboxValuesSchema = WorkflowToolConfigFieldsSchema;
+const CheckboxValuesSchema = WorkflowToolConfigFieldsSchema;
 export type CheckboxValues = z.infer<typeof CheckboxValuesSchema>;
 
-export const SingleFilesSchema = z.object({
+const SingleFilesSchema = z.object({
   baseFile: z.string(),
   editedFile: z.string(),
 });
 export type SingleFiles = z.infer<typeof SingleFilesSchema>;
 
-export const FileOptionsSchema = z.object({
+const FileOptionsSchema = z.object({
   baseFile: z.array(z.string()),
   editedFile: z.array(z.string()),
   commit: z.array(z.string()).optional(),
 });
 export type FileOptions = z.infer<typeof FileOptionsSchema>;
 
-export const MultiFilesSchema = z.object({
+const MultiFilesSchema = z.object({
   inputFiles: z.array(z.string()),
   contextFiles: z.array(z.string()),
   mediaFiles: z.array(z.string()),
@@ -189,10 +189,9 @@ export type MultiFiles = z.infer<typeof MultiFilesSchema>;
 // Enumerates the four `MultiFiles` keys (`inputFiles` / `contextFiles` /
 // `mediaFiles` / `outputFiles`) so `listId` fields below are constrained to
 // valid `keyof MultiFiles` values instead of an unconstrained `z.string()`.
-export const MultiFilesKeySchema = MultiFilesSchema.keyof();
-export type MultiFilesKey = z.infer<typeof MultiFilesKeySchema>;
+const MultiFilesKeySchema = MultiFilesSchema.keyof();
 
-export const FileStateContextSchema = z.object({
+const FileStateContextSchema = z.object({
   sessionType: SessionTypeSchema,
   checkboxValues: CheckboxValuesSchema,
   singleFiles: SingleFilesSchema,
@@ -202,7 +201,7 @@ export const FileStateContextSchema = z.object({
 });
 export type FileStateContextValue = z.infer<typeof FileStateContextSchema>;
 
-export const SessionContextSchema = z.object({
+const SessionContextSchema = z.object({
   sessionType: SessionTypeSchema,
   instruction: z.string(),
   placeholder: z.string(),
@@ -218,7 +217,7 @@ export const SessionContextSchema = z.object({
 });
 export type SessionContextValue = z.infer<typeof SessionContextSchema>;
 
-export const StringValueDetailSchema = z.object({
+const StringValueDetailSchema = z.object({
   value: z.string(),
 });
 export type StringValueDetail = z.infer<typeof StringValueDetailSchema>;
@@ -229,44 +228,44 @@ export type ModelChangeDetail = StringValueDetail;
 export type InstructionChangeDetail = StringValueDetail;
 export type CommitChangeDetail = StringValueDetail;
 
-export const FileActionDetailSchema = z.object({
+const FileActionDetailSchema = z.object({
   type: z.union([DocumentFileTypeSchema, z.enum(['base', 'edited'])]),
 });
 export type FileActionDetail = z.infer<typeof FileActionDetailSchema>;
 
-export const MultipleFilesActionDetailSchema = z.object({
+const MultipleFilesActionDetailSchema = z.object({
   listId: MultiFilesKeySchema,
 });
 export type MultipleFilesActionDetail = z.infer<
   typeof MultipleFilesActionDetailSchema
 >;
 
-export const MultipleFilesTypeActionDetailSchema = z.object({
+const MultipleFilesTypeActionDetailSchema = z.object({
   type: MultipleDocumentFileTypeSchema,
 });
 export type MultipleFilesTypeActionDetail = z.infer<
   typeof MultipleFilesTypeActionDetailSchema
 >;
 
-export const RemoveFileDetailSchema = z.object({
+const RemoveFileDetailSchema = z.object({
   listId: MultiFilesKeySchema,
   file: z.string(),
 });
 export type RemoveFileDetail = z.infer<typeof RemoveFileDetailSchema>;
 
-export const ReorderFilesDetailSchema = z.object({
+const ReorderFilesDetailSchema = z.object({
   listId: MultiFilesKeySchema,
   files: z.array(z.string()),
 });
 export type ReorderFilesDetail = z.infer<typeof ReorderFilesDetailSchema>;
 
-export const CheckboxChangeDetailSchema = z.object({
+const CheckboxChangeDetailSchema = z.object({
   id: z.string(),
   checked: z.boolean(),
 });
 export type CheckboxChangeDetail = z.infer<typeof CheckboxChangeDetailSchema>;
 
-export const BannerActionDetailSchema = z.object({
+const BannerActionDetailSchema = z.object({
   action: z.string(),
   provider: z.string().nullish(),
   customDirSet: z.boolean().nullish(),
@@ -282,26 +281,26 @@ export const GettingStartedActionSchema = z.enum([
 ]);
 export type GettingStartedAction = z.infer<typeof GettingStartedActionSchema>;
 
-export const GettingStartedActionDetailSchema = z.object({
+const GettingStartedActionDetailSchema = z.object({
   action: GettingStartedActionSchema,
 });
 export type GettingStartedActionDetail = z.infer<
   typeof GettingStartedActionDetailSchema
 >;
 
-export const InstallGuideDetailSchema = z.object({
+const InstallGuideDetailSchema = z.object({
   tool: z.string(),
 });
 export type InstallGuideDetail = z.infer<typeof InstallGuideDetailSchema>;
 
-export const LatexDiffsToggleDetailSchema = z.object({
+const LatexDiffsToggleDetailSchema = z.object({
   visible: z.boolean(),
 });
 export type LatexDiffsToggleDetail = z.infer<
   typeof LatexDiffsToggleDetailSchema
 >;
 
-export const LatexDiffsActionDetailSchema = z.object({
+const LatexDiffsActionDetailSchema = z.object({
   action: z.enum([
     'latexdiff',
     'latexdiffvc',
@@ -316,7 +315,7 @@ export type LatexDiffsActionDetail = z.infer<
   typeof LatexDiffsActionDetailSchema
 >;
 
-export const FocusInstructionDetailSchema = z.object({
+const FocusInstructionDetailSchema = z.object({
   key: z.string(),
   text: z.string(),
 });
@@ -324,20 +323,20 @@ export type FocusInstructionDetail = z.infer<
   typeof FocusInstructionDetailSchema
 >;
 
-export const SessionTypeChangeDetailSchema = z.object({
+const SessionTypeChangeDetailSchema = z.object({
   value: SessionTypeSchema,
 });
 export type SessionTypeChangeDetail = z.infer<
   typeof SessionTypeChangeDetailSchema
 >;
 
-export const AgentChangeDetailSchema = z.object({
+const AgentChangeDetailSchema = z.object({
   sessionType: SessionTypeSchema,
   value: z.string(),
 });
 export type AgentChangeDetail = z.infer<typeof AgentChangeDetailSchema>;
 
-export const ActionDetailSchema = z.object({
+const ActionDetailSchema = z.object({
   action: z.string(),
 });
 export type ActionDetail = z.infer<typeof ActionDetailSchema>;

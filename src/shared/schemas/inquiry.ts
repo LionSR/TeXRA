@@ -17,9 +17,6 @@ const ExternalInquirySessionLinkSchema = z.string().trim().min(1);
 export const ExternalInquirySessionLinksSchema = z.array(
   ExternalInquirySessionLinkSchema,
 );
-export type ExternalInquirySessionLinks = z.infer<
-  typeof ExternalInquirySessionLinksSchema
->;
 
 export const ExternalInquiryThreadIdSchema = z
   .string()
@@ -33,14 +30,10 @@ export type ExternalInquiryThreadId = z.infer<
 // Status + summary
 // ============================================================================
 
-export const InquiryThreadStatusSchema = z.enum([
-  'open',
-  'answered',
-  'dropped',
-]);
+const InquiryThreadStatusSchema = z.enum(['open', 'answered', 'dropped']);
 export type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
 
-export const ExternalInquiryThreadSummarySchema = z.object({
+const ExternalInquiryThreadSummarySchema = z.object({
   threadId: ExternalInquiryThreadIdSchema,
   parentStreamId: StreamTabIdSchema.nullable(),
   status: InquiryThreadStatusSchema,
@@ -56,7 +49,7 @@ export type ExternalInquiryThreadSummary = z.infer<
 // Resume outcome — UI badge metadata for inquiryThreadUpdated events
 // ============================================================================
 
-export const InquiryResumeOutcomeSchema = z.enum([
+const InquiryResumeOutcomeSchema = z.enum([
   'sent',
   'queued',
   'resumed',
@@ -76,7 +69,7 @@ export type InquiryThreadUpdatedEvent = z.infer<
 // Action payloads — sent from inquiry panel to the host (keyed by threadId)
 // ============================================================================
 
-export const InquiryActionMessageSchema = z.discriminatedUnion('action', [
+const InquiryActionMessageSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('submit'),
     threadId: ExternalInquiryThreadIdSchema,

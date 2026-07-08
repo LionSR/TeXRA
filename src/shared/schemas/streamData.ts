@@ -69,7 +69,7 @@ export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 // tracked in `docs/proposals/architecture-checkpoints-2026.md` / `#6981`.
 // ============================================================================
 
-export const LegacyInstructionEntrySchema = z.looseObject({
+const LegacyInstructionEntrySchema = z.looseObject({
   text: z.string(),
   timestamp: z.number().optional(),
 });
