@@ -60,7 +60,7 @@ export const ReflectionFlowStateSchema = z.object({
   compileRepairRoundGranted: z.boolean().optional(),
 });
 
-export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
+type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
 
 /** Shared state type for reflection flow nodes. */
 export type ReflectionFlowShared = ReflectionFlowState;

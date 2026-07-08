@@ -115,7 +115,7 @@ const ChildRecordDataSchema = z.object({
   agent: z.string(),
   timestamp: z.string(),
 });
-export type ChildRecordData = z.infer<typeof ChildRecordDataSchema>;
+type ChildRecordData = z.infer<typeof ChildRecordDataSchema>;
 
 /** Full child record including the `id` derived from the KV key name. */
 export interface ChildRecord extends ChildRecordData {

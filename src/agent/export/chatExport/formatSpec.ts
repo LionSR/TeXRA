@@ -50,7 +50,7 @@ function collectFiles(config: ExportConfig): Array<[string, string]> {
   return files;
 }
 
-export function extractMeta(input: ChatExportInput): DocumentMeta {
+function extractMeta(input: ChatExportInput): DocumentMeta {
   return {
     date: formatLocaleTimestamp(input.timestamp),
     agent: input.config.agent,

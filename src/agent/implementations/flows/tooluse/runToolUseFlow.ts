@@ -99,7 +99,7 @@ export interface RunToolUseFlowResult {
   totalCostUsd?: number;
 }
 
-export class ToolUseFlowError extends Error {
+class ToolUseFlowError extends Error {
   constructor(
     message: string,
     readonly result: RunToolUseFlowResult,
@@ -116,7 +116,7 @@ export function getToolUseFlowErrorResult(
   return error instanceof ToolUseFlowError ? error.result : undefined;
 }
 
-export interface ToolUseFlowContext {
+interface ToolUseFlowContext {
   readonly ownerSession: SessionHandle;
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: ToolUseServices['modelHandler'];

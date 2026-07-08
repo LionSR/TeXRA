@@ -36,7 +36,7 @@ export const EdgeFunctionResponseSchema = z.object({
 });
 
 /** Loaded remote agent configuration (settings + prompts). */
-export const RemoteAgentConfigSchema = z.strictObject({
+const RemoteAgentConfigSchema = z.strictObject({
   settings: AgentSettingSchema,
   prompts: AgentPromptSchema,
 });

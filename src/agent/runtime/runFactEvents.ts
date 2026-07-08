@@ -16,7 +16,7 @@ import type {
  * `updateTodos`/`updatePlan`/`goalPaused`, the extension filters on
  * `addOutputFiles`). Retiring it means typed `AgentEvent` arms per fact.
  */
-export const RUN_FACT_DOMAIN_PREFIX = 'runFact.';
+const RUN_FACT_DOMAIN_PREFIX = 'runFact.';
 
 export type RunFactPayloads = {
   updateTodos: UpdateTodosPayload;

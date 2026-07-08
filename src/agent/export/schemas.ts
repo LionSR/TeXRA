@@ -16,7 +16,7 @@ import { z } from 'zod';
 // Export configuration (caller-supplied)
 // ============================================================
 
-export const ExportConfigSchema = z.object({
+const ExportConfigSchema = z.object({
   agent: z.string().optional(),
   model: z.string().optional(),
   instruction: z.string().optional(),
@@ -27,7 +27,7 @@ export const ExportConfigSchema = z.object({
 });
 export type ExportConfig = z.infer<typeof ExportConfigSchema>;
 
-export const ChatExportInputSchema = z.object({
+const ChatExportInputSchema = z.object({
   timestamp: z.string(),
   description: z.string().optional(),
   config: ExportConfigSchema,
@@ -44,7 +44,7 @@ const WebSearchResultSchema = z.object({
   url: z.string(),
 });
 
-export const UserPartSchema = z.discriminatedUnion('type', [
+const UserPartSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
   z.object({
     type: z.literal('attachment'),
