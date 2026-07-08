@@ -13,7 +13,7 @@ import { commandOnly } from './messageFactories';
 // Data schemas
 // ============================================================
 
-export const MemoryViewItemSchema = z.object({
+const MemoryViewItemSchema = z.object({
   displayPath: z.string(),
   storagePath: z.string(),
   size: z.number(),
@@ -28,7 +28,7 @@ export const MemoryViewItemSchema = z.object({
 });
 export type MemoryViewItem = z.infer<typeof MemoryViewItemSchema>;
 
-export const MemoryPreviewSchema = z.object({
+const MemoryPreviewSchema = z.object({
   storagePath: z.string(),
   lineCount: z.number().optional(),
   preview: z.string().optional(),
@@ -63,10 +63,9 @@ export const UpdateMemoryEnabledMessageSchema = z.object({
 export const MemoryPathMessageSchema = z.object({
   storagePath: z.string().min(1),
 });
-export type MemoryPathMessage = z.infer<typeof MemoryPathMessageSchema>;
 
 /** Memory item action detail for frontend events (open/delete) */
-export const MemoryItemActionDetailSchema = z.object({
+const MemoryItemActionDetailSchema = z.object({
   storagePath: z.string(),
   displayPath: z.string().optional(),
 });
@@ -78,13 +77,11 @@ export type MemoryItemActionDetail = z.infer<
 export const MemoryDeleteMessageSchema = MemoryPathMessageSchema.extend({
   displayPath: z.string().min(1),
 });
-export type MemoryDeleteMessage = z.infer<typeof MemoryDeleteMessageSchema>;
 
 /** Memory enabled toggle message (reusable field schema) */
 export const MemoryEnabledMessageSchema = z.object({
   enabled: z.boolean(),
 });
-export type MemoryEnabledMessage = z.infer<typeof MemoryEnabledMessageSchema>;
 
 // Inbound messages with command literals
 export const GetMemoryDataMessageSchema = commandOnly(
