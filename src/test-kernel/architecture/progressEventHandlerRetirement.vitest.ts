@@ -13,6 +13,8 @@ const REPO_ROOT = resolve(
 
 const RETIRED_MODULE =
   'src/shared/progressView/backend/events/ProgressEventHandler.ts';
+const RETIRED_EXTENSION_PROGRESS_MODULE =
+  'packages/extension/src/frontend/events/extensionProgressEvents.ts';
 const RETIRED_SYMBOL = /\bProgressEventHandler\b/;
 
 const SCAN_ROOTS = [
@@ -62,6 +64,12 @@ function mentionsRetiredSymbol(file: string): boolean {
 describe('ProgressEventHandler retirement boundary', () => {
   it('removes the retired ProgressEventHandler module', () => {
     expect(existsSync(resolve(REPO_ROOT, RETIRED_MODULE))).toBe(false);
+  });
+
+  it('removes the retired extension progress-event adapter module', () => {
+    expect(
+      existsSync(resolve(REPO_ROOT, RETIRED_EXTENSION_PROGRESS_MODULE)),
+    ).toBe(false);
   });
 
   it('removes the ProgressEventHandler class name from production sources', () => {
