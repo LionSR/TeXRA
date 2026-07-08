@@ -669,7 +669,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('applies session-originated progress events exactly once', async () => {
+  it('applies session facts without re-entering the host progress-event applier', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
     const applier = vi.spyOn(backend.eventHandler, 'handleProgressEvent');
@@ -689,8 +689,7 @@ describe('ProgressBackend', () => {
       });
 
       await vi.waitFor(() => expect(backend.state.activeStream).toBe(streamId));
-      expect(applier).toHaveBeenCalledTimes(1);
-      expect(applier).toHaveBeenCalledWith('setActiveStream', payload);
+      expect(applier).not.toHaveBeenCalled();
     } finally {
       subscription.dispose();
       backend.dispose();
@@ -878,47 +877,7 @@ describe('ProgressBackend', () => {
       });
 
       expect(handleRunFact).toHaveBeenCalledTimes(7);
-      expect(handleProgressEvent).toHaveBeenCalledTimes(7);
-      expect(handleProgressEvent).toHaveBeenNthCalledWith(1, 'addOutputFiles', {
-        streamId,
-        filesByRound: { 1: [outputFile] },
-      });
-      expect(handleProgressEvent).toHaveBeenNthCalledWith(
-        2,
-        'updateMissingOutputs',
-        {
-          streamId,
-          filesByRound: { 1: ['paper.pdf'] },
-        },
-      );
-      expect(handleProgressEvent).toHaveBeenNthCalledWith(
-        3,
-        'updateCompileFailures',
-        {
-          streamId,
-          filesByRound: { 1: [compileFailure] },
-        },
-      );
-      expect(handleProgressEvent).toHaveBeenNthCalledWith(4, 'updateTodos', {
-        streamId,
-        todos,
-      });
-      expect(handleProgressEvent).toHaveBeenNthCalledWith(5, 'updatePlan', {
-        streamId,
-        plan,
-      });
-      expect(handleProgressEvent).toHaveBeenNthCalledWith(
-        6,
-        'updateStreamUsage',
-        {
-          streamId,
-          storageKey,
-          usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
-        },
-      );
-      expect(handleProgressEvent).toHaveBeenNthCalledWith(7, 'goalPaused', {
-        streamId,
-      });
+      expect(handleProgressEvent).not.toHaveBeenCalled();
       expect(updateFiles).toHaveBeenCalledTimes(1);
       expect(updateFiles).toHaveBeenCalledWith(streamId, {
         rounds: { 1: [outputFile] },
