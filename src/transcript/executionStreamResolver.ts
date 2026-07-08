@@ -119,7 +119,7 @@ async function pickBestMetaMatch(
  *
  * Decide-once-carry-as-data (#7469): when a `streamDataMeta` resolution below
  * finds exactly one meta-matched candidate (no disambiguation needed), it's
- * cached onto the execution's own metadata (`writeExecutionStreamId`) so a
+ * cached onto the execution's own metadata (`writeExecutionStreamId`) before a
  * later call for the same executionId can skip straight to a single cheap
  * read instead of re-scanning every persisted stream. A multi-candidate
  * resolution is deliberately NOT cached: `pickBestMetaMatch`'s ranking
@@ -162,7 +162,7 @@ export async function resolvePersistedStreamIdForExecution(
       options.streamLogStore,
     );
     if (metaCandidates.length === 1) {
-      void writeExecutionStreamId(executionId, streamId);
+      await writeExecutionStreamId(executionId, streamId);
     }
     return { streamId, source: 'streamDataMeta' };
   }
