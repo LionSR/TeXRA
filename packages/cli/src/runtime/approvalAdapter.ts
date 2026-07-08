@@ -288,7 +288,6 @@ export function createHeadlessCliHostInteractions(
       });
       return { threadId: request.threadId };
     },
-    handleProgressEvent: () => false,
     resolve: () => false,
     // Headless requests decide inline (policy or prompt hooks) — there is no
     // pending registry to cancel into.

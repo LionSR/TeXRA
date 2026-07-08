@@ -6,6 +6,7 @@ import {
   type ExtensionPresentationEventPayloads,
   isExtensionPresentationEvent,
 } from '@frontend/events/extensionPresentationEvents';
+import { emitExtensionProgressEvent } from '@frontend/events/extensionProgressEvents';
 
 export const extensionAgentRuntimeHost: AgentRuntimeHost = {
   interactions: defaultSession().interactions,
@@ -17,6 +18,6 @@ export const extensionAgentRuntimeHost: AgentRuntimeHost = {
       );
       return;
     }
-    defaultSession().interactions.handleProgressEvent(event, payload);
+    emitExtensionProgressEvent(event, payload);
   },
 };

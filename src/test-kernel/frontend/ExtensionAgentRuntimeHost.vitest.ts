@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { extensionPresentationEvents } from '@frontend/events/extensionPresentationEvents';
+import { setExtensionProgressEventSink } from '@frontend/events/extensionProgressEvents';
 import type { StreamTabId } from '@shared/schemas';
 
 describe('extensionAgentRuntimeHost', () => {
@@ -27,43 +27,39 @@ describe('extensionAgentRuntimeHost', () => {
     }
   });
 
-  it('routes run progress events through extension host interactions', () => {
-    const interactionEvents: unknown[] = [];
-    const disposeInteractions = defaultSession().useHostInteractions({
-      handleProgressEvent: (event, payload) => {
-        interactionEvents.push({ event, payload });
-        return true;
+  it('routes run progress events through the extension progress sink', () => {
+    const progressEvents: unknown[] = [];
+    const disposeProgressSink = setExtensionProgressEventSink(
+      (event, payload) => {
+        progressEvents.push({ event, payload });
       },
-      resolve: () => false,
-      cancel: () => {},
-    });
+    );
 
     try {
       extensionAgentRuntimeHost.emit('setActiveStream', {
         streamId: 'extension:progress' as StreamTabId,
       });
 
-      expect(interactionEvents).toEqual([
+      expect(progressEvents).toEqual([
         {
           event: 'setActiveStream',
           payload: { streamId: 'extension:progress' as StreamTabId },
         },
       ]);
 
-      disposeInteractions();
+      disposeProgressSink();
       extensionAgentRuntimeHost.emit('setActiveStream', {
         streamId: 'extension:after-detach' as StreamTabId,
       });
 
-      // A detached host-interactions implementation no longer receives events.
-      expect(interactionEvents).toEqual([
+      expect(progressEvents).toEqual([
         {
           event: 'setActiveStream',
           payload: { streamId: 'extension:progress' as StreamTabId },
         },
       ]);
     } finally {
-      disposeInteractions();
+      disposeProgressSink();
     }
   });
 });

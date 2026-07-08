@@ -189,15 +189,6 @@ function emitProjectedProgressEvent(
   runtimeHost: AgentRuntimeHost,
   projected: CliProjectedProgressEvent,
 ): void {
-  if (
-    projected.event === 'removeStream' &&
-    runtimeHost.interactions?.handleProgressEvent(
-      projected.event,
-      projected.payload,
-    )
-  ) {
-    return;
-  }
   runtimeHost.emit(projected.event, projected.payload);
 }
 
