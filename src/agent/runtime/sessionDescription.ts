@@ -11,7 +11,6 @@ import { getAgent } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   createHelperModelKit,
@@ -114,11 +113,13 @@ export async function generateSessionDescription(
       const description = cleanSessionDescription(text);
       if (!description) return;
       await writeSessionDescription(executionId, description);
-      emitRuntimeEvent(
-        'updateStreamDescription',
-        { streamId, description },
-        session,
-      );
+      session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateStreamDescription',
+          payload: { streamId, description },
+        },
+      });
       logger.info(CHANNEL, `Generated session description for ${executionId}`);
     }
   } catch (err) {

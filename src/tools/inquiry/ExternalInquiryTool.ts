@@ -22,7 +22,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { createChannelTrace } from '@logger';
 import {
   ExternalInquiryThreadIdSchema,
@@ -358,6 +357,7 @@ export class ExternalInquiryTool extends defineTool({
         'inquiry { command: "ask" } requires an active stream context.',
       );
     }
+    const ownerSession = session ?? defaultSession();
 
     logger.info(`Inquiry dispatch [${input.thread_id ?? 'new'}]`, {
       data: input.question.slice(0, 100),
@@ -391,7 +391,13 @@ export class ExternalInquiryTool extends defineTool({
     }
 
     runtimeHost.emit('requestEnsureProgressView', {});
-    emitRuntimeEvent('setActiveStream', { streamId }, session);
+    ownerSession.events.emit({
+      scope: 'session',
+      event: {
+        type: 'setActiveStream',
+        payload: { streamId },
+      },
+    });
     const isFollowUp = !!input.thread_id;
     const basePermission = {
       requestId: persisted.threadId, // legacy field — panel addresses by threadId now
@@ -428,7 +434,13 @@ export class ExternalInquiryTool extends defineTool({
     // Background Tasks panel: announce the open thread.
     const summary = await getThreadSummary(persisted.threadId);
     if (summary) {
-      emitRuntimeEvent('inquiryThreadUpdated', summary, session);
+      ownerSession.events.emit({
+        scope: 'session',
+        event: {
+          type: 'inquiryThreadUpdated',
+          payload: summary,
+        },
+      });
     }
 
     const message =
