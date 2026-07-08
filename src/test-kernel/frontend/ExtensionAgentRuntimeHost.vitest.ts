@@ -27,7 +27,7 @@ describe('extensionAgentRuntimeHost', () => {
     }
   });
 
-  it('routes run progress events through the extension progress sink', () => {
+  it('routes backend interaction events through the extension progress sink', () => {
     const progressEvents: unknown[] = [];
     const disposeProgressSink = setExtensionProgressEventSink(
       (event, payload) => {
@@ -39,23 +39,34 @@ describe('extensionAgentRuntimeHost', () => {
       extensionAgentRuntimeHost.emit('setActiveStream', {
         streamId: 'extension:progress' as StreamTabId,
       });
-
-      expect(progressEvents).toEqual([
-        {
-          event: 'setActiveStream',
-          payload: { streamId: 'extension:progress' as StreamTabId },
-        },
-      ]);
-
-      disposeProgressSink();
-      extensionAgentRuntimeHost.emit('setActiveStream', {
-        streamId: 'extension:after-detach' as StreamTabId,
+      extensionAgentRuntimeHost.emit('updateToolEditApprovalBypassState', {
+        streamId: 'extension:progress' as StreamTabId,
+        bypassActive: true,
       });
 
       expect(progressEvents).toEqual([
         {
-          event: 'setActiveStream',
-          payload: { streamId: 'extension:progress' as StreamTabId },
+          event: 'updateToolEditApprovalBypassState',
+          payload: {
+            streamId: 'extension:progress' as StreamTabId,
+            bypassActive: true,
+          },
+        },
+      ]);
+
+      disposeProgressSink();
+      extensionAgentRuntimeHost.emit('updateToolEditApprovalBypassState', {
+        streamId: 'extension:after-detach' as StreamTabId,
+        bypassActive: false,
+      });
+
+      expect(progressEvents).toEqual([
+        {
+          event: 'updateToolEditApprovalBypassState',
+          payload: {
+            streamId: 'extension:progress' as StreamTabId,
+            bypassActive: true,
+          },
         },
       ]);
     } finally {
