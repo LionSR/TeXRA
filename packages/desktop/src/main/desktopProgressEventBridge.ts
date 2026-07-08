@@ -80,11 +80,10 @@ export interface DesktopProgressEventBridge {
   hasRestoredStream(streamId: StreamTabId): boolean;
 
   /**
-   * Handle a progress event emitted through the runtime host.
+   * Handle a desktop presentation event emitted through the runtime host.
    *
-   * Applies the desktop-specific rail update (persist snapshot, remove ghost,
-   * route-to-progress, show root errors) for events delivered through the
-   * owning window's runtime host or session projection path.
+   * Session and run facts reach this bridge through `onSessionEvent`; this path
+   * is only for window-local host requests that have no durable session fact.
    */
   onProgressEvent<K extends keyof ProgressEventPayloads>(
     event: K,
@@ -216,37 +215,6 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     // this second route also no-ops once disposed.
     if (this.disposed) return;
     switch (event) {
-      case 'setActiveStream': {
-        const data = payload as ProgressEventPayloads['setActiveStream'];
-        this.handleSetActiveStream(data);
-        return;
-      }
-      case 'setTaskState': {
-        const data = payload as ProgressEventPayloads['setTaskState'];
-        this.handleRunConfigFact(data.streamId, data.executionId);
-        return;
-      }
-      case 'updateStreamStatus': {
-        const data = payload as ProgressEventPayloads['updateStreamStatus'];
-        this.handleStreamStatusFact(data.streamId, data.status);
-        return;
-      }
-      case 'updateStreamDescription': {
-        const data =
-          payload as ProgressEventPayloads['updateStreamDescription'];
-        this.persistStreamSnapshot(data.streamId);
-        return;
-      }
-      case 'setParentStream': {
-        const data = payload as ProgressEventPayloads['setParentStream'];
-        this.persistStreamSnapshot(data.childStreamId);
-        return;
-      }
-      case 'goalStateChanged': {
-        const data = payload as ProgressEventPayloads['goalStateChanged'];
-        this.handleGoalStateChanged(data.streamId);
-        return;
-      }
       case 'requestEnsureProgressView':
         this.opts.routeToProgress();
         return;

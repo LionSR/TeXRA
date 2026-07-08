@@ -326,10 +326,16 @@ describe('DesktopProgressEventBridge', () => {
 
       try {
         expect(bridge.hasRestoredStream('live-stream')).toBe(true);
-        bridge.onProgressEvent('updateStreamStatus', {
+        bridge.onSessionEvent({
+          scope: 'run',
           streamId: 'live-stream',
-          status: STREAM_STATUS.RUNNING,
-          previousStatus: STREAM_PHASE.CANCELLED,
+          event: {
+            type: 'status',
+            streamId: 'live-stream',
+            phase: STREAM_PHASE.RUNNING,
+            previousPhase: STREAM_PHASE.CANCELLED,
+            cause: 'run-start',
+          } as any,
         });
         bridge.hydrateRestoredStreams();
 
@@ -378,16 +384,23 @@ describe('DesktopProgressEventBridge', () => {
   // ── Progress events ─────────────────────────────────────────────────────
 
   describe('onProgressEvent', () => {
-    it('removes ghost and persists snapshot on setTaskState', async () => {
+    it('ignores stream fact-shaped host events', async () => {
       const upsert = vi.fn(async () => {});
+      const onGoalStateChanged = vi.fn();
+      const streamStatus = {
+        get: vi.fn(() => STREAM_PHASE.WAITING),
+        transition: vi.fn(() => true),
+      };
 
       const bridge = createBridge({
+        onGoalStateChanged,
         state: makeMockState({
           streamLogs: createStreamLogs({
             has: () => true,
             getLastTimestamp: () => 3_000,
           }),
         }),
+        streamStatus,
         streamSnapshotStore: createSnapshotStore({
           hydrated: [createSnapshot({ streamId: 'task-stream' })],
           upsert,
@@ -401,51 +414,19 @@ describe('DesktopProgressEventBridge', () => {
           streamId: 'task-stream',
           taskState: undefined as any,
         });
-
-        expect(bridge.hasRestoredStream('task-stream')).toBe(false);
-        await settleMicrotasks();
-        expect(upsert).toHaveBeenCalled();
-      } finally {
-        bridge.dispose();
-      }
-    });
-
-    it('removes ghost and persists snapshot on updateStreamStatus', async () => {
-      const upsert = vi.fn(async () => {});
-      const streamStatus = {
-        get: vi.fn(() => STREAM_PHASE.WAITING),
-        transition: vi.fn(() => true),
-      };
-
-      const bridge = createBridge({
-        state: makeMockState({
-          streamLogs: createStreamLogs({
-            has: () => true,
-            getLastTimestamp: () => 3_000,
-          }),
-        }),
-        streamStatus,
-        streamSnapshotStore: createSnapshotStore({
-          hydrated: [createSnapshot({ streamId: 'status-stream' })],
-          upsert,
-        }),
-      });
-
-      try {
         bridge.onProgressEvent('updateStreamStatus', {
-          streamId: 'status-stream',
+          streamId: 'task-stream',
           status: STREAM_STATUS.RUNNING,
           previousStatus: STREAM_PHASE.CANCELLED,
         });
+        bridge.onProgressEvent('goalStateChanged', {
+          streamId: 'task-stream',
+        });
 
-        expect(bridge.hasRestoredStream('status-stream')).toBe(false);
         await settleMicrotasks();
-        expect(upsert).toHaveBeenCalledWith(
-          expect.objectContaining({
-            streamId: 'status-stream',
-            lastKnownStatus: STREAM_PHASE.RUNNING,
-          }),
-        );
+        expect(bridge.hasRestoredStream('task-stream')).toBe(true);
+        expect(upsert).not.toHaveBeenCalled();
+        expect(onGoalStateChanged).not.toHaveBeenCalled();
       } finally {
         bridge.dispose();
       }
@@ -460,51 +441,6 @@ describe('DesktopProgressEventBridge', () => {
             streamId: 'test',
           }),
         ).not.toThrow();
-      } finally {
-        bridge.dispose();
-      }
-    });
-
-    it('clears active stream when setActiveStream has empty streamId', () => {
-      const messages: unknown[] = [];
-      const mockState = makeMockState();
-      mockState.activeStream = 'previous-stream';
-
-      const bridge = createBridge({
-        state: mockState,
-        sendMessage: (msg) => messages.push(msg),
-        getActiveStream: () => mockState.activeStream,
-      });
-
-      try {
-        bridge.onProgressEvent('setActiveStream', {
-          streamId: '',
-          suppressViewSwitch: true,
-        });
-
-        expect(mockState.activeStream).toBe('');
-        expect(messages).toContainEqual({
-          command: 'setActiveStream',
-          activeStream: '',
-        });
-      } finally {
-        bridge.dispose();
-      }
-    });
-
-    it('updates goal badge state from the session progress path', () => {
-      const onGoalStateChanged = vi.fn();
-      const bridge = createBridge({ onGoalStateChanged });
-
-      try {
-        bridge.onProgressEvent('goalStateChanged', {
-          streamId: 'goal-stream',
-        });
-
-        expect(onGoalStateChanged).toHaveBeenCalledWith('goal-stream', false, {
-          status: undefined,
-          objective: undefined,
-        });
       } finally {
         bridge.dispose();
       }
@@ -875,9 +811,8 @@ describe('DesktopProgressEventBridge', () => {
       bridge.dispose();
 
       // These should not throw
-      bridge.onProgressEvent('setTaskState', {
-        streamId: 'test',
-        taskState: undefined as any,
+      bridge.onProgressEvent('requestShowError', {
+        message: 'test',
       });
       bridge.onStreamDeleted('test');
       bridge.sendRestoredDisplay('test');
