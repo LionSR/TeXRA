@@ -37,8 +37,6 @@ export interface DiffRunOutcome {
   totalOperations: number;
 }
 
-export type DiffOperationType = 'round' | 'between-rounds';
-
 interface DiffOperationBase {
   base: FileLocation;
   revised: FileLocation;
@@ -46,12 +44,12 @@ interface DiffOperationBase {
   cwd: string;
 }
 
-export interface RoundDiffOperation extends DiffOperationBase {
+interface RoundDiffOperation extends DiffOperationBase {
   type: 'round';
   round: number;
 }
 
-export interface BetweenRoundsDiffOperation extends DiffOperationBase {
+interface BetweenRoundsDiffOperation extends DiffOperationBase {
   type: 'between-rounds';
   fromRound: number;
   toRound: number;

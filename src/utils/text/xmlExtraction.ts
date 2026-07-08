@@ -197,7 +197,7 @@ export async function extractScratchpad(
 // Extraction Result Schemas
 // ============================================================================
 
-export interface ExtractionResult {
+interface ExtractionResult {
   content: string | null;
   method: 'simple' | 'markdown' | 'latex' | 'none';
 }

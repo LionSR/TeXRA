@@ -14,19 +14,14 @@ import type { Skill } from './SkillSchema';
 // Local imports - utilities
 import type { Dirent } from 'node:fs';
 
-export {
-  type SkillIssueCode,
-  type SkillIssueSeverity,
-  type SkillLoadIssue,
-} from './skillLoader';
+export { type SkillLoadIssue } from './skillLoader';
 
 export interface DiscoverSkillsResult {
   skills: Skill[];
   errors: SkillLoadIssue[];
 }
 
-export type SkillSourceScope =
-  'bundled' | 'user' | 'project' | 'interop' | 'custom';
+type SkillSourceScope = 'bundled' | 'user' | 'project' | 'interop' | 'custom';
 
 export interface SkillSource {
   scope: SkillSourceScope;

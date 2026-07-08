@@ -23,13 +23,6 @@ import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 
-export type RecordingLogLevel = 'debug' | 'info' | 'warn' | 'error';
-
-export interface RecordingLogEntry {
-  level: RecordingLogLevel;
-  message: string;
-}
-
 function fakeFsError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
 }
@@ -424,7 +417,7 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   }
 }
 
-export class FakeWorkspaceProvider implements WorkspaceProvider {
+class FakeWorkspaceProvider implements WorkspaceProvider {
   constructor(private readonly workspacePath: string | undefined) {}
 
   getWorkspacePath(): string | undefined {
@@ -445,7 +438,7 @@ export class FakeWorkspaceProvider implements WorkspaceProvider {
   }
 }
 
-export class FakeStorageProvider implements StorageProvider {
+class FakeStorageProvider implements StorageProvider {
   constructor(
     private readonly storagePath = '/workspace/.texra/storage',
     private readonly globalStoragePath = '/global/.texra/storage',
