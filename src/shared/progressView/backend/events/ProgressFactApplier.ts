@@ -113,7 +113,6 @@ export class ProgressFactApplier {
     this.state.getOrCreateStreamState(streamId, category);
     this.state.resetFinishedChildCounters(streamId);
     this.pendingProgressUpdates.delete(streamId);
-    this.state.pruneInterruptHandles();
 
     if (this.state.activeStream === streamId) {
       this.maybeUpdateFilterForCategory(knownCategory);
