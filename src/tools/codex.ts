@@ -42,6 +42,7 @@ import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { formatWallTimeSeconds } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -145,7 +146,7 @@ function formatCodexDelivery(
       attributes: [{ name: 'thread-id', value: threadId || null }],
     },
     {
-      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      wallTime: formatWallTimeSeconds(wallTimeMs),
       response: turn.finalResponse,
       usage: turn.usage
         ? { input: turn.usage.input_tokens, output: turn.usage.output_tokens }

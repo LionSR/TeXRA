@@ -35,6 +35,7 @@ import { formatLocaleTimestamp } from '@utils/text/stringUtils';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
+import { hasSearchValue } from './historySearch';
 
 type ConfigValue = string | number | boolean | string[] | null | undefined;
 
@@ -219,11 +220,6 @@ export class HistoryItemElement extends LitElement {
     return html`${value ?? ''}`;
   }
 
-  private hasValue(value: ConfigValue): boolean {
-    if (value == null) return false;
-    return !Array.isArray(value) || value.length > 0;
-  }
-
   private renderInstructionBlock(
     instructionText: string | null,
     titleText: string,
@@ -259,7 +255,7 @@ export class HistoryItemElement extends LitElement {
     label: string | TemplateResult,
     entries: Array<[string, ConfigValue]>,
   ): TemplateResult | null {
-    const filtered = entries.filter(([, value]) => this.hasValue(value));
+    const filtered = entries.filter(([, value]) => hasSearchValue(value));
     if (!filtered.length) return null;
 
     return html`

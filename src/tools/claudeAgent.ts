@@ -37,7 +37,7 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { isNonEmptyString } from '@utils/core';
+import { formatWallTimeSeconds, isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -159,7 +159,7 @@ function formatClaudeDelivery(
       attributes: [{ name: 'session-id', value: turn.sessionId || null }],
     },
     {
-      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      wallTime: formatWallTimeSeconds(wallTimeMs),
       response: turn.finalResponse,
       usage: turn.usage
         ? {

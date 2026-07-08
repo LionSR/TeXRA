@@ -9,6 +9,29 @@ import * as vscode from 'vscode';
 import { WorkspaceFS } from '@utils/files';
 
 /**
+ * Clamp a 1-based line number to a 0-based VS Code line index. Floors first
+ * so a fractional line number degrades gracefully instead of producing a
+ * fractional index; a no-op for the integer line numbers every caller passes.
+ */
+function toZeroBasedLine(line: number): number {
+  return Math.max(0, Math.floor(line) - 1);
+}
+
+/**
+ * Build a VS Code range spanning 1-based `startLine` through `endLine`
+ * (inclusive, defaults to `startLine`). MAX_SAFE_INTEGER is clamped to the
+ * line length by VS Code, so this spans the full text of the last line.
+ */
+export function lineToRange(
+  startLine: number,
+  endLine: number = startLine,
+): vscode.Range {
+  const start = toZeroBasedLine(startLine);
+  const end = Math.max(start, toZeroBasedLine(endLine));
+  return new vscode.Range(start, 0, end, Number.MAX_SAFE_INTEGER);
+}
+
+/**
  * Open a file in VS Code editor, optionally positioning cursor at a line.
  * Reuses existing editor if file is already open.
  */
@@ -39,7 +62,7 @@ export async function openFileInEditor(
 
     if (line !== undefined) {
       const position = new vscode.Position(
-        Math.max(0, line - 1),
+        toZeroBasedLine(line),
         column ? Math.max(0, column - 1) : 0,
       );
       editor.selection = new vscode.Selection(position, position);

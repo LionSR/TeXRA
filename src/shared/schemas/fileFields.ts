@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { unique } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 const LEGACY_KEYS = [
@@ -48,11 +49,9 @@ export function migrateLegacyContextFileFields(input: unknown): unknown {
       obj.contextFile !== obj.auxiliaryFile
         ? [obj.auxiliaryFile]
         : [];
-    const merged = [
-      ...new Set(
-        [...refList, ...auxList, ...auxFallback].filter(isNonEmptyString),
-      ),
-    ];
+    const merged = unique(
+      [...refList, ...auxList, ...auxFallback].filter(isNonEmptyString),
+    );
     if (merged.length > 0) obj.contextFiles = merged;
   }
   delete obj.referenceFile;
@@ -71,9 +70,9 @@ export function migrateLegacyContextFileFields(input: unknown): unknown {
       ? listValue.filter(isNonEmptyString)
       : [];
     if (isNonEmptyString(obj[single])) {
-      obj[multi] = [
-        ...new Set([obj[single] as string, ...list].filter(isNonEmptyString)),
-      ];
+      obj[multi] = unique(
+        [obj[single] as string, ...list].filter(isNonEmptyString),
+      );
     } else if (Array.isArray(listValue)) {
       obj[multi] = list;
     }

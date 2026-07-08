@@ -95,6 +95,7 @@ import {
   type DesktopToolEditApprovalController,
 } from './desktopToolEditApproval.js';
 import { createDesktopHostInteractions } from './desktopHostInteractions.js';
+import { toLogData } from './desktopLogUtils.js';
 import {
   DesktopProgressFileActions,
   type DesktopLatexdiffRunContext,
@@ -450,7 +451,7 @@ export class DesktopProgressBridge {
           },
           logError: (message, error) => {
             this.logger.error(message, {
-              data: error instanceof Error ? error : { error },
+              data: toLogData(error),
             });
           },
         },
@@ -528,7 +529,7 @@ export class DesktopProgressBridge {
           reportImageSaveError: (image, error) => {
             this.logger.warn(
               `Failed to save pasted follow-up image ${image.fileName}`,
-              { data: error instanceof Error ? error : { error } },
+              { data: toLogData(error) },
             );
           },
         },
@@ -691,7 +692,7 @@ export class DesktopProgressBridge {
     this.workflowFileActions.clearAllBackups();
     void this.state.flush().catch((error: unknown) => {
       this.logger.warn('Failed to flush desktop progress state', {
-        data: error instanceof Error ? error : { error },
+        data: toLogData(error),
       });
     });
     // Tear down this window's session last. In-flight runs are allowed to keep
@@ -924,10 +925,7 @@ export class DesktopProgressBridge {
         this.logger.warn(
           'Failed to consult persisted flow records during desktop restart-repair fallback',
           {
-            data:
-              detectError instanceof Error
-                ? detectError
-                : { error: detectError },
+            data: toLogData(detectError),
           },
         );
         // detectRaceGuardedWaitingStreams() throwing only means the
@@ -984,15 +982,12 @@ export class DesktopProgressBridge {
         this.logger.warn(
           'Failed to apply desktop stream repair fallback writes',
           {
-            data:
-              repairError instanceof Error
-                ? repairError
-                : { error: repairError },
+            data: toLogData(repairError),
           },
         );
       }
       this.logger.warn('Failed to repair desktop streams after restart', {
-        data: error instanceof Error ? error : { error },
+        data: toLogData(error),
       });
     }
   }
@@ -1226,7 +1221,7 @@ export class DesktopProgressBridge {
     error: unknown,
   ): Promise<void> {
     this.logger.error(`Failed to resume desktop stream ${streamId}`, {
-      data: error instanceof Error ? error : { error },
+      data: toLogData(error),
     });
     await this.options.showErrorMessage?.(
       `Resume failed: ${toErrorMessage(error)}`,
@@ -1314,7 +1309,7 @@ export class DesktopProgressBridge {
       await this.state.snapshots.preload([streamId]);
     } catch (error) {
       this.logger.warn(`Failed to read persisted resume data for ${streamId}`, {
-        data: error instanceof Error ? error : { error },
+        data: toLogData(error),
       });
       return undefined;
     }
