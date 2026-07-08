@@ -14,7 +14,6 @@ import {
 } from '@agent/core/state/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
@@ -24,6 +23,7 @@ import {
   createHeadlessCliHostInteractions,
   installCliApprovalHandlers,
 } from './approvalAdapter';
+import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
@@ -183,7 +183,7 @@ export async function executeCliRequest(
     defaultSession(),
     interactionHost,
   );
-  const detachSessionProgressProjection = attachSessionProgressEventProjection(
+  const detachSessionProgressProjection = attachCliSessionProgressProjection(
     defaultSession().events,
     interactionHost,
   );

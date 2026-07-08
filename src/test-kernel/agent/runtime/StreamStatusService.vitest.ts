@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { TraceEmitter, type StatusEvent } from '@agent/trace';
-import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   StreamStatusMachine,
@@ -24,6 +23,7 @@ import {
 } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 /** Fresh registry + recording host, keyed to a per-test stream id. */
 function setupMachine(streamId: string): {
@@ -34,7 +34,7 @@ function setupMachine(streamId: string): {
 } {
   const events = new SessionEventHub();
   const explicit = createRecordingHost();
-  attachSessionProgressEventProjection(events, explicit.host);
+  attachSessionProgressEventProjectionForTest(events, explicit.host);
   return {
     machine: new StreamStatusMachine(),
     explicit,
@@ -65,7 +65,7 @@ describe('StreamStatusMachine', () => {
     const second = new StreamStatusMachine();
     const events = new SessionEventHub();
     const explicit = createRecordingHost();
-    attachSessionProgressEventProjection(events, explicit.host);
+    attachSessionProgressEventProjectionForTest(events, explicit.host);
     const streamId = 'stream-status-listener-test' as StreamTabId;
     const changes: string[] = [];
 
@@ -378,7 +378,7 @@ describe('StreamStatusMachine', () => {
     const machine = new StreamStatusMachine();
     const events = new SessionEventHub();
     const explicit = createRecordingHost();
-    attachSessionProgressEventProjection(events, explicit.host);
+    attachSessionProgressEventProjectionForTest(events, explicit.host);
     const trace = new TraceEmitter();
     const streamId = 'stream-status-projection-test' as StreamTabId;
     const statusEvents: StatusEvent[] = [];
