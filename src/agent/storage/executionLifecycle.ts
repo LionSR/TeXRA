@@ -12,7 +12,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
 
 import * as logger from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -179,4 +179,17 @@ export async function writeSessionDescription(
   description: string,
 ): Promise<void> {
   await persistMetaField(executionId, { description }, 'session description');
+}
+
+/**
+ * Cache the resolved transcript stream for an execution, once
+ * `resolvePersistedStreamIdForExecution` (`executionStreamResolver.ts`) has
+ * actually decided it via its meta-scan, so later resolutions for the same
+ * executionId can skip straight to this field instead of re-scanning.
+ */
+export async function writeExecutionStreamId(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): Promise<void> {
+  await persistMetaField(executionId, { streamId }, 'execution stream id');
 }

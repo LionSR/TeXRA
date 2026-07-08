@@ -16,6 +16,9 @@ import {
   StreamSnapshotStore,
 } from '@transcript';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { registerExecution } from '@agent/storage/executionLifecycle';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -24,8 +27,37 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { AgentCategory } from '@shared/schemas/agent';
 import type { Platform } from '@platform/platform';
+
+const MINIMAL_CONFIG: AgentConfig = {
+  agent: 'chat',
+  model: 'deepseekproT',
+  instruction: 'Check the proof.',
+  agentCategory: AgentCategory.ToolUse,
+  inputFiles: [],
+  outputFiles: [],
+  contextFiles: [],
+  mediaFiles: [],
+  editedFile: null,
+  editedFiles: [],
+  memories: [],
+  toolConfig: DEFAULT_TOOL_CONFIG,
+};
+
+/** Polls readMeta until streamId lands, tolerating the fire-and-forget write's async settle. */
+async function waitForCachedStreamId(
+  executionId: ExecutionId,
+): Promise<StreamTabId | undefined> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const streamId = (await getExecutionStore(executionId).readMeta())
+      ?.streamId;
+    if (streamId) return streamId;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return undefined;
+}
 
 const tempDirs: string[] = [];
 
@@ -260,4 +292,48 @@ describe('resolvePersistedStreamIdForExecution', () => {
       expect(maxInFlight).toBeLessThanOrEqual(8);
     },
   );
+
+  it('returns a cached executionMeta streamId without scanning any persisted stream (#7469)', async () => {
+    const executionId = 'abc555' as ExecutionId;
+    const cachedStreamId = 'orchestrator@deepseekproT#abc555' as StreamTabId;
+    await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator');
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date().toISOString(),
+      streamId: cachedStreamId,
+    });
+
+    // No persisted stream exists at all — if the cache weren't consulted
+    // first, the scan would find nothing and this would resolve to null.
+    const resolved = await resolvePersistedStreamIdForExecution(executionId, {
+      snapshotStore: new StreamSnapshotStore(),
+    });
+
+    expect(resolved).toEqual({
+      streamId: cachedStreamId,
+      source: 'executionMeta',
+    });
+  });
+
+  it('caches a streamDataMeta resolution onto the execution meta for a later cheap lookup (#7469)', async () => {
+    const executionId = 'abc666' as ExecutionId;
+    const streamId = 'orchestrator@deepseekproT#abc666' as StreamTabId;
+    await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator');
+
+    const store = new StreamSnapshotStore();
+    store.setTaskState(streamId, taskState('orchestrator'), executionId);
+    await store.flush();
+
+    const first = await resolvePersistedStreamIdForExecution(executionId, {
+      snapshotStore: new StreamSnapshotStore(),
+    });
+    expect(first).toEqual({ streamId, source: 'streamDataMeta' });
+
+    const cachedStreamId = await waitForCachedStreamId(executionId);
+    expect(cachedStreamId).toBe(streamId);
+
+    const second = await resolvePersistedStreamIdForExecution(executionId, {
+      snapshotStore: new StreamSnapshotStore(),
+    });
+    expect(second).toEqual({ streamId, source: 'executionMeta' });
+  });
 });
