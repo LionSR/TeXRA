@@ -44,7 +44,7 @@ interface ApprovalHandlerTransport<T> {
   resolve: (id: string) => void;
 }
 
-export interface ApprovalRequestHandlerOverrides {
+interface ApprovalRequestHandlerOverrides {
   retry: ApprovalHandlerTransport<RetryPermission>;
   agentProposal: ApprovalHandlerTransport<AgentProposalPermission>;
 }
