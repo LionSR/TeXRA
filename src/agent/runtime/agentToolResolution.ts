@@ -196,10 +196,7 @@ function runtimeNarrowToolDefinition(
   tool: ToolDefinition,
   diagnosticsAddUnavailable: boolean,
 ): ToolDefinition {
-  if (diagnosticsAddUnavailable) {
-    return withoutDiagnosticsAddCommand(tool);
-  }
-  return tool;
+  return diagnosticsAddUnavailable ? withoutDiagnosticsAddCommand(tool) : tool;
 }
 
 /**

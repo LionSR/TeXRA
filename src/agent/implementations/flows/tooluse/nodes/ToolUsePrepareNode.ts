@@ -233,15 +233,10 @@ function refreshPersistedSystemMessage(
   // For system-role messages: preserve existing content block type (OpenAI Chat
   // uses 'text', OpenAI Responses uses 'input_text') so the resumed snapshot
   // stays valid across providers.
-  const prevContent = existing.content;
-  let firstBlockType: string | null = null;
-  if (Array.isArray(prevContent) && prevContent.length > 0) {
-    const firstBlock = prevContent[0];
-    if (typeof firstBlock === 'object' && firstBlock !== null) {
-      const type = (firstBlock as { type?: unknown }).type;
-      if (typeof type === 'string') firstBlockType = type;
-    }
-  }
+  const prevType = Array.isArray(existing.content)
+    ? (existing.content[0] as { type?: unknown } | undefined)?.type
+    : undefined;
+  const firstBlockType = typeof prevType === 'string' ? prevType : null;
   const systemContent = firstBlockType
     ? [{ type: firstBlockType, text: systemText }]
     : systemText;
