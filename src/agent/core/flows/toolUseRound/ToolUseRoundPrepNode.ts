@@ -78,13 +78,15 @@ export class ToolUseRoundPrepNode<C> extends BaseNode<
     // before the model starts thinking/responding
     if (prepRes.queuedFollowUps?.length) {
       for (const followUp of prepRes.queuedFollowUps) {
-        // This follow-up's transcript row must be logged whether
+        // A non-synthetic follow-up's transcript row must be logged whether
         // appendFollowUpAsUserMessage succeeds or throws (e.g. a corrupt/
         // oversized media file) -- otherwise a failed follow-up round leaves
         // no record of what the user asked for. `finally` preserves the
         // throw so the round still fails as before; a throw before any
         // attachment was inserted just yields an empty attachments list,
-        // which is accurate (nothing was actually inserted).
+        // which is accurate (nothing was actually inserted). Synthetic
+        // follow-ups are still never logged, throw or not -- unchanged from
+        // before this fix.
         let result: AppendFollowUpResult | undefined;
         try {
           result = await appendFollowUpAsUserMessage(
