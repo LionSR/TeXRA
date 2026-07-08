@@ -14,6 +14,8 @@ import {
   STREAM_PHASE,
   ConversationProgressSchema,
   ExtendedTokenUsageStatsSchema,
+  UpdatePlanPayloadSchema,
+  UpdateTodosPayloadSchema,
   type ConversationProgress,
   type GoalStatus,
   type StorageKey,
@@ -456,10 +458,25 @@ export class ProgressEventHandler {
       }
 
       const factName = fromRunFactDomainKey(event.key);
+
+      if (factName === 'updateTodos') {
+        const payload = UpdateTodosPayloadSchema.safeParse(event.data);
+        return payload.success
+          ? this.handleProgressFact('updateTodos', payload.data)
+          : undefined;
+      }
+
+      if (factName === 'updatePlan') {
+        const payload = UpdatePlanPayloadSchema.safeParse(event.data);
+        return payload.success
+          ? this.handleProgressFact('updatePlan', payload.data)
+          : undefined;
+      }
+
       if (!factName || !isObject(event.data)) return undefined;
       return this.handleProgressFact(
         factName,
-        event.data as ProgressEventPayloads[typeof factName],
+        event.data as unknown as ProgressEventPayloads[typeof factName],
       );
     }
 
