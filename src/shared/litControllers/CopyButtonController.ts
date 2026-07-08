@@ -4,7 +4,7 @@ import {
 } from '@shared/utils/clipboard';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
-export interface CopyButtonConfig {
+interface CopyButtonConfig {
   /** Default button title/tooltip */
   defaultTitle?: string;
   /** Title shown after successful copy */
@@ -18,7 +18,7 @@ export interface CopyButtonConfig {
 /**
  * Computed state for copy button (used in templates).
  */
-export interface CopyButtonState {
+interface CopyButtonState {
   /** Current title/tooltip text */
   title: string;
   /** Current aria-label */

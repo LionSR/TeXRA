@@ -10,7 +10,7 @@ import type { ActiveChildInfo } from '@shared/schemas';
 import { appendTail } from '@utils/strings/appendTail';
 
 /** Per-execution captured stdout/stderr tail held in stream meta. */
-export interface StreamProcessOutput {
+interface StreamProcessOutput {
   readonly stdout: string;
   readonly stderr: string;
 }
@@ -40,7 +40,7 @@ export type StreamMetaCommand =
  * at the cap). The CLI uses an exact cut; the webview trims to a lower
  * `retainChars` so output can keep appending before the next reset.
  */
-export interface OutputCap {
+interface OutputCap {
   readonly maxChars: number;
   readonly retainChars?: number;
 }

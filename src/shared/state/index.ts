@@ -1,5 +1,1 @@
-export {
-  PersistedState,
-  createWebviewStorage,
-  type StateStorage,
-} from './PersistedState';
+export { PersistedState, createWebviewStorage } from './PersistedState';

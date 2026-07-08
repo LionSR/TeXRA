@@ -62,12 +62,6 @@ export function getModelProviderDecorator(provider: string): ProviderDecorator {
   );
 }
 
-export interface AgentDecorator {
-  icon: string;
-  label: string;
-  hint?: string;
-}
-
 export const AGENT_DECORATORS = {
   properties: {
     remote: {

@@ -24,7 +24,7 @@ interface ProviderDef {
   readonly region?: ProviderRegionSetting;
 }
 
-export interface ProviderRegionSetting {
+interface ProviderRegionSetting {
   readonly key: GlobalStateKey;
   readonly default: boolean;
   readonly displayName?: string;

@@ -24,7 +24,7 @@ export interface LatexReferenceFormatter {
   (refType: string, label: string): string;
 }
 
-export interface MarkdownProcessorConfig {
+interface MarkdownProcessorConfig {
   readonly renderer: MarkdownItInstance;
   /**
    * Formatter for `\ref{…}` / `\cref{…}` / `\eqref{…}` placeholders. Defaults
@@ -57,7 +57,7 @@ export interface MarkdownProcessorConfig {
  * renderer runs. Tests assert against these directly so the cache is
  * exercised as a behaviour, not as a string-equality coincidence.
  */
-export interface MarkdownProcessorStats {
+interface MarkdownProcessorStats {
   readonly hits: () => number;
   readonly misses: () => number;
 }

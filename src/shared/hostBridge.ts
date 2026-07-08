@@ -1,6 +1,6 @@
 import { HOST_BRIDGE_API_KEY, type HostBridgeApi } from './hostBridgeTypes';
 
-export { HOST_BRIDGE_API_KEY, type HostBridgeApi } from './hostBridgeTypes';
+export { type HostBridgeApi } from './hostBridgeTypes';
 
 declare const acquireVsCodeApi: (() => HostBridgeApi) | undefined;
 

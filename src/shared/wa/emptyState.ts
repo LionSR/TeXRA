@@ -9,7 +9,7 @@ import { html as staticHtml, literal } from 'lit/static-html.js';
 
 import { waIcon, type TeXRAIconName } from './webAwesomeIcons';
 
-export interface EmptyStateAction {
+interface EmptyStateAction {
   readonly label: string;
   readonly onClick: () => void;
   readonly appearance?: 'filled' | 'outlined';
@@ -23,7 +23,7 @@ export interface EmptyStateAction {
   readonly icon?: TeXRAIconName;
 }
 
-export type EmptyStateHeadingTag = 'h1' | 'h2' | 'h3';
+type EmptyStateHeadingTag = 'h1' | 'h2' | 'h3';
 
 export interface EmptyStateOptions {
   readonly icon: TeXRAIconName;
