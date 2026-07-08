@@ -137,10 +137,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       const store = new StreamSnapshotStore();
       store.setTaskState(parentStream, taskState('orchestrator'), executionId);
       store.setTaskState(childStream, taskState('bash'), executionId);
-      store.handleProgressEvent('updateTodos', {
-        streamId: childStream,
-        todos: [TODO],
-      });
+      store.setTodos(childStream, [TODO]);
       await store.flush();
 
       const resolved = await resolvePersistedStreamIdForExecution(executionId, {
@@ -221,10 +218,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
         taskState('bash'),
         executionId,
       );
-      snapshotWriter.handleProgressEvent('updateTodos', {
-        streamId: workPlanOnlyStream,
-        todos: [TODO],
-      });
+      snapshotWriter.setTodos(workPlanOnlyStream, [TODO]);
       await snapshotWriter.flush();
 
       const logStore = new StreamLogStore();
