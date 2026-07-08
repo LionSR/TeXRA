@@ -36,7 +36,7 @@ import {
 } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
-import type { ProgressBackendInteractionPayloads } from '@shared/progressView/backend/events/ProgressEventHandler';
+import type { ProgressBackendInteractionPayloads } from '@shared/progressView/backend/events/ProgressInteractionHandler';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
@@ -81,7 +81,7 @@ export class ProgressViewProvider
 
   public readonly backend: ProgressBackend;
   public readonly state: ProgressBackend['state'];
-  public readonly eventHandler: ProgressBackend['eventHandler'];
+  public readonly interactionHandler: ProgressBackend['interactionHandler'];
   public readonly webviewBridge: ProgressBackend['webviewBridge'];
   public readonly webviewUpdater: ProgressBackend['webviewUpdater'];
 
@@ -151,7 +151,7 @@ export class ProgressViewProvider
     this.state = this.backend.state;
     this.webviewUpdater = this.backend.webviewUpdater;
     this.webviewBridge = this.backend.webviewBridge;
-    this.eventHandler = this.backend.eventHandler;
+    this.interactionHandler = this.backend.interactionHandler;
 
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -177,7 +177,7 @@ export class ProgressViewProvider
     );
     const detachExtensionProgressEvents = setExtensionProgressEventSink(
       (event, payload) => {
-        this.backend.handleProgressEvent(
+        this.backend.handleInteractionEvent(
           event,
           payload as ProgressBackendInteractionPayloads[typeof event],
         );

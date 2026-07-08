@@ -70,7 +70,7 @@ type TestableBridge = Bridge & {
       }) => Promise<unknown>;
     };
   };
-  handleProgressEvent(event: string, payload: unknown): void;
+  handleInteractionEvent(event: string, payload: unknown): void;
   syncFullView(): void;
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
   setActiveStream(streamId: StreamTabId): void;
@@ -696,7 +696,7 @@ describe('DesktopProgressBridge', () => {
     ).length;
 
     try {
-      bridge.handleProgressEvent('addOutputFiles', {
+      bridge.handleInteractionEvent('addOutputFiles', {
         streamId,
         filesByRound: {
           1: [
@@ -730,8 +730,8 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages, { showErrorMessage });
 
     try {
-      bridge.handleProgressEvent('requestEnsureProgressView', {});
-      bridge.handleProgressEvent('requestShowError', {
+      bridge.handleInteractionEvent('requestEnsureProgressView', {});
+      bridge.handleInteractionEvent('requestShowError', {
         message: 'Root run failed',
       });
 
