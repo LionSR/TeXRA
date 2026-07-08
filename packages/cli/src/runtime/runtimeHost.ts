@@ -1,9 +1,6 @@
 // Local imports - runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
+import type { SetTaskStatePayload } from '@agent/runtime/taskStateProgressPayload';
 import {
   isRuntimeInteractionEvent,
   type RuntimeInteractionEvent,
@@ -24,7 +21,10 @@ import {
   type Logger,
   type LogSink,
 } from './logSinks';
-import { createRunProgressRenderer } from './runProgressRenderer';
+import {
+  createRunProgressRenderer,
+  isRunProgressEvent,
+} from './runProgressRenderer';
 import type { CliContext } from './cliContext';
 
 export type CliRuntimeHost = AgentRuntimeHost & {
@@ -90,7 +90,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       if (
         !isRuntimePresentationEvent(event) &&
         !isRuntimeInteractionEvent(event) &&
-        runProgress?.handle(event as ProgressEvent, payload)
+        isRunProgressEvent(event) &&
+        runProgress?.handle(event, payload)
       ) {
         return;
       }
@@ -98,7 +99,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       if (context.quietLogs) return;
 
       if (event === 'setTaskState') {
-        const data = payload as ProgressEventPayloads['setTaskState'];
+        const data = payload as SetTaskStatePayload;
         ensureLogger().info('Task state registered', {
           streamId: data.streamId,
         });

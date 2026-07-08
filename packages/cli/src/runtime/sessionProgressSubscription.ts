@@ -1,8 +1,8 @@
 import type { AgentEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import {
+import type {
   ProgressEvent,
-  type ProgressEventPayloads,
+  ProgressEventPayloads,
 } from '@agent/runtime/hostProgressEvents';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
@@ -38,7 +38,7 @@ const CLI_RUN_FACT_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
 
 /**
  * Project session facts onto the frozen host-progress vocabulary for headless
- * CLI output. `followUpSent` is intentionally session-local.
+ * CLI public output. `followUpSent` is intentionally session-local.
  */
 function projectCliSessionFact(
   fact: SessionFact,
