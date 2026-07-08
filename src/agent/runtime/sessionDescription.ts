@@ -66,7 +66,9 @@ function buildUserPrompt(
 export function getSessionDescriptionInstruction(
   config: Pick<AgentConfig, 'displayInstruction' | 'instruction'>,
 ): string {
-  return (config.displayInstruction?.trim() || config.instruction?.trim()) ?? '';
+  return (
+    (config.displayInstruction?.trim() || config.instruction?.trim()) ?? ''
+  );
 }
 
 /**
