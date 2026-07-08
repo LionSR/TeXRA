@@ -19,6 +19,7 @@ import {
 import { workspaceSM } from '@common/state';
 import { appSignals } from '@eventBus/AppSignals';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
+import { setExtensionProgressEventSink } from '@frontend/events/extensionProgressEvents';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createChannelTrace } from '@logger';
 import {
@@ -59,6 +60,8 @@ import { attachProgressBackendAppSignals } from './progressBackendAppSignals';
 import type { MainViewProvider } from '../MainViewProvider';
 
 const MAX_INQUIRY_THREAD_HYDRATION = 100;
+const SESSION_FACT_OWNED_EXTENSION_PROGRESS_EVENTS: ReadonlySet<string> =
+  new Set(['addOutputFiles', 'removeStream']);
 
 export type ProgressStreamRevealResult = 'revealed' | 'missing';
 
@@ -171,13 +174,32 @@ export class ProgressViewProvider
       createExtensionHostInteractions({
         runtimeHost: extensionAgentRuntimeHost,
         getApprovalHandlers: () => this.approvalHandlers,
-        removeStream: (streamId) =>
-          this.messageHandler.removeStreamFromHost(streamId),
-        handleProgressEvent: (event, payload) =>
-          this.backend.handleProgressEvent(event, payload),
       }),
     );
-    this._disposables.push({ dispose: this.detachHostInteractions });
+    const detachExtensionProgressEvents = setExtensionProgressEventSink(
+      (event, payload) => {
+        if (SESSION_FACT_OWNED_EXTENSION_PROGRESS_EVENTS.has(event)) return;
+        this.backend.handleProgressEvent(event, payload);
+      },
+    );
+    const detachRemoveStreamCleanup = defaultSession().events.subscribe(
+      (sessionEvent) => {
+        if (
+          sessionEvent.scope === 'session' &&
+          sessionEvent.event.type === 'removeStream'
+        ) {
+          this.messageHandler.removeStreamFromHost(
+            sessionEvent.event.payload.streamId,
+          );
+        }
+      },
+      { scope: 'session' },
+    );
+    this._disposables.push(
+      { dispose: this.detachHostInteractions },
+      { dispose: detachExtensionProgressEvents },
+      { dispose: detachRemoveStreamCleanup },
+    );
 
     ProgressViewProvider._instance = this;
     setProgressViewBridge(this);

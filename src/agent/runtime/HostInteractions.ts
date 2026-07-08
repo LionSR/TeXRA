@@ -1,8 +1,4 @@
 import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
-import type {
   AgentProposal,
   Plan,
   ProviderErrorPartial,
@@ -180,10 +176,6 @@ export interface HostInteractions {
   openExternalInquiry?(
     request: HostExternalInquiryRequest,
   ): Promise<HostExternalInquiryHandle> | undefined;
-  handleProgressEvent<K extends ProgressEvent>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): boolean;
   resolve(requestId: string, result: HostInteractionResolution): boolean;
   /** Settle pending requests matching the selector with their reject/cancel defaults. */
   cancel(selector?: HostInteractionCancelSelector): void;
@@ -191,7 +183,6 @@ export interface HostInteractions {
 }
 
 const noopHostInteractions: HostInteractions = {
-  handleProgressEvent: () => false,
   resolve: () => false,
   cancel: () => {},
 };
@@ -215,13 +206,6 @@ export class SessionHostInteractions implements HostInteractions {
       if (this.active === interactions) this.active = previous;
       interactions.dispose?.();
     };
-  }
-
-  handleProgressEvent<K extends ProgressEvent>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): boolean {
-    return this.active.handleProgressEvent(event, payload);
   }
 
   requestToolEditApproval(
