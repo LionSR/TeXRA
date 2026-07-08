@@ -5,9 +5,9 @@
  * for extracting fields from monolithic signals.
  */
 
-import { SignalWatcher, signal, computed, Signal } from '@lit-labs/signals';
+import { SignalWatcher, signal, Signal } from '@lit-labs/signals';
 
-export { SignalWatcher, signal, computed, Signal };
+export { SignalWatcher, signal, Signal };
 
 /**
  * Selector: extracts a field from a monolithic signal.

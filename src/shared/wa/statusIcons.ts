@@ -3,10 +3,9 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { css, html, type CSSResult, type TemplateResult } from 'lit';
 
-export type WaTagVariant =
-  'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+type WaTagVariant = 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
 
-export interface SetStatusFallback {
+interface SetStatusFallback {
   readonly label: string;
   readonly variant?: WaTagVariant;
 }

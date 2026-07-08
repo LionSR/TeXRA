@@ -15,7 +15,7 @@ export type ProgressViewMessageSender = (
   message: ProgressViewOutboundMessage,
 ) => boolean | PromiseLike<boolean>;
 
-export interface ProgressLogSource {
+interface ProgressLogSource {
   readonly head: number;
   getRange(fromSeq: number, toSeq: number): StreamLogEntry[];
   getDirtyUpdates(maxSeqInclusive: number): StreamLogEntry[];

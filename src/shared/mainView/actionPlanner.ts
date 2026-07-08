@@ -8,7 +8,7 @@ import { capitalize } from '@utils/text/stringUtils';
 // Common result types
 // ============================================================
 
-export interface ActionValidationError {
+interface ActionValidationError {
   readonly valid: false;
   readonly message: string;
 }
@@ -135,7 +135,7 @@ export interface CompareState {
   readonly editedFile: string;
 }
 
-export type ComparePayload = {
+type ComparePayload = {
   baseFile: string;
   editedFile: string;
 };
