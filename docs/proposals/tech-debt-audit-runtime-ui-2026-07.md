@@ -9,16 +9,16 @@
 > and [`session-scoped-runtime-architecture.md`](./session-scoped-runtime-architecture.md).
 > Re-verify every pin before acting — this territory changes at ~60 PRs/day.
 
-**Scope.** The maintainer steered this sweep explicitly *away* from the
-model-handler layer (A1/C3, still the largest raw mass) and *toward* the
+**Scope.** The maintainer steered this sweep explicitly _away_ from the
+model-handler layer (A1/C3, still the largest raw mass) and _toward_ the
 runtime↔UI coupling surface and the run/session data-structure layering: dual
 states, plane multiplications, mis-owned/re-derived facts, leaky boundaries,
 half-migrations, the bag↔RunContext split-brain, the PocketFlow node/flow
 indirection, the agent-definition/registry shape, and the FS-wrapper/cache
 stack.
 
-**Method.** Three parallel workflows, each *read → independent adversarial verify
-→ synthesize*: (1) ~40 readers over the session-runtime, facts, interaction,
+**Method.** Three parallel workflows, each _read → independent adversarial verify
+→ synthesize_: (1) ~40 readers over the session-runtime, facts, interaction,
 status, agents, flow-engine, and storage planes (Parts A/B); (2) four lenses on
 error-handling / try-catch discipline, error-pipeline ownership, one-failure→N-host
 rendering, and a live dual-systems census (Parts C/D); (3) an APoSD design-philosophy
@@ -47,11 +47,10 @@ shared owner; the coordinator layer is folded into `session.interactions`.
 
 ---
 
-
 > **Companion documents** (same audit, split for length):
+>
 > - [`tech-debt-error-ownership-2026-07.md`](./tech-debt-error-ownership-2026-07.md) — Part C (error handling & ownership) + Part D (dual-systems census).
 > - [`tech-debt-design-philosophy-2026-07.md`](./tech-debt-design-philosophy-2026-07.md) — Part E (APoSD design-philosophy evaluation + module-depth scorecard).
-
 
 ---
 
@@ -62,18 +61,18 @@ net-deletions first.
 
 ### A1. Desktop silently no-ops the `removeStream` session fact → leaked tabs + per-stream resources (HIGH; live bug; net −7 LoC)
 
-*(Consolidates facts-plane `RC1` and host-wiring `HW1` — one gap, two readers.)*
+_(Consolidates facts-plane `RC1` and host-wiring `HW1` — one gap, two readers.)_
 
 **Pins.** `src/tools/childStream.ts:265-271` emits `removeStream` on `autoClose`;
 `src/tools/bash.ts:450,466` pass `{autoClose:true}` on every background completion
 (`:475` prints `Stream tab: ${childStreamId}` — the child is a real rail tab).
 `src/shared/progressView/backend/events/ProgressFactApplier.ts:197-198` is `case
 'removeStream': return;` (bare no-op, teardown delegated to hosts).
-`ProgressBackend.setupEventListeners` (`ProgressBackend.ts:118-125`) is the *only*
+`ProgressBackend.setupEventListeners` (`ProgressBackend.ts:118-125`) is the _only_
 shared session-fact route for **both** extension and desktop. Extension wires the
 teardown via a bespoke subscriber (`ProgressViewProvider.ts:186-198` →
 `ProgressViewMessageHandler.ts:134-137` = `deleteStream` + `GoalStore.forget`);
-CLI TUI wires it (`subscribeRuntimeHost.ts:417-419`). Desktop wires *neither*:
+CLI TUI wires it (`subscribeRuntimeHost.ts:417-419`). Desktop wires _neither_:
 `desktopProgressEventBridge.ts:438-458` `handleSessionFact` has no `removeStream`
 case (`default: return`); `grep removeStream packages/desktop` = 0. Desktop already
 owns a full `deleteStream` (`desktopAgentExecution.ts:1073-1096`:
@@ -117,7 +116,7 @@ host-interactions); `:240-249` = the fallback
 `toolEditApprovalController.enqueue(() => (context?.toolEditApprovalHandler ??
 platform().toolEditApproval)(request))`. `platform().toolEditApproval` is read
 only at `:246`; `context.toolEditApprovalHandler` consumed only at `:246`.
-All four production hosts wire `runtimeHost.interactions` *and* provide
+All four production hosts wire `runtimeHost.interactions` _and_ provide
 `requestToolEditApproval` (`extensionAgentRuntimeHost.ts:16`,
 `desktopAgentExecution.ts:253` + `desktopHostInteractions.ts:77`,
 `chatSessionController.ts:234/240`, `runExecution.ts:169-176` +
@@ -134,19 +133,20 @@ session-scoped host-interactions port that supersedes both. Route 1 always wins
 in production, so routes 2+3 and the module-global `enqueue` serialization are
 dead-but-fully-wired, reachable only through the noop test host. Sibling commit
 `134524753` already removed the analogous bash + userQuestion fallbacks (bash
-now *throws* at `bashApproval.ts:108`) but deliberately left tool-edit — a staged
+now _throws_ at `bashApproval.ts:108`) but deliberately left tool-edit — a staged
 migration, not a required path.
 
 **Fix (net-delete, staged 2-then-3).** Delete the `?? platform().toolEditApproval`
 fallback and make `requestToolEditApproval` require the host-interactions route
 (throw, mirroring `bashApproval.ts:108`). Then delete: the Platform port field
 (`platform.ts:75` + `nodeHost.ts:105-106`), `RunContext.toolEditApprovalHandler`
-+ its ~10 propagation sites (`executeAgent.ts`, `runAgent.ts`,
-`AgentLaunchContext.ts`, `subagentExecution.ts:207/272`, both native strategies,
-`resumeToolUseSnapshot.ts`, `resumeQueuedToolUse.ts`), the
-`createDesktop/CliToolEditApprovalPort` + `setDesktopToolEditApprovalHandler`
-factories, and rewrite the one noop-host test to exercise route 1. ≈ −300 to −450
-LoC, −1 port, −1 context field, 0 new elements.
+
+- its ~10 propagation sites (`executeAgent.ts`, `runAgent.ts`,
+  `AgentLaunchContext.ts`, `subagentExecution.ts:207/272`, both native strategies,
+  `resumeToolUseSnapshot.ts`, `resumeQueuedToolUse.ts`), the
+  `createDesktop/CliToolEditApprovalPort` + `setDesktopToolEditApprovalHandler`
+  factories, and rewrite the one noop-host test to exercise route 1. ≈ −300 to −450
+  LoC, −1 port, −1 context field, 0 new elements.
 
 **Rejected trap.** Do not "keep it as a safety net" or add a unifying abstraction
 over the three routes (net-add). This is dead code the target design already
@@ -171,7 +171,7 @@ option; call sites `chatSessionController.ts:302-309` (onIdle/WAITING) and
 
 **Mechanism.** `StreamLogStore` carries no guaranteed stable-id finalized assistant
 message, so the CLI synthesizes a "final" entry from `result.lastResponse` and
-reconciles it against the store-derived `MODEL_RESPONSE` by comparing *normalized*
+reconciles it against the store-derived `MODEL_RESPONSE` by comparing _normalized_
 text (with the `✓`/`\checkmark` substitution). When the predicate misjudges
 (replacement rules, subagent-followup trimming, whitespace) the finalized message
 duplicates in scrollback or vanishes — the most fragile CLI state code, and an R1
@@ -196,14 +196,14 @@ across a process boundary; the CLI reads the store in-process.
 
 ### A4. `resolveAndResumeStream` reads the process-global `StreamStatusService`, not the session that owns the fact → the resume anti-clobber guard is dead on desktop (MED; net-neutral correctness)
 
-*(Consolidates runtime-core `RC1`, status-vocabulary `RC1`, and async-races `AR1`
-— independently rediscovered 3×.)*
+_(Consolidates runtime-core `RC1`, status-vocabulary `RC1`, and async-races `AR1`
+— independently rediscovered 3×.)_
 
 **Pins.** `src/agent/runtime/resolveAndResumeStream.ts:17` value-imports the
 `StreamStatusService` singleton; guards at `:82` (early return) and `:117`
 (post-retrieval TOCTOU re-check) both call
 `StreamStatusService.isActiveOrResuming(streamId)`. `StreamStatusService.ts:324` is
-the process singleton. `SessionHandle.ts:113` gives a non-default session a *fresh*
+the process singleton. `SessionHandle.ts:113` gives a non-default session a _fresh_
 `new StreamStatusMachine()`; `:313-322` `defaultSession()` aliases the singleton.
 `AgentLaunchContext.ts:593-594` `launchSession = input.session ?? currentSession()`,
 `streamStatus = launchSession.status`. Desktop injects `session: this.session`
@@ -247,7 +247,7 @@ registry (new indirection for a fact each session already owns).
 no ledger row.**
 
 **Pins.** `AgentRuntimeHost.ts:30` `readonly interactions?: HostInteractions`
-(the "direct host-event sink"). The *owner* is `SessionHandle.ts:103`
+(the "direct host-event sink"). The _owner_ is `SessionHandle.ts:103`
 `readonly interactions: SessionHostInteractions`
 (`HostInteractions.ts:142-151` "Session-owned host interaction surface"). All 4
 hosts set `runtimeHost.interactions = session.interactions`
@@ -299,10 +299,10 @@ Per-arm grep: **5 are live** — `showToolEditPermission` (`toolEditApproval.ts:
 
 **Mechanism.** The pre-request/reply emit era was half-retired: the shared
 `emit` contract still advertises 6 approval events no code emits, forcing every
-host `emit()` to type-accept events that never arrive. The 6 names are *not* fully
+host `emit()` to type-accept events that never arrive. The 6 names are _not_ fully
 dead — the CLI reuses them as its own internal discriminator vocabulary
 (`approvalEvents.ts:6-34`, `decideApprovalEvent` at `approvalAdapter.ts:104`), so
-narrowing the shared type requires *relocating* a payload map into CLI-owned types.
+narrowing the shared type requires _relocating_ a payload map into CLI-owned types.
 
 **Fix (net-neutral, contract-negative).** Narrow `RuntimeInteractionEventPayloads`
 to the 5 emitted arms; relocate the 6 request payload shapes into a CLI-local map
@@ -325,7 +325,7 @@ wrong (it reuses the 6 names) — removal is a move, not a free delete.
 `ApprovalCleanupScope.vitest.ts:76-80`). `approval/index.ts:34/81/104` call
 `bashApprovalController.rejectPendingForStream/rejectUnscopedPending/rejectAllPending`;
 `streamApprovalQueue.ts:126` `rejectWhere` iterates the always-empty `pending`
-Map → no-ops. Tool-edit's registry *is* live
+Map → no-ops. Tool-edit's registry _is_ live
 (`nativeToolEditApproval.ts:217`, `desktopToolEditApproval.ts:103`). Actual bash
 cancellation flows via `session.interactions.cancel`
 (`index.ts:38/82/108` → host `pendingRequests`, `desktopHostInteractions.ts:95`).
@@ -369,11 +369,11 @@ union of the 6 run facts + conversationProgress/usage/setTaskState/roundStage/
 child-activity/process-output) in `runFactEvents.ts` (already imported by all 4);
 relocate the 3 local `*RunFactSchema` there (net 0 schemas). Each consumer becomes
 a `switch` on `decoded.kind` → its own sink. **Honest caveat (R6):** this repo's
-refactor-LoC lesson shows extractions across divergent sites net-*add*; the payoff
+refactor-LoC lesson shows extractions across divergent sites net-_add_; the payoff
 is single-validation + one wire-up point at the cost of +1 function/+1 type, not a
 LoC win. Stepping-stone to the v0.41 typed-arm end state.
 
-**Rejected trap (R4).** Sharing the *sink* (one reducer across CLI+webview+persistence)
+**Rejected trap (R4).** Sharing the _sink_ (one reducer across CLI+webview+persistence)
 is confirmed-divergent — CLI keeps `status.cause` (`:96`) the webview drops; CLI
 TUI skips the 3 output-file facts. Share only the decode; each consumer keeps its
 own apply.
@@ -414,7 +414,7 @@ duals (`defaultSession()` aliasing, fewer-elements:60); no ledger row.**
 **Pins.** Three standalone singletons: `executionRegistry.ts:927`
 `SharedExecutionRegistry`, `ExecutionSubscriptionBinder.ts:294`
 `SharedExecutionSubscriptionBinder`, `StreamStatusService.ts:324`.
-`SessionHandle.ts:315-317` `defaultSession()` composes all three *by identity*.
+`SessionHandle.ts:315-317` `defaultSession()` composes all three _by identity_.
 16 host usage sites import them directly (11 `SharedExecutionRegistry`:
 `setupAssistantCommand:206`, `agentCommands:12/19`, `historyHandlers:102/129`,
 `chatSessionController:204`, `agentModelCommands:108`, `handleSlashCommand:220`,
@@ -423,7 +423,7 @@ duals (`defaultSession()` aliasing, fewer-elements:60); no ledger row.**
 run outside a run ALS, so `currentSession()===defaultSession()===the singletons`.
 
 **Mechanism.** For single-session hosts (extension, CLI) the standalone exports
-*are* `defaultSession()`'s members by identity — zero runtime divergence, deletion/
+_are_ `defaultSession()`'s members by identity — zero runtime divergence, deletion/
 naming debt only. But `defaultSession()` is load-bearing (both single-session
 hosts run through it), so the exports can't fold into its construction until the 16
 sites migrate.
@@ -436,7 +436,7 @@ Marginal value (−2/−3 exports for 16 mechanical edits) under anti-churn disc
 
 **Rejected trap.** Do not delete `StreamStatusService` itself or wrap it in a new
 accessor/port — it is the deliberate `defaultSession().status` instance
-(`SessionHandle.ts:317`); only its *direct host imports* migrate. Adding any
+(`SessionHandle.ts:317`); only its _direct host imports_ migrate. Adding any
 new port/facade violates R4.
 
 ### A11. CLI `childExecutionStatus.ts` hand-rolls an in-flight status set duplicating the trait-derived `isInFlightStatus` (LOW; net −6 LoC, −1 hand-rolled vocabulary)
@@ -465,8 +465,8 @@ predicate; only the 4-word in-flight Set is a clean dedup.
 
 ### A12. Dead `removeStream` arm in the CLI TUI emit-wrap `applyToState` (LOW; net −5 LoC; R1 dual-state)
 
-*(Consolidates runtime-ui-boundaries `OC4` and cli-tui `RC3` — one dead arm, two
-readers.)*
+_(Consolidates runtime-ui-boundaries `OC4` and cli-tui `RC3` — one dead arm, two
+readers.)_
 
 **R1 dual-state — dead migration leftover (not a live divergent state); no PR.**
 
@@ -513,7 +513,7 @@ import it in `TexraTranscriptRecorder.ts` (no cycle: `StreamSnapshotStore`, also
 
 **Rejected trap.** Replacing `startsWith` with
 `fromRunFactDomainKey(...)!==undefined` is wrong — `startsWith` deliberately skips
-*all* `runFact.*` keys including future/unknown ones; the decode rejects unknown
+_all_ `runFact.*` keys including future/unknown ones; the decode rejects unknown
 keys, so an unrecognized run fact would then leak into the transcript. Share only
 the prefix.
 
@@ -622,8 +622,8 @@ module singletons (dual state); relocate ownership, don't duplicate it.
   drives `isNewRunningTransition`) and Stage 5 has landed (`ProgressEventBus` = 0
   refs). Rename `_previousStatus`→`previousStatus`, replace the false comment with
   its real role. **Do not delete the param** (the comment invites it; `:828` needs
-  it). *(Facts-plane `RC4` — Stage-5 precondition fired, but the comment is
-  actionable, so it lives here, not in Part C.)*
+  it). _(Facts-plane `RC4` — Stage-5 precondition fired, but the comment is
+  actionable, so it lives here, not in Part C.)_
 - **`cliState.ts:30-35`** header still claims it "mirrors the webview's
   progressState shape … a port, not a rewrite". The shapes have forked: CLI = one
   monolithic 22-field `StreamSlice` (`:102-147`) in one `streams` Map; extension =
@@ -636,7 +636,6 @@ module singletons (dual state); relocate ownership, don't duplicate it.
   under Ink's root-subscription model.
 
 ---
-
 
 ## Part B — Run/session data-model, flow-engine, agents & storage/FS layering debt
 
@@ -657,7 +656,7 @@ tool-use per-step KV dual-write, fewer-elements:58).**
 (`ExecutionKVStore.ts:527-532`), duplicating the streamLogs sidecar that
 `completedRunArchive` reconstructs. `completedRunArchive.ts` arbitrates both via
 **mtime** (todos `:113-116`, conversation `legacyFirst` `:516-521`). #7500 removed
-only the tool-use *projection*, not `persistTodos` nor the reflection write.
+only the tool-use _projection_, not `persistTodos` nor the reflection write.
 
 **Mechanism.** Two stores flush asynchronously on the same hot path and race on
 mtime, so `completedRunArchive` cannot trust either copy and must stat-compare
@@ -671,7 +670,7 @@ reads the sidecar facade"). Remove `persistTodos` wiring + the reflection
 (iface+impl) and the `todos/conversationModifiedAt` accessors; collapse
 `completedRunArchive`'s mtime arbitration to a straight sidecar-else-legacy read.
 **Corrected cost:** ~300 LoC of `completedRunArchive` (`:168-457`) is the
-streamLogs→conversation *reconstructor* (needed regardless); only ~40-50 LoC is
+streamLogs→conversation _reconstructor_ (needed regardless); only ~40-50 LoC is
 the race-driven mtime arbitration → realistic net ≈ −60 to −80 LoC (not −150).
 
 **Rejected trap.** Do not merge the two stores or add an "archive writer"
@@ -787,8 +786,8 @@ contain near-identical for-loops
 this.services); shared.messages = result.messages; } finally { if (!synthetic)
 logUserMessage(...); }`); deltas are only the synthetic source and the logger ref.
 `followUpMessages.ts:38` `appendFollowUpAsUserMessage` + `:26` `followUpDisplayText`.
-`onFollowUpConsumed` fires *before* the loop in `ToolUseWaitNode` (`:184-186`) and
-*after* in `ToolUseRoundPrepNode` (`:108-110`).
+`onFollowUpConsumed` fires _before_ the loop in `ToolUseWaitNode` (`:184-186`) and
+_after_ in `ToolUseRoundPrepNode` (`:108-110`).
 
 **Mechanism.** Two flow nodes in different packages (core/flows vs
 implementations/flows) independently maintain the same follow-up-injection +
@@ -838,7 +837,7 @@ applies `BACKGROUND_MODE_MIN_RETRIES`, sets `this.maxRetries`/`this.wait`, then
 production subclass, `ModelInvocationNode` (`:53`), does not override `_exec`, so it
 routes through `RetryableInvocationNode._exec`. The only readers of
 `this.maxRetries`/`this.wait` (`node/index.ts:187/193/216`) run inside
-`super._exec`, *after* the override overwrites both.
+`super._exec`, _after_ the override overwrites both.
 
 **Mechanism.** Every construction (once per cycle) reads the config to seed
 `maxRetries`/`wait`, but `_exec` unconditionally re-reads and overwrites both
@@ -859,7 +858,7 @@ cache the config on the instance; the point is one owner at exec time.
 `migrateLegacyWorkspaceStorage` + `resolveWorkspaceStoragePath` + `mkdirSync`
 (`:191`) + `writeWorkspaceSidecar` (`:192`) — no memoization (class fields:
 only `getWorkspacePath`). Per steady-state call: 3 sha256, 2 `existsSync`, 1
-`mkdirSync` (a *write* syscall on read paths). Chain: `storageFS.ts:18-20`
+`mkdirSync` (a _write_ syscall on read paths). Chain: `storageFS.ts:18-20`
 `getBasePath()`→`getStoragePath()`; `relativeFS.ts:19-25` per op; `baseFS.ts:39-43`
 `preparePath` on every read/write/stat/readDir/exists. `executionListing.ts:126-159`
 `listExecutions` `pMap`s `readMeta`+`readConfig` = 2 `getStoragePath`/execution.
@@ -911,8 +910,8 @@ no forward migration and no dated ledger row.**
 
 **Pins.** `workspaceStorage.ts:20` `LEGACY_RUNS_STORAGE_DIR='taskRuns'`; `:85-89`
 `resolveLegacyRunStoragePath`; `:115-124` `resolveExistingRunStoragePath` probes
-`executions/` first (`:119-120`) then falls back to `taskRuns/` (`:121-122`) *only
-on a primary miss*. `grep 'taskRuns'` confirms NO rename/move exists — the legacy
+`executions/` first (`:119-120`) then falls back to `taskRuns/` (`:121-122`) _only
+on a primary miss_. `grep 'taskRuns'` confirms NO rename/move exists — the legacy
 branch is load-bearing for reads AND deletes (`runDirOps.ts:76-82` `runCleanRunDir`
 cleans the legacy location too). 9 call sites across housekeeping/tools/latex/
 controllers/cli.
@@ -965,7 +964,7 @@ partial dir. Both partials are benign display artifacts, not corruption; not a
 session-scoping race.
 
 **Fix (cheaper than corpus C5d).** Sequence the writes so `meta.json` (the listing
-read-gate) is written *last*, so any partial has no meta and stays
+read-gate) is written _last_, so any partial has no meta and stays
 invisible/cleanable; or add a catch that deletes the partial dir on failure. No
 new element.
 
@@ -1030,7 +1029,7 @@ the max rule in one site silently desyncs the displayed total from the executed
 total.
 
 **Fix.** Likely **not worth doing**: the proposed extraction net-adds a trivial
-`Math.max` helper (+function +2 imports) and does *not* close the drift it names
+`Math.max` helper (+function +2 imports) and does _not_ close the drift it names
 (the default-2 constant still lives in both the schema prefault and the flow's
 `?? 2`). If pursued, an `effectiveRoundCount(...)` owner must also own the default
 constant; at minimum do not extract a bare `Math.max`.
@@ -1067,27 +1066,26 @@ targeted diagnostic for custom files.
 
 ---
 
-
 ## R1 dual-state accounting
 
 Per fewer-elements R1, no dual-system may rest without an open delete PR or a dated
 #6981 row. This audit's live duals:
 
-| # | Finding | Kind | Open delete PR | #6981 row | Note |
-|---|---------|------|----------------|-----------|------|
-| A2 | tool-edit approval fallback | triple-wired routes | none | none | target design prescribes deletion; stage 2-then-3 |
-| A3 | CLI synthetic-entry machinery | old+new for one message | #7086 (unverified) | none | gated on recorder stable-id upsert |
-| A5 | `AgentRuntimeHost.interactions` | dual access path (identity) | none | none | cannot diverge in prod |
-| A6 | 6 phantom emit arms | types-only zombie | none | none | relocate to CLI-local map |
-| A10 | `Shared*` singletons / `defaultSession()` alias | identity alias | none | none | **one of the ten known duals** |
-| A12 | dead CLI `removeStream` arm | dead migration leftover | none | none | not truly divergent |
-| A14 | `TaskGroup.index/total` | dead write-only duplicate | none | none | |
-| A15 | `TaskGroupList` `/^r\d+$/` | string-vs-typed encoding | none | none | inert on HEAD runs |
-| A16 | `ApprovalRequestHandler` replay | complementary registries | none | none | **won't-do closure** (justified split) |
-| B1 | KV dual-write todos+conversation | code-to-code dual-write | none | pending #7246 D1 | **two of the ten known duals** |
-| B2 | bag↔RunContext 5 fields | internal core dual | none | none | corpus B6 residual; single write owner |
-| B3 | `TaskState` parallel shape | derived-only shape | none | none | **one of the ten known duals**; delete gated on CLI freeze |
-| B10 | `executions/` + `taskRuns/` | dual dir names | none | none | external-data-adjacent; needs dated row |
+| #   | Finding                                         | Kind                        | Open delete PR     | #6981 row        | Note                                                       |
+| --- | ----------------------------------------------- | --------------------------- | ------------------ | ---------------- | ---------------------------------------------------------- |
+| A2  | tool-edit approval fallback                     | triple-wired routes         | none               | none             | target design prescribes deletion; stage 2-then-3          |
+| A3  | CLI synthetic-entry machinery                   | old+new for one message     | #7086 (unverified) | none             | gated on recorder stable-id upsert                         |
+| A5  | `AgentRuntimeHost.interactions`                 | dual access path (identity) | none               | none             | cannot diverge in prod                                     |
+| A6  | 6 phantom emit arms                             | types-only zombie           | none               | none             | relocate to CLI-local map                                  |
+| A10 | `Shared*` singletons / `defaultSession()` alias | identity alias              | none               | none             | **one of the ten known duals**                             |
+| A12 | dead CLI `removeStream` arm                     | dead migration leftover     | none               | none             | not truly divergent                                        |
+| A14 | `TaskGroup.index/total`                         | dead write-only duplicate   | none               | none             |                                                            |
+| A15 | `TaskGroupList` `/^r\d+$/`                      | string-vs-typed encoding    | none               | none             | inert on HEAD runs                                         |
+| A16 | `ApprovalRequestHandler` replay                 | complementary registries    | none               | none             | **won't-do closure** (justified split)                     |
+| B1  | KV dual-write todos+conversation                | code-to-code dual-write     | none               | pending #7246 D1 | **two of the ten known duals**                             |
+| B2  | bag↔RunContext 5 fields                         | internal core dual          | none               | none             | corpus B6 residual; single write owner                     |
+| B3  | `TaskState` parallel shape                      | derived-only shape          | none               | none             | **one of the ten known duals**; delete gated on CLI freeze |
+| B10 | `executions/` + `taskRuns/`                     | dual dir names              | none               | none             | external-data-adjacent; needs dated row                    |
 
 **Mapping to the ten known duals (fewer-elements:58-60).** Given full treatment
 here: `setTaskState` compat (B3), completed-run todos dual-owner + tool-use
@@ -1101,7 +1099,6 @@ exception); TUI usage-echo guard (Sweep-1-adjacent).
 
 ---
 
-
 ## Corpus items reconfirmed RESOLVED (do not re-raise)
 
 Confirmed at HEAD `54c3bed25`; each proposes no code — only tracker/doc closure.
@@ -1114,55 +1111,54 @@ Confirmed at HEAD `54c3bed25`; each proposes no code — only tracker/doc closur
   `setToolEditApprovalHandler` gone (`RunContext.ts:27` field +
   `toolEditApproval.ts:245-246` `context?... ?? platform()`). **Actionable:** update
   `agent-runtime-ui-coupling-audit.md:3/21` ("Partially landed / 4 of 5 open" is
-  stale) and close the trackers. *(surviving OC1)*
+  stale) and close the trackers. _(surviving OC1)_
 - **B5 design-table trio** — `InterruptRegistry` deleted (#7593 / `902daeb65`, 0
   refs); `deriveResumability` is the single owner (`resumability.ts:92`); the
   `sendFollowUp` decision-then-act window is closed (`ToolUseFollowUp.ts:195-205`
-  synchronous, no yield). *(runtime-core RC3)*
+  synchronous, no yield). _(runtime-core RC3)_
 - **fewer-elements §5/§8 coordinator multiplication** — folded into
   `session.interactions` (#7504 / `18098a7ff`); no `runCoordinators`/
   `RunCoordinatorBridge`/`*Coordinator` in `src/agent/runtime`;
-  `HostInteractions.ts:196-271` is a thin forwarder. *(interactions-plane RC1)*
+  `HostInteractions.ts:196-271` is a thin forwarder. _(interactions-plane RC1)_
 - **A2 "command→handler mapping authored twice"** — closed by the shared
   `*CommandActions` contracts (`SettingsViewCommandHandlers.ts:24/252`,
   `ProgressViewHost.ts:73`; both hosts fill one contract). The per-host action
-  *bodies* are the deliberate transport seam. *(host-wiring HW4)*
+  _bodies_ are the deliberate transport seam. _(host-wiring HW4)_
 - **Resumability 5-way host disagreement** — one storage-owned
   `deriveResumability` (`resumability.ts:92`); every consumer routes through it.
-  *(transcript-persistence RC2)*
+  _(transcript-persistence RC2)_
 - **Per-host crash-repair duplication + self-inconsistency** — one owner
   (`restartRepair.ts:142` `repairRestartedStreams`; `:102-132` writes terminal
-  status; comment `:134-141` owns the three consistent writes). *(transcript-persistence RC3)*
+  status; comment `:134-141` owns the three consistent writes). _(transcript-persistence RC3)_
 - **Tab-delete orphaning + no retention/GC** — `SessionStores.ts:44` `deleteStream`
   reaps streamLogs+snapshot+execution dir; startup GC wired
-  (`ProgressViewState.ts:365` `sweepOrphanedStreams`). *(transcript-persistence RC4)*
+  (`ProgressViewState.ts:365` `sweepOrphanedStreams`). _(transcript-persistence RC4)_
 - **C1a ToolResult status contract** — source-declared discriminated union
   (`toolResult.ts:177-181`); `NormalizedToolResultSchema` + `ToolResultPayloadSchema`
-  deleted (0 hits). *(tools-runtime-contract RC1)*
+  deleted (0 hits). _(tools-runtime-contract RC1)_
 - **C1b two child-run drivers** — unified into `startChildRunLoop`
   (`childRunLoop.ts:454`) + 4 strategies + shared `deliveryEnvelope`;
-  `agentCliSessionLoop.ts` deleted (#7523/`e907e6b01`). *(tools-runtime-contract RC2)*
+  `agentCliSessionLoop.ts` deleted (#7523/`e907e6b01`). _(tools-runtime-contract RC2)_
 - **Corpus B6 streamId/executionId/runtimeHost dual-read** — resolved to one read
   path (`AgentRunIdentity` on `AgentLaunchContext.ts:78` only; 0 bag reads; all via
-  `useLaunchRunContext()`). The live residual is B2's *different* field set.
-  *(flows-di RC2)*
+  `useLaunchRunContext()`). The live residual is B2's _different_ field set.
+  _(flows-di RC2)_
 - **Corpus B6 "shared keys far exceed typed fields" (184/41/10)** — no longer
   holds; 84 accesses / 18 keys, all typed (`ToolUseRunShared` 8 fields +
   Zod-schematized `ToolUseRoundShared`); one runtime narrow via
-  `assertPreparedShared`. *(flows-di RC3)*
+  `assertPreparedShared`. _(flows-di RC3)_
 - **C5a fire-and-forget `sendFollowUp`** — both chains now `.catch`
   (`ExecutionSubscriptionBinder.ts:153-175`, `StreamSubscriptionRegistry.ts:114-136`).
-  *(async-races AR2)*
+  _(async-races AR2)_
 - **C5b desktop transcript-flush at quit** — awaited
   (`desktopAgentExecution.ts:709-711` `state.flush()`; before-quit
   `index.ts:906-915`; per-window `StreamLogStore` = `session.transcripts`).
-  *(async-races AR3)*
+  _(async-races AR3)_
 - **C5c goalStore index mutation** — serialized under `indexMutex.runExclusive`
   (`goalStore.ts:20/93-105`; concurrent `start` touches independent keys).
-  *(async-races AR4)*
+  _(async-races AR4)_
 
 ---
-
 
 ## Healthy — do not churn
 
@@ -1201,7 +1197,6 @@ Verified sound in passing; fixes here would be net-negative churn.
   either way.
 
 ---
-
 
 ## Suggested priority
 
