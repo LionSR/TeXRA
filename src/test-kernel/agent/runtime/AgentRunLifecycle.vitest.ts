@@ -40,15 +40,13 @@ import {
   STREAM_STATUS,
   type ExecutionId,
   type StorageKey,
-  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentKey } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import { createRecordingHost } from '../progressTestUtils';
-import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
+import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   writeTerminalStatus: vi.fn().mockResolvedValue(undefined),
@@ -249,14 +247,12 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('projects run config before the RUNNING status projection', async () => {
-    const { executionId, streamId, streamStatus, ctx, explicit } =
-      lifecycleFixture('lifecycle-run-config-before-running');
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-run-config-before-running',
+    );
     const trace = new TraceEmitter();
     const detachTrace = ctx.session.attachRunTrace(trace, streamId);
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      ctx.session.events,
-      explicit.host,
-    );
+    const recorded = recordSessionEvents(ctx.session.events, { scope: 'run' });
     ctx.logger = trace;
     ctx.disposeTrace = detachTrace;
 
@@ -268,26 +264,24 @@ describe('runFlowWithLifecycle', () => {
         streamId,
       }));
 
-      const setTaskStateIndex = explicit.events.findIndex(
-        (event) => event.event === 'setTaskState',
+      const runConfigIndex = recorded.events.findIndex(
+        (event) => event.scope === 'run' && event.event.type === 'run.config',
       );
-      const runningIndex = explicit.events.findIndex((event) => {
-        if (event.event !== 'updateStreamStatus') return false;
-        const payload = event.payload as {
-          streamId: StreamTabId;
-          status: StreamPhase;
-        };
+      const runningIndex = recorded.events.findIndex((event) => {
+        if (event.scope !== 'run' || event.event.type !== 'status') {
+          return false;
+        }
         return (
-          payload.streamId === streamId &&
-          payload.status === STREAM_PHASE.RUNNING
+          event.event.streamId === streamId &&
+          event.event.phase === STREAM_PHASE.RUNNING
         );
       });
 
-      expect(setTaskStateIndex).toBeGreaterThanOrEqual(0);
+      expect(runConfigIndex).toBeGreaterThanOrEqual(0);
       expect(runningIndex).toBeGreaterThanOrEqual(0);
-      expect(setTaskStateIndex).toBeLessThan(runningIndex);
+      expect(runConfigIndex).toBeLessThan(runningIndex);
     } finally {
-      detachProjection();
+      recorded.detach();
       detachTrace();
       clearStreamStatusForTest(streamStatus, streamId);
     }

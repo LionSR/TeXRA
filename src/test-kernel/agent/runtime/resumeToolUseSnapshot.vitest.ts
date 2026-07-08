@@ -17,11 +17,11 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
-import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
+import { recordSessionEvents, sessionFactPayloads } from '../progressTestUtils';
 
 const STREAM = 'stream:tooluse-resume' as StreamTabId;
 const runtimeHost = { emit: vi.fn() };
-let detachSessionProgressProjection: (() => void) | undefined;
+let recordedSession: ReturnType<typeof recordSessionEvents> | undefined;
 
 function snapshot(parentStreamId?: StreamTabId): ToolUseSessionSnapshot {
   return { streamId: STREAM, parentStreamId } as ToolUseSessionSnapshot;
@@ -52,16 +52,14 @@ describe('resumeToolUseSnapshot', () => {
     resumeToolUseFromSnapshotMock.mockReset();
     resumeToolUseFromSnapshotMock.mockResolvedValue(undefined);
     runtimeHost.emit.mockReset();
-    detachSessionProgressProjection =
-      attachSessionProgressEventProjectionForTest(
-        defaultSession().events,
-        runtimeHost,
-      );
+    recordedSession = recordSessionEvents(defaultSession().events, {
+      scope: 'session',
+    });
   });
 
   afterEach(() => {
-    detachSessionProgressProjection?.();
-    detachSessionProgressProjection = undefined;
+    recordedSession?.detach();
+    recordedSession = undefined;
     ToolUseFollowUpQueue.release(STREAM);
     clearStreamStatusForTest(StreamStatusService, STREAM);
   });
@@ -83,9 +81,12 @@ describe('resumeToolUseSnapshot', () => {
       text: 'queued one',
       origin: 'user',
     });
-    expect(runtimeHost.emit).toHaveBeenCalledWith('updateQueuedFollowUps', {
-      streamId: STREAM,
-    });
+    expect(
+      sessionFactPayloads(
+        recordedSession?.events ?? [],
+        'updateQueuedFollowUps',
+      ),
+    ).toContainEqual({ streamId: STREAM });
   });
 
   it('seeds an explicit follow-up ahead of the queued items', async () => {
@@ -155,10 +156,12 @@ describe('resumeToolUseSnapshot', () => {
     expect(StreamStatusService.get(STREAM)).toBe(STREAM_STATUS.WAITING);
     expect(reportFailure).toHaveBeenCalledWith(failure);
     // The re-enqueue replays a queue update beyond the initial drain notification.
-    const queueUpdates = runtimeHost.emit.mock.calls.filter(
-      ([event]) => event === 'updateQueuedFollowUps',
-    );
-    expect(queueUpdates).toHaveLength(2);
+    expect(
+      sessionFactPayloads(
+        recordedSession?.events ?? [],
+        'updateQueuedFollowUps',
+      ),
+    ).toHaveLength(2);
   });
 
   it('uses the supplied session status plane for resume markers', async () => {

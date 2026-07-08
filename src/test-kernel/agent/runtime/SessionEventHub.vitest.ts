@@ -8,8 +8,7 @@ import {
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { type StreamTabId } from '@shared/schemas';
 
-import { createRecordingHost } from '../progressTestUtils';
-import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
+import { recordSessionEvents } from '../progressTestUtils';
 
 const streamId = 'stream:hub' as StreamTabId;
 const otherStreamId = 'stream:other' as StreamTabId;
@@ -94,16 +93,12 @@ describe('SessionEventHub', () => {
     ).toThrow(/No run-scoped session event subscribers/);
   });
 
-  it('projects run facts and usage from trace events to the runtime host', () => {
+  it('routes run facts and usage from trace events onto the session hub', () => {
     const trace = new TraceEmitter();
     const hub = new SessionEventHub();
-    const host = createRecordingHost();
+    const recorded = recordSessionEvents(hub, { scope: 'run' });
     const detachTrace = trace.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
-    );
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      hub,
-      host.host,
     );
     const todos = [
       {
@@ -112,7 +107,7 @@ describe('SessionEventHub', () => {
         activeForm: 'routing facts',
       },
     ];
-    const plan = { objective: 'Project every easy run fact.' };
+    const plan = { objective: 'Route every easy run fact.' };
 
     emitRunFact(trace, 'updateTodos', { streamId, todos });
     emitRunFact(trace, 'updatePlan', { streamId, plan });
@@ -142,52 +137,87 @@ describe('SessionEventHub', () => {
     );
     trace.emit({ type: 'stream.chunk', id: 'ignored', text: 'x' });
 
-    expect(host.events).toEqual([
+    expect(recorded.events).toMatchObject([
       {
-        event: 'updateTodos',
-        payload: { streamId, todos },
-      },
-      {
-        event: 'updatePlan',
-        payload: { streamId, plan },
-      },
-      {
-        event: 'addOutputFiles',
-        payload: { streamId, filesByRound: { 1: [] } },
-      },
-      {
-        event: 'updateMissingOutputs',
-        payload: { streamId, filesByRound: { 1: [] } },
-      },
-      {
-        event: 'updateCompileFailures',
-        payload: { streamId, filesByRound: { 1: [] } },
-      },
-      {
-        event: 'goalPaused',
-        payload: { streamId },
-      },
-      {
-        event: 'updateStreamUsage',
-        payload: {
-          streamId,
-          storageKey: 'run:usage',
-          usage: { inputTokens: 10, outputTokens: 5, cost: 0 },
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: 'runFact.updateTodos',
+          data: { streamId, todos },
         },
+      },
+      {
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: 'runFact.updatePlan',
+          data: { streamId, plan },
+        },
+      },
+      {
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: 'runFact.addOutputFiles',
+          data: { streamId, filesByRound: { 1: [] } },
+        },
+      },
+      {
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: 'runFact.updateMissingOutputs',
+          data: { streamId, filesByRound: { 1: [] } },
+        },
+      },
+      {
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: 'runFact.updateCompileFailures',
+          data: { streamId, filesByRound: { 1: [] } },
+        },
+      },
+      {
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: 'runFact.goalPaused',
+          data: { streamId },
+        },
+      },
+      {
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'usage',
+          data: {
+            streamId,
+            storageKey: 'run:usage',
+            usage: { inputTokens: 10, outputTokens: 5, cost: 0 },
+          },
+        },
+      },
+      {
+        scope: 'run',
+        streamId,
+        event: { type: 'stream.chunk', id: 'ignored', text: 'x' },
       },
     ]);
 
-    detachProjection();
+    recorded.detach();
     detachTrace();
   });
 
-  it('projects stream descriptions from session facts to the runtime host', () => {
+  it('routes stream descriptions as session facts', () => {
     const hub = new SessionEventHub();
-    const host = createRecordingHost();
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      hub,
-      host.host,
-    );
+    const recorded = recordSessionEvents(hub, { scope: 'session' });
 
     hub.emit({
       scope: 'session',
@@ -200,25 +230,24 @@ describe('SessionEventHub', () => {
       },
     });
 
-    expect(host.events).toEqual([
+    expect(recorded.events).toEqual([
       {
-        event: 'updateStreamDescription',
-        payload: {
-          streamId,
-          description: 'Checking proof outline',
+        scope: 'session',
+        event: {
+          type: 'updateStreamDescription',
+          payload: {
+            streamId,
+            description: 'Checking proof outline',
+          },
         },
       },
     ]);
-    detachProjection();
+    recorded.detach();
   });
 
-  it('projects parent-stream links from session facts to the runtime host', () => {
+  it('routes parent-stream links as session facts', () => {
     const hub = new SessionEventHub();
-    const host = createRecordingHost();
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      hub,
-      host.host,
-    );
+    const recorded = recordSessionEvents(hub, { scope: 'session' });
 
     hub.emit({
       scope: 'session',
@@ -231,34 +260,33 @@ describe('SessionEventHub', () => {
       },
     });
 
-    expect(host.events).toEqual([
+    expect(recorded.events).toEqual([
       {
-        event: 'setParentStream',
-        payload: {
-          childStreamId: otherStreamId,
-          parentStreamId: streamId,
+        scope: 'session',
+        event: {
+          type: 'setParentStream',
+          payload: {
+            childStreamId: otherStreamId,
+            parentStreamId: streamId,
+          },
         },
       },
     ]);
-    detachProjection();
+    recorded.detach();
   });
 
-  it('detaches test projection subscriptions cleanly', () => {
+  it('detaches session hub subscriptions cleanly', () => {
     const trace = new TraceEmitter();
     const hub = new SessionEventHub();
-    const host = createRecordingHost();
+    const recorded = recordSessionEvents(hub, { scope: 'run' });
     const detachTrace = trace.subscribe((event) =>
       hub.emit({ scope: 'run', streamId, event }),
     );
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      hub,
-      host.host,
-    );
 
-    detachProjection();
+    recorded.detach();
     emitRunFact(trace, 'goalPaused', { streamId });
 
-    expect(host.events).toEqual([]);
+    expect(recorded.events).toEqual([]);
     detachTrace();
   });
 });

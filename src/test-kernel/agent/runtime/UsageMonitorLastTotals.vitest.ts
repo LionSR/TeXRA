@@ -14,8 +14,11 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 
-import { createRecordingHost } from '../progressTestUtils';
-import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
+import {
+  createRecordingHost,
+  recordSessionEvents,
+  runEventsOfType,
+} from '../progressTestUtils';
 
 const modelInfo = {
   capabilities: {
@@ -35,17 +38,14 @@ const modelInfo = {
 };
 
 function createMonitorWithEvents() {
-  const { host, events } = createRecordingHost();
+  const { host } = createRecordingHost();
   const logger = new TraceEmitter();
   const hub = new SessionEventHub();
   const storageKey = 'usage-last-totals' as StorageKey;
   const streamId = 'stream:usage-last-totals' as StreamTabId;
+  const recorded = recordSessionEvents(hub, { scope: 'run' });
   const detachTrace = logger.subscribe((event) =>
     hub.emit({ scope: 'run', streamId, event }),
-  );
-  const detachProjection = attachSessionProgressEventProjectionForTest(
-    hub,
-    host,
   );
   const monitor = new UsageMonitor(
     modelInfo,
@@ -54,9 +54,9 @@ function createMonitorWithEvents() {
   );
   return {
     monitor,
-    events,
+    events: recorded.events,
     dispose: () => {
-      detachProjection();
+      recorded.detach();
       detachTrace();
     },
   };
@@ -79,7 +79,7 @@ describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
     }
   });
 
-  it('forwards the ChatGPT subscription route to progress usage events', async () => {
+  it('forwards the ChatGPT subscription route to session usage facts', async () => {
     const { dispose, events, monitor } = createMonitorWithEvents();
     try {
       const state = AgentRunStateSnapshotSchema.parse({});
@@ -94,17 +94,15 @@ describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
 
       await monitor.recordUsage(state);
 
-      const usageEvent = events.find(
-        (event) => event.event === 'updateStreamUsage',
-      );
-      const usagePayload = usageEvent?.payload as
+      const usageEvent = runEventsOfType(events, 'usage').at(0);
+      const usageData = usageEvent?.data as
         { usage?: Record<string, unknown> } | undefined;
-      expect(usagePayload).toMatchObject({
+      expect(usageData).toMatchObject({
         usage: {
           usageRoute: 'chatgpt-subscription',
         },
       });
-      expect(usagePayload?.usage).not.toHaveProperty('viaChatGptSubscription');
+      expect(usageData?.usage).not.toHaveProperty('viaChatGptSubscription');
     } finally {
       dispose();
     }
