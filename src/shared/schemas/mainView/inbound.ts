@@ -292,10 +292,10 @@ const CleanLatexdiffvcMessageSchema = z.object({
   ...latexdiffvcOperationFields,
 });
 
-export const LatexdiffvcOperationMessageSchema = z.discriminatedUnion(
-  'command',
-  [PackLatexdiffvcMessageSchema, CleanLatexdiffvcMessageSchema],
-);
+const LatexdiffvcOperationMessageSchema = z.discriminatedUnion('command', [
+  PackLatexdiffvcMessageSchema,
+  CleanLatexdiffvcMessageSchema,
+]);
 export type LatexdiffvcOperationMessage = z.infer<
   typeof LatexdiffvcOperationMessageSchema
 >;
