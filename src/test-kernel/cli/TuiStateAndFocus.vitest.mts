@@ -3449,13 +3449,21 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
   });
 
   it('refreshes queued follow-up display when an active follow-up is sent', () => {
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
     const wrapped = wrapRuntimeHost(makeHost());
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
     const queue = ToolUseFollowUpQueue.acquire(root);
 
     try {
       queue.enqueue({ text: 'Keep the proof under one page.' });
-      wrapped.emit('followUpSent', { streamId: root });
+      hub.emit({
+        scope: 'session',
+        event: {
+          type: 'followUpSent',
+          payload: { streamId: root },
+        },
+      });
 
       let slice = streams.get().get(root);
       expect(slice?.queuedFollowUps).toBe(1);
@@ -3470,6 +3478,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       expect(slice?.queuedFollowUps).toBe(0);
       expect(slice?.queuedFollowUpMessages).toEqual([]);
     } finally {
+      detach();
       ToolUseFollowUpQueue.release(root);
     }
   });

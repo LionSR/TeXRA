@@ -43,10 +43,8 @@ export function attachSessionProgressEventProjection(
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'session') return;
-      emitProjectedProgressEvent(
-        runtimeHost,
-        projectSessionFactToProgressEvent(sessionEvent.event),
-      );
+      const projected = projectSessionFactToProgressEvent(sessionEvent.event);
+      if (projected) emitProjectedProgressEvent(runtimeHost, projected);
     },
     { scope: 'session' },
   );
@@ -93,7 +91,7 @@ export function toUpdateStreamUsagePayload(
 
 export function projectSessionFactToProgressEvent(
   fact: SessionFact,
-): ProjectedProgressEvent {
+): ProjectedProgressEvent | undefined {
   switch (fact.type) {
     case 'goalStateChanged':
       return { event: 'goalStateChanged', payload: fact.payload };
@@ -103,6 +101,8 @@ export function projectSessionFactToProgressEvent(
       return { event: 'clearMissingOutputs', payload: fact.payload };
     case 'updateQueuedFollowUps':
       return { event: 'updateQueuedFollowUps', payload: fact.payload };
+    case 'followUpSent':
+      return undefined;
     case 'setActiveStream':
       return { event: 'setActiveStream', payload: fact.payload };
     case 'updateStreamDescription':

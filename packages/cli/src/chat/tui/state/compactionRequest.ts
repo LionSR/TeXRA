@@ -1,5 +1,5 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ManualCompactionRequestResult } from '@agent/runtime/executionRegistry';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 
 export interface CliCompactionRequestOptions {
@@ -9,7 +9,7 @@ export interface CliCompactionRequestOptions {
   ) => ManualCompactionRequestResult;
   readonly notifyFollowUpSent: (
     streamId: StreamTabId,
-    runtimeHost?: AgentRuntimeHost,
+    session?: SessionHandle,
   ) => void;
   readonly appendTranscript: (message: string, streamId?: StreamTabId) => void;
 }
@@ -35,7 +35,7 @@ export function requestCliCompaction({
       );
       return;
     case 'requested':
-      notifyFollowUpSent(result.streamId, result.runtimeHost);
+      notifyFollowUpSent(result.streamId, result.session);
       appendTranscript(
         'Context compaction requested. The agent will process it on the next model call.',
         result.streamId,
