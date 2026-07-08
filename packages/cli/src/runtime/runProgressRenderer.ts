@@ -3,18 +3,52 @@ import path from 'node:path';
 // Local imports - agent metadata
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-
-// Local imports - progress events
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { SetTaskStatePayload } from '@agent/runtime/taskStateProgressPayload';
 
 // Local imports - shared schemas
-import { STREAM_PHASE, STREAM_STATUS, type StreamPhase } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  STREAM_STATUS,
+  type StreamPhase,
+  type UpdateActiveProcessesPayload,
+  type UpdateActiveSubagentsPayload,
+  type UpdateConversationProgressPayload,
+  type UpdateRoundStagePayload,
+  type UpdateStreamDescriptionPayload,
+  type UpdateStreamStatusPayload,
+} from '@shared/schemas';
 
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
 
-type ProgressEvent = keyof ProgressEventPayloads;
+export type RunProgressEventPayloads = {
+  setTaskState: SetTaskStatePayload;
+  updateConversationProgress: UpdateConversationProgressPayload;
+  updateRoundStage: UpdateRoundStagePayload;
+  updateActiveProcesses: UpdateActiveProcessesPayload;
+  updateActiveSubagents: UpdateActiveSubagentsPayload;
+  updateStreamStatus: UpdateStreamStatusPayload;
+  updateStreamDescription: UpdateStreamDescriptionPayload;
+};
+
+export type RunProgressEvent = keyof RunProgressEventPayloads;
+
+const RUN_PROGRESS_EVENTS = [
+  'setTaskState',
+  'updateConversationProgress',
+  'updateRoundStage',
+  'updateActiveProcesses',
+  'updateActiveSubagents',
+  'updateStreamStatus',
+  'updateStreamDescription',
+] as const satisfies readonly RunProgressEvent[];
+
+const RunProgressEventSet: ReadonlySet<string> = new Set(RUN_PROGRESS_EVENTS);
+
+export function isRunProgressEvent(event: string): event is RunProgressEvent {
+  return RunProgressEventSet.has(event);
+}
 
 // Carriage return + erase-line (CSI 2K): rewind to column 0 and clear the row
 // so the single live status line can be repainted in place.
@@ -32,7 +66,7 @@ interface RenderState {
 }
 
 export interface RunProgressRenderer {
-  handle(event: ProgressEvent, payload: unknown): boolean;
+  handle(event: RunProgressEvent, payload: unknown): boolean;
   clear(): void;
   preserve(): void;
 }
@@ -89,11 +123,13 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.startedAt = this.nowMs();
   }
 
-  handle(event: ProgressEvent, payload: unknown): boolean {
+  handle(event: RunProgressEvent, payload: unknown): boolean {
     switch (event) {
       case 'setTaskState':
         if (
-          this.applyTaskState(payload as ProgressEventPayloads['setTaskState'])
+          this.applyTaskState(
+            payload as RunProgressEventPayloads['setTaskState'],
+          )
         ) {
           this.updateHeartbeat();
           this.render(true);
@@ -103,7 +139,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         if (this.rootStreamTerminal) return true;
         if (
           this.applyConversationProgress(
-            payload as ProgressEventPayloads['updateConversationProgress'],
+            payload as RunProgressEventPayloads['updateConversationProgress'],
           )
         ) {
           this.updateHeartbeat();
@@ -114,7 +150,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         if (this.rootStreamTerminal) return true;
         if (
           this.applyRoundStage(
-            payload as ProgressEventPayloads['updateRoundStage'],
+            payload as RunProgressEventPayloads['updateRoundStage'],
           )
         ) {
           this.updateHeartbeat();
@@ -126,11 +162,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         if (this.rootStreamTerminal) return true;
         if (event === 'updateActiveProcesses') {
           this.applyActiveProcesses(
-            payload as ProgressEventPayloads['updateActiveProcesses'],
+            payload as RunProgressEventPayloads['updateActiveProcesses'],
           );
         } else {
           this.applyActiveSubagents(
-            payload as ProgressEventPayloads['updateActiveSubagents'],
+            payload as RunProgressEventPayloads['updateActiveSubagents'],
           );
         }
         this.updateHeartbeat();
@@ -138,7 +174,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         return true;
       case 'updateStreamStatus':
         {
-          const data = payload as ProgressEventPayloads['updateStreamStatus'];
+          const data =
+            payload as RunProgressEventPayloads['updateStreamStatus'];
           if (!this.isRootStream(data.streamId)) return true;
           const { status } = data;
           this.state.phase = formatRunProgressStatus(status);
@@ -154,7 +191,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       case 'updateStreamDescription': {
         if (this.rootStreamTerminal) return true;
         const data =
-          payload as ProgressEventPayloads['updateStreamDescription'];
+          payload as RunProgressEventPayloads['updateStreamDescription'];
         if (this.isRootStream(data.streamId)) {
           this.state.phase = data.description;
           this.updateHeartbeat();
@@ -183,9 +220,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     }
   }
 
-  private applyTaskState(
-    payload: ProgressEventPayloads['setTaskState'],
-  ): boolean {
+  private applyTaskState(payload: SetTaskStatePayload): boolean {
     if (!this.claimRootStream(payload.streamId)) return false;
 
     const config = payload.taskState.agentConfig;
@@ -200,7 +235,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private applyConversationProgress(
-    payload: ProgressEventPayloads['updateConversationProgress'],
+    payload: UpdateConversationProgressPayload,
   ): boolean {
     if (!this.claimRootStream(payload.streamId)) return false;
 
@@ -209,9 +244,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return true;
   }
 
-  private applyRoundStage(
-    payload: ProgressEventPayloads['updateRoundStage'],
-  ): boolean {
+  private applyRoundStage(payload: UpdateRoundStagePayload): boolean {
     if (!this.claimRootStream(payload.streamId)) return false;
 
     this.state.round = payload.roundStage.index + 1;
@@ -222,9 +255,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return true;
   }
 
-  private applyActiveProcesses(
-    payload: ProgressEventPayloads['updateActiveProcesses'],
-  ): void {
+  private applyActiveProcesses(payload: UpdateActiveProcessesPayload): void {
     if (!this.claimRootStream(payload.parentStreamId)) return;
 
     this.state.activeProcesses = formatActiveChildren(
@@ -235,9 +266,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     );
   }
 
-  private applyActiveSubagents(
-    payload: ProgressEventPayloads['updateActiveSubagents'],
-  ): void {
+  private applyActiveSubagents(payload: UpdateActiveSubagentsPayload): void {
     if (!this.claimRootStream(payload.parentStreamId)) return;
 
     this.state.activeSubagents = formatActiveChildren(
