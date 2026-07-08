@@ -3,10 +3,10 @@
 //
 // Launches the bundled `dist/bin/tui-harness.js` under a pseudo-terminal,
 // renders the byte stream through a headless terminal emulator, drives a few
-// product-focused scenarios with raw keystrokes, and asserts that the text a
-// human would see is actually on screen. It fails with a readable frame
-// snippet when expected UI text disappears — the regression we keep hitting as
-// the live-region / scrollback layout evolves.
+// product-focused scenarios with raw keystrokes, and asserts against each
+// scenario's declared viewport or scrollback frame. It fails with a readable
+// frame snippet when expected UI text disappears — the regression we keep
+// hitting as the live-region / scrollback layout evolves.
 //
 // This is intentionally small: a handful of scenarios that exercise the
 // transcript, queued follow-ups, a slash command, an approval modal, the
@@ -112,6 +112,7 @@ const HARNESS = process.env.TEXRA_TUI_HARNESS
 const SCENARIOS = [
   {
     name: 'transcript',
+    frame: 'scrollback',
     env: { HARNESS_ENTRIES: '8' },
     expect: [
       'TeXRA',
@@ -123,6 +124,7 @@ const SCENARIOS = [
   },
   {
     name: 'live-tool-only-spacing',
+    frame: 'scrollback',
     env: {
       HARNESS_LIVE_INVISIBLE_ASSISTANT: '1',
       HARNESS_LIVE_TOOL_ONLY: '1',
@@ -137,6 +139,7 @@ const SCENARIOS = [
   },
   {
     name: 'live-tool-stack-spacing',
+    frame: 'scrollback',
     rows: 34,
     env: {
       HARNESS_LIVE_INVISIBLE_ASSISTANT: '1',
@@ -169,6 +172,7 @@ const SCENARIOS = [
   },
   {
     name: 'assistant-tool-preamble-spacing',
+    frame: 'scrollback',
     env: {
       HARNESS_ASSISTANT_TOOL_PREAMBLE: '1',
     },
@@ -195,7 +199,7 @@ const SCENARIOS = [
         'First queued follow-up||Second queued follow-up',
     },
     bootExpect: 'queued 2',
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Queued follow-ups (2)',
       '1. First queued follow-up',
@@ -215,7 +219,7 @@ const SCENARIOS = [
     },
     bootExpect: 'queued 1',
     keys: ['/status', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'queued follow-ups: 1',
       '1. ✓ reviewer completed All good <ok>',
@@ -232,7 +236,7 @@ const SCENARIOS = [
         '<orchestrator-followup><subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/></orchestrator-followup>',
     },
     bootExpect: 'queued 1',
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Queued follow-ups (1)',
       '1. ⟳ review · todos · 6 done, 0 active, 0 pending',
@@ -252,7 +256,7 @@ const SCENARIOS = [
         'First queued follow-up||Second queued follow-up',
     },
     bootExpect: 'queued 2',
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Queued follow-ups (2)',
       '1. First queued follow-up',
@@ -265,6 +269,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-followup-summary',
+    frame: 'scrollback',
     env: { HARNESS_ENTRIES: '0', HARNESS_SUBAGENT_FOLLOWUPS: '1' },
     expect: [
       '⟳ strategy · round 2/3',
@@ -277,6 +282,7 @@ const SCENARIOS = [
   },
   {
     name: 'long-tool-output-elided',
+    frame: 'scrollback',
     env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
     expect: [
       '● bash (python3 enumerate_triples.py)',
@@ -288,6 +294,7 @@ const SCENARIOS = [
   },
   {
     name: 'bash-rejection-deduped',
+    frame: 'scrollback',
     env: { HARNESS_ENTRIES: '0', HARNESS_REJECTED_BASH_TOOL: '1' },
     expect: [
       "● bash (printf 'approval-reject-live\\n')",
@@ -305,7 +312,7 @@ const SCENARIOS = [
     cols: 80,
     env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
     keys: [DC4],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'tool-output-line-10 hidden-middle',
       'wide-column-F',
@@ -316,6 +323,7 @@ const SCENARIOS = [
   },
   {
     name: 'orchestrate-launcher',
+    frame: 'scrollback',
     env: { HARNESS_ORCHESTRATION: '1' },
     bootExpect: 'Choose how to start this CLI session.',
     exitKeys: [ESC],
@@ -349,6 +357,7 @@ const SCENARIOS = [
   },
   {
     name: 'orchestrate-delegated-history',
+    frame: 'scrollback',
     env: {
       HARNESS_ORCHESTRATION: '1',
       HARNESS_DELEGATED_ORCHESTRATION_HISTORY: '1',
@@ -381,7 +390,7 @@ const SCENARIOS = [
     bootExpect: 'Choose how to start this CLI session.',
     exitKeys: [ESC],
     expectExit: true,
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'TeXRA',
       'Choose how to start this CLI session.',
@@ -406,6 +415,7 @@ const SCENARIOS = [
   },
   {
     name: 'orchestrate-relay-model-pick',
+    frame: 'scrollback',
     env: {
       HARNESS_ORCHESTRATION: '1',
       HARNESS_API_MODE: 'included',
@@ -425,6 +435,7 @@ const SCENARIOS = [
   },
   {
     name: 'orchestrate-personal-model-pick',
+    frame: 'scrollback',
     // Orchestration scenarios use harness model fixtures for provider-key
     // availability; API-key env fixtures are only needed by the real /model list.
     env: {
@@ -450,6 +461,7 @@ const SCENARIOS = [
   },
   {
     name: 'orchestrate-model-pick-esc-back-reselect',
+    frame: 'scrollback',
     env: {
       HARNESS_ORCHESTRATION: '1',
       HARNESS_API_MODE: 'personal',
@@ -469,6 +481,7 @@ const SCENARIOS = [
   },
   {
     name: 'orchestrate-no-runnable-models',
+    frame: 'scrollback',
     env: {
       HARNESS_ORCHESTRATION: '1',
       HARNESS_API_MODE: 'personal',
@@ -491,6 +504,7 @@ const SCENARIOS = [
   },
   {
     name: 'slash-palette',
+    frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/mo'],
     expect: [
@@ -507,7 +521,7 @@ const SCENARIOS = [
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/help', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Session',
       '/clear',
@@ -522,7 +536,7 @@ const SCENARIOS = [
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/goal', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Goal mode starts from an approved plan',
       'choose `r approve & run`',
@@ -535,7 +549,7 @@ const SCENARIOS = [
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['\\goal', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Goal mode starts from an approved plan',
       'choose `r approve & run`',
@@ -548,7 +562,7 @@ const SCENARIOS = [
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/resume', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/resume',
@@ -566,7 +580,7 @@ const SCENARIOS = [
       HARNESS_QUEUED_FOLLOWUPS: 'queued before clear',
     },
     keys: ['/clear', '\r', '/status', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'agent: chat',
       'model: harness-model',
@@ -584,7 +598,7 @@ const SCENARIOS = [
     cols: 100,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/hlp\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Unknown command: /hlp. Did you mean /help? Type /help to list commands.',
     ],
@@ -595,7 +609,7 @@ const SCENARIOS = [
     cols: 52,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '/api',
       'Switch between included relay',
@@ -621,7 +635,7 @@ const SCENARIOS = [
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/login\r'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/login',
@@ -645,12 +659,13 @@ const SCENARIOS = [
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/', `${NAK}/model\r`],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['/model · personal API keys', 'Available models'],
     unexpect: ['/\u0015/model', '/model - error'],
   },
   {
     name: 'slash-palette-esc-retypes-command',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
@@ -675,6 +690,7 @@ const SCENARIOS = [
   },
   {
     name: 'slash-palette-csi-escape-ignored',
+    frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/', `${ESC}[13:2u`],
     expect: ['│ › /'],
@@ -685,7 +701,7 @@ const SCENARIOS = [
     cols: 120,
     env: { HARNESS_ENTRIES: '2' },
     keys: ['prove the bounded case for n <= 20', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['Harness received: prove the bounded case for n <= 20'],
     unexpect: ['signal read during notification phase', 'ERROR'],
   },
@@ -694,7 +710,7 @@ const SCENARIOS = [
     cols: 120,
     env: { HARNESS_ENTRIES: '2' },
     keys: ['first line', KITTY_SHIFT_ENTER, 'second line', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['Harness received: first line\nsecond line'],
     unexpect: ['first linesecond line', '13;2u', '[13', 'ERROR'],
   },
@@ -703,12 +719,13 @@ const SCENARIOS = [
     cols: 120,
     env: { HARNESS_ENTRIES: '2' },
     keys: ['first line', LF, 'second line', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['Harness received: first line\nsecond line'],
     unexpect: ['first linesecond line', 'ERROR'],
   },
   {
     name: 'agent-form',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
@@ -745,6 +762,7 @@ const SCENARIOS = [
   },
   {
     name: 'agent-form-80-cols',
+    frame: 'scrollback',
     cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
@@ -788,7 +806,7 @@ const SCENARIOS = [
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '/model · personal API keys',
       'Available models. Finish the active response before switching models.',
@@ -809,7 +827,7 @@ const SCENARIOS = [
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '/model · personal API keys',
       'Available models. Finish the active response before switching models.',
@@ -827,7 +845,7 @@ const SCENARIOS = [
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '/model · personal API keys',
       'Choose the model for future turns.',
@@ -851,7 +869,7 @@ const SCENARIOS = [
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/model · personal API keys',
@@ -876,7 +894,7 @@ const SCENARIOS = [
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['Harness model selected. Future turns:'],
     unexpect: [
       'Finish the active response before switching models.',
@@ -893,7 +911,7 @@ const SCENARIOS = [
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r', '21'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: ['Harness model selected. Future turns:'],
     unexpect: [
@@ -910,7 +928,7 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '4',
     },
     keys: ['/model', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '/model · included relay',
       'No model choices in this API mode.',
@@ -929,7 +947,7 @@ const SCENARIOS = [
     name: 'api-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: ['/api', 'api:', 'auth:', 'Personal API keys', 'Included relay'],
     unexpect: ['loading API status...', 'ServerSideKeyService not initialized'],
@@ -938,7 +956,7 @@ const SCENARIOS = [
     name: 'config-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/config', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/config',
@@ -971,7 +989,7 @@ const SCENARIOS = [
     name: 'approval-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/approval', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '/approval',
       'Choose when privileged actions prompt or auto-approve.',
@@ -985,6 +1003,7 @@ const SCENARIOS = [
   },
   {
     name: 'approval-policy-status-bar',
+    frame: 'scrollback',
     env: { HARNESS_APPROVAL_POLICY: 'never', HARNESS_ENTRIES: '4' },
     expect: ['personal', 'deny', '[/status]details'],
     unexpect: ['keys deny', 'approval: deny privileged actions'],
@@ -992,7 +1011,7 @@ const SCENARIOS = [
   {
     name: 'uninterruptible-running-status-bar',
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['◆ running', '[Ctrl-C]exit'],
     unexpect: ['[Ctrl-C]stop'],
   },
@@ -1000,7 +1019,7 @@ const SCENARIOS = [
     name: 'tools-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/tools', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/tools',
@@ -1017,7 +1036,7 @@ const SCENARIOS = [
     name: 'skills-form',
     env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
     keys: ['/skills', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/skills',
@@ -1040,7 +1059,7 @@ const SCENARIOS = [
     name: 'skills-form-select-submit',
     env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
     keys: ['/skills', '\r', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: ['Harness skill selected: proof-audit.'],
     unexpect: [
@@ -1059,7 +1078,7 @@ const SCENARIOS = [
       HARNESS_VISIBLE_WORKFLOW_AGENTS: PHYSICIST_WORKFLOW_AGENTS,
     },
     keys: ['/agent', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
@@ -1082,7 +1101,7 @@ const SCENARIOS = [
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '/model · personal API keys',
       'Available models',
@@ -1099,7 +1118,7 @@ const SCENARIOS = [
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '/api',
       'Personal API keys',
@@ -1116,7 +1135,7 @@ const SCENARIOS = [
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r', '21'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['API mode set to included.'],
     unexpect: ['ServerSideKeyService not initialized'],
   },
@@ -1126,7 +1145,7 @@ const SCENARIOS = [
     cols: 60,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/approval', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '/approval',
       'Ask',
@@ -1149,7 +1168,7 @@ const SCENARIOS = [
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/tools', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/tools',
@@ -1168,7 +1187,7 @@ const SCENARIOS = [
     name: 'slash-palette-overflow',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '… 5 earlier',
       '/subscription',
@@ -1185,7 +1204,7 @@ const SCENARIOS = [
     name: 'edit-approval',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Apply edit to draft.tex?',
       'y approve',
@@ -1202,7 +1221,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
     keys: ['e', 'needs direct proof'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Apply edit to draft.tex?',
       '> needs direct proof',
@@ -1218,7 +1237,7 @@ const SCENARIOS = [
     cols: 40,
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Apply edit to draft.tex?',
       'y approve',
@@ -1233,12 +1252,13 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
     keys: ['y'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['[/status]details', '[/model]models'],
     unexpect: ['Apply edit to draft.tex?', '1 approval'],
   },
   {
     name: 'bash-approval',
+    frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
     resizes: [{ cols: 120 }],
@@ -1273,7 +1293,7 @@ const SCENARIOS = [
     cols: 40,
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Run bash command?',
       '$ npm run compile:safe',
@@ -1291,7 +1311,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
     keys: ['e', 'use portable python3 instead'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Run bash command?',
       '> use portable python3 instead',
@@ -1303,6 +1323,7 @@ const SCENARIOS = [
   },
   {
     name: 'long-bash-approval',
+    frame: 'scrollback',
     rows: 24,
     env: {
       HARNESS_ENTRIES: '4',
@@ -1330,7 +1351,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
     bootExpect: '[Ctrl-C]',
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Run bash command?',
       'Directory:',
@@ -1352,7 +1373,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Ctrl-C]',
     keys: [DOWN, DOWN, DOWN],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Run bash command?',
       'Directory:',
@@ -1374,7 +1395,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Ctrl-C]',
     keys: [PAGE_DOWN],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Run bash command?',
       'Directory:',
@@ -1394,7 +1415,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
     bootExpect: '[Ctrl-C]',
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['Run bash command?', 'Directory:', 'rows hidden', 'y approve'],
     unexpect: ['[Option-p]tasks'],
   },
@@ -1403,7 +1424,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
     keys: ['a'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['AUTO-BASH', '[/status]details', '[/model]models'],
     unexpect: ['AUTO-APPROVE', 'Run bash command?', '1 approval'],
   },
@@ -1417,7 +1438,7 @@ const SCENARIOS = [
     bootExpect: '[Ctrl-C]',
     keys: ['y', { input: 'y', delayMs: 1000 }],
     settleMs: 6000,
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['SECOND-BASH-APPROVED', '[/status]details', '[/model]models'],
     unexpect: ['Run bash command?', '1 approval'],
   },
@@ -1426,7 +1447,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
     keys: ['a', '/status', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'approval: ask before privileged actions',
       'auto-approvals: bash commands',
@@ -1444,12 +1465,13 @@ const SCENARIOS = [
     },
     bootExpect: '[Ctrl-C]',
     keys: ['a', '/status', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['team: Physicist', 'auto-approvals: bash commands', 'AUTO-BASH'],
     unexpect: ['Run bash command?', '1 approval', ']subagents'],
   },
   {
     name: 'agent-proposal-long',
+    frame: 'scrollback',
     rows: 24,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_AGENT_PROPOSAL: '1' },
@@ -1474,7 +1496,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_AGENT_PROPOSAL: '1' },
     bootExpect: '[Ctrl-C]',
     keys: [PAGE_DOWN, PAGE_DOWN, PAGE_DOWN, PAGE_DOWN, PAGE_DOWN, PAGE_DOWN],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Spawn review?',
       'Model: deepseekT',
@@ -1494,7 +1516,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
     bootExpect: '[Ctrl-C]',
     keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Agent asks:',
       'more rows',
@@ -1520,7 +1542,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
     bootExpect: '[Ctrl-C]',
     keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Agent asks:',
       'more rows',
@@ -1546,7 +1568,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
     bootExpect: '[Ctrl-C]',
     keys: [EM],
-    frame: 'tail',
+    frame: 'viewport',
     fakeClipboard: {
       expectIncludes: [
         'Problem: Find all integer triples',
@@ -1563,7 +1585,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
     bootExpect: '[Ctrl-C]',
     keys: [LONG_EXTERNAL_INQUIRY_ANSWER, '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '[inquiry] ei_123456abcdef answered.',
       'A: Independent check agrees',
@@ -1587,7 +1609,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
     bootExpect: '[Ctrl-C]',
     keys: [LONG_EXTERNAL_INQUIRY_ANSWER_FOR_TRUNCATION, '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '[inquiry] ei_123456abcdef answered.',
       'A: Long verification note 01',
@@ -1610,7 +1632,7 @@ const SCENARIOS = [
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_USER_QUESTION: '1' },
     bootExpect: '[Ctrl-C]',
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Agent asks:',
       'previous rows',
@@ -1632,6 +1654,7 @@ const SCENARIOS = [
   },
   {
     name: 'plan-approval',
+    frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
     expect: [
@@ -1651,6 +1674,7 @@ const SCENARIOS = [
   },
   {
     name: 'plan-approval-goal',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
@@ -1670,6 +1694,7 @@ const SCENARIOS = [
   },
   {
     name: 'plan-approval-wrap-boundary',
+    frame: 'scrollback',
     rows: 24,
     cols: 81,
     env: {
@@ -1707,6 +1732,7 @@ const SCENARIOS = [
   },
   {
     name: 'plan-approval-stale-tail',
+    frame: 'scrollback',
     rows: 40,
     cols: 80,
     env: {
@@ -1742,6 +1768,7 @@ const SCENARIOS = [
   },
   {
     name: 'compact-plan-approval',
+    frame: 'scrollback',
     rows: 10,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
@@ -1762,6 +1789,7 @@ const SCENARIOS = [
   },
   {
     name: 'compact-plan-approval-goal',
+    frame: 'scrollback',
     rows: 10,
     cols: 80,
     env: {
@@ -1792,7 +1820,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Ctrl-C]',
     keys: ['r', '/status', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'PLAN-GOAL',
       'auto-approvals: bash commands',
@@ -1813,12 +1841,13 @@ const SCENARIOS = [
     },
     bootExpect: '[Ctrl-C]',
     keys: [DC2],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['Approve plan?', 'r approve & run', '1 approval'],
     unexpect: ['PLAN-GOAL', '[/model]models'],
   },
   {
     name: 'retry-approval',
+    frame: 'scrollback',
     cols: 120,
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
@@ -1839,7 +1868,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
     keys: ['k'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['RETRY-API-MODE personal', '[/status]details', '[/model]models'],
     unexpect: ['Retry the failed call?', '1 approval'],
   },
@@ -1848,12 +1877,13 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
     keys: ['n'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['[/status]details', '[/model]models'],
     unexpect: ['Apply edit to draft.tex?', '1 approval'],
   },
   {
     name: 'subagents',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -1873,6 +1903,7 @@ const SCENARIOS = [
   },
   {
     name: 'failed-subagent-status',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -1892,6 +1923,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagents-with-todos-compact',
+    frame: 'scrollback',
     rows: 14,
     cols: 80,
     env: {
@@ -1913,6 +1945,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagents-with-todos-narrow-status',
+    frame: 'scrollback',
     rows: 14,
     cols: 44,
     env: {
@@ -1927,6 +1960,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-picker',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -1964,7 +1998,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 's', 'f', 'child follow-up on focused stream', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'strategy is checking the harness-child-strategy details',
       'Harness received: child follow-up on focused stream',
@@ -1978,6 +2012,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-tab-focus-full-frame',
+    frame: 'scrollback',
     cols: 120,
     env: {
       HARNESS_ENTRIES: '4',
@@ -2001,6 +2036,7 @@ const SCENARIOS = [
   },
   {
     name: 'hidden-root-approval-tab-return',
+    frame: 'scrollback',
     cols: 120,
     env: {
       HARNESS_ENTRIES: '4',
@@ -2028,6 +2064,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-focused-bounded-live-tail',
+    frame: 'scrollback',
     cols: 120,
     rows: 14,
     env: {
@@ -2055,6 +2092,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-focused-transcript-viewer-full-history',
+    frame: 'scrollback',
     cols: 120,
     rows: 14,
     env: {
@@ -2089,7 +2127,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: ['\t', '/status', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'strategy is checking the harness-child-strategy details',
       '[1:strategy]*',
@@ -2106,6 +2144,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-focus-return-root-scrollback-deduped',
+    frame: 'scrollback',
     cols: 120,
     env: {
       HARNESS_ENTRIES: '4',
@@ -2130,6 +2169,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-picker-enter-views-subagent',
+    frame: 'scrollback',
     cols: 120,
     env: {
       HARNESS_ENTRIES: '4',
@@ -2152,6 +2192,7 @@ const SCENARIOS = [
   },
   {
     name: 'nested-subagent-picker-enter-views-subagent',
+    frame: 'scrollback',
     cols: 100,
     env: {
       HARNESS_ENTRIES: '4',
@@ -2185,7 +2226,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 's', 'f', ESC + 's'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Subagents',
       'Stream: strategy',
@@ -2209,7 +2250,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 's', 'f', ESC + 'p'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Tasks and sub-workflows',
       'Stream: strategy',
@@ -2228,6 +2269,7 @@ const SCENARIOS = [
   },
   {
     name: 'task-picker',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -2261,7 +2303,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 's'], // Esc/Alt-s
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Subagents',
       'Stream: main',
@@ -2291,7 +2333,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p'], // Esc/Alt-p
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Tasks and sub-workflows',
       'Stream: main',
@@ -2321,7 +2363,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p', DOWN, DOWN, DOWN], // Esc/Alt-p, select process row
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Tasks and sub-workflows',
       'latex build',
@@ -2333,6 +2375,7 @@ const SCENARIOS = [
   },
   {
     name: 'task-subworkflow-detail',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -2352,6 +2395,7 @@ const SCENARIOS = [
   },
   {
     name: 'task-subworkflow-detail-long-output',
+    frame: 'scrollback',
     rows: 12,
     cols: 48,
     env: {
@@ -2389,7 +2433,7 @@ const SCENARIOS = [
     },
     bootExpect: 'TeXRA',
     keys: [ESC + 'p', '\r', ...Array.from({ length: 22 }, () => UP)],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'stream · strategy',
       'Please handle the harness-child-strategy',
@@ -2408,6 +2452,7 @@ const SCENARIOS = [
   },
   {
     name: 'task-process-detail',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -2435,7 +2480,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 's'], // Esc/Alt-s
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Subagents',
       'Stream: main',
@@ -2464,7 +2509,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 's', DOWN], // Esc/Alt-s, select second subagent
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Subagents',
       'Stream: main',
@@ -2493,7 +2538,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p'], // Esc/Alt-p
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Tasks and sub-workflows',
       'Stream: main',
@@ -2514,7 +2559,7 @@ const SCENARIOS = [
     },
     bootExpect: 'TeXRA',
     keys: [ESC + 's'], // Esc/Alt-s
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'strategy',
       '+2 more',
@@ -2535,7 +2580,7 @@ const SCENARIOS = [
     },
     bootExpect: 'TeXRA',
     keys: [ESC + 's'], // Esc/Alt-s
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['◆ running 1m', 'personal'],
     unexpect: ['◆running', 'personal3', '3 sub 1 proc'],
   },
@@ -2550,7 +2595,7 @@ const SCENARIOS = [
     },
     bootExpect: 'TeXRA',
     keys: [ESC + 'p', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'stream · strategy',
       'harness-child-strategy details and',
@@ -2574,7 +2619,7 @@ const SCENARIOS = [
     },
     bootExpect: 'TeXRA',
     keys: [ESC + 'p', '\r', DOWN],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'stream · strategy',
       'harness-child-strategy',
@@ -2597,7 +2642,7 @@ const SCENARIOS = [
     },
     bootExpect: 'TeXRA',
     keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'shell · latex build',
       'main.tex: Proof sketch needs one',
@@ -2617,7 +2662,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     keys: [ESC + 'p', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'stream · strategy',
       'concise result.',
@@ -2638,7 +2683,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'shell · latex build',
       'reference',
@@ -2650,6 +2695,7 @@ const SCENARIOS = [
   },
   {
     name: 'stopped-subagent-picker',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -2672,6 +2718,7 @@ const SCENARIOS = [
   },
   {
     name: 'stopped-task-picker',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -2690,6 +2737,7 @@ const SCENARIOS = [
   },
   {
     name: 'stopped-task-subworkflow-detail',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -2715,7 +2763,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p', 'k', ESC + 's', 'f'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '[1:strategy](stopped)',
       '◆ stopped',
@@ -2736,7 +2784,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p', 'k', ESC + 's', 'f', { input: ESC, delayMs: 40 }, 's'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['Subagents', 'strategy', '1. strategy — stopped', 'root active'],
     unexpect: ['Tasks and sub-workflows', '◆ running', '2 sub 1 proc'],
   },
@@ -2750,7 +2798,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p', 'k', ESC + 's', 'f', { input: ESC, delayMs: 40 }, '\t'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['[2:leanSolver]', '◆ waiting for you', 'root active'],
     unexpect: [
       'Harness interrupt requested.',
@@ -2768,7 +2816,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p', 'k', ESC + 's', 'f', 'can you still receive this?', '\r'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       '[1:strategy](stopped)',
       '◆ stopped',
@@ -2789,7 +2837,7 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '4',
     },
     keys: [ESC + 'p'],
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['entry-4 chat history line', '[/status]details', '[Ctrl-C]exit'],
     unexpect: [
       '[Option-p]tasks',
@@ -2804,6 +2852,7 @@ const SCENARIOS = [
   },
   {
     name: 'task-picker-parent-fallback',
+    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
@@ -2820,6 +2869,7 @@ const SCENARIOS = [
   },
   {
     name: 'todos',
+    frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     expect: [
       'Split theorem into algebraic and analytic checks',
@@ -2833,7 +2883,7 @@ const SCENARIOS = [
       HARNESS_TODOS: '1',
       HARNESS_TODOS_COMPLETED: '1',
     },
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['◆ running'],
     unexpect: [
       'Split theorem into algebraic and analytic checks',
@@ -2847,7 +2897,7 @@ const SCENARIOS = [
       HARNESS_TODOS: '1',
       HARNESS_TODOS_IDLE: '1',
     },
-    frame: 'tail',
+    frame: 'viewport',
     expect: ['idle', '[Ctrl-C]exit'],
     unexpect: [
       'Split theorem into algebraic and analytic checks',
@@ -2856,6 +2906,7 @@ const SCENARIOS = [
   },
   {
     name: 'ctrl-c-exit',
+    frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4' },
     keys: [ETX],
     expectExit: true,
@@ -2869,7 +2920,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ETX],
-    frame: 'tail',
+    frame: 'viewport',
     expect: [
       'Harness interrupt requested.',
       '[main](stopped)',
@@ -3077,6 +3128,9 @@ if (!useExistingHarness) {
 
 const DEFAULT_COLS = Number(process.env.TUI_VALIDATE_COLS ?? '100');
 const DEFAULT_ROWS = Number(process.env.TUI_VALIDATE_ROWS ?? '40');
+const FRAME_MODE_VIEWPORT = 'viewport';
+const FRAME_MODE_SCROLLBACK = 'scrollback';
+const DEFAULT_FRAME_MODE = FRAME_MODE_VIEWPORT;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function scenarioCols(scenario) {
@@ -3096,8 +3150,8 @@ function makeTerm(scenario) {
   });
 }
 
-// Render the whole buffer (scrollback included) so finalized <Static> rows that
-// scrolled above the viewport still count as "on screen for the session".
+// Render the whole buffer once; scenarioFrame() then selects the visible
+// viewport or the historical scrollback for the scenario's assertion target.
 function renderFrame(term) {
   const buf = term.buffer.active;
   const lines = [];
@@ -3115,7 +3169,12 @@ function frameTail(frame, rows) {
 }
 
 function scenarioFrame(scenario, fullFrame, rows) {
-  return scenario.frame === 'tail' ? frameTail(fullFrame, rows) : fullFrame;
+  const frameMode = scenario.frame ?? DEFAULT_FRAME_MODE;
+  if (frameMode === FRAME_MODE_VIEWPORT) return frameTail(fullFrame, rows);
+  if (frameMode === FRAME_MODE_SCROLLBACK) return fullFrame;
+  throw new Error(
+    `unknown validate-tui frame mode for ${scenario.name}: ${frameMode}`,
+  );
 }
 
 function expectedFrameTextVisible(scenario, frame) {
