@@ -136,7 +136,12 @@ export class LatexdiffResults extends LitElement {
           aria-hidden="true"
         ></wa-icon>
         ${this.renderFileLink(baseFile, baseLabel)}
-        <span class="arrow">→</span>
+        <wa-icon
+          class="arrow"
+          library=${TEXRA_ICON_LIBRARY}
+          name="arrow-right"
+          aria-hidden="true"
+        ></wa-icon>
         ${this.renderFileLink(revisedFile, revisedLabel)}
         (${this.renderFileLink(diffFile, 'diff')})
       </li>
