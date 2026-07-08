@@ -16,6 +16,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   isRunningGroupEntry,
+  isRunningStreamingTextEntry,
   StreamLog,
   type StreamLogAppendInput,
   type StreamLogPreservedRawEntry,
@@ -34,6 +35,7 @@ const StreamLogSummarySchema = z.object({
   firstTimestamp: z.number().finite().optional().catch(undefined),
   lastTimestamp: z.number().finite().optional().catch(undefined),
   hasRunningGroup: z.boolean().optional().catch(undefined),
+  hasRunningStreamingText: z.boolean().optional().catch(undefined),
 });
 type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 
@@ -52,7 +54,22 @@ function summaryOf(logInstance: StreamLog): StreamLogSummary {
     firstTimestamp: logInstance.firstTimestamp,
     lastTimestamp: logInstance.lastTimestamp,
     hasRunningGroup: logInstance.hasRunningGroup,
+    hasRunningStreamingText: logInstance.hasRunningStreamingText,
   };
+}
+
+/**
+ * A persisted summary needs its stream force-loaded before the recovery
+ * sweep can finalize anything left running — either an orphaned task group
+ * or an orphaned thinking/scratchpad/model-response stream (#7276: these can
+ * close independently, e.g. an error path that ends the group without also
+ * finalizing an in-flight nested stream).
+ */
+function hasSomethingRunning(summary: StreamLogSummary | undefined): boolean {
+  return (
+    summary?.hasRunningGroup === true ||
+    summary?.hasRunningStreamingText === true
+  );
 }
 
 export class StreamLogStore {
@@ -380,7 +397,7 @@ export class StreamLogStore {
   ): Promise<StreamTabId[]> {
     const streamsToLoad = new Set(streamIds);
     for (const [streamId, summary] of this.summaries) {
-      if (summary.hasRunningGroup && !this.logs.has(streamId)) {
+      if (hasSomethingRunning(summary) && !this.logs.has(streamId)) {
         streamsToLoad.add(streamId);
       }
     }
@@ -391,7 +408,7 @@ export class StreamLogStore {
       });
     }
 
-    const affected = this.endRunningGroupsInLoadedLogs(now, undefined, status);
+    const affected = this.endRunningEntriesInLoadedLogs(now, undefined, status);
     if (affected.length > 0) {
       void this.save();
     }
@@ -406,8 +423,7 @@ export class StreamLogStore {
   ): Promise<StreamTabId[]> {
     if (streamIds.length === 0) return [];
     const streamsToLoad = streamIds.filter(
-      (id) =>
-        !this.logs.has(id) && this.summaries.get(id)?.hasRunningGroup === true,
+      (id) => !this.logs.has(id) && hasSomethingRunning(this.summaries.get(id)),
     );
     if (streamsToLoad.length > 0) {
       await pMap(streamsToLoad, (id) => this.ensureLoaded(id), {
@@ -415,7 +431,7 @@ export class StreamLogStore {
       });
     }
 
-    const affected = this.endRunningGroupsInLoadedLogs(
+    const affected = this.endRunningEntriesInLoadedLogs(
       now,
       new Set(streamIds),
       status,
@@ -427,7 +443,7 @@ export class StreamLogStore {
     return affected;
   }
 
-  private endRunningGroupsInLoadedLogs(
+  private endRunningEntriesInLoadedLogs(
     now: number,
     streamIds?: ReadonlySet<StreamTabId>,
     status: EndGroupStatus = END_GROUP_STATUS.ERROR,
@@ -437,13 +453,26 @@ export class StreamLogStore {
       if (streamIds && !streamIds.has(streamId)) continue;
       let updatedAny = false;
       for (const entry of logInstance.getRange(0, logInstance.head)) {
-        if (!isRunningGroupEntry(entry)) continue;
-        const existingData = isObject(entry.data) ? entry.data : {};
+        if (isRunningGroupEntry(entry)) {
+          const existingData = isObject(entry.data) ? entry.data : {};
+          updatedAny ||= !!logInstance.update(entry.id, {
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+            data: { ...existingData, status, endTime: now },
+          });
+          continue;
+        }
 
-        updatedAny ||= !!logInstance.update(entry.id, {
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          data: { ...existingData, status, endTime: now },
-        });
+        // A thinking/scratchpad/model-response stream that never got a
+        // `stream.end` (run cancelled/crashed/reloaded mid-stream) — finalize
+        // it so it renders as its normal completed banner instead of being
+        // stuck rendering as an in-progress entry forever (#7276).
+        if (isRunningStreamingTextEntry(entry)) {
+          const existingData = isObject(entry.data) ? entry.data : {};
+          updatedAny ||= !!logInstance.update(entry.id, {
+            data: { ...existingData, status: 'completed' },
+          });
+          continue;
+        }
       }
 
       if (updatedAny) {
@@ -583,6 +612,7 @@ export class StreamLogStore {
       existing.firstTimestamp = logInstance.firstTimestamp;
       existing.lastTimestamp = logInstance.lastTimestamp;
       existing.hasRunningGroup = logInstance.hasRunningGroup;
+      existing.hasRunningStreamingText = logInstance.hasRunningStreamingText;
     } else {
       this.summaries.set(streamId, summaryOf(logInstance));
     }
@@ -655,16 +685,27 @@ export class StreamLogStore {
       firstTimestamp: entries[0]?.timestamp,
       lastTimestamp: entries.at(-1)?.timestamp,
       hasRunningGroup: entries.some(isRunningGroupEntry),
+      hasRunningStreamingText: entries.some(isRunningStreamingTextEntry),
     };
   }
 
   private parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
     const result = StreamLogSummarySchema.safeParse(value);
     if (!result.success) return undefined;
-    const { firstTimestamp, lastTimestamp, hasRunningGroup } = result.data;
+    const {
+      firstTimestamp,
+      lastTimestamp,
+      hasRunningGroup,
+      hasRunningStreamingText,
+    } = result.data;
     if (firstTimestamp === undefined && lastTimestamp === undefined)
       return undefined;
-    return { firstTimestamp, lastTimestamp, hasRunningGroup };
+    return {
+      firstTimestamp,
+      lastTimestamp,
+      hasRunningGroup,
+      hasRunningStreamingText,
+    };
   }
 
   private async writeStream(

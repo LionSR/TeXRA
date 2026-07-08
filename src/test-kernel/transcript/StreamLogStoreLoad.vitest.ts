@@ -78,6 +78,24 @@ function runningGroupEntry(
   };
 }
 
+/** A thinking/scratchpad/model-response entry whose stream never finalized. */
+function runningStreamingTextEntry(
+  streamId: string,
+  seqNo: number,
+  timestamp: number,
+): StreamLogEntry {
+  return {
+    seqNo,
+    id: `${streamId}-thinking-${seqNo}`,
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp,
+    messageType: MESSAGE_TYPES.THINKING,
+    text: 'reasoning in progress',
+    data: { status: 'running' },
+  };
+}
+
 function fileStat(mtime: number): FileStat {
   return {
     type: FileType.File,
@@ -298,6 +316,7 @@ describe('StreamLogStore load', () => {
       firstTimestamp: 200,
       lastTimestamp: 250,
       hasRunningGroup: false,
+      hasRunningStreamingText: false,
     });
   });
 
@@ -328,6 +347,7 @@ describe('StreamLogStore load', () => {
       firstTimestamp: 200,
       lastTimestamp: 250,
       hasRunningGroup: false,
+      hasRunningStreamingText: false,
     });
   });
 
@@ -364,6 +384,7 @@ describe('StreamLogStore load', () => {
       firstTimestamp: 100,
       lastTimestamp: 100,
       hasRunningGroup: false,
+      hasRunningStreamingText: false,
     });
   });
 
@@ -405,10 +426,51 @@ describe('StreamLogStore load', () => {
       firstTimestamp: 100,
       lastTimestamp: 100,
       hasRunningGroup: false,
+      hasRunningStreamingText: false,
     });
     expect(
       storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'beta')),
     ).toBeUndefined();
+  });
+
+  it('finalizes an orphaned streaming-text entry even when its group already closed (#7276)', async () => {
+    // The task group closed normally (hasRunningGroup: false), but a nested
+    // thinking stream never got its stream.end — e.g. an error path that
+    // ended the group without also finalizing the in-flight nested stream.
+    const storage = mockStorage({
+      logs: {
+        gamma: [runningStreamingTextEntry('gamma', 1, 100)],
+      },
+      summaries: {
+        gamma: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: false,
+          hasRunningStreamingText: true,
+        },
+      },
+    });
+
+    const store = new StreamLogStore();
+    await store.load();
+
+    expect(storage.fullLogReads()).toBe(0);
+
+    const affected = await store.endRunningGroupsForStreams(['gamma'], 300);
+    await store.flush();
+    const entry = store.get('gamma')?.getRange(0).at(0);
+
+    expect(affected).toEqual(['gamma']);
+    expect(storage.fullLogReads()).toBe(1);
+    expect(entry?.data).toEqual({ status: 'completed' });
+    expect(
+      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'gamma')),
+    ).toEqual({
+      firstTimestamp: 100,
+      lastTimestamp: 100,
+      hasRunningGroup: false,
+      hasRunningStreamingText: false,
+    });
   });
 
   it('can close selected running groups with a neutral stopped status', async () => {
@@ -716,6 +778,7 @@ describe('StreamLogStore load', () => {
       firstTimestamp: 700,
       lastTimestamp: 700,
       hasRunningGroup: false,
+      hasRunningStreamingText: false,
     });
   });
 
@@ -743,6 +806,7 @@ describe('StreamLogStore load', () => {
       firstTimestamp: 500,
       lastTimestamp: 500,
       hasRunningGroup: false,
+      hasRunningStreamingText: false,
     });
   });
 
