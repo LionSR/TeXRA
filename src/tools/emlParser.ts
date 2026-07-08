@@ -1,5 +1,6 @@
 // Third-party imports
 import PostalMime from 'postal-mime';
+import TurndownService from 'turndown';
 import type { Address, Attachment, Email } from 'postal-mime';
 
 /** An image extracted from the email (inline or attached). */
@@ -153,28 +154,18 @@ function formatAddress(addr: Address): string {
   return addr.name ? `${addr.name} <${addr.address}>` : (addr.address ?? '');
 }
 
+const turndownService = new TurndownService({ headingStyle: 'atx' }).remove([
+  'style',
+  'script',
+]);
+
 /**
- * Minimal HTML-to-text conversion: strip tags and decode common entities.
- * This is intentionally lightweight — we only hit this path when no text/plain
- * part exists in the email.
+ * HTML-to-text conversion via turndown, used only when no text/plain part
+ * exists in the email. Renders as Markdown rather than raw plain text, but
+ * that's a feature here: it preserves lists, links, and emphasis instead of
+ * flattening them, and matches the html-to-Markdown fallback already used by
+ * WebFetchTool for the same "readable representation" purpose.
  */
 function stripHtml(html: string): string {
-  return (
-    html
-      // Remove non-visible blocks before stripping tags so their text content
-      // (CSS rules, JS code) doesn't leak into the plain-text output.
-      .replaceAll(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replaceAll(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replaceAll(/<br\s*\/?>/gi, '\n')
-      .replaceAll(/<\/(?:p|div|tr|li|h[1-6])>/gi, '\n')
-      .replaceAll(/<[^>]+>/g, '')
-      .replaceAll(/&nbsp;/gi, ' ')
-      .replaceAll(/&lt;/gi, '<')
-      .replaceAll(/&gt;/gi, '>')
-      .replaceAll(/&quot;/gi, '"')
-      .replaceAll(/&#039;/gi, "'")
-      .replaceAll(/&amp;/gi, '&')
-      .replaceAll(/\n{3,}/g, '\n\n')
-      .trim()
-  );
+  return turndownService.turndown(html).trim();
 }
