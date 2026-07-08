@@ -16,14 +16,13 @@ import {
   type ExecutionHandle,
   type ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
-import type { SessionHandle } from './SessionHandle';
+import { currentSession, type SessionHandle } from './SessionHandle';
 
 const logger = createChannelTrace('ExecutionSubscriptionBinder');
 
@@ -65,6 +64,17 @@ function snapshot(
     status: info.status,
     elapsed: info.elapsed,
   };
+}
+
+function emitQueuedFollowUpsChanged(
+  streamId: StreamTabId,
+  session?: SessionHandle,
+): void {
+  const target = session ?? currentSession();
+  target.events.emit({
+    scope: 'session',
+    event: { type: 'updateQueuedFollowUps', payload: { streamId } },
+  });
 }
 
 class ExecutionSubscription implements Disposable {
@@ -160,11 +170,7 @@ class ExecutionSubscription implements Disposable {
     )
       .then((result) => {
         if (result.status === 'sent' || result.status === 'queued') {
-          emitRuntimeEvent(
-            'updateQueuedFollowUps',
-            { streamId: this.streamId },
-            this.session,
-          );
+          emitQueuedFollowUpsChanged(this.streamId, this.session);
         }
       })
       .catch((err: unknown) => {
