@@ -52,9 +52,9 @@ import { BashTool } from '@tools/bash';
 import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';
 
-import { attachSessionProgressEventProjectionForTest } from '../agent/sessionProgressTestUtils';
 import {
   createRecordingHost,
+  recordSessionEvents,
   withTestRunContext,
 } from '../agent/progressTestUtils';
 
@@ -419,10 +419,7 @@ describe('BashTool', () => {
     const parentStreamId = 'bash-tool-bg-parent' as StreamTabId;
     const { host } = createRecordingHost();
     const bashTool = new BashTool();
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      defaultSession().events,
-      host,
-    );
+    const recorded = recordSessionEvents(defaultSession().events);
 
     try {
       const launchResult = await withToolEnvironment(
@@ -447,7 +444,7 @@ describe('BashTool', () => {
         );
       });
     } finally {
-      detachProjection();
+      recorded.detach();
     }
 
     // sendFollowUp is overloaded (string | FollowUpQueueInput); bash.ts always
