@@ -23,7 +23,11 @@ import {
   resolveAndResumeStream,
 } from '@agent/runtime/resolveAndResumeStream';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type {
+  AgentRuntimeEvent,
+  AgentRuntimeEventPayloads,
+  AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
@@ -38,7 +42,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
 import {
   getFileListConfig,
   loadFileListSettings,
@@ -1000,12 +1004,16 @@ export class DesktopProgressBridge {
     });
   }
 
-  private handleProgressEvent<K extends keyof ProgressEventPayloads>(
+  private handleProgressEvent<K extends AgentRuntimeEvent>(
     event: K,
-    payload: ProgressEventPayloads[K],
+    payload: AgentRuntimeEventPayloads[K],
   ): void {
-    if (event === 'addOutputFiles') return;
-    this.backend.handleProgressEvent(event, payload);
+    if (!isRuntimePresentationEvent(event)) {
+      if (event === 'addOutputFiles') return;
+      this.backend.handleProgressEvent(event, payload);
+      return;
+    }
+
     switch (event) {
       case 'requestEnsureProgressView':
         this.progressEvents.onProgressEvent(
