@@ -1,0 +1,103 @@
+import { JSDOM } from 'jsdom';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import {
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  type LogMessageData,
+} from '@shared/schemas';
+
+/**
+ * Regression coverage for #7276: a thinking/scratchpad/model-response entry
+ * that's still streaming in (`data.status: 'running'`) must render through
+ * the same collapsible banner shell (`formatBannerContentTemplate`) as a
+ * finalized entry — never fall back to the plain `log-line` template, which
+ * is visually indistinguishable from an unrelated info log.
+ */
+describe('thinking block renders as a banner while streaming', () => {
+  let dom: JSDOM;
+
+  beforeAll(() => {
+    dom = new JSDOM('<!doctype html><html><body></body></html>');
+    Object.assign(globalThis, {
+      window: dom.window,
+      document: dom.window.document,
+      Node: dom.window.Node,
+      Element: dom.window.Element,
+      DocumentFragment: dom.window.DocumentFragment,
+    });
+  });
+
+  afterAll(() => {
+    dom.window.close();
+  });
+
+  it('renders a banner-details shell, not a plain log line, while the stream is running', async () => {
+    const { formatLogEntry } =
+      await import('@progressView/frontend/formatters');
+    const { render } = await import('lit');
+
+    const message: LogMessageData = {
+      id: 'think-1',
+      text: '**bold** reasoning in progress',
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.THINKING,
+      data: { status: 'running' },
+    };
+
+    const container = document.createElement('div');
+    render(formatLogEntry(message), container);
+
+    expect(container.querySelector('details.banner-details')).not.toBeNull();
+    expect(container.querySelector('.log-line')).toBeNull();
+    // Markdown parsing is skipped while running — raw text, not rendered HTML.
+    expect(container.textContent).toContain('**bold** reasoning in progress');
+    expect(container.querySelector('strong')).toBeNull();
+  });
+
+  it('upgrades to rendered markdown once the stream finalizes, inside the same banner shell', async () => {
+    const { formatLogEntry } =
+      await import('@progressView/frontend/formatters');
+    const { render } = await import('lit');
+
+    const message: LogMessageData = {
+      id: 'think-1',
+      text: '**bold** reasoning done',
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.THINKING,
+      data: { status: 'completed' },
+    };
+
+    const container = document.createElement('div');
+    render(formatLogEntry(message), container);
+
+    expect(container.querySelector('details.banner-details')).not.toBeNull();
+    expect(container.querySelector('strong')?.textContent).toBe('bold');
+  });
+
+  it('applies the same running/finalized behavior to model-response entries', async () => {
+    const { formatLogEntry } =
+      await import('@progressView/frontend/formatters');
+    const { render } = await import('lit');
+
+    const runningMessage: LogMessageData = {
+      id: 'resp-1',
+      text: '**bold** answer in progress',
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      data: { status: 'running' },
+    };
+
+    const runningContainer = document.createElement('div');
+    render(formatLogEntry(runningMessage), runningContainer);
+
+    expect(
+      runningContainer.querySelector('details.banner-details'),
+    ).not.toBeNull();
+    expect(runningContainer.querySelector('.log-line')).toBeNull();
+    expect(runningContainer.querySelector('strong')).toBeNull();
+  });
+});

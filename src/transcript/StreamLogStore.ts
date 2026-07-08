@@ -15,6 +15,7 @@ import { debounce, filterNotNull, isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
+  isOrphanedStreamingTextEntry,
   isRunningGroupEntry,
   StreamLog,
   type StreamLogAppendInput,
@@ -437,13 +438,25 @@ export class StreamLogStore {
       if (streamIds && !streamIds.has(streamId)) continue;
       let updatedAny = false;
       for (const entry of logInstance.getRange(0, logInstance.head)) {
-        if (!isRunningGroupEntry(entry)) continue;
-        const existingData = isObject(entry.data) ? entry.data : {};
+        if (isRunningGroupEntry(entry)) {
+          const existingData = isObject(entry.data) ? entry.data : {};
+          updatedAny ||= !!logInstance.update(entry.id, {
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+            data: { ...existingData, status, endTime: now },
+          });
+          continue;
+        }
 
-        updatedAny ||= !!logInstance.update(entry.id, {
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          data: { ...existingData, status, endTime: now },
-        });
+        // A thinking/scratchpad/model-response stream that never got a
+        // `stream.end` (run cancelled/crashed/reloaded mid-stream) — finalize
+        // it so it renders as its normal completed banner instead of being
+        // stuck rendering as an in-progress entry forever (#7276).
+        if (isOrphanedStreamingTextEntry(entry)) {
+          const existingData = isObject(entry.data) ? entry.data : {};
+          updatedAny ||= !!logInstance.update(entry.id, {
+            data: { ...existingData, status: 'completed' },
+          });
+        }
       }
 
       if (updatedAny) {

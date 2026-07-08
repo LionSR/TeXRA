@@ -1,4 +1,5 @@
 import {
+  MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type StreamLogEntry,
   type StreamLogTextDelta,
@@ -20,6 +21,24 @@ export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
   const data = isObject(entry.data) ? entry.data : {};
   const status = typeof data.status === 'string' ? data.status : 'running';
   return status === 'running';
+}
+
+const STREAMING_TEXT_MESSAGE_TYPES = new Set<string>([
+  MESSAGE_TYPES.THINKING,
+  MESSAGE_TYPES.SCRATCHPAD,
+  MESSAGE_TYPES.MODEL_RESPONSE,
+]);
+
+/**
+ * True for a thinking/scratchpad/model-response entry left at
+ * `data.status: 'running'` — e.g. its stream never got a `stream.end`
+ * because the run was cancelled, crashed, or the host reloaded mid-stream.
+ */
+export function isOrphanedStreamingTextEntry(entry: StreamLogEntry): boolean {
+  if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) return false;
+  if (!STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType ?? '')) return false;
+  const data = isObject(entry.data) ? entry.data : {};
+  return data.status === 'running';
 }
 
 export class StreamLog {

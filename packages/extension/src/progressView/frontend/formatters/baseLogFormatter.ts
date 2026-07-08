@@ -1,12 +1,37 @@
 /**
  * Base log formatter utilities for open state management and error handling.
  */
+import { MESSAGE_TYPES, type LogMessageData } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export type FormatOptions = {
   preservedOpen?: boolean;
   defaultOpen?: boolean;
 };
+
+/** Message types whose text streams in incrementally before finalizing. */
+const STREAMING_TEXT_TYPES = new Set<string>([
+  MESSAGE_TYPES.THINKING,
+  MESSAGE_TYPES.SCRATCHPAD,
+  MESSAGE_TYPES.MODEL_RESPONSE,
+]);
+
+function isRunningData(data: unknown): boolean {
+  return (
+    data !== null &&
+    typeof data === 'object' &&
+    'status' in data &&
+    data.status === 'running'
+  );
+}
+
+/** True while a thinking/scratchpad/model-response entry is still streaming in. */
+export function isStreamingTextLogMessage(message: LogMessageData): boolean {
+  return (
+    STREAMING_TEXT_TYPES.has(message.messageType ?? '') &&
+    isRunningData(message.data)
+  );
+}
 
 /** Result of safeFormat - either success with value or failure with error. */
 export type SafeFormatResult<T> =
