@@ -46,7 +46,7 @@ interface ConversationEntryBase {
   /** Entry was synthesized by the CLI and is not present in StreamLogStore. */
   readonly synthetic?: boolean;
   /** Why the CLI synthesized this entry. */
-  readonly syntheticKind?: 'final' | 'local' | 'process';
+  readonly syntheticKind?: 'local' | 'process';
   /** StreamLog head at the moment a synthetic entry was appended. */
   readonly syntheticAfterSeq?: number;
 }

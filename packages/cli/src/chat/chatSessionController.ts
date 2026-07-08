@@ -273,7 +273,6 @@ export function createChatSessionController(
     const { runtimeHost, approvalsUnavailable, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
-    let waitingTurn = 0;
     let executionRegistered = false;
     let agentSettled = false;
     session.executionId = executionId;
@@ -293,15 +292,9 @@ export function createChatSessionController(
             activeStreamId.set(resolvedStreamId);
             if (session.stopRequested) interruptActiveRun();
           },
-          onIdle: (lastResponse) => {
+          onIdle: () => {
             if (!session.streamId) return;
-            projectStreamTranscript(session.streamId, {
-              fallbackAssistant: {
-                text: lastResponse,
-                idPrefix: `waiting:${executionId}:${waitingTurn++}`,
-              },
-              finalize: true,
-            });
+            projectStreamTranscript(session.streamId, { finalize: true });
           },
         });
       })
@@ -312,17 +305,7 @@ export function createChatSessionController(
           sessionContext,
         );
         if (result.streamId) {
-          projectStreamTranscript(result.streamId, {
-            finalize: true,
-            ...(result.category === AgentCategory.ToolUse
-              ? {
-                  fallbackAssistant: {
-                    text: result.lastResponse,
-                    idPrefix: `final:${result.executionId}`,
-                  },
-                }
-              : {}),
-          });
+          projectStreamTranscript(result.streamId, { finalize: true });
         }
         notify({ kind: 'agentFinished' });
       })
