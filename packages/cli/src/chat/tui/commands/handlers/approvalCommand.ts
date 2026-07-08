@@ -7,7 +7,7 @@ import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { openCliSlashCommandForm } from '../slashForms';
 import { type SlashCommandContext } from './slashContext';
 
-export const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
+const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 
 export function applyCliApprovalPolicySelection(
   input: string,

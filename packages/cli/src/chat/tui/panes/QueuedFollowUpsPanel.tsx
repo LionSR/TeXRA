@@ -7,7 +7,7 @@ import { truncateSummaryToWidth } from '../render/terminalText';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
 
-export interface QueuedFollowUpPanelRow {
+interface QueuedFollowUpPanelRow {
   readonly kind: 'message' | 'overflow';
   readonly text: string;
 }

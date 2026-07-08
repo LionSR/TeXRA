@@ -492,7 +492,7 @@ export function registerChildStreams(
 /** Active inline slash form, or `undefined` when the chat input owns the
  *  screen. The form's `onDone` clears this slot. Kept opaque (the form
  *  carries its own state) so the registry stays declarative. */
-export interface ActiveSlashForm {
+interface ActiveSlashForm {
   /** The slash command that mounted the form (for the header strip). */
   readonly commandName: string;
   /** Status-bar verb for Escape while the form owns input. Defaults to close. */

@@ -25,7 +25,7 @@ import {
 import { resolveCliResourcesPath } from './resourcesPath';
 import type { SkillSourceOptions } from '@skills/skillSources';
 
-export type CliMode = 'headless' | 'interactive';
+type CliMode = 'headless' | 'interactive';
 
 export interface CliPromptRequest {
   readonly kind: 'approval' | 'externalInquiry';
