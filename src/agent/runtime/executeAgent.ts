@@ -259,37 +259,20 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
   };
 }
 
-/** Options for executeAgent. */
-export interface ExecuteAgentOptions {
-  /** Host services used by the runtime to report progress/UI events. */
-  runtimeHost: AgentRuntimeHost;
-  /** When true, proposal tools are filtered out to prevent nesting. */
-  isSubagent?: boolean;
-  /**
-   * When true, enforce that configPayload.agentCategory matches the agent's
-   * YAML-defined category. Callers that explicitly set a category (e.g.
-   * DelegationTools) should opt in; callers that pass pre-parsed configs with
-   * prefaulted defaults (e.g. runExecuteCommand) should leave this off.
-   */
-  enforceCategory?: boolean;
+/**
+ * Callback and host-context fields shared by every entry point that drives one
+ * subagent run (`executeAgent`, `resumeToolUseFromSnapshot`, and
+ * `resumeQueuedToolUseSnapshot`). Extracted so the three option bags describing
+ * the same run can't silently drift out of sync or re-declare the same field
+ * under a different name.
+ */
+export interface SubagentRunOptions {
   /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
   parentStreamId?: StreamTabId;
-  /**
-   * Depth of this execution in the delegation chain. Root (user-initiated) is 0;
-   * each delegate_agent / delegate_workflow call increments it. Used to gate
-   * nested delegation based on the Multi-Agent settings. Defaults to 0.
-   */
-  delegationDepth?: number;
-  /** Fires with the real streamId before the stream is activated (before UI sync). */
-  onStreamResolved?: (streamId: StreamTabId) => void;
   /** Fires when a tool-use session consumes queued follow-up instructions. */
   onFollowUpConsumed?: () => void;
   /** Fires on meaningful progress: todo changes and tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
-  onIdle?: (lastResponse: string | undefined) => void;
-  /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
-  stopAfterCycle?: boolean;
   /**
    * Allow the promise to resolve with the non-terminal WAITING result. This is
    * reserved for native subagent drivers that keep the execution handle and
@@ -309,12 +292,47 @@ export interface ExecuteAgentOptions {
    * frozen, process-wide `platform().toolEditApproval` port.
    */
   toolEditApprovalHandler?: ToolEditApprovalPort;
-  /** Resume using this persisted provider-message format instead of today's default route. */
-  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
-  /** Fires when a subagent fails and should report the failure to its orchestrator. */
-  onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
+  /**
+   * Fires when the subagent run itself fails, so a caller can report the
+   * failure up the delegation chain. Distinct from a host-level failure
+   * surface such as `ResumeQueuedToolUseOptions.onError` (log + toast for a
+   * failed resume-plumbing step) — this callback is about the run's outcome.
+   */
+  onRunError?: (
+    error: unknown,
+    result: AgentFlowResult,
+  ) => void | Promise<void>;
   /** Fires once with the live per-run handle right after it is tracked (F-2). */
   onRun?: (handle: AgentRunHandle) => void | Promise<void>;
+}
+
+/** Options for executeAgent. */
+export interface ExecuteAgentOptions extends SubagentRunOptions {
+  /** Host services used by the runtime to report progress/UI events. */
+  runtimeHost: AgentRuntimeHost;
+  /** When true, proposal tools are filtered out to prevent nesting. */
+  isSubagent?: boolean;
+  /**
+   * When true, enforce that configPayload.agentCategory matches the agent's
+   * YAML-defined category. Callers that explicitly set a category (e.g.
+   * DelegationTools) should opt in; callers that pass pre-parsed configs with
+   * prefaulted defaults (e.g. runExecuteCommand) should leave this off.
+   */
+  enforceCategory?: boolean;
+  /**
+   * Depth of this execution in the delegation chain. Root (user-initiated) is 0;
+   * each delegate_agent / delegate_workflow call increments it. Used to gate
+   * nested delegation based on the Multi-Agent settings. Defaults to 0.
+   */
+  delegationDepth?: number;
+  /** Fires with the real streamId before the stream is activated (before UI sync). */
+  onStreamResolved?: (streamId: StreamTabId) => void;
+  /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
+  onIdle?: (lastResponse: string | undefined) => void;
+  /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
+  stopAfterCycle?: boolean;
+  /** Resume using this persisted provider-message format instead of today's default route. */
+  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
 }
 
 export function executeAgent(
@@ -405,7 +423,7 @@ export async function executeAgent(
       {
         isSubagent,
         parentStreamId: options.parentStreamId,
-        onError: options.onError,
+        onError: options.onRunError,
         onRun: options.onRun,
       },
     );
@@ -418,24 +436,7 @@ export async function executeAgent(
   });
 }
 
-export interface ResumeToolUseFromSnapshotOptions {
-  /** Hide tools whose approval prompts cannot be answered in this host mode. */
-  readonly approvalPromptsUnavailable?: boolean;
-  /** Hide tools unavailable because the current host/runtime cannot support them. */
-  readonly runtimeUnavailableTools?: readonly string[];
-  /** Session owning this run's coordination state. Defaults to the process session. */
-  readonly session?: SessionHandle;
-  /** Per-run override for the host's tool-edit approval UI — see `ExecuteAgentOptions.toolEditApprovalHandler`. */
-  readonly toolEditApprovalHandler?: ToolEditApprovalPort;
-  readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
-  readonly onFollowUpConsumed?: () => void;
-  readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  readonly onError?: (
-    error: unknown,
-    result: AgentFlowResult,
-  ) => void | Promise<void>;
-  readonly parentStreamId?: StreamTabId;
-  readonly allowWaitingResult?: boolean;
+export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
   readonly setupSession?: (session: IToolUseSession) => void;
 }
 
@@ -520,7 +521,7 @@ export async function resumeToolUseFromSnapshot(
       {
         isSubagent,
         parentStreamId: options.parentStreamId,
-        onError: options.onError,
+        onError: options.onRunError,
         onRun: options.onRun,
       },
     );

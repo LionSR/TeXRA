@@ -1,8 +1,8 @@
 // Local imports - replacement
 import { generateReferenceSpacing } from '@replacement/helpers';
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
-export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
+export const PERSONAL_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'personal_style',
   description:
     'Personal writing style preferences for specific LaTeX commands and spacing',

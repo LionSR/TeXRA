@@ -1,5 +1,5 @@
 // Local imports
-import { ReplacementCategory, ReplacementFunction } from './types';
+import { RegexReplacementCategory, ReplacementFunction } from './types';
 import {
   FENCED_LATEX_BLOCK_PATTERN_INLINE,
   FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
@@ -60,7 +60,7 @@ function createCaptionTrimmer(
 
 // ===== Regex replacements =====
 
-export const FENCED_LATEX_BLOCK_REPLACEMENTS: ReplacementCategory = {
+export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexReplacementCategory = {
   name: 'fenced_latex_blocks',
   description:
     'Convert Markdown-style fenced math blocks into proper LaTeX environments',
@@ -73,7 +73,7 @@ export const FENCED_LATEX_BLOCK_REPLACEMENTS: ReplacementCategory = {
 };
 
 // Parentheses sizing standardization
-export const PARENTHESES_REPLACEMENTS: ReplacementCategory = {
+export const PARENTHESES_REPLACEMENTS: RegexReplacementCategory = {
   name: 'parentheses',
   description: 'Standardize parentheses sizing using regex patterns',
   isRegex: true,
@@ -113,7 +113,7 @@ export const PARENTHESES_REPLACEMENTS: ReplacementCategory = {
 };
 
 // LaTeX inline math formatting fixes
-export const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
+export const INLINE_MATH_REPLACEMENTS: RegexReplacementCategory = {
   name: 'inline_math',
   description: 'Fixes for LaTeX inline math formatting',
   isRegex: true,
@@ -140,27 +140,28 @@ export const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
 };
 
 // Context-aware personal style conversions
-export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: ReplacementCategory = {
-  name: 'personal_style_contextual',
-  description:
-    'Context-aware replacements for personal style rules that avoid macro definitions',
-  isRegex: true,
-  flags: 'g',
-  patterns: {
-    // Temporarily protect \mathrm{Tr} inside command definitions
-    '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{Tr\\}':
-      '$1__TEXRA_PRESERVE_TR__',
-    // Temporarily protect \mathrm{tr} inside command definitions
-    '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{tr\\}':
-      '$1__TEXRA_PRESERVE_tr__',
-    // Apply preferred operator command forms
-    '\\\\mathrm\\{Tr\\}': '\\Tr',
-    '\\\\mathrm\\{tr\\}': '\\tr',
-    // Restore protected command definitions
-    __TEXRA_PRESERVE_TR__: '\\mathrm{Tr}',
-    __TEXRA_PRESERVE_tr__: '\\mathrm{tr}',
-  },
-};
+export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexReplacementCategory =
+  {
+    name: 'personal_style_contextual',
+    description:
+      'Context-aware replacements for personal style rules that avoid macro definitions',
+    isRegex: true,
+    flags: 'g',
+    patterns: {
+      // Temporarily protect \mathrm{Tr} inside command definitions
+      '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{Tr\\}':
+        '$1__TEXRA_PRESERVE_TR__',
+      // Temporarily protect \mathrm{tr} inside command definitions
+      '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{tr\\}':
+        '$1__TEXRA_PRESERVE_tr__',
+      // Apply preferred operator command forms
+      '\\\\mathrm\\{Tr\\}': '\\Tr',
+      '\\\\mathrm\\{tr\\}': '\\tr',
+      // Restore protected command definitions
+      __TEXRA_PRESERVE_TR__: '\\mathrm{Tr}',
+      __TEXRA_PRESERVE_tr__: '\\mathrm{tr}',
+    },
+  };
 
 /**
  * LATEXDIFF USAGE NOTE:
@@ -180,7 +181,7 @@ export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: ReplacementCategory = {
  */
 
 // Latexdiff markup fixes using regex
-export const LATEXDIFF_MARKUP_REPLACEMENTS: ReplacementCategory = {
+export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexReplacementCategory = {
   name: 'latexdiff_markup',
   description: 'Fixes for redundant braces and whitespace in latexdiff markup',
   isRegex: true,
@@ -298,7 +299,7 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: ReplacementCategory = {
   },
 };
 
-export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
+export const EQUATION_STYLE_REPLACEMENTS: RegexReplacementCategory = {
   name: 'equation_style',
   description: 'Fixes for equation style formatting',
   isRegex: true,

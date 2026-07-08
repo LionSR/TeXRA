@@ -3,9 +3,9 @@ import {
   generateSectionSpacingFixes,
   SECTION_TYPES,
 } from '@replacement/helpers';
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
-export const SECTION_REPLACEMENTS: ReplacementCategory = {
+export const SECTION_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'sections',
   description: 'Fixes for section spacing in LaTeX documents',
   isRegex: false,

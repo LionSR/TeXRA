@@ -28,12 +28,22 @@ import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { OutputFileInfoSchema, CompileFailureSchema } from './output';
 import { roundIndexedRecord } from './roundIndexed';
 import { StreamStatusSchema } from './stream';
-import {
-  ActiveChildInfoSchema,
-  ConversationProgressSchema,
-} from './streamState';
+import { BackendOwnedFieldsSchema } from './streamState';
 import { RunUsageMapSchema } from './usage';
 import { WorkPlanSnapshotShape } from './workPlan';
+
+/**
+ * The liveness/log-derived fields this snapshot shares with the backend-owned
+ * stream-state metadata (`@shared/schemas/streamState`), picked from that one
+ * definition so the two can't drift apart field-by-field.
+ */
+const SharedBackendOwnedFieldsSchema = BackendOwnedFieldsSchema.pick({
+  conversationProgress: true,
+  finishedSubagentCount: true,
+  finishedProcessCount: true,
+  activeSubagents: true,
+  activeProcesses: true,
+});
 
 /**
  * Bump when the persisted shape changes. A reader enforces this as a
@@ -83,7 +93,7 @@ export const PersistedWorkPlanSchema = z.object({
 // StreamSnapshot — the assembled logical view (durable + log-derived + liveness)
 // ============================================================================
 
-export const StreamSnapshotSchema = z.object({
+export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   schemaVersion: z
     .literal(STREAM_SNAPSHOT_SCHEMA_VERSION)
     .catch(STREAM_SNAPSHOT_SCHEMA_VERSION),
@@ -105,13 +115,11 @@ export const StreamSnapshotSchema = z.object({
 
   // -- Log-derived (recomputed from the StreamLog on load) ------------------
   status: StreamStatusSchema.optional(),
-  conversationProgress: ConversationProgressSchema.prefault({}),
-  finishedSubagentCount: z.number().prefault(0),
-  finishedProcessCount: z.number().prefault(0),
+  // conversationProgress, finishedSubagentCount, finishedProcessCount come
+  // from SharedBackendOwnedFieldsSchema above.
 
   // -- Liveness (NEVER restored as live — clamp on hydrate) -----------------
-  activeSubagents: z.array(ActiveChildInfoSchema).prefault([]),
-  activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
+  // activeSubagents, activeProcesses come from SharedBackendOwnedFieldsSchema.
 });
 
 export type StreamSnapshot = z.infer<typeof StreamSnapshotSchema>;

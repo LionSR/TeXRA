@@ -86,7 +86,7 @@ function callDelegateReview(agent = 'review') {
 }
 
 /**
- * One-shot executeAgent mock that reports a failed child via onError and
+ * One-shot executeAgent mock that reports a failed child via onRunError and
  * returns the same failed result, carrying the given subagent cost.
  */
 function mockExecuteAgentErrorOnce(totalCostUsd: number): void {
@@ -98,7 +98,7 @@ function mockExecuteAgentErrorOnce(totalCostUsd: number): void {
       streamId: 'child-stream',
       totalCostUsd,
     };
-    await options.onError?.(new Error('review model failed'), failed);
+    await options.onRunError?.(new Error('review model failed'), failed);
     return failed;
   });
 }

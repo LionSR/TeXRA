@@ -82,7 +82,7 @@ export function createNativeWorkflowStrategy(
           toolEditApprovalHandler: params.toolEditApprovalHandler,
           onStreamResolved: params.onStreamResolved,
           onProgress: (update) => ports.notify(update),
-          onError: (err) => {
+          onRunError: (err) => {
             lastErr = err;
           },
           onRun: (handle) => {
