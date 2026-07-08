@@ -305,4 +305,35 @@ describe('retrieveSessionResumeData', () => {
     if (resume?.type !== 'workflow') return;
     expect(resume.modelHandlerCompatibilityKey).toBe('ModelHandlerGoogleGenAI');
   });
+
+  it('normalizes legacy workflow messages shared state for resume routing', async () => {
+    const executionId = 'abc132' as ExecutionId;
+    const streamId = 'workflow@gemini35f#abc132' as StreamTabId;
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        currentRound: 1,
+        totalRounds: 2,
+        messages: [
+          {
+            role: 'user',
+            parts: [{ text: 'Continue the old workflow messages.' }],
+          },
+        ],
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+
+    const resume = await retrieveSessionResumeData(
+      streamId,
+      executionId,
+      agentConfigToTaskState(GOOGLE_WORKFLOW_CONFIG),
+    );
+
+    expect(resume?.type).toBe('workflow');
+    if (resume?.type !== 'workflow') return;
+    expect(resume.modelHandlerCompatibilityKey).toBe('ModelHandlerGoogleGenAI');
+  });
 });
