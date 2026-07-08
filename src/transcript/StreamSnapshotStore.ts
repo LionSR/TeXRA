@@ -1165,13 +1165,21 @@ export class StreamSnapshotStore {
     return assembleSnapshot(streamId, await readStreamData(this.kv(streamId)));
   }
 
-  /** Assemble the snapshot from already-hydrated in-memory accumulators. */
+  /**
+   * Assemble the snapshot from already-hydrated in-memory accumulators.
+   * Clones the round-indexed records (same as the public getOutputFiles/
+   * getMissingOutputs/getCompileFailures accessors) so a caller reassigning
+   * or pushing/splicing a returned per-round array can't corrupt these live
+   * accumulators. Per cloneRoundIndexed's own contract, item objects
+   * themselves are not cloned — they're treated as immutable value objects,
+   * same as every other schema-derived type in this codebase.
+   */
   private snapshotFromMemory(streamId: StreamTabId): StreamSnapshot {
     return assembleSnapshot(streamId, {
       meta: this.meta.get(streamId),
-      outputFiles: this.outputFiles.get(streamId) ?? {},
-      missingOutputs: this.missingOutputs.get(streamId) ?? {},
-      compileFailures: this.compileFailures.get(streamId) ?? {},
+      outputFiles: cloneRoundIndexed(this.outputFiles.get(streamId)),
+      missingOutputs: cloneRoundIndexed(this.missingOutputs.get(streamId)),
+      compileFailures: cloneRoundIndexed(this.compileFailures.get(streamId)),
       usage: this.usage.get(streamId) ?? new Map(),
       usageUnparsed: this.usageUnparsed.get(streamId) ?? new Map(),
       workPlan: this.getWorkPlan(streamId),
