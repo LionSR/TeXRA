@@ -1,13 +1,13 @@
-// Wrap a runtime host's `emit` so progress payloads patch `cliState` while
-// still flowing through the original emitter. Approvals are intentionally
-// not handled here — `subscribeApprovals.ts` owns the typed-modal pipeline.
+// Wrap a runtime host's `emit` so host-local focus and approval-bypass updates
+// patch `cliState` while still flowing through the original emitter. Durable
+// progress facts enter through `attachTuiRunFactSubscription`.
 
 import type { AgentEvent } from '@agent/trace';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
@@ -17,8 +17,13 @@ import {
   UpdateTodosPayloadSchema,
   type ActiveChildInfo,
   type GoalPausedPayload,
+  type RemoveStreamPayload,
+  type SetActiveStreamPayload,
+  type StreamTabId,
   type UpdateActiveProcessesPayload,
   type UpdateProcessOutputPayload,
+  type UpdateQueuedFollowUpsPayload,
+  type UpdateRoundStagePayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
@@ -43,8 +48,13 @@ import { appendLocalAssistantTranscript } from './transcript';
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
-type CliStateRuntimeEventPayloads = ProgressEventPayloads &
-  RuntimeInteractionEventPayloads;
+type CliStateRuntimeEventPayloads = {
+  setActiveStream: SetActiveStreamPayload;
+  removeStream: RemoveStreamPayload;
+  updateToolEditApprovalBypassState: RuntimeInteractionEventPayloads['updateToolEditApprovalBypassState'];
+  updateBashApprovalBypassState: RuntimeInteractionEventPayloads['updateBashApprovalBypassState'];
+  updateSuperYoloBypassState: RuntimeInteractionEventPayloads['updateSuperYoloBypassState'];
+};
 
 type CliStateRuntimeEvent = keyof CliStateRuntimeEventPayloads;
 
@@ -67,9 +77,7 @@ function applyUsageUpdate(payload: UpdateStreamUsagePayload): void {
   }));
 }
 
-function applySetActiveStream(
-  payload: ProgressEventPayloads['setActiveStream'],
-): void {
+function applySetActiveStream(payload: SetActiveStreamPayload): void {
   const next = payload.streamId;
   if (!next) {
     activeStreamId.set(undefined);
@@ -91,15 +99,7 @@ function applySetActiveStream(
   }
 }
 
-function applyTaskState(payload: ProgressEventPayloads['setTaskState']): void {
-  const config = payload.taskState.agentConfig;
-  applyRunConfig(payload.streamId, config);
-}
-
-function applyRunConfig(
-  streamId: ProgressEventPayloads['setTaskState']['streamId'],
-  config: ProgressEventPayloads['setTaskState']['taskState']['agentConfig'],
-): void {
+function applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {
   patchStream(streamId, (s) => {
     if (s.model === config.model && s.category === config.agentCategory) {
       return s;
@@ -122,9 +122,7 @@ function sameQueuedFollowUps(
   );
 }
 
-function applyRoundStage(
-  payload: ProgressEventPayloads['updateRoundStage'],
-): void {
+function applyRoundStage(payload: UpdateRoundStagePayload): void {
   patchStream(payload.streamId, (s) => {
     if (
       s.roundStage?.index === payload.roundStage.index &&
@@ -148,9 +146,10 @@ function sameActiveChildren(
   );
 }
 
-function applyActiveSubagents(
-  payload: ProgressEventPayloads['updateActiveSubagents'],
-): void {
+function applyActiveSubagents(payload: {
+  parentStreamId: StreamTabId;
+  children: readonly ActiveChildInfo[];
+}): void {
   registerChildStreams(payload.parentStreamId, payload.children);
   patchStream(payload.parentStreamId, (s) => {
     const childStreams = mergeChildStreams(s.childStreams, payload.children);
@@ -207,9 +206,10 @@ function applyProcessOutput(payload: UpdateProcessOutputPayload): void {
   }));
 }
 
-function applyParentStream(
-  payload: ProgressEventPayloads['setParentStream'],
-): void {
+function applyParentStream(payload: {
+  childStreamId: StreamTabId;
+  parentStreamId: StreamTabId | null;
+}): void {
   setParentStream(payload.childStreamId, payload.parentStreamId);
 }
 
@@ -224,7 +224,7 @@ function isGoalPausedPayload(value: unknown): value is GoalPausedPayload {
 
 function applyDirectTuiDomainEvent(
   event: Extract<AgentEvent, { type: 'domain' }>,
-  fallbackStreamId: ProgressEventPayloads['updateRoundStage']['streamId'],
+  fallbackStreamId: StreamTabId,
 ): boolean {
   if (event.key === 'conversationProgress') {
     const progress = ConversationProgressSchema.safeParse(event.data);
@@ -271,7 +271,7 @@ function applyDirectTuiDomainEvent(
 
 function applyDirectTuiRunEvent(
   event: AgentEvent,
-  fallbackStreamId: ProgressEventPayloads['updateRoundStage']['streamId'],
+  fallbackStreamId: StreamTabId,
 ): boolean {
   switch (event.type) {
     case 'run.config':
@@ -324,7 +324,7 @@ function applyDirectTuiRunEvent(
 }
 
 function refreshQueuedFollowUps(
-  streamId: ProgressEventPayloads['updateQueuedFollowUps']['streamId'],
+  streamId: UpdateQueuedFollowUpsPayload['streamId'],
 ): void {
   const messages = defaultSession().followUps.getAll(streamId);
   patchStream(streamId, (s) => {
@@ -452,83 +452,18 @@ function applyToState<K extends CliStateRuntimeEvent>(
 ): void {
   switch (event) {
     case 'setActiveStream': {
-      const p = payload as ProgressEventPayloads['setActiveStream'];
+      const p = payload as CliStateRuntimeEventPayloads['setActiveStream'];
       applySetActiveStream(p);
       return;
     }
-    case 'setTaskState': {
-      const p = payload as ProgressEventPayloads['setTaskState'];
-      applyTaskState(p);
-      return;
-    }
-    case 'setParentStream': {
-      const p = payload as ProgressEventPayloads['setParentStream'];
-      applyParentStream(p);
-      return;
-    }
     case 'removeStream':
-      removeStream((payload as ProgressEventPayloads['removeStream']).streamId);
+      removeStream(
+        (payload as CliStateRuntimeEventPayloads['removeStream']).streamId,
+      );
       return;
-    case 'updateStreamUsage': {
-      const p = payload as ProgressEventPayloads['updateStreamUsage'];
-      applyUsageUpdate(p);
-      return;
-    }
-    case 'updateConversationProgress': {
-      const p = payload as ProgressEventPayloads['updateConversationProgress'];
-      patchStream(p.streamId, (s) => ({
-        ...s,
-        conversation: p.progress,
-      }));
-      return;
-    }
-    case 'updateRoundStage': {
-      const p = payload as ProgressEventPayloads['updateRoundStage'];
-      applyRoundStage(p);
-      return;
-    }
-    case 'updateStreamDescription': {
-      const p = payload as ProgressEventPayloads['updateStreamDescription'];
-      patchStream(p.streamId, (s) => ({
-        ...s,
-        description: p.description,
-      }));
-      return;
-    }
-    case 'updateActiveSubagents': {
-      const p = payload as ProgressEventPayloads['updateActiveSubagents'];
-      applyActiveSubagents(p);
-      return;
-    }
-    case 'updateActiveProcesses': {
-      const p = payload as ProgressEventPayloads['updateActiveProcesses'];
-      applyActiveProcesses(p);
-      return;
-    }
-    case 'updateProcessOutput': {
-      const p = payload as ProgressEventPayloads['updateProcessOutput'];
-      applyProcessOutput(p);
-      return;
-    }
-    case 'updateTodos': {
-      const p = payload as ProgressEventPayloads['updateTodos'];
-      patchStream(p.streamId, (s) => ({
-        ...s,
-        todos: p.todos,
-      }));
-      return;
-    }
-    case 'updatePlan': {
-      const p = payload as ProgressEventPayloads['updatePlan'];
-      patchStream(p.streamId, (s) => ({
-        ...s,
-        plan: p.plan,
-      }));
-      return;
-    }
     case 'updateToolEditApprovalBypassState': {
       const p =
-        payload as RuntimeInteractionEventPayloads['updateToolEditApprovalBypassState'];
+        payload as CliStateRuntimeEventPayloads['updateToolEditApprovalBypassState'];
       patchStream(p.streamId, (s) => ({
         ...s,
         bypass: { ...s.bypass, toolEdit: p.bypassActive },
@@ -537,7 +472,7 @@ function applyToState<K extends CliStateRuntimeEvent>(
     }
     case 'updateBashApprovalBypassState': {
       const p =
-        payload as RuntimeInteractionEventPayloads['updateBashApprovalBypassState'];
+        payload as CliStateRuntimeEventPayloads['updateBashApprovalBypassState'];
       patchStream(p.streamId, (s) => ({
         ...s,
         bypass: { ...s.bypass, bash: p.bypassActive },
@@ -546,22 +481,11 @@ function applyToState<K extends CliStateRuntimeEvent>(
     }
     case 'updateSuperYoloBypassState': {
       const p =
-        payload as RuntimeInteractionEventPayloads['updateSuperYoloBypassState'];
+        payload as CliStateRuntimeEventPayloads['updateSuperYoloBypassState'];
       patchStream(p.streamId, (s) => ({
         ...s,
         bypass: { ...s.bypass, superYolo: p.bypassActive },
       }));
-      return;
-    }
-    case 'updateQueuedFollowUps': {
-      // The event itself has no delta payload, so re-read the queue directly.
-      const p = payload as ProgressEventPayloads['updateQueuedFollowUps'];
-      refreshQueuedFollowUps(p.streamId);
-      return;
-    }
-    case 'goalPaused': {
-      const p = payload as ProgressEventPayloads['goalPaused'];
-      appendGoalPausedTranscriptNotice(p);
       return;
     }
     default:
