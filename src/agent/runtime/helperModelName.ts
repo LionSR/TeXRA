@@ -12,10 +12,12 @@ import { isNonEmptyString } from '@utils/core';
  *
  * Single source of truth for the "validate against candidates, else fall
  * back" precedence chain shared by {@link getHelperModelName} (below) and
- * `SettingsModelSelectionController.getEffectiveHelperModel`. Callers own
- * what candidate list — and whether an empty candidate list means "no
- * restriction" or "fall back" — they pass in; see `getHelperModelName` for
- * that deliberate divergence.
+ * `SettingsModelSelectionController.getEffectiveHelperModel`. An empty
+ * `candidateModels` always falls through to `DEFAULT_HELPER_MODEL` here —
+ * this function does not implement "no restriction" semantics. A caller
+ * that wants an empty list to mean "accept the configured model as-is"
+ * must short-circuit before calling; see `getHelperModelName`'s
+ * `enabledModels.length === 0` check for that deliberate divergence.
  */
 export function resolveEffectiveHelperModel(
   configuredModel: string | undefined,
