@@ -4,11 +4,7 @@
 
 import type { AgentEvent } from '@agent/trace';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import {
-  projectRunFactToProgressEvent,
-  toUpdateStreamUsagePayload,
-} from '@agent/runtime/sessionProgressEventProjection';
-import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
+import { projectRunFactToProgressEvent } from '@agent/runtime/sessionProgressEventProjection';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type {
   ProgressEvent,
@@ -16,9 +12,6 @@ import type {
 } from '@agent/runtime/hostProgressEvents';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import {
-  ExtendedTokenUsageStatsSchema,
-  UpdatePlanPayloadSchema,
-  UpdateTodosPayloadSchema,
   type ActiveChildInfo,
   type GoalPausedPayload,
   type UpdateActiveProcessesPayload,
@@ -30,7 +23,6 @@ import {
   reduceStreamMeta,
   type StreamMetaCommand,
 } from '@shared/streams/streamMetaReducer';
-import { isObject } from '@utils/core';
 
 import {
   activeStreamId,
@@ -53,143 +45,6 @@ type Emit = <K extends ProgressEvent>(
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
-function usageEchoKey(payload: UpdateStreamUsagePayload): string {
-  const parsedUsage = ExtendedTokenUsageStatsSchema.safeParse(payload.usage);
-  const usage = parsedUsage.success ? parsedUsage.data : payload.usage;
-  const extendedUsage = parsedUsage.success ? parsedUsage.data : undefined;
-  return JSON.stringify({
-    streamId: payload.streamId,
-    storageKey: payload.storageKey,
-    executionId: payload.executionId ?? null,
-    usage: {
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
-      cost: usage.cost,
-      cacheReadInputTokens: usage.cacheReadInputTokens ?? null,
-      cacheMissInputTokens: usage.cacheMissInputTokens ?? null,
-      cacheCreationInputTokens: usage.cacheCreationInputTokens ?? null,
-      elapsedTime: extendedUsage?.elapsedTime ?? null,
-      percentageCached: extendedUsage?.percentageCached ?? null,
-      reasoningTokens: extendedUsage?.reasoningTokens ?? null,
-      toolUseTokens: extendedUsage?.toolUseTokens ?? null,
-      usageRoute: usage.usageRoute ?? null,
-    },
-  });
-}
-
-function consumeEchoCount(counts: Map<string, number>, key: string): boolean {
-  const count = counts.get(key);
-  if (!count) return false;
-  if (count === 1) {
-    counts.delete(key);
-  } else {
-    counts.set(key, count - 1);
-  }
-  return true;
-}
-
-/**
- * Dedupe a fact that reaches this module through two paths that both fire
- * off the *same* underlying `SessionEventHub` event: `attachTuiRunFactSubscription`
- * applying it directly, and the CLI session progress projection re-emitting it
- * as a legacy `runtimeHost.emit(...)` that `applyToState` also applies.
- *
- * This guard is deliberately **order-independent**: `applyDirect` and
- * `applyLegacy` are symmetric, each first checking whether the *other* side
- * already recorded this key before applying anything itself. Whichever path's
- * subscriber the hub happens to invoke first for a given event "wins" the
- * apply; the second one only consumes the marker and skips. Correctness does
- * NOT depend on `attachTuiRunFactSubscription` being registered on the hub
- * before the CLI projection (today it is in `chatSessionController.ts`, but
- * nothing requires that and it is not guaranteed to stay true) — see #7388.
- * Regression coverage for both attach orders lives in
- * `TuiStateAndFocus.vitest.mts` ("does not double-count projected usage when
- * the TUI subscriber is first" / "... when CLI projection is first").
- *
- * Do not replace this with a one-directional variant (remember-on-direct,
- * consume-on-legacy-only) — that reintroduces exactly the order dependency
- * this comment rules out.
- */
-class EchoGuard<T> {
-  private readonly directAppliedCounts = new Map<string, number>();
-  private readonly legacyAppliedCounts = new Map<string, number>();
-
-  constructor(
-    private readonly keyFor: (payload: T) => string,
-    private readonly apply: (payload: T) => void,
-  ) {}
-
-  applyDirect(payload: T): void {
-    const key = this.keyFor(payload);
-    if (consumeEchoCount(this.legacyAppliedCounts, key)) return;
-    this.apply(payload);
-    this.rememberForThisTurn(this.directAppliedCounts, key);
-  }
-
-  applyLegacy(payload: T): void {
-    const key = this.keyFor(payload);
-    if (consumeEchoCount(this.directAppliedCounts, key)) return;
-    this.apply(payload);
-    this.rememberForThisTurn(this.legacyAppliedCounts, key);
-  }
-
-  clear(): void {
-    this.directAppliedCounts.clear();
-    this.legacyAppliedCounts.clear();
-  }
-
-  private rememberForThisTurn(counts: Map<string, number>, key: string): void {
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-    queueMicrotask(() => {
-      consumeEchoCount(counts, key);
-    });
-  }
-}
-
-// Migration lifetime: this module-level handle lets the legacy host
-// `updateStreamUsage` projection path reach the guard owned by the direct
-// session subscription in `attachTuiRunFactSubscription`. It exists solely to
-// dedupe the two paths' overlapping usage updates during the migration and
-// must be deleted together with the legacy `updateStreamUsage` projection.
-type UsageEchoGuard = EchoGuard<UpdateStreamUsagePayload>;
-let activeUsageEchoGuard: UsageEchoGuard | undefined;
-
-function goalPausedEchoKey(payload: GoalPausedPayload): string {
-  return payload.streamId;
-}
-
-function processOutputEchoKey(payload: UpdateProcessOutputPayload): string {
-  return JSON.stringify({
-    parentStreamId: payload.parentStreamId,
-    executionId: payload.executionId,
-    stdout: payload.stdout,
-    stderr: payload.stderr,
-  });
-}
-
-function activeProcessesEchoKey(payload: UpdateActiveProcessesPayload): string {
-  return JSON.stringify({
-    parentStreamId: payload.parentStreamId,
-    processes: payload.processes.map((process) => ({
-      kind: process.kind,
-      executionId: process.executionId,
-      agentName: process.agentName,
-      status: process.status ?? null,
-      startedAt: process.startedAt ?? null,
-      elapsed: process.elapsed ?? null,
-      toolName: process.toolName ?? null,
-      childStreamId: process.kind === 'subagent' ? process.childStreamId : null,
-    })),
-  });
-}
-
-type GoalPausedNoticeEchoGuard = EchoGuard<GoalPausedPayload>;
-let activeGoalPausedNoticeEchoGuard: GoalPausedNoticeEchoGuard | undefined;
-type ActiveProcessesEchoGuard = EchoGuard<UpdateActiveProcessesPayload>;
-let activeProcessesEchoGuard: ActiveProcessesEchoGuard | undefined;
-type ProcessOutputEchoGuard = EchoGuard<UpdateProcessOutputPayload>;
-let activeProcessOutputEchoGuard: ProcessOutputEchoGuard | undefined;
-
 function appendGoalPausedTranscriptNotice(payload: GoalPausedPayload): void {
   // Without a transcript line, an auto-paused goal is indistinguishable
   // from a hang: the agent simply stops mid-objective.
@@ -207,6 +62,44 @@ function applyUsageUpdate(payload: UpdateStreamUsagePayload): void {
       s.cumulativeUsage ? [s.cumulativeUsage, payload.usage] : [payload.usage],
     ),
   }));
+}
+
+function applySetActiveStream(
+  payload: ProgressEventPayloads['setActiveStream'],
+): void {
+  const next = payload.streamId;
+  if (!next) {
+    activeStreamId.set(undefined);
+    return;
+  }
+  // Register background child streams without stealing focus from the
+  // parent page. This mirrors the extension progress view contract.
+  // Capture the agent category so the exit hint can list only resumable
+  // tool-use subagents (workflows don't resume).
+  // Always return a fresh slice so a brand-new (e.g. suppressed child)
+  // stream is registered in the map even when no category is supplied —
+  // returning `s` unchanged would leave a never-created stream unregistered.
+  patchStream(next, (s) => ({
+    ...s,
+    category: payload.agentCategory ?? s.category,
+  }));
+  if (payload.suppressViewSwitch !== true) {
+    activeStreamId.set(next);
+  }
+}
+
+function applyTaskState(payload: ProgressEventPayloads['setTaskState']): void {
+  const config = payload.taskState.agentConfig;
+  patchStream(payload.streamId, (s) => {
+    if (s.model === config.model && s.category === config.agentCategory) {
+      return s;
+    }
+    return {
+      ...s,
+      model: config.model,
+      category: config.agentCategory,
+    };
+  });
 }
 
 function sameQueuedFollowUps(
@@ -313,13 +206,35 @@ function applyParentStream(
 function applyDirectTuiRunEvent(
   event: AgentEvent,
   fallbackStreamId: ProgressEventPayloads['updateRoundStage']['streamId'],
-  activeProcessesGuard: ActiveProcessesEchoGuard,
-  processOutputGuard: ProcessOutputEchoGuard,
 ): boolean {
   const projected = projectRunFactToProgressEvent(fallbackStreamId, event);
   if (!projected) return false;
 
   switch (projected.event) {
+    case 'setTaskState':
+      applyTaskState(projected.payload);
+      return true;
+    case 'updateStreamUsage':
+      applyUsageUpdate(projected.payload);
+      return true;
+    case 'updateTodos':
+      patchStream(projected.payload.streamId, (s) => ({
+        ...s,
+        todos: projected.payload.todos,
+      }));
+      return true;
+    case 'updatePlan':
+      patchStream(projected.payload.streamId, (s) => ({
+        ...s,
+        plan: projected.payload.plan,
+      }));
+      return true;
+    case 'updateConversationProgress':
+      patchStream(projected.payload.streamId, (s) => ({
+        ...s,
+        conversation: projected.payload.progress,
+      }));
+      return true;
     case 'updateRoundStage':
       applyRoundStage(projected.payload);
       return true;
@@ -327,13 +242,16 @@ function applyDirectTuiRunEvent(
       applyActiveSubagents(projected.payload);
       return true;
     case 'updateActiveProcesses':
-      activeProcessesGuard.applyDirect(projected.payload);
+      applyActiveProcesses(projected.payload);
       return true;
     case 'setParentStream':
       applyParentStream(projected.payload);
       return true;
     case 'updateProcessOutput':
-      processOutputGuard.applyDirect(projected.payload);
+      applyProcessOutput(projected.payload);
+      return true;
+    case 'goalPaused':
+      appendGoalPausedTranscriptNotice(projected.payload);
       return true;
     default:
       return false;
@@ -396,34 +314,34 @@ export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
 export function attachTuiRunFactSubscription(
   events: SessionEventHub,
 ): () => void {
-  const usageEchoGuard = new EchoGuard(usageEchoKey, applyUsageUpdate);
-  const goalPausedNoticeEchoGuard = new EchoGuard(
-    goalPausedEchoKey,
-    appendGoalPausedTranscriptNotice,
-  );
-  const activeProcessesGuard = new EchoGuard(
-    activeProcessesEchoKey,
-    applyActiveProcesses,
-  );
-  const processOutputGuard = new EchoGuard(
-    processOutputEchoKey,
-    applyProcessOutput,
-  );
-  activeUsageEchoGuard = usageEchoGuard;
-  activeGoalPausedNoticeEchoGuard = goalPausedNoticeEchoGuard;
-  activeProcessesEchoGuard = activeProcessesGuard;
-  activeProcessOutputEchoGuard = processOutputGuard;
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'session') return;
       switch (sessionEvent.event.type) {
+        case 'setActiveStream':
+          applySetActiveStream(sessionEvent.event.payload);
+          return;
+        case 'updateStreamDescription': {
+          const payload = sessionEvent.event.payload;
+          patchStream(payload.streamId, (s) => ({
+            ...s,
+            description: payload.description,
+          }));
+          return;
+        }
         case 'setParentStream':
           applyParentStream(sessionEvent.event.payload);
+          return;
+        case 'removeStream':
+          removeStream(sessionEvent.event.payload.streamId);
           return;
         case 'followUpSent':
           // Active-session follow-ups enter the same queue before the wait node
           // consumes them; refresh immediately so the status bar shows the
           // pending message instead of only seeing the later drain event.
+          refreshQueuedFollowUps(sessionEvent.event.payload.streamId);
+          return;
+        case 'updateQueuedFollowUps':
           refreshQueuedFollowUps(sessionEvent.event.payload.streamId);
           return;
         default:
@@ -436,68 +354,15 @@ export function attachTuiRunFactSubscription(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'run') return;
       const { event } = sessionEvent;
-      if (
-        applyDirectTuiRunEvent(
-          event,
-          sessionEvent.streamId,
-          activeProcessesGuard,
-          processOutputGuard,
-        )
-      ) {
+      if (applyDirectTuiRunEvent(event, sessionEvent.streamId)) {
         return;
-      }
-
-      if (event.type === 'usage') {
-        const payload = toUpdateStreamUsagePayload(
-          event.data,
-          sessionEvent.streamId,
-        );
-        if (payload) {
-          usageEchoGuard.applyDirect(payload);
-        }
-        return;
-      }
-
-      if (event.type !== 'domain') return;
-      const factName = fromRunFactDomainKey(event.key);
-
-      switch (factName) {
-        case 'updateTodos': {
-          const payload = UpdateTodosPayloadSchema.safeParse(event.data);
-          if (payload.success) {
-            patchStream(payload.data.streamId, (s) => ({
-              ...s,
-              todos: payload.data.todos,
-            }));
-          }
-          return;
-        }
-        case 'updatePlan': {
-          const payload = UpdatePlanPayloadSchema.safeParse(event.data);
-          if (payload.success) {
-            patchStream(payload.data.streamId, (s) => ({
-              ...s,
-              plan: payload.data.plan,
-            }));
-          }
-          return;
-        }
-        case 'goalPaused': {
-          if (isObject(event.data) && typeof event.data.streamId === 'string') {
-            goalPausedNoticeEchoGuard.applyDirect({
-              streamId: event.data.streamId as GoalPausedPayload['streamId'],
-            });
-          }
-          return;
-        }
-        default:
-          return;
       }
     },
     {
       scope: 'run',
       types: [
         'domain',
+        'run.config',
         'usage',
         'stage.start',
         'child.activity',
@@ -508,22 +373,6 @@ export function attachTuiRunFactSubscription(
   return () => {
     detachRunFacts();
     detachSessionFacts();
-    usageEchoGuard.clear();
-    goalPausedNoticeEchoGuard.clear();
-    activeProcessesGuard.clear();
-    processOutputGuard.clear();
-    if (activeUsageEchoGuard === usageEchoGuard) {
-      activeUsageEchoGuard = undefined;
-    }
-    if (activeGoalPausedNoticeEchoGuard === goalPausedNoticeEchoGuard) {
-      activeGoalPausedNoticeEchoGuard = undefined;
-    }
-    if (activeProcessesEchoGuard === activeProcessesGuard) {
-      activeProcessesEchoGuard = undefined;
-    }
-    if (activeProcessOutputEchoGuard === processOutputGuard) {
-      activeProcessOutputEchoGuard = undefined;
-    }
   };
 }
 
@@ -534,40 +383,12 @@ function applyToState<K extends ProgressEvent>(
   switch (event) {
     case 'setActiveStream': {
       const p = payload as ProgressEventPayloads['setActiveStream'];
-      const next = p.streamId;
-      if (!next) {
-        activeStreamId.set(undefined);
-        return;
-      }
-      // Register background child streams without stealing focus from the
-      // parent page. This mirrors the extension progress view contract.
-      // Capture the agent category so the exit hint can list only resumable
-      // tool-use subagents (workflows don't resume).
-      // Always return a fresh slice so a brand-new (e.g. suppressed child)
-      // stream is registered in the map even when no category is supplied —
-      // returning `s` unchanged would leave a never-created stream unregistered.
-      patchStream(next, (s) => ({
-        ...s,
-        category: p.agentCategory ?? s.category,
-      }));
-      if (p.suppressViewSwitch !== true) {
-        activeStreamId.set(next);
-      }
+      applySetActiveStream(p);
       return;
     }
     case 'setTaskState': {
       const p = payload as ProgressEventPayloads['setTaskState'];
-      const config = p.taskState.agentConfig;
-      patchStream(p.streamId, (s) => {
-        if (s.model === config.model && s.category === config.agentCategory) {
-          return s;
-        }
-        return {
-          ...s,
-          model: config.model,
-          category: config.agentCategory,
-        };
-      });
+      applyTaskState(p);
       return;
     }
     case 'setParentStream': {
@@ -580,11 +401,7 @@ function applyToState<K extends ProgressEvent>(
       return;
     case 'updateStreamUsage': {
       const p = payload as ProgressEventPayloads['updateStreamUsage'];
-      if (activeUsageEchoGuard) {
-        activeUsageEchoGuard.applyLegacy(p);
-      } else {
-        applyUsageUpdate(p);
-      }
+      applyUsageUpdate(p);
       return;
     }
     case 'updateConversationProgress': {
@@ -615,20 +432,12 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'updateActiveProcesses': {
       const p = payload as ProgressEventPayloads['updateActiveProcesses'];
-      if (activeProcessesEchoGuard) {
-        activeProcessesEchoGuard.applyLegacy(p);
-      } else {
-        applyActiveProcesses(p);
-      }
+      applyActiveProcesses(p);
       return;
     }
     case 'updateProcessOutput': {
       const p = payload as ProgressEventPayloads['updateProcessOutput'];
-      if (activeProcessOutputEchoGuard) {
-        activeProcessOutputEchoGuard.applyLegacy(p);
-      } else {
-        applyProcessOutput(p);
-      }
+      applyProcessOutput(p);
       return;
     }
     case 'updateTodos': {
@@ -681,11 +490,7 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'goalPaused': {
       const p = payload as ProgressEventPayloads['goalPaused'];
-      if (activeGoalPausedNoticeEchoGuard) {
-        activeGoalPausedNoticeEchoGuard.applyLegacy(p);
-      } else {
-        appendGoalPausedTranscriptNotice(p);
-      }
+      appendGoalPausedTranscriptNotice(p);
       return;
     }
     default:
