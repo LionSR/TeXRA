@@ -12,14 +12,9 @@ import type {
   InquiryThreadUpdatedEvent,
   PlanApprovalPermission,
   RemoveStreamPayload,
-  RequestEnsureProgressViewPayload,
-  RequestOpenFilePayload,
-  RequestShowErrorPayload,
-  RequestShowInstructionPayload,
   RetryPermission,
   SetActiveStreamPayload,
   SetParentStreamPayload,
-  ShowAgentConfigBannerPayload,
   StreamTabId,
   ToolEditPermission,
   UpdateActiveProcessesPayload,
@@ -38,8 +33,8 @@ import type {
 } from '@shared/schemas';
 
 /**
- * **Frozen** legacy host progress-event view, spoken by
- * `AgentRuntimeHost.emit` and host-owned compatibility adapters.
+ * **Frozen** legacy host progress-event view, spoken by retained
+ * progress-output adapters and host-owned compatibility adapters.
  * Retained CLI public output now projects into this table inside the CLI
  * adapter boundary (D3 decision on #6984: frozen until v0.41).
  *
@@ -116,15 +111,6 @@ export interface ProgressEventPayloads {
   removeStream: RemoveStreamPayload;
 
   goalStateChanged: GoalStateChangedPayload;
-
-  // ── Frontend-bound presentation requests ──
-  // Emitted by agent core/runtime; consumed by host presentation listeners
-  // (the extension routes these through `extensionPresentationEvents`).
-  requestOpenFile: RequestOpenFilePayload;
-  requestShowInstruction: RequestShowInstructionPayload;
-  showAgentConfigBanner: ShowAgentConfigBannerPayload;
-  requestShowError: RequestShowErrorPayload;
-  requestEnsureProgressView: RequestEnsureProgressViewPayload;
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;

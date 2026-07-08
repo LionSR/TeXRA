@@ -1,12 +1,10 @@
 import { EventEmitter } from 'node:events';
 
-import type {
-  RequestEnsureProgressViewPayload,
-  RequestOpenFilePayload,
-  RequestShowErrorPayload,
-  RequestShowInstructionPayload,
-  ShowAgentConfigBannerPayload,
-} from '@shared/schemas';
+import {
+  isRuntimePresentationEvent,
+  type RuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 
 /**
  * Extension host-presentation channel: the five UI requests the agent core
@@ -14,31 +12,17 @@ import type {
  * banners, errors, progress-view reveals). Payloads are the fact-native
  * presentation types from `@shared/schemas`.
  */
-export interface ExtensionPresentationEventPayloads {
-  requestOpenFile: RequestOpenFilePayload;
-  requestShowInstruction: RequestShowInstructionPayload;
-  showAgentConfigBanner: ShowAgentConfigBannerPayload;
-  requestShowError: RequestShowErrorPayload;
-  requestEnsureProgressView: RequestEnsureProgressViewPayload;
-}
+export type ExtensionPresentationEventPayloads =
+  RuntimePresentationEventPayloads;
 
-export type ExtensionPresentationEvent =
-  keyof ExtensionPresentationEventPayloads;
-
-const EVENT_SET: ReadonlySet<string> = new Set([
-  'requestOpenFile',
-  'requestShowInstruction',
-  'showAgentConfigBanner',
-  'requestShowError',
-  'requestEnsureProgressView',
-] satisfies ExtensionPresentationEvent[]);
+export type ExtensionPresentationEvent = RuntimePresentationEvent;
 
 const MAX_BUFFER_SIZE = 1000;
 
 export function isExtensionPresentationEvent(
   event: string,
 ): event is ExtensionPresentationEvent {
-  return EVENT_SET.has(event);
+  return isRuntimePresentationEvent(event);
 }
 
 class ExtensionPresentationEventBus {
