@@ -53,7 +53,6 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
     const session = new SessionHandle();
     const cancel = vi.fn();
     const detach = session.useHostInteractions({
-      handleProgressEvent: () => false,
       resolve: () => false,
       cancel,
     });

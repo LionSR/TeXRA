@@ -15,7 +15,6 @@ function hostWithInteractions(
   return {
     emit: vi.fn(),
     interactions: {
-      handleProgressEvent: () => false,
       resolve: () => false,
       cancel: () => {},
       ...interactions,
@@ -75,10 +74,9 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
-  it('offers removeStream to host interactions before legacy emission', () => {
+  it('re-emits removeStream through the headless CLI host rail', () => {
     const events = new SessionEventHub();
-    const handleProgressEvent = vi.fn(() => true);
-    const host = hostWithInteractions({ handleProgressEvent });
+    const host = hostWithInteractions();
     const detach = attachCliSessionProgressProjection(events, host);
 
     try {
@@ -90,10 +88,9 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
 
-      expect(handleProgressEvent).toHaveBeenCalledWith('removeStream', {
+      expect(host.emit).toHaveBeenCalledWith('removeStream', {
         streamId,
       });
-      expect(host.emit).not.toHaveBeenCalled();
     } finally {
       detach();
     }
