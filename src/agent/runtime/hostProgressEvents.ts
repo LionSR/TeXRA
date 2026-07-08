@@ -11,6 +11,7 @@ import type {
   GoalStateChangedPayload,
   InquiryThreadUpdatedEvent,
   PlanApprovalPermission,
+  RemoveStreamPayload,
   RequestEnsureProgressViewPayload,
   RequestOpenFilePayload,
   RequestShowErrorPayload,
@@ -113,7 +114,7 @@ export interface ProgressEventPayloads {
 
   /** Request the progress view to remove a stream tab (used by short-lived
    *  child streams that should auto-close once their work is done). */
-  removeStream: { streamId: StreamTabId };
+  removeStream: RemoveStreamPayload;
 
   goalStateChanged: GoalStateChangedPayload;
 
