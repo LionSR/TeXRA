@@ -5,17 +5,15 @@ import type {
   ProgressEventPayloads,
 } from '@agent/runtime/hostProgressEvents';
 import {
-  ExtendedTokenUsageStatsSchema,
   ConversationProgressSchema,
   UpdatePlanPayloadSchema,
   UpdateTodosPayloadSchema,
-  type StorageKey,
   type StreamTabId,
-  type UpdateStreamUsagePayload,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
 import { fromRunFactDomainKey } from './runFactEvents';
+import { toUpdateStreamUsagePayload } from './runFactUsage';
 import type { SessionEventHub, SessionFact } from './SessionEventHub';
 
 export type ProjectedProgressEvent = {
@@ -55,36 +53,6 @@ export function projectSessionFactToProgressEvent(
     case 'removeStream':
       return { event: 'removeStream', payload: fact.payload };
   }
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-/**
- * Parse a raw `usage` session-event `data` payload into the typed
- * `updateStreamUsage` progress payload. CLI TUI, legacy host projection, and
- * ProgressBackend all consume this same parser so their accepted usage shapes
- * cannot silently diverge.
- */
-export function toUpdateStreamUsagePayload(
-  data: unknown,
-  fallbackStreamId: StreamTabId,
-): UpdateStreamUsagePayload | undefined {
-  if (!isObject(data)) return undefined;
-  const storageKey = asString(data.storageKey);
-  if (!storageKey) return undefined;
-  const usage = ExtendedTokenUsageStatsSchema.safeParse(data.usage);
-  if (!usage.success) return undefined;
-
-  const streamId = asString(data.streamId) ?? fallbackStreamId;
-  const executionId = asString(data.executionId);
-  return {
-    streamId: streamId as StreamTabId,
-    storageKey: storageKey as StorageKey,
-    ...(executionId ? { executionId } : {}),
-    usage: usage.data,
-  };
 }
 
 export function projectRunFactToProgressEvent(

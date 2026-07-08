@@ -1,6 +1,6 @@
 // Local imports - runtime events
+import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { toUpdateStreamUsagePayload } from '@agent/runtime/sessionProgressEventProjection';
 
 // Local imports - status bar state
 import type { StatusBarUsageTracker } from './StatusBarUsageTracker';
