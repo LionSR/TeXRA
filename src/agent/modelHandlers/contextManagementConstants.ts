@@ -45,6 +45,13 @@ export function getAnthropicMaxPdfPages(contextWindow: number): number {
 export const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
 
 /**
+ * Prefix prepended to a client-side compaction summary when it is folded back
+ * into the conversation as a synthetic user message. Shared across every
+ * provider handler so the resumed-conversation marker stays identical.
+ */
+export const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
+
+/**
  * Rough chars-per-token ratio for estimating token counts without a tokenizer.
  * ~4 chars/token is the standard approximation for GPT-family models on English
  * and code. Used only where exact counting is unavailable — e.g. the
