@@ -25,8 +25,12 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { FlexibleFS } from '@utils/files';
-import { createRecordingHost, withTestRunContext } from '../progressTestUtils';
-import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
+import {
+  createRecordingHost,
+  recordSessionEvents,
+  runEventsOfType,
+  withTestRunContext,
+} from '../progressTestUtils';
 
 function createLocation(path: string): FileLocation {
   return { kind: 'external', absolutePath: path };
@@ -127,24 +131,22 @@ function createOutputNode(
   } as unknown as ReflectionServices);
 }
 
-function createProjectedRuntime(streamId: string) {
-  const { events, host } = createRecordingHost();
+function createRecordedRuntime(streamId: string) {
+  const { events: hostEvents, host } = createRecordingHost();
   const logger = new TraceEmitter();
   const hub = new SessionEventHub();
   const typedStreamId = streamId as StreamTabId;
+  const recorded = recordSessionEvents(hub, { scope: 'run' });
   const detachTrace = logger.subscribe((event) =>
     hub.emit({ scope: 'run', streamId: typedStreamId, event }),
   );
-  const detachProjection = attachSessionProgressEventProjectionForTest(
-    hub,
-    host,
-  );
   return {
-    events,
+    events: recorded.events,
     host,
+    hostEvents,
     logger,
     dispose: () => {
-      detachProjection();
+      recorded.detach();
       detachTrace();
     },
   };
@@ -152,8 +154,8 @@ function createProjectedRuntime(streamId: string) {
 
 describe('output progress events', () => {
   it('publishes reflection output-node events through the runtime host', async () => {
-    const projected = createProjectedRuntime('stream:output-node');
-    const { events, host, logger } = projected;
+    const projected = createRecordedRuntime('stream:output-node');
+    const { events, host, hostEvents, logger } = projected;
     const outputNode = createOutputNode(
       'stream:output-node',
       host,
@@ -207,14 +209,16 @@ describe('output progress events', () => {
       );
 
       expect(transition).toBe('default');
-      expect(events).toEqual([
+      expect(runEventsOfType(events, 'domain')).toMatchObject([
         {
-          event: 'addOutputFiles',
-          payload: {
+          key: 'runFact.addOutputFiles',
+          data: {
             streamId: 'stream:output-node',
             filesByRound: { 2: [fileInfo] },
           },
         },
+      ]);
+      expect(hostEvents).toEqual([
         {
           event: 'requestOpenFile',
           payload: { location: openedLocation, preserveFocus: true },
@@ -346,7 +350,7 @@ describe('output progress events', () => {
   });
 
   it('publishes missing-output processing events through the runtime host', async () => {
-    const projected = createProjectedRuntime('stream:processor');
+    const projected = createRecordedRuntime('stream:processor');
     const { events, host, logger } = projected;
     const { roundData, ensureRoundData, setRoundOutputs } =
       createRoundDataStore();
@@ -372,10 +376,13 @@ describe('output progress events', () => {
         createLocation('/tmp/raw-output.xml'),
       );
 
-      expect(events).toEqual([
+      expect(
+        runEventsOfType(events, 'domain').filter(
+          (event) => event.key === 'runFact.updateMissingOutputs',
+        ),
+      ).toMatchObject([
         {
-          event: 'updateMissingOutputs',
-          payload: {
+          data: {
             streamId: 'stream:processor',
             filesByRound: { 3: [] },
           },
@@ -388,7 +395,7 @@ describe('output progress events', () => {
   });
 
   it('emits missing-output events when extraction yields no files (no exception)', async () => {
-    const projected = createProjectedRuntime('stream:processor');
+    const projected = createRecordedRuntime('stream:processor');
     const { events, host, logger } = projected;
     const { roundData, ensureRoundData, setRoundOutputs } =
       createRoundDataStore();
@@ -412,10 +419,13 @@ describe('output progress events', () => {
         createLocation('/tmp/raw-output.xml'),
       );
 
-      expect(events).toEqual([
+      expect(
+        runEventsOfType(events, 'domain').filter(
+          (event) => event.key === 'runFact.updateMissingOutputs',
+        ),
+      ).toMatchObject([
         {
-          event: 'updateMissingOutputs',
-          payload: {
+          data: {
             streamId: 'stream:processor',
             filesByRound: { 4: [] },
           },
@@ -435,7 +445,7 @@ describe('output progress events', () => {
     const readSpy = vi
       .spyOn(FlexibleFS, 'read')
       .mockResolvedValue('% chunk.tex\n\\section{Untagged content}\n');
-    const projected = createProjectedRuntime('stream:processor');
+    const projected = createRecordedRuntime('stream:processor');
     const { events, host, logger } = projected;
     const warnings: string[] = [];
     const detachWarnings = logger.subscribe((event) => {
@@ -467,10 +477,13 @@ describe('output progress events', () => {
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('no files could be extracted');
       // The missing-output signal is still emitted alongside the warning.
-      expect(events).toEqual([
+      expect(
+        runEventsOfType(events, 'domain').filter(
+          (event) => event.key === 'runFact.updateMissingOutputs',
+        ),
+      ).toMatchObject([
         {
-          event: 'updateMissingOutputs',
-          payload: { streamId: 'stream:processor', filesByRound: { 5: [] } },
+          data: { streamId: 'stream:processor', filesByRound: { 5: [] } },
         },
       ]);
     } finally {

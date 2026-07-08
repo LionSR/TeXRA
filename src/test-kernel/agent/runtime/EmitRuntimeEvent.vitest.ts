@@ -7,8 +7,7 @@ import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import type { StreamTabId } from '@shared/schemas';
 
-import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
-import { createRecordingHost } from '../progressTestUtils';
+import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const streamId = (s: string): StreamTabId => s as StreamTabId;
 
@@ -38,10 +37,7 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
   it("routes in-run facts through the active run's session", () => {
     const run = createRecordingHost();
     const session = new SessionHandle();
-    const detachProjection = attachSessionProgressEventProjectionForTest(
-      session.events,
-      run.host,
-    );
+    const recorded = recordSessionEvents(session.events, { scope: 'session' });
     try {
       withRunContext(
         createRunContext({
@@ -54,14 +50,17 @@ describe('emitRuntimeEvent (SDK Step 7d F-1 — one emit path)', () => {
           });
         },
       );
-      expect(run.events).toEqual([
+      expect(recorded.events).toEqual([
         {
-          event: 'updateQueuedFollowUps',
-          payload: { streamId: 's:run' },
+          scope: 'session',
+          event: {
+            type: 'updateQueuedFollowUps',
+            payload: { streamId: 's:run' },
+          },
         },
       ]);
     } finally {
-      detachProjection();
+      recorded.detach();
       session.dispose();
     }
   });

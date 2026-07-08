@@ -1,4 +1,5 @@
 // Local imports
+import type { AgentEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   matchesCancelSelector,
@@ -12,6 +13,12 @@ import {
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import type {
+  SessionEvent,
+  SessionEventHub,
+  SessionEventSubscriptionFilter,
+  SessionFact,
+} from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
@@ -28,6 +35,40 @@ export type RecordedProgressEvent = {
 
 export interface RecordingProgressSink {
   emit(event: string, payload: unknown): void;
+}
+
+export function recordSessionEvents(
+  hub: SessionEventHub,
+  filter: SessionEventSubscriptionFilter = {},
+): {
+  readonly events: SessionEvent[];
+  readonly detach: () => void;
+} {
+  const events: SessionEvent[] = [];
+  const detach = hub.subscribe((event) => events.push(event), filter);
+  return { events, detach };
+}
+
+export function sessionFactPayloads<T extends SessionFact['type']>(
+  events: readonly SessionEvent[],
+  type: T,
+): unknown[] {
+  const payloads: unknown[] = [];
+  for (const entry of events) {
+    if (entry.scope !== 'session' || entry.event.type !== type) continue;
+    payloads.push(entry.event.payload);
+  }
+  return payloads;
+}
+
+export function runEventsOfType<T extends AgentEvent['type']>(
+  events: readonly SessionEvent[],
+  type: T,
+): Extract<AgentEvent, { type: T }>[] {
+  return events.flatMap((entry) => {
+    if (entry.scope !== 'run' || entry.event.type !== type) return [];
+    return [entry.event as Extract<AgentEvent, { type: T }>];
+  });
 }
 
 export function createRecordingHost(): {
