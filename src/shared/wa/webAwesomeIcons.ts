@@ -1,6 +1,7 @@
 // Third-party imports
 import { faArrowDown } from '@fortawesome/free-solid-svg-icons/faArrowDown';
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons/faArrowLeft';
+import { faArrowRight } from '@fortawesome/free-solid-svg-icons/faArrowRight';
 import { faArrowRotateLeft } from '@fortawesome/free-solid-svg-icons/faArrowRotateLeft';
 import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons/faArrowsRotate';
 import { faArrowUp } from '@fortawesome/free-solid-svg-icons/faArrowUp';
@@ -143,6 +144,7 @@ function iconSvg(iconDefinition: FontAwesomeIconDefinition): string {
 const icons = {
   'arrow-down': faArrowDown,
   'arrow-left': faArrowLeft,
+  'arrow-right': faArrowRight,
   'arrow-rotate-left': faArrowRotateLeft,
   'arrow-up': faArrowUp,
   'arrow-up-right-from-square': faArrowUpRightFromSquare,

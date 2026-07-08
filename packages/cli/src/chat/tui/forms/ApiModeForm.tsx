@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink';
+import { Spinner } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
 import { type CliApiMode } from '@cli/runtime/apiAccessMode';
@@ -16,12 +17,13 @@ export interface ApiModeFormProps {
 }
 
 export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
-  const [statusLines, setStatusLines] = useState<readonly string[]>([
-    'loading API status...',
-  ]);
+  const [statusLines, setStatusLines] = useState<readonly string[] | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
+    setStatusLines(null);
     void loadCliApiStatusLines({ apiMode: props.currentMode })
       .then((lines) => {
         if (!cancelled) setStatusLines(lines);
@@ -69,11 +71,15 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
         Choose which credentials model calls should use. Press 1 for API keys.
       </Text>
       <Box marginTop={1} flexDirection="column">
-        {statusLines.map((line, index) => (
-          <Text key={`${index}:${line}`} dimColor>
-            {line}
-          </Text>
-        ))}
+        {statusLines === null ? (
+          <Spinner label="loading API status..." />
+        ) : (
+          statusLines.map((line, index) => (
+            <Text key={`${index}:${line}`} dimColor>
+              {line}
+            </Text>
+          ))
+        )}
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Select
