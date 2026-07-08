@@ -113,6 +113,13 @@ export function attachTranscriptRecorder(
   // rely on that distinction to tell a root run's terminal status apart from
   // a round's (see toStreamLifecycleStatus in packages/trace-viewer).
   const stageKinds = new Map<string, 'run' | 'round' | 'phase' | 'session'>();
+  // Id of the round's own MODEL_RESPONSE stream entry, so a subsequent
+  // `response.finalized` event (#7086) can upsert that entry's text instead
+  // of appending a duplicate row. Set on `stream.start` for a MODEL_RESPONSE
+  // stream, consumed (and cleared) by `response.finalized`, and reset at
+  // every round boundary so a round that never streamed can't accidentally
+  // reuse an earlier round's stream id.
+  let pendingModelResponseId: string | undefined;
 
   const flushStream = (state: StreamSinkState, id: string): void => {
     if (state.updateTimer) {
@@ -213,6 +220,9 @@ export function attachTranscriptRecorder(
 
       case 'stage.start':
         if (event.kind) stageKinds.set(event.id, event.kind);
+        // A new round starts fresh: whatever MODEL_RESPONSE stream the
+        // previous round may have opened is no longer this round's to reuse.
+        if (event.kind === 'round') pendingModelResponseId = undefined;
         store.append(streamId, {
           id: event.id,
           type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
@@ -331,6 +341,9 @@ export function attachTranscriptRecorder(
           updateTimer: null,
         };
         streams.set(event.id, state);
+        if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
+          pendingModelResponseId = event.id;
+        }
         // The start IS the signal consumers care about — it marks the moment
         // the phase began: a running THINKING entry drives the CLI's "model
         // is thinking" indicator, and a running MODEL_RESPONSE entry says
@@ -367,6 +380,29 @@ export function attachTranscriptRecorder(
         state.ended = true;
         flushStream(state, event.id);
         streams.delete(event.id);
+        return;
+      }
+
+      case 'response.finalized': {
+        if (!event.text) return;
+        // Upsert by id, not by text: if this round's own MODEL_RESPONSE
+        // stream already wrote a (possibly raw, pre-replacement) entry,
+        // reconcile it to the authoritative text; otherwise this round never
+        // streamed (e.g. a non-streaming provider call), so append it fresh.
+        const correlatorId = pendingModelResponseId;
+        pendingModelResponseId = undefined;
+        if (correlatorId) {
+          store.update(streamId, correlatorId, {
+            text: event.text,
+            data: { status: 'completed' },
+          });
+          return;
+        }
+        appendLog({
+          groupId: event.stageId,
+          messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+          text: event.text,
+        });
         return;
       }
 
