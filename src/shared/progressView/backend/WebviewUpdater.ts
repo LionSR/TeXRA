@@ -454,12 +454,11 @@ export class WebviewUpdater {
     // Send lightweight metadata — only backend-owned fields the frontend merges.
     const streamMetadata: Record<StreamTabId, StreamMetadata> = {};
     for (const streamInfo of streams) {
-      const metadata = this.buildStreamMetadataForStream(
+      streamMetadata[streamInfo.name] = this.buildStreamMetadataForStream(
         state,
         streamInfo,
         streamStates,
       );
-      streamMetadata[streamInfo.name] = metadata;
     }
 
     this.updateStreams(

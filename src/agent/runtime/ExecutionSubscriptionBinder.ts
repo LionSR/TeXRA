@@ -133,10 +133,9 @@ class ExecutionSubscription implements Disposable {
       return;
     }
 
-    const transition =
-      this.last && statusChanged
-        ? `${this.last.status} → ${current.status}`
-        : current.status;
+    const transition = this.last
+      ? `${this.last.status} → ${current.status}`
+      : current.status;
     const elapsed = current.elapsed ? ` (${current.elapsed} elapsed)` : '';
     this.send(
       `${this.executionId} (${this.agentName}, ${this.category}) ${transition}${elapsed}`,

@@ -31,12 +31,6 @@ const AskUserQuestionInputSchema = z.strictObject({
 
 export type AskUserQuestionInput = z.infer<typeof AskUserQuestionInputSchema>;
 
-interface UserQuestionResult {
-  submitted: boolean;
-  answers?: UserQuestionAnswers;
-  feedback?: string;
-}
-
 export async function handleUserQuestionAction(payload: {
   requestId: string;
   action: 'submit' | 'reject' | 'skip';
