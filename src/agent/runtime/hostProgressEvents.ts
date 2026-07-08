@@ -1,22 +1,16 @@
 import type { TaskState } from '@agent/core/state/TaskState';
 import type {
   AddOutputFilesPayload,
-  AgentProposalPermission,
-  BashPermission,
   ClearMissingOutputsPayload,
   ConversationProgress,
   ExecutionId,
-  ExternalInquiryPermission,
   GoalPausedPayload,
   GoalStateChangedPayload,
   InquiryThreadUpdatedEvent,
-  PlanApprovalPermission,
   RemoveStreamPayload,
-  RetryPermission,
   SetActiveStreamPayload,
   SetParentStreamPayload,
   StreamTabId,
-  ToolEditPermission,
   UpdateActiveProcessesPayload,
   UpdateActiveSubagentsPayload,
   UpdateCompileFailuresPayload,
@@ -29,7 +23,6 @@ import type {
   UpdateStreamStatusPayload,
   UpdateStreamUsagePayload,
   UpdateTodosPayload,
-  UserQuestionPermission,
 } from '@shared/schemas';
 
 /**
@@ -46,9 +39,8 @@ import type {
  * rails keep one shared key/payload table while they are migrated to typed
  * session/host surfaces.
  * Every fact-plane key below references its named vocabulary type — this map
- * projects the vocabulary, it does not define it. Keys still typed inline are
- * not facts: host-rail status/RPC keys plus the remaining Stage-5 residue
- * (`setTaskState`).
+ * projects the vocabulary, it does not define it. The remaining inline key is
+ * the Stage-5 `setTaskState` residue.
  */
 export interface ProgressEventPayloads {
   // ── Run/stream progress ──
@@ -64,32 +56,8 @@ export interface ProgressEventPayloads {
     taskState: TaskState;
   };
   updateStreamUsage: UpdateStreamUsagePayload;
-  // ── Approval / permission RPC ──
-  // The show* keys are synthesized by the CLI approval adapter from typed
-  // `HostInteractions` requests; only tool-edit show/resolve still flows on
-  // the host rail itself (src/tools/approval + native approval paths).
-  showRetryRequest: RetryPermission;
-  showToolEditPermission: ToolEditPermission;
-  resolveToolEditPermission: { requestId: string };
-  updateToolEditApprovalBypassState: {
-    streamId: StreamTabId;
-    bypassActive: boolean;
-  };
-  updateBashApprovalBypassState: {
-    streamId: StreamTabId;
-    bypassActive: boolean;
-  };
-  updateSuperYoloBypassState: {
-    streamId: StreamTabId;
-    bypassActive: boolean;
-  };
-  showBashPermission: BashPermission;
-  showAgentProposal: AgentProposalPermission;
-  showPlanApproval: PlanApprovalPermission;
-  showExternalInquiry: ExternalInquiryPermission;
   /** Inquiry thread state changed (open, answered, dropped, or resume outcome). */
   inquiryThreadUpdated: InquiryThreadUpdatedEvent;
-  showUserQuestion: UserQuestionPermission;
   // ── Run/stream progress (part 2) ──
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;

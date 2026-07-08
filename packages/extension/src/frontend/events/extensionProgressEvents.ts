@@ -1,11 +1,11 @@
 import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
+  ProgressBackendEvent,
+  ProgressBackendEventPayloads,
+} from '@shared/progressView/backend/events/ProgressEventHandler';
 
-type ExtensionProgressEventSink = <K extends ProgressEvent>(
+type ExtensionProgressEventSink = <K extends ProgressBackendEvent>(
   event: K,
-  payload: ProgressEventPayloads[K],
+  payload: ProgressBackendEventPayloads[K],
 ) => void;
 
 let activeSink: ExtensionProgressEventSink | undefined;
@@ -23,9 +23,9 @@ export function setExtensionProgressEventSink(
   };
 }
 
-export function emitExtensionProgressEvent<K extends ProgressEvent>(
+export function emitExtensionProgressEvent<K extends ProgressBackendEvent>(
   event: K,
-  payload: ProgressEventPayloads[K],
+  payload: ProgressBackendEventPayloads[K],
 ): void {
   activeSink?.(event, payload);
 }

@@ -12,7 +12,7 @@ import type {
   ProposalResult,
   RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import type { UserQuestionAnswers } from '@shared/schemas';
 
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
@@ -109,7 +109,7 @@ export function installCliApprovalHandlers(
 
 async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
   event: K,
-  payload: ProgressEventPayloads[K],
+  payload: RuntimeInteractionEventPayloads[K],
   context: CliContext,
   hooks: CliApprovalPromptHooks,
   options: { writeRejectionToStderr?: boolean } = {},
@@ -117,7 +117,7 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
   const immediate = immediateDecisionForApproval(event, payload, context);
 
   if (event === 'showRetryRequest') {
-    const data = payload as ProgressEventPayloads['showRetryRequest'];
+    const data = payload as RuntimeInteractionEventPayloads['showRetryRequest'];
     if (!immediate) hooks.beforePrompt?.();
     writeTextStderr(formatRetryRequestMessage(data));
   }
@@ -172,7 +172,7 @@ function toRetryResult(
 }
 
 async function askHeadlessUserQuestion(
-  payload: ProgressEventPayloads['showUserQuestion'],
+  payload: RuntimeInteractionEventPayloads['showUserQuestion'],
   context: CliContext,
   hooks: CliApprovalPromptHooks,
 ): Promise<HostUserQuestionResult> {
@@ -226,7 +226,7 @@ export function createHeadlessCliHostInteractions(
       return decideToolEdit(request, context, hooks);
     },
     async requestBashApproval(request) {
-      const payload: ProgressEventPayloads['showBashPermission'] = {
+      const payload: RuntimeInteractionEventPayloads['showBashPermission'] = {
         requestId: 'headless-bash',
         command: request.command,
         ...(request.cwd ? { cwd: request.cwd } : {}),
@@ -260,7 +260,7 @@ export function createHeadlessCliHostInteractions(
       return toProposalResult(decision);
     },
     async requestRetry(request: HostRetryRequest) {
-      const payload: ProgressEventPayloads['showRetryRequest'] = {
+      const payload: RuntimeInteractionEventPayloads['showRetryRequest'] = {
         streamId: request.streamId,
         operation: request.operation,
         ...(request.model ? { model: request.model } : {}),
@@ -295,15 +295,17 @@ export function createHeadlessCliHostInteractions(
   };
 }
 
-export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
+export function handleCliApprovalEvent<
+  K extends keyof RuntimeInteractionEventPayloads,
+>(
   event: K,
-  payload: ProgressEventPayloads[K],
+  payload: RuntimeInteractionEventPayloads[K],
   context: CliContext,
   hooks: CliApprovalPromptHooks = {},
 ): boolean {
   if (event === 'showExternalInquiry') {
     handleExternalInquiry(
-      payload as ProgressEventPayloads['showExternalInquiry'],
+      payload as RuntimeInteractionEventPayloads['showExternalInquiry'],
       context,
       hooks,
     );
@@ -312,7 +314,7 @@ export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
 
   if (event === 'showUserQuestion') {
     handleUserQuestion(
-      payload as ProgressEventPayloads['showUserQuestion'],
+      payload as RuntimeInteractionEventPayloads['showUserQuestion'],
       context,
       hooks,
     );
