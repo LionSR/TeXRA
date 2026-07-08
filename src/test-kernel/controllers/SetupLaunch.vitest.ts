@@ -194,9 +194,7 @@ describe('resolveSetupLaunchModel', () => {
       provider === 'openRouter' ? 'or-test' : undefined,
     );
 
-    await expect(
-      resolveSetupLaunchModel({} as never, true),
-    ).resolves.toEqual({
+    await expect(resolveSetupLaunchModel({} as never, true)).resolves.toEqual({
       model: SETUP_MODEL_BY_PROVIDER.openRouter,
       reason: 'access-list-default',
     });
