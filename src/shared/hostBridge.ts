@@ -15,9 +15,8 @@ function resolveHostBridgeApi(): HostBridgeApi {
     [HOST_BRIDGE_API_KEY]?: HostBridgeApi;
   };
 
-  if (globalScope[HOST_BRIDGE_API_KEY]) {
-    return globalScope[HOST_BRIDGE_API_KEY] as HostBridgeApi;
-  }
+  const existing = globalScope[HOST_BRIDGE_API_KEY];
+  if (existing) return existing;
 
   if (typeof acquireVsCodeApi === 'function') {
     const api = acquireVsCodeApi();

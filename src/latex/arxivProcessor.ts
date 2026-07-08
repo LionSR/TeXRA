@@ -53,8 +53,7 @@ function normalizeWorkspaceRelativeDirectory(candidate: string): string {
   return candidate
     .trim()
     .replaceAll(path.sep, '/')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '');
+    .replaceAll(/^\/+|\/+$/g, '');
 }
 
 export function resolveArxivPaperDirectoryRelative(

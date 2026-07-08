@@ -5,10 +5,6 @@ import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 
 export const RUN_DESCRIPTOR_SCHEMA_VERSION = 1;
 
-function executionConfigReferencePath(executionId: string): string {
-  return `executions/${executionId}/config.json`;
-}
-
 export const RunConfigReferenceSchema = z.strictObject({
   kind: z.literal('executionConfig'),
   executionId: ExecutionIdSchema,
@@ -41,7 +37,7 @@ export function buildRunDescriptor(input: {
     configRef: {
       kind: 'executionConfig',
       executionId: input.executionId,
-      path: executionConfigReferencePath(input.executionId),
+      path: `executions/${input.executionId}/config.json`,
     },
   });
 }

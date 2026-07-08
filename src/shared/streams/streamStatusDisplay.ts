@@ -13,14 +13,8 @@ import {
 export type StreamStatusDisplayKey = StreamPhase | StreamSubstate | 'ready';
 
 interface StreamStatusDisplayState {
-  readonly phase?: StreamPhase;
-  readonly substate?: StreamSubstate;
   readonly key?: StreamStatusDisplayKey;
   readonly legacyStatus?: string;
-}
-
-function phaseDisplayKey(phase: StreamPhase): StreamStatusDisplayKey {
-  return phase;
 }
 
 function streamStatusDisplayState(
@@ -34,11 +28,7 @@ function streamStatusDisplayState(
 
   const phase = StreamPhaseSchema.safeParse(status);
   if (phase.success) {
-    return {
-      phase: phase.data,
-      ...(substate ? { substate } : {}),
-      key: substate ?? phaseDisplayKey(phase.data),
-    };
+    return { key: substate ?? phase.data };
   }
 
   const legacyStatus = StreamStatusSchema.safeParse(status);
@@ -47,10 +37,8 @@ function streamStatusDisplayState(
   const legacyPhase = streamStatusToPhase(legacyStatus.data);
   const legacySubstate = streamStatusToSubstate(legacyStatus.data);
   return {
-    phase: legacyPhase,
-    ...(legacySubstate ? { substate: legacySubstate } : {}),
     legacyStatus: legacyStatus.data,
-    key: legacySubstate ?? phaseDisplayKey(legacyPhase),
+    key: legacySubstate ?? legacyPhase,
   };
 }
 

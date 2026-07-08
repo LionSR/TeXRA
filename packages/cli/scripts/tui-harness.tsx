@@ -712,13 +712,6 @@ function stoppedChild(child: ActiveChildInfo): ActiveChildInfo {
   };
 }
 
-function stopMatchingChild(
-  child: ActiveChildInfo,
-  executionId: string,
-): ActiveChildInfo {
-  return child.executionId === executionId ? stoppedChild(child) : child;
-}
-
 function isDifferentExecution(
   child: ActiveChildInfo,
   executionId: string,
@@ -1447,7 +1440,7 @@ function markHarnessExecutionStopped(executionId: string): void {
       isDifferentExecution(child, executionId),
     ),
     childStreams: slice.childStreams.map((child) =>
-      stopMatchingChild(child, executionId),
+      child.executionId === executionId ? stoppedChild(child) : child,
     ),
     entries: [
       ...slice.entries,
