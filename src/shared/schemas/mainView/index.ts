@@ -19,9 +19,7 @@
  */
 export {
   DocumentFileTypeSchema,
-  ExtendedDocumentFileTypeSchema,
   MULTIPLE_DOCUMENT_FILE_TYPES,
-  MultipleDocumentFileTypeSchema,
   type DocumentFileType,
   type MultipleDocumentFileType,
 } from '../fileTypes';

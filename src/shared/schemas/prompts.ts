@@ -16,10 +16,7 @@ import {
 } from './proposalFields';
 
 /** Optional stream ID - allows empty string when stream context is unavailable */
-export const OptionalStreamIdSchema = z.union([
-  StreamTabIdSchema,
-  z.literal(''),
-]);
+const OptionalStreamIdSchema = z.union([StreamTabIdSchema, z.literal('')]);
 
 /** Common permission request fields */
 const PermissionBaseSchema = z.strictObject({
@@ -80,13 +77,13 @@ const ProposalPermissionBaseSchema = z.object({
   streamId: StreamTabIdSchema,
 });
 
-export const WorkflowAgentProposalPermissionSchema =
+const WorkflowAgentProposalPermissionSchema =
   ProposalPermissionBaseSchema.extend(WorkflowAgentProposalSchema.shape);
 export type WorkflowAgentProposalPermission = z.infer<
   typeof WorkflowAgentProposalPermissionSchema
 >;
 
-export const ToolUseAgentProposalPermissionSchema =
+const ToolUseAgentProposalPermissionSchema =
   ProposalPermissionBaseSchema.extend(ToolUseAgentProposalSchema.shape);
 
 export const AgentProposalPermissionSchema = z.discriminatedUnion(
@@ -127,11 +124,11 @@ const ExternalInquiryPermissionBaseSchema = PermissionBaseSchema.extend(
  * First inquiry in a thread. Fresh dispatches have no prior transcript, draft,
  * or session links, but durable hydration may carry a saved open-turn draft.
  */
-export const NewExternalInquiryPermissionSchema =
+const NewExternalInquiryPermissionSchema =
   ExternalInquiryPermissionBaseSchema.extend({ mode: z.literal('new') });
 
 /** Follow-up inquiry — carries thread context from prior turns. */
-export const FollowUpExternalInquiryPermissionSchema =
+const FollowUpExternalInquiryPermissionSchema =
   ExternalInquiryPermissionBaseSchema.extend({ mode: z.literal('followUp') });
 
 export const ExternalInquiryPermissionSchema = z.discriminatedUnion('mode', [
@@ -148,11 +145,10 @@ export type ExternalInquiryPermission = z.infer<
 
 export const USER_QUESTION_ACTIONS = ['submit', 'reject'] as const;
 
-export const UserQuestionOptionSchema = z.strictObject({
+const UserQuestionOptionSchema = z.strictObject({
   label: z.string().min(1),
   description: z.string().nullish(),
 });
-export type UserQuestionOption = z.infer<typeof UserQuestionOptionSchema>;
 
 export const UserQuestionPromptSchema = z.strictObject({
   question: z.string().min(1),
@@ -177,7 +173,7 @@ export type UserQuestionAnswers = z.infer<typeof UserQuestionAnswersSchema>;
  * has a single source of truth. See docs/proposals/tui-extension-sharing.md
  * (Rung 1).
  */
-export const ApprovalDecisionSchema = z.object({
+const ApprovalDecisionSchema = z.object({
   accepted: z.boolean(),
   /**
    * Free-text payload carried with the decision. For rejections this is the
@@ -225,7 +221,6 @@ export type ToolEditApprovalAction =
   (typeof TOOL_EDIT_APPROVAL_ACTIONS)[number];
 
 export const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
-export type BashApprovalAction = (typeof BASH_APPROVAL_ACTIONS)[number];
 
 export const PlanApprovalPermissionSchema = z.strictObject({
   approvalId: z.string(),

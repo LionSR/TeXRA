@@ -107,7 +107,7 @@ export type NormalizedToolUse = z.infer<typeof NormalizedToolUseSchema>;
 /** URL field for tool payloads that will be rendered as live links. */
 const SafeUrlSchema = z.string().transform(sanitizeLiveLinkUrl);
 
-export const WebSearchResultItemSchema = z.object({
+const WebSearchResultItemSchema = z.object({
   url: SafeUrlSchema.optional(),
   title: z.string().optional(),
   domain: z.string().optional(),
@@ -119,7 +119,6 @@ export const WebSearchPayloadSchema = z.object({
   provider: z.string().optional(),
   status: z.string().optional(),
 });
-export type WebSearchPayload = z.infer<typeof WebSearchPayloadSchema>;
 
 export const WebFetchPayloadSchema = z.object({
   url: SafeUrlSchema.optional(),
@@ -130,4 +129,3 @@ export const WebFetchPayloadSchema = z.object({
   /** Fetched document text, size-capped at the source (#7508). */
   content: z.string().optional(),
 });
-export type WebFetchPayload = z.infer<typeof WebFetchPayloadSchema>;
