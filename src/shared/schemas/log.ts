@@ -18,7 +18,7 @@ export const END_GROUP_STATUS = {
   STOPPED: 'stopped',
 } as const;
 
-export const EndGroupStatusSchema = z.enum(END_GROUP_STATUS);
+const EndGroupStatusSchema = z.enum(END_GROUP_STATUS);
 export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
 
 type _AssertEndGroupStatusSubset = EndGroupStatus extends TaskGroupStatus
@@ -101,7 +101,7 @@ export const StreamLogTextDeltaSchema = z.strictObject({
 });
 export type StreamLogTextDelta = z.infer<typeof StreamLogTextDeltaSchema>;
 
-export const LogMessageDataSchema = z.strictObject({
+const LogMessageDataSchema = z.strictObject({
   id: z.string().min(1),
   text: z.string(),
   level: LogLevelSchema,
@@ -112,10 +112,6 @@ export const LogMessageDataSchema = z.strictObject({
   data: z.unknown().optional(),
 });
 export type LogMessageData = z.infer<typeof LogMessageDataSchema>;
-
-export const LogMessageUpdateSchema = LogMessageDataSchema.partial().required({
-  id: true,
-});
 
 /**
  * Legacy log message format (from STREAM_TABS era).

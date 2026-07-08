@@ -5,7 +5,7 @@ import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 
 export const RUN_DESCRIPTOR_SCHEMA_VERSION = 1;
 
-export function executionConfigReferencePath(executionId: string): string {
+function executionConfigReferencePath(executionId: string): string {
   return `executions/${executionId}/config.json`;
 }
 
@@ -14,8 +14,6 @@ export const RunConfigReferenceSchema = z.strictObject({
   executionId: ExecutionIdSchema,
   path: z.string(),
 });
-
-export type RunConfigReference = z.infer<typeof RunConfigReferenceSchema>;
 
 export const RunDescriptorSchema = z.strictObject({
   schemaVersion: z.literal(RUN_DESCRIPTOR_SCHEMA_VERSION),
