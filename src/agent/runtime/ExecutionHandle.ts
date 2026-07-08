@@ -9,6 +9,7 @@ import pDefer from 'p-defer';
 
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import {
   STREAM_STATUS,
@@ -40,6 +41,7 @@ export interface ExecutionHandle {
 }
 
 export interface LiveToolUseFlowContext {
+  readonly ownerSession?: SessionHandle;
   readonly session: {
     appendFollowUp(followUp: FollowUpQueueInput): void;
   };
