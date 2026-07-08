@@ -36,7 +36,7 @@ import {
 } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
-import type { ProgressBackendEventPayloads } from '@shared/progressView/backend/events/ProgressEventHandler';
+import type { ProgressBackendInteractionPayloads } from '@shared/progressView/backend/events/ProgressEventHandler';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
@@ -179,7 +179,7 @@ export class ProgressViewProvider
       (event, payload) => {
         this.backend.handleProgressEvent(
           event,
-          payload as ProgressBackendEventPayloads[typeof event],
+          payload as ProgressBackendInteractionPayloads[typeof event],
         );
       },
     );
