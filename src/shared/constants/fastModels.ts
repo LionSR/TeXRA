@@ -12,7 +12,7 @@
  */
 
 /** Input-price ceiling (USD per million tokens) for the fast-model hint. */
-export const FAST_FIRST_RESPONSE_PRICE_CEILING = 1;
+const FAST_FIRST_RESPONSE_PRICE_CEILING = 1;
 
 /** Hint string prepended to the model tooltip when the model qualifies. */
 export const FAST_FIRST_RESPONSE_HINT =

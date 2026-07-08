@@ -20,7 +20,7 @@ export interface WalkthroughStep {
   readonly body: string;
 }
 
-export interface WalkthroughAction {
+interface WalkthroughAction {
   readonly label: string;
   readonly onClick: () => void;
   // The "primary" action also serves as the initial focus target on show —
@@ -45,7 +45,7 @@ export interface WalkthroughDialogOptions {
   readonly classes?: WalkthroughDialogClassNames;
 }
 
-export interface WalkthroughDialogClassNames {
+interface WalkthroughDialogClassNames {
   readonly dialog?: string;
   readonly header?: string;
   readonly icon?: string;

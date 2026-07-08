@@ -1,9 +1,5 @@
 import { MULTIPLE_DOCUMENT_FILE_TYPES } from '../schemas/fileTypes';
-import type {
-  MainViewExecuteFiles,
-  MainViewExecuteMessage,
-  MainViewExecuteSession,
-} from '../schemas/mainView/executeMessage';
+import type { MainViewExecuteMessage } from '../schemas/mainView/executeMessage';
 import type {
   CheckboxValues,
   MultiFiles,
@@ -11,11 +7,7 @@ import type {
   SingleFiles,
 } from '../schemas/mainView/state';
 
-export type {
-  MainViewExecuteFiles,
-  MainViewExecuteMessage,
-  MainViewExecuteSession,
-};
+export type { MainViewExecuteMessage };
 
 export interface MainViewExecutionFormState {
   readonly sessionType: SessionType;

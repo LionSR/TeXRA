@@ -8,12 +8,9 @@
 export {
   createMarkdownRenderer,
   type MarkdownItInstance,
-  type MarkdownRendererConfig,
 } from './createMarkdownRenderer';
 export {
   createMarkdownProcessor,
-  type LatexReferenceFormatter,
   type MarkdownProcessor,
-  type MarkdownProcessorConfig,
   type MarkdownProcessorRenderEnv,
 } from './createMarkdownProcessor';

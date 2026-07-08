@@ -15,7 +15,7 @@ import MarkdownIt from 'markdown-it/lib/index.mjs';
 /** Instance type for the markdown-it renderer (`new MarkdownIt(...)`). */
 export type MarkdownItInstance = InstanceType<typeof MarkdownIt>;
 
-export interface MarkdownRendererConfig {
+interface MarkdownRendererConfig {
   /**
    * Code-fence highlighter — same shape as markdown-it's `highlight` option.
    * The webview returns HTML; the CLI host returns an ANSI-coloured string.

@@ -12,7 +12,7 @@ import {
 
 export type StreamStatusDisplayKey = StreamPhase | StreamSubstate | 'ready';
 
-export interface StreamStatusDisplayState {
+interface StreamStatusDisplayState {
   readonly phase?: StreamPhase;
   readonly substate?: StreamSubstate;
   readonly key?: StreamStatusDisplayKey;
@@ -23,7 +23,7 @@ function phaseDisplayKey(phase: StreamPhase): StreamStatusDisplayKey {
   return phase;
 }
 
-export function streamStatusDisplayState(
+function streamStatusDisplayState(
   status: string | undefined,
   substate?: StreamSubstate,
 ): StreamStatusDisplayState {
