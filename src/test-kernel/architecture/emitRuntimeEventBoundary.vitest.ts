@@ -12,7 +12,6 @@ const REPO_ROOT = resolve(
 );
 
 const ALLOWED_PRODUCTION_REFERENCES = [
-  'packages/desktop/src/main/desktopAgentExecution.ts',
   'packages/extension/src/commands/agent/followUpCommand.ts',
   'packages/extension/src/commands/housekeeping/streamEventUtils.ts',
   'src/agent/followUp/ToolUseFollowUp.ts',
