@@ -164,15 +164,18 @@ async function persistWorkflowResultMeta(
 ): Promise<void> {
   try {
     const resultMeta: ResultMeta = {
-      outputs: [...result.outputs],
-      compileFailures: [...result.compileFailures],
+      producer: 'cliWorkflow',
+      result: {
+        outputs: [...result.outputs],
+        compileFailures: [...result.compileFailures],
+        ...(result.copiedOutput && {
+          copiedOutput: result.copiedOutput,
+        }),
+        ...(result.copiedOutputs?.length && {
+          copiedOutputs: [...result.copiedOutputs],
+        }),
+      },
     };
-    if (result.copiedOutput) {
-      resultMeta.copiedOutput = result.copiedOutput;
-    }
-    if (result.copiedOutputs?.length) {
-      resultMeta.copiedOutputs = [...result.copiedOutputs];
-    }
     await getExecutionStore(executionId).writeResultMeta(resultMeta);
   } catch (error) {
     writeTextStderr(

@@ -393,18 +393,24 @@ describe('CLI history runtime', () => {
       logAbsolutePath: '/tmp/run/compile/r1_paper.tex.log',
     };
     mocks.readResultMeta.mockResolvedValue({
-      copiedOutput: '/tmp/annotated.tex',
-      outputs: [outputSummary],
-      compileFailures: [compileFailure],
+      producer: 'cliWorkflow',
+      result: {
+        copiedOutput: '/tmp/annotated.tex',
+        outputs: [outputSummary],
+        compileFailures: [compileFailure],
+      },
     });
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
     const text = formatCliHistoryDetailsText(details!);
 
     expect(details?.resultMeta).toEqual({
-      copiedOutput: '/tmp/annotated.tex',
-      outputs: [outputSummary],
-      compileFailures: [compileFailure],
+      producer: 'cliWorkflow',
+      result: {
+        copiedOutput: '/tmp/annotated.tex',
+        outputs: [outputSummary],
+        compileFailures: [compileFailure],
+      },
     });
     expect(text).toContain('"copiedOutput":"/tmp/annotated.tex"');
     expect(text).toContain('"compileFailures"');
