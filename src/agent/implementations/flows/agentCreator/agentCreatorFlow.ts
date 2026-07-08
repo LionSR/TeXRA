@@ -27,7 +27,7 @@ const CHANNEL = 'AgentCreator';
 
 export type AgentCategory = 'workflow' | 'toolUse';
 
-export interface AgentPromptPair {
+interface AgentPromptPair {
   systemPrompt: string;
   userRequest: string;
 }
@@ -42,7 +42,7 @@ export interface CreatorConfig {
   };
 }
 
-export interface AgentBlueprint {
+interface AgentBlueprint {
   category: AgentCategory;
   agentName: string;
   filePath: string;

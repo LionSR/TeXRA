@@ -25,7 +25,7 @@ interface NodeRecord {
   nodeId?: string;
 }
 
-export interface FlowCursor {
+interface FlowCursor {
   /** The next graph-local node path, or null when the flow has reached a terminal edge. */
   nextNodeId: string | null;
   /** Last action emitted by the previous node, for diagnostics and legacy parity. */

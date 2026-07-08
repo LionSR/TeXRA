@@ -15,11 +15,9 @@ import type { SdkToolCall } from './ModelHandlerContracts';
 // to avoid — see the note on `IModelHandler` below.
 export type {
   TokenCountOptions,
-  TokenValidationResult,
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
-  StopConditionsResult,
   OpenAIToolCall,
   DeepSeekToolCall,
   OpenAIResponseToolCall,

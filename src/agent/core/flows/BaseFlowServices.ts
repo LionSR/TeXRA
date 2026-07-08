@@ -21,7 +21,7 @@ export type RoundFinalizedCallback = (
 ) => void | Promise<void>;
 
 /** Delegation-scoped policy flags, grouped so they travel together on `AgentCore`. */
-export interface DelegationPolicy {
+interface DelegationPolicy {
   /**
    * Delegation depth: 0 for root (user-initiated), N for a subagent N levels deep.
    * Set by executeAgent from ExecuteAgentOptions.delegationDepth. Used by the

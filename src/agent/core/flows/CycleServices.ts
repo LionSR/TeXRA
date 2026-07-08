@@ -60,7 +60,7 @@ export async function withModelClient<C, T extends object>(
   };
 }
 
-export interface TextConnectionService {
+interface TextConnectionService {
   /**
    * Determines the best textual connector between two strings in a LaTeX
    * document context (empty string, space, or newline).
