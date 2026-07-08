@@ -37,6 +37,8 @@ const failedExecutionId = 'c11116' as ExecutionId;
 const failedChildStreamId = 'codex#c11116' as StreamTabId;
 const normalizedErrorExecutionId = 'c11117' as ExecutionId;
 const normalizedErrorChildStreamId = 'codex#c11117' as StreamTabId;
+const noProjectionAutoCloseExecutionId = 'c11118' as ExecutionId;
+const noProjectionAutoCloseChildStreamId = 'bash#c11118' as StreamTabId;
 const config = {
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -68,9 +70,15 @@ function withSessionProgressProjection<T>(
     host,
   );
   try {
-    return run();
-  } finally {
+    const result = run();
+    if (result instanceof Promise) {
+      return result.finally(detach) as T;
+    }
     detach();
+    return result;
+  } catch (err) {
+    detach();
+    throw err;
   }
 }
 
@@ -84,6 +92,7 @@ describe('child stream progress events', () => {
       cancelledChildStreamId,
       failedChildStreamId,
       normalizedErrorChildStreamId,
+      noProjectionAutoCloseChildStreamId,
     ]) {
       clearStreamStatusForTest(StreamStatusService, streamId);
     }
@@ -272,6 +281,45 @@ describe('child stream progress events', () => {
       ]);
 
       await childStream.finalize();
+    } finally {
+      detachFacts();
+    }
+  });
+
+  it('publishes child stream auto-close as a session fact without direct host emission', async () => {
+    const active = createRecordingHost();
+    const facts: unknown[] = [];
+    const detachFacts = defaultSession().events.subscribe((event) => {
+      if (event.scope === 'session') {
+        facts.push(event);
+      }
+    });
+
+    try {
+      const childStream = createChildStream(
+        noProjectionAutoCloseExecutionId,
+        parentStreamId,
+        {
+          runtimeHost: active.host,
+          streamPrefix: 'bash',
+          streamCategory: AgentCategory.ToolUse,
+          agentName: 'test-agent',
+          description: 'Run a background bash command',
+          config,
+          toolName: 'bash',
+        },
+      );
+
+      await childStream.finalize({ autoClose: true });
+
+      expect(active.events).toEqual([]);
+      expect(facts).toContainEqual({
+        scope: 'session',
+        event: {
+          type: 'removeStream',
+          payload: { streamId: noProjectionAutoCloseChildStreamId },
+        },
+      });
     } finally {
       detachFacts();
     }
