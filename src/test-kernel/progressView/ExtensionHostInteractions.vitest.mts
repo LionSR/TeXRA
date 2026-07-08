@@ -72,7 +72,7 @@ function createInteractions(options?: {
 }) {
   return createExtensionHostInteractions({
     runtimeHost: options?.runtimeHost ?? createRuntimeHost(),
-    session: options?.session,
+    session: options?.session ?? new SessionHandle(),
     getApprovalHandlers: () => options?.handlers ?? createHandlers(),
   });
 }
