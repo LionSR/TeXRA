@@ -141,6 +141,10 @@ export interface UpdateQueuedFollowUpsPayload {
   streamId: StreamTabId;
 }
 
+export interface FollowUpSentPayload {
+  streamId: StreamTabId;
+}
+
 /**
  * Host-agnostic action tokens for {@link RequestShowInstructionPayload}.
  * The agent core emits a token; each host maps it to its own UI affordance

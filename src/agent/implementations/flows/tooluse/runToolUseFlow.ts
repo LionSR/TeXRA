@@ -9,7 +9,10 @@ import {
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
 import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
@@ -114,6 +117,7 @@ export function getToolUseFlowErrorResult(
 }
 
 export interface ToolUseFlowContext {
+  readonly ownerSession: SessionHandle;
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: ToolUseServices['modelHandler'];
   readonly runtimeHost: AgentRuntimeHost;
@@ -270,6 +274,7 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   const flowContext: ToolUseFlowContext = {
+    ownerSession: runSession,
     session: sessionLifecycle,
     get modelHandler() {
       return services.modelHandler;

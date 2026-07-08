@@ -29,7 +29,7 @@ export async function compactResponse(streamId: StreamTabId): Promise<void> {
       );
       return;
     case 'requested':
-      notifyFollowUpSent(result.streamId, result.runtimeHost);
+      notifyFollowUpSent(result.streamId, result.session);
       await vscode.window.showInformationMessage(
         'Context compaction requested. The agent will process it on the next model call.',
       );
