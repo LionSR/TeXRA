@@ -1,5 +1,4 @@
 import type { AgentEvent } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type {
   ProgressEvent,
@@ -26,48 +25,36 @@ export type ProjectedProgressEvent = {
   };
 }[ProgressEvent];
 
-function emitProjectedProgressEvent(
-  runtimeHost: AgentRuntimeHost,
-  projected: ProjectedProgressEvent,
-): void {
-  if (
-    projected.event === 'removeStream' &&
-    runtimeHost.interactions?.handleProgressEvent(
-      projected.event,
-      projected.payload,
-    )
-  ) {
-    return;
-  }
-  runtimeHost.emit(projected.event, projected.payload);
-}
-
 /**
- * Subscribe a host-owned progress surface to the session fact plane and
- * re-emit the retained progress events that have not yet moved to a native
- * host/session projection.
+ * Project session facts onto the frozen host-progress vocabulary when a
+ * compatibility surface still needs that view. `followUpSent` is intentionally
+ * session-local and has no host-progress projection.
  */
-export function attachSessionProgressEventProjection(
-  events: SessionEventHub,
-  runtimeHost: AgentRuntimeHost,
-): () => void {
-  const detachSessionFacts = events.subscribe(
-    (sessionEvent) => {
-      if (sessionEvent.scope !== 'session') return;
-      const projected = projectSessionFactToProgressEvent(sessionEvent.event);
-      if (projected) emitProjectedProgressEvent(runtimeHost, projected);
-    },
-    { scope: 'session' },
-  );
-  const detachRunFacts = subscribeRunFactsAsProgressEvents(
-    events,
-    (projected) => emitProjectedProgressEvent(runtimeHost, projected),
-  );
-
-  return () => {
-    detachRunFacts();
-    detachSessionFacts();
-  };
+export function projectSessionFactToProgressEvent(
+  fact: SessionFact,
+): ProjectedProgressEvent | undefined {
+  switch (fact.type) {
+    case 'goalStateChanged':
+      return { event: 'goalStateChanged', payload: fact.payload };
+    case 'inquiryThreadUpdated':
+      return { event: 'inquiryThreadUpdated', payload: fact.payload };
+    case 'clearMissingOutputs':
+      return { event: 'clearMissingOutputs', payload: fact.payload };
+    case 'updateQueuedFollowUps':
+      return { event: 'updateQueuedFollowUps', payload: fact.payload };
+    case 'followUpSent':
+      return undefined;
+    case 'setActiveStream':
+      return { event: 'setActiveStream', payload: fact.payload };
+    case 'updateStreamDescription':
+      return { event: 'updateStreamDescription', payload: fact.payload };
+    case 'updateStreamStatus':
+      return { event: 'updateStreamStatus', payload: fact.payload };
+    case 'setParentStream':
+      return { event: 'setParentStream', payload: fact.payload };
+    case 'removeStream':
+      return { event: 'removeStream', payload: fact.payload };
+  }
 }
 
 function asString(value: unknown): string | undefined {
@@ -98,33 +85,6 @@ export function toUpdateStreamUsagePayload(
     ...(executionId ? { executionId } : {}),
     usage: usage.data,
   };
-}
-
-function projectSessionFactToProgressEvent(
-  fact: SessionFact,
-): ProjectedProgressEvent | undefined {
-  switch (fact.type) {
-    case 'goalStateChanged':
-      return { event: 'goalStateChanged', payload: fact.payload };
-    case 'inquiryThreadUpdated':
-      return { event: 'inquiryThreadUpdated', payload: fact.payload };
-    case 'clearMissingOutputs':
-      return { event: 'clearMissingOutputs', payload: fact.payload };
-    case 'updateQueuedFollowUps':
-      return { event: 'updateQueuedFollowUps', payload: fact.payload };
-    case 'followUpSent':
-      return undefined;
-    case 'setActiveStream':
-      return { event: 'setActiveStream', payload: fact.payload };
-    case 'updateStreamDescription':
-      return { event: 'updateStreamDescription', payload: fact.payload };
-    case 'updateStreamStatus':
-      return { event: 'updateStreamStatus', payload: fact.payload };
-    case 'setParentStream':
-      return { event: 'setParentStream', payload: fact.payload };
-    case 'removeStream':
-      return { event: 'removeStream', payload: fact.payload };
-  }
 }
 
 export function projectRunFactToProgressEvent(
@@ -261,7 +221,7 @@ const RUN_FACT_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
  * Kept for compatibility consumers that still need the legacy progress-event
  * surface, such as headless CLI output.
  */
-function subscribeRunFactsAsProgressEvents(
+export function subscribeRunFactsAsProgressEvents(
   events: SessionEventHub,
   onProjected: (projected: ProjectedProgressEvent) => void,
 ): () => void {
