@@ -54,5 +54,3 @@ export const VSCODE_SETTING_PATHS = [
   'apiKeys.set',
   'apiKeys.remove',
 ] as const;
-
-export type VscodeSettingPath = (typeof VSCODE_SETTING_PATHS)[number];

@@ -26,7 +26,7 @@ const openFileCommands = {
   openLabel: 'texra.openLabel',
 };
 
-export interface OpenLabelOptions {
+interface OpenLabelOptions {
   notifyNotFound?: boolean;
 }
 

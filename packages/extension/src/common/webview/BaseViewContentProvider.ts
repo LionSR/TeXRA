@@ -5,12 +5,12 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { buildWebviewHtml } from './html';
 
-export interface ModuleDescriptor {
+interface ModuleDescriptor {
   key: string;
   path: string;
 }
 
-export abstract class BaseViewContentProvider {
+abstract class BaseViewContentProvider {
   protected readonly logger: typeof logger;
   protected readonly channel: string;
   private readonly viewPath: string;
