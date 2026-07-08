@@ -15,6 +15,7 @@ import {
   SharedExecutionRegistry,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { onFollowUpSent, sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -26,6 +27,7 @@ const streamId = 'stream:follow-up' as StreamTabId;
 describe('tool-use follow-up progress events', () => {
   let unsubscribeFollowUpObserver: (() => void) | undefined;
   const trackedExecutionIds = new Set<string>();
+  const sessions = new Set<SessionHandle>();
 
   afterEach(() => {
     unsubscribeFollowUpObserver?.();
@@ -34,6 +36,10 @@ describe('tool-use follow-up progress events', () => {
       SharedExecutionRegistry.untrack(executionId);
     }
     trackedExecutionIds.clear();
+    for (const session of sessions) {
+      session.dispose({ keepActiveExecutions: true });
+    }
+    sessions.clear();
     clearAllStreamStatusesForTest(StreamStatusService);
   });
 
@@ -42,11 +48,13 @@ describe('tool-use follow-up progress events', () => {
     host = noopAgentRuntimeHost,
     appendFollowUp,
     executionId = `exec-${stream}`,
+    session,
   }: {
     readonly stream?: StreamTabId;
     readonly host?: AgentRuntimeHost;
     readonly appendFollowUp: LiveToolUseFlowContext['session']['appendFollowUp'];
     readonly executionId?: string;
+    readonly session?: SessionHandle;
   }): void {
     const handle = new AgentExecutionHandle(
       executionId,
@@ -57,6 +65,7 @@ describe('tool-use follow-up progress events', () => {
       host,
     );
     handle.attachToolUseFlow({
+      ...(session ? { ownerSession: session } : {}),
       session: { appendFollowUp },
       modelHandler: { supportsManualCompaction: true },
       runtimeHost: host,
@@ -65,17 +74,34 @@ describe('tool-use follow-up progress events', () => {
       switchModel: async () => {},
       interrupt: () => {},
     });
-    SharedExecutionRegistry.track(handle);
-    trackedExecutionIds.add(executionId);
+    if (session) {
+      session.executions.track(handle);
+    } else {
+      SharedExecutionRegistry.track(handle);
+      trackedExecutionIds.add(executionId);
+    }
   }
 
-  it('publishes sent follow-up events through the active runtime host', async () => {
+  it('publishes sent follow-up events through the owning session fact hub', async () => {
     const { events, host } = createRecordingHost();
+    const session = new SessionHandle();
+    sessions.add(session);
+    const facts: unknown[] = [];
+    const detachFacts = session.events.subscribe((event) => {
+      facts.push(event);
+    });
     const appendFollowUp = vi.fn();
 
-    trackToolUseFlow({ host, appendFollowUp });
+    trackToolUseFlow({ host, appendFollowUp, session });
 
-    const result = await sendFollowUp(streamId, 'please continue');
+    const result = await sendFollowUp(
+      streamId,
+      'please continue',
+      undefined,
+      undefined,
+      session,
+    );
+    detachFacts();
 
     expect(result).toEqual({ status: 'sent' });
     expect(appendFollowUp).toHaveBeenCalledWith({
@@ -83,12 +109,16 @@ describe('tool-use follow-up progress events', () => {
       mediaFiles: undefined,
       displayText: undefined,
     });
-    expect(events).toEqual([
+    expect(facts).toEqual([
       {
-        event: 'followUpSent',
-        payload: { streamId },
+        scope: 'session',
+        event: {
+          type: 'followUpSent',
+          payload: { streamId },
+        },
       },
     ]);
+    expect(events).toEqual([]);
   });
 
   it('notifies local follow-up observers through onFollowUpSent', async () => {

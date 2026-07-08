@@ -8,6 +8,7 @@
 import { writeTerminalStatus } from '@agent/storage';
 import type { ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   StreamStatusService,
   type StreamStatusEmitOptions,
@@ -115,7 +116,7 @@ export type ManualCompactionRequestResult =
   | {
       readonly kind: 'requested';
       readonly streamId: StreamTabId;
-      readonly runtimeHost?: AgentRuntimeHost;
+      readonly session?: SessionHandle;
     }
   | {
       readonly kind: 'unsupported';
@@ -398,7 +399,7 @@ export class ExecutionRegistry {
     return {
       kind: 'requested',
       streamId,
-      ...(context.runtimeHost && { runtimeHost: context.runtimeHost }),
+      ...(context.ownerSession && { session: context.ownerSession }),
     };
   }
 

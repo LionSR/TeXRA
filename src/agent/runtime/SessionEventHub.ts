@@ -4,6 +4,7 @@ import type { AgentEvent } from '@agent/trace';
 import { createChannelTrace } from '@logger';
 import type {
   ClearMissingOutputsPayload,
+  FollowUpSentPayload,
   GoalStateChangedPayload,
   InquiryThreadUpdatedEvent,
   SetActiveStreamPayload,
@@ -38,6 +39,10 @@ export type SessionFact =
   | {
       readonly type: 'updateQueuedFollowUps';
       readonly payload: UpdateQueuedFollowUpsPayload;
+    }
+  | {
+      readonly type: 'followUpSent';
+      readonly payload: FollowUpSentPayload;
     }
   | {
       readonly type: 'setActiveStream';

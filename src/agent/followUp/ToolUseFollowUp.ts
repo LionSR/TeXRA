@@ -16,7 +16,7 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import type { FollowUpQueueInput } from './FollowUpQueue';
@@ -134,7 +134,7 @@ export function onFollowUpSent(
 
 export function notifyFollowUpSent(
   streamId: StreamTabId,
-  runtimeHost?: AgentRuntimeHost,
+  session?: SessionHandle,
 ): void {
   for (const observer of followUpSentObservers) {
     try {
@@ -145,7 +145,7 @@ export function notifyFollowUpSent(
       });
     }
   }
-  runtimeHost?.emit('followUpSent', { streamId });
+  emitRuntimeEvent('followUpSent', { streamId }, session);
 }
 
 /**
@@ -200,7 +200,7 @@ export async function sendFollowUp(
 
   if (target.kind === 'active') {
     target.context.session.appendFollowUp(item);
-    notifyFollowUpSent(streamId, target.context.runtimeHost);
+    notifyFollowUpSent(streamId, ownerSession);
     return { status: 'sent' };
   }
 
