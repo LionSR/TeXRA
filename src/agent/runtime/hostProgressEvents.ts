@@ -1,16 +1,14 @@
-import type { TaskState } from '@agent/core/state/TaskState';
+import type { SetTaskStatePayload } from '@agent/runtime/taskStateProgressPayload';
 import type {
   AddOutputFilesPayload,
   ClearMissingOutputsPayload,
-  ConversationProgress,
-  ExecutionId,
   GoalPausedPayload,
   GoalStateChangedPayload,
   InquiryThreadUpdatedEvent,
   RemoveStreamPayload,
   SetActiveStreamPayload,
   SetParentStreamPayload,
-  StreamTabId,
+  UpdateConversationProgressPayload,
   UpdateActiveProcessesPayload,
   UpdateActiveSubagentsPayload,
   UpdateCompileFailuresPayload,
@@ -39,8 +37,7 @@ import type {
  * rails keep one shared key/payload table while they are migrated to typed
  * session/host surfaces.
  * Every fact-plane key below references its named vocabulary type — this map
- * projects the vocabulary, it does not define it. The remaining inline key is
- * the Stage-5 `setTaskState` residue.
+ * projects the vocabulary, it does not define it.
  */
 export interface ProgressEventPayloads {
   // ── Run/stream progress ──
@@ -50,21 +47,14 @@ export interface ProgressEventPayloads {
   updateMissingOutputs: UpdateMissingOutputsPayload;
   updateCompileFailures: UpdateCompileFailuresPayload;
   clearMissingOutputs: ClearMissingOutputsPayload;
-  setTaskState: {
-    streamId: StreamTabId;
-    executionId?: ExecutionId;
-    taskState: TaskState;
-  };
+  setTaskState: SetTaskStatePayload;
   updateStreamUsage: UpdateStreamUsagePayload;
   /** Inquiry thread state changed (open, answered, dropped, or resume outcome). */
   inquiryThreadUpdated: InquiryThreadUpdatedEvent;
   // ── Run/stream progress (part 2) ──
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
-  updateConversationProgress: {
-    streamId: StreamTabId;
-    progress: ConversationProgress;
-  };
+  updateConversationProgress: UpdateConversationProgressPayload;
   updateRoundStage: UpdateRoundStagePayload;
   updateQueuedFollowUps: UpdateQueuedFollowUpsPayload;
   goalPaused: GoalPausedPayload;
