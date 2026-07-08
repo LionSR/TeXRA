@@ -1,13 +1,42 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
-import type { StreamTabId } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
+import {
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const streamId = 'stream:cli-session-projection' as StreamTabId;
+const executionId = 'execution:cli-session-projection' as ExecutionId;
+
+function workflowConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
+  return {
+    agent: 'polish',
+    agentCategory: AgentCategory.Workflow,
+    model: 'deepseek-chat',
+    inputFiles: ['paper.tex'],
+    contextFiles: [],
+    mediaFiles: [],
+    outputFiles: [],
+    editedFile: null,
+    editedFiles: [],
+    instruction: '',
+    toolConfig: DEFAULT_TOOL_CONFIG,
+    memories: [],
+    workingDirectory: '/tmp/project',
+    ...overrides,
+  };
+}
 
 function hostWithInteractions(
   interactions?: Partial<HostInteractions>,
@@ -120,6 +149,76 @@ describe('attachCliSessionProgressProjection', () => {
         streamId,
         storageKey: 'run-a',
         usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
+      });
+    } finally {
+      detach();
+    }
+  });
+
+  it('projects run config facts to the public setTaskState event', () => {
+    const events = new SessionEventHub();
+    const host = hostWithInteractions();
+    const detach = attachCliSessionProgressProjection(events, host);
+    const config = workflowConfig({
+      inputFiles: ['paper.tex', 'appendix.tex'],
+      contextFiles: ['notes.md'],
+    });
+
+    try {
+      events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'run.config',
+          streamId,
+          executionId,
+          config,
+        },
+      });
+
+      expect(host.emit).toHaveBeenCalledWith('setTaskState', {
+        streamId,
+        executionId,
+        taskState: {
+          agentConfig: config,
+          activeFiles: {
+            input: true,
+            context: true,
+            media: false,
+            output: false,
+          },
+        },
+      });
+    } finally {
+      detach();
+    }
+  });
+
+  it('projects status facts to the public stream-status event', () => {
+    const events = new SessionEventHub();
+    const host = hostWithInteractions();
+    const detach = attachCliSessionProgressProjection(events, host);
+
+    try {
+      events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'status',
+          streamId,
+          phase: STREAM_PHASE.RUNNING,
+          previousPhase: STREAM_PHASE.WAITING,
+          cause: STREAM_TRANSITION_CAUSE.RESUME,
+          substate: STREAM_SUBSTATE.RESUMING,
+        },
+      });
+
+      expect(host.emit).toHaveBeenCalledWith('updateStreamStatus', {
+        streamId,
+        status: STREAM_PHASE.RUNNING,
+        previousStatus: STREAM_PHASE.WAITING,
+        cause: STREAM_TRANSITION_CAUSE.RESUME,
+        substate: STREAM_SUBSTATE.RESUMING,
       });
     } finally {
       detach();
