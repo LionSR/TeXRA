@@ -70,10 +70,10 @@ export class StreamStatusMachine {
     options: StreamStatusEmitOptions = {},
   ): boolean {
     if (this.reservations.has(stream)) return false;
-    if (!canAcquireStreamReservation(this.phases.get(stream)?.phase)) {
+    const previousPhase = this.phases.get(stream)?.phase;
+    if (!canAcquireStreamReservation(previousPhase)) {
       return false;
     }
-    const previousPhase = this.phases.get(stream)?.phase;
     this.reservations.add(stream);
     this.publishStatus(stream, STREAM_PHASE.RUNNING, {
       ...options,

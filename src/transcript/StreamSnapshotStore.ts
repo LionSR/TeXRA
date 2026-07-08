@@ -465,8 +465,7 @@ export class StreamSnapshotStore {
     version: number,
     apply: () => unknown,
   ): Promise<void> {
-    let next: Promise<void> = Promise.resolve();
-    next = this.ensureSeeded(stream, version)
+    const next: Promise<void> = this.ensureSeeded(stream, version)
       .then(() => {
         if (this.streamVersion(stream) !== version) return;
         if (!this.seeded.has(stream)) {
@@ -1297,9 +1296,6 @@ export class StreamSnapshotStore {
   ): Promise<HydratedRunState> {
     const executionId = executionIdFromMeta(meta);
     let descriptor = meta.runDescriptor;
-    if (meta.runDescriptor) {
-      descriptor = meta.runDescriptor;
-    }
 
     if (executionId) {
       let config: AgentConfig | null = null;
