@@ -1,4 +1,4 @@
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
@@ -22,7 +22,7 @@ const NON_TUI_EXTERNAL_INQUIRY_FEEDBACK =
   'panel, or ask_user_question for synchronous CLI input.';
 
 export function handleExternalInquiry(
-  payload: ProgressEventPayloads['showExternalInquiry'],
+  payload: RuntimeInteractionEventPayloads['showExternalInquiry'],
   context: CliContext,
   _hooks: CliApprovalPromptHooks = {},
 ): void {
@@ -49,7 +49,7 @@ export function handleExternalInquiry(
 }
 
 export function handleUserQuestion(
-  payload: ProgressEventPayloads['showUserQuestion'],
+  payload: RuntimeInteractionEventPayloads['showUserQuestion'],
   context: CliContext,
   hooks: CliApprovalPromptHooks = {},
 ): void {

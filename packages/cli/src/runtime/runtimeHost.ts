@@ -5,6 +5,11 @@ import type {
   ProgressEventPayloads,
 } from '@agent/runtime/hostProgressEvents';
 import {
+  isRuntimeInteractionEvent,
+  type RuntimeInteractionEvent,
+  type RuntimeInteractionEventPayloads,
+} from '@agent/runtime/runtimeInteractionEvents';
+import {
   isRuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
@@ -49,10 +54,10 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       if (closed) return;
 
       if (
-        !isRuntimePresentationEvent(event) &&
+        isRuntimeInteractionEvent(event) &&
         handleCliApprovalEvent(
-          event as ProgressEvent,
-          payload as ProgressEventPayloads[ProgressEvent],
+          event as RuntimeInteractionEvent,
+          payload as RuntimeInteractionEventPayloads[RuntimeInteractionEvent],
           context,
           {
             beforePrompt: prepareInteractivePrompt,
@@ -84,7 +89,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
 
       if (
         !isRuntimePresentationEvent(event) &&
-        runProgress?.handle(event, payload)
+        !isRuntimeInteractionEvent(event) &&
+        runProgress?.handle(event as ProgressEvent, payload)
       ) {
         return;
       }

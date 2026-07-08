@@ -63,6 +63,10 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
+import type {
+  ProgressBackendEvent,
+  ProgressBackendEventPayloads,
+} from '@shared/progressView/backend/events/ProgressEventHandler';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import {
@@ -1005,7 +1009,10 @@ export class DesktopProgressBridge {
   ): void {
     if (!isRuntimePresentationEvent(event)) {
       if (event === 'addOutputFiles') return;
-      this.backend.handleProgressEvent(event, payload);
+      this.backend.handleProgressEvent(
+        event as ProgressBackendEvent,
+        payload as ProgressBackendEventPayloads[ProgressBackendEvent],
+      );
       return;
     }
 

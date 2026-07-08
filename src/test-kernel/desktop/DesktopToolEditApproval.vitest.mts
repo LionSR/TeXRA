@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import type {
   DiffOptions,
   DiffSession,
@@ -53,8 +53,8 @@ interface DesktopPlatformModule {
 }
 
 interface RecordingRuntimeHost extends AgentRuntimeHost {
-  shownToolEditPermissions: ProgressEventPayloads['showToolEditPermission'][];
-  resolvedToolEditPermissions: ProgressEventPayloads['resolveToolEditPermission'][];
+  shownToolEditPermissions: RuntimeInteractionEventPayloads['showToolEditPermission'][];
+  resolvedToolEditPermissions: RuntimeInteractionEventPayloads['resolveToolEditPermission'][];
 }
 
 let activeToolEditApproval:
@@ -70,27 +70,25 @@ function useControllerApproval(controller: {
 }
 
 function createRecordingRuntimeHost(): RecordingRuntimeHost {
-  const shownToolEditPermissions: ProgressEventPayloads['showToolEditPermission'][] =
+  const shownToolEditPermissions: RuntimeInteractionEventPayloads['showToolEditPermission'][] =
     [];
-  const resolvedToolEditPermissions: ProgressEventPayloads['resolveToolEditPermission'][] =
+  const resolvedToolEditPermissions: RuntimeInteractionEventPayloads['resolveToolEditPermission'][] =
     [];
-  const eventHandlers: Partial<{
-    [K in keyof ProgressEventPayloads]: (
-      payload: ProgressEventPayloads[K],
-    ) => void;
-  }> = {
-    showToolEditPermission: (payload) => {
-      shownToolEditPermissions.push(payload);
-    },
-    resolveToolEditPermission: (payload) => {
-      resolvedToolEditPermissions.push(payload);
-    },
-  };
   return {
     shownToolEditPermissions,
     resolvedToolEditPermissions,
     emit: (event, payload) => {
-      eventHandlers[event]?.(payload);
+      if (event === 'showToolEditPermission') {
+        shownToolEditPermissions.push(
+          payload as RuntimeInteractionEventPayloads['showToolEditPermission'],
+        );
+        return;
+      }
+      if (event === 'resolveToolEditPermission') {
+        resolvedToolEditPermissions.push(
+          payload as RuntimeInteractionEventPayloads['resolveToolEditPermission'],
+        );
+      }
     },
   };
 }
