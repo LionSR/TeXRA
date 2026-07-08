@@ -2,8 +2,8 @@
  * Desktop progress-event bridge.
  *
  * Extracted from DesktopProgressBridge to own the ghost-stream hydration,
- * stream-snapshot persistence, restored-display sending, and progress-event →
- * rail-update translation.  The parent bridge composes this as a focused
+ * stream-snapshot persistence, restored-display sending, and desktop-local
+ * presentation events. The parent bridge composes this as a focused
  * collaborator and keeps runtime-host, approval, resume, and stream-lifecycle
  * wiring.
  *
@@ -13,18 +13,20 @@
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   STREAM_PHASE,
   type ProgressViewOutboundMessage,
+  type RequestEnsureProgressViewPayload,
+  type RequestShowErrorPayload,
   type RestoredStreamSnapshot,
+  type SetActiveStreamPayload,
   type StreamTabId,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas/agent';
-import { isGoalInFlight, type GoalStatus } from '@shared/schemas/goal';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import type { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
+import { AgentCategory } from '@shared/schemas/agent';
+import { isGoalInFlight, type GoalStatus } from '@shared/schemas/goal';
 import { GoalStore } from '@tools/goal';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
@@ -58,6 +60,14 @@ export interface DesktopProgressEventBridgeOptions {
   onShowError: (message: string) => void;
 }
 
+export interface DesktopPresentationPayloads {
+  requestEnsureProgressView: RequestEnsureProgressViewPayload;
+  requestShowError: RequestShowErrorPayload;
+}
+
+export type DesktopPresentationProgressEvent =
+  keyof DesktopPresentationPayloads;
+
 // ── Public interface ────────────────────────────────────────────────────────
 
 export interface DesktopProgressEventBridge {
@@ -85,9 +95,9 @@ export interface DesktopProgressEventBridge {
    * Session and run facts reach this bridge through `onSessionEvent`; this path
    * is only for window-local host requests that have no durable session fact.
    */
-  onProgressEvent<K extends keyof ProgressEventPayloads>(
+  onProgressEvent<K extends DesktopPresentationProgressEvent>(
     event: K,
-    payload: ProgressEventPayloads[K],
+    payload: DesktopPresentationPayloads[K],
   ): void;
 
   /** Handle session/run facts emitted by this window's SessionEventHub. */
@@ -202,9 +212,9 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
 
   // ── Progress events ──────────────────────────────────────────────────────
 
-  onProgressEvent<K extends keyof ProgressEventPayloads>(
+  onProgressEvent<K extends DesktopPresentationProgressEvent>(
     event: K,
-    payload: ProgressEventPayloads[K],
+    payload: DesktopPresentationPayloads[K],
   ): void {
     // A headless run may still hold the owning bridge's `hostChannel.emit`
     // closure that routes here after the desktop window closed and this bridge
@@ -219,12 +229,10 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
         this.opts.routeToProgress();
         return;
       case 'requestShowError': {
-        const data = payload as ProgressEventPayloads['requestShowError'];
+        const data = payload as RequestShowErrorPayload;
         this.opts.onShowError(data.message);
         return;
       }
-      default:
-        return;
     }
   }
 
@@ -461,9 +469,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     }
   }
 
-  private handleSetActiveStream(
-    payload: ProgressEventPayloads['setActiveStream'],
-  ): void {
+  private handleSetActiveStream(payload: SetActiveStreamPayload): void {
     if (!payload.streamId) {
       this.opts.state.activeStream = '';
       this.opts.sendMessage({
