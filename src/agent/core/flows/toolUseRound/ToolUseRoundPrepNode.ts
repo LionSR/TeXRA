@@ -9,6 +9,7 @@ import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
+  type AppendFollowUpResult,
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 
@@ -77,18 +78,31 @@ export class ToolUseRoundPrepNode<C> extends BaseNode<
     // before the model starts thinking/responding
     if (prepRes.queuedFollowUps?.length) {
       for (const followUp of prepRes.queuedFollowUps) {
-        const result = await appendFollowUpAsUserMessage(
-          shared.messages,
-          followUp,
-          this.services,
-        );
-        shared.messages = result.messages;
-        if (!prepRes.synthetic) {
-          logUserMessage(
-            this.services.logger,
-            followUpDisplayText(followUp),
-            result.attachmentKinds,
+        // A non-synthetic follow-up's transcript row must be logged whether
+        // appendFollowUpAsUserMessage succeeds or throws (e.g. a corrupt/
+        // oversized media file) -- otherwise a failed follow-up round leaves
+        // no record of what the user asked for. `finally` preserves the
+        // throw so the round still fails as before; a throw before any
+        // attachment was inserted just yields an empty attachments list,
+        // which is accurate (nothing was actually inserted). Synthetic
+        // follow-ups are still never logged, throw or not -- unchanged from
+        // before this fix.
+        let result: AppendFollowUpResult | undefined;
+        try {
+          result = await appendFollowUpAsUserMessage(
+            shared.messages,
+            followUp,
+            this.services,
           );
+          shared.messages = result.messages;
+        } finally {
+          if (!prepRes.synthetic) {
+            logUserMessage(
+              this.services.logger,
+              followUpDisplayText(followUp),
+              result?.attachmentKinds ?? [],
+            );
+          }
         }
       }
       if (!prepRes.synthetic) {
