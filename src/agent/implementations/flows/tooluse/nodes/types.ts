@@ -12,7 +12,10 @@ import {
   UserVariableChannelsSchema,
   type UserVariableChannels,
 } from '@agent/core/definition/AgentCycleOptions';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import {
+  ProviderMessageArraySchema,
+  type ProviderMessage,
+} from '@agent/modelHandlers/types/ProviderMessage';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import type { RetryErrorInfo } from '@shared/schemas';
@@ -107,9 +110,9 @@ export function assertPreparedShared(
   }
 }
 
-const MessagesSchema = z.looseObject({ messages: z.array(z.unknown()) });
+const MessagesSchema = z.looseObject({ messages: ProviderMessageArraySchema });
 const LegacyConversationSchema = z.looseObject({
-  conversation: z.array(z.unknown()),
+  conversation: ProviderMessageArraySchema,
 });
 
 /**

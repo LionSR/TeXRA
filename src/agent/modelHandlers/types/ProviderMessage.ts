@@ -31,3 +31,22 @@ export const ProviderMessageSchema = z.custom<ProviderMessage>(
     error: 'messages must contain provider message objects',
   },
 );
+
+export const ProviderMessageArraySchema = z.array(ProviderMessageSchema);
+
+const ProviderMessageStorageSchema = z.union([
+  ProviderMessageArraySchema,
+  z
+    .looseObject({ messages: ProviderMessageArraySchema })
+    .transform(({ messages }) => messages),
+  z
+    .looseObject({ conversation: ProviderMessageArraySchema })
+    .transform(({ conversation }) => conversation),
+]);
+
+export function normalizeProviderMessages(
+  value: unknown,
+): ProviderMessage[] | null {
+  const result = ProviderMessageStorageSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
