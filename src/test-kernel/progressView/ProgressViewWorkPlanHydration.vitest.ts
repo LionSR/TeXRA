@@ -15,7 +15,7 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { ProgressEventHandler } from '@shared/progressView/backend/events/ProgressEventHandler';
+import { ProgressFactApplier } from '@shared/progressView/backend/events/ProgressFactApplier';
 import type { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
@@ -121,11 +121,10 @@ describe('progress view snapshot hydration', () => {
   it('syncs the durable display snapshot from the shared progress-view backend', async () => {
     const state = await createLoadedState();
     const { messages, updater, bridge } = createSyncCapture();
-    const handler = new ProgressEventHandler(
+    const handler = new ProgressFactApplier(
       state,
       updater,
       bridge,
-      {} as never,
       () => false,
     );
 
@@ -189,11 +188,10 @@ describe('progress view snapshot hydration', () => {
     const state = await createLoadedState();
     const { messages, updater, bridge } = createSyncCapture();
     const controlledStream = 'stream:controls' as StreamTabId;
-    const handler = new ProgressEventHandler(
+    const handler = new ProgressFactApplier(
       state,
       updater,
       bridge,
-      {} as never,
       () => false,
       (streamId) => {
         expect(streamId).toBe(controlledStream);

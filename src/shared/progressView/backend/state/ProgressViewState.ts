@@ -194,7 +194,7 @@ export class ProgressViewState {
 
   /**
    * Release a previously-active stream's entries if its status is not
-   * in-flight. `ProgressEventHandler.setStreamStatus` intentionally skips
+   * in-flight. `ProgressFactApplier.setStreamStatus` intentionally skips
    * eviction for the active tab, so every active-stream switch path must
    * call this on the stream being moved away from to close the loop.
    */

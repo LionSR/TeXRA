@@ -1132,13 +1132,13 @@ export class DesktopProgressBridge {
 
   private syncStreamContent(streamId: StreamTabId | ''): void {
     if (!streamId) {
-      this.backend.eventHandler.syncStreamContent('');
+      this.backend.factApplier.syncStreamContent('');
       return;
     }
 
     void this.streamLogs.ensureLoaded(streamId).then(() => {
       if (this.state.activeStream !== streamId) return;
-      this.backend.eventHandler.syncStreamContent(streamId, {
+      this.backend.factApplier.syncStreamContent(streamId, {
         includeActiveState: true,
       });
       this.progressEvents.sendRestoredDisplay(streamId);
