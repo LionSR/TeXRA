@@ -15,7 +15,7 @@ export const REMOTE_ORCHESTRATOR_AGENT_NAMES = [
  * relay-served roots above, these ship in the extension/CLI and are available
  * offline without sign-in.
  */
-export const BUNDLED_ORCHESTRATOR_AGENT_NAMES = ['engineer'] as const;
+const BUNDLED_ORCHESTRATOR_AGENT_NAMES = ['engineer'] as const;
 
 /** Built-in delegating team roots, relay-served plus bundled. */
 export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [

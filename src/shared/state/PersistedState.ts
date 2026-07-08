@@ -4,7 +4,7 @@ import { z } from 'zod';
  * Minimal storage interface for state persistence.
  * Works with both backend (Memento) and frontend (webview) storage.
  */
-export interface StateStorage {
+interface StateStorage {
   get(key: string): unknown;
   set(key: string, value: unknown): void;
 }

@@ -2,7 +2,7 @@ import { postMessage } from '@shared/hostBridge';
 import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
-export interface RecordingButtonConfig {
+interface RecordingButtonConfig {
   startCommand: string;
   stopCommand: string;
   startTitle?: string;
@@ -15,7 +15,7 @@ export interface RecordingButtonConfig {
 /**
  * Computed state for recording button (used in templates).
  */
-export interface RecordingButtonState {
+interface RecordingButtonState {
   /** Current icon name */
   icon: TeXRAIconName;
   /** Current title/tooltip text */

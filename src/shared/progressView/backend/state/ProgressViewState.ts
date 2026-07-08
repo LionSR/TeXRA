@@ -42,7 +42,7 @@ import { SessionStores } from './SessionStores';
 const LEGACY_INSTRUCTION_BACKFILL_CONCURRENCY = 8;
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
-export const StreamHintsSchema = StreamTabInfoBaseSchema.pick({
+const StreamHintsSchema = StreamTabInfoBaseSchema.pick({
   agent: true,
   agentCategory: true,
   inputFile: true,

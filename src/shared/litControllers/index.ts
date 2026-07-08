@@ -1,20 +1,7 @@
-export {
-  CopyButtonController,
-  type CopyButtonConfig,
-  type CopyButtonState,
-} from './CopyButtonController';
+export { CopyButtonController } from './CopyButtonController';
 
-export {
-  RecordingButtonController,
-  type RecordingButtonConfig,
-  type RecordingButtonState,
-} from './RecordingButtonController';
+export { RecordingButtonController } from './RecordingButtonController';
 
-export {
-  SortableController,
-  type SortableControllerConfig,
-  type SortableReorderCallback,
-  type SortableReorderResult,
-} from './SortableController';
+export { SortableController } from './SortableController';
 
 export { installToolbarTooltips } from './TooltipController';

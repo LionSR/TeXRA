@@ -2,12 +2,12 @@
 import Sortable from 'sortablejs';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
-export interface SortableControllerConfig {
+interface SortableControllerConfig {
   /** Animation duration in ms (default: 150) */
   animation?: number;
 }
 
-export interface SortableReorderResult {
+interface SortableReorderResult {
   /** Original index before drag */
   oldIndex: number;
   /** New index after drop */
@@ -20,7 +20,7 @@ export interface SortableReorderResult {
  * Callback invoked when items are reordered via drag-and-drop.
  * @param result - Contains oldIndex, newIndex, and the reordered items array
  */
-export type SortableReorderCallback = (result: SortableReorderResult) => void;
+type SortableReorderCallback = (result: SortableReorderResult) => void;
 
 /**
  * Lit reactive controller for managing Sortable.js on a file list element.
