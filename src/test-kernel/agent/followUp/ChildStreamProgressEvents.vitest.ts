@@ -11,7 +11,6 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import {
   STREAM_PHASE,
   STREAM_STATUS,
