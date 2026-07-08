@@ -236,7 +236,7 @@ describe('ProgressBackend', () => {
 
     backend.webviewUpdater.sendStreamMetadata(
       backend.state,
-      backend.eventHandler.getAllStreamStates(),
+      backend.factApplier.getAllStreamStates(),
     );
 
     expect(
@@ -346,7 +346,7 @@ describe('ProgressBackend', () => {
 
       backend.webviewUpdater.sendStreamMetadata(
         backend.state,
-        backend.eventHandler.getAllStreamStates(),
+        backend.factApplier.getAllStreamStates(),
       );
       const fullSync = messages.find(
         (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
@@ -720,7 +720,7 @@ describe('ProgressBackend', () => {
   it('applies session run facts through the fact-native handler', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
-    const handleRunFact = vi.spyOn(backend.eventHandler, 'handleRunFact');
+    const handleRunFact = vi.spyOn(backend.factApplier, 'handleRunFact');
     const handleProgressEvent = vi.spyOn(
       backend.eventHandler,
       'handleProgressEvent',
@@ -991,7 +991,7 @@ describe('ProgressBackend', () => {
   it('no-ops session output-file run facts after dispose', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
-    const handleRunFact = vi.spyOn(backend.eventHandler, 'handleRunFact');
+    const handleRunFact = vi.spyOn(backend.factApplier, 'handleRunFact');
     const handleProgressEvent = vi.spyOn(
       backend.eventHandler,
       'handleProgressEvent',
@@ -1225,8 +1225,8 @@ describe('ProgressBackend', () => {
         inquiryThread,
       );
 
-      expect(direct.backend.eventHandler.getAllStreamStates()).toEqual(
-        legacyEquivalent.backend.eventHandler.getAllStreamStates(),
+      expect(direct.backend.factApplier.getAllStreamStates()).toEqual(
+        legacyEquivalent.backend.factApplier.getAllStreamStates(),
       );
       expect(
         direct.backend.state.snapshots.getMissingOutputs(parentStreamId),
@@ -1263,7 +1263,7 @@ describe('ProgressBackend', () => {
       backend.state.activeStream = 'tool-stream';
       backend.state.agentCategoryFilter = 'toolUse';
 
-      await backend.eventHandler.setStreamStatus(
+      await backend.factApplier.setStreamStatus(
         'unknown-stream',
         STREAM_PHASE.RUNNING,
       );
@@ -1312,7 +1312,7 @@ describe('ProgressBackend', () => {
         finishedProcessCount: 2,
       }));
 
-      await backend.eventHandler.setStreamStatus(
+      await backend.factApplier.setStreamStatus(
         stream,
         STREAM_PHASE.RUNNING,
         STREAM_PHASE.COMPLETED,
@@ -1375,7 +1375,7 @@ describe('ProgressBackend', () => {
         progress: { toolCallCount: 7 },
       });
 
-      await backend.eventHandler.setStreamStatus(
+      await backend.factApplier.setStreamStatus(
         stream,
         STREAM_PHASE.RUNNING,
         STREAM_PHASE.COMPLETED,
@@ -1439,7 +1439,7 @@ describe('ProgressBackend', () => {
         'workflow-existing',
       );
 
-      await backend.eventHandler.setStreamStatus(
+      await backend.factApplier.setStreamStatus(
         'workflow-stream',
         STREAM_PHASE.RUNNING,
       );
@@ -1477,7 +1477,7 @@ describe('ProgressBackend', () => {
     // Regression test for the config/hints agentCategory single-owner fix:
     // buildStreamInfos (matchesFilter + buildStreamTabInfo, streamInfoUtils.ts
     // / streamTabInfo.ts) and syncStreamContent (getStreamCategory,
-    // ProgressEventHandler.ts) must resolve the same category from the same
+    // ProgressFactApplier.ts) must resolve the same category from the same
     // config/hints inputs, even when hints deliberately disagree with the
     // live config.
     const { backend, messages } = createRecordingBackend();
@@ -1505,7 +1505,7 @@ describe('ProgressBackend', () => {
       const workflowInfos = buildStreamInfos(backend.state, 'workflow');
       expect(workflowInfos.map((info) => info.name)).not.toContain(stream);
 
-      backend.eventHandler.syncStreamContent(stream);
+      backend.factApplier.syncStreamContent(stream);
       const sync = messages.find(
         (message) =>
           message.command === PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,

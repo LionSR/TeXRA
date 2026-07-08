@@ -334,7 +334,7 @@ export class ProgressViewProvider
 
     const activeStream = this.webviewUpdater.sendStreamMetadata(
       this.state,
-      this.eventHandler.getAllStreamStates(),
+      this.backend.factApplier.getAllStreamStates(),
       theme,
     );
 
@@ -348,10 +348,10 @@ export class ProgressViewProvider
       if (activeStream && !this.state.streamLogs.get(activeStream)) {
         void this.state.streamLogs.ensureLoaded(activeStream).then(() => {
           if (this.state.activeStream !== activeStream) return;
-          this.eventHandler.syncStreamContent(activeStream);
+          this.backend.factApplier.syncStreamContent(activeStream);
         });
       } else {
-        this.eventHandler.syncStreamContent(activeStream);
+        this.backend.factApplier.syncStreamContent(activeStream);
       }
     }
 
@@ -541,7 +541,9 @@ export class ProgressViewProvider
 
     this.webviewUpdater.setActiveStream(streamId);
     // Hydrate content (logs, todos, follow-ups, instruction, bypass state) + active-state metadata
-    this.eventHandler.syncStreamContent(streamId, { includeActiveState: true });
+    this.backend.factApplier.syncStreamContent(streamId, {
+      includeActiveState: true,
+    });
   }
 
   public async revealStream(

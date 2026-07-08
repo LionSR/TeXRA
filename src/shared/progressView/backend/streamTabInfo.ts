@@ -32,7 +32,7 @@ export interface StreamTabInfoInputs {
 /**
  * Single owner of the two-source `config`/`hints` agentCategory lookup shared
  * by `buildStreamTabInfo`, `buildStreamInfo` (streamInfoUtils.ts), and
- * `getStreamCategory` (ProgressEventHandler.ts). Live `config` wins over the
+ * `getStreamCategory` (ProgressFactApplier.ts). Live `config` wins over the
  * fallback `hints`. Deliberately undefined-preserving (no default baked in)
  * — `getStreamCategory` needs that variant; callers that want a concrete
  * category layer `?? AgentCategory.Workflow` on top.
