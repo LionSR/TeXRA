@@ -54,6 +54,7 @@ import {
 import { ModelHandler } from '../ModelHandler';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  COMPACTION_SUMMARY_PREFIX,
   COMPACTION_SYSTEM_PROMPT,
 } from '../contextManagementConstants';
 import type {
@@ -349,7 +350,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       },
       (summary) => ({
         role: 'user',
-        content: `[Previous conversation summary]\n\n${summary}`,
+        content: `${COMPACTION_SUMMARY_PREFIX}${summary}`,
       }),
     );
   }
