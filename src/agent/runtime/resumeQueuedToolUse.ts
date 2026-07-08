@@ -1,43 +1,21 @@
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
-import type {
-  AgentFlowResult,
-  AgentRuntimeFlowResult,
-} from '@agent/runtime/AgentFlowResult';
-import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
+import type { AgentRuntimeFlowResult } from '@agent/runtime/AgentFlowResult';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type SubagentProgressUpdate,
   type StreamTabId,
 } from '@shared/schemas';
-import { resumeToolUseFromSnapshot } from './executeAgent';
+import {
+  resumeToolUseFromSnapshot,
+  type SubagentRunOptions,
+} from './executeAgent';
 import { emitRuntimeEvent } from './emitRuntimeEvent';
-import { defaultSession, type SessionHandle } from './SessionHandle';
-import type { ToolEditApprovalPort } from '@platform/interfaces';
+import { defaultSession } from './SessionHandle';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
-export interface ResumeQueuedToolUseOptions {
-  /** Session owning this run's coordination state. Defaults to the process session. */
-  readonly session?: SessionHandle;
-  /** Tools hidden because the current host/runtime cannot support them. */
-  readonly runtimeUnavailableTools?: readonly string[];
-  /** Hide tools whose approval prompts cannot be answered in this host mode. */
-  readonly approvalPromptsUnavailable?: boolean;
-  /** Per-run override for the host's tool-edit approval UI — see `ExecuteAgentOptions.toolEditApprovalHandler`. */
-  readonly toolEditApprovalHandler?: ToolEditApprovalPort;
-  /** Parent stream used when a native subagent resumes under its orchestrator. */
-  readonly parentStreamId?: StreamTabId;
-  /** Allow native subagent resume to halt at WAITING instead of terminalizing. */
-  readonly allowWaitingResult?: boolean;
-  readonly onFollowUpConsumed?: () => void;
-  readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  readonly onRunError?: (
-    error: unknown,
-    result: AgentFlowResult,
-  ) => void | Promise<void>;
-  readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
+export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
   /**
    * Fires with the resumed run's raw outcome — terminal or WAITING — right
    * after the call returns successfully. Additive to `onRunError`, which only
@@ -108,7 +86,7 @@ export async function resumeQueuedToolUseSnapshot(
       allowWaitingResult: options.allowWaitingResult,
       onFollowUpConsumed: options.onFollowUpConsumed,
       onProgress: options.onProgress,
-      onError: options.onRunError,
+      onRunError: options.onRunError,
       onRun: options.onRun,
       setupSession: (session) => {
         for (const item of followUps) {

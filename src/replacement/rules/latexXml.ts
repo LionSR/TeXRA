@@ -4,9 +4,9 @@ import {
   generateLatexToXmlConversions,
   LATEX_ENVIRONMENTS,
 } from '@replacement/helpers';
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
-export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
+export const LATEX_XML_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'latex_xml',
   description: 'Fixes specific to XML output processing',
   isRegex: false,

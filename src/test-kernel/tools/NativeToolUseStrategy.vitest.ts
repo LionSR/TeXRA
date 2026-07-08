@@ -133,13 +133,13 @@ describe('NativeToolUseStrategy', () => {
     expect(msg).toContain('status="completed"');
   });
 
-  it('reports a non-throwing subagent failure via isTurnError, captured from onError', async () => {
+  it('reports a non-throwing subagent failure via isTurnError, captured from onRunError', async () => {
     const params = baseParams();
     const strategy = createNativeToolUseStrategy(params);
     const failure = new Error('model overloaded');
 
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onError?.(failure);
+      options.onRunError?.(failure);
       return {
         category: 'toolUse',
         outcome: 'failed',

@@ -1,5 +1,8 @@
 // Local imports - replacement
-import { ReplacementCategory, ReplacementFunction } from '@replacement/types';
+import {
+  RegexReplacementCategory,
+  ReplacementFunction,
+} from '@replacement/types';
 
 const MACRO_TO_ENVIRONMENT: Record<string, string> = {
   be: '\\begin{equation}',
@@ -20,7 +23,7 @@ const expandEquationMacro: ReplacementFunction = (
   return replacement ? `${leading}${replacement}${trailing}` : match;
 };
 
-export const EQUATION_MACRO_REPLACEMENTS: ReplacementCategory = {
+export const EQUATION_MACRO_REPLACEMENTS: RegexReplacementCategory = {
   name: 'equation_macros',
   description:
     'Expands short equation helpers like \\be into full environments',

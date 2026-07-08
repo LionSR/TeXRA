@@ -1,7 +1,7 @@
 // Local imports - replacement
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
-export const GPTNESS_REPLACEMENTS: ReplacementCategory = {
+export const GPTNESS_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'gptness',
   description: 'GPTness improvements',
   isRegex: false,

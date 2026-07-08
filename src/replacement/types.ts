@@ -9,11 +9,23 @@ export type ReplacementFunction = (
 
 export type ReplacementValue = string | ReplacementFunction;
 
-export interface ReplacementCategory {
+/** Plain string substitution, applied via `String.prototype.replaceAll`. */
+export interface NonRegexReplacementCategory {
+  name: string;
+  description: string;
+  patterns: Record<string, string>;
+  isRegex?: false;
+}
+
+/** Regex-based substitution; patterns may be a replacement string or callback. */
+export interface RegexReplacementCategory {
   name: string;
   description: string;
   patterns: Record<string, ReplacementValue>;
-  isRegex?: boolean;
-  /** Regex flags such as 'g'; only consulted when isRegex is true. */
+  isRegex: true;
+  /** Regex flags such as 'g'. */
   flags?: string;
 }
+
+export type ReplacementCategory =
+  NonRegexReplacementCategory | RegexReplacementCategory;

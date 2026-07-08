@@ -1,7 +1,7 @@
 // Local imports - replacement
-import { ReplacementCategory } from '@replacement/types';
+import { NonRegexReplacementCategory } from '@replacement/types';
 
-export const LATEXDIFF_REPLACEMENTS: ReplacementCategory = {
+export const LATEXDIFF_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'latexdiff',
   description: 'Fixes for LaTeXdiff markup and compatibility issues',
   isRegex: false,
