@@ -14,7 +14,7 @@ import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/toolus
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import { retrieveSessionResumeData } from './SessionResumeRetrieval';
-import { StreamStatusService } from './StreamStatusService';
+import type { StreamStatusMachine } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
@@ -27,6 +27,14 @@ interface ResolvedResumeState {
 export interface ResumeStreamPorts {
   /** Runtime host receiving the RESUMING/WAITING status updates. */
   readonly runtimeHost: AgentRuntimeHost;
+  /**
+   * The status machine of the session that owns this stream — per-window on
+   * desktop, the default session's machine in the extension/CLI. The
+   * active/resuming guards must read the machine the run actually writes
+   * (`launchSession.status`); reading the process-global default here left
+   * both guards permanently false in multi-session hosts.
+   */
+  readonly streamStatus: Pick<StreamStatusMachine, 'isActiveOrResuming'>;
   /**
    * Resolve the persisted run state + execution id for a stream, or `undefined`
    * when there is nothing to resume. The host owns any "no state" messaging it
@@ -79,7 +87,7 @@ export async function resolveAndResumeStream(
   ports: ResumeStreamPorts,
 ): Promise<boolean> {
   if (
-    StreamStatusService.isActiveOrResuming(streamId) ||
+    ports.streamStatus.isActiveOrResuming(streamId) ||
     resumeInFlight.has(streamId)
   ) {
     return false;
@@ -114,7 +122,7 @@ export async function resolveAndResumeStream(
     // that flips this stream active/resuming while we awaited retrieval. If that
     // happened, abandon the resume rather than clobbering the launched run's
     // status.
-    if (StreamStatusService.isActiveOrResuming(streamId)) {
+    if (ports.streamStatus.isActiveOrResuming(streamId)) {
       return false;
     }
 
