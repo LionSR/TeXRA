@@ -7,6 +7,7 @@ import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
+  type AppendFollowUpResult,
 } from '@agent/followUp/followUpMessages';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { STREAM_PHASE } from '@shared/schemas';
@@ -185,18 +186,30 @@ export class ToolUseWaitNode<C> extends Node<
     }
 
     for (const followUp of execRes.followUps) {
-      const result = await appendFollowUpAsUserMessage(
-        shared.messages,
-        followUp,
-        this.services,
-      );
-      shared.messages = result.messages;
-      if (!execRes.synthetic) {
-        logUserMessage(
-          logger,
-          followUpDisplayText(followUp),
-          result.attachmentKinds,
+      // A non-synthetic follow-up's transcript row must be logged whether
+      // appendFollowUpAsUserMessage succeeds or throws (e.g. a corrupt/
+      // oversized media file) -- otherwise a failed resume leaves no record
+      // of what the user asked for. `finally` preserves the throw so the
+      // resume still fails as before; a throw before any attachment was
+      // inserted just yields an empty attachments list, which is accurate
+      // (nothing was actually inserted). Synthetic follow-ups are still
+      // never logged, throw or not -- unchanged from before this fix.
+      let result: AppendFollowUpResult | undefined;
+      try {
+        result = await appendFollowUpAsUserMessage(
+          shared.messages,
+          followUp,
+          this.services,
         );
+        shared.messages = result.messages;
+      } finally {
+        if (!execRes.synthetic) {
+          logUserMessage(
+            logger,
+            followUpDisplayText(followUp),
+            result?.attachmentKinds ?? [],
+          );
+        }
       }
     }
 
