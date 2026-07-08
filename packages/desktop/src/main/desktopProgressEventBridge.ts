@@ -26,6 +26,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import type { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import { GoalStore } from '@tools/goal';
+import { toLogData } from './desktopLogUtils.js';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -373,7 +374,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
         await this.opts.streamSnapshotStore.replaceAll([]);
       } catch (error: unknown) {
         this.opts.logger.warn('Failed to clear stream snapshot store', {
-          data: error instanceof Error ? error : { error },
+          data: toLogData(error),
         });
       }
     }
@@ -441,7 +442,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     };
     void store.upsert(snapshot).catch((error: unknown) => {
       this.opts.logger.warn('Failed to persist stream snapshot', {
-        data: error instanceof Error ? error : { error },
+        data: toLogData(error),
       });
     });
   }
@@ -453,7 +454,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     if (!store) return;
     void store.remove(streamId).catch((error: unknown) => {
       this.opts.logger.warn('Failed to remove persisted stream snapshot', {
-        data: error instanceof Error ? error : { error },
+        data: toLogData(error),
       });
     });
   }

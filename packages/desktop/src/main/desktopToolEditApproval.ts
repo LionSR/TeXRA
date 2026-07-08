@@ -1,5 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { nanoid } from 'nanoid';
@@ -27,6 +26,7 @@ import {
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { createTexraTempDir } from './desktopTempDir.js';
 import { setDesktopToolEditApprovalHandler } from './platform/index.js';
 
 export interface DesktopToolEditApprovalOptions {
@@ -168,8 +168,10 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     requestId: string,
     request: ToolEditApprovalRequest,
   ): Promise<DesktopPendingToolEditApproval> {
-    const tempRoot = this.options.tempRoot ?? tmpdir();
-    const tempDir = await mkdtemp(path.join(tempRoot, 'texra-tool-edit-'));
+    const tempDir = await createTexraTempDir(
+      'texra-tool-edit-',
+      this.options.tempRoot,
+    );
     const { originalPath, proposedPath } = await writeApprovalTempFiles({
       directory: tempDir,
       targetPath: request.path,
