@@ -18,6 +18,12 @@ import { StreamStatusService } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
+export interface ResolvedResumeState {
+  readonly runState: AgentConfig | TaskState;
+  readonly executionId: ExecutionId;
+  readonly parentStreamId?: StreamTabId;
+}
+
 export interface ResumeStreamPorts {
   /** Runtime host receiving the RESUMING/WAITING status updates. */
   readonly runtimeHost: AgentRuntimeHost;
@@ -28,9 +34,7 @@ export interface ResumeStreamPorts {
    */
   resolveResumeState(
     streamId: StreamTabId,
-  ): Promise<
-    { runState: AgentConfig | TaskState; executionId: ExecutionId } | undefined
-  >;
+  ): Promise<ResolvedResumeState | undefined>;
   /** Resume a tool-use snapshot (host injects its failure surface). */
   resumeToolUseSnapshot(snapshot: ToolUseSessionSnapshot): Promise<boolean>;
   /**
@@ -87,11 +91,19 @@ export async function resolveAndResumeStream(
     // The host's resolveResumeState owns its own "no persisted state" messaging.
     if (!resolved) return false;
 
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      resolved.executionId,
-      resolved.runState,
-    );
+    const resume =
+      resolved.parentStreamId !== undefined
+        ? await retrieveSessionResumeData(
+            streamId,
+            resolved.executionId,
+            resolved.runState,
+            { parentStreamId: resolved.parentStreamId },
+          )
+        : await retrieveSessionResumeData(
+            streamId,
+            resolved.executionId,
+            resolved.runState,
+          );
     if (!resume) {
       await ports.reportNoResumableSession?.(streamId);
       return false;
