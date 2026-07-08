@@ -2,7 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { selectSetupCredentialModelExcludingOpenRouter } from '@controllers/onboarding/setupLaunch';
+import {
+  resolveSetupLaunchModel,
+  SETUP_INSTRUCTION,
+} from '@controllers/onboarding/setupLaunch';
 import { platform } from '@platform/platform';
 import { loadAgents } from '@agent/index';
 import { registerExecution } from '@agent/storage';
@@ -19,11 +22,7 @@ import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import * as logger from '@logger/logUtils';
-import {
-  CHATGPT_SETUP_MODEL,
-  SETUP_MODEL_BY_PROVIDER,
-} from '@model/setupModelDefaults';
-import { decideRunModel } from '@model/runModelDecision';
+import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
@@ -31,15 +30,12 @@ import {
 } from '@shared/copy/onboarding';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { generateExecutionId } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const CHANNEL = 'SetupAssistant';
 logger.initialize(CHANNEL);
-
-const SETUP_INSTRUCTION =
-  'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
 
 interface LaunchModelResolution {
   model: string;
@@ -47,40 +43,18 @@ interface LaunchModelResolution {
 }
 
 /**
- * Pure model selection. The caller already validated that a globally-enabled
- * OpenRouter route has a key; the OR-only fallback still needs a scoped flag
- * flip before launch.
+ * The extension additionally offers the OpenRouter access-list model as a
+ * last resort (`ensureRoutingConfigured` already prompted the user, so the
+ * fallback's flag flip is expected, unlike desktop's silent-launch path).
  */
 async function selectLaunchModel(): Promise<LaunchModelResolution | null> {
-  const useOpenRouter = getUseOpenRouter();
-  const openRouterModel = useOpenRouter
-    ? SETUP_MODEL_BY_PROVIDER.openRouter
-    : (await SecretManager.hasUsableApiKey('openRouter'))
-      ? SETUP_MODEL_BY_PROVIDER.openRouter
-      : undefined;
-  const credentialModel = useOpenRouter
-    ? undefined
-    : await selectSetupCredentialModelExcludingOpenRouter(platform().secrets);
-  const decision = decideRunModel([
-    {
-      model: useOpenRouter ? openRouterModel : undefined,
-      reason: 'router-config',
-    },
-    {
-      model: credentialModel,
-      reason: 'credential',
-    },
-    {
-      model: useOpenRouter ? undefined : openRouterModel,
-      reason: 'access-list-default',
-    },
-  ]);
-  if (!decision) return null;
+  const resolution = await resolveSetupLaunchModel(platform().secrets, true);
+  if (!resolution) return null;
   return {
-    model: decision.model,
+    model: resolution.model,
     requiresOpenRouter:
-      decision.reason === 'router-config' ||
-      decision.reason === 'access-list-default',
+      resolution.reason === 'router-config' ||
+      resolution.reason === 'access-list-default',
   };
 }
 

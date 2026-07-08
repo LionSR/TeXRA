@@ -17,12 +17,15 @@ import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  COMMIT_LABEL_FORMAT,
+  splitCommitLines,
+} from '@utils/git/commitLogFormat';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'gitCommands';
 logger.initialize(CHANNEL);
 
-const COMMIT_LABEL_FORMAT = '%h: %s (%cr)';
 const COMMIT_HASH_PATTERN = /^[0-9a-fA-F]{4,40}$/;
 const OVERLEAF_GIT_TOKEN_URL = 'https://www.overleaf.com/user/settings';
 const OVERLEAF_TOKEN_DOCS_URL =
@@ -98,7 +101,7 @@ function getRecentCommits(rootPath?: string): string[] | null {
   if (result.exitCode !== 0) {
     return [];
   }
-  return result.stdout.split('\n').map((line) => line.trim());
+  return splitCommitLines(result.stdout);
 }
 
 function findCommitInHistory(
