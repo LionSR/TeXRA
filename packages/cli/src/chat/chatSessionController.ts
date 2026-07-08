@@ -22,7 +22,6 @@ import {
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
@@ -247,18 +246,12 @@ export function createChatSessionController(
     const detachTuiRunFacts = attachTuiRunFactSubscription(
       defaultSession().events,
     );
-    const detachSessionProgressProjection =
-      attachSessionProgressEventProjection(
-        defaultSession().events,
-        interactiveHost,
-      );
     return {
       wrapped: interactiveHost,
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
       finalize: (): void => {
         detachResultToast();
         detachTuiRunFacts();
-        detachSessionProgressProjection();
         detachHostInteractions();
         if (session.runtimeHost === interactiveHost) {
           session.runtimeHost = undefined;
