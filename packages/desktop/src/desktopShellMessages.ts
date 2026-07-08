@@ -16,7 +16,3 @@ export const DesktopSetRouteMessageSchema = z.object({
   command: z.literal(DESKTOP_SHELL_COMMANDS.SET_ROUTE),
   route: DesktopRouteSchema,
 });
-
-export type DesktopSetRouteMessage = z.infer<
-  typeof DesktopSetRouteMessageSchema
->;
