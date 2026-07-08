@@ -26,7 +26,7 @@ export type LatexProbeTool = (typeof LATEX_PROBE_TOOLS)[number];
 
 export type LatexPathTool = Exclude<LatexProbeTool, 'perl'>;
 
-export type LatexRecommendedStatus = Pick<
+type LatexRecommendedStatus = Pick<
   LatexSettingsStatus,
   'outDir' | 'autoRevealExclude'
 >;

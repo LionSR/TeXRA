@@ -64,7 +64,7 @@ function getAcceptAction(isNewFile: boolean, targetExists: boolean): string {
  * workspace. Shared by the VS Code command and the desktop bridge so both
  * hosts surface identical wording.
  */
-export function buildAcceptConfirmMessage(
+function buildAcceptConfirmMessage(
   target: AcceptedFileTarget,
   basePath: string,
   editedPath: string,

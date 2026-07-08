@@ -22,7 +22,7 @@ export interface AcceptCopyMeta {
   round: number;
 }
 
-export interface ProgressWorkflowFileActionsState {
+interface ProgressWorkflowFileActionsState {
   getActiveStream(): StreamTabId | '';
   getExecutionId(stream: StreamTabId): string | undefined;
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
@@ -31,7 +31,7 @@ export interface ProgressWorkflowFileActionsState {
   ): { agent: string; model: string } | undefined;
 }
 
-export interface ProgressWorkflowFileActionsHost {
+interface ProgressWorkflowFileActionsHost {
   compareFiles(baseFile: string, editedFile: string): Promise<void>;
   acceptEditedFile(
     baseFile: string,

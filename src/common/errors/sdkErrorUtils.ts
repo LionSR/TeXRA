@@ -7,7 +7,6 @@
  */
 export {
   type SdkErrorKind,
-  type SdkErrorMetadata,
   sdkErrorKindFromStatusCode,
   isRetryableStatusCode,
 } from './sdkError/sdkErrorKinds';
@@ -25,7 +24,6 @@ export {
 export {
   type ConnectTrackableStream,
   type StreamConnectTracker,
-  type StreamingFailureHooks,
   annotateStreamFailure,
   handleStreamingFailure,
   trackStreamConnect,
@@ -55,5 +53,4 @@ export { isRelayMonthlyLimitMessage } from './sdkError/relayDetection';
 export {
   parseChatGptSubscriptionLimit,
   describeChatGptSubscriptionLimit,
-  type ChatGptSubscriptionLimit,
 } from './sdkError/chatgptSubscriptionDetection';

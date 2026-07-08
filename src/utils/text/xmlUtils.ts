@@ -27,6 +27,4 @@ export {
   extractContentFromXMLbyTagMultiple,
   extractScratchpad,
   extractDocuments,
-  type ExtractionResult,
-  type MultipleExtractionResult,
 } from './xmlExtraction';

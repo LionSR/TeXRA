@@ -20,7 +20,7 @@ import type { MathMarkupOption } from './latexdiff/mathMarkup';
 // LaTeXdiff Result Schemas
 // ============================================================================
 
-export const LaTeXdiffResultSchema = z.object({
+const LaTeXdiffResultSchema = z.object({
   success: z.boolean(),
   diffFileName: z.string().optional(),
   message: z.string().optional(),

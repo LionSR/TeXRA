@@ -10,7 +10,7 @@ export const MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES = [
   'media',
 ] as const satisfies readonly MultipleDocumentFileType[];
 
-export type MainViewAttachableDropCategory =
+type MainViewAttachableDropCategory =
   (typeof MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES)[number];
 
 export type MainViewAllowedDropExtensions = Readonly<
