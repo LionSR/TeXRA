@@ -392,7 +392,7 @@ export class StreamLogStore {
       });
     }
 
-    const affected = this.endRunningGroupsInLoadedLogs(now, undefined, status);
+    const affected = this.endRunningEntriesInLoadedLogs(now, undefined, status);
     if (affected.length > 0) {
       void this.save();
     }
@@ -416,7 +416,7 @@ export class StreamLogStore {
       });
     }
 
-    const affected = this.endRunningGroupsInLoadedLogs(
+    const affected = this.endRunningEntriesInLoadedLogs(
       now,
       new Set(streamIds),
       status,
@@ -428,7 +428,7 @@ export class StreamLogStore {
     return affected;
   }
 
-  private endRunningGroupsInLoadedLogs(
+  private endRunningEntriesInLoadedLogs(
     now: number,
     streamIds?: ReadonlySet<StreamTabId>,
     status: EndGroupStatus = END_GROUP_STATUS.ERROR,

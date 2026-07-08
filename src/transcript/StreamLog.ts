@@ -1,6 +1,6 @@
 import {
-  MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  STREAMING_TEXT_MESSAGE_TYPES,
   type StreamLogEntry,
   type StreamLogTextDelta,
 } from '@shared/schemas';
@@ -22,12 +22,6 @@ export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
   const status = typeof data.status === 'string' ? data.status : 'running';
   return status === 'running';
 }
-
-const STREAMING_TEXT_MESSAGE_TYPES = new Set<string>([
-  MESSAGE_TYPES.THINKING,
-  MESSAGE_TYPES.SCRATCHPAD,
-  MESSAGE_TYPES.MODEL_RESPONSE,
-]);
 
 /**
  * True for a thinking/scratchpad/model-response entry left at

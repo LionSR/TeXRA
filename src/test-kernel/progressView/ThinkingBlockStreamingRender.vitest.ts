@@ -134,4 +134,28 @@ describe('thinking block renders as a banner while streaming', () => {
     expect(runningContainer.querySelector('strong')).toBeNull();
     expect(runningDetails?.hasAttribute('open')).toBe(true);
   });
+
+  it('resolves the scratchpad banner config (pencil icon, "Scratchpad" label), not the thinking default', async () => {
+    const { formatLogEntry } =
+      await import('@progressView/frontend/formatters');
+    const { render } = await import('lit');
+
+    const message: LogMessageData = {
+      id: 'scratch-1',
+      text: 'jotting down a formula',
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.SCRATCHPAD,
+      data: { status: 'running' },
+    };
+
+    const container = document.createElement('div');
+    render(formatLogEntry(message), container);
+
+    const details = container.querySelector('details.banner-details');
+    expect(details).not.toBeNull();
+    expect(details?.hasAttribute('open')).toBe(true);
+    expect(container.textContent).toContain('Scratchpad');
+    expect(container.querySelector('wa-icon[name="pencil"]')).not.toBeNull();
+  });
 });
