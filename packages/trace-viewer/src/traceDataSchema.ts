@@ -74,6 +74,7 @@ const TraceExecutionMetaSchema = z.object({
   category: z.string().optional(),
   description: z.string().optional(),
   delegationDepth: z.int().nonnegative().optional(),
+  streamId: StreamTabIdSchema.optional(),
 });
 
 export const TraceDataSchema = z.object({
