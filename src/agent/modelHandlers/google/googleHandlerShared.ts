@@ -206,9 +206,7 @@ export async function uploadGoogleMediaEntries<T>(
     }
 
     const canUseSourcePath =
-      entry.source_path &&
-      entry.source_path.length > 0 &&
-      entry.bytes_match_source !== false;
+      entry.source_path && entry.bytes_match_source !== false;
     if (!canUseSourcePath) {
       logger.error(
         `Skipping media entry ${fileName} due to missing upload source`,

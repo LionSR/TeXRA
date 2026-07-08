@@ -27,7 +27,7 @@ interface DeliveryEnvelopeParams {
 
 function formatDeliveryEnvelope(params: DeliveryEnvelopeParams): string {
   const attrs = params.attributes
-    .filter((attr) => attr.value !== null && attr.value !== undefined)
+    .filter((attr) => attr.value != null)
     .map((attr) => `${attr.name}="${escapeAttr(String(attr.value))}"`)
     .join(' ');
   const open = attrs ? `<${params.tag} ${attrs}>` : `<${params.tag}>`;

@@ -258,18 +258,12 @@ export class ProgressWorkflowFileActionsController {
     // Use the matched entry's own `round` and prefer the most recent match:
     // in-place workflows reuse the same workspace path across rounds, so the
     // Map key (and the first match) would mislabel the `r<round>` postfix.
-    let round: number | undefined;
-    for (const infos of Object.values(this.deps.state.getOutputFiles(stream))) {
-      for (const info of infos) {
-        if (
-          info.location.absolutePath === file &&
-          (round === undefined || info.round > round)
-        ) {
-          round = info.round;
-        }
-      }
-    }
-    if (round === undefined) return undefined;
+    const rounds = Object.values(this.deps.state.getOutputFiles(stream))
+      .flat()
+      .filter((info) => info.location.absolutePath === file)
+      .map((info) => info.round);
+    if (rounds.length === 0) return undefined;
+    const round = rounds.reduce((max, r) => Math.max(max, r));
 
     return { agent: config.agent, model: config.model, round };
   }
@@ -277,14 +271,12 @@ export class ProgressWorkflowFileActionsController {
   private findOutputDirectory(
     runOutputs: RoundIndexed<OutputFileInfo>,
   ): string | undefined {
-    for (const infos of Object.values(runOutputs)) {
-      for (const info of infos) {
-        const kind = info.location.kind;
-        if (kind === 'runStorage' || kind === 'workspace') {
-          return path.dirname(info.location.absolutePath);
-        }
-      }
-    }
-    return undefined;
+    const match = Object.values(runOutputs)
+      .flat()
+      .find(
+        ({ location }) =>
+          location.kind === 'runStorage' || location.kind === 'workspace',
+      );
+    return match ? path.dirname(match.location.absolutePath) : undefined;
   }
 }

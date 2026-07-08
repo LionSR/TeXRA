@@ -129,10 +129,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       return undefined;
     }
 
-    const isImage = mimeType.startsWith('image/');
-    const isPdf = mimeType === 'application/pdf';
-
-    if (isImage || isPdf) {
+    if (mimeType.startsWith('image/') || mimeType === 'application/pdf') {
       return PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH;
     }
     // Videos use default which is optimal
@@ -363,12 +360,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         `Sending message with ${lastMessageParts.length} parts.`,
       );
 
+      const messageParams: SendMessageParameters = {
+        message: [...lastMessageParts],
+        config: { ...generationConfig, abortSignal: signal },
+      };
       if (useStreaming) {
-        const streamParams: SendMessageParameters = {
-          message: [...lastMessageParts],
-          config: { ...generationConfig, abortSignal: signal },
-        };
-        const stream = await chat.sendMessageStream(streamParams);
+        const stream = await chat.sendMessageStream(messageParams);
 
         // Opened before the request; the deferred starts fire (if ever) at
         // the first thought/text part — the phase signal for this API.
@@ -465,22 +462,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         // Part.thought is a native property of the Google GenAI SDK Part interface
         const candidateContent = baseResponse.candidates?.[0]?.content;
         if (candidateContent?.parts) {
-          const filteredParts = candidateContent.parts.filter(
+          // Update the parts array; the SDK will compute the text property from it
+          candidateContent.parts = candidateContent.parts.filter(
             (part) => !part.thought,
           );
-          // Update the parts array; the SDK will compute the text property from it
-          candidateContent.parts = filteredParts;
         }
 
         return { response: baseResponse };
       }
 
-      const sendParams: SendMessageParameters = {
-        message: [...lastMessageParts],
-        config: { ...generationConfig, abortSignal: signal },
-      };
-
-      const response = await chat.sendMessage(sendParams);
+      const response = await chat.sendMessage(messageParams);
       return { response };
     } catch (error) {
       return handleStreamingFailure(error, {
@@ -689,7 +680,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       };
     }
 
-    if (!responseObject.candidates || responseObject.candidates.length === 0) {
+    if (!responseObject.candidates?.length) {
       if (responseObject?.promptFeedback?.blockReason) {
         const { blockReason, safetyRatings } = responseObject.promptFeedback;
         this.logger.error(`Request blocked: ${blockReason}`, {
@@ -967,7 +958,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         (part): part is FunctionResponsePart => part !== null,
       );
 
-      if (attachmentParts.length === 0 && attachments.length > 0) {
+      if (attachmentParts.length === 0) {
         this.logger.warn(
           `All attachments for Google function response '${call.name}' failed to encode.`,
         );

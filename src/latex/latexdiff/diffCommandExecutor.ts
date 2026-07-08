@@ -7,7 +7,7 @@ import { getConfig } from '@utils/config/configUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 // Local file imports
-import { DEFAULT_MATH_MARKUP, type MathMarkupOption } from './mathMarkup';
+import type { MathMarkupOption } from './mathMarkup';
 
 const DEFAULT_PICTURE_ENVS =
   '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';
