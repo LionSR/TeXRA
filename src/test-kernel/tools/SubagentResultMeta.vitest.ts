@@ -42,22 +42,30 @@ describe('buildSubagentResultMeta', () => {
 
     expect(ResultMetaSchema.parse(meta)).toEqual(meta);
     expect(meta).toMatchObject({
+      producer: 'subagent',
       agentName: 'merge',
-      category: 'workflow',
       outcome: 'completed',
       success: true,
       wallTimeMs: 1234,
       totalCostUsd: 0.42,
-      outputs: [OUTPUT],
-      diffs: [
-        {
-          path: OUTPUT.absolutePath,
-          diffRelPath: 'diffs/r0_output.tex.diff',
-          largeChange: false,
-        },
-      ],
+      result: {
+        category: 'workflow',
+        outputs: [OUTPUT],
+        diffs: [
+          {
+            path: OUTPUT.absolutePath,
+            diffRelPath: 'diffs/r0_output.tex.diff',
+            largeChange: false,
+          },
+        ],
+      },
     });
-    expect(meta.compileFailures).toBeUndefined();
+    expect(meta.result?.category).toBe('workflow');
+    expect(
+      meta.result?.category === 'workflow'
+        ? meta.result.compileFailures
+        : undefined,
+    ).toBeUndefined();
   });
 
   it('records diffsUnavailable in the manifest when diff generation failed', () => {
@@ -75,8 +83,15 @@ describe('buildSubagentResultMeta', () => {
     });
 
     expect(ResultMetaSchema.parse(meta)).toEqual(meta);
-    expect(meta.diffs).toBeUndefined();
-    expect(meta.diffsUnavailable).toBe('latexdiff crashed');
+    expect(meta.result?.category).toBe('workflow');
+    expect(
+      meta.result?.category === 'workflow' ? meta.result.diffs : undefined,
+    ).toBeUndefined();
+    expect(
+      meta.result?.category === 'workflow'
+        ? meta.result.diffsUnavailable
+        : undefined,
+    ).toBe('latexdiff crashed');
   });
 
   it('builds a schema-valid manifest for tool-use results', () => {
@@ -94,14 +109,16 @@ describe('buildSubagentResultMeta', () => {
 
     expect(ResultMetaSchema.parse(meta)).toEqual(meta);
     expect(meta).toMatchObject({
+      producer: 'subagent',
       agentName: 'reviewer',
-      category: 'toolUse',
       success: true,
-      lastResponse: 'All findings verified.',
-      touchedFiles: ['notes.md'],
+      result: {
+        category: 'toolUse',
+        lastResponse: 'All findings verified.',
+        touchedFiles: ['notes.md'],
+      },
     });
-    expect(meta.outputs).toBeUndefined();
-    expect(meta.diffs).toBeUndefined();
+    expect(meta.result?.category).toBe('toolUse');
   });
 
   it('failure manifest overwrites interim success and never claims success', () => {
@@ -130,6 +147,7 @@ describe('buildSubagentResultMeta', () => {
     const meta = buildSubagentFailureResultMeta('merge', undefined, 10);
     expect(ResultMetaSchema.parse(meta)).toEqual(meta);
     expect(meta).toEqual({
+      producer: 'subagent',
       agentName: 'merge',
       outcome: 'failed',
       success: false,

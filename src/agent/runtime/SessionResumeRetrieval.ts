@@ -20,7 +20,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
+import { ProviderMessageArraySchema } from '@agent/modelHandlers/types/ProviderMessage';
 import {
   migrateSharedState,
   StateSlicesSchema,
@@ -67,7 +67,7 @@ export interface SessionResumeRetrievalOptions {
 }
 
 const CurrentToolUseFlowRecordStateSchema = z.looseObject({
-  messages: z.array(ProviderMessageSchema),
+  messages: ProviderMessageArraySchema,
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
   stateSlices: StateSlicesSchema,
 });
@@ -94,12 +94,18 @@ function throwIfResumeStorageUnreadable(
  * Minimal schema for validating workflow flow record exists and has resumable state.
  * Full validation happens when the flow actually resumes.
  */
-const WorkflowFlowRecordStateSchema = z.object({
-  currentRound: z.int().nonnegative(),
-  totalRounds: z.int().nonnegative(),
-  conversation: z.array(ProviderMessageSchema).prefault([]),
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
-});
+const WorkflowFlowRecordStateSchema = z
+  .looseObject({
+    currentRound: z.int().nonnegative(),
+    totalRounds: z.int().nonnegative(),
+    conversation: ProviderMessageArraySchema.nullish(),
+    messages: ProviderMessageArraySchema.nullish(),
+    modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
+  })
+  .transform(({ messages, conversation, ...state }) => ({
+    ...state,
+    conversation: conversation ?? messages ?? [],
+  }));
 
 /**
  * Retrieve resume data for a WAITING session.

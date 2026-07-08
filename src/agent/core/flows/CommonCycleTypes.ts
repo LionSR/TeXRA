@@ -8,7 +8,7 @@ import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState'
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import {
-  ProviderMessageSchema,
+  ProviderMessageArraySchema,
   type ProviderMessage,
 } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
@@ -20,7 +20,7 @@ import { formatPostCompactionContext } from '@tools/subagentResults';
 
 /** Base schema for fields common to all cycle flows. */
 export const BaseCycleFieldsSchema = z.object({
-  messages: z.array(ProviderMessageSchema),
+  messages: ProviderMessageArraySchema,
   shouldStop: z.boolean(),
   /** Distinguishes: completion (true) vs cancellation/failure (false) */
   endTurn: z.boolean(),

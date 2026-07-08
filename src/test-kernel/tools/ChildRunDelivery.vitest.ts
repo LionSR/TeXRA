@@ -56,6 +56,7 @@ describe('child run delivery', () => {
 
   it('persists result manifests through the execution store', async () => {
     const resultMeta = {
+      producer: 'subagent',
       agentName: 'review',
       outcome: 'completed',
       success: true,
