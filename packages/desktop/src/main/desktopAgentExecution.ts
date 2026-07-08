@@ -1168,6 +1168,10 @@ export class DesktopProgressBridge {
 
     return resolveAndResumeStream(streamId, {
       runtimeHost: this.runtimeHost,
+      // Desktop runs write status to this window's session machine, so the
+      // resume guards must read the same machine (the process-global default
+      // is never populated here).
+      streamStatus: this.session.status,
       resolveResumeState: async (id) => {
         const resumeState = await this.resolveResumeState(id);
         if (!resumeState) {
