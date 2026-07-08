@@ -95,6 +95,7 @@ const PHYSICIST_LOCAL_TOOL_USE_AGENTS = [
   'presenter',
 ].join('||');
 const PHYSICIST_WORKFLOW_AGENTS = ['correct', 'polish'].join('||');
+const TWO_OPENAI_MODELS = ['gpt55', 'gpt55pro'].join('||');
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
@@ -822,6 +823,7 @@ const SCENARIOS = [
     env: {
       HARNESS_CAN_SELECT_MODEL: '1',
       HARNESS_ENTRIES: '4',
+      HARNESS_VISIBLE_MODELS: TWO_OPENAI_MODELS,
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
@@ -870,6 +872,7 @@ const SCENARIOS = [
     env: {
       HARNESS_CAN_SELECT_MODEL: '1',
       HARNESS_ENTRIES: '4',
+      HARNESS_VISIBLE_MODELS: TWO_OPENAI_MODELS,
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r', '\r'],
@@ -886,6 +889,7 @@ const SCENARIOS = [
     env: {
       HARNESS_CAN_SELECT_MODEL: '1',
       HARNESS_ENTRIES: '4',
+      HARNESS_VISIBLE_MODELS: TWO_OPENAI_MODELS,
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r', '21'],
@@ -1074,6 +1078,7 @@ const SCENARIOS = [
     cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
+      HARNESS_VISIBLE_MODELS: TWO_OPENAI_MODELS,
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
