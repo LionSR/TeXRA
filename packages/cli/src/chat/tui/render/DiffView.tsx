@@ -212,7 +212,7 @@ function overflowMarkerText(
   return (
     candidates.find(
       (candidate) => textDisplayWidth(candidate) <= markerWidth,
-    ) ?? clipToWidth(candidates.at(-1) ?? '', markerWidth)
+    ) ?? clipToWidth(candidates[1], markerWidth)
   );
 }
 

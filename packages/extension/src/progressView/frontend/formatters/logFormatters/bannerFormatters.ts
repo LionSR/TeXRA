@@ -12,7 +12,6 @@ import type { LogMessageData } from '@shared/schemas';
 import {
   html,
   unsafeHTML,
-  classMap,
   ifDefined,
   type FormatResult,
 } from '../litTemplates';
@@ -105,20 +104,8 @@ export function formatModelResponseTemplate(
   // banner-content--streaming whitespace note).
   // prettier-ignore
   const contentTemplate = options?.isRunning
-    ? html`<div class=${classMap({
-        'banner-content': true,
-        'banner-content--streaming': true,
-        'log-entry-content': true,
-        'banner-content--model': true,
-        [`message-${level}`]: true,
-      })}>${trimmedContent}</div>`
-    : html`<div class=${classMap({
-        'banner-content': true,
-        'markdown-content': true,
-        'log-entry-content': true,
-        'banner-content--model': true,
-        [`message-${level}`]: true,
-      })}>${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
+    ? html`<div class="banner-content banner-content--streaming log-entry-content banner-content--model message-${level}">${trimmedContent}</div>`
+    : html`<div class="banner-content markdown-content log-entry-content banner-content--model message-${level}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 
   // prettier-ignore
   return html`<details class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
