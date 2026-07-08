@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
 import type { HostInteractionResolution } from '@agent/runtime/HostInteractions';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
@@ -34,6 +36,7 @@ interface DesktopHostInteractions {
 interface DesktopHostInteractionsModule {
   createDesktopHostInteractions(options: {
     runtimeHost: { emit: (event: string, payload: unknown) => void };
+    session?: SessionHandle;
     getApprovalHandlers(): unknown;
     getToolEditApprovals(): unknown;
   }): DesktopHostInteractions;
@@ -73,21 +76,31 @@ async function createInteractions(handlers = createHandlers()) {
   const { createDesktopHostInteractions } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopHostInteractions.ts'))
   )) as DesktopHostInteractionsModule;
+  const runtimeHost = { emit: vi.fn() };
+  const session = new SessionHandle();
+  const sessionEvents: SessionEvent[] = [];
+  session.events.subscribe((event) => sessionEvents.push(event), {
+    scope: 'session',
+  });
 
   return {
     interactions: createDesktopHostInteractions({
-      runtimeHost: { emit: vi.fn() },
+      runtimeHost,
+      session,
       getApprovalHandlers: () => handlers,
       getToolEditApprovals: () => ({}),
     }),
     handlers,
+    runtimeHost,
+    sessionEvents,
   };
 }
 
 describe('createDesktopHostInteractions', () => {
   it('rejects a resolution whose kind does not match the pending request', async () => {
     const handlers = createHandlers();
-    const { interactions } = await createInteractions(handlers);
+    const { interactions, runtimeHost, sessionEvents } =
+      await createInteractions(handlers);
 
     const resultPromise = interactions.requestBashApproval({
       command: 'echo hi',
@@ -106,6 +119,18 @@ describe('createDesktopHostInteractions', () => {
       interactions.resolve(requestId, { kind: 'bash', action: 'approve' }),
     ).toBe(true);
     await expect(resultPromise).resolves.toEqual({ accepted: true });
+    expect(runtimeHost.emit).toHaveBeenCalledWith(
+      'requestEnsureProgressView',
+      {},
+    );
+    expect(runtimeHost.emit).not.toHaveBeenCalledWith(
+      'setActiveStream',
+      expect.anything(),
+    );
+    expect(sessionEvents).toContainEqual({
+      scope: 'session',
+      event: { type: 'setActiveStream', payload: { streamId: 'stream-a' } },
+    });
   });
 
   it('forwards a cancellation cause as bash reject feedback', async () => {
