@@ -1,9 +1,9 @@
 import type { AgentEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@agent/runtime/hostProgressEvents';
+  AgentRuntimeProgressEvent,
+  AgentRuntimeProgressEventPayloads,
+} from '@agent/runtime/agentRuntimeProgressEvents';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type {
@@ -20,11 +20,11 @@ import {
 import { isObject } from '@utils/core';
 
 type ProjectedProgressEvent = {
-  [K in ProgressEvent]: {
+  [K in AgentRuntimeProgressEvent]: {
     readonly event: K;
-    readonly payload: ProgressEventPayloads[K];
+    readonly payload: AgentRuntimeProgressEventPayloads[K];
   };
-}[ProgressEvent];
+}[AgentRuntimeProgressEvent];
 
 function projectSessionFactToProgressEvent(
   fact: SessionFact,
@@ -115,7 +115,8 @@ function projectRunFactToProgressEvent(
     }
     return {
       event: factName,
-      payload: event.data as unknown as ProgressEventPayloads[typeof factName],
+      payload:
+        event.data as unknown as AgentRuntimeProgressEventPayloads[typeof factName],
     } as ProjectedProgressEvent;
   }
 
