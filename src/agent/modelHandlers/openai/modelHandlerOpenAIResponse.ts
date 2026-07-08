@@ -978,9 +978,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       (summary): ResponseInputItem => ({
         type: 'message',
         role: 'user',
-        content: [
-          createInputText(`${COMPACTION_SUMMARY_PREFIX}${summary}`),
-        ],
+        content: [createInputText(`${COMPACTION_SUMMARY_PREFIX}${summary}`)],
       }),
     );
 

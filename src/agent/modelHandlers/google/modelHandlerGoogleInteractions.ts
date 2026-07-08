@@ -1844,9 +1844,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       },
       (summary): Step => ({
         type: 'user_input',
-        content: [
-          this.textContent(`${COMPACTION_SUMMARY_PREFIX}${summary}`),
-        ],
+        content: [this.textContent(`${COMPACTION_SUMMARY_PREFIX}${summary}`)],
       }),
     );
   }
