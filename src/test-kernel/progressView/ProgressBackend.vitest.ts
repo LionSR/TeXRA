@@ -977,6 +977,57 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('drops malformed updateTodos/updatePlan run facts instead of forwarding them unchecked (#7562)', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const subscription = backend.setupEventListeners();
+    const handleProgressEvent = vi.spyOn(
+      backend.eventHandler,
+      'handleProgressEvent',
+    );
+    const updateTodos = vi.spyOn(backend.webviewUpdater, 'updateTodos');
+    const updatePlan = vi.spyOn(backend.webviewUpdater, 'updatePlan');
+    const streamId = 'session:malformed-todos-plan' as StreamTabId;
+
+    try {
+      await backend.state.snapshots.load([]);
+      backend.handleProgressEvent('setActiveStream', {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
+      handleProgressEvent.mockClear();
+      updateTodos.mockClear();
+      updatePlan.mockClear();
+
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updateTodos'),
+          data: { streamId, todos: 'not-an-array' },
+        },
+      });
+      session.events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'domain',
+          key: toRunFactDomainKey('updatePlan'),
+          data: { streamId, plan: { steps: ['legacy shape'] } },
+        },
+      });
+
+      expect(handleProgressEvent).not.toHaveBeenCalled();
+      expect(updateTodos).not.toHaveBeenCalled();
+      expect(updatePlan).not.toHaveBeenCalled();
+    } finally {
+      subscription.dispose();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('no-ops session output-file run facts after dispose', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
