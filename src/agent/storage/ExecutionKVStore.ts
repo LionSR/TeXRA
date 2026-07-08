@@ -19,6 +19,7 @@ import * as logger from '@logger/logUtils';
 import {
   ExecutionIdSchema,
   RunOutcomeSchema,
+  StreamTabIdSchema,
   executionStatusToRunOutcome,
   type ExecutionId,
   type RunOutcome,
@@ -73,6 +74,14 @@ const ExecutionMetaBaseSchema = z.object({
    * having to walk a potentially broken parent chain.
    */
   delegationDepth: z.int().nonnegative().optional(),
+  /**
+   * The transcript stream this execution's data lives under, once resolved.
+   * Decide-once-carry-as-data cache for `resolvePersistedStreamIdForExecution`
+   * (`executionStreamResolver.ts`): absent on executions whose stream wasn't
+   * resolved yet (or predate this field), in which case the resolver falls
+   * back to its full meta-scan.
+   */
+  streamId: StreamTabIdSchema.optional(),
 });
 
 export const ExecutionMetaSchema = ExecutionMetaBaseSchema.transform(
