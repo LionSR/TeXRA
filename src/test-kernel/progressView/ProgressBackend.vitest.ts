@@ -717,9 +717,10 @@ describe('ProgressBackend', () => {
     expect(backend.state.activeStream).not.toBe(streamId);
   });
 
-  it('applies session run facts through the guarded applier', async () => {
+  it('applies session run facts through the fact-native handler', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
+    const handleRunFact = vi.spyOn(backend.eventHandler, 'handleRunFact');
     const handleProgressEvent = vi.spyOn(
       backend.eventHandler,
       'handleProgressEvent',
@@ -767,9 +768,9 @@ describe('ProgressBackend', () => {
     };
     const todos: TodoItem[] = [
       {
-        content: 'Preserve session fact projection',
+        content: 'Preserve session fact handling',
         status: 'pending',
-        activeForm: 'Preserving session fact projection',
+        activeForm: 'Preserving session fact handling',
       },
     ];
     const plan: Plan = {
@@ -782,6 +783,7 @@ describe('ProgressBackend', () => {
         streamId,
         agentCategory: AgentCategory.Workflow,
       });
+      handleRunFact.mockClear();
       handleProgressEvent.mockClear();
       updateFiles.mockClear();
       updateMissingOutputs.mockClear();
@@ -874,6 +876,7 @@ describe('ProgressBackend', () => {
         },
       });
 
+      expect(handleRunFact).toHaveBeenCalledTimes(7);
       expect(handleProgressEvent).toHaveBeenCalledTimes(7);
       expect(handleProgressEvent).toHaveBeenNthCalledWith(1, 'addOutputFiles', {
         streamId,
@@ -977,6 +980,7 @@ describe('ProgressBackend', () => {
   it('no-ops session output-file run facts after dispose', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const subscription = backend.setupEventListeners();
+    const handleRunFact = vi.spyOn(backend.eventHandler, 'handleRunFact');
     const handleProgressEvent = vi.spyOn(
       backend.eventHandler,
       'handleProgressEvent',
@@ -1002,6 +1006,7 @@ describe('ProgressBackend', () => {
         streamId,
         agentCategory: AgentCategory.Workflow,
       });
+      handleRunFact.mockClear();
       handleProgressEvent.mockClear();
       updateFiles.mockClear();
       backend.dispose();
@@ -1019,6 +1024,7 @@ describe('ProgressBackend', () => {
         },
       });
 
+      expect(handleRunFact).not.toHaveBeenCalled();
       expect(handleProgressEvent).not.toHaveBeenCalled();
       expect(updateFiles).not.toHaveBeenCalled();
       expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({});
@@ -1052,6 +1058,11 @@ describe('ProgressBackend', () => {
       },
     });
     const subscription = backend.setupEventListeners();
+    const handleSessionFact = vi.spyOn(
+      backend.eventHandler,
+      'handleSessionFact',
+    );
+    const handleRunFact = vi.spyOn(backend.eventHandler, 'handleRunFact');
     const streamId = 'session:observer' as StreamTabId;
     const todos: TodoItem[] = [
       {
@@ -1091,6 +1102,8 @@ describe('ProgressBackend', () => {
         },
       });
 
+      expect(handleSessionFact).toHaveBeenCalledTimes(1);
+      expect(handleRunFact).toHaveBeenCalledTimes(2);
       expect(observed).toEqual([
         { event: 'goalStateChanged', payload: { streamId } },
         { event: 'updateTodos', payload: { streamId, todos } },
@@ -1103,7 +1116,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('handles direct session events with the same backend effects as host projection', async () => {
+  it('handles session facts with the same backend effects as host progress events', async () => {
     const direct = createIsolatedRecordingBackend();
     const legacyEquivalent = createIsolatedRecordingBackend();
     const directSubscription = direct.backend.setupEventListeners();
