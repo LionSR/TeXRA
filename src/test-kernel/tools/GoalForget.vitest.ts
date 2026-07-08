@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createRecordingHost } from '@test/agent/progressTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { GoalStore } from '@tools/goal';
+import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 
 const STREAM_A = 'stream:forget-a' as StreamTabId;
 const STREAM_B = 'stream:forget-b' as StreamTabId;
@@ -40,6 +43,64 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     const next = await GoalStore.start(STREAM_A, 'objective two');
     expect(next.objective).toBe('objective two');
     expect(next.status).toBe('active');
+  });
+
+  it('routes explicit-session forget notifications only to the passed session', async () => {
+    const runSession = new SessionHandle();
+    const explicitSession = new SessionHandle();
+    const seenRun: unknown[] = [];
+    const seenExplicit: unknown[] = [];
+    const seenDefault: unknown[] = [];
+    const detachRun = subscribeGoalStateChanges(runSession, (change) => {
+      seenRun.push(change);
+    });
+    const detachExplicit = subscribeGoalStateChanges(
+      explicitSession,
+      (change) => {
+        seenExplicit.push(change);
+      },
+    );
+    const detachDefault = subscribeGoalStateChanges(
+      defaultSession(),
+      (change) => {
+        seenDefault.push(change);
+      },
+    );
+
+    try {
+      await withRunContext(
+        createRunContext({
+          runtimeHost: createRecordingHost().host,
+          session: runSession,
+        }),
+        async () => {
+          await GoalStore.start(STREAM_A, 'objective one');
+        },
+      );
+      seenRun.length = 0;
+      seenExplicit.length = 0;
+      seenDefault.length = 0;
+
+      await withRunContext(
+        createRunContext({
+          runtimeHost: createRecordingHost().host,
+          session: runSession,
+        }),
+        async () => {
+          await GoalStore.forget(STREAM_A, explicitSession);
+        },
+      );
+
+      expect(seenRun).toEqual([]);
+      expect(seenExplicit).toEqual([{ streamId: STREAM_A }]);
+      expect(seenDefault).toEqual([]);
+    } finally {
+      detachRun();
+      detachExplicit();
+      detachDefault();
+      runSession.dispose();
+      explicitSession.dispose();
+    }
   });
 
   it('cleans up an unparseable blob (raw key presence, not parse success)', async () => {
