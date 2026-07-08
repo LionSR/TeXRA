@@ -7,9 +7,9 @@ import {
   isExtensionPresentationEvent,
 } from '@frontend/events/extensionPresentationEvents';
 import { emitExtensionProgressEvent } from '@frontend/events/extensionProgressEvents';
-import type {
-  ProgressBackendEvent,
-  ProgressBackendEventPayloads,
+import {
+  isProgressBackendInteractionEvent,
+  type ProgressBackendInteractionPayloads,
 } from '@shared/progressView/backend/events/ProgressEventHandler';
 
 export const extensionAgentRuntimeHost: AgentRuntimeHost = {
@@ -22,9 +22,11 @@ export const extensionAgentRuntimeHost: AgentRuntimeHost = {
       );
       return;
     }
-    emitExtensionProgressEvent(
-      event as ProgressBackendEvent,
-      payload as ProgressBackendEventPayloads[ProgressBackendEvent],
-    );
+    if (isProgressBackendInteractionEvent(event)) {
+      emitExtensionProgressEvent(
+        event,
+        payload as ProgressBackendInteractionPayloads[typeof event],
+      );
+    }
   },
 };
