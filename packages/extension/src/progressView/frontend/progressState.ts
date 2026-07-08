@@ -98,14 +98,11 @@ export const unsupportedProgressCommands$ = signal<ReadonlySet<string> | null>(
 export const streamById$ = select(appState, (s) => s.streamById);
 export const streamFilter$ = select(appState, (s) => s.streamFilter);
 export const streamStates$ = select(appState, (s) => s.streamStates);
-export const streamLogs$ = select(appState, (s) => s.streamLogs);
+const streamLogs$ = select(appState, (s) => s.streamLogs);
 export const activeStreamId$ = select(appState, (s) => s.activeStreamId);
-export const processOutputs$ = select(appState, (s) => s.processOutputs);
-export const inquiries$ = select(appState, (s) => s.inquiries);
-export const followupOptions$ = select(
-  appState,
-  (s) => s.followupOptionsByStream,
-);
+const processOutputs$ = select(appState, (s) => s.processOutputs);
+const inquiries$ = select(appState, (s) => s.inquiries);
+const followupOptions$ = select(appState, (s) => s.followupOptionsByStream);
 
 // ---------------------------------------------------------------------------
 // Derived computeds: only re-evaluate when selector inputs propagate.
@@ -192,7 +189,7 @@ export function resetProgressState(): void {
 // ---------------------------------------------------------------------------
 
 /** Only changes when active stream switches or stream list changes. */
-export const activeStreamInfo$ = new Signal.Computed(() => {
+const activeStreamInfo$ = new Signal.Computed(() => {
   const id = activeStreamId$.get();
   return id ? (streamById$.get().get(id) ?? null) : null;
 });
@@ -203,9 +200,7 @@ export const activeStreamInfo$ = new Signal.Computed(() => {
  * unfiltered, so `streamById.size` alone can't distinguish "nothing
  * visible" from "everything hidden by filter".
  */
-export const hasStreams$ = new Signal.Computed(
-  () => tabStreams$.get().length > 0,
-);
+const hasStreams$ = new Signal.Computed(() => tabStreams$.get().length > 0);
 
 /** True only when the backend knows no streams at all, independent of filter. */
 export const hasAnyStreams$ = new Signal.Computed(
@@ -213,7 +208,7 @@ export const hasAnyStreams$ = new Signal.Computed(
 );
 
 /** Only changes when the ACTIVE stream's state changes, not any stream. */
-export const activeStreamState$ = new Signal.Computed(() => {
+const activeStreamState$ = new Signal.Computed(() => {
   const info = activeStreamInfo$.get();
   if (!info) return null;
   return (
@@ -222,7 +217,7 @@ export const activeStreamState$ = new Signal.Computed(() => {
 });
 
 /** Only changes when the ACTIVE stream's logs change, not any stream. */
-export const activeStreamLogs$ = new Signal.Computed(() => {
+const activeStreamLogs$ = new Signal.Computed(() => {
   const info = activeStreamInfo$.get();
   if (!info) return EMPTY_STREAM_LOGS;
   return streamLogs$.get().get(info.name) ?? EMPTY_STREAM_LOGS;
@@ -246,7 +241,7 @@ export const activeProcessOutputs$ = new Signal.Computed(
 // LogList doesn't re-render.
 // ---------------------------------------------------------------------------
 
-export const activeTaskGroups$ = new Signal.Computed(
+const activeTaskGroups$ = new Signal.Computed(
   () => activeStreamState$.get()?.taskGroups ?? EMPTY_TASK_GROUPS,
 );
 
@@ -263,7 +258,7 @@ export const activeInquiries$ = new Signal.Computed(() => {
   return threads.length > 0 ? threads : EMPTY_INQUIRIES;
 });
 
-export const activeIsToolUse$ = new Signal.Computed(() => {
+const activeIsToolUse$ = new Signal.Computed(() => {
   const state = activeStreamState$.get();
   return state ? isToolUseState(state) : false;
 });
