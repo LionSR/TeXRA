@@ -190,7 +190,7 @@ export class ExecutionRegistry {
           ) {
             this.notifyWaiters(executionId);
             if (handle.isChildExecution) {
-              this.emitActiveSubagentsUpdate(handle.parentStreamId);
+              this.emitChildActivity(handle.parentStreamId, 'subagents');
             }
             break;
           }
@@ -237,7 +237,7 @@ export class ExecutionRegistry {
     this.handles.set(handle.executionId, handle);
     if (handle instanceof AgentExecutionHandle) {
       if (handle.isChildExecution) {
-        this.emitActiveSubagentsUpdate(handle.parentStreamId);
+        this.emitChildActivity(handle.parentStreamId, 'subagents');
         this.emitParentStreamUpdate({
           childStreamId: handle.childStreamId,
           parentStreamId: handle.parentStreamId,
@@ -245,7 +245,7 @@ export class ExecutionRegistry {
       }
     } else if (handle instanceof ProcessExecutionHandle) {
       this.processOutput.register(handle);
-      this.emitActiveProcessesUpdate(handle.parentStreamId);
+      this.emitChildActivity(handle.parentStreamId, 'processes');
     }
   }
 
@@ -308,7 +308,7 @@ export class ExecutionRegistry {
     this.handles.delete(handle.executionId);
     this.notifyWaiters(handle.executionId);
     if (handle instanceof AgentExecutionHandle && handle.isChildExecution) {
-      this.emitActiveSubagentsUpdate(handle.parentStreamId);
+      this.emitChildActivity(handle.parentStreamId, 'subagents');
       return;
     }
 
@@ -317,7 +317,7 @@ export class ExecutionRegistry {
       // badge handler prunes output entries for processes no longer active.
       const finalize = (): void => {
         this.processOutput.unregister(handle.executionId);
-        this.emitActiveProcessesUpdate(handle.parentStreamId);
+        this.emitChildActivity(handle.parentStreamId, 'processes');
       };
       if (handle.outputPaths) {
         void this.processOutput.flush(handle).finally(finalize);
@@ -570,7 +570,7 @@ export class ExecutionRegistry {
         this.terminate(handle, visited, { cascadeChildren: false });
       }
     }
-    this.emitActiveSubagentsUpdate(parentStreamId);
+    this.emitChildActivity(parentStreamId, 'subagents');
   }
 
   /**
@@ -617,14 +617,7 @@ export class ExecutionRegistry {
     if (!runtimeHost) {
       return { kind: 'no_target', streamId, childPolicy };
     }
-    this.streamStatus.transition(
-      streamId,
-      STREAM_PHASE.CANCELLED,
-      'user-stop',
-      {
-        ...(this.events ? { events: this.events } : {}),
-      },
-    );
+    this.cancelStreamStatus(streamId);
     return { kind: 'marked_stopped', streamId, childPolicy };
   }
 
@@ -667,37 +660,31 @@ export class ExecutionRegistry {
     };
   }
 
-  private emitActiveSubagentsUpdate(parentStreamId: StreamTabId): void {
-    const children = this.collectChildSummary(
+  private emitChildActivity(
+    parentStreamId: StreamTabId,
+    kind: 'subagents' | 'processes',
+  ): void {
+    const items = this.collectChildSummary(
       parentStreamId,
-      AgentExecutionHandle,
+      kind === 'subagents' ? AgentExecutionHandle : ProcessExecutionHandle,
     );
     this.requireSessionEvents().emit({
       scope: 'run',
       streamId: parentStreamId,
-      event: {
-        type: 'child.activity',
-        kind: 'subagents',
-        parentStreamId,
-        children,
-      },
-    });
-  }
-
-  private emitActiveProcessesUpdate(parentStreamId: StreamTabId): void {
-    const processes = this.collectChildSummary(
-      parentStreamId,
-      ProcessExecutionHandle,
-    );
-    this.requireSessionEvents().emit({
-      scope: 'run',
-      streamId: parentStreamId,
-      event: {
-        type: 'child.activity',
-        kind: 'processes',
-        parentStreamId,
-        processes,
-      },
+      event:
+        kind === 'subagents'
+          ? {
+              type: 'child.activity',
+              kind: 'subagents',
+              parentStreamId,
+              children: items,
+            }
+          : {
+              type: 'child.activity',
+              kind: 'processes',
+              parentStreamId,
+              processes: items,
+            },
     });
   }
 
@@ -779,12 +766,7 @@ export class ExecutionRegistry {
       const interruptible = this.interrupts.get(handle.childStreamId);
       if (interruptible) {
         interruptible.interrupt();
-        this.streamStatus.transition(
-          handle.childStreamId,
-          STREAM_PHASE.CANCELLED,
-          'user-stop',
-          this.streamStatusEmitOptions(handle),
-        );
+        this.cancelStreamStatus(handle.childStreamId, handle);
         return true;
       }
       // No live interrupt context: a native subagent suspended at WAITING has
@@ -881,20 +863,32 @@ export class ExecutionRegistry {
       projectRunOutcome(RUN_OUTCOME.CANCELLED).executionStatus,
     ).catch(() => {});
     this.untrackHandle(handle);
-    this.streamStatus.transition(
-      handle.childStreamId,
-      STREAM_PHASE.CANCELLED,
-      'user-stop',
-      this.streamStatusEmitOptions(handle),
-    );
+    this.cancelStreamStatus(handle.childStreamId, handle);
     return true;
   }
 
   private streamStatusEmitOptions(
-    handle: AgentExecutionHandle,
+    handle?: AgentExecutionHandle,
   ): StreamStatusEmitOptions {
-    if (handle.trace) return { trace: handle.trace };
+    if (handle?.trace) return { trace: handle.trace };
     return this.events ? { events: this.events } : {};
+  }
+
+  /**
+   * Mark a stream CANCELLED from a user stop. Routes the status emission through
+   * the handle's trace when one is available and falls back to the registry's
+   * SessionEventHub otherwise (see {@link streamStatusEmitOptions}).
+   */
+  private cancelStreamStatus(
+    streamId: StreamTabId,
+    handle?: AgentExecutionHandle,
+  ): void {
+    this.streamStatus.transition(
+      streamId,
+      STREAM_PHASE.CANCELLED,
+      'user-stop',
+      this.streamStatusEmitOptions(handle),
+    );
   }
 
   private interruptRegisteredStream(
@@ -905,14 +899,7 @@ export class ExecutionRegistry {
     if (!interruptible) return false;
     interruptible.interrupt();
     if (runtimeHost) {
-      this.streamStatus.transition(
-        streamId,
-        STREAM_PHASE.CANCELLED,
-        'user-stop',
-        {
-          ...(this.events ? { events: this.events } : {}),
-        },
-      );
+      this.cancelStreamStatus(streamId);
     }
     return true;
   }
