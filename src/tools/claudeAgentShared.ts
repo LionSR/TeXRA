@@ -3,7 +3,6 @@
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
 import {
   ClaudeAgentEffortSchema,
-  ClaudeAgentModelSchema,
   ClaudeAgentPermissionModeSchema,
 } from '@shared/schemas/agentCliSettings';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -48,14 +47,6 @@ export type ClaudeAgentPermissionMode =
  * adaptively how much thinking to do, scaled by this hint. Derived from
  * `ClaudeAgentEffortSchema` (the single source of truth in `@shared`). */
 export const CLAUDE_AGENT_EFFORT_LEVELS = ClaudeAgentEffortSchema.options;
-
-/** Canonical Claude model IDs surfaced by the settings dropdown.
- * The SDK accepts arbitrary model strings; this list is what we expose in the
- * UI. Derived from `ClaudeAgentModelSchema` (the single source of truth in
- * `@shared`). Sonnet, Fable, and Opus use the alias form; Haiku 4.5 ships with
- * a dated snapshot suffix (its only published identifier at time of writing). */
-export const CLAUDE_AGENT_MODELS = ClaudeAgentModelSchema.options;
-export type ClaudeAgentModel = (typeof CLAUDE_AGENT_MODELS)[number];
 
 /**
  * Adaptive thinking is only supported on Fable 5, Opus 4.6+, and Sonnet 4.6+
