@@ -87,8 +87,8 @@ async function removeFromIndex(streamId: StreamTabId): Promise<void> {
 /**
  * Mutate callbacks must return the same array reference (`index`, unchanged)
  * when nothing actually changed, so this can skip the write via reference
- * equality — both current callers (`addToIndex`, `removeFromIndex`) already
- * follow this contract.
+ * equality — all current callers (`addToIndex`, `removeFromIndex`,
+ * `forgetMany`'s inline callback) already follow this contract.
  */
 async function mutateIndex(
   mutate: (index: StreamTabId[]) => StreamTabId[],
@@ -289,7 +289,10 @@ export const GoalStore = {
     const dropped = new Set(toRemove);
     await Promise.all([
       ...toRemove.map((id) => state.update(streamKey(id), undefined)),
-      mutateIndex((index) => index.filter((id) => !dropped.has(id))),
+      mutateIndex((index) => {
+        const next = index.filter((id) => !dropped.has(id));
+        return next.length === index.length ? index : next;
+      }),
     ]);
     for (const id of toRemove)
       emitRuntimeEvent('goalStateChanged', { streamId: id }, session);
