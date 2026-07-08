@@ -1,6 +1,9 @@
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import {
+  normalizeProviderMessages,
+  type ProviderMessage,
+} from '@agent/modelHandlers/types/ProviderMessage';
 import { isObject } from '@utils/core';
 import {
   ModelHandlerCompatibilityKeySchema,
@@ -61,10 +64,6 @@ export function inferPersistedModelHandlerCompatibilityKey(
     : undefined;
 }
 
-function arrayOfProviderMessages(value: unknown): ProviderMessage[] | null {
-  return Array.isArray(value) ? (value as ProviderMessage[]) : null;
-}
-
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
@@ -104,8 +103,9 @@ export function inferPersistedFlowModelHandlerCompatibilityKey(
   if (parsedKey.success && parsedKey.data) return parsedKey.data;
 
   const messages =
-    arrayOfProviderMessages(record.messages) ??
-    arrayOfProviderMessages(record.conversation);
+    normalizeProviderMessages(record.messages) ??
+    normalizeProviderMessages(record.conversation) ??
+    normalizeProviderMessages(record);
   if (!messages) return undefined;
 
   return inferPersistedModelHandlerCompatibilityKey(

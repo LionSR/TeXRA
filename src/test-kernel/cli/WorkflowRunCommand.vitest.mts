@@ -377,9 +377,12 @@ describe('CLI workflow run command', () => {
         fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
       ).resolves.toBe('polished');
       expect(mocks.writeResultMeta).toHaveBeenCalledWith({
-        copiedOutput: path.join(root, 'polished.tex'),
-        outputs: [outputSummary],
-        compileFailures: [compileFailure],
+        producer: 'cliWorkflow',
+        result: {
+          copiedOutput: path.join(root, 'polished.tex'),
+          outputs: [outputSummary],
+          compileFailures: [compileFailure],
+        },
       });
     } finally {
       await fs.rm(root, { recursive: true, force: true });
@@ -430,9 +433,12 @@ describe('CLI workflow run command', () => {
         fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
       ).resolves.toBe('polished');
       expect(mocks.writeResultMeta).toHaveBeenCalledWith({
-        copiedOutputs: [path.join(root, 'out', 'paper.tex')],
-        outputs: [outputSummary],
-        compileFailures: [],
+        producer: 'cliWorkflow',
+        result: {
+          copiedOutputs: [path.join(root, 'out', 'paper.tex')],
+          outputs: [outputSummary],
+          compileFailures: [],
+        },
       });
     } finally {
       await fs.rm(root, { recursive: true, force: true });
