@@ -1,9 +1,4 @@
 import type { AgentEvent } from '@agent/trace';
-import type {
-  AgentRuntimeProgressEvent,
-  AgentRuntimeProgressEventPayloads,
-  AgentRuntimeProgressSink,
-} from '@agent/runtime/agentRuntimeProgressEvents';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type {
@@ -18,13 +13,12 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
+import type { RecordingProgressSink } from './progressTestUtils';
 
 type ProjectedProgressEvent = {
-  [K in AgentRuntimeProgressEvent]: {
-    readonly event: K;
-    readonly payload: AgentRuntimeProgressEventPayloads[K];
-  };
-}[AgentRuntimeProgressEvent];
+  readonly event: string;
+  readonly payload: unknown;
+};
 
 function projectSessionFactToProgressEvent(
   fact: SessionFact,
@@ -115,9 +109,8 @@ function projectRunFactToProgressEvent(
     }
     return {
       event: factName,
-      payload:
-        event.data as unknown as AgentRuntimeProgressEventPayloads[typeof factName],
-    } as ProjectedProgressEvent;
+      payload: event.data,
+    };
   }
 
   if (event.type === 'stage.start') {
@@ -200,7 +193,7 @@ function subscribeRunFactsAsProgressEventsForTest(
 }
 
 function emitProjectedProgressEventForTest(
-  runtimeHost: AgentRuntimeProgressSink,
+  runtimeHost: RecordingProgressSink,
   projected: ProjectedProgressEvent,
 ): void {
   runtimeHost.emit(projected.event, projected.payload);
@@ -208,7 +201,7 @@ function emitProjectedProgressEventForTest(
 
 export function attachSessionProgressEventProjectionForTest(
   events: SessionEventHub,
-  runtimeHost: AgentRuntimeProgressSink,
+  runtimeHost: RecordingProgressSink,
 ): () => void {
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {

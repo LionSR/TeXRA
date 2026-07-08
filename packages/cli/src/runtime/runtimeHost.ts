@@ -4,11 +4,6 @@ import type {
   AgentRuntimeEventPayloads,
   AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import type {
-  AgentRuntimeProgressEvent,
-  AgentRuntimeProgressEventPayloads,
-  AgentRuntimeProgressSink,
-} from '@agent/runtime/agentRuntimeProgressEvents';
 import type { SetTaskStatePayload } from '@agent/runtime/taskStateProgressPayload';
 import {
   isRuntimeInteractionEvent,
@@ -35,13 +30,18 @@ import {
   isRunProgressEvent,
 } from './runProgressRenderer';
 import type { CliContext } from './cliContext';
+import type {
+  CliProgressEvent,
+  CliProgressEventPayloads,
+  CliProgressSink,
+} from './cliProgressEvents';
 
 export type CliRuntimeEventPayloads = AgentRuntimeEventPayloads &
-  AgentRuntimeProgressEventPayloads;
-export type CliRuntimeEvent = AgentRuntimeEvent | AgentRuntimeProgressEvent;
+  CliProgressEventPayloads;
+export type CliRuntimeEvent = AgentRuntimeEvent | CliProgressEvent;
 
 export type CliRuntimeHost = AgentRuntimeHost &
-  AgentRuntimeProgressSink & {
+  CliProgressSink & {
     prepareInteractivePrompt?: () => void;
     close(): Promise<void>;
   };

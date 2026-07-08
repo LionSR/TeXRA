@@ -1,9 +1,4 @@
 import type { AgentEvent } from '@agent/trace';
-import type {
-  AgentRuntimeProgressEvent,
-  AgentRuntimeProgressEventPayloads,
-  AgentRuntimeProgressSink,
-} from '@agent/runtime/agentRuntimeProgressEvents';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type {
@@ -18,13 +13,18 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
+import type {
+  CliProgressEvent,
+  CliProgressEventPayloads,
+  CliProgressSink,
+} from './cliProgressEvents';
 
 type CliProjectedProgressEvent = {
-  [K in AgentRuntimeProgressEvent]: {
+  [K in CliProgressEvent]: {
     readonly event: K;
-    readonly payload: AgentRuntimeProgressEventPayloads[K];
+    readonly payload: CliProgressEventPayloads[K];
   };
-}[AgentRuntimeProgressEvent];
+}[CliProgressEvent];
 
 const CLI_RUN_FACT_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
   'domain',
@@ -130,7 +130,7 @@ function projectCliRunFact(
     return {
       event: factName,
       payload:
-        event.data as unknown as AgentRuntimeProgressEventPayloads[typeof factName],
+        event.data as unknown as CliProgressEventPayloads[typeof factName],
     } as CliProjectedProgressEvent;
   }
 
@@ -187,7 +187,7 @@ function projectCliRunFact(
 }
 
 function emitProjectedProgressEvent(
-  runtimeHost: AgentRuntimeProgressSink,
+  runtimeHost: CliProgressSink,
   projected: CliProjectedProgressEvent,
 ): void {
   runtimeHost.emit(projected.event, projected.payload);
@@ -200,7 +200,7 @@ function emitProjectedProgressEvent(
  */
 export function attachCliSessionProgressProjection(
   events: SessionEventHub,
-  runtimeHost: AgentRuntimeProgressSink,
+  runtimeHost: CliProgressSink,
 ): () => void {
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
