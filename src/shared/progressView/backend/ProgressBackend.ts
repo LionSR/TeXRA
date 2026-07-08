@@ -49,17 +49,7 @@ export interface ProgressBackendOptions {
    * projection of the registry.
    */
   getUnsupportedCommands?: () => readonly string[];
-  /** Host-local side effects for session-originated progress events. */
-  onSessionProgressEvent?<K extends ProgressEvent>(
-    event: K,
-    payload: ProgressEventPayloads[K],
-  ): void;
 }
-
-type SessionProgressEventObserver = <K extends ProgressEvent>(
-  event: K,
-  payload: ProgressEventPayloads[K],
-) => void;
 
 /**
  * Host-neutral progress-view backend composition.
@@ -74,12 +64,10 @@ export class ProgressBackend {
   readonly webviewBridge: WebviewBridge;
   readonly eventHandler: ProgressEventHandler;
   private readonly session: SessionHandle;
-  private readonly onSessionProgressEvent?: SessionProgressEventObserver;
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
     this.session = options.session ?? defaultSession();
-    this.onSessionProgressEvent = options.onSessionProgressEvent;
     this.state = new ProgressViewState(
       options.storage,
       options.snapshots,
@@ -130,15 +118,7 @@ export class ProgressBackend {
       (sessionEvent) => {
         if (this.disposed) return;
         if (sessionEvent.scope !== 'session') return;
-        const notification = this.eventHandler.handleSessionFact(
-          sessionEvent.event,
-        );
-        if (notification) {
-          this.onSessionProgressEvent?.(
-            notification.event,
-            notification.payload,
-          );
-        }
+        this.eventHandler.handleSessionFact(sessionEvent.event);
       },
       { scope: 'session' },
     );
@@ -146,16 +126,10 @@ export class ProgressBackend {
       (sessionEvent) => {
         if (this.disposed) return;
         if (sessionEvent.scope !== 'run') return;
-        const notification = this.eventHandler.handleRunFact(
+        this.eventHandler.handleRunFact(
           sessionEvent.streamId,
           sessionEvent.event,
         );
-        if (notification) {
-          this.onSessionProgressEvent?.(
-            notification.event,
-            notification.payload,
-          );
-        }
       },
       { scope: 'run', types: PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES },
     );
