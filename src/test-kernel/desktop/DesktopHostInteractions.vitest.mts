@@ -36,7 +36,7 @@ interface DesktopHostInteractions {
 interface DesktopHostInteractionsModule {
   createDesktopHostInteractions(options: {
     runtimeHost: { emit: (event: string, payload: unknown) => void };
-    session?: SessionHandle;
+    session: SessionHandle;
     getApprovalHandlers(): unknown;
     getToolEditApprovals(): unknown;
   }): DesktopHostInteractions;
