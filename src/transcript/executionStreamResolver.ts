@@ -162,7 +162,7 @@ export async function resolvePersistedStreamIdForExecution(
       options.streamLogStore,
     );
     if (metaCandidates.length === 1) {
-      void writeExecutionStreamId(executionId, streamId);
+      await writeExecutionStreamId(executionId, streamId);
     }
     return { streamId, source: 'streamDataMeta' };
   }
