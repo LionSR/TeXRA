@@ -10,7 +10,8 @@
  * This is Slice 1 of the desktopAgentExecution.ts refactor (issue #6329).
  */
 
-import type { AgentTrace } from '@agent/trace';
+import type { AgentEvent, AgentTrace } from '@agent/trace';
+import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { ProgressEventPayloads } from '@agent/runtime/hostProgressEvents';
 import {
@@ -90,6 +91,9 @@ export interface DesktopProgressEventBridge {
     payload: ProgressEventPayloads[K],
   ): void;
 
+  /** Handle session/run facts emitted by this window's SessionEventHub. */
+  onSessionEvent(event: SessionEvent): void;
+
   /**
    * Restore a ghost stream's persisted sidecar display (todos, plan, usage,
    * output files) if it hasn't been restored yet.  Public so `syncStreamContent`
@@ -123,6 +127,11 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
   private readonly restoredDisplayInFlight = new Set<StreamTabId>();
   /** Streams that became live in this bridge and must not be restored as ghosts. */
   private readonly liveStreams = new Set<StreamTabId>();
+  /** Fact values known before the durable snapshot meta view catches up. */
+  private readonly liveSnapshotFacts = new Map<
+    StreamTabId,
+    Partial<Pick<RestoredStreamSnapshot, 'executionId' | 'lastKnownStatus'>>
+  >();
 
   /** True once `dispose()` has torn down this bridge. */
   private disposed = false;
@@ -188,6 +197,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       this.restoredStreams.delete(streamId);
       this.restoredDisplaySent.delete(streamId);
       this.restoredDisplayInFlight.delete(streamId);
+      this.liveSnapshotFacts.delete(streamId);
     }
   }
 
@@ -208,33 +218,17 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     switch (event) {
       case 'setActiveStream': {
         const data = payload as ProgressEventPayloads['setActiveStream'];
-        if (!data.streamId) {
-          this.opts.state.activeStream = '';
-          this.opts.sendMessage({
-            command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-            activeStream: '',
-          });
-          return;
-        }
-        if (data.suppressViewSwitch !== true) {
-          this.opts.routeToProgress();
-          this.sendRestoredDisplay(data.streamId);
-        }
+        this.handleSetActiveStream(data);
         return;
       }
       case 'setTaskState': {
         const data = payload as ProgressEventPayloads['setTaskState'];
-        this.liveStreams.add(data.streamId);
-        this.opts.state.streamLogs.ensureStream(data.streamId);
-        this.restoredStreams.delete(data.streamId);
-        this.persistStreamSnapshot(data.streamId);
+        this.handleRunConfigFact(data.streamId, data.executionId);
         return;
       }
       case 'updateStreamStatus': {
         const data = payload as ProgressEventPayloads['updateStreamStatus'];
-        this.liveStreams.add(data.streamId);
-        this.restoredStreams.delete(data.streamId);
-        this.persistStreamSnapshot(data.streamId);
+        this.handleStreamStatusFact(data.streamId, data.status);
         return;
       }
       case 'updateStreamDescription': {
@@ -250,11 +244,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       }
       case 'goalStateChanged': {
         const data = payload as ProgressEventPayloads['goalStateChanged'];
-        const goal = GoalStore.getForStream(data.streamId);
-        this.opts.onGoalStateChanged(data.streamId, isGoalInFlight(goal), {
-          status: goal?.status,
-          objective: goal?.objective,
-        });
+        this.handleGoalStateChanged(data.streamId);
         return;
       }
       case 'requestEnsureProgressView':
@@ -268,6 +258,15 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       default:
         return;
     }
+  }
+
+  onSessionEvent(event: SessionEvent): void {
+    if (this.disposed) return;
+    if (event.scope === 'session') {
+      this.handleSessionFact(event.event);
+      return;
+    }
+    this.handleRunEvent(event.event);
   }
 
   // ── Restored display ─────────────────────────────────────────────────────
@@ -360,6 +359,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     this.removePersistedStream(streamId);
     this.restoredDisplaySent.delete(streamId);
     this.restoredDisplayInFlight.delete(streamId);
+    this.liveSnapshotFacts.delete(streamId);
   }
 
   async onAllStreamsDeleted(): Promise<void> {
@@ -367,6 +367,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     this.restoredDisplaySent.clear();
     this.restoredDisplayInFlight.clear();
     this.liveStreams.clear();
+    this.liveSnapshotFacts.clear();
     if (this.opts.streamSnapshotStore) {
       try {
         await this.opts.streamSnapshotStore.replaceAll([]);
@@ -386,14 +387,28 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     this.restoredDisplaySent.clear();
     this.restoredDisplayInFlight.clear();
     this.liveStreams.clear();
+    this.liveSnapshotFacts.clear();
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────
 
-  private persistStreamSnapshot(streamId: StreamTabId): void {
+  private persistStreamSnapshot(
+    streamId: StreamTabId,
+    overrides: Partial<
+      Pick<RestoredStreamSnapshot, 'executionId' | 'lastKnownStatus'>
+    > = {},
+  ): void {
     const store = this.opts.streamSnapshotStore;
     if (!store) return;
 
+    const knownFacts = { ...this.liveSnapshotFacts.get(streamId) };
+    if (overrides.executionId !== undefined) {
+      knownFacts.executionId = overrides.executionId;
+    }
+    if (overrides.lastKnownStatus !== undefined) {
+      knownFacts.lastKnownStatus = overrides.lastKnownStatus;
+    }
+    this.liveSnapshotFacts.set(streamId, knownFacts);
     const taskState = this.opts.state.snapshots.getTaskState(streamId);
     const info = buildStreamInfo(this.opts.state, streamId, 'all');
     const restored = this.restoredStreams.get(streamId);
@@ -409,9 +424,13 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
       inputFile: info?.inputFile || restored?.inputFile,
       instruction: taskState?.agentConfig.instruction || restored?.instruction,
       lastKnownStatus:
-        currentStatus ?? restored?.lastKnownStatus ?? STREAM_PHASE.COMPLETED,
+        knownFacts.lastKnownStatus ??
+        currentStatus ??
+        restored?.lastKnownStatus ??
+        STREAM_PHASE.COMPLETED,
       description: info?.description ?? restored?.description,
-      executionId: info?.executionId ?? restored?.executionId,
+      executionId:
+        knownFacts.executionId ?? info?.executionId ?? restored?.executionId,
       parentStreamId: info?.parentStreamId ?? restored?.parentStreamId,
       creationTimestamp:
         info?.creationTimestamp ?? restored?.creationTimestamp ?? Date.now(),
@@ -429,12 +448,92 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
 
   private removePersistedStream(streamId: StreamTabId): void {
     this.restoredStreams.delete(streamId);
+    this.liveSnapshotFacts.delete(streamId);
     const store = this.opts.streamSnapshotStore;
     if (!store) return;
     void store.remove(streamId).catch((error: unknown) => {
       this.opts.logger.warn('Failed to remove persisted stream snapshot', {
         data: error instanceof Error ? error : { error },
       });
+    });
+  }
+
+  private handleSessionFact(fact: SessionFact): void {
+    switch (fact.type) {
+      case 'setActiveStream':
+        this.handleSetActiveStream(fact.payload);
+        return;
+      case 'updateStreamStatus':
+        this.handleStreamStatusFact(fact.payload.streamId, fact.payload.status);
+        return;
+      case 'updateStreamDescription':
+        this.persistStreamSnapshot(fact.payload.streamId);
+        return;
+      case 'setParentStream':
+        this.persistStreamSnapshot(fact.payload.childStreamId);
+        return;
+      case 'goalStateChanged':
+        this.handleGoalStateChanged(fact.payload.streamId);
+        return;
+      default:
+        return;
+    }
+  }
+
+  private handleRunEvent(event: AgentEvent): void {
+    switch (event.type) {
+      case 'run.config':
+        this.handleRunConfigFact(event.streamId, event.executionId);
+        return;
+      case 'status':
+        this.handleStreamStatusFact(event.streamId, event.phase);
+        return;
+      default:
+        return;
+    }
+  }
+
+  private handleSetActiveStream(
+    payload: ProgressEventPayloads['setActiveStream'],
+  ): void {
+    if (!payload.streamId) {
+      this.opts.state.activeStream = '';
+      this.opts.sendMessage({
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+        activeStream: '',
+      });
+      return;
+    }
+    if (payload.suppressViewSwitch !== true) {
+      this.opts.routeToProgress();
+      this.sendRestoredDisplay(payload.streamId);
+    }
+  }
+
+  private handleRunConfigFact(
+    streamId: StreamTabId,
+    executionId?: RestoredStreamSnapshot['executionId'],
+  ): void {
+    this.liveStreams.add(streamId);
+    this.opts.state.streamLogs.ensureStream(streamId);
+    this.restoredStreams.delete(streamId);
+    this.persistStreamSnapshot(streamId, { executionId });
+  }
+
+  private handleStreamStatusFact(
+    streamId: StreamTabId,
+    lastKnownStatus?: RestoredStreamSnapshot['lastKnownStatus'],
+  ): void {
+    this.liveStreams.add(streamId);
+    this.restoredStreams.delete(streamId);
+    this.persistStreamSnapshot(streamId, { lastKnownStatus });
+  }
+
+  private handleGoalStateChanged(streamId: StreamTabId): void {
+    const goal = GoalStore.getForStream(streamId);
+    this.opts.onGoalStateChanged(streamId, isGoalInFlight(goal), {
+      status: goal?.status,
+      objective: goal?.objective,
     });
   }
 }
