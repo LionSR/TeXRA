@@ -19,6 +19,7 @@ import {
 import { assertNever, clamp } from '@utils/core';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
+import { clampModalWidth } from './ui/theme';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
 import { TranscriptViewer } from './modals/TranscriptViewer';
@@ -86,7 +87,6 @@ interface InputEventEmitterLike {
   off(event: 'input', listener: (data: string) => void): void;
 }
 
-const MIN_TRANSCRIPT_WIDTH = 20;
 const FOREGROUND_TRANSCRIPT_ROWS = 1;
 const MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT = 6;
 const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
@@ -724,7 +724,7 @@ export function App(props: AppProps): React.JSX.Element {
     status: activeSlice?.status,
     todos: activeSlice?.todos ?? [],
   });
-  const transcriptWidth = Math.max(MIN_TRANSCRIPT_WIDTH, columns);
+  const transcriptWidth = clampModalWidth(columns);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
     childControlMode,

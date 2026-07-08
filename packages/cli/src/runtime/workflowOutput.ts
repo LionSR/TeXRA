@@ -8,6 +8,7 @@ import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
+import { toPosixPath } from '@utils/core/pathCore';
 import { getRunDir } from '@utils/files';
 
 import { CliUsageError, type CliContext } from './cliContext';
@@ -94,14 +95,10 @@ interface WorkflowOutputResolutionOptions {
   readonly terminalStatus: ExecutionStatus;
 }
 
-function toPosix(p: string): string {
-  return p.replaceAll('\\', '/');
-}
-
 function outputCopyRelativePath(output: OutputFileSummary): string {
   const relativePath =
     output.relativePath || path.basename(output.absolutePath);
-  const parts = toPosix(relativePath).split('/');
+  const parts = toPosixPath(relativePath).split('/');
   const withoutRoundDir = /^r\d+$/.test(parts[0] ?? '')
     ? parts.slice(1)
     : parts;
@@ -115,14 +112,18 @@ function outputCopyRelativePathForExpectedOutput(
   const generatedRelativePath = outputCopyRelativePath(output);
   if (expectedRelativePaths.length === 0) return generatedRelativePath;
 
-  const generatedName = path.posix.basename(toPosix(generatedRelativePath));
+  const generatedName = path.posix.basename(
+    toPosixPath(generatedRelativePath),
+  );
   const normalizedOriginalPath =
-    output.originalPath == null ? undefined : toPosix(output.originalPath);
+    output.originalPath == null
+      ? undefined
+      : toPosixPath(output.originalPath);
   const matchingExpectedPaths =
     normalizedOriginalPath == null
       ? []
       : expectedRelativePaths.filter((expected) => {
-          const normalizedExpected = toPosix(expected);
+          const normalizedExpected = toPosixPath(expected);
           if (path.posix.basename(normalizedExpected) !== generatedName) {
             return false;
           }

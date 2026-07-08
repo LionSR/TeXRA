@@ -7,6 +7,7 @@ import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { byStringProp, isObject } from '@utils/core';
+import { toPosixPath } from '@utils/core/pathCore';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
 
@@ -58,7 +59,7 @@ async function walkStorageDirectory(
     const entryIsDirectory = isDirectory(type);
     const stat = await StorageFS.stat(childPath).catch(() => ({ size: 0 }));
     files.push({
-      path: rawRelative.replaceAll('\\', '/'),
+      path: toPosixPath(rawRelative),
       size: stat.size,
       isDirectory: entryIsDirectory,
     });

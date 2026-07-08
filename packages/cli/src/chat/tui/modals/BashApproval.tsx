@@ -4,7 +4,11 @@ import { Box, Text, useWindowSize } from 'ink';
 import type { BashPermission } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
+import {
+  clampModalWidth,
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+  MIN_MODAL_CONTENT_WIDTH,
+} from '../ui/theme';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
@@ -27,7 +31,6 @@ export interface BashApprovalProps {
 export type BashCommandDisplayLine = ScrollableDisplayLine<'command'>;
 
 const BASH_APPROVAL_TITLE = 'Run bash command?';
-const MIN_BASH_COMMAND_WIDTH = 20;
 const DEFAULT_BASH_COMMAND_ROWS = 12;
 const COMPACT_BASH_COMMAND_ROWS = 3;
 const BASH_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 7;
@@ -48,7 +51,7 @@ export function bashApprovalCommandRowsBudget({
     availableRows,
     columns,
     title,
-    minContentWidth: MIN_BASH_COMMAND_WIDTH,
+    minContentWidth: MIN_MODAL_CONTENT_WIDTH,
     defaultRows: DEFAULT_BASH_COMMAND_ROWS,
     compactMaxRows: COMPACT_BASH_COMMAND_ROWS,
     spaciousFixedRows: BASH_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
@@ -64,7 +67,7 @@ export function bashCommandDisplayLines({
   readonly command: string;
   readonly width: number;
 }): BashCommandDisplayLine[] {
-  const commandWidth = Math.max(MIN_BASH_COMMAND_WIDTH, width);
+  const commandWidth = clampModalWidth(width);
   return command.split('\n').flatMap((line, index) =>
     wrapAnsiToWidth(`${index === 0 ? '$ ' : '  '}${line}`, commandWidth)
       .split('\n')
@@ -82,10 +85,7 @@ export function bashCwdDisplayLine({
   const trimmedCwd = cwd?.trim();
   if (!trimmedCwd) return undefined;
 
-  return truncateToWidth(
-    `Directory: ${trimmedCwd}`,
-    Math.max(MIN_BASH_COMMAND_WIDTH, width),
-  );
+  return truncateToWidth(`Directory: ${trimmedCwd}`, clampModalWidth(width));
 }
 
 export function maxBashCommandScrollOffset(
@@ -128,8 +128,7 @@ export function boundedBashCommandDisplayLines({
 
 export function BashApproval(props: BashApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
-  const commandWidth = Math.max(
-    MIN_BASH_COMMAND_WIDTH,
+  const commandWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
   const cwdLine = useMemo(

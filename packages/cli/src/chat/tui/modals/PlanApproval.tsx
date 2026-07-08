@@ -4,7 +4,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import type { PlanApprovalPermission } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
+import { clampModalWidth, CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
 import { confirmCardCompactChromeRows } from './ConfirmCardState';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
@@ -21,7 +21,6 @@ export interface PlanApprovalProps {
 }
 
 export const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
-const MIN_PLAN_APPROVAL_CONTENT_WIDTH = 20;
 const PLAN_APPROVAL_TITLE = 'Approve plan?';
 export const PLAN_APPROVAL_GOAL_NOTICE =
   'Approve & run only auto-approves bash.';
@@ -169,7 +168,7 @@ export function planApprovalDisplayLines({
   readonly width: number;
   readonly padLines?: boolean;
 }): string[] {
-  const contentWidth = Math.max(MIN_PLAN_APPROVAL_CONTENT_WIDTH, width);
+  const contentWidth = clampModalWidth(width);
   return objective.split('\n').flatMap((line) => {
     if (line.length === 0) return [padLines ? fillRows('', contentWidth) : ''];
     const wrapped = wrapAnsiToWidth(line, contentWidth)

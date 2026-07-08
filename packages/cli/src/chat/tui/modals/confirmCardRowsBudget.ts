@@ -1,6 +1,6 @@
 import { clamp } from '@utils/core';
 
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
+import { clampModalWidth, CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 
 /**
@@ -44,9 +44,9 @@ export function confirmCardContentRowsBudget({
 }): number {
   if (availableRows === undefined) return defaultRows;
 
-  const titleWidth = Math.max(
-    minContentWidth,
+  const titleWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
+    minContentWidth,
   );
   const titleRows = wrapAnsiToWidth(title, titleWidth).split('\n').length;
   const fixedRows = titleRows + extraFixedRows;

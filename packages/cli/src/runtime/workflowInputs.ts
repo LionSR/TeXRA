@@ -8,6 +8,7 @@ import { tryPlatform } from '@platform/platform';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { unique } from '@utils/core';
+import { toPosixPath } from '@utils/core/pathCore';
 import type { Disposable } from '@platform/interfaces';
 import type { Stats } from 'node:fs';
 
@@ -38,7 +39,7 @@ function normalizeCliInputPath(candidate: string, cwd: string): string {
   const absolutePath = resolveAgainstCwd(candidate, cwd);
   const relativePath = path.relative(cwd, absolutePath);
   return isContainedRelativePath(relativePath)
-    ? relativePath.replaceAll(path.sep, '/')
+    ? toPosixPath(relativePath)
     : absolutePath;
 }
 
@@ -99,7 +100,7 @@ export function hasMixedStdinWorkflowInputSpecs(
 export function isMaterializedStdinWorkflowInputPath(
   inputPath: string,
 ): boolean {
-  const normalized = inputPath.replaceAll('\\', '/');
+  const normalized = toPosixPath(inputPath);
   const parent = path.posix.basename(path.posix.dirname(normalized));
   return (
     path.posix.basename(normalized) === STDIN_WORKFLOW_INPUT_BASENAME &&
