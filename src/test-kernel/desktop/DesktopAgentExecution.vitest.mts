@@ -686,7 +686,7 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
-  it('routes host-path runtime events through the desktop session host channel', async () => {
+  it('does not persist desktop snapshots from host-path stream facts', async () => {
     const messages: unknown[] = [];
     const streamSnapshotStore = createStreamSnapshotStore([]);
     const bridge = (await createBridge(messages, {
@@ -701,15 +701,9 @@ describe('DesktopProgressBridge', () => {
         executionId: 'de57e0',
         taskState: TaskStateSchema.parse(workflowTaskState()),
       });
+      await settleProgressEvents();
 
-      await vi.waitFor(() => {
-        expect(streamSnapshotStore.upsert).toHaveBeenCalledWith(
-          expect.objectContaining({
-            streamId: 'desktop-host-stream',
-            executionId: 'de57e0',
-          }),
-        );
-      });
+      expect(streamSnapshotStore.upsert).not.toHaveBeenCalled();
     } finally {
       bridge.dispose();
     }
@@ -2139,17 +2133,27 @@ describe('DesktopProgressBridge', () => {
     });
 
     try {
-      bridge.handleProgressEvent('setTaskState', {
+      (bridge as BridgeWithSession).session.events.emit({
+        scope: 'run',
         streamId: 'stream-1',
-        executionId: 'ec1001',
-        taskState,
+        event: {
+          type: 'run.config',
+          streamId: 'stream-1',
+          executionId: 'ec1001',
+          config: taskState.agentConfig,
+        } as any,
       });
 
       await bridge.deleteStream('stream-1');
-      bridge.handleProgressEvent('setTaskState', {
+      (bridge as BridgeWithSession).session.events.emit({
+        scope: 'run',
         streamId: 'stream-1',
-        executionId: 'ec1001',
-        taskState,
+        event: {
+          type: 'run.config',
+          streamId: 'stream-1',
+          executionId: 'ec1001',
+          config: taskState.agentConfig,
+        } as any,
       });
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
       expect(retrieveSessionResumeData).not.toHaveBeenCalled();
