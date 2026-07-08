@@ -4,8 +4,8 @@
 
 import type { AgentEvent } from '@agent/trace';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
+import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { toUpdateStreamUsagePayload } from '@agent/runtime/sessionProgressEventProjection';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type {
   ProgressEvent,
