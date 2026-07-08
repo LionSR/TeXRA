@@ -117,14 +117,19 @@ async function pickBestMetaMatch(
  * with older records and child-stream prefixes that cannot be derived from the
  * top-level agent/model pair.
  *
- * Decide-once-carry-as-data (#7469): once a `streamDataMeta` resolution below
- * has actually disambiguated the canonical stream via the meta-scan, it's
+ * Decide-once-carry-as-data (#7469): when a `streamDataMeta` resolution below
+ * finds exactly one meta-matched candidate (no disambiguation needed), it's
  * cached onto the execution's own metadata (`writeExecutionStreamId`) so a
  * later call for the same executionId can skip straight to a single cheap
- * read instead of re-scanning every persisted stream. Only that confirmed
- * result is cached — the suffix/fallback sources below are heuristic guesses
- * for when no stream's meta.json actually claims this executionId, and
- * caching a guess as if it were a confirmed match could pin a wrong answer.
+ * read instead of re-scanning every persisted stream. A multi-candidate
+ * resolution is deliberately NOT cached: `pickBestMetaMatch`'s ranking
+ * depends on which `streamLogStore`/workPlan data happens to be available to
+ * *this* call, so an earlier call without a loaded `streamLogStore` could
+ * settle on a worse (non-log-backed) candidate than a later call that does
+ * have one — caching that would permanently shadow the better answer. The
+ * suffix/fallback sources further below are heuristic guesses for when no
+ * stream's meta.json actually claims this executionId at all, and caching a
+ * guess as if it were a confirmed match could pin a wrong answer too.
  */
 export async function resolvePersistedStreamIdForExecution(
   executionId: ExecutionId,
@@ -156,7 +161,9 @@ export async function resolvePersistedStreamIdForExecution(
       snapshotStore,
       options.streamLogStore,
     );
-    void writeExecutionStreamId(executionId, streamId);
+    if (metaCandidates.length === 1) {
+      void writeExecutionStreamId(executionId, streamId);
+    }
     return { streamId, source: 'streamDataMeta' };
   }
 

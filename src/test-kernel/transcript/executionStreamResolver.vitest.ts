@@ -46,17 +46,16 @@ const MINIMAL_CONFIG: AgentConfig = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 };
 
-/** Polls readMeta until streamId lands, tolerating the fire-and-forget write's async settle. */
+/** Waits for readMeta to reflect the fire-and-forget write's async settle. */
 async function waitForCachedStreamId(
   executionId: ExecutionId,
 ): Promise<StreamTabId | undefined> {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const streamId = (await getExecutionStore(executionId).readMeta())
-      ?.streamId;
-    if (streamId) return streamId;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  return undefined;
+  let streamId: StreamTabId | undefined;
+  await vi.waitFor(async () => {
+    streamId = (await getExecutionStore(executionId).readMeta())?.streamId;
+    expect(streamId).toBeDefined();
+  });
+  return streamId;
 }
 
 const tempDirs: string[] = [];
@@ -336,4 +335,59 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
     expect(second).toEqual({ streamId, source: 'executionMeta' });
   });
+
+  it(
+    'does not cache a multi-candidate resolution, so a later call with a ' +
+      'loaded streamLogStore can still pick the log-backed candidate (#7469)',
+    async () => {
+      const executionId = 'abc777' as ExecutionId;
+      const parentStream = 'aOrchestrator@deepseekproT#abc777' as StreamTabId;
+      const childStream = 'zBashTool@tool#abc777' as StreamTabId;
+      await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator');
+
+      const snapshotWriter = new StreamSnapshotStore();
+      snapshotWriter.setTaskState(
+        parentStream,
+        taskState('orchestrator'),
+        executionId,
+      );
+      snapshotWriter.setTaskState(childStream, taskState('bash'), executionId);
+      await snapshotWriter.flush();
+
+      const logStore = new StreamLogStore();
+      await logStore.load();
+      logStore.append(childStream, {
+        id: 'entry-1',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 100,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'child stream output',
+      });
+      await logStore.flush();
+
+      // First call has no streamLogStore, so pickBestMetaMatch can't see the
+      // child's log and falls back to the first candidate (the parent).
+      const uninformed = await resolvePersistedStreamIdForExecution(
+        executionId,
+        { snapshotStore: new StreamSnapshotStore() },
+      );
+      expect(uninformed).toEqual({
+        streamId: parentStream,
+        source: 'streamDataMeta',
+      });
+
+      // If that resolution had been cached, this second call -- which DOES
+      // have the log store -- would incorrectly return the cached parent
+      // instead of correctly picking the log-backed child.
+      const informed = await resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+        streamLogStore: logStore,
+      });
+      expect(informed).toEqual({
+        streamId: childStream,
+        source: 'streamDataMeta',
+      });
+    },
+  );
 });
