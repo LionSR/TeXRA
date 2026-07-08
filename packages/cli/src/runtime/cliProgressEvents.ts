@@ -33,8 +33,8 @@ import type {
  * choose an explicit host projection only when a retained public surface
  * requires it.
  */
-export interface AgentRuntimeProgressEventPayloads {
-  // ── Run/stream progress ──
+export interface CliProgressEventPayloads {
+  // Run/stream progress.
   setActiveStream: SetActiveStreamPayload;
   updateStreamStatus: UpdateStreamStatusPayload;
   addOutputFiles: AddOutputFilesPayload;
@@ -45,7 +45,6 @@ export interface AgentRuntimeProgressEventPayloads {
   updateStreamUsage: UpdateStreamUsagePayload;
   /** Inquiry thread state changed (open, answered, dropped, or resume outcome). */
   inquiryThreadUpdated: InquiryThreadUpdatedEvent;
-  // ── Run/stream progress (part 2) ──
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
   updateConversationProgress: UpdateConversationProgressPayload;
@@ -58,18 +57,20 @@ export interface AgentRuntimeProgressEventPayloads {
   updateStreamDescription: UpdateStreamDescriptionPayload;
   setParentStream: SetParentStreamPayload;
 
-  /** Request the progress view to remove a stream tab (used by short-lived
-   *  child streams that should auto-close once their work is done). */
+  /**
+   * Request the progress view to remove a stream tab. This is used by
+   * short-lived child streams that should auto-close once their work is done.
+   */
   removeStream: RemoveStreamPayload;
 
   goalStateChanged: GoalStateChangedPayload;
 }
 
-export type AgentRuntimeProgressEvent = keyof AgentRuntimeProgressEventPayloads;
+export type CliProgressEvent = keyof CliProgressEventPayloads;
 
-export interface AgentRuntimeProgressSink {
-  emit<K extends AgentRuntimeProgressEvent>(
+export interface CliProgressSink {
+  emit<K extends CliProgressEvent>(
     event: K,
-    payload: AgentRuntimeProgressEventPayloads[K],
+    payload: CliProgressEventPayloads[K],
   ): void;
 }
