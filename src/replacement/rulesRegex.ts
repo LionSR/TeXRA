@@ -22,12 +22,10 @@ const convertFencedLatexBlock: ReplacementFunction = (
   const safeEnvironment = environment ?? '';
   const safeBody = multilineBody || inlineBody || '';
 
-  let bodyWithTrailingBreak = '';
-  if (safeBody !== '') {
-    bodyWithTrailingBreak = safeBody.endsWith(newline)
+  const bodyWithTrailingBreak =
+    safeBody === '' || safeBody.endsWith(newline)
       ? safeBody
       : `${safeBody}${newline}`;
-  }
   const emptyBodyPadding = safeBody === '' ? newline : '';
 
   return `${safeLeadingBreak}${safeIndent}\\begin{${safeEnvironment}}${newline}${emptyBodyPadding}${bodyWithTrailingBreak}${safeIndent}\\end{${safeEnvironment}}`;

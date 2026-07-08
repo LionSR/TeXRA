@@ -75,7 +75,7 @@ export function extractTextFromTag(
  */
 function extractLatexFromMarkdown(content: string): string | null {
   const match = content.match(/```(?:latex|tex)\n([\s\S]*?)\n```/i);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 /**
@@ -123,7 +123,7 @@ export function extractMultipleTextFromTag(
     );
     const containerMatch = inputContent.match(containerRegex);
 
-    if (containerMatch && containerMatch[1]) {
+    if (containerMatch?.[1]) {
       const documents = extractNamedDocuments(containerMatch[1]);
       if (documents.length > 0) {
         return documents;

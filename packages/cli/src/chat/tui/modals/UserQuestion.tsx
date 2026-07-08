@@ -58,13 +58,11 @@ function wrappedUserQuestionPromptLines({
   readonly text: string;
   readonly width: number;
 }): UserQuestionPromptLine[] {
-  const lines: UserQuestionPromptLine[] = [];
-  for (const line of text.split('\n')) {
-    for (const wrapped of wrapAnsiToWidth(line, width).split('\n')) {
-      lines.push({ kind, text: wrapped });
-    }
-  }
-  return lines;
+  return text.split('\n').flatMap((line) =>
+    wrapAnsiToWidth(line, width)
+      .split('\n')
+      .map((wrapped): UserQuestionPromptLine => ({ kind, text: wrapped })),
+  );
 }
 
 function userQuestionInlineClipIndicator({

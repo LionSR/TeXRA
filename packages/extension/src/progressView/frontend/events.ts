@@ -38,13 +38,11 @@ export interface FollowUpSendDetail {
   readonly images: readonly ExtractedClipboardImage[];
 }
 
-interface WorkflowFollowupFormData {
+export interface FollowupCommandDetail {
   agent: string;
   model: string;
   initialQuestion: string;
 }
-
-export type FollowupCommandDetail = WorkflowFollowupFormData;
 
 /**
  * Frontend-only panel action emitted by the inline "Yolo (this session)"

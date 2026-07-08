@@ -155,7 +155,6 @@ export class PersistedFlow<
     await this.ensureRecord(shared);
     let step = await this.stepWithResult();
     while (step.hasMore) {
-      // step loop
       step = await this.stepWithResult();
     }
     return (step.action ??
