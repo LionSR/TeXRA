@@ -17,7 +17,10 @@ import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
+import {
+  COMMIT_LABEL_FORMAT,
+  splitCommitLines,
+} from '@utils/git/commitLogFormat';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'gitCommands';
@@ -98,7 +101,7 @@ function getRecentCommits(rootPath?: string): string[] | null {
   if (result.exitCode !== 0) {
     return [];
   }
-  return result.stdout.split('\n').map((line) => line.trim());
+  return splitCommitLines(result.stdout);
 }
 
 function findCommitInHistory(

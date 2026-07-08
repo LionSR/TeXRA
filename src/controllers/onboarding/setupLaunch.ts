@@ -70,7 +70,7 @@ export interface SetupModelResolution {
  * extension prompts the user first (`ensureRoutingConfigured`) and can offer
  * it.
  */
-export async function resolveSetupModel(
+export async function resolveSetupLaunchModel(
   secrets: PlatformSecrets,
   includeAccessListFallback: boolean,
 ): Promise<SetupModelResolution | null> {
@@ -109,7 +109,7 @@ export async function resolveSetupModel(
  * already on and an OpenRouter key exists.
  */
 export async function selectDesktopSetupModel(): Promise<string | null> {
-  const resolution = await resolveSetupModel(platform().secrets, false);
+  const resolution = await resolveSetupLaunchModel(platform().secrets, false);
   return resolution?.model ?? null;
 }
 

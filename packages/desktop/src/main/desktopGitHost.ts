@@ -20,7 +20,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { clamp } from '@utils/core';
-import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
+import {
+  COMMIT_LABEL_FORMAT,
+  splitCommitLines,
+} from '@utils/git/commitLogFormat';
 import { isGitRepository } from '@utils/system/isGitRepository';
 
 const execFileAsync = promisify(execFile);
@@ -121,7 +124,7 @@ export function createDesktopGitHost(
           },
         );
         return {
-          commits: stdout.split('\n').map((line) => line.trim()),
+          commits: splitCommitLines(stdout),
           isGitRepo: true,
         };
       } catch (error) {

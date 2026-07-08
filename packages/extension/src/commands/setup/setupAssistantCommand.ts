@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import {
-  resolveSetupModel,
+  resolveSetupLaunchModel,
   SETUP_INSTRUCTION,
 } from '@controllers/onboarding/setupLaunch';
 import { platform } from '@platform/platform';
@@ -48,7 +48,7 @@ interface LaunchModelResolution {
  * fallback's flag flip is expected, unlike desktop's silent-launch path).
  */
 async function selectLaunchModel(): Promise<LaunchModelResolution | null> {
-  const resolution = await resolveSetupModel(platform().secrets, true);
+  const resolution = await resolveSetupLaunchModel(platform().secrets, true);
   if (!resolution) return null;
   return {
     model: resolution.model,

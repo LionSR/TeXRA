@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 /**
- * Mirrors `resolveSetupModel`'s real router-config / credential /
+ * Mirrors `resolveSetupLaunchModel`'s real router-config / credential /
  * access-list-fallback precedence using the same mocked primitives this
  * suite already drives (`getUseOpenRouter`, `hasUsableApiKey`,
  * `selectSetupCredentialModelExcludingOpenRouter`) — the real function lives
@@ -84,8 +84,10 @@ vi.mock('@controllers/onboarding/setupLaunch', () => ({
     'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.',
   selectSetupCredentialModelExcludingOpenRouter:
     mocks.selectSetupCredentialModelExcludingOpenRouter,
-  resolveSetupModel: (_secrets: unknown, includeAccessListFallback: boolean) =>
-    resolveSetupModelMock(includeAccessListFallback),
+  resolveSetupLaunchModel: (
+    _secrets: unknown,
+    includeAccessListFallback: boolean,
+  ) => resolveSetupModelMock(includeAccessListFallback),
 }));
 
 vi.mock('@auth/codex', () => ({
