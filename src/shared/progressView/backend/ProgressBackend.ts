@@ -2,11 +2,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import {
-  type ProjectedProgressEvent,
-  projectSessionFactToProgressEvent,
-  subscribeRunFactsAsProgressEvents,
-} from '@agent/runtime/sessionProgressEventProjection';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
@@ -17,6 +12,7 @@ import {
 } from '@shared/progressView/backend/WebviewBridge';
 import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import {
+  PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES,
   ProgressEventHandler,
   type GetProgressStreamControls,
   type ProgressEventSubscription,
@@ -132,15 +128,36 @@ export class ProgressBackend {
       this.eventHandler.createLocalSubscription();
     const detachSessionFacts = this.session.events.subscribe(
       (sessionEvent) => {
+        if (this.disposed) return;
         if (sessionEvent.scope !== 'session') return;
-        const projected = projectSessionFactToProgressEvent(sessionEvent.event);
-        if (projected) this.handleProjectedProgressEvent(projected);
+        const notification = this.eventHandler.handleSessionFact(
+          sessionEvent.event,
+        );
+        if (notification) {
+          this.onSessionProgressEvent?.(
+            notification.event,
+            notification.payload,
+          );
+        }
       },
       { scope: 'session' },
     );
-    const detachRunFacts = subscribeRunFactsAsProgressEvents(
-      this.session.events,
-      (projected) => this.handleProjectedProgressEvent(projected),
+    const detachRunFacts = this.session.events.subscribe(
+      (sessionEvent) => {
+        if (this.disposed) return;
+        if (sessionEvent.scope !== 'run') return;
+        const notification = this.eventHandler.handleRunFact(
+          sessionEvent.streamId,
+          sessionEvent.event,
+        );
+        if (notification) {
+          this.onSessionProgressEvent?.(
+            notification.event,
+            notification.payload,
+          );
+        }
+      },
+      { scope: 'run', types: PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES },
     );
     return {
       dispose: () => {
@@ -149,13 +166,6 @@ export class ProgressBackend {
         eventHandlerSubscription.dispose();
       },
     };
-  }
-
-  private handleProjectedProgressEvent(
-    projected: ProjectedProgressEvent,
-  ): void {
-    this.handleProgressEvent(projected.event, projected.payload);
-    this.onSessionProgressEvent?.(projected.event, projected.payload);
   }
 
   handleProgressEvent<K extends ProgressEvent>(
