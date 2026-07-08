@@ -8,6 +8,8 @@ import type {
 import {
   ExtendedTokenUsageStatsSchema,
   ConversationProgressSchema,
+  UpdatePlanPayloadSchema,
+  UpdateTodosPayloadSchema,
   type StorageKey,
   type StreamTabId,
   type UpdateStreamUsagePayload,
@@ -173,9 +175,21 @@ export function projectRunFactToProgressEvent(
 
     const factName = fromRunFactDomainKey(event.key);
     if (!factName || !isObject(event.data)) return undefined;
+    if (factName === 'updateTodos') {
+      const payload = UpdateTodosPayloadSchema.safeParse(event.data);
+      return payload.success
+        ? { event: 'updateTodos', payload: payload.data }
+        : undefined;
+    }
+    if (factName === 'updatePlan') {
+      const payload = UpdatePlanPayloadSchema.safeParse(event.data);
+      return payload.success
+        ? { event: 'updatePlan', payload: payload.data }
+        : undefined;
+    }
     return {
       event: factName,
-      payload: event.data as ProgressEventPayloads[typeof factName],
+      payload: event.data as unknown as ProgressEventPayloads[typeof factName],
     } as ProjectedProgressEvent;
   }
 
