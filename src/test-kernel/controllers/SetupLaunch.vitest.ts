@@ -55,6 +55,7 @@ vi.mock('@utils/config/providerConfig', () => ({
 const {
   selectSetupCredentialModelExcludingOpenRouter,
   selectDesktopSetupModel,
+  resolveSetupLaunchModel,
 } = await import('@controllers/onboarding/setupLaunch');
 
 describe('selectSetupCredentialModelExcludingOpenRouter', () => {
@@ -167,5 +168,45 @@ describe('selectDesktopSetupModel', () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
 
     await expect(selectDesktopSetupModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
+  });
+});
+
+/**
+ * `selectDesktopSetupModel` above always calls `resolveSetupLaunchModel`
+ * with `includeAccessListFallback: false`, so it never exercises the
+ * access-list-default branch the extension opts into. These cases drive
+ * `resolveSetupLaunchModel` directly (against the real `decideRunModel`,
+ * not a mock) to cover that branch and prove the two hosts' policies
+ * actually diverge where intended.
+ */
+describe('resolveSetupLaunchModel', () => {
+  beforeEach(() => {
+    mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
+    mocks.canUseServerSideKeys.mockReset().mockResolvedValue(false);
+    mocks.canUseServerSideKeysForModel.mockReset().mockResolvedValue(false);
+    mocks.canUseModelSync.mockReset().mockReturnValue(false);
+    mocks.lookupApiKey.mockReset().mockResolvedValue(undefined);
+    mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
+  });
+
+  it('falls back to the OpenRouter access-list model when no credential is available and the caller opts in', async () => {
+    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
+      provider === 'openRouter' ? 'or-test' : undefined,
+    );
+
+    await expect(resolveSetupLaunchModel({} as never, true)).resolves.toEqual({
+      model: SETUP_MODEL_BY_PROVIDER.openRouter,
+      reason: 'access-list-default',
+    });
+  });
+
+  it('returns null instead of the access-list fallback when the caller opts out', async () => {
+    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
+      provider === 'openRouter' ? 'or-test' : undefined,
+    );
+
+    await expect(resolveSetupLaunchModel({} as never, false)).resolves.toBe(
+      null,
+    );
   });
 });
