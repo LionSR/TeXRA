@@ -81,7 +81,12 @@ export function replaceMessagesInPlace<T>(target: T[], newContents: T[]): void {
   target.push(...newContents);
 }
 
-type CycleServices = AgentCore & { workspace: AgentWorkspaceState };
+/**
+ * Core services scoped with the run's workspace state. Named distinctly from
+ * the exported service interfaces in the sibling `CycleServices.ts` (which
+ * model the live model client) to avoid a same-folder name collision.
+ */
+type WorkspaceScopedCore = AgentCore & { workspace: AgentWorkspaceState };
 
 export type CycleDebugFileOptions = {
   continuationCount: number;
@@ -110,7 +115,7 @@ export async function saveCycleDebug(
 }
 
 export function defaultPostCompactionContext(
-  services: CycleServices,
+  services: WorkspaceScopedCore,
 ): string | null {
   const { session, streamId } = useLaunchRunContext();
   const { subagents, processes } =
@@ -145,7 +150,7 @@ export function extractModelResponse(
   response: unknown,
   responseTimeMs: number | undefined,
   endTag: string,
-  services: CycleServices,
+  services: WorkspaceScopedCore,
   options: ExtractModelResponseOptions = {},
 ): ExtractedModelResponse {
   const { modelHandler, workspace, logger } = services;
