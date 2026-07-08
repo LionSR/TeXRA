@@ -164,7 +164,7 @@ export const STREAM_SUBSTATE = {
 export const StreamSubstateSchema = z.enum(STREAM_SUBSTATE);
 export type StreamSubstate = z.infer<typeof StreamSubstateSchema>;
 
-export function isRunOutcome(value: string | undefined): value is RunOutcome {
+function isRunOutcome(value: string | undefined): value is RunOutcome {
   return RunOutcomeSchema.safeParse(value).success;
 }
 
@@ -215,20 +215,6 @@ export function streamStatusToSubstate(
   }
 }
 
-export function streamPhaseToStreamStatus(phase: StreamPhase): StreamStatus {
-  switch (phase) {
-    case STREAM_PHASE.RUNNING:
-      return STREAM_STATUS.RUNNING;
-    case STREAM_PHASE.WAITING:
-      return STREAM_STATUS.WAITING;
-    case STREAM_PHASE.FAILED:
-      return STREAM_STATUS.ERROR;
-    case STREAM_PHASE.COMPLETED:
-    case STREAM_PHASE.CANCELLED:
-      return STREAM_STATUS.STOPPED;
-  }
-}
-
 export type StreamLifecycleStatus = StreamPhase | typeof STREAM_STATUS.READY;
 
 export function streamStatusToLifecycleStatus(
@@ -274,7 +260,6 @@ export const WorktreePRInfoSchema = z.object({
   deletions: z.number().optional(),
   ciState: WorktreeCIStateSchema.optional(),
 });
-export type WorktreePRInfo = z.infer<typeof WorktreePRInfoSchema>;
 
 export const WorktreeInfoSchema = z.object({
   /** Absolute path of the worktree the agent is operating in. */

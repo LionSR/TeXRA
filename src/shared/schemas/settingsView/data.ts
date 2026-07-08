@@ -49,14 +49,6 @@ import {
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
 } from '../agentCliSettings';
-export {
-  ClaudeAgentEffortSchema,
-  ClaudeAgentModelSchema,
-  ClaudeAgentPermissionModeSchema,
-  CodexApprovalPolicySchema,
-  CodexReasoningEffortSchema,
-  CodexSandboxModeSchema,
-} from '../agentCliSettings';
 export type {
   ClaudeAgentEffort,
   ClaudeAgentModel,
