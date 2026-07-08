@@ -141,7 +141,7 @@ Best practices:
       return {
         status: 'executed',
         summary: 'Created plan (no active session)',
-        output: this.formatPlan(plan),
+        output: `Plan objective:\n${plan.objective}`,
         diagnostics: {
           warning: 'No active plan context — plan may not persist',
         },
@@ -435,9 +435,5 @@ Best practices:
         : 'Plan approved — proceed with implementation',
       output: `${prefix} Work toward the objective, tracking concrete steps with the todo tool.`,
     };
-  }
-
-  private formatPlan(plan: Plan): string {
-    return `Plan objective:\n${plan.objective}`;
   }
 }

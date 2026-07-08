@@ -205,8 +205,7 @@ function configureAnsi(
 
   r.heading_open = (tokens, idx) => {
     headingDepth += 1;
-    const start = quoteDepth === 0 ? '\n' : quoteBlockStart(tokens, idx);
-    return start;
+    return quoteDepth === 0 ? '\n' : quoteBlockStart(tokens, idx);
   };
   r.heading_close = () => {
     headingDepth = Math.max(0, headingDepth - 1);

@@ -249,9 +249,7 @@ export abstract class PollingSourceBase<
    * `pollOne`.
    */
   protected detach(key: K): void {
-    const state = this.subscriptions.get(key);
-    if (!state) return;
-    this.subscriptions.delete(key);
+    if (!this.subscriptions.delete(key)) return;
     this.notifyKeysChanged();
   }
 

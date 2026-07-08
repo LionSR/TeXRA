@@ -161,12 +161,11 @@ export async function executeCliRequest(
   runContext: CliContext,
   options: CliExecuteOptions = {},
 ): Promise<{ result: ExecuteAgentResult; terminalStatus: ExecutionStatus }> {
-  const baseRuntimeHost = createCliRuntimeHost(runContext);
+  const runtimeHost = createCliRuntimeHost(runContext);
   const snapshotStore = new StreamSnapshotStore();
   const detachSnapshotEvents = snapshotStore.attachSessionEvents(
     defaultSession().events,
   );
-  const runtimeHost = baseRuntimeHost;
   const detachHostInteractions = defaultSession().useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),

@@ -157,12 +157,10 @@ export function formatSubagentDelivery(
     workingDirectory?: string;
   },
 ): string {
-  const lines = [
-    ...formatDeliveryPreamble({
-      workingDirectory: options?.workingDirectory,
-      memoryMisses: result.memoryMisses,
-    }),
-  ];
+  const lines = formatDeliveryPreamble({
+    workingDirectory: options?.workingDirectory,
+    memoryMisses: result.memoryMisses,
+  });
 
   if (result.category === 'workflow') {
     if (options?.diffsUnavailable) {
