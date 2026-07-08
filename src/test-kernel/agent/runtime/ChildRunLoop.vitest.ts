@@ -1,6 +1,6 @@
 // E2E fixtures for the promoted "one loop, N strategies" child-run driver.
 // These exercise the loop's own mechanics (queue acquire/drain, one
-// interruptible for the child's whole lifetime, per-turn delivery, terminal
+// run-handle interrupt target for the child's whole lifetime, per-turn delivery, terminal
 // finalize) against a minimal fake strategy — the same contract every real
 // strategy (codex, claude, native tool-use, native workflow) implements.
 // Identical assertions apply regardless of which strategy is plugged in,
@@ -36,9 +36,30 @@ import {
 } from '@shared/schemas';
 
 const session = defaultSession();
+const trackedExecutionIds = new Set<string>();
 
 function uniqueStreamId(label: string): StreamTabId {
   return `${label}-${Math.random().toString(36).slice(2)}` as StreamTabId;
+}
+
+function trackChildHandle(
+  executionId: ExecutionId,
+  parentStreamId: StreamTabId,
+  childStreamId: StreamTabId,
+): AgentExecutionHandle {
+  const handle = new AgentExecutionHandle(
+    executionId,
+    parentStreamId,
+    childStreamId,
+    'fake',
+    'toolUse',
+    { emit: vi.fn() } as never,
+  );
+  session.executions.trackAgentExecution(handle, {
+    status: STREAM_PHASE.RUNNING,
+  });
+  trackedExecutionIds.add(executionId);
+  return handle;
 }
 
 /** A turn the fake strategy can produce: interim (loop continues) or terminal. */
@@ -119,32 +140,35 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  session.interrupts.retainOnly(new Set());
+  for (const executionId of trackedExecutionIds) {
+    session.executions.untrack(executionId);
+  }
+  trackedExecutionIds.clear();
 });
 
 describe('childRunLoop E2E fixtures', () => {
   it('delegate → interrupt mid-run: an interrupt during the first turn ends the run without a terminal delivery for that turn', async () => {
     const childStreamId = uniqueStreamId('interrupt-mid-run');
     const parentStreamId = 'parent' as StreamTabId;
+    const executionId = 'exec-interrupt-mid-run' as ExecutionId;
     const { strategy, rejectTurn } = createFakeStrategy();
+    const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
 
     startChildRunLoop({
       childStreamId,
       parentStreamId,
-      executionId: 'exec-interrupt-mid-run' as ExecutionId,
+      executionId,
       agentName: 'fake',
       strategy,
     });
 
-    // Give the loop's async IIFE a tick to register its interruptible and
+    // Give the loop's async IIFE a tick to attach its interrupt handler and
     // call launch().
     await vi.waitFor(() =>
       expect(isChildRunLoopActive(childStreamId)).toBe(true),
     );
 
-    const interruptible = session.interrupts.get(childStreamId);
-    expect(interruptible).toBeDefined();
-    interruptible?.interrupt();
+    expect(handle.interrupt()).toBe(true);
     // Simulate the in-flight call rejecting with an AbortError-shaped
     // rejection, matching what a real strategy's abortController produces.
     const abortError = new Error('Aborted');
@@ -155,7 +179,7 @@ describe('childRunLoop E2E fixtures', () => {
       expect(isChildRunLoopActive(childStreamId)).toBe(false),
     );
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
-    expect(session.interrupts.get(childStreamId)).toBeUndefined();
+    expect(session.executions.getHandle(executionId)).toBeUndefined();
   });
 
   it('delegate → complete → follow-up delivery: an interim turn delivers, then the loop picks up a queued follow-up for the next turn', async () => {
@@ -212,7 +236,9 @@ describe('childRunLoop E2E fixtures', () => {
   it('late result after parent stop: a turn that resolves after the loop already interrupted still attempts best-effort delivery and does not throw', async () => {
     const childStreamId = uniqueStreamId('late-result');
     const parentStreamId = 'parent' as StreamTabId;
+    const executionId = 'exec-late-result' as ExecutionId;
     const { strategy, resolveTurn } = createFakeStrategy();
+    const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
     // The parent stream is gone by the time this late delivery lands.
     mocks.deliverChildRunFollowUp.mockResolvedValue({
       kind: 'no_session',
@@ -222,7 +248,7 @@ describe('childRunLoop E2E fixtures', () => {
     startChildRunLoop({
       childStreamId,
       parentStreamId,
-      executionId: 'exec-late-result' as ExecutionId,
+      executionId,
       agentName: 'fake',
       strategy,
     });
@@ -233,7 +259,7 @@ describe('childRunLoop E2E fixtures', () => {
     // Interrupt the loop, then let the in-flight turn resolve normally
     // (not aborted) — mirrors a turn that was already past its own
     // interruption checkpoints when the stop landed.
-    session.interrupts.get(childStreamId)?.interrupt();
+    expect(handle.interrupt()).toBe(true);
     await resolveTurn(1, { kind: 'terminal', value: 'late' });
 
     await vi.waitFor(() => {
@@ -251,12 +277,14 @@ describe('childRunLoop E2E fixtures', () => {
   it('kill during WAITING: interrupting the loop while it is blocked between turns ends the run without a hang', async () => {
     const childStreamId = uniqueStreamId('kill-during-waiting');
     const parentStreamId = 'parent' as StreamTabId;
+    const executionId = 'exec-kill-during-waiting' as ExecutionId;
     const { strategy, resolveTurn } = createFakeStrategy();
+    const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
 
     startChildRunLoop({
       childStreamId,
       parentStreamId,
-      executionId: 'exec-kill-during-waiting' as ExecutionId,
+      executionId,
       agentName: 'fake',
       strategy,
     });
@@ -269,18 +297,13 @@ describe('childRunLoop E2E fixtures', () => {
     await vi.waitFor(() => {
       expect(mocks.deliverChildRunFollowUp).toHaveBeenCalled();
     });
-    // The loop is now blocked in queue.waitAndDrainAll — no live per-turn
-    // interruptible exists here (nothing is mid-turn); this loop's own
-    // interruptible, registered for the child's whole lifetime, is the only
-    // thing a kill can find.
-    const interruptible = session.interrupts.get(childStreamId);
-    expect(interruptible).toBeDefined();
-    interruptible?.interrupt();
+    // The loop is now blocked in queue.waitAndDrainAll; the loop's handler on
+    // the run handle is the live stop target.
+    expect(handle.interrupt()).toBe(true);
 
     await vi.waitFor(() =>
       expect(isChildRunLoopActive(childStreamId)).toBe(false),
     );
-    expect(session.interrupts.get(childStreamId)).toBeUndefined();
     // Only the one interim delivery — the kill did not spawn another turn.
     expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1);
   });
@@ -288,9 +311,9 @@ describe('childRunLoop E2E fixtures', () => {
   it('stop between turns (native, no ChildStream) settles and untracks the dangling handle — no ghost subagent', async () => {
     // Regression: for a native strategy (no ChildStream — each turn owns its
     // own AgentExecutionHandle via runFlowWithLifecycle, not the loop), a
-    // stop landing BETWEEN turns finds the loop's own interruptible in
-    // ExecutionRegistry, calls .interrupt(), and transitions the stream to
-    // CANCELLED — but assumes a live flow will notice and self-finalize.
+    // stop landing BETWEEN turns interrupts the loop through the run handle
+    // and transitions the stream to CANCELLED — but assumes a live flow will
+    // notice and self-finalize.
     // Nothing is running here (the loop is just blocked on a queue wait), so
     // without the loop's own finalize-on-interrupt fallback, the most
     // recently tracked handle for this stream — still WAITING, still
@@ -332,11 +355,8 @@ describe('childRunLoop E2E fixtures', () => {
       expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
     );
 
-    // Loop is now between turns. Interrupt it — simulating
-    // ExecutionRegistry.terminate() finding the loop's own interruptible.
-    const interruptible = session.interrupts.get(childStreamId);
-    expect(interruptible).toBeDefined();
-    interruptible?.interrupt();
+    // Loop is now between turns. Interrupt it through the run handle.
+    expect(handle.interrupt()).toBe(true);
 
     await vi.waitFor(() =>
       expect(isChildRunLoopActive(childStreamId)).toBe(false),
@@ -352,18 +372,16 @@ describe('childRunLoop E2E fixtures', () => {
     expect(session.executions.getHandle(executionId)).toBeUndefined();
   });
 
-  it('re-registers the loop interruptible immediately when a turn settles, before delivery (Copilot review: no interruptible-gap during delivery)', async () => {
-    // Regression: a native turn's own flow-owned interruptible registers on
-    // the SAME InterruptRegistry slot while it runs, then unregisters it in
-    // its own `finally` the instant it returns (mirroring runToolUseFlow).
-    // If the loop re-registered its own interruptible only AFTER awaiting
-    // deliverTurn (persist report / persist manifest / deliver follow-up),
-    // a stop/kill landing during that delivery window would find nothing
-    // live. This strategy clobbers-then-unregisters the slot inside its own
-    // `launch`, exactly like a real native turn, and the test inspects the
-    // registry WHILE delivery is deliberately held open.
+  it('reattaches the loop interrupt handler immediately when a turn settles, before delivery (Copilot review: no interrupt gap during delivery)', async () => {
+    // Regression: if the loop attached its own interrupt handler only AFTER
+    // awaiting deliverTurn (persist report / persist manifest / deliver
+    // follow-up), a stop/kill landing during that delivery window would find
+    // only the now-detached per-turn flow context. The test inspects the run
+    // handle while delivery is deliberately held open.
     const childStreamId = uniqueStreamId('reregister-before-delivery');
     const parentStreamId = 'parent' as StreamTabId;
+    const executionId = 'exec-reregister-before-delivery' as ExecutionId;
+    const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
     let deliveryGate: DeferredPromise<void> | undefined;
     mocks.deliverChildRunFollowUp.mockImplementation(async () => {
       deliveryGate = pDefer<void>();
@@ -373,13 +391,7 @@ describe('childRunLoop E2E fixtures', () => {
 
     const strategy: ChildRunStrategy<FakeTurn> = {
       stageLabel: 'Reregister test',
-      launch: async () => {
-        // Simulates runToolUseFlow's own register-on-start,
-        // unregister-in-finally choreography on the identical stream id.
-        session.interrupts.register(childStreamId, { interrupt: () => {} });
-        session.interrupts.unregister(childStreamId);
-        return { kind: 'terminal', value: 'done' };
-      },
+      launch: async () => ({ kind: 'terminal', value: 'done' }),
       isTerminal: () => true,
       formatDelivery: (turn) => `delivered:${turn.value}`,
       formatError: () => 'error',
@@ -388,7 +400,7 @@ describe('childRunLoop E2E fixtures', () => {
     startChildRunLoop({
       childStreamId,
       parentStreamId,
-      executionId: 'exec-reregister-before-delivery' as ExecutionId,
+      executionId,
       agentName: 'fake',
       strategy,
     });
@@ -397,9 +409,9 @@ describe('childRunLoop E2E fixtures', () => {
     // window the review flagged as unprotected.
     await vi.waitFor(() => expect(deliveryGate).toBeDefined());
 
-    // The loop's own interruptible must already be back in place here, even
-    // though delivery has not finished.
-    expect(session.interrupts.get(childStreamId)).toBeDefined();
+    // The loop's own interrupt handler must already be back in place here,
+    // even though delivery has not finished.
+    expect(handle.interrupt()).toBe(true);
 
     deliveryGate?.resolve();
     await vi.waitFor(() =>

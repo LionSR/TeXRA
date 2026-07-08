@@ -216,16 +216,32 @@ async function runToolUseAgent(
  */
 async function runReflectionAgent(
   ctx: AgentLaunchContext,
+  handle: AgentExecutionHandle,
   setting: AgentWorkflowSetting,
 ): Promise<AgentFlowResult> {
   const { streamId } = ctx;
   const onRoundFinalized = createUsageRecordingCallback(ctx);
-  const result = await runReflectionFlow({
-    ...ctx,
-    ...createInterruptCallbacks(),
-    onRoundFinalized,
-    setting,
+  const interruptCallbacks = createInterruptCallbacks();
+  const detachInterruptHandler = handle.attachInterruptHandler({
+    interrupt(): void {
+      interruptCallbacks.onInterrupt?.();
+      ctx.session.interactions.cancel({
+        streamId,
+        cause: 'Run interrupted.',
+      });
+    },
   });
+  let result: Awaited<ReturnType<typeof runReflectionFlow>>;
+  try {
+    result = await runReflectionFlow({
+      ...ctx,
+      ...interruptCallbacks,
+      onRoundFinalized,
+      setting,
+    });
+  } finally {
+    detachInterruptHandler();
+  }
   return buildWorkflowFlowResult(
     result,
     ctx.executionId,
@@ -418,7 +434,7 @@ export async function executeAgent(
         if (setting.agentCategory === AgentCategory.ToolUse) {
           return runToolUseAgent(ctx, handle, setting, options);
         }
-        return runReflectionAgent(ctx, setting);
+        return runReflectionAgent(ctx, handle, setting);
       },
       {
         isSubagent,

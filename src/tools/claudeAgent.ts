@@ -456,7 +456,7 @@ function startClaudeAgentLoop(params: {
           childStreamId,
           parentStreamId,
           executionId,
-          interrupts: session.interrupts,
+          executions: session.executions,
           model: params.model,
           permissionMode: params.permissionMode,
           effort: params.effort,

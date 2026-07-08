@@ -14,7 +14,6 @@ import {
   AgentExecutionHandle,
   SharedExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
-import { SharedInterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { SharedExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { type Plan, type StreamTabId } from '@shared/schemas';
@@ -43,7 +42,6 @@ function trackAgent(
 
 describe('SessionHandle', () => {
   it('defaultSession wraps the process singletons by identity', () => {
-    expect(defaultSession().interrupts).toBe(SharedInterruptRegistry);
     expect(defaultSession().executions).toBe(SharedExecutionRegistry);
     expect(defaultSession().subscriptions).toBe(
       SharedExecutionSubscriptionBinder,
@@ -61,7 +59,6 @@ describe('SessionHandle', () => {
   it('a fresh session shares no member with the module singletons', () => {
     const fresh = new SessionHandle();
     try {
-      expect(fresh.interrupts).not.toBe(SharedInterruptRegistry);
       expect(fresh.executions).not.toBe(SharedExecutionRegistry);
       expect(fresh.subscriptions).not.toBe(SharedExecutionSubscriptionBinder);
       expect(fresh.interactions).not.toBe(defaultSession().interactions);
@@ -82,7 +79,6 @@ describe('SessionHandle', () => {
     try {
       expect(session.hostChannel).toBe(host);
       expect(session.executions).not.toBe(SharedExecutionRegistry);
-      expect(session.interrupts).not.toBe(SharedInterruptRegistry);
     } finally {
       session.dispose();
     }
@@ -179,14 +175,12 @@ describe('SessionHandle', () => {
     const interactions = vi.spyOn(session.interactions, 'dispose');
     const subscriptions = vi.spyOn(session.subscriptions, 'dispose');
     const executions = vi.spyOn(session.executions, 'dispose');
-    const retainOnly = vi.spyOn(session.interrupts, 'retainOnly');
 
     session.dispose();
 
     expect(interactions).toHaveBeenCalledOnce();
     expect(subscriptions).toHaveBeenCalledOnce();
     expect(executions).toHaveBeenCalledOnce();
-    expect(retainOnly).toHaveBeenCalledWith(new Set());
   });
 
   it('can keep active executions visible until they settle', async () => {

@@ -15,7 +15,7 @@ import {
   getCurrentToolContexts,
   type ToolCallContext,
 } from '@agent/followUp/ToolFileInteractionContext';
-import { type IInterruptible } from '@agent/runtime/InterruptRegistry';
+import type { ExecutionInterruptHandler } from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -104,7 +104,7 @@ function usesShellLevelBackgrounding(command: string): boolean {
   return SHELL_BACKGROUNDING_PATTERN.test(command);
 }
 
-class BashBackgroundSession implements IInterruptible {
+class BashBackgroundSession implements ExecutionInterruptHandler {
   private pid: number | undefined;
   private interrupted = false;
 
@@ -277,7 +277,10 @@ export class BashTool extends defineTool({
     // unregisters after the process ends, possibly outside the ALS.
     const runSession = currentSession();
     const session = new BashBackgroundSession();
-    runSession.interrupts.register(childStreamId, session);
+    const detachInterruptHandler =
+      runSession.executions
+        .getAgentHandleByStream(childStreamId)
+        ?.attachInterruptHandler(session) ?? (() => {});
 
     const logChunk = (chunk: string, level: 'info' | 'warn'): void => {
       if (logCapReached) return;
@@ -333,7 +336,7 @@ export class BashTool extends defineTool({
     const finalizeBackground = (
       options?: Parameters<typeof childStream.finalize>[0],
     ): Promise<void> => {
-      runSession.interrupts.unregister(childStreamId);
+      detachInterruptHandler();
       return childStream.finalize(options);
     };
 

@@ -5,9 +5,9 @@
  * it re-exposes no per-concern methods, so callers keep the existing instance
  * vocabulary they already use after 7a–c landed (`session.interactions.x(...)`,
  * `session.executions.y(...)`). It composes the landed runtime owners —
- * {@link InterruptRegistry}, {@link ExecutionRegistry},
- * {@link ExecutionSubscriptionBinder}, {@link SessionHostInteractions} — plus
- * the trace flusher set and an optional session-scoped host channel.
+ * {@link ExecutionRegistry}, {@link ExecutionSubscriptionBinder},
+ * {@link SessionHostInteractions} — plus the trace flusher set and an
+ * optional session-scoped host channel.
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop `BrowserWindow`. The default instance,
@@ -18,7 +18,7 @@
  * Fresh construction is in FORCED dependency order with every cross-reference
  * explicit: no member is ever allowed to default to a neighboring module
  * singleton (the "silent state split" trap — a fresh member quietly sharing a
- * singleton would leak interrupts or cross-session `clearAll` sweeps). The
+ * singleton would leak cross-session `clearAll` sweeps). The
  * fresh-ctor test in `SessionHandle.vitest.ts` locks this.
  *
  * It is deliberately NOT a conversation/session API (send/stream/resume/history):
@@ -44,10 +44,6 @@ import {
   SharedExecutionRegistry,
 } from './executionRegistry';
 import {
-  InterruptRegistry,
-  SharedInterruptRegistry,
-} from './InterruptRegistry';
-import {
   ExecutionSubscriptionBinder,
   SharedExecutionSubscriptionBinder,
 } from './ExecutionSubscriptionBinder';
@@ -68,7 +64,6 @@ const logger = createChannelTrace('sessionHandle');
 export type SessionHandleInit = Partial<
   Pick<
     SessionHandle,
-    | 'interrupts'
     | 'executions'
     | 'subscriptions'
     | 'events'
@@ -90,8 +85,6 @@ export interface SessionDisposeOptions {
 }
 
 export class SessionHandle {
-  /** Live executions that can be interrupted by stream id. */
-  readonly interrupts: InterruptRegistry;
   /** Per-run execution handles; owns the process-output poller + status sub. */
   readonly executions: ExecutionRegistry;
   /** Execution-status subscriptions bound to agent stream lifecycles. */
@@ -117,14 +110,13 @@ export class SessionHandle {
   constructor(init: SessionHandleInit = {}) {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
-    const interrupts = init.interrupts ?? new InterruptRegistry();
     const status = init.status ?? new StreamStatusMachine();
     const events = init.events ?? new SessionEventHub();
     const transcripts = init.transcripts ?? new StreamLogStore();
     const followUps = init.followUps ?? new ToolUseFollowUpQueue();
     const executions =
       init.executions ??
-      new ExecutionRegistry({ interrupts, streamStatus: status, events });
+      new ExecutionRegistry({ streamStatus: status, events });
     // Re-attaching on every `SessionHandle` construction — including for the
     // shared/default-session `ExecutionRegistry` singleton, which predates any
     // session — rebinds `publishResult` to *this* session's listeners.
@@ -132,7 +124,6 @@ export class SessionHandle {
       this.publishRunEvent(streamId, event),
     );
 
-    this.interrupts = interrupts;
     this.executions = executions;
     const subscriptions =
       init.subscriptions ??
@@ -219,14 +210,12 @@ export class SessionHandle {
    * Tear down everything this session owns. Order matters: drain this session's
    * pending trace writes, then either defer teardown while active executions
    * must remain visible for process-wide guards, or drop subscription
-   * disposers, dispose the execution registry, clear interrupt entries
-   * (`InterruptRegistry` has no `clear()`; `retainOnly` with the empty set is
-   * the existing precedent), settle pending host interactions via
-   * `interactions.dispose()`, and drop result listeners. Finally
-   * unregister this session's flusher set from the process-wide drain and
-   * deregister from `liveSessions` once no active executions remain — both in
-   * `finally` so a teardown throw can't strand a fully disposed session in the
-   * cross-session aggregate.
+   * disposers, dispose the execution registry, settle pending host
+   * interactions via `interactions.dispose()`, and drop result listeners.
+   * Finally unregister this session's flusher set from the process-wide drain
+   * and deregister from `liveSessions` once no active executions remain —
+   * both in `finally` so a teardown throw can't strand a fully disposed
+   * session in the cross-session aggregate.
    */
   dispose(options: SessionDisposeOptions = {}): void {
     if (this.disposeStarted) return;
@@ -273,7 +262,6 @@ export class SessionHandle {
   private teardownOwners(): void {
     this.subscriptions.dispose();
     this.executions.dispose();
-    this.interrupts.retainOnly(new Set());
     this.interactions.dispose();
     this.resultListeners.clear();
   }
@@ -324,7 +312,6 @@ let cachedDefaultSession: SessionHandle | undefined;
  */
 export function defaultSession(): SessionHandle {
   return (cachedDefaultSession ??= new SessionHandle({
-    interrupts: SharedInterruptRegistry,
     executions: SharedExecutionRegistry,
     subscriptions: SharedExecutionSubscriptionBinder,
     status: StreamStatusService,

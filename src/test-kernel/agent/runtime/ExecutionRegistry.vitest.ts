@@ -10,7 +10,6 @@ import {
   ProcessExecutionHandle,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
-import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
 import {
   SessionEventHub,
@@ -50,21 +49,16 @@ describe('executionRegistry', () => {
     expect(flush).not.toHaveBeenCalled();
   });
 
-  it('uses its interrupt registry when terminating agent handles', () => {
+  it('uses the handle interrupt target when terminating agent handles', () => {
     const explicit = createRecordingHost();
-    const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({
-      interrupts,
-      streamStatus,
-    });
+    const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-injected-interrupt-test';
     const parentStreamId = 'parent-injected-interrupt-test' as StreamTabId;
     const childStreamId = 'child-injected-interrupt-test' as StreamTabId;
     const interrupt = vi.fn();
 
     try {
-      interrupts.register(childStreamId, { interrupt });
       const handle = new AgentExecutionHandle(
         executionId,
         parentStreamId,
@@ -73,6 +67,7 @@ describe('executionRegistry', () => {
         'toolUse',
         explicit.host,
       );
+      handle.attachInterruptHandler({ interrupt });
       registry.track(handle);
 
       expect(registry.kill(executionId)).toBe(true);
@@ -81,20 +76,18 @@ describe('executionRegistry', () => {
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
     } finally {
       registry.dispose();
-      interrupts.unregister(childStreamId);
     }
   });
 
   it('falls back to a registered waiting-cleanup when a suspended handle has no live interrupt (issue #7287)', () => {
     // Regression: a native subagent suspended at WAITING has already had its
-    // live interrupt unregistered (runToolUseFlow's finally), while the
+    // live interrupt context detached (runToolUseFlow's finally), while the
     // handle stays tracked for resume. Before the fix, terminate() found no
-    // interruptible context and silently no-opped, leaving the handle stuck
+    // interrupt target and silently no-opped, leaving the handle stuck
     // registered forever with no way to tear it down from a stop/kill.
     const explicit = createRecordingHost();
-    const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-waiting-cleanup-kill-test';
     const parentStreamId = 'parent-waiting-cleanup-kill-test' as StreamTabId;
     const childStreamId = 'child-waiting-cleanup-kill-test' as StreamTabId;
@@ -111,8 +104,8 @@ describe('executionRegistry', () => {
       );
       registry.track(handle);
       handle.registerWaitingCleanup(cleanup);
-      // No interrupts.register() for childStreamId: mirrors a suspended
-      // subagent whose live tool-use session has already been disposed.
+      // No handle interrupt target: mirrors a suspended subagent whose live
+      // tool-use session has already been disposed.
       // Genuinely suspended: only `transitionToWaiting` reaches this status.
       seedStreamStatusForTest(
         streamStatus,
@@ -325,12 +318,10 @@ describe('executionRegistry', () => {
 
   it('owns visible stream stop policy for root and children', () => {
     const explicit = createRecordingHost();
-    const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
     attachSessionProgressEventProjectionForTest(events, explicit.host);
     const registry = new ExecutionRegistry({
-      interrupts,
       streamStatus,
       events,
     });
@@ -340,28 +331,26 @@ describe('executionRegistry', () => {
     const childInterrupt = vi.fn();
 
     try {
-      interrupts.register(rootStreamId, { interrupt: rootInterrupt });
-      interrupts.register(childStreamId, { interrupt: childInterrupt });
-      registry.track(
-        new AgentExecutionHandle(
-          'exec-root-stop-policy-test',
-          rootStreamId,
-          rootStreamId,
-          'test-root',
-          'toolUse',
-          explicit.host,
-        ),
+      const rootHandle = new AgentExecutionHandle(
+        'exec-root-stop-policy-test',
+        rootStreamId,
+        rootStreamId,
+        'test-root',
+        'toolUse',
+        explicit.host,
       );
-      registry.track(
-        new AgentExecutionHandle(
-          'exec-child-stop-policy-test',
-          rootStreamId,
-          childStreamId,
-          'test-subagent',
-          'toolUse',
-          explicit.host,
-        ),
+      rootHandle.attachInterruptHandler({ interrupt: rootInterrupt });
+      registry.track(rootHandle);
+      const childHandle = new AgentExecutionHandle(
+        'exec-child-stop-policy-test',
+        rootStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        explicit.host,
       );
+      childHandle.attachInterruptHandler({ interrupt: childInterrupt });
+      registry.track(childHandle);
 
       expect(
         registry.stopAgentStream(rootStreamId, {
@@ -395,9 +384,8 @@ describe('executionRegistry', () => {
 
   it('interrupts grandchildren when killing a subagent chain', () => {
     const explicit = createRecordingHost();
-    const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const registry = new ExecutionRegistry({ streamStatus });
     const rootStreamId = 'root-cascade-test' as StreamTabId;
     const childStreamId = 'child-cascade-test' as StreamTabId;
     const grandchildStreamId = 'grandchild-cascade-test' as StreamTabId;
@@ -405,30 +393,28 @@ describe('executionRegistry', () => {
     const grandchildInterrupt = vi.fn();
 
     try {
-      interrupts.register(childStreamId, { interrupt: childInterrupt });
-      interrupts.register(grandchildStreamId, {
+      const childHandle = new AgentExecutionHandle(
+        'exec-child-cascade-test',
+        rootStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        explicit.host,
+      );
+      childHandle.attachInterruptHandler({ interrupt: childInterrupt });
+      registry.track(childHandle);
+      const grandchildHandle = new AgentExecutionHandle(
+        'exec-grandchild-cascade-test',
+        childStreamId,
+        grandchildStreamId,
+        'test-grandchild',
+        'toolUse',
+        explicit.host,
+      );
+      grandchildHandle.attachInterruptHandler({
         interrupt: grandchildInterrupt,
       });
-      registry.track(
-        new AgentExecutionHandle(
-          'exec-child-cascade-test',
-          rootStreamId,
-          childStreamId,
-          'test-subagent',
-          'toolUse',
-          explicit.host,
-        ),
-      );
-      registry.track(
-        new AgentExecutionHandle(
-          'exec-grandchild-cascade-test',
-          childStreamId,
-          grandchildStreamId,
-          'test-grandchild',
-          'toolUse',
-          explicit.host,
-        ),
-      );
+      registry.track(grandchildHandle);
 
       expect(registry.kill('exec-child-cascade-test')).toBe(true);
 
@@ -438,14 +424,11 @@ describe('executionRegistry', () => {
       expect(streamStatus.get(grandchildStreamId)).toBe(STREAM_PHASE.CANCELLED);
     } finally {
       registry.dispose();
-      interrupts.unregister(childStreamId);
-      interrupts.unregister(grandchildStreamId);
     }
   });
 
   it('detaches descendants when killing with detached subagents', () => {
     const explicit = createRecordingHost();
-    const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
     const detachProjection = attachSessionProgressEventProjectionForTest(
@@ -453,7 +436,6 @@ describe('executionRegistry', () => {
       explicit.host,
     );
     const registry = new ExecutionRegistry({
-      interrupts,
       streamStatus,
       events,
     });
@@ -464,30 +446,28 @@ describe('executionRegistry', () => {
     const grandchildInterrupt = vi.fn();
 
     try {
-      interrupts.register(childStreamId, { interrupt: childInterrupt });
-      interrupts.register(grandchildStreamId, {
+      const childHandle = new AgentExecutionHandle(
+        'exec-child-detach-kill-test',
+        rootStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        explicit.host,
+      );
+      childHandle.attachInterruptHandler({ interrupt: childInterrupt });
+      registry.track(childHandle);
+      const grandchildHandle = new AgentExecutionHandle(
+        'exec-grandchild-detach-kill-test',
+        childStreamId,
+        grandchildStreamId,
+        'test-grandchild',
+        'toolUse',
+        explicit.host,
+      );
+      grandchildHandle.attachInterruptHandler({
         interrupt: grandchildInterrupt,
       });
-      registry.track(
-        new AgentExecutionHandle(
-          'exec-child-detach-kill-test',
-          rootStreamId,
-          childStreamId,
-          'test-subagent',
-          'toolUse',
-          explicit.host,
-        ),
-      );
-      registry.track(
-        new AgentExecutionHandle(
-          'exec-grandchild-detach-kill-test',
-          childStreamId,
-          grandchildStreamId,
-          'test-grandchild',
-          'toolUse',
-          explicit.host,
-        ),
-      );
+      registry.track(grandchildHandle);
 
       expect(
         registry.kill('exec-child-detach-kill-test', {
@@ -512,14 +492,11 @@ describe('executionRegistry', () => {
     } finally {
       registry.dispose();
       detachProjection();
-      interrupts.unregister(childStreamId);
-      interrupts.unregister(grandchildStreamId);
     }
   });
 
   it('detaches children when stopping a stream with detached subagents', () => {
     const explicit = createRecordingHost();
-    const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
     const detachProjection = attachSessionProgressEventProjectionForTest(
@@ -527,7 +504,6 @@ describe('executionRegistry', () => {
       explicit.host,
     );
     const registry = new ExecutionRegistry({
-      interrupts,
       streamStatus,
       events,
     });
@@ -540,41 +516,38 @@ describe('executionRegistry', () => {
     const grandchildInterrupt = vi.fn();
 
     try {
-      interrupts.register(rootStreamId, { interrupt: rootInterrupt });
-      interrupts.register(childStreamId, { interrupt: childInterrupt });
-      interrupts.register(grandchildStreamId, {
+      const rootHandle = new AgentExecutionHandle(
+        'exec-root-detach-stop-policy-test',
+        rootStreamId,
+        rootStreamId,
+        'test-root',
+        'toolUse',
+        explicit.host,
+      );
+      rootHandle.attachInterruptHandler({ interrupt: rootInterrupt });
+      registry.track(rootHandle);
+      const childHandle = new AgentExecutionHandle(
+        'exec-child-detach-stop-policy-test',
+        rootStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        explicit.host,
+      );
+      childHandle.attachInterruptHandler({ interrupt: childInterrupt });
+      registry.track(childHandle);
+      const grandchildHandle = new AgentExecutionHandle(
+        'exec-grandchild-detach-stop-policy-test',
+        childStreamId,
+        grandchildStreamId,
+        'test-grandchild',
+        'toolUse',
+        explicit.host,
+      );
+      grandchildHandle.attachInterruptHandler({
         interrupt: grandchildInterrupt,
       });
-      registry.track(
-        new AgentExecutionHandle(
-          'exec-root-detach-stop-policy-test',
-          rootStreamId,
-          rootStreamId,
-          'test-root',
-          'toolUse',
-          explicit.host,
-        ),
-      );
-      registry.track(
-        new AgentExecutionHandle(
-          'exec-child-detach-stop-policy-test',
-          rootStreamId,
-          childStreamId,
-          'test-subagent',
-          'toolUse',
-          explicit.host,
-        ),
-      );
-      registry.track(
-        new AgentExecutionHandle(
-          'exec-grandchild-detach-stop-policy-test',
-          childStreamId,
-          grandchildStreamId,
-          'test-grandchild',
-          'toolUse',
-          explicit.host,
-        ),
-      );
+      registry.track(grandchildHandle);
 
       expect(
         registry.stopAgentStream(rootStreamId, {
@@ -618,43 +591,6 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('stops a registered stream before its execution handle is tracked', () => {
-    const explicit = createRecordingHost();
-    const interrupts = new InterruptRegistry();
-    const streamStatus = new StreamStatusMachine();
-    const events = new SessionEventHub();
-    attachSessionProgressEventProjectionForTest(events, explicit.host);
-    const registry = new ExecutionRegistry({
-      interrupts,
-      streamStatus,
-      events,
-    });
-    const streamId = 'untracked-stop-policy-test' as StreamTabId;
-    const interrupt = vi.fn();
-
-    try {
-      interrupts.register(streamId, { interrupt });
-
-      expect(
-        registry.stopAgentStream(streamId, {
-          runtimeHost: explicit.host,
-        }),
-      ).toEqual({
-        kind: 'interrupted',
-        streamId,
-        childPolicy: 'cascade',
-      });
-
-      expect(interrupt).toHaveBeenCalledOnce();
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-      expect(explicit.events.at(-1)?.payload).toMatchObject({
-        status: STREAM_PHASE.CANCELLED,
-      });
-    } finally {
-      registry.dispose();
-    }
-  });
-
   it('marks an ownerless stream stopped when a host can publish status', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();
@@ -682,7 +618,7 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('reports no target when no execution, interrupt, or host owns the stream', () => {
+  it('reports no target when no execution or host owns the stream', () => {
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const streamId = 'missing-stop-target-test' as StreamTabId;
