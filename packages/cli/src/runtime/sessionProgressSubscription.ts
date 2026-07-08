@@ -6,7 +6,7 @@ import {
 } from '@agent/runtime/sessionProgressEventProjection';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 
-function emitProjectedProgressEventForTest(
+function emitProjectedProgressEvent(
   runtimeHost: AgentRuntimeHost,
   projected: ProjectedProgressEvent,
 ): void {
@@ -22,7 +22,12 @@ function emitProjectedProgressEventForTest(
   runtimeHost.emit(projected.event, projected.payload);
 }
 
-export function attachSessionProgressEventProjectionForTest(
+/**
+ * Headless CLI compatibility adapter. Public CLI output still speaks the
+ * frozen host progress-event vocabulary, so this boundary alone re-emits
+ * session facts through `runtimeHost.emit`.
+ */
+export function attachCliSessionProgressProjection(
   events: SessionEventHub,
   runtimeHost: AgentRuntimeHost,
 ): () => void {
@@ -30,15 +35,13 @@ export function attachSessionProgressEventProjectionForTest(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'session') return;
       const projected = projectSessionFactToProgressEvent(sessionEvent.event);
-      if (projected) {
-        emitProjectedProgressEventForTest(runtimeHost, projected);
-      }
+      if (projected) emitProjectedProgressEvent(runtimeHost, projected);
     },
     { scope: 'session' },
   );
   const detachRunFacts = subscribeRunFactsAsProgressEvents(
     events,
-    (projected) => emitProjectedProgressEventForTest(runtimeHost, projected),
+    (projected) => emitProjectedProgressEvent(runtimeHost, projected),
   );
 
   return () => {

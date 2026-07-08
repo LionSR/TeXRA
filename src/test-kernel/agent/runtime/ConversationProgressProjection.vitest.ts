@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { logConversationProgress, TraceEmitter } from '@agent/trace';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
-import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 function setupHub(streamId: StreamTabId) {
   const trace = new TraceEmitter();
@@ -15,7 +15,7 @@ function setupHub(streamId: StreamTabId) {
   const detachTrace = trace.subscribe((event) =>
     hub.emit({ scope: 'run', streamId, event }),
   );
-  const detach = attachSessionProgressEventProjection(hub, host);
+  const detach = attachSessionProgressEventProjectionForTest(hub, host);
   return {
     trace,
     events,
