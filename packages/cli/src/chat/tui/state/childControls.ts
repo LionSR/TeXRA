@@ -73,7 +73,7 @@ export interface ChildControlStreamTarget {
   readonly streamId: StreamTabId | undefined;
 }
 
-export interface ChildControlDisplayTarget extends ChildControlStreamTarget {
+interface ChildControlDisplayTarget extends ChildControlStreamTarget {
   readonly streamLabel: string | undefined;
   readonly streamScopeDetail: string | undefined;
 }

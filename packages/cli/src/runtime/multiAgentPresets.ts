@@ -15,7 +15,7 @@ import {
 } from '@shared/schemas/agentPresets';
 import { implicitDefaultToolUseAgents } from './defaultAgents';
 
-export type CliMultiAgentPresetSource = 'built-in' | 'custom';
+type CliMultiAgentPresetSource = 'built-in' | 'custom';
 
 export interface CliMultiAgentPreset extends AgentModePreset {
   readonly source: CliMultiAgentPresetSource;
@@ -40,9 +40,9 @@ export interface CliMultiAgentTeamLaunchBlockMessageOptions {
   readonly followUpAdvice?: string;
 }
 
-export type CliMultiAgentPlanStatus = 'available' | 'degraded' | 'unavailable';
+type CliMultiAgentPlanStatus = 'available' | 'degraded' | 'unavailable';
 
-export interface CliMultiAgentPresetAgentAvailability {
+interface CliMultiAgentPresetAgentAvailability {
   readonly available: number;
   readonly total: number;
   readonly missing: readonly string[];
@@ -81,7 +81,7 @@ const MULTI_AGENT_SHOW_HINT =
   'Hint: run `texra multi-agent show <team-id>` to see missing agents for degraded or unavailable presets.';
 const MULTI_AGENT_LOGIN_HINT =
   'Hint: Researcher Access sign-in may load additional remote team agents.';
-export const MULTI_AGENT_NO_TEAM_ROOT_REASON = 'no runnable team root';
+const MULTI_AGENT_NO_TEAM_ROOT_REASON = 'no runnable team root';
 const MULTI_AGENT_LAUNCHER_SHOW_HINT =
   'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.';
 const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
