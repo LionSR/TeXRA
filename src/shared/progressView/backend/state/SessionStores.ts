@@ -7,6 +7,9 @@ import * as logger from '@logger/logUtils';
 // Local imports - shared
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
+// Local imports - utils
+import { unique } from '@utils/core';
+
 // Local imports - transcript
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
@@ -117,7 +120,7 @@ export class SessionStores {
     executionIds: Iterable<ExecutionId>,
   ): Promise<void> {
     await Promise.all(
-      [...new Set(executionIds)].map((executionId) =>
+      unique(executionIds).map((executionId) =>
         this.deleteExecution(executionId),
       ),
     );

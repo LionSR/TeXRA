@@ -5,7 +5,10 @@ import { writeClipboardText } from '@cli/runtime/clipboardText';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 import { clamp } from '@utils/core';
 
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
+import {
+  clampModalWidth,
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+} from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput } from '../input/inputKeys';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -45,7 +48,6 @@ function copyStatusLabel(status: Exclude<CopyStatus, 'idle'>): string {
   }
 }
 
-const MIN_EXTERNAL_INQUIRY_WIDTH = 20;
 const DEFAULT_EXTERNAL_INQUIRY_QUESTION_ROWS = 16;
 const COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS = 3;
 const EXTERNAL_INQUIRY_FIXED_ROWS = 6;
@@ -149,7 +151,7 @@ function externalInquiryQuestionLines({
   readonly question: string;
   readonly width: number;
 }): ExternalInquiryDisplayLine[] {
-  const questionWidth = Math.max(MIN_EXTERNAL_INQUIRY_WIDTH, width);
+  const questionWidth = clampModalWidth(width);
   return question.split('\n').flatMap((line) =>
     wrapAnsiToWidth(line, questionWidth)
       .split('\n')
@@ -232,8 +234,7 @@ export function ExternalInquiry(
   const [answer, setAnswer] = useState('');
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const [questionOffset, setQuestionOffset] = useState(0);
-  const contentWidth = Math.max(
-    MIN_EXTERNAL_INQUIRY_WIDTH,
+  const contentWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
   const answerRows = externalInquiryAnswerRowsBudget(props.availableRows);
