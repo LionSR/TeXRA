@@ -130,25 +130,14 @@ describe('StreamSnapshotStore', () => {
     );
   });
 
-  it('persists todos/plan/usage from progress events and reassembles them on a fresh store', async () => {
+  it('persists todos/plan/usage from direct mutators and reassembles them on a fresh store', async () => {
     const writer = new StreamSnapshotStore();
 
-    writer.handleProgressEvent('updateTodos', {
-      streamId: STREAM,
-      todos: [TODO],
-    });
-    writer.handleProgressEvent('updatePlan', { streamId: STREAM, plan: PLAN });
+    writer.setTodos(STREAM, [TODO]);
+    writer.setPlan(STREAM, PLAN);
     // Two deltas for the same run must accumulate, not overwrite.
-    writer.handleProgressEvent('updateStreamUsage', {
-      streamId: STREAM,
-      storageKey: RUN,
-      usage: usage(100, 20, 0.5),
-    });
-    writer.handleProgressEvent('updateStreamUsage', {
-      streamId: STREAM,
-      storageKey: RUN,
-      usage: usage(50, 10, 0.25),
-    });
+    void writer.addUsage(STREAM, RUN, usage(100, 20, 0.5));
+    void writer.addUsage(STREAM, RUN, usage(50, 10, 0.25));
 
     await writer.flush();
 
@@ -352,7 +341,7 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
-  it('seeds existing disk data before an unloaded progress mutation, so it is not erased', async () => {
+  it('seeds existing disk data before an unloaded usage mutation, so it is not erased', async () => {
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
     // A prior session persisted usage for run-1.
@@ -363,11 +352,7 @@ describe('StreamSnapshotStore', () => {
 
     // A fresh store (NOT load()ed) handles a delta for a NEW run.
     const store = new StreamSnapshotStore();
-    store.handleProgressEvent('updateStreamUsage', {
-      streamId: STREAM,
-      storageKey: 'run-2' as StorageKey,
-      usage: usage(50, 10, 0.25),
-    });
+    void store.addUsage(STREAM, 'run-2' as StorageKey, usage(50, 10, 0.25));
     await store.flush();
 
     // run-1 (prior) survives — the unseeded write did not clobber it.
