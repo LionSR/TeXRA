@@ -13,7 +13,6 @@ import {
 import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import {
@@ -107,6 +106,7 @@ import {
   STREAM_STATUS,
   TODO_STATUS,
   type ActiveChildInfo,
+  type ExecutionId,
   type Plan,
   type StorageKey,
   type StreamTabId,
@@ -3013,406 +3013,186 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     }
   });
 
-  it('does not double-count projected usage when the TUI subscriber is first', () => {
+  it('applies direct session stream facts without host emission', () => {
     const hub = new SessionEventHub();
     const hostEmit = vi.fn();
     const wrapped = wrapRuntimeHost({
       emit: hostEmit,
       close: async () => {},
     } as unknown as CliRuntimeHost);
-    // Regression coverage for #7388: `attachTuiRunFactSubscription` is
-    // registered on the hub before the CLI projection here (the order
-    // `chatSessionController.ts` uses today), and two distinct usage events
-    // are emitted so the guard's dedupe is proven across a sequence, not just
-    // a single isolated pairing.
-    const detachTui = attachTuiRunFactSubscription(hub);
-    const detachProjection = attachSessionProgressEventProjection(hub, wrapped);
-    const storageKey = 'root-echo-run' as StorageKey;
-    const payload = {
-      streamId: root,
-      storageKey,
-      executionId: 'exec-echo',
-      usage: {
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 1,
-        cacheReadInputTokens: 30,
-        elapsedTime: 1.5,
-        percentageCached: 25,
-        reasoningTokens: 7,
-      },
-    };
-    const secondPayload = {
-      streamId: root,
-      storageKey,
-      executionId: 'exec-echo',
-      usage: {
-        inputTokens: 50,
-        outputTokens: 10,
-        cost: 0.5,
-        cacheReadInputTokens: 5,
-        elapsedTime: 0.8,
-        percentageCached: 10,
-        reasoningTokens: 3,
-      },
-    };
+    const wrappedEmit = vi.spyOn(wrapped, 'emit');
+    const detach = attachTuiRunFactSubscription(hub);
 
     try {
+      activeStreamId.set(root);
       hub.emit({
-        scope: 'run',
-        streamId: root,
+        scope: 'session',
         event: {
-          type: 'usage',
-          stats: payload.usage,
-          data: payload,
-        },
-      });
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'usage',
-          stats: secondPayload.usage,
-          data: secondPayload,
-        },
-      });
-
-      expect(streams.get().get(root)?.usage).toEqual(secondPayload.usage);
-      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
-        inputTokens: 150,
-        outputTokens: 30,
-        cost: 1.5,
-        cacheReadInputTokens: 35,
-        cacheMissInputTokens: 0,
-        cacheCreationInputTokens: 0,
-        reasoningTokens: 10,
-      });
-      expect(hostEmit).toHaveBeenNthCalledWith(1, 'updateStreamUsage', payload);
-      expect(hostEmit).toHaveBeenNthCalledWith(
-        2,
-        'updateStreamUsage',
-        secondPayload,
-      );
-    } finally {
-      detachProjection();
-      detachTui();
-    }
-  });
-
-  it('does not double-count projected usage when CLI projection is first', () => {
-    const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    // Regression coverage for #7388: the CLI projection is registered on the
-    // hub before the TUI subscription here — the reverse of what
-    // `chatSessionController.ts` does today — to prove the echo guard's dedupe
-    // does not depend on that registration order. Two distinct usage events
-    // are emitted so the guard is proven across a sequence, not just a single
-    // isolated pairing.
-    const detachProjection = attachSessionProgressEventProjection(hub, wrapped);
-    const detachTui = attachTuiRunFactSubscription(hub);
-    const storageKey = 'root-cli-projection-first-run' as StorageKey;
-    const payload = {
-      streamId: root,
-      storageKey,
-      executionId: 'exec-cli-projection-first',
-      usage: {
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 1,
-        cacheReadInputTokens: 30,
-        elapsedTime: 1.5,
-        percentageCached: 25,
-        reasoningTokens: 7,
-      },
-    };
-    const secondPayload = {
-      streamId: root,
-      storageKey,
-      executionId: 'exec-projector-first',
-      usage: {
-        inputTokens: 50,
-        outputTokens: 10,
-        cost: 0.5,
-        cacheReadInputTokens: 5,
-        elapsedTime: 0.8,
-        percentageCached: 10,
-        reasoningTokens: 3,
-      },
-    };
-
-    try {
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'usage',
-          stats: payload.usage,
-          data: payload,
+          type: 'setActiveStream',
+          payload: {
+            streamId: child1,
+            suppressViewSwitch: true,
+            agentCategory: AgentCategory.ToolUse,
+          },
         },
       });
       hub.emit({
-        scope: 'run',
-        streamId: root,
+        scope: 'session',
         event: {
-          type: 'usage',
-          stats: secondPayload.usage,
-          data: secondPayload,
+          type: 'updateStreamDescription',
+          payload: {
+            streamId: child1,
+            description: 'Checking the local compactness claim.',
+          },
         },
       });
 
-      expect(streams.get().get(root)?.usage).toEqual(secondPayload.usage);
-      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
-        inputTokens: 150,
-        outputTokens: 30,
-        cost: 1.5,
-        cacheReadInputTokens: 35,
-        cacheMissInputTokens: 0,
-        cacheCreationInputTokens: 0,
-        reasoningTokens: 10,
+      expect(activeStreamId.get()).toBe(root);
+      expect(streams.get().get(child1)).toMatchObject({
+        category: AgentCategory.ToolUse,
+        description: 'Checking the local compactness claim.',
       });
-      expect(hostEmit).toHaveBeenNthCalledWith(1, 'updateStreamUsage', payload);
-      expect(hostEmit).toHaveBeenNthCalledWith(
-        2,
-        'updateStreamUsage',
-        secondPayload,
-      );
-    } finally {
-      detachTui();
-      detachProjection();
-    }
-  });
 
-  it.each([
-    {
-      name: 'TUI subscriber is first',
-      attach: (hub: SessionEventHub, host: CliRuntimeHost) => {
-        const detachTui = attachTuiRunFactSubscription(hub);
-        const detachProjection = attachSessionProgressEventProjection(
-          hub,
-          host,
-        );
-        return () => {
-          detachProjection();
-          detachTui();
-        };
-      },
-    },
-    {
-      name: 'CLI projection is first',
-      attach: (hub: SessionEventHub, host: CliRuntimeHost) => {
-        const detachProjection = attachSessionProgressEventProjection(
-          hub,
-          host,
-        );
-        const detachTui = attachTuiRunFactSubscription(hub);
-        return () => {
-          detachTui();
-          detachProjection();
-        };
-      },
-    },
-  ])('does not duplicate process output when the $name', ({ attach }) => {
-    const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const detach = attach(hub, wrapped);
-    const payload = {
-      parentStreamId: root,
-      executionId: 'exec-output',
-      stdout: 'alpha',
-      stderr: 'beta',
-    };
-
-    try {
       hub.emit({
-        scope: 'run',
-        streamId: root,
+        scope: 'session',
         event: {
-          type: 'process.output',
-          ...payload,
+          type: 'removeStream',
+          payload: { streamId: child1 },
         },
       });
 
-      expect(streams.get().get(root)?.processOutput.get('exec-output')).toEqual(
-        {
-          stdout: 'alpha',
-          stderr: 'beta',
-        },
-      );
-      expect(hostEmit).toHaveBeenCalledWith('updateProcessOutput', payload);
+      expect(streams.get().has(child1)).toBe(false);
+      expect(wrappedEmit).not.toHaveBeenCalled();
+      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
+      wrappedEmit.mockRestore();
     }
   });
 
-  it.each([
-    {
-      name: 'TUI subscriber is first',
-      attach: (hub: SessionEventHub, host: CliRuntimeHost) => {
-        const detachTui = attachTuiRunFactSubscription(hub);
-        const detachProjection = attachSessionProgressEventProjection(
-          hub,
-          host,
-        );
-        return () => {
-          detachProjection();
-          detachTui();
-        };
-      },
-    },
-    {
-      name: 'CLI projection is first',
-      attach: (hub: SessionEventHub, host: CliRuntimeHost) => {
-        const detachProjection = attachSessionProgressEventProjection(
-          hub,
-          host,
-        );
-        const detachTui = attachTuiRunFactSubscription(hub);
-        return () => {
-          detachTui();
-          detachProjection();
-        };
-      },
-    },
-  ])(
-    'does not duplicate completed-process transcript entries when the $name',
-    ({ attach }) => {
-      const hub = new SessionEventHub();
-      const hostEmit = vi.fn();
-      const wrapped = wrapRuntimeHost({
-        emit: hostEmit,
-        close: async () => {},
-      } as unknown as CliRuntimeHost);
-      const detach = attach(hub, wrapped);
-
-      try {
-        hub.emit({
-          scope: 'run',
-          streamId: root,
-          event: {
-            type: 'child.activity',
-            kind: 'processes',
-            parentStreamId: root,
-            processes: [runningProcessA, runningProcessB],
-          },
-        });
-        hub.emit({
-          scope: 'run',
-          streamId: root,
-          event: {
-            type: 'process.output',
-            parentStreamId: root,
-            executionId: 'exec-a',
-            stdout: 'finished output',
-            stderr: '',
-          },
-        });
-        hub.emit({
-          scope: 'run',
-          streamId: root,
-          event: {
-            type: 'child.activity',
-            kind: 'processes',
-            parentStreamId: root,
-            processes: [runningProcessB],
-          },
-        });
-
-        const slice = streams.get().get(root);
-        const processEntries =
-          slice?.entries.filter((entry) => entry.role === 'process') ?? [];
-        expect(processEntries).toHaveLength(1);
-        expect(processEntries[0]?.process?.executionId).toBe('exec-a');
-        expect(slice?.processOutput.has('exec-a')).toBe(false);
-        expect(slice?.activeProcesses).toEqual([runningProcessB]);
-        expect(hostEmit).toHaveBeenCalledWith('updateActiveProcesses', {
-          parentStreamId: root,
-          processes: [runningProcessB],
-        });
-      } finally {
-        detach();
-      }
-    },
-  );
-
-  it('does not duplicate the goalPaused notice when the TUI subscriber is first', () => {
+  it('applies direct run config and conversation progress without host emission', () => {
     const hub = new SessionEventHub();
     const hostEmit = vi.fn();
     const wrapped = wrapRuntimeHost({
       emit: hostEmit,
       close: async () => {},
     } as unknown as CliRuntimeHost);
-    const detachTui = attachTuiRunFactSubscription(hub);
-    const detachProjection = attachSessionProgressEventProjection(hub, wrapped);
-    const payload = { streamId: root };
+    const wrappedEmit = vi.spyOn(wrapped, 'emit');
+    const detach = attachTuiRunFactSubscription(hub);
 
     try {
       hub.emit({
         scope: 'run',
         streamId: root,
         event: {
+          type: 'run.config',
+          streamId: root,
+          executionId: 'exec-config' as ExecutionId,
+          config: {
+            agent: 'search',
+            agentCategory: AgentCategory.ToolUse,
+            model: 'kimi26T',
+            instruction: 'Check the enumeration independently.',
+            inputFiles: [],
+            contextFiles: [],
+            mediaFiles: [],
+            outputFiles: [],
+            editedFile: null,
+            editedFiles: [],
+            toolConfig: DEFAULT_TOOL_CONFIG,
+            memories: [],
+            workingDirectory: undefined,
+          },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
           type: 'domain',
-          key: toRunFactDomainKey('goalPaused'),
-          data: payload,
+          key: 'conversationProgress',
+          data: { toolCallCount: 3 },
         },
       });
 
-      expect(
-        streams
-          .get()
-          .get(root)
-          ?.entries.filter(
-            (entry) => entry.text === GOAL_PAUSED_TRANSCRIPT_NOTICE,
-          ),
-      ).toHaveLength(1);
-      expect(hostEmit).toHaveBeenCalledWith('goalPaused', payload);
+      expect(streams.get().get(root)).toMatchObject({
+        model: 'kimi26T',
+        category: AgentCategory.ToolUse,
+        conversation: { toolCallCount: 3 },
+      });
+      expect(wrappedEmit).not.toHaveBeenCalled();
+      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
-      detachProjection();
-      detachTui();
+      detach();
+      wrappedEmit.mockRestore();
     }
   });
 
-  it('does not duplicate the goalPaused notice when CLI projection is first', () => {
+  it('applies direct usage sequences exactly once', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const detachProjection = attachSessionProgressEventProjection(hub, wrapped);
-    const detachTui = attachTuiRunFactSubscription(hub);
-    const payload = { streamId: root };
+    const detach = attachTuiRunFactSubscription(hub);
+    const storageKey = 'root-direct-sequence-run' as StorageKey;
+    const payload = {
+      streamId: root,
+      storageKey,
+      executionId: 'exec-direct-sequence',
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
+        elapsedTime: 1.5,
+        percentageCached: 25,
+        reasoningTokens: 7,
+      },
+    };
+    const secondPayload = {
+      streamId: root,
+      storageKey,
+      executionId: 'exec-direct-sequence',
+      usage: {
+        inputTokens: 50,
+        outputTokens: 10,
+        cost: 0.5,
+        cacheReadInputTokens: 5,
+        elapsedTime: 0.8,
+        percentageCached: 10,
+        reasoningTokens: 3,
+      },
+    };
 
     try {
       hub.emit({
         scope: 'run',
         streamId: root,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('goalPaused'),
+          type: 'usage',
+          stats: payload.usage,
           data: payload,
         },
       });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'usage',
+          stats: secondPayload.usage,
+          data: secondPayload,
+        },
+      });
 
-      expect(
-        streams
-          .get()
-          .get(root)
-          ?.entries.filter(
-            (entry) => entry.text === GOAL_PAUSED_TRANSCRIPT_NOTICE,
-          ),
-      ).toHaveLength(1);
-      expect(hostEmit).toHaveBeenCalledWith('goalPaused', payload);
+      expect(streams.get().get(root)?.usage).toEqual(secondPayload.usage);
+      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+        inputTokens: 150,
+        outputTokens: 30,
+        cost: 1.5,
+        cacheReadInputTokens: 35,
+        cacheMissInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        reasoningTokens: 10,
+      });
     } finally {
-      detachTui();
-      detachProjection();
+      detach();
     }
   });
 
@@ -3463,7 +3243,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
   it('refreshes queued follow-up display when an active follow-up is sent', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);
-    const wrapped = wrapRuntimeHost(makeHost());
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
     const queue = ToolUseFollowUpQueue.acquire(root);
 
@@ -3484,7 +3263,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       ]);
 
       queue.drain();
-      wrapped.emit('updateQueuedFollowUps', { streamId: root });
+      hub.emit({
+        scope: 'session',
+        event: {
+          type: 'updateQueuedFollowUps',
+          payload: { streamId: root },
+        },
+      });
 
       slice = streams.get().get(root);
       expect(slice?.queuedFollowUps).toBe(0);
