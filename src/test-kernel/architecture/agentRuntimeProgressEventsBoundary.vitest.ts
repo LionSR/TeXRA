@@ -12,9 +12,10 @@ const REPO_ROOT = resolve(
   '../../..',
 );
 
-const TARGET_MODULE = 'src/agent/runtime/hostProgressEvents.ts';
+const LEGACY_MODULE = 'src/agent/runtime/hostProgressEvents.ts';
+const TARGET_MODULE = 'src/agent/runtime/agentRuntimeProgressEvents.ts';
 const TARGET_MODULE_STEM = TARGET_MODULE.replace(/\.(?:ts|tsx|mts|cts)$/, '');
-const TARGET_ALIAS = '@agent/runtime/hostProgressEvents';
+const TARGET_ALIAS = '@agent/runtime/agentRuntimeProgressEvents';
 
 const ALLOWED_PRODUCTION_IMPORTERS = [
   'src/agent/runtime/AgentRuntimeHost.ts',
@@ -133,8 +134,12 @@ function importsTargetModule(file: string): boolean {
   );
 }
 
-describe('host progress-event vocabulary boundary', () => {
-  it('keeps hostProgressEvents scoped to the runtime host contract and public CLI projection', () => {
+describe('agent runtime progress-event vocabulary boundary', () => {
+  it('deletes the legacy hostProgressEvents module', () => {
+    expect(existsSync(resolve(REPO_ROOT, LEGACY_MODULE))).toBe(false);
+  });
+
+  it('keeps runtime progress events scoped to host contract and public CLI projection', () => {
     expect(existsSync(resolve(REPO_ROOT, TARGET_MODULE))).toBe(true);
 
     const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
