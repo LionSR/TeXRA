@@ -120,6 +120,27 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
+  it('does not project session-local follow-up sent facts onto host progress', () => {
+    const hub = new SessionEventHub();
+    const host = createRecordingHost();
+    const streamId = 'stream:follow-up' as StreamTabId;
+
+    const detach = attachCliSessionProgressProjection(hub, host.host);
+    try {
+      hub.emit({
+        scope: 'session',
+        event: {
+          type: 'followUpSent',
+          payload: { streamId },
+        },
+      });
+
+      expect(host.events).toEqual([]);
+    } finally {
+      detach();
+    }
+  });
+
   it('projects run config updates onto retained CLI task-state events', () => {
     const hub = new SessionEventHub();
     const host = createRecordingHost();
