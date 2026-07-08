@@ -356,30 +356,6 @@ describe('desktop IPC adapters', () => {
     });
   });
 
-  it('parses tab-separated git log output into renderer-shaped labels', async () => {
-    // The git host parser shapes lines into `<hash>: <subject>
-    // (<relative>)` so the renderer can keep its existing string[] schema.
-    const { parseCommitLog } = (await import(
-      moduleFileUrl(desktopSourcePath('main', 'desktopGitHost.ts'))
-    )) as { parseCommitLog: (stdout: string) => string[] };
-
-    const stdout = [
-      'abc1234\tAdd feature\t2 days ago',
-      'def5678\tFix: handle edge case\t3 days ago',
-      // Blank lines are silently skipped.
-      '',
-      // Lines missing a relative date are skipped (defensive — should not
-      // happen with our format but proves the parser doesn't crash).
-      'badrow',
-    ].join('\n');
-
-    expect(parseCommitLog(stdout)).toEqual([
-      'abc1234: Add feature (2 days ago)',
-      'def5678: Fix: handle edge case (3 days ago)',
-    ]);
-    expect(parseCommitLog('')).toEqual([]);
-  });
-
   it('wires the main login banner to desktop sign-in', async () => {
     const { createDesktopShellIpc } = await loadDesktopShellIpc();
     const postToRenderer = vi.fn();

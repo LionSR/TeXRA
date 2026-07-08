@@ -3,19 +3,14 @@
  * `docs/dev/standalone-trajectory-audit.md` (trajectory #16).
  *
  * The VS Code extension surfaces "recent commits" via `texra.getRecentCommits`,
- * which shells out to `git log` with `--pretty=format:'%h: %s (%cr)'` and
+ * which shells out to `git log` with the shared `COMMIT_LABEL_FORMAT` and
  * returns the lines verbatim. The desktop shell historically replied to
  * `MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS` with an empty list because no
  * `vscode.git`-equivalent host port existed. This module fills that gap by
  * spawning `git log` directly via Node's `child_process.execFile` (no shell,
- * no string interpolation — the workspace path travels via `cwd`).
- *
- * The renderer's `SetRecentCommitsMessageSchema` consumes a `string[]` of
- * pre-formatted labels, so we parse a richer tab-separated `--pretty=format`
- * payload (`%h%x09%s%x09%cr`) and rebuild the same `<short>: <subject>
- * (<relative>)` shape the extension produces. Splitting the format keeps the
- * parser robust against subjects that contain `: ` literally — those would
- * have been ambiguous if we'd echoed the human-readable label directly.
+ * no string interpolation — the workspace path travels via `cwd`), reusing
+ * the same host-neutral `isGitRepository` probe and label format the
+ * extension uses so the two hosts can't drift apart.
  */
 
 // Not routed through executeCommand: it doesn't expose a `maxBuffer` option,
@@ -25,6 +20,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { clamp } from '@utils/core';
+import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
+import { isGitRepository } from '@utils/system/isGitRepository';
 
 const execFileAsync = promisify(execFile);
 
@@ -36,15 +33,6 @@ const execFileAsync = promisify(execFile);
  */
 const DEFAULT_COMMIT_LIMIT = 20;
 const MAX_COMMIT_LIMIT = 1000;
-
-/** Field separator used inside `git log --pretty=format` (literal TAB). */
-const FIELD_SEPARATOR = '\t';
-
-/**
- * `%h` short hash, `%s` subject, `%cr` committer date relative. Tabs separate
- * fields so subjects with literal `: ` survive the round-trip.
- */
-const COMMIT_PRETTY_FORMAT = `%h${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%cr`;
 
 /**
  * Hard upper bound on git output bytes (8 MiB). 20 commits with subjects
@@ -105,19 +93,11 @@ export function createDesktopGitHost(
       if (!workspace) {
         return { commits: [], isGitRepo: false };
       }
-      // Use `git rev-parse --is-inside-work-tree` instead of `existsSync('.git')`
-      // — the latter wrongly reports `false` from subdirectories and misses
-      // worktrees/submodules where `.git` is a pointer file (bot review #3817).
-      try {
-        const { stdout } = await execFileAsync(
-          'git',
-          ['rev-parse', '--is-inside-work-tree'],
-          { cwd: workspace, timeout: GIT_TIMEOUT_MS },
-        );
-        if (stdout.trim() !== 'true') {
-          return { commits: [], isGitRepo: false };
-        }
-      } catch {
+      // Uses `git rev-parse --is-inside-work-tree` instead of
+      // `existsSync('.git')` — the latter wrongly reports `false` from
+      // subdirectories and misses worktrees/submodules where `.git` is a
+      // pointer file (bot review #3817).
+      if (!(await isGitRepository(workspace))) {
         // Missing git, not a repo, etc. Don't surface via `onError` — this
         // is the steady-state for any non-git workspace.
         return { commits: [], isGitRepo: false };
@@ -132,7 +112,7 @@ export function createDesktopGitHost(
             'log',
             '-n',
             String(limit),
-            `--pretty=format:${COMMIT_PRETTY_FORMAT}`,
+            `--pretty=format:${COMMIT_LABEL_FORMAT}`,
           ],
           {
             cwd: workspace,
@@ -140,7 +120,10 @@ export function createDesktopGitHost(
             maxBuffer: MAX_BUFFER_BYTES,
           },
         );
-        return { commits: parseCommitLog(stdout), isGitRepo: true };
+        return {
+          commits: stdout.split('\n').map((line) => line.trim()),
+          isGitRepo: true,
+        };
       } catch (error) {
         // rev-parse already passed, so we know it's a repo — report
         // isGitRepo:true with an empty list so empty-repo states stay honest.
@@ -149,35 +132,6 @@ export function createDesktopGitHost(
       }
     },
   };
-}
-
-/**
- * Convert tab-separated `git log` output into the `<hash>: <subject>
- * (<relative>)` label shape the renderer expects.
- *
- * Exported for unit tests so we can pin the behaviour against fixtures that
- * include awkward subjects (literal `: `, embedded tabs, blank lines).
- */
-export function parseCommitLog(stdout: string): string[] {
-  if (!stdout) return [];
-  const lines = stdout.split('\n');
-  const commits: string[] = [];
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/\r$/, '');
-    if (!line) continue;
-    // Split on the first two TABs only so subjects containing tabs
-    // (rare but legal) round-trip correctly.
-    const firstTab = line.indexOf(FIELD_SEPARATOR);
-    if (firstTab < 0) continue;
-    const lastTab = line.lastIndexOf(FIELD_SEPARATOR);
-    if (lastTab <= firstTab) continue;
-    const hash = line.slice(0, firstTab);
-    const subject = line.slice(firstTab + 1, lastTab);
-    const relative = line.slice(lastTab + 1);
-    if (!hash || !subject || !relative) continue;
-    commits.push(`${hash}: ${subject} (${relative})`);
-  }
-  return commits;
 }
 
 function clampCommitLimit(value: number): number {
