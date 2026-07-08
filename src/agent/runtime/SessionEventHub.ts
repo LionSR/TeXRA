@@ -7,6 +7,7 @@ import type {
   FollowUpSentPayload,
   GoalStateChangedPayload,
   InquiryThreadUpdatedEvent,
+  RemoveStreamPayload,
   SetActiveStreamPayload,
   SetParentStreamPayload,
   StreamTabId,
@@ -59,6 +60,10 @@ export type SessionFact =
   | {
       readonly type: 'setParentStream';
       readonly payload: SetParentStreamPayload;
+    }
+  | {
+      readonly type: 'removeStream';
+      readonly payload: RemoveStreamPayload;
     };
 
 export type SessionEvent =

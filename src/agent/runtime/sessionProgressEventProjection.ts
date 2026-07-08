@@ -28,6 +28,15 @@ export function emitProjectedProgressEvent(
   runtimeHost: AgentRuntimeHost,
   projected: ProjectedProgressEvent,
 ): void {
+  if (
+    projected.event === 'removeStream' &&
+    runtimeHost.interactions?.handleProgressEvent(
+      projected.event,
+      projected.payload,
+    )
+  ) {
+    return;
+  }
   runtimeHost.emit(projected.event, projected.payload);
 }
 
@@ -111,6 +120,8 @@ export function projectSessionFactToProgressEvent(
       return { event: 'updateStreamStatus', payload: fact.payload };
     case 'setParentStream':
       return { event: 'setParentStream', payload: fact.payload };
+    case 'removeStream':
+      return { event: 'removeStream', payload: fact.payload };
   }
 }
 
