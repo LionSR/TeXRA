@@ -12,7 +12,6 @@ import {
 } from '@agent/runtime/executionRegistry';
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
-import { attachSessionProgressEventProjection } from '@agent/runtime/sessionProgressEventProjection';
 import {
   SessionEventHub,
   type SessionEvent,
@@ -27,6 +26,7 @@ import {
 } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
+import { attachSessionProgressEventProjectionForTest } from '../sessionProgressTestUtils';
 
 describe('executionRegistry', () => {
   it('owns process-output poller teardown', () => {
@@ -328,7 +328,7 @@ describe('executionRegistry', () => {
     const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
-    attachSessionProgressEventProjection(events, explicit.host);
+    attachSessionProgressEventProjectionForTest(events, explicit.host);
     const registry = new ExecutionRegistry({
       interrupts,
       streamStatus,
@@ -448,7 +448,7 @@ describe('executionRegistry', () => {
     const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
-    const detachProjection = attachSessionProgressEventProjection(
+    const detachProjection = attachSessionProgressEventProjectionForTest(
       events,
       explicit.host,
     );
@@ -522,7 +522,7 @@ describe('executionRegistry', () => {
     const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
-    const detachProjection = attachSessionProgressEventProjection(
+    const detachProjection = attachSessionProgressEventProjectionForTest(
       events,
       explicit.host,
     );
@@ -623,7 +623,7 @@ describe('executionRegistry', () => {
     const interrupts = new InterruptRegistry();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
-    attachSessionProgressEventProjection(events, explicit.host);
+    attachSessionProgressEventProjectionForTest(events, explicit.host);
     const registry = new ExecutionRegistry({
       interrupts,
       streamStatus,
@@ -659,7 +659,7 @@ describe('executionRegistry', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
-    attachSessionProgressEventProjection(events, explicit.host);
+    attachSessionProgressEventProjectionForTest(events, explicit.host);
     const registry = new ExecutionRegistry({ streamStatus, events });
     const streamId = 'ownerless-stop-policy-test' as StreamTabId;
 
@@ -845,7 +845,7 @@ describe('executionRegistry', () => {
   it('projects handle updates from session events', () => {
     const explicit = createRecordingHost();
     const events = new SessionEventHub();
-    const detachProjection = attachSessionProgressEventProjection(
+    const detachProjection = attachSessionProgressEventProjectionForTest(
       events,
       explicit.host,
     );
@@ -1157,7 +1157,7 @@ describe('executionRegistry', () => {
   it('projects detach updates from session events', () => {
     const explicit = createRecordingHost();
     const events = new SessionEventHub();
-    const detachProjection = attachSessionProgressEventProjection(
+    const detachProjection = attachSessionProgressEventProjectionForTest(
       events,
       explicit.host,
     );
