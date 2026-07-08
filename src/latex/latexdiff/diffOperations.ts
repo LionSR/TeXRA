@@ -231,6 +231,17 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     const roundOutputs: RoundOutput[] = [];
     const hasRound = (round: number): boolean =>
       roundOutputs.some((entry) => entry.round === round);
+    // Upsert so a round matched more than once (e.g. two legacy files
+    // matching the same round regex) keeps a single entry — the last match
+    // wins, same as the prior `Map<number, string>.set()` semantics.
+    const setRoundOutput = (round: number, filePath: string): void => {
+      const existing = roundOutputs.find((entry) => entry.round === round);
+      if (existing) {
+        existing.path = filePath;
+      } else {
+        roundOutputs.push({ round, path: filePath });
+      }
+    };
 
     // Legacy flat layout: files sit directly under outputDirPath as
     // `<base>_<chunk>_r{round}_<normalizedModel>.tex`.
@@ -255,10 +266,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       if (!match) continue;
       const round = RoundKeySchema.safeParse(match[1]);
       if (!round.success) continue;
-      roundOutputs.push({
-        round: round.data,
-        path: path.join(outputDirPath, fileName),
-      });
+      setRoundOutput(round.data, path.join(outputDirPath, fileName));
     }
 
     // Mid-era layout: outputs under `r{round}/<base>_<cleanAgent>_<model>.tex`.
@@ -295,10 +303,10 @@ export async function runLatexdiffViaWorkspaceScan(params: {
           fileName === midEraFilename,
       );
       if (!match) continue;
-      roundOutputs.push({
+      setRoundOutput(
         round,
-        path: path.join(outputDirPath, entryName, midEraFilename),
-      });
+        path.join(outputDirPath, entryName, midEraFilename),
+      );
     }
 
     // New-layout workflow outputs live inside task-run storage
