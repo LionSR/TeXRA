@@ -14,6 +14,7 @@
  * component is re-mounted with fresh @state.
  */
 
+import { LRUCache } from 'lru-cache';
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -51,7 +52,7 @@ import type { PermissionState } from '../permissionState';
 
 const DRAFT_CACHE_CAP = 50;
 const DRAFT_SAVE_DELAY_MS = 400;
-const draftCache = new Map<string, InquiryDraft>();
+const draftCache = new LRUCache<string, InquiryDraft>({ max: DRAFT_CACHE_CAP });
 const resolvedIds = createBoundedIdSet(DRAFT_CACHE_CAP);
 const INQUIRY_SUBMIT_ACTION = 'submit';
 
@@ -163,10 +164,6 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     if (resolvedIds.has(ids.requestId)) return;
     if (draft) {
       draftCache.set(ids.requestId, draft);
-      if (draftCache.size > DRAFT_CACHE_CAP) {
-        const oldest = draftCache.keys().next().value;
-        if (oldest !== undefined) draftCache.delete(oldest);
-      }
     } else {
       draftCache.delete(ids.requestId);
     }
