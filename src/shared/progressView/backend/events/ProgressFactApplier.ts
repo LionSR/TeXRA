@@ -322,14 +322,17 @@ export class ProgressFactApplier {
   }
 
   /**
-   * `domain` run facts (keyed `runFact.<name>`) dispatch through this table:
-   * one entry per handled {@link RunFactEventName}. Adding a new projected fact
-   * is a single row here. `goalPaused` is intentionally absent — the progress
-   * backend does not project it (see `runFactEvents.ts`) — so an unlisted fact
-   * is silently ignored, matching the prior if-ladder's fall-through.
+   * `domain` run facts (keyed `runFact.<name>`) dispatch through this table.
+   * It is typed as an *exhaustive* `Record<RunFactEventName, …>`, so adding a
+   * run fact is a COMPILE error here until it is given an arm — turning the old
+   * silent fall-through into compile-loudness (issue #7689; the silent-`default`
+   * class behind #7639/#7640). Facts the progress backend intentionally does not
+   * project map to `null` — an explicit, reviewable opt-out rather than an
+   * omission — currently only `goalPaused`.
    */
-  private readonly domainFactHandlers: Partial<
-    Record<RunFactEventName, (data: unknown) => void>
+  private readonly domainFactHandlers: Record<
+    RunFactEventName,
+    ((data: unknown) => void) | null
   > = {
     updateTodos: this.domainFact('updateTodos', UpdateTodosPayloadSchema, (p) =>
       this.handleUpdateTodos(p),
@@ -349,6 +352,8 @@ export class ProgressFactApplier {
       'updateCompileFailures',
       (p) => this.handleUpdateCompileFailures(p),
     ),
+    // Intentionally unprojected by the progress backend — explicit opt-out.
+    goalPaused: null,
   };
 
   /** Build a domain-fact handler that Zod-validates the payload before applying. */
