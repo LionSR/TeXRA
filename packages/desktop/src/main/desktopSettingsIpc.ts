@@ -1063,7 +1063,6 @@ export function createDesktopSettingsIpc(
     memory: {
       getData: () => postMemoryData(),
       getPreview: (storagePath) => postMemoryPreview(storagePath),
-      getEnabled: () => postMemoryEnabled(),
       openFile: (data) => openMemoryFile(data),
       openFolder: () => openMemoryFolder(),
       delete: (data) => deleteMemory(data),
@@ -1072,7 +1071,6 @@ export function createDesktopSettingsIpc(
       unpin: (storagePath) => setMemoryPinned(storagePath, false),
     },
     history: {
-      getData: () => postHistoryData(),
       deleteAgent: (historyId) => deleteHistoryItem(historyId),
       clear: () => clearHistory(),
       rerunAgent: unsupported(
@@ -1092,10 +1090,6 @@ export function createDesktopSettingsIpc(
       ),
     },
     profile: {
-      getData: () => postProfileData(),
-      selectAgent: unsupported(
-        'Selecting an agent from Settings is not available in the desktop app yet.',
-      ),
       signIn: () => signIn(),
       signOut: () => signOut(),
       setApiAccessMode: (mode) => setApiAccessMode(mode),
@@ -1114,7 +1108,6 @@ export function createDesktopSettingsIpc(
         options.openExternalUrl?.(url) ?? Promise.resolve(),
     },
     modelSelection: {
-      getData: () => postModelSelectionData(),
       setEnabled: (modelName, enabled) =>
         updateModelEnabled({ modelName, enabled }),
       setHelperModel: (modelName) => updateHelperModel(modelName),
@@ -1124,8 +1117,6 @@ export function createDesktopSettingsIpc(
         updatePreferShortModelNames(enabled),
     },
     orchestration: {
-      getSuperYoloEnabled: () => postSuperYoloEnabled(),
-      setSuperYoloEnabled: () => postSuperYoloEnabled(),
       setAllowOrchestratorKill: (enabled) =>
         updateBooleanWorkspaceSetting(
           StateKeys.ALLOW_ORCHESTRATOR_KILL,
@@ -1138,7 +1129,6 @@ export function createDesktopSettingsIpc(
         ),
     },
     agentSelection: {
-      getData: () => postAgentSelectionData(),
       setEnabled: ({ category, source, name, enabled }) =>
         updateAgentEnabled({ category, source, name, enabled }),
       setAllEnabled: ({ category, source, enabled }) =>
@@ -1158,16 +1148,13 @@ export function createDesktopSettingsIpc(
       viewRemotePrompt: unsupported(
         'Viewing a remote agent prompt is not available in the desktop app yet.',
       ),
-      getCustomDir: () => postCustomAgentDir(),
       setCustomDir: () => setCustomAgentDir(),
       resetCustomDir: () => resetCustomAgentDir(),
-      getModePresets: () => postAgentModePresets(),
       applyModePreset: (presetId) => applyAgentModePreset(presetId),
       saveModePreset: () => saveAgentModePreset(),
       deleteModePreset: (presetId) => deleteAgentModePreset(presetId),
     },
     gitAuthor: {
-      getSettings: () => postGitAuthorSettings(),
       setMarkCommits: (enabled) =>
         setGitAuthor(StateKeys.GIT_MARK_COMMITS, enabled),
       setName: (name) => setGitAuthor(StateKeys.GIT_AUTHOR_NAME, name),
@@ -1199,7 +1186,6 @@ export function createDesktopSettingsIpc(
       ),
     },
     chatGpt: {
-      getAuthStatus: () => postChatGptAuthStatus(),
       signIn: () => signInChatGpt(),
       signOut: () => signOutChatGpt(),
       setPreferSubscription: (enabled) => setChatGptPreferSubscription(enabled),
@@ -1207,7 +1193,6 @@ export function createDesktopSettingsIpc(
         setChatGptSubscriptionToolUseOnly(enabled),
     },
     approval: {
-      getSettings: () => postApprovalSettings(),
       setBashApprovalEnabled: (enabled) => updateBashApprovalEnabled(enabled),
       setCodexSandboxMode: (mode) =>
         setAgent(StateKeys.CODEX_SANDBOX_MODE, mode),
@@ -1223,7 +1208,6 @@ export function createDesktopSettingsIpc(
         setAgent(StateKeys.CLAUDE_AGENT_EFFORT, effort),
     },
     tools: {
-      getDashboardData: () => postToolDashboardData(),
       openInstallUrl: (url) =>
         options.openExternalUrl?.(url) ?? Promise.resolve(),
       installExtension: (extensionId) =>
@@ -1233,7 +1217,6 @@ export function createDesktopSettingsIpc(
       runCommand: ({ toolId, kind }) => runToolCommand({ toolId, kind }),
     },
     latex: {
-      getSettingsStatus: () => postLatexSettingsStatus(),
       applySettings: () => postLatexSettingsStatus(),
       installLatexWorkshop: () =>
         options.installToolExtension?.(LATEX_WORKSHOP_EXT_ID) ??
@@ -1247,7 +1230,6 @@ export function createDesktopSettingsIpc(
         }
         return options.runInstallCommand?.(installCommand) ?? Promise.resolve();
       },
-      getConfigValues: () => postLatexConfigValues(),
       setConfigValue: ({ field, value }) =>
         updateLatexConfigValue({ field, value }),
     },
