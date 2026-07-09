@@ -9,7 +9,12 @@ import {
   createNodePlatform,
   initNodeAgentRuntime,
   initializeNodeGoalPrompts,
+  initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
+import {
+  TEXRA_CONFIG_FILE_NAME,
+  workspaceTexraConfigPath,
+} from '@platform/defaults/nodeStorage';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
 
@@ -17,11 +22,6 @@ import { initPlatform, platform, tryPlatform } from '@platform/platform';
 import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local imports - agent index
-import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
-import {
-  TEXRA_CONFIG_FILE_NAME,
-  workspaceTexraConfigPath,
-} from '@platform/defaults/nodeStorage';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - auth
@@ -277,13 +277,9 @@ export async function initCliPlatform(
     versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
   });
 
-  setRuntimeSkillSources(
-    defaultSkillSources(
-      {
-        cwd: context.cwd,
-        resourcesPath: context.resourcesPath,
-      },
-      context.skillSourceOptions,
-    ),
-  );
+  initializeNodeRuntimeSkills({
+    cwd: context.cwd,
+    resourcesPath: context.resourcesPath,
+    skillSourceOptions: context.skillSourceOptions,
+  });
 }
