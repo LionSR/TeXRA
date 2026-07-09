@@ -17,8 +17,11 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
+type MockForm = 'mock' | 'doMock';
+
 interface MockSite {
   file: string;
+  form: MockForm;
   specifier: string;
 }
 
@@ -26,6 +29,8 @@ interface MockBaseline {
   semantics: string;
   sites: MockSite[];
 }
+
+const MOCK_FORMS: MockForm[] = ['mock', 'doMock'];
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
@@ -51,16 +56,25 @@ function sourceFilesUnder(dir: string): string[] {
     .map((entry) => join(dir, entry));
 }
 
-const VI_MOCK_METHODS = new Set(['mock', 'doMock']);
+function mockFormFromCall(
+  node: ts.Node,
+): { call: ts.CallExpression; form: MockForm } | null {
+  if (
+    !ts.isCallExpression(node) ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    !ts.isIdentifier(node.expression.expression) ||
+    node.expression.expression.text !== 'vi'
+  ) {
+    return null;
+  }
 
-function isViMockCall(node: ts.Node): node is ts.CallExpression {
-  return (
-    ts.isCallExpression(node) &&
-    ts.isPropertyAccessExpression(node.expression) &&
-    ts.isIdentifier(node.expression.expression) &&
-    node.expression.expression.text === 'vi' &&
-    VI_MOCK_METHODS.has(node.expression.name.text)
-  );
+  switch (node.expression.name.text) {
+    case 'mock':
+    case 'doMock':
+      return { call: node, form: node.expression.name.text };
+    default:
+      return null;
+  }
 }
 
 function collectAgentMockSites(file: string): MockSite[] {
@@ -74,12 +88,13 @@ function collectAgentMockSites(file: string): MockSite[] {
 
   const sites: MockSite[] = [];
   const visit = (node: ts.Node): void => {
-    if (isViMockCall(node)) {
-      const [specifierArg] = node.arguments;
+    const mock = mockFormFromCall(node);
+    if (mock != null) {
+      const [specifierArg] = mock.call.arguments;
       if (specifierArg != null && ts.isStringLiteralLike(specifierArg)) {
         const specifier = specifierArg.text;
         if (AGENT_SPECIFIER.test(specifier)) {
-          sites.push({ file: repoRelative(file), specifier });
+          sites.push({ file: repoRelative(file), form: mock.form, specifier });
         }
       }
     }
@@ -94,8 +109,18 @@ function collectHostAgentMockSites(): MockSite[] {
     sourceFilesUnder(dir).flatMap(collectAgentMockSites),
   ).toSorted(
     (a, b) =>
-      a.file.localeCompare(b.file) || a.specifier.localeCompare(b.specifier),
+      a.file.localeCompare(b.file) ||
+      a.form.localeCompare(b.form) ||
+      a.specifier.localeCompare(b.specifier),
   );
+}
+
+function countSitesByForm(sites: MockSite[]): Record<MockForm, number> {
+  const counts: Record<MockForm, number> = { mock: 0, doMock: 0 };
+  for (const { form } of sites) {
+    counts[form] += 1;
+  }
+  return counts;
 }
 
 function readBaseline(): MockBaseline {
@@ -103,16 +128,23 @@ function readBaseline(): MockBaseline {
 }
 
 describe('QA-2 host-side @agent mock ratchet', () => {
-  it("does not increase the count of vi.mock()/vi.doMock('@agent/...') sites in CLI/desktop suites", () => {
+  it("does not increase the count of either vi.mock or vi.doMock('@agent/...') sites in CLI/desktop suites", () => {
     const baseline = readBaseline();
     const current = collectHostAgentMockSites();
+    const baselineCounts = countSitesByForm(baseline.sites);
+    const currentCounts = countSitesByForm(current);
 
-    expect(
-      current.length,
-      `host-side @agent mock sites grew from ${baseline.sites.length} to ${current.length}:\n` +
-        `${current.map((site) => `${site.file}: ${site.specifier}`).join('\n')}\n\n` +
-        'If this growth is intentional, update host-agent-mock-baseline.json in this PR.',
-    ).toBeLessThanOrEqual(baseline.sites.length);
+    for (const form of MOCK_FORMS) {
+      expect(
+        currentCounts[form],
+        `host-side @agent vi.${form} sites grew from ${baselineCounts[form]} to ${currentCounts[form]}:\n` +
+          `${current
+            .filter((site) => site.form === form)
+            .map((site) => `${site.file}: vi.${site.form}('${site.specifier}')`)
+            .join('\n')}\n\n` +
+          'If this growth is intentional, update host-agent-mock-baseline.json in this PR.',
+      ).toBeLessThanOrEqual(baselineCounts[form]);
+    }
   });
 
   it('keeps the baseline ordered (an empty baseline is a valid, welcome outcome)', () => {
