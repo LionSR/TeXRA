@@ -12,6 +12,7 @@ import type {
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { RunScope } from '@agent/runtime/RunScope';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
@@ -51,8 +52,13 @@ export interface AgentCore<C = unknown> {
 }
 
 export interface AgentRunIdentity {
+  /** Canonical identity and session owner for this launched run. */
+  readonly runScope: RunScope;
+  /** Compatibility field; prefer `runScope.runtimeHost` for new code. */
   readonly runtimeHost: AgentRuntimeHost;
+  /** Compatibility field; prefer `runScope.streamId` for new code. */
   readonly streamId: StreamTabId;
+  /** Compatibility field; prefer `runScope.executionId` for new code. */
   readonly executionId: ExecutionId;
 }
 
