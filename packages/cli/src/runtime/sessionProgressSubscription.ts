@@ -6,7 +6,7 @@ import type {
 } from '@agent/runtime/SessionEventHub';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import type { StreamTabId } from '@shared/schemas';
+import type { StreamTabId, UpdateStreamStatusPayload } from '@shared/schemas';
 import { assertNever } from '@utils/core';
 import { writeNdjsonStdout } from './logSinks';
 import type {
@@ -229,6 +229,16 @@ function emitProjectedProgressEvent(
   });
 }
 
+function statusProjectionKey(payload: UpdateStreamStatusPayload): string {
+  return JSON.stringify([
+    payload.streamId,
+    payload.status,
+    payload.previousStatus ?? null,
+    payload.cause ?? null,
+    payload.substate ?? null,
+  ]);
+}
+
 /**
  * Headless CLI compatibility adapter. Public NDJSON output still speaks the
  * frozen progress-event vocabulary inside `kind: "progress"` records, so this
@@ -238,11 +248,23 @@ export function attachCliSessionProgressProjection(
   events: SessionEventHub,
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
 ): () => void {
+  const lastStatusByStream = new Map<StreamTabId, string>();
+
+  function emitProjected(projected: CliProjectedNdjsonProgressEvent): void {
+    if (projected.event === 'updateStreamStatus') {
+      const key = statusProjectionKey(projected.payload);
+      const streamId = projected.payload.streamId;
+      if (lastStatusByStream.get(streamId) === key) return;
+      lastStatusByStream.set(streamId, key);
+    }
+    emitProjectedProgressEvent(writeRecord, projected);
+  }
+
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'session') return;
       const projected = projectCliSessionFact(sessionEvent.event);
-      if (projected) emitProjectedProgressEvent(writeRecord, projected);
+      if (projected) emitProjected(projected);
     },
     { scope: 'session' },
   );
@@ -253,7 +275,7 @@ export function attachCliSessionProgressProjection(
         sessionEvent.streamId,
         sessionEvent.event,
       );
-      if (projected) emitProjectedProgressEvent(writeRecord, projected);
+      if (projected) emitProjected(projected);
     },
     { scope: 'run', types: CLI_RUN_PROGRESS_EVENT_TYPES },
   );
