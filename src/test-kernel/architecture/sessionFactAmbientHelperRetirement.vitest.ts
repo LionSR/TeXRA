@@ -11,9 +11,7 @@ const REPO_ROOT = resolve(
   '../../..',
 );
 
-const ALLOWED_PRODUCTION_REFERENCES = [
-  'src/agent/runtime/emitRuntimeEvent.ts',
-] as const;
+const ALLOWED_PRODUCTION_REFERENCES = [] as const;
 
 const SCAN_ROOTS = [
   'packages/cli/src',
@@ -23,7 +21,7 @@ const SCAN_ROOTS = [
 ] as const;
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
-const EMIT_RUNTIME_EVENT_SYMBOL = /\bemitRuntimeEvent\b/;
+const RETIRED_AMBIENT_HELPER_SYMBOL = /\bemitRuntimeEvent\b/;
 
 function toRepoPath(path: string): string {
   return relative(REPO_ROOT, resolve(REPO_ROOT, path)).replaceAll('\\', '/');
@@ -57,11 +55,11 @@ function stripComments(source: string): string {
 
 function referencesEmitRuntimeEvent(file: string): boolean {
   const source = stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8'));
-  return EMIT_RUNTIME_EVENT_SYMBOL.test(source);
+  return RETIRED_AMBIENT_HELPER_SYMBOL.test(source);
 }
 
-describe('emitRuntimeEvent boundary', () => {
-  it('keeps the ambient session-fact helper surface explicitly bounded', () => {
+describe('ambient session-fact helper retirement', () => {
+  it('keeps the retired ambient session-fact helper out of production code', () => {
     const references = SCAN_ROOTS.flatMap(sourceFilesUnder)
       .filter(referencesEmitRuntimeEvent)
       .toSorted();
