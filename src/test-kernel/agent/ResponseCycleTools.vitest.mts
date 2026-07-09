@@ -2,23 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { responseCycleToolsForModel } from '@agent/core/flows/ResponseCycleFlow';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { createRunScope } from '@agent/runtime/RunScope';
 
 function toolNames(tools: readonly { name: string }[] | undefined): string[] {
   return tools?.map((tool) => tool.name) ?? [];
 }
 
 function responseServices({
-  approvalPromptsUnavailable,
-  runtimeUnavailableTools,
   supportsFunctionCalling = true,
 }: {
-  approvalPromptsUnavailable?: boolean;
-  runtimeUnavailableTools?: readonly string[];
   supportsFunctionCalling?: boolean;
 }) {
   return {
-    delegation: { approvalPromptsUnavailable },
-    runtimeUnavailableTools,
     modelHandler: {
       capabilities: { supportsFunctionCalling },
     },
@@ -32,6 +28,30 @@ function responseServices({
       ],
     },
   };
+}
+
+function withResponseRunContext<T>(
+  options: {
+    approvalPromptsUnavailable?: boolean;
+    runtimeUnavailableTools?: readonly string[];
+  },
+  fn: () => T,
+): T {
+  return withRunContext(
+    createRunContext({
+      runScope: createRunScope({
+        runtimeHost: { emit: vi.fn() },
+        streamId: 'response-cycle-stream',
+        executionId: 'response-cycle-execution',
+        agentName: 'response-agent',
+        session: {} as any,
+      }),
+      modelSource: 'live',
+      getModel: () => 'deepseekT',
+      ...options,
+    }),
+    fn,
+  ) as T;
 }
 
 describe('response cycle tool visibility', () => {
@@ -55,16 +75,20 @@ describe('response cycle tool visibility', () => {
       expected: ['bash', 'grep', 'write_file', 'wolfram'],
     },
   ])('$name', ({ services, expected }) => {
-    const tools = responseCycleToolsForModel(responseServices(services) as any);
+    const tools = withResponseRunContext(services, () =>
+      responseCycleToolsForModel(responseServices({}) as any),
+    );
 
     expect(toolNames(tools)).toEqual(expected);
   });
 
   it('omits workflow tools when the model handler cannot call functions', () => {
-    const tools = responseCycleToolsForModel(
-      responseServices({
-        supportsFunctionCalling: false,
-      }) as any,
+    const tools = withResponseRunContext({}, () =>
+      responseCycleToolsForModel(
+        responseServices({
+          supportsFunctionCalling: false,
+        }) as any,
+      ),
     );
 
     expect(tools).toBeUndefined();

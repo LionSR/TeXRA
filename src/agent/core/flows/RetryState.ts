@@ -2,7 +2,7 @@
 
 import { StatusCodes } from 'http-status-codes';
 
-import { Node, type NonIterableObject } from '@agent/node';
+import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -15,6 +15,7 @@ import {
   toRetryErrorInfo,
   type RetryErrorInfo,
 } from '@shared/schemas';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -22,8 +23,14 @@ const BACKGROUND_MODE_MIN_RETRIES = 3;
 
 /** Returns maxRetries (1 initial + N auto-retries) and wait (seconds between retries). */
 function getNodeRetryConfig(): { maxRetries: number; wait: number } {
-  const maxAutoAttempts = getConfig<number>('texra.model.retry.maxAttempts', 1);
-  const backoffMs = getConfig<number>('texra.model.retry.backoffMs', 1000);
+  const maxAutoAttempts = getConfig<number>(
+    'texra.model.retry.maxAttempts',
+    DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+  );
+  const backoffMs = getConfig<number>(
+    'texra.model.retry.backoffMs',
+    DEFAULT_CORE_SETTINGS.model.retry.backoffMs,
+  );
 
   return {
     maxRetries: 1 + Math.max(0, maxAutoAttempts),
@@ -77,9 +84,8 @@ async function tryRefreshClient(
 /** Base class for model/tool invocation nodes with retry support. */
 export abstract class RetryableInvocationNode<
   S,
-  P extends NonIterableObject = NonIterableObject,
   Svc extends RetryableNodeServices = RetryableNodeServices,
-> extends Node<S, P, Svc> {
+> extends Node<S, Svc> {
   protected _userCancelled = false;
   protected _hasAttemptedTokenRefresh = false;
   protected _persistent401Error: Error | null = null;

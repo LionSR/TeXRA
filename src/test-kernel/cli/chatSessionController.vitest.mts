@@ -11,12 +11,55 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   stopAgentStream: vi.fn(),
   workspaceGet: vi.fn(),
+  getExecutionStore: vi.fn(),
+  setCliHelperModel: vi.fn(),
+  createCliRuntimeHost: vi.fn(),
+  runtimeHostClose: vi.fn(),
+  defaultSession: vi.fn(),
+  streamIsActiveOrResuming: vi.fn(),
+  detachHostInteractions: vi.fn(),
+  attachTerminalResultToast: vi.fn(),
+  attachTuiRunFactSubscription: vi.fn(),
+  createTuiHostInteractions: vi.fn(),
+  resolveAndResumeStream: vi.fn(),
+  isResumeInFlight: vi.fn(),
+  resumeQueuedToolUseSnapshot: vi.fn(),
+  projectStreamTranscript: vi.fn(),
+  notify: vi.fn(),
+  appendLocalAssistantTranscript: vi.fn(),
+  appendLocalErrorTranscript: vi.fn(),
+  appendLocalUserTranscript: vi.fn(),
+  clearLocalTranscript: vi.fn(),
+  moveLocalTranscriptToStream: vi.fn(),
+}));
+
+vi.mock('@agent/storage', () => ({
+  getExecutionStore: mocks.getExecutionStore,
+  registerExecution: vi.fn(),
+  writeTerminalStatus: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/executionRegistry', () => ({
   SharedExecutionRegistry: {
     stopAgentStream: mocks.stopAgentStream,
   },
+}));
+
+vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
+  resolveAndResumeStream: mocks.resolveAndResumeStream,
+  isResumeInFlight: mocks.isResumeInFlight,
+}));
+
+vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
+  resumeQueuedToolUseSnapshot: mocks.resumeQueuedToolUseSnapshot,
+}));
+
+vi.mock('@agent/runtime/SessionHandle', () => ({
+  defaultSession: mocks.defaultSession,
+}));
+
+vi.mock('@agent/runtime/terminalResultToast', () => ({
+  attachTerminalResultToast: mocks.attachTerminalResultToast,
 }));
 
 vi.mock('@platform/platform', () => ({
@@ -27,7 +70,40 @@ vi.mock('@platform/platform', () => ({
   }),
 }));
 
+vi.mock('@cli/runtime/initPlatform', () => ({
+  setCliHelperModel: mocks.setCliHelperModel,
+}));
+
+vi.mock('@cli/runtime/runtimeHost', () => ({
+  createCliRuntimeHost: mocks.createCliRuntimeHost,
+}));
+
+vi.mock('@cli/chat/tui/state/subscribeApprovals', () => ({
+  createTuiHostInteractions: mocks.createTuiHostInteractions,
+}));
+
+vi.mock('@cli/chat/tui/state/subscribeRuntimeHost', () => ({
+  attachTuiRunFactSubscription: mocks.attachTuiRunFactSubscription,
+}));
+
+vi.mock('@cli/chat/tui/state/transcriptProjection', () => ({
+  projectStreamTranscript: mocks.projectStreamTranscript,
+}));
+
+vi.mock('@cli/chat/tui/state/transcript', () => ({
+  appendLocalAssistantTranscript: mocks.appendLocalAssistantTranscript,
+  appendLocalErrorTranscript: mocks.appendLocalErrorTranscript,
+  appendLocalUserTranscript: mocks.appendLocalUserTranscript,
+  clearLocalTranscript: mocks.clearLocalTranscript,
+  moveLocalTranscriptToStream: mocks.moveLocalTranscriptToStream,
+}));
+
+vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
+  notify: mocks.notify,
+}));
+
 import { StreamSnapshotStore } from '@transcript';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
@@ -36,6 +112,7 @@ import {
   chatTuiCanStartRootRun,
   type TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
+import type { StreamTabId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ---------------------------------------------------------------------------
@@ -85,6 +162,45 @@ function makeInit(
   };
 }
 
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve: (value: T | PromiseLike<T>) => void = () => {};
+  let reject: (reason?: unknown) => void = () => {};
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function makeResumeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
+  return {
+    agent: 'demo-agent',
+    model: 'demo-model',
+    agentCategory: 'toolUse',
+    ...overrides,
+  } as AgentConfig;
+}
+
+function makeResumeSnapshotStore(options: {
+  readonly preload?: () => Promise<void>;
+  readonly executionId?: string | undefined;
+  readonly persistedExecutionId?: string | undefined;
+  readonly config?: AgentConfig | undefined;
+  readonly parentStreamId?: StreamTabId | undefined;
+}): StreamSnapshotStore {
+  return {
+    preload: vi.fn(options.preload ?? (async () => undefined)),
+    getExecutionId: vi.fn(() => options.executionId),
+    readPersistedExecutionId: vi.fn(async () => options.persistedExecutionId),
+    getRunConfig: vi.fn(() => options.config),
+    getParentStreamId: vi.fn(() => options.parentStreamId),
+  } as unknown as StreamSnapshotStore;
+}
+
 // ---------------------------------------------------------------------------
 // Predicate: chatTuiCanStartRootRun
 // ---------------------------------------------------------------------------
@@ -126,6 +242,45 @@ describe('createChatSessionController', () => {
     mocks.stopAgentStream.mockReset();
     mocks.workspaceGet.mockReset();
     mocks.workspaceGet.mockReturnValue(false);
+    mocks.getExecutionStore.mockReset();
+    mocks.setCliHelperModel.mockReset();
+    mocks.setCliHelperModel.mockResolvedValue(undefined);
+    mocks.createCliRuntimeHost.mockReset();
+    mocks.runtimeHostClose.mockReset();
+    mocks.runtimeHostClose.mockResolvedValue(undefined);
+    mocks.createCliRuntimeHost.mockReturnValue({
+      close: mocks.runtimeHostClose,
+      emit: vi.fn(),
+    });
+    mocks.defaultSession.mockReset();
+    mocks.streamIsActiveOrResuming.mockReset();
+    mocks.streamIsActiveOrResuming.mockReturnValue(false);
+    mocks.detachHostInteractions.mockReset();
+    mocks.attachTerminalResultToast.mockReset();
+    mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
+    mocks.attachTuiRunFactSubscription.mockReset();
+    mocks.attachTuiRunFactSubscription.mockReturnValue(vi.fn());
+    mocks.createTuiHostInteractions.mockReset();
+    mocks.createTuiHostInteractions.mockReturnValue({});
+    mocks.defaultSession.mockReturnValue({
+      useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
+      interactions: {},
+      events: {},
+      status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
+    });
+    mocks.resolveAndResumeStream.mockReset();
+    mocks.resolveAndResumeStream.mockResolvedValue(true);
+    mocks.isResumeInFlight.mockReset();
+    mocks.isResumeInFlight.mockReturnValue(false);
+    mocks.resumeQueuedToolUseSnapshot.mockReset();
+    mocks.resumeQueuedToolUseSnapshot.mockResolvedValue(true);
+    mocks.projectStreamTranscript.mockReset();
+    mocks.notify.mockReset();
+    mocks.appendLocalAssistantTranscript.mockReset();
+    mocks.appendLocalErrorTranscript.mockReset();
+    mocks.appendLocalUserTranscript.mockReset();
+    mocks.clearLocalTranscript.mockReset();
+    mocks.moveLocalTranscriptToStream.mockReset();
   });
 
   it('returns an object satisfying the ChatSessionController interface', () => {
@@ -200,6 +355,92 @@ describe('createChatSessionController', () => {
     expect(mocks.stopAgentStream).toHaveBeenCalledWith('stream-1', {
       detachActiveChildren: true,
       runtimeHost,
+    });
+  });
+
+  it('reserves the root-run slot before tryResumeStream awaits persisted state', async () => {
+    const preload = deferred();
+    const session = makeSession({ runCompleted: true });
+    const snapshotStore = makeResumeSnapshotStore({
+      preload: () => preload.promise,
+      executionId: undefined,
+    });
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    const resumed = ctrl.tryResumeStream('stream-1');
+
+    expect(session.runPromise).toBeDefined();
+    expect(session.runCompleted).toBe(false);
+    expect(ctrl.canStartRootRun()).toBe(false);
+
+    preload.resolve(undefined);
+    await expect(resumed).resolves.toBe(false);
+    expect(session.runCompleted).toBe(true);
+  });
+
+  it('treats a busy CLI root slot as a non-dropping wake outcome', async () => {
+    const session = makeSession({
+      runPromise: new Promise(() => {}),
+      runCompleted: false,
+    });
+    const snapshotStore = makeResumeSnapshotStore({});
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    await expect(ctrl.tryResumeStream('child-stream')).resolves.toBe(true);
+
+    expect(snapshotStore.preload).not.toHaveBeenCalled();
+  });
+
+  it('allows WAITING results when auto-resuming queued tool-use snapshots', async () => {
+    const session = makeSession({ runCompleted: true });
+    const config = makeResumeConfig();
+    const snapshotStore = makeResumeSnapshotStore({
+      executionId: 'exec-1',
+      config,
+    });
+    mocks.resolveAndResumeStream.mockImplementationOnce(
+      async (
+        _streamId: StreamTabId,
+        ports: { resumeToolUseSnapshot(snapshot: unknown): Promise<boolean> },
+      ) => ports.resumeToolUseSnapshot({ version: 2 }),
+    );
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    await expect(ctrl.tryResumeStream('stream-1')).resolves.toBe(true);
+
+    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+      'stream-1',
+      { version: 2 },
+      expect.any(Object),
+      expect.objectContaining({ allowWaitingResult: true }),
+    );
+    expect(mocks.projectStreamTranscript).toHaveBeenCalledWith('stream-1', {
+      finalize: true,
+    });
+  });
+
+  it('does not finalize the stream transcript when auto-resume returns false', async () => {
+    const session = makeSession({ runCompleted: true });
+    const config = makeResumeConfig();
+    const snapshotStore = makeResumeSnapshotStore({
+      executionId: 'exec-1',
+      config,
+    });
+    mocks.resolveAndResumeStream.mockResolvedValueOnce(false);
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    await expect(ctrl.tryResumeStream('stream-1')).resolves.toBe(false);
+
+    expect(mocks.projectStreamTranscript).not.toHaveBeenCalledWith('stream-1', {
+      finalize: true,
     });
   });
 });

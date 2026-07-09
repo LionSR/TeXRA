@@ -105,6 +105,33 @@ describe('desktop composition root and launch environment', () => {
     );
   });
 
+  it('initializes desktop runtime skills from the resolved resource bundle', async () => {
+    const source = await readFile(
+      repoPath('packages', 'desktop', 'src', 'main', 'platform', 'index.ts'),
+      'utf8',
+    );
+
+    expect(
+      source.indexOf('const resourcesPath = resolveResourcesPath'),
+    ).toBeGreaterThanOrEqual(0);
+    expect(source.indexOf('initializeNodeRuntimeSkills({')).toBeGreaterThan(
+      source.indexOf('const resourcesPath = resolveResourcesPath'),
+    );
+    expect(source.indexOf('initializeNodeRuntimeSkills({')).toBeLessThan(
+      source.indexOf('bootstrapNodeAgentDirectories('),
+    );
+  });
+
+  it('uses the home directory as the no-workspace skill discovery fallback', async () => {
+    const source = await readFile(
+      repoPath('packages', 'desktop', 'src', 'main', 'platform', 'index.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain("cwd: workspacePath ?? app.getPath('home'),");
+    expect(source).not.toContain('cwd: workspacePath ?? userDataPath,');
+  });
+
   it('resolves workspace paths only from an explicit launch environment', async () => {
     const { resolveWorkspacePath } =
       await loadDesktopPlatformModule<PathsModule>('paths.ts');

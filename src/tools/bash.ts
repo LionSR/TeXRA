@@ -16,6 +16,10 @@ import {
   type ToolCallContext,
 } from '@agent/followUp/ToolFileInteractionContext';
 import type { ExecutionInterruptHandler } from '@agent/runtime/ExecutionHandle';
+import {
+  getRunContextExecutionId,
+  getRunContextWorkingDirectory,
+} from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -30,11 +34,7 @@ import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/constants/toolDefaults';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
-import {
-  getRunContextExecutionId,
-  getRunContextWorkingDirectory,
-  requireRunStream,
-} from '@tools/contextHelpers';
+import { requireRunStream } from '@tools/contextHelpers';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,

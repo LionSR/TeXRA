@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { appSignals } from '@eventBus/AppSignals';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -22,22 +23,23 @@ let testApprovalHandler:
   | undefined;
 
 function installTestPlatform(): Promise<void> {
-  return installPlatform(
-    {
-      workspacePath,
-      storagePath,
-      globalStoragePath: '/global/.texra/storage',
-    },
-    {
-      toolEditApproval: (request) => {
+  return installPlatform({
+    workspacePath,
+    storagePath,
+    globalStoragePath: '/global/.texra/storage',
+  }).then(() => {
+    defaultSession().useHostInteractions({
+      requestToolEditApproval: (request) => {
         const handler = testApprovalHandler;
         if (!handler) {
           throw new Error('No test handler. Set `testApprovalHandler`.');
         }
         return handler(request);
       },
-    },
-  );
+      resolve: () => false,
+      cancel: () => undefined,
+    });
+  });
 }
 
 const executionId = 'abcdef' as ExecutionId;
@@ -112,6 +114,7 @@ describe('accept_run_files progress events', () => {
     AbsoluteFS.read = originalAbsoluteRead;
     FlexibleFS.read = originalFlexibleRead;
     testApprovalHandler = undefined;
+    defaultSession().interactions.dispose();
     cleanupAllApprovals();
   });
 

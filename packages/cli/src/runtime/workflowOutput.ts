@@ -8,6 +8,7 @@ import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
+import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { getRunDir } from '@utils/files';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
@@ -102,9 +103,10 @@ function outputCopyRelativePath(output: OutputFileSummary): string {
   const relativePath =
     output.relativePath || path.basename(output.absolutePath);
   const parts = toPosixPath(relativePath).split('/');
-  const withoutRoundDir = /^r\d+$/.test(parts[0] ?? '')
-    ? parts.slice(1)
-    : parts;
+  const withoutRoundDir =
+    parts[0] !== undefined && parseWorkflowOutputRoundDir(parts[0]) !== null
+      ? parts.slice(1)
+      : parts;
   return getSafeDocumentRelativePath(withoutRoundDir.join('/'));
 }
 

@@ -52,10 +52,6 @@ interface DesktopToolEditApprovalModule {
   };
 }
 
-interface DesktopPlatformModule {
-  createDesktopToolEditApprovalPort(): import('@platform/interfaces').ToolEditApprovalPort;
-}
-
 interface RecordingRuntimeHost extends AgentRuntimeHost {
   shownToolEditPermissions: RuntimeInteractionEventPayloads['showToolEditPermission'][];
   resolvedToolEditPermissions: RuntimeInteractionEventPayloads['resolveToolEditPermission'][];
@@ -165,11 +161,10 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       tryUseRunContext: vi.fn(() =>
         activeToolEditApproval
           ? {
-              runtimeHost: {
+              session: {
                 interactions: {
                   requestToolEditApproval: activeToolEditApproval,
                 },
-                emit: () => {},
               },
             }
           : undefined,
@@ -200,26 +195,17 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     };
   });
 
-  const [
-    { initPlatform },
-    { createFakePlatform },
-    { nodeFilesystem },
-    desktopPlatformModule,
-  ] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-    import('@platform/defaults/nodeFilesystem'),
-    import(
-      moduleFileUrl(desktopSourcePath('main', 'platform', 'index.ts'))
-    ) as Promise<DesktopPlatformModule>,
-  ]);
+  const [{ initPlatform }, { createFakePlatform }, { nodeFilesystem }] =
+    await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+      import('@platform/defaults/nodeFilesystem'),
+    ]);
   initPlatform(
     createFakePlatform(
       { workspacePath },
       {
         fs: nodeFilesystem,
-        toolEditApproval:
-          desktopPlatformModule.createDesktopToolEditApprovalPort(),
       },
     ),
   );

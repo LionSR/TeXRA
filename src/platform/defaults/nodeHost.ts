@@ -16,6 +16,9 @@
 // Node imports
 import { join } from 'node:path';
 
+// Local imports - skills
+import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+
 // Local imports - agent + tools (composition wiring)
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal/promptLoader';
@@ -32,6 +35,7 @@ import { platform } from '../platform';
 
 // Type imports
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
+import type { SkillSourceOptions } from '@skills/index';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,
@@ -39,7 +43,6 @@ import type {
   StateStore,
   StorageProvider,
   ToolAvailabilityHost,
-  ToolEditApprovalPort,
 } from '../interfaces';
 import type { Platform } from '../platform';
 import type { PlatformSecrets } from '../secrets';
@@ -63,13 +66,6 @@ export interface NodePlatformServices {
   readonly getWorkspacePath: () => string | undefined;
   /** Host-specific availability overrides merged over the no-op defaults. */
   readonly toolAvailability?: Partial<ToolAvailabilityHost>;
-  /**
-   * Tool-edit approval handler override.  If omitted, the returned Platform
-   * object carries a default that throws — hosts that run agents with tool-use
-   * must provide a real handler here, wired either directly (extension) or via a
-   * session-scoped indirection (CLI, desktop).
-   */
-  readonly toolEditApproval?: ToolEditApprovalPort;
 }
 
 export interface NodeAgentDirectoryBootstrapOptions {
@@ -77,6 +73,12 @@ export interface NodeAgentDirectoryBootstrapOptions {
   readonly resourcesPath: string;
   readonly currentVersion: string | undefined;
   readonly versionStateKey: string;
+}
+
+export interface NodeRuntimeSkillOptions {
+  readonly cwd: string;
+  readonly resourcesPath: string;
+  readonly skillSourceOptions?: SkillSourceOptions;
 }
 
 const bootstrappedAgentDirectoryResources = new Map<string, string>();
@@ -110,17 +112,6 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
     // ports are optional and single-implementer (VS Code only); core call
     // sites already treat an absent port as a no-op, so omitting them here is
     // enough — no per-host stub needed.
-    // Default handler throws — a host must override this to support tool-edit
-    // approvals.  CLI and desktop override via a session-scoped indirection
-    // (see the host's own initPlatform code); the extension wires its native
-    // handler directly.
-    toolEditApproval:
-      services.toolEditApproval ??
-      (() => {
-        throw new Error(
-          'Tool edit approval is not available: no handler has been configured.',
-        );
-      }),
   };
 }
 
@@ -151,6 +142,28 @@ export function initNodeAgentRuntime(lifecycle: LifecycleHost): void {
  */
 export function initializeNodeGoalPrompts(resourcesPath: string): void {
   initializeGoalPrompts(join(resourcesPath, 'goal', 'goal.yaml'));
+}
+
+/**
+ * Register runtime skill sources for a Node host.
+ *
+ * The CLI and desktop hosts use the same precedence: explicit custom roots,
+ * project skills, user skills, and bundled skills. The CLI supplies custom and
+ * interop options from command-line flags; desktop uses the defaults so it
+ * always gets project, user, and bundled runtime skills.
+ */
+export function initializeNodeRuntimeSkills(
+  options: NodeRuntimeSkillOptions,
+): void {
+  setRuntimeSkillSources(
+    defaultSkillSources(
+      {
+        cwd: options.cwd,
+        resourcesPath: options.resourcesPath,
+      },
+      options.skillSourceOptions,
+    ),
+  );
 }
 
 /**

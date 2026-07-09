@@ -1,5 +1,5 @@
 // Local imports - core flow primitives
-import { BatchNode } from '@agent/node';
+import { Node } from '@agent/node';
 import {
   emitToolUseCard,
   endToolUseCard,
@@ -15,7 +15,6 @@ import type {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 
 // Local imports - logging
 import type { FileLocation } from '@shared/schemas';
@@ -101,9 +100,8 @@ interface ToolExecutionResult {
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-export class ToolUseDispatchNode<C> extends BatchNode<
+export class ToolUseDispatchNode<C> extends Node<
   ToolUseRoundShared,
-  FlowParams,
   ToolUseRoundServices<C>
 > {
   /**

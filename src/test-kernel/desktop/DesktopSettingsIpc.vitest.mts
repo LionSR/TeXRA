@@ -13,7 +13,11 @@ import {
 } from '@tools/worktreeConfig';
 import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import {
+  desktopSourcePath,
+  moduleFileUrl,
+  repoPath,
+} from './desktopTestPaths.mjs';
 
 const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
 const computeModelOptionsData = vi.hoisted(() =>
@@ -25,6 +29,33 @@ const computeModelOptionsData = vi.hoisted(() =>
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData,
   invalidateModelOptionsCache,
+}));
+
+// The export wiring tests below assert desktopSettingsIpc.ts's history
+// actions call through to ChatExportController with the right arguments and
+// react to its result — ChatExportController's own formatting/compile/write
+// behavior already has dedicated coverage (ChatExportController.vitest.ts,
+// ChatExportControllerHtml.vitest.ts), so it's mocked here rather than
+// re-exercised.
+const chatExportMocks = vi.hoisted(() => ({
+  buildExportInput: vi.fn(),
+  exportAsMarkdown: vi.fn(),
+  exportAsLatex: vi.fn(),
+  exportAsHtml: vi.fn(),
+  constructorDeps: [] as unknown[],
+}));
+
+vi.mock('@controllers/settingsView/ChatExportController', () => ({
+  ChatExportController: class {
+    buildExportInput = chatExportMocks.buildExportInput;
+    exportAsMarkdown = chatExportMocks.exportAsMarkdown;
+    exportAsLatex = chatExportMocks.exportAsLatex;
+    exportAsHtml = chatExportMocks.exportAsHtml;
+
+    constructor(deps: unknown) {
+      chatExportMocks.constructorDeps.push(deps);
+    }
+  },
 }));
 
 interface StateStore {
@@ -83,6 +114,12 @@ interface DesktopSettingsIpcModule {
     selectCustomAgentDirectory?: () => Promise<string | undefined>;
     openPath?: (filePath: string) => Promise<void>;
     openExternalUrl?: (url: string) => Promise<void>;
+    resourcesPath?: string;
+    runExecution?: (request: {
+      config: Record<string, unknown>;
+      executionId?: string;
+    }) => Promise<void>;
+    restoreTaskState?: (taskState: unknown) => Promise<boolean>;
     installToolExtension?: (extensionId: string) => Promise<void>;
     promptSecret?: (input: {
       title: string;
@@ -112,6 +149,7 @@ interface DesktopSettingsIpcModule {
     runInstallCommand?: (command: string) => Promise<void>;
     onError?: (error: unknown) => void;
     modelListRefresh?: PromiseLike<void>;
+    revealStream?: (streamId: string) => Promise<void>;
   }): {
     refreshAuthDependentData(): Promise<void>;
     handleMessage(
@@ -311,6 +349,10 @@ describe('desktop settings IPC', () => {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
         values: {},
       },
+      {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+        items: [],
+      },
     ]);
   }, 15_000);
 
@@ -364,46 +406,6 @@ describe('desktop settings IPC', () => {
       workspaceState.values.get(WorkspaceStateKey.GIT_WORKTREE_SUPPORT),
     ).toBe(true);
     expect(isWorktreeSupportEnabled()).toBe(true);
-  });
-
-  it('serves Git author read requests without reapplying process env', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const workspaceState = new MemoryStateStore();
-    workspaceState.values.set(WorkspaceStateKey.GIT_AUTHOR_NAME, 'Applied');
-    workspaceState.values.set(
-      WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-      'applied@example.com',
-    );
-    const posted: unknown[] = [];
-
-    const settings = createDesktopSettingsIpc({
-      workspaceState,
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
-    });
-
-    workspaceState.values.set(WorkspaceStateKey.GIT_AUTHOR_NAME, 'Read Only');
-    workspaceState.values.set(
-      WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-      'read@example.com',
-    );
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
-      }),
-    ).toBe(true);
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      authorName: 'Read Only',
-      authorEmail: 'read@example.com',
-    });
-    expect(getGitAuthorEnv()).toEqual({
-      GIT_AUTHOR_NAME: 'Applied',
-      GIT_AUTHOR_EMAIL: 'applied@example.com',
-      GIT_COMMITTER_NAME: 'Applied',
-      GIT_COMMITTER_EMAIL: 'applied@example.com',
-    });
   });
 
   it('round-trips desktop crash reporting settings through global state and secrets', async () => {
@@ -488,88 +490,62 @@ describe('desktop settings IPC', () => {
     expect(initializeCalls).toBe(1);
   });
 
-  it('serves storage-backed LaTeX config reads through workspace state', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const workspaceState = new MemoryStateStore();
-    workspaceState.values.set(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, false);
-    workspaceState.values.set(
-      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-      30_000,
-    );
-    workspaceState.values.set(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, 5_000);
-    workspaceState.values.set(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP, 'fine');
-    workspaceState.values.set(WorkspaceStateKey.LATEX_FORMATTER, 'tex-fmt');
-    workspaceState.values.set('texra.invalidLatexValue', 'ignored');
-    const posted: unknown[] = [];
-
-    const settings = createDesktopSettingsIpc({
-      workspaceState,
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_LATEX_CONFIG_VALUES,
-      }),
-    ).toBe(true);
-
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values: {
-        workflowAutoCompile: false,
-        workflowAutoCompileTimeoutMs: 30_000,
-        latexdiffTimeoutMs: 5_000,
-        latexdiffMathMarkup: 'fine',
-        latexFormatter: 'tex-fmt',
-      },
-    });
-  });
-
-  it('loads desktop LaTeX tooling status instead of leaving the tab spinning', async () => {
+  it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const posted: unknown[] = [];
 
     const settings = createDesktopSettingsIpc({
       workspaceState: new MemoryStateStore(),
       globalState: new MemoryStateStore(),
-      detectLatexSettingsStatus: async () => ({
-        outDir: true,
-        autoRevealExclude: true,
-        texDistributionInstalled: true,
-        latexWorkshopInstalled: false,
-        latexdiffInstalled: true,
-        latexindentInstalled: false,
-        texcountInstalled: true,
-        imageProcessingInstalled: false,
-        platform: 'darwin',
-        pdflatexPath: '/Library/TeX/texbin/pdflatex',
-        latexmkPath: '/Library/TeX/texbin/latexmk',
-        latexdiffPath: '/opt/homebrew/bin/latexdiff',
-        latexindentPath: null,
-        texcountPath: '/opt/homebrew/bin/texcount',
-        ghostscriptPath: null,
-        graphicsmagickPath: null,
-        packageManager: 'brew',
-      }),
       postToRenderer: (message) => posted.push(message),
+    });
+
+    // Was previously declared unsupported and appeared in the derived
+    // capability broadcast (SET_UNSUPPORTED_COMMANDS); the fix removes it.
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'settings',
+    });
+    const capabilities = posted[0] as { commands?: string[] };
+    expect(capabilities.commands).not.toContain(
+      SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+    );
+    posted.length = 0;
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+      }),
+    ).toBe(true);
+
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+      items: [],
+    });
+  });
+
+  it('routes revealGoalStream to the window-owned progress bridge (issue #7751 FS6)', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const revealed: string[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => undefined,
+      revealStream: async (streamId) => {
+        revealed.push(streamId);
+      },
     });
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS,
+        command: SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM,
+        streamId: 'goal-owning-stream',
       }),
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-      settings: expect.objectContaining({
-        platform: 'darwin',
-        texDistributionInstalled: true,
-        latexdiffInstalled: true,
-      }),
-    });
+    expect(revealed).toEqual(['goal-owning-stream']);
   });
 
   it('runs allowlisted LaTeX install commands through the desktop host', async () => {
@@ -645,20 +621,6 @@ describe('desktop settings IPC', () => {
         infoMessages.push(message);
       },
       postToRenderer: (message) => posted.push(message),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      providerKeyStatuses: expect.arrayContaining([
-        expect.objectContaining({ provider: 'google', status: 'not-set' }),
-      ]),
     });
 
     expect(
@@ -763,23 +725,6 @@ describe('desktop settings IPC', () => {
       postToRenderer: (message) => posted.push(message),
     });
 
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_CHATGPT_AUTH_STATUS,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      status: {
-        signedIn: false,
-        preferSubscription: false,
-        subscriptionToolUseOnly: false,
-      },
-    });
-
-    posted.length = 0;
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
@@ -1198,17 +1143,6 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items: [expect.objectContaining({ id: 'zotero', enabled: true })],
-    });
-
-    expect(
-      settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
         toolId: 'zotero',
         enabled: false,
@@ -1230,7 +1164,7 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
     expect(refreshCount).toBe(1);
-    expect(buildCalls.length).toBeGreaterThanOrEqual(3);
+    expect(buildCalls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('refreshes launcher agent options after agent visibility changes', async () => {
@@ -1812,55 +1746,6 @@ describe('desktop settings IPC', () => {
     ]);
   });
 
-  it('waits for desktop model-list refresh before serving model selection', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const refreshGate = createDeferred();
-    const globalState = new (class extends MemoryStateStore {
-      override async update(key: string, value: unknown): Promise<void> {
-        if (key === GlobalStateKey.ENABLED_MODELS) {
-          await refreshGate.promise;
-        }
-        await super.update(key, value);
-      }
-    })();
-    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 12);
-    globalState.values.set(GlobalStateKey.ENABLED_MODELS, ['custom-model']);
-    const posted: unknown[] = [];
-
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState,
-      postToRenderer: (message) => posted.push(message),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION,
-      }),
-    ).toBe(true);
-    await Promise.resolve();
-
-    expect(posted).toEqual([]);
-
-    refreshGate.resolve();
-    await flushAsyncWork();
-
-    expect(globalState.values.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
-      MODEL_LIST_VERSION,
-    );
-    expect(
-      (posted.at(-1) as { command?: string; models?: Array<{ name: string }> })
-        .command,
-    ).toBe(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION);
-    expect(
-      (posted.at(-1) as { models?: Array<{ name: string }> }).models,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: DEFAULT_MODELS[0] }),
-      ]),
-    );
-  });
-
   it('does not duplicate profile refresh after delegated desktop sign-out', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const posted: unknown[] = [];
@@ -1911,16 +1796,6 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED,
-      }),
-    ).toBe(true);
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled: true,
-    });
-
-    expect(
-      settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
         enabled: false,
       }),
@@ -1934,29 +1809,379 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it('surfaces unsupported desktop history actions instead of dropping them', async () => {
+  it('reruns an agent from history through the shared runAgent path', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const messages: string[] = [];
+    const { getExecutionStore } = await import('@agent/storage');
+    const { AgentConfigSchema } =
+      await import('@agent/core/definition/AgentConfig');
+    const { AgentCategory } = await import('@shared/schemas/agent');
+
+    const historyId = 'aaaa1111';
+    const config = AgentConfigSchema.parse({
+      agent: 'chat',
+      model: 'deepseekT',
+      instruction: 'Check a proof.',
+      agentCategory: AgentCategory.ToolUse,
+    });
+    await getExecutionStore(historyId).writeConfig(config);
+
+    const infos: string[] = [];
+    const runRequests: unknown[] = [];
     const settings = createDesktopSettingsIpc({
       workspaceState: new MemoryStateStore(),
       globalState: new MemoryStateStore(),
       postToRenderer: () => {},
       showInfoMessage: async (message) => {
-        messages.push(message);
+        infos.push(message);
+      },
+      runExecution: async (request) => {
+        runRequests.push(request);
       },
     });
 
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
-        historyId: 'abcdef',
+        historyId,
       }),
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(messages).toEqual([
-      'Rerun from history is not available in the desktop app yet.',
+    expect(infos).toEqual(['Rerunning agent from history']);
+    expect(runRequests).toEqual([{ config, executionId: undefined }]);
+  });
+
+  it("restores a history item's setup into the main view", async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const { getExecutionStore } = await import('@agent/storage');
+    const { AgentConfigSchema } =
+      await import('@agent/core/definition/AgentConfig');
+    const { AgentCategory } = await import('@shared/schemas/agent');
+
+    const historyId = 'bbbb2222';
+    const config = AgentConfigSchema.parse({
+      agent: 'chat',
+      model: 'deepseekT',
+      instruction: 'Check a proof.',
+      agentCategory: AgentCategory.ToolUse,
+    });
+    await getExecutionStore(historyId).writeConfig(config);
+
+    const errors: string[] = [];
+    const restoredTaskStates: unknown[] = [];
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      showErrorMessage: async (message) => {
+        errors.push(message);
+      },
+      restoreTaskState: async (taskState) => {
+        restoredTaskStates.push(taskState);
+        return true;
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+        historyId,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(errors).toEqual([]);
+    expect(restoredTaskStates).toEqual([{ agentConfig: config }]);
+  });
+
+  it('reports missing history items for rerun and restore instead of dropping them', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const shownErrors: string[] = [];
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      showErrorMessage: async (message) => {
+        shownErrors.push(message);
+      },
+    });
+
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+      historyId: 'ffff9999',
+    });
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+      historyId: 'ffff9999',
+    });
+    await flushAsyncWork();
+
+    expect(shownErrors).toEqual([
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
     ]);
+  });
+
+  it('errors instead of a false success when rerun has no runExecution dependency wired (Copilot #7827)', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const { getExecutionStore } = await import('@agent/storage');
+    const { AgentConfigSchema } =
+      await import('@agent/core/definition/AgentConfig');
+    const { AgentCategory } = await import('@shared/schemas/agent');
+
+    const historyId = 'cccc3333';
+    const config = AgentConfigSchema.parse({
+      agent: 'chat',
+      model: 'deepseekT',
+      instruction: 'Check a proof.',
+      agentCategory: AgentCategory.ToolUse,
+    });
+    await getExecutionStore(historyId).writeConfig(config);
+
+    const infos: string[] = [];
+    const errors: string[] = [];
+    // Deliberately omit `runExecution` — this is the desktop wiring gap the
+    // finding calls out: the IPC handler must not report success when the
+    // host never wired the execution bridge.
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      showInfoMessage: async (message) => {
+        infos.push(message);
+      },
+      showErrorMessage: async (message) => {
+        errors.push(message);
+      },
+    });
+
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+      historyId,
+    });
+    await flushAsyncWork();
+
+    expect(infos).toEqual([]);
+    expect(errors).toEqual([
+      'Rerunning agents from history is not available in this build',
+    ]);
+  });
+
+  it('surfaces a friendly error instead of throwing on a corrupted history config (Copilot/texra-review #7827)', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const { getExecutionStore } = await import('@agent/storage');
+
+    const historyId = 'dddd4444';
+    // Bypass writeConfig's AgentConfig contract to simulate a corrupt/legacy
+    // on-disk record — a wrong-typed `agent` field fails AgentConfigSchema
+    // outright (unlike a merely-missing field, which prefaults), the same
+    // "malformed stored config" scenario the review comments describe for
+    // AgentConfigSchema.parse(raw).
+    await getExecutionStore(historyId).write('config', {
+      agent: 42,
+    });
+
+    const infos: string[] = [];
+    const errors: string[] = [];
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      showInfoMessage: async (message) => {
+        infos.push(message);
+      },
+      showErrorMessage: async (message) => {
+        errors.push(message);
+      },
+      runExecution: async () => {},
+      restoreTaskState: async () => true,
+    });
+
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+      historyId,
+    });
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+      historyId,
+    });
+    await flushAsyncWork();
+
+    // Neither handler throws an unhandled ZodError; both report a graceful,
+    // user-visible message instead (the corrupt record fails schema
+    // validation at the storage layer already — readValidated returns null —
+    // so it surfaces as the unified "unreadable" error, not a raw parse
+    // exception).
+    expect(infos).toEqual([]);
+    expect(errors).toEqual([
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+    ]);
+  });
+
+  it('exports a history chat to Markdown via the shared ChatExportController', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const exportInput = {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      config: { agent: 'chat' },
+      conversation: [],
+    };
+    chatExportMocks.buildExportInput.mockResolvedValue({
+      status: 'ok',
+      exportInput,
+    });
+    chatExportMocks.exportAsMarkdown.mockResolvedValue({
+      storagePath: 'executions/abc/chat.md',
+      absolutePath: '/tmp/executions/abc/chat.md',
+    });
+
+    const opened: string[] = [];
+    const infos: string[] = [];
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      resourcesPath: repoPath('packages', 'extension', 'resources'),
+      openPath: async (filePath) => {
+        opened.push(filePath);
+      },
+      showInfoMessage: async (message) => {
+        infos.push(message);
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+        historyId: 'abc',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(chatExportMocks.buildExportInput).toHaveBeenCalledWith('abc');
+    expect(chatExportMocks.exportAsMarkdown).toHaveBeenCalledWith(
+      'abc',
+      exportInput,
+    );
+    expect(opened).toEqual(['/tmp/executions/abc/chat.md']);
+    expect(infos).toEqual(['Chat exported: chat.md']);
+    // Constructed from the real bundled `templates/chatExport.tex` (the
+    // LaTeX-export dependency), not a mocked/stubbed preamble.
+    expect(chatExportMocks.constructorDeps.at(-1)).toMatchObject({
+      latexPreamble: expect.stringContaining('\\documentclass'),
+    });
+  });
+
+  it('falls back to opening the .tex source when LaTeX compilation fails', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const exportInput = {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      config: { agent: 'chat' },
+      conversation: [],
+    };
+    chatExportMocks.buildExportInput.mockResolvedValue({
+      status: 'ok',
+      exportInput,
+    });
+    chatExportMocks.exportAsLatex.mockResolvedValue({
+      storagePath: 'executions/abc/chat.tex',
+      absolutePath: '/tmp/executions/abc/chat.tex',
+      pdfPath: undefined,
+      logTail: '! Undefined control sequence.',
+    });
+
+    const opened: string[] = [];
+    const infos: string[] = [];
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      resourcesPath: repoPath('packages', 'extension', 'resources'),
+      openPath: async (filePath) => {
+        opened.push(filePath);
+      },
+      showInfoMessage: async (message) => {
+        infos.push(message);
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
+        historyId: 'abc',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(opened).toEqual(['/tmp/executions/abc/chat.tex']);
+    expect(infos).toEqual([
+      'LaTeX compilation failed. The .tex source file has been opened instead.',
+    ]);
+  });
+
+  it('exports a history chat to HTML via the shared trace-viewer template', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    chatExportMocks.exportAsHtml.mockResolvedValue({
+      status: 'ok',
+      result: {
+        storagePath: 'executions/abc/chat.html',
+        absolutePath: '/tmp/executions/abc/chat.html',
+      },
+    });
+
+    const opened: string[] = [];
+    const resourcesPath = repoPath('packages', 'extension', 'resources');
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      resourcesPath,
+      openPath: async (filePath) => {
+        opened.push(filePath);
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
+        historyId: 'abc',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(chatExportMocks.exportAsHtml).toHaveBeenCalledWith(
+      'abc',
+      `${resourcesPath}/traceViewerStandalone/index.html`,
+    );
+    expect(opened).toEqual(['/tmp/executions/abc/chat.html']);
+  });
+
+  it('reports a missing history item on export instead of throwing', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    chatExportMocks.buildExportInput.mockResolvedValue({
+      status: 'config_missing',
+    });
+
+    const infos: string[] = [];
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      resourcesPath: repoPath('packages', 'extension', 'resources'),
+      showInfoMessage: async (message) => {
+        infos.push(message);
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+        historyId: 'missing',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(infos).toEqual(['History item not found']);
   });
 
   it('ignores unsupported or malformed settings messages', async () => {

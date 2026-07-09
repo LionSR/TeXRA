@@ -253,6 +253,27 @@ export interface StreamEndEvent extends StageStamp {
 }
 
 /**
+ * Authoritative final assistant text for the round that just ended the
+ * turn — decided once at the flow boundary where `assembly.lastResponse` is
+ * set (after `extractResponse`'s replacement-rule cleanup runs), and carried
+ * as data from there rather than re-derived downstream. Fires at every
+ * mid-run turn boundary (the tool-use loop pausing to wait for the next user
+ * message), not only the terminal round, so a subscriber never has to guess
+ * whether the run is "really" done (#7086).
+ *
+ * The round's own MODEL_RESPONSE stream (when the response actually
+ * streamed) writes raw provider chunks in real time, before replacement
+ * rules run — so its persisted text can trivially differ from this event's
+ * text (e.g. a literal vs. a replaced LaTeX symbol). Subscribers reconcile by
+ * updating that stream's entry to this text instead of a caller having to
+ * prove the two already match.
+ */
+export interface ResponseFinalizedEvent extends StageStamp {
+  readonly type: 'response.finalized';
+  readonly text: string;
+}
+
+/**
  * Host-specific escape hatch. Hosts use this for events that aren't part
  * of the agent-general union (TeXRA: `latexdiff`, `scratchpad`,
  * `filesLoaded`, `missingOutputs`, `webSearch`, `webFetch`, …). Keeps the
@@ -355,5 +376,6 @@ export type AgentEvent =
   | StreamStartEvent
   | StreamChunkEvent
   | StreamEndEvent
+  | ResponseFinalizedEvent
   | DomainEvent
   | ResultEvent;

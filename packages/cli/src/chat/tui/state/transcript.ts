@@ -35,69 +35,6 @@ function normalizeTranscriptText(text: string): string {
   return text.trim();
 }
 
-function syntheticFallbackDedupeText(text: string): string {
-  return normalizeTranscriptText(text).replaceAll('\\checkmark', '✓');
-}
-
-function currentTurnStartIndex(entries: readonly ConversationEntry[]): number {
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    if (entries[index]?.role === 'user') return index;
-  }
-  return 0;
-}
-
-export function appendAssistantTranscriptIfMissing(
-  streamId: StreamTabId,
-  text: string | undefined,
-  idPrefix = 'assistant',
-): void {
-  const normalized = normalizeTranscriptText(text ?? '');
-  if (!normalized) return;
-  const syntheticDedupeText = syntheticFallbackDedupeText(normalized);
-  const syntheticAfterSeq = getDefaultStreamLogStore().get(streamId)?.head ?? 0;
-
-  patchStream(streamId, (slice) => {
-    const entryId = `${idPrefix}:${streamId}`;
-    const turnStartIndex = currentTurnStartIndex(slice.entries);
-    const lastStreamEntryInTurn = slice.entries.findLast(
-      (entry, index) => index >= turnStartIndex && !entry.synthetic,
-    );
-    const streamLogOwnsFallback = lastStreamEntryInTurn?.role === 'assistant';
-    const streamLogAlreadyRenderedFallback = slice.entries.some(
-      (entry, index) =>
-        !entry.synthetic &&
-        index >= turnStartIndex &&
-        entry.role === 'assistant' &&
-        syntheticFallbackDedupeText(entry.text) === syntheticDedupeText,
-    );
-    const alreadyRendered =
-      streamLogOwnsFallback ||
-      streamLogAlreadyRenderedFallback ||
-      slice.entries.some((entry) => {
-        if (entry.id === entryId) return true;
-        return (
-          entry.synthetic === true &&
-          entry.syntheticKind === 'final' &&
-          entry.syntheticAfterSeq === syntheticAfterSeq &&
-          entry.role === 'assistant' &&
-          syntheticFallbackDedupeText(entry.text) === syntheticDedupeText
-        );
-      });
-    if (alreadyRendered) return slice;
-
-    const entry: ConversationEntry = {
-      id: entryId,
-      role: 'assistant',
-      text: normalized,
-      finalized: true,
-      synthetic: true,
-      syntheticKind: 'final',
-      syntheticAfterSeq,
-    };
-    return { ...slice, entries: [...slice.entries, entry] };
-  });
-}
-
 export function appendLocalAssistantTranscript(
   text: string,
   streamId?: StreamTabId,
