@@ -13,6 +13,7 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { createRunScope } from '@agent/runtime/RunScope';
 import {
   SessionHandle,
   currentSession,
@@ -64,6 +65,14 @@ function createLifecycleContext(
   });
   const prompt = AgentPromptSchema.parse({});
   const storageKey = executionId as StorageKey;
+  const runtimeHost = explicit.host;
+  const runScope = createRunScope({
+    runtimeHost,
+    streamId,
+    executionId,
+    agentName: config.agent,
+    session,
+  });
   const modelInfo = {
     capabilities: {
       supportsPromptCaching: false,
@@ -85,9 +94,10 @@ function createLifecycleContext(
     config,
     setting,
     prompt,
-    streamId,
-    executionId,
-    runtimeHost: explicit.host,
+    runScope,
+    streamId: runScope.streamId,
+    executionId: runScope.executionId,
+    runtimeHost: runScope.runtimeHost,
     streamStatus,
     logger: noopTrace,
     parentStage: noopTrace.openStage('Run: assistant'),
@@ -98,7 +108,7 @@ function createLifecycleContext(
       modelInfo,
       {
         logger: noopTrace,
-        runtimeHost: explicit.host,
+        runtimeHost,
         storageKey,
         streamId,
       },
