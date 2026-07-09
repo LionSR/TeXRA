@@ -13,7 +13,6 @@ import {
   saveCycleDebug,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import {
   isTokenLimitStopReason,
   type ProviderStopReason,
@@ -107,7 +106,6 @@ interface ResponsePrepResult {
  */
 class ResponsePrepNode<C> extends BaseNode<
   ResponseCycleShared,
-  FlowParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
@@ -233,7 +231,6 @@ export function responseCycleToolsForModel<C>(
  */
 class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleShared,
-  FlowParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
@@ -436,7 +433,6 @@ class ResponseProcessNode<C> extends BaseNode<
  */
 class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleShared,
-  FlowParams,
   ResponseCycleServices<C>
 > {
   /** Finalize the round by recording stats and invoking callback. */
@@ -470,7 +466,6 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
  */
 class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleShared,
-  FlowParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
@@ -586,13 +581,11 @@ class ResponseContinuationNode<C> extends BaseNode<
  */
 export function createResponseCycleFlow<C>(): Flow<
   ResponseCycleShared,
-  FlowParams,
   ResponseCycleServices<C>
 > {
   const prepNode = new ResponsePrepNode<C>();
   const invokeNode = new ModelInvocationNode<
     ResponseCycleShared,
-    FlowParams,
     ResponseCycleServices<C>
   >({
     operationName: 'Model invocation',
@@ -626,7 +619,5 @@ export function createResponseCycleFlow<C>(): Flow<
 
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ResponseCycleShared, FlowParams, ResponseCycleServices<C>>(
-    prepNode,
-  );
+  return new Flow<ResponseCycleShared, ResponseCycleServices<C>>(prepNode);
 }

@@ -122,6 +122,16 @@ describe('desktop composition root and launch environment', () => {
     );
   });
 
+  it('uses the home directory as the no-workspace skill discovery fallback', async () => {
+    const source = await readFile(
+      repoPath('packages', 'desktop', 'src', 'main', 'platform', 'index.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain("cwd: workspacePath ?? app.getPath('home'),");
+    expect(source).not.toContain('cwd: workspacePath ?? userDataPath,');
+  });
+
   it('resolves workspace paths only from an explicit launch environment', async () => {
     const { resolveWorkspacePath } =
       await loadDesktopPlatformModule<PathsModule>('paths.ts');

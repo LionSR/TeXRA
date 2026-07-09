@@ -2,7 +2,7 @@
  * Schema definitions for ProfileView messages.
  *
  * Outbound: Backend → Frontend (UPDATE_PROFILE)
- * Inbound: Frontend → Backend (GET_PROFILE_DATA, SELECT_AGENT, etc.)
+ * Inbound: Frontend → Backend (SIGN_IN, SIGN_OUT, etc.)
  */
 import { z } from 'zod';
 
@@ -117,25 +117,12 @@ export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 // Inbound message schemas (frontend → backend)
 // ============================================================
 
-/** Agent selection message (reusable field schema) */
-const SelectAgentMessageSchema = z.object({
-  agentName: z.string().min(1),
-});
-
 /** API access mode message (reusable field schema) */
 const SetApiAccessModeMessageSchema = z.object({
   mode: ApiAccessModeSchema,
 });
 
 // Inbound messages with command literals
-export const GetProfileDataMessageSchema = commandOnly(
-  PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA,
-);
-
-export const SelectAgentInboundMessageSchema = SelectAgentMessageSchema.extend({
-  command: z.literal(PROFILE_VIEW_COMMANDS.SELECT_AGENT),
-});
-
 export const SignInMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_IN);
 
 export const SignOutMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_OUT);

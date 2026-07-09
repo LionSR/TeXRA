@@ -21,7 +21,9 @@ const CHANNEL = 'Resumability';
 
 const ResumableFlowRecordSchema = z.looseObject({
   flowName: z.string(),
-  params: z.record(z.string(), z.unknown()),
+  // Legacy records carry an (always-empty) params bag; new records omit it
+  // entirely after the params channel was deleted (#7691).
+  params: z.record(z.string(), z.unknown()).optional(),
   shared: z.record(z.string(), z.unknown()),
   createdAt: z.string(),
   nodes: z.array(z.looseObject({ action: z.string().optional() })),
