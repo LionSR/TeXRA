@@ -6,6 +6,7 @@ import {
   StreamSnapshotStore,
 } from '@transcript';
 import { writeTerminalStatus } from '@agent/storage';
+import { AgentError } from '@common/errors';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -158,12 +159,16 @@ export async function executeCliToolUseConfig(
  * lifecycle and status handling, which is how their behavior diverged before.
  *
  * A classified run failure (AgentRunLifecycle already ran it through
- * `classifyAgentError` and wrote the terminal outcome before rethrowing for
- * the extension host) is consumed here into a non-zero exit code instead of
- * being rethrown — otherwise it reaches `bin/texra.ts`'s crash handler and
- * gets misreported as an unexpected crash, printed a second time alongside a
- * "please report it" line (issue #7645). Flows' own rethrow stays untouched;
- * only this CLI boundary stops propagating it further.
+ * `classifyAgentError` and wrote the terminal outcome before rethrowing an
+ * `AgentError` for the extension host) is consumed here into a non-zero exit
+ * code instead of being rethrown — otherwise it reaches `bin/texra.ts`'s
+ * crash handler and gets misreported as an unexpected crash, printed a
+ * second time alongside a "please report it" line (issue #7645). Flows' own
+ * rethrow stays untouched; only this CLI boundary stops propagating it
+ * further. Only `AgentError` — the classified, already-handled shape — takes
+ * this path; any other rejection (e.g. `registerExecution` disk I/O,
+ * `workspaceState.update` failures) is genuinely unexpected and is rethrown
+ * so the crash handler still reports it.
  */
 export async function executeCliRequest(
   request: ValidatedExecutionRequest,
@@ -247,7 +252,14 @@ export async function executeCliRequest(
   try {
     const result = await (options.wrap ? options.wrap(invoke) : invoke());
     runResult = { ok: true, result };
-  } catch {
+  } catch (err) {
+    // Only a classified, already-handled AgentError resolves to a non-zero
+    // exit code here; anything else (e.g. registerExecution disk I/O,
+    // workspaceState.update failures) is unexpected and must keep
+    // propagating to bin/texra.ts's crash handler.
+    if (!(err instanceof AgentError)) {
+      throw err;
+    }
     if (options.markErrorOnThrow && request.executionId) {
       await writeTerminalStatus(request.executionId, EXECUTION_STATUS.ERROR);
     }
