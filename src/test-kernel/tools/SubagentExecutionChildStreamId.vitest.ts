@@ -67,7 +67,6 @@ describe('executeSubagent childStreamId derivation', () => {
       delegationDepth: 0,
       approvalPromptsUnavailable: false,
       runtimeUnavailableTools: [],
-      toolEditApprovalHandler: undefined,
       stopAfterCycle: false,
     });
     mocks.currentSession.mockReturnValue({ tag: 'parent-session' });
