@@ -948,6 +948,84 @@ describe('CLI run progress renderer', () => {
     expect(output).toContain('polish paper.tex · 0s');
   });
 
+  it('renders traced run-status facts for attached run progress rendering', async () => {
+    const output = await captureStreamWrites(process.stderr, async () => {
+      const events = new SessionEventHub();
+      const host = createCliRuntimeHost(
+        context({
+          colorEnabled: false,
+          quietLogs: true,
+          renderRunProgress: true,
+        }),
+      );
+      const detach = host.attachRunProgressRenderer(events);
+
+      emitWorkflowRunConfig(events);
+      events.emit({
+        scope: 'run',
+        streamId: 'stream-1' as StreamTabId,
+        event: {
+          type: 'status',
+          streamId: 'stream-1' as StreamTabId,
+          phase: STREAM_PHASE.COMPLETED,
+          previousPhase: STREAM_PHASE.RUNNING,
+          cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        },
+      });
+
+      detach();
+      await host.close();
+    });
+
+    expect(output).toBe(
+      'polish paper.tex · 0s\npolish paper.tex · done · 0s\n',
+    );
+  });
+
+  it('deduplicates matching run and session stream-status facts', async () => {
+    const output = await captureStreamWrites(process.stderr, async () => {
+      const events = new SessionEventHub();
+      const host = createCliRuntimeHost(
+        context({
+          colorEnabled: false,
+          quietLogs: true,
+          renderRunProgress: true,
+        }),
+      );
+      const detach = host.attachRunProgressRenderer(events);
+
+      emitWorkflowRunConfig(events);
+      events.emit({
+        scope: 'run',
+        streamId: 'stream-1' as StreamTabId,
+        event: {
+          type: 'status',
+          streamId: 'stream-1' as StreamTabId,
+          phase: STREAM_PHASE.COMPLETED,
+          previousPhase: STREAM_PHASE.RUNNING,
+          cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        },
+      });
+      events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateStreamStatus',
+          payload: {
+            streamId: 'stream-1' as StreamTabId,
+            status: STREAM_PHASE.COMPLETED,
+          },
+        },
+      });
+
+      detach();
+      await host.close();
+    });
+
+    expect(output).toBe(
+      'polish paper.tex · 0s\npolish paper.tex · done · 0s\n',
+    );
+  });
+
   it('preserves the live progress line before interactive prompts', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const events = new SessionEventHub();
