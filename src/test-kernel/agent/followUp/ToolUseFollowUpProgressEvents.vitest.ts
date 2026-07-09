@@ -10,14 +10,19 @@ import {
   noopAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import {
   AgentExecutionHandle,
   SharedExecutionRegistry,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { onFollowUpSent, sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  notifyFollowUpSent,
+  onFollowUpSent,
+  sendFollowUp,
+} from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { createRecordingHost } from '../progressTestUtils';
@@ -25,17 +30,25 @@ import { createRecordingHost } from '../progressTestUtils';
 const streamId = 'stream:follow-up' as StreamTabId;
 
 describe('tool-use follow-up progress events', () => {
-  let unsubscribeFollowUpObserver: (() => void) | undefined;
+  const unsubscribeFollowUpObservers: Array<() => void> = [];
   const trackedExecutionIds = new Set<string>();
+  const sessionTrackedExecutions: Array<{
+    readonly session: SessionHandle;
+    readonly executionId: string;
+  }> = [];
   const sessions = new Set<SessionHandle>();
 
   afterEach(() => {
-    unsubscribeFollowUpObserver?.();
-    unsubscribeFollowUpObserver = undefined;
+    for (const unsubscribe of unsubscribeFollowUpObservers.splice(0)) {
+      unsubscribe();
+    }
     for (const executionId of trackedExecutionIds) {
       SharedExecutionRegistry.untrack(executionId);
     }
     trackedExecutionIds.clear();
+    for (const { session, executionId } of sessionTrackedExecutions.splice(0)) {
+      session.executions.untrack(executionId);
+    }
     for (const session of sessions) {
       session.dispose({ keepActiveExecutions: true });
     }
@@ -76,6 +89,7 @@ describe('tool-use follow-up progress events', () => {
     });
     if (session) {
       session.executions.track(handle);
+      sessionTrackedExecutions.push({ session, executionId });
     } else {
       SharedExecutionRegistry.track(handle);
       trackedExecutionIds.add(executionId);
@@ -121,21 +135,169 @@ describe('tool-use follow-up progress events', () => {
     expect(events).toEqual([]);
   });
 
+  it('prefers an explicit session over the active run context when notifying follow-up sent', () => {
+    const run = createRecordingHost();
+    const explicitSession = new SessionHandle();
+    const activeSession = new SessionHandle();
+    sessions.add(explicitSession);
+    sessions.add(activeSession);
+    const explicitFacts: unknown[] = [];
+    const activeFacts: unknown[] = [];
+    const detachExplicitFacts = explicitSession.events.subscribe((event) => {
+      explicitFacts.push(event);
+    });
+    const detachActiveFacts = activeSession.events.subscribe((event) => {
+      activeFacts.push(event);
+    });
+
+    try {
+      withRunContext(
+        createRunContext({
+          runtimeHost: run.host,
+          session: activeSession,
+        }),
+        () => notifyFollowUpSent(streamId, explicitSession),
+      );
+
+      expect(explicitFacts).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'followUpSent',
+            payload: { streamId },
+          },
+        },
+      ]);
+      expect(activeFacts).toEqual([]);
+      expect(run.events).toEqual([]);
+    } finally {
+      detachExplicitFacts();
+      detachActiveFacts();
+    }
+  });
+
+  it("routes follow-up sent notifications through the active run's current session", () => {
+    const run = createRecordingHost();
+    const session = new SessionHandle();
+    sessions.add(session);
+    const facts: unknown[] = [];
+    const detachFacts = session.events.subscribe((event) => {
+      facts.push(event);
+    });
+
+    try {
+      withRunContext(
+        createRunContext({
+          runtimeHost: run.host,
+          session,
+        }),
+        () => notifyFollowUpSent(streamId),
+      );
+
+      expect(facts).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'followUpSent',
+            payload: { streamId },
+          },
+        },
+      ]);
+      expect(run.events).toEqual([]);
+    } finally {
+      detachFacts();
+    }
+  });
+
+  it('falls back to the default session when the active run has no event hub', () => {
+    const run = createRecordingHost();
+    const defaultFacts: unknown[] = [];
+    const detachDefaultFacts = defaultSession().events.subscribe((event) => {
+      defaultFacts.push(event);
+    });
+
+    try {
+      withRunContext(
+        createRunContext({
+          runtimeHost: run.host,
+          session: {} as SessionHandle,
+        }),
+        () => notifyFollowUpSent(streamId),
+      );
+
+      expect(defaultFacts).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'followUpSent',
+            payload: { streamId },
+          },
+        },
+      ]);
+      expect(run.events).toEqual([]);
+    } finally {
+      detachDefaultFacts();
+    }
+  });
+
   it('notifies local follow-up observers through onFollowUpSent', async () => {
     const { host } = createRecordingHost();
     const observed: StreamTabId[] = [];
-    unsubscribeFollowUpObserver = onFollowUpSent((observedStreamId) => {
-      observed.push(observedStreamId);
-    });
+    unsubscribeFollowUpObservers.push(
+      onFollowUpSent((observedStreamId) => {
+        observed.push(observedStreamId);
+      }),
+    );
 
     trackToolUseFlow({ host, appendFollowUp: vi.fn() });
 
     await sendFollowUp(streamId, 'break wait');
-    unsubscribeFollowUpObserver();
-    unsubscribeFollowUpObserver = undefined;
+    unsubscribeFollowUpObservers.pop()?.();
     await sendFollowUp(streamId, 'after unsubscribe');
 
     expect(observed).toEqual([streamId]);
+  });
+
+  it('runs observers before session emission and catches observer errors', async () => {
+    const session = new SessionHandle();
+    sessions.add(session);
+    const order: string[] = [];
+    const detachFacts = session.events.subscribe(() => {
+      order.push('session event');
+    });
+    unsubscribeFollowUpObservers.push(
+      onFollowUpSent(() => {
+        order.push('throwing observer');
+        throw new Error('observer failure');
+      }),
+      onFollowUpSent(() => {
+        order.push('next observer');
+      }),
+    );
+
+    try {
+      trackToolUseFlow({
+        appendFollowUp: vi.fn(),
+        session,
+      });
+
+      const result = await sendFollowUp(
+        streamId,
+        'observer ordering',
+        undefined,
+        undefined,
+        session,
+      );
+
+      expect(result).toEqual({ status: 'sent' });
+      expect(order).toEqual([
+        'throwing observer',
+        'next observer',
+        'session event',
+      ]);
+    } finally {
+      detachFacts();
+    }
   });
 
   it('does not append through stale active contexts after final status', async () => {
@@ -156,6 +318,33 @@ describe('tool-use follow-up progress events', () => {
       streamStatus: STREAM_PHASE.COMPLETED,
     });
     expect(appendFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('does not emit a follow-up sent fact when no follow-up reaches a live session', async () => {
+    const session = new SessionHandle();
+    sessions.add(session);
+    const facts: unknown[] = [];
+    const detachFacts = session.events.subscribe((event) => {
+      facts.push(event);
+    });
+
+    try {
+      const result = await sendFollowUp(
+        'stream:no-follow-up-session' as StreamTabId,
+        'cannot deliver',
+        undefined,
+        undefined,
+        session,
+      );
+
+      expect(result).toEqual({
+        status: 'no_session',
+        streamStatus: undefined,
+      });
+      expect(facts).toEqual([]);
+    } finally {
+      detachFacts();
+    }
   });
 
   it('queues follow-ups for resuming streams through registry admission', async () => {

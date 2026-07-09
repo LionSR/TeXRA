@@ -14,7 +14,6 @@ const REPO_ROOT = resolve(
 const ALLOWED_PRODUCTION_REFERENCES = [
   'packages/extension/src/commands/agent/followUpCommand.ts',
   'packages/extension/src/commands/housekeeping/streamEventUtils.ts',
-  'src/agent/followUp/ToolUseFollowUp.ts',
   'src/agent/runtime/emitRuntimeEvent.ts',
   'src/agent/runtime/executeAgent.ts',
   'src/tools/approval/toolEditApproval.ts',
