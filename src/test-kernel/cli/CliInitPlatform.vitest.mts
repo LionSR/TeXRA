@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
@@ -193,6 +194,45 @@ describe('CLI platform init', () => {
     expect(vi.mocked(UsageLogService.dispose)).not.toHaveBeenCalled();
     for (const handler of mocks.shutdownHandlers) await handler();
     expect(vi.mocked(UsageLogService.dispose)).toHaveBeenCalled();
+  });
+
+  it('installs a CLI agent resume port that delegates to the active handler', async () => {
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
+    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+
+    await initCliPlatform(cliContext({ installSignalHandlers: false }));
+
+    type NodePlatformOptions = {
+      readonly agentResume: {
+        tryResumeStream(streamId: string): Promise<boolean>;
+        isResumeInFlight(streamId: string): boolean;
+      };
+    };
+    const createNodePlatformCalls = mocks.createNodePlatform.mock
+      .calls as unknown as Array<[NodePlatformOptions]>;
+    const nodePlatformOptions = createNodePlatformCalls[0]?.[0];
+    expect(nodePlatformOptions?.agentResume).toBeDefined();
+    if (!nodePlatformOptions) throw new Error('expected node platform options');
+
+    const tryResumeStream = vi.fn(async () => true);
+    const isResumeInFlight = vi.fn(() => true);
+    const dispose = setCliAgentResumeHandler({
+      tryResumeStream,
+      isResumeInFlight,
+    });
+
+    try {
+      await expect(
+        nodePlatformOptions.agentResume.tryResumeStream('stream:cli-resume'),
+      ).resolves.toBe(true);
+      expect(tryResumeStream).toHaveBeenCalledWith('stream:cli-resume');
+      expect(
+        nodePlatformOptions.agentResume.isResumeInFlight('stream:cli-resume'),
+      ).toBe(true);
+      expect(isResumeInFlight).toHaveBeenCalledWith('stream:cli-resume');
+    } finally {
+      dispose();
+    }
   });
 
   it('bootstraps bundled agents with the CLI version store', async () => {
