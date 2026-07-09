@@ -14,6 +14,14 @@
 
 <!-- State what duplication was removed or avoided. If a new abstraction was added, state the invariant or host-boundary decision it owns. Do not add pass-through layers. -->
 
+## Net elements (R6)
+
+<!-- Constructs added vs deleted: files (diffstat), exported symbols (`^[+-]export` over the diff), classes/interfaces/enums, net LoC. Required for refactor/simplify/consolidate/dedupe/extract PRs. -->
+
+## Consumer counts (R8)
+
+<!-- Deleting or re-routing an emit path or export? State the grepped subscriber count per affected key. Otherwise: "n/a" + reason. -->
+
 ## Host impact
 
 Extension:
