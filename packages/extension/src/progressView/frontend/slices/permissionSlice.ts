@@ -13,7 +13,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { clearInquiryDraft } from '../components/ExternalInquiryPanel';
 import { updateToolUseState } from '../stateUtils';
 import { createBoundedIdSet } from '../utils/boundedIdSet';
-import type { PermissionState } from '../permissionState';
+import { permissionId, type PermissionState } from '../permissionState';
 import type {
   HandlerRegistry,
   MessageHandlerContext,
@@ -70,15 +70,12 @@ function upsertProposalPermission(
 export function removePrompt(
   ctx: MessageHandlerContext,
   kind: PermissionState['kind'],
-  idField: string,
   idValue: string,
 ): boolean {
   const current = ctx.getPermissions();
-  const next = current.filter((p) => {
-    if (p.kind !== kind) return true;
-    const data = p.data as Record<string, unknown>;
-    return data[idField] !== idValue;
-  });
+  const next = current.filter(
+    (p) => p.kind !== kind || permissionId(p) !== idValue,
+  );
   ctx.setPermissions(next);
   return next.length !== current.length;
 }
@@ -132,23 +129,17 @@ export const permissionHandlers = {
         });
       } else {
         // Prepend newest permissions so keyboard shortcuts target the latest request.
-        // Deduplicate by requestId to prevent duplicate UI when replay() re-sends
+        // Deduplicate by id to prevent duplicate UI when replay() re-sends
         // pending items (e.g., on view visibility change).
         const entry = {
           kind: permission.kind,
           data: permission.data,
         } as PermissionState;
-        const idField =
-          permission.kind === PERMISSION_KIND.RETRY ? 'streamId' : 'requestId';
-        const id = (permission.data as Record<string, unknown>)[idField];
+        const id = permissionId(entry);
         const existing = ctx.getPermissions();
-        const alreadyPresent =
-          id != null &&
-          existing.some(
-            (p) =>
-              p.kind === permission.kind &&
-              (p.data as Record<string, unknown>)[idField] === id,
-          );
+        const alreadyPresent = existing.some(
+          (p) => p.kind === permission.kind && permissionId(p) === id,
+        );
         if (alreadyPresent) return;
         ctx.setPermissions([entry, ...existing]);
       }
@@ -159,28 +150,17 @@ export const permissionHandlers = {
     switch (kind) {
       case PERMISSION_KIND.TOOL_EDIT:
       case PERMISSION_KIND.BASH:
-        removePrompt(ctx, kind, 'requestId', id);
-        break;
       case PERMISSION_KIND.RETRY:
-        removePrompt(ctx, kind, 'streamId', id);
-        break;
       case PERMISSION_KIND.PLAN_APPROVAL:
-        removePrompt(ctx, kind, 'approvalId', id);
+      case PERMISSION_KIND.USER_QUESTION:
+        removePrompt(ctx, kind, id);
         break;
       case PERMISSION_KIND.EXTERNAL_INQUIRY:
-        removePrompt(ctx, kind, 'requestId', id);
+        removePrompt(ctx, kind, id);
         clearInquiryDraft(id);
         break;
-      case PERMISSION_KIND.USER_QUESTION:
-        removePrompt(ctx, kind, 'requestId', id);
-        break;
       default: {
-        const removed = removePrompt(
-          ctx,
-          PERMISSION_KIND.PROPOSAL,
-          'proposalId',
-          id,
-        );
+        const removed = removePrompt(ctx, PERMISSION_KIND.PROPOSAL, id);
         if (!removed) addResolvedProposalId(id);
       }
     }
