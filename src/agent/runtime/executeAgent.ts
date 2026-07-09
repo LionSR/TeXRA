@@ -114,11 +114,12 @@ function wrapOnFollowUpConsumed(
   onFollowUpConsumed?: () => void,
 ): () => void {
   return () => {
-    ctx.session.events.emit({
+    const { streamId: runStreamId, session: runSession } = ctx.runScope;
+    runSession.events.emit({
       scope: 'session',
       event: {
         type: 'updateQueuedFollowUps',
-        payload: { streamId: ctx.streamId },
+        payload: { streamId: runStreamId },
       },
     });
     onFollowUpConsumed?.();
@@ -154,7 +155,7 @@ async function runToolUseAgent(
     'isSubagent' | 'onFollowUpConsumed' | 'onProgress' | 'onIdle'
   >,
 ): Promise<AgentRuntimeFlowResult> {
-  const { streamId } = ctx;
+  const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
   const onRoundFinalized = createUsageRecordingCallback(ctx);
   try {
     const result = await runToolUseFlow(
@@ -195,8 +196,8 @@ async function runToolUseAgent(
     );
     return buildToolUseFlowResult(
       result,
-      ctx.executionId,
-      streamId,
+      runExecutionId,
+      runStreamId,
       ctx.attachedMemoryMisses,
     );
   } catch (err) {
@@ -204,8 +205,8 @@ async function runToolUseAgent(
     if (!failedResult) throw err;
     const result = buildToolUseFlowResult(
       failedResult,
-      ctx.executionId,
-      streamId,
+      runExecutionId,
+      runStreamId,
       ctx.attachedMemoryMisses,
     );
     if (isWaitingFlowResult(result)) throw err;
@@ -224,14 +225,18 @@ async function runReflectionAgent(
   handle: AgentExecutionHandle,
   setting: AgentWorkflowSetting,
 ): Promise<AgentFlowResult> {
-  const { streamId } = ctx;
+  const {
+    streamId: runStreamId,
+    executionId: runExecutionId,
+    session: runSession,
+  } = ctx.runScope;
   const onRoundFinalized = createUsageRecordingCallback(ctx);
   const interruptCallbacks = createInterruptCallbacks();
   const detachInterruptHandler = handle.attachInterruptHandler({
     interrupt(): void {
       interruptCallbacks.onInterrupt?.();
-      ctx.session.interactions.cancel({
-        streamId,
+      runSession.interactions.cancel({
+        streamId: runStreamId,
         cause: 'Run interrupted.',
       });
     },
@@ -249,8 +254,8 @@ async function runReflectionAgent(
   }
   return buildWorkflowFlowResult(
     result,
-    ctx.executionId,
-    streamId,
+    runExecutionId,
+    runStreamId,
     ctx.attachedMemoryMisses,
   );
 }
@@ -401,7 +406,13 @@ export async function executeAgent(
   ctx.stopAfterCycle = options.stopAfterCycle;
   ctx.toolEditApprovalHandler = options.toolEditApprovalHandler;
   return withExecutionRunContext(ctx, async () => {
-    const { setting, streamId, config } = ctx;
+    const { setting, config } = ctx;
+    const {
+      streamId: runStreamId,
+      executionId: runExecutionId,
+      session: runSession,
+      runtimeHost: runRuntimeHost,
+    } = ctx.runScope;
     const { isSubagent } = options;
 
     // Fire-and-forget: generate AI session description from the user's instruction.
@@ -409,26 +420,30 @@ export async function executeAgent(
     // Applies to tool-use agents, including subagents, so their progress tabs show
     // meaningful descriptions in multi-agent pipelines.
     generateSessionDescription(
-      ctx.executionId,
-      streamId,
+      runExecutionId,
+      runStreamId,
       config,
-      ctx.session,
+      runSession,
     ).catch(() => {});
     const result = await runFlowWithLifecycle(
       ctx,
       async (handle) => {
         // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
         if (executionId) await ensureRunDir(executionId);
-        logger.info(`Starting task execution (streamId: ${streamId})`);
+        logger.info(`Starting task execution (streamId: ${runStreamId})`);
         logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
         logger.debug('Task execution details', {
-          data: { streamId, agent: config.agent, model: config.model },
+          data: {
+            streamId: runStreamId,
+            agent: config.agent,
+            model: config.model,
+          },
         });
         logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
         // Subagents don't need to force-open the progress board or show notifications —
         // the orchestrator's stream is already visible.
         if (!isSubagent && !getProgressViewBridge().isViewVisible()) {
-          ctx.runtimeHost.emit('requestEnsureProgressView', {
+          runRuntimeHost.emit('requestEnsureProgressView', {
             fallbackNotification: buildFallbackNotification(config),
           });
         }
@@ -494,7 +509,8 @@ export async function resumeToolUseFromSnapshot(
   };
   ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
   ctx.toolEditApprovalHandler = options.toolEditApprovalHandler;
-  const { setting, streamId } = ctx;
+  const { setting } = ctx;
+  const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
 
   return withExecutionRunContext(ctx, async () => {
     if (setting.agentCategory !== AgentCategory.ToolUse) {
@@ -534,8 +550,8 @@ export async function resumeToolUseFromSnapshot(
         );
         return buildToolUseFlowResult(
           result,
-          ctx.executionId,
-          streamId,
+          runExecutionId,
+          runStreamId,
           ctx.attachedMemoryMisses,
         );
       },
