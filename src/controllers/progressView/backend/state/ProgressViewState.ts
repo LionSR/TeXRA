@@ -32,6 +32,7 @@ import {
   createBackendStorage,
 } from '@shared/state/PersistedState';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GoalStore } from '@tools/goal';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { SessionStores } from './SessionStores';
@@ -163,6 +164,10 @@ export class ProgressViewState {
     this.stores = new SessionStores({
       streamLogs: this.streamLogs,
       snapshots: this.snapshots,
+      goalEntries: {
+        forget: (stream) => GoalStore.forget(stream, this.session),
+        forgetMany: (streams) => GoalStore.forgetMany(streams, this.session),
+      },
     });
   }
 
