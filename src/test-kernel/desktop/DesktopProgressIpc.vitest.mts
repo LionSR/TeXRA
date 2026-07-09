@@ -93,13 +93,31 @@ describe('desktop Progress IPC', () => {
     const ipc = createDesktopProgressIpc({ progress });
 
     expect(
-      ipc.handleMessage({ command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY }),
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'progress',
+      }),
     ).toBe(false);
     await Promise.resolve();
 
     expect(progress.syncFullView).toHaveBeenCalledTimes(1);
     expect(progress.hydrateProgressViewInquiries).toHaveBeenCalledTimes(1);
     expect(progress.replayPendingPrompts).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores main-view readiness broadcasts for Progress prompt replay', async () => {
+    const progress = createProgress();
+    const ipc = createDesktopProgressIpc({ progress });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'main',
+      }),
+    ).toBe(false);
+
+    expect(progress.syncFullView).not.toHaveBeenCalled();
+    expect(progress.replayPendingPrompts).not.toHaveBeenCalled();
   });
 
   it('replays pending prompts after lazy Progress readiness load', async () => {
@@ -109,7 +127,10 @@ describe('desktop Progress IPC', () => {
     });
 
     expect(
-      ipc.handleMessage({ command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY }),
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'progress',
+      }),
     ).toBe(false);
     await Promise.resolve();
 
