@@ -2,7 +2,7 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { platform } from '@platform/platform';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
 import {
   internalValidationModelHandlerEnvName,

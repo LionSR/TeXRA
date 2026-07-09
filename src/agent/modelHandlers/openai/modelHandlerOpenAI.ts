@@ -13,6 +13,14 @@ import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState'
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
+import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
+import type {
+  CreateResponseOptions,
+  CreateResponseResult,
+  ExtractResponseResult,
+  DeepSeekToolCall,
+  OpenAIToolCall,
+} from '@agent/types/IModelHandler';
 import {
   buildErrorLogData,
   isMissingFinishReasonError,
@@ -39,7 +47,6 @@ import { tagOpenAISdkError } from './openAISdkError';
 
 // Local file imports
 import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
-import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import {
   appendUserTextToChatMessages,
   createChatRoundMessages,
@@ -83,13 +90,6 @@ import type {
   ChatCompletionToolMessageParam,
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
-import type {
-  CreateResponseOptions,
-  CreateResponseResult,
-  ExtractResponseResult,
-  DeepSeekToolCall,
-  OpenAIToolCall,
-} from '../types/IModelHandler';
 import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
 
 type ChatCompletionRequestBase = Omit<

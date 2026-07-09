@@ -22,6 +22,15 @@ import { parseToolInputAsObject } from '@agent/core/flows/toolUseRound/toolCallP
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
+import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
+import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
+import type {
+  CreateResponseOptions,
+  CreateResponseResult,
+  ExtractResponseResult,
+  GoogleToolCall,
+  TokenCountOptions,
+} from '@agent/types/IModelHandler';
 import {
   detectStatusCode,
   attachPartialText,
@@ -72,17 +81,8 @@ import {
   loadAttachmentBuffer,
 } from '../utils/toolAttachmentUtils';
 import { convertToolSchema, toGoogleTools } from '../toolConversion';
-import { GOOGLE_FINISH } from '../types/StopReasonTypes';
 
 // Type imports
-import type { ProviderStopReason } from '../types/StopReasonTypes';
-import type {
-  CreateResponseOptions,
-  CreateResponseResult,
-  ExtractResponseResult,
-  GoogleToolCall,
-  TokenCountOptions,
-} from '../types/IModelHandler';
 
 // Interactions SDK aliases (public surface; the SDK re-exports these under the
 // `Interactions` namespace — the internal `_2`-suffixed types are not exported).

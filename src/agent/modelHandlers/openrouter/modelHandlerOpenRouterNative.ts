@@ -13,6 +13,13 @@ import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState'
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
+import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
+import type {
+  CreateResponseOptions,
+  CreateResponseResult,
+  ExtractResponseResult,
+  OpenRouterToolCall,
+} from '@agent/types/IModelHandler';
 import {
   detectStatusCode,
   handleStreamingFailure,
@@ -36,7 +43,6 @@ import {
 import { tagOpenRouterSdkError } from './openRouterSdkError';
 
 // Local file imports
-import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { toOpenAITools } from '../toolConversion';
 import {
   appendUserTextToChatMessages,
@@ -72,12 +78,6 @@ import type {
   ChatContentText,
   ChatRequest,
 } from '@openrouter/sdk/models';
-import type {
-  CreateResponseOptions,
-  CreateResponseResult,
-  ExtractResponseResult,
-  OpenRouterToolCall,
-} from '../types/IModelHandler';
 
 // ============================================================================
 // Handler

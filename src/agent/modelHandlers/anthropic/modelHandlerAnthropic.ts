@@ -21,6 +21,24 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - common
+import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
+import {
+  extractAnthropicWebFetchResults,
+  extractAnthropicWebSearchResults,
+  isAnthropicServerToolContent,
+  isAnthropicServerToolUse,
+  isAnthropicWebFetchResult,
+  isAnthropicWebSearchResult,
+  type ServerToolExtractionResult,
+} from '@agent/types/ServerToolTypes';
+import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
+import type {
+  CreateResponseOptions,
+  CreateResponseResult,
+  ExtractResponseResult,
+  AnthropicToolCall,
+  TokenCountOptions,
+} from '@agent/types/IModelHandler';
 import {
   attachStreamDiagnostics,
   handleStreamingFailure,
@@ -55,16 +73,6 @@ import {
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
 import { toAnthropicTools } from '../toolConversion';
-import { ANTHROPIC_STOP } from '../types/StopReasonTypes';
-import {
-  extractAnthropicWebFetchResults,
-  extractAnthropicWebSearchResults,
-  isAnthropicServerToolContent,
-  isAnthropicServerToolUse,
-  isAnthropicWebFetchResult,
-  isAnthropicWebSearchResult,
-  type ServerToolExtractionResult,
-} from '../types/ServerToolTypes';
 import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
@@ -106,14 +114,6 @@ import {
 } from './anthropicServerTools';
 
 // Type imports
-import type { ProviderStopReason } from '../types/StopReasonTypes';
-import type {
-  CreateResponseOptions,
-  CreateResponseResult,
-  ExtractResponseResult,
-  AnthropicToolCall,
-  TokenCountOptions,
-} from '../types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaContentBlock,

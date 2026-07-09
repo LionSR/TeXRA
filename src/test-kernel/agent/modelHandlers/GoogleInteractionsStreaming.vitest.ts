@@ -8,7 +8,7 @@ import {
 import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
-import { GOOGLE_FINISH } from '@agent/modelHandlers/types/StopReasonTypes';
+import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
 import type { Interactions } from '@google/genai';
 
 type StreamRecord = {

@@ -10,7 +10,7 @@ import {
   mapAnthropicWebSearchEntries,
   type WebFetchResult,
   type WebSearchResult,
-} from '@agent/modelHandlers/types/ServerToolTypes';
+} from '@agent/types/ServerToolTypes';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { StreamDiagnostics } from '@shared/schemas';
 import { emitServerToolResult } from './serverToolResultEmission';
