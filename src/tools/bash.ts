@@ -161,7 +161,7 @@ export class BashTool extends defineTool({
     }
 
     // Signal execution starting (triggers in-progress log after approval)
-    callContext?.onExecutionReady?.();
+    callContext?.hooks?.onExecutionReady?.();
 
     const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
 
@@ -194,8 +194,8 @@ export class BashTool extends defineTool({
       cwd,
       truncate: true,
       timeout: timeoutMs,
-      onStdout: ctx?.onToolOutput,
-      onStderr: ctx?.onToolOutput,
+      onStdout: ctx?.hooks?.onToolOutput,
+      onStderr: ctx?.hooks?.onToolOutput,
       signal: ctx?.signal,
     });
 

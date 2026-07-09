@@ -10,6 +10,7 @@ import { html, render, type TemplateResult } from 'lit';
 import { create as mutate } from 'mutative';
 import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
+import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
 import {
   createHostEventHandlerContext,
   createHostMessageHandlerContext,
@@ -167,14 +168,7 @@ conversationView.setAttribute('data-desktop-view', 'progress');
 
 // Left rail: a fresh <stream-tabs> mount wired to module-level progressState.
 // PRD § 7.D requires mounting <stream-tabs> directly (not inside <progress-app>).
-const railTabs = document.createElement('stream-tabs') as HTMLElement & {
-  streams: unknown;
-  activeStreamId: string | null;
-  filter: unknown;
-  streamStates: unknown;
-  pendingApprovalStreamIds: unknown;
-  childStreamsByParent: unknown;
-};
+const railTabs = document.createElement('stream-tabs') as StreamTabs;
 
 const settingsView: HTMLElement = document.createElement('settings-app');
 settingsView.setAttribute('data-desktop-view', 'settings');

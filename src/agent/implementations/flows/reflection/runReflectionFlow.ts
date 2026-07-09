@@ -265,6 +265,7 @@ export async function runReflectionFlow<C = unknown>(
       ReflectionServices<C>
     >(prepContextNode, kv, {
       parentStage,
+      sharedSchema: ReflectionFlowStateSchema,
       callbacks: {
         createRoundStage: (roundIndex, parent, shared) =>
           logger.openStage(`r${roundIndex}`, {
