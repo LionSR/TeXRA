@@ -144,7 +144,15 @@ export class PersistedFlow<
 
   /** Single canonical cast site for trusting a persisted `shared` blob as `S`. */
   private readShared(raw: unknown): S {
-    return this.sharedSchema ? this.sharedSchema.parse(raw) : (raw as S);
+    if (!this.sharedSchema) return raw as S;
+    const result = this.sharedSchema.safeParse(raw);
+    if (!result.success) {
+      throw new Error(
+        `Persisted shared state for flow run "${this.runId}" failed schema validation`,
+        { cause: result.error },
+      );
+    }
+    return result.data;
   }
 
   /** Register a write-through projection that fires after each persist. */
