@@ -7,7 +7,7 @@ import {
   type RoundOutput,
 } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/constants/outputProtocol';
-import { normalizeFilePath } from '@shared/utils/path';
+import { normalizeFilePath } from '@utils/core';
 import { FlexibleFS, replaceInputCommands } from '@utils/files';
 import {
   extractMultipleTextFromTag,

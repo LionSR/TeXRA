@@ -15,7 +15,7 @@ import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
 } from '@agent/utils/outputFileUtils';
-import { getBasename, normalizeFilePath } from '@shared/utils/path';
+import { getBasename, normalizeFilePath } from '@utils/core';
 
 import {
   isClosingMarkdownFence,

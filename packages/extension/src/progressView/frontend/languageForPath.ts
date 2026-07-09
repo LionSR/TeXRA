@@ -1,5 +1,5 @@
 // Local imports - shared utilities
-import { getBasename } from '@shared/utils/path';
+import { getBasename } from '@utils/core';
 
 type LanguageMap =
   ReadonlyMap<string, string> | Readonly<Record<string, string>>;

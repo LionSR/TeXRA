@@ -28,12 +28,11 @@ import {
   type ExecutionId,
   type RunOutcome,
 } from '@shared/schemas';
-import { normalizeFilePath } from '@shared/utils/path';
 import {
   CompileFailureSummarySchema,
   OutputFileSummarySchema,
 } from '@shared/schemas/output';
-import { byString, filterNotNull } from '@utils/core';
+import { byString, filterNotNull, normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // ============================================================================
