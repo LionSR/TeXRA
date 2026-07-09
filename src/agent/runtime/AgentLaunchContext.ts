@@ -122,13 +122,11 @@ const STATUS_MESSAGES: Record<string, string> = {
  * This is the single owner of the launch-context → ambient-context mapping, so
  * new per-run flags (e.g. `stopAfterCycle`, `approvalPromptsUnavailable`,
  * `runtimeUnavailableTools`) live in one place and are never silently dropped.
- * The ambient context is intentionally a flat projection, so two fields are
- * renamed from their nested `AgentCore` positions:
- *  - `AgentConfig.agent`  → `RunContext.agentName`
- *  - `AgentConfig.model`  → `RunContext.model`
- *
- * `RunContext.model` reads through `getModel` so tools observe model switches
- * applied to `AgentLaunchContext.config.model` during an interactive session.
+ * Run identity (`streamId`/`executionId`/`agentName`/`workingDirectory`)
+ * travels via `ctx.runScope` unchanged; only `AgentConfig.model` is renamed
+ * here, to `RunContext.model`, reading through `getModel` so tools observe
+ * model switches applied to `AgentLaunchContext.config.model` during an
+ * interactive session.
  */
 function agentContextToRunContext(
   ctx: AgentLaunchContext,

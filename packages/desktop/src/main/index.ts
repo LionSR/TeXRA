@@ -273,6 +273,8 @@ function createWindow(options: {
    * veteran from a fresh install. See ElectronPlatformInitResult.hasPriorInstall.
    */
   hasPriorInstall: boolean;
+  /** See ElectronPlatformInitResult.resourcesPath. */
+  resourcesPath: string;
 }): void {
   const window = new BrowserWindow({
     width: 960,
@@ -577,6 +579,15 @@ function createWindow(options: {
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     sendStartupCatalogData: true,
     modelListRefresh,
+    resourcesPath: options.resourcesPath,
+    // Rerun/Restore from history: same host-neutral owners the extension's
+    // history handlers call (runAgent / buildMainViewState), reached through
+    // the desktop agent-execution bridge instead of a vscode command.
+    runExecution: async (request) => {
+      await (await getAgentExecution()).progress.runExecution(request);
+    },
+    restoreTaskState: async (taskState) =>
+      (await getAgentExecution()).progress.restoreTaskState(taskState),
     promptSecret: (input) =>
       promptInRenderer(window, { ...input, password: true }),
     promptText: (input) => promptInRenderer(window, input),
@@ -983,6 +994,7 @@ if (protocolLifecycle.shouldContinue) {
           streamSnapshotStore,
           progressSnapshotStore: platformInit.progressSnapshotStore,
           hasPriorInstall: platformInit.hasPriorInstall,
+          resourcesPath: platformInit.resourcesPath,
         });
       reopenMainWindow();
 

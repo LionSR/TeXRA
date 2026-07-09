@@ -12,7 +12,6 @@ import type {
   ConversationRoundStateSnapshot,
 } from '@agent/core/state/AgentState';
 import { bestConnectionMethod } from '@agent/runtime/textConnection';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { buildFailedRetryInfo } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -40,7 +39,6 @@ type CycleOutcome =
 
 export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  FlowParams,
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<CyclePrepInput> {

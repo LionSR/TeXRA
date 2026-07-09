@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { AgentError } from '@common/errors';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
@@ -71,7 +72,8 @@ vi.mock('@cli/runtime/runtimeHost', () => ({
   createCliRuntimeHost: mocks.createCliRuntimeHost,
 }));
 
-vi.mock('@cli/runtime/approvalAdapter', () => ({
+vi.mock('@cli/runtime/approvalAdapter', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/approvalAdapter')>()),
   createHeadlessCliHostInteractions: mocks.createHeadlessCliHostInteractions,
 }));
 
@@ -458,14 +460,75 @@ describe('executeCliRequest', () => {
     const store = getDefaultStreamLogStore();
     const loadSpy = vi.spyOn(store, 'load').mockResolvedValue(undefined);
     const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
-    mocks.runAgent.mockRejectedValueOnce(new Error('boom'));
+    mocks.runAgent.mockRejectedValueOnce(new AgentError('boom'));
 
-    await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
-      'boom',
-    );
+    // #7645: a classified run failure resolves to a non-zero exit code
+    // instead of rethrowing — otherwise it reaches bin/texra.ts's crash
+    // handler and gets misreported as an unexpected crash (double-printed
+    // message + a false "please report it" line).
+    const result = await executeCliRequest(request, cliContext());
 
+    expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
     expect(loadSpy).toHaveBeenCalledTimes(1);
     expect(flushSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('rethrows a non-AgentError rejection instead of swallowing it into an exit code', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { getDefaultStreamLogStore } = await import('@transcript');
+    const request = baseRequest();
+    const store = getDefaultStreamLogStore();
+    const loadSpy = vi.spyOn(store, 'load').mockResolvedValue(undefined);
+    const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
+    // An unclassified failure (e.g. registerExecution disk I/O,
+    // workspaceState.update) is genuinely unexpected — it must keep
+    // propagating so bin/texra.ts's crash handler reports it, instead of
+    // being swallowed into a bare non-zero exit with no stderr.
+    mocks.runAgent.mockRejectedValueOnce(new Error('disk full'));
+
+    await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
+      'disk full',
+    );
+
+    // Cleanup still runs via `finally` even though the error propagates.
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves a classified run failure to a non-zero exit code without rethrowing', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = baseRequest();
+    mocks.runAgent.mockRejectedValueOnce(new AgentError('provider boom'));
+
+    const result = await executeCliRequest(request, cliContext(), {
+      markErrorOnThrow: true,
+    });
+
+    expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+    // markErrorOnThrow still records the terminal status, same as before.
+    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
+      'exec-1',
+      EXECUTION_STATUS.ERROR,
+    );
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps a classified run failure to ApprovalDenied when the run denied approval', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { markApprovalDenied } =
+      await import('@cli/runtime/approval/approvalPolicy');
+    const request = baseRequest();
+    const context = cliContext();
+    markApprovalDenied(context);
+    mocks.runAgent.mockRejectedValueOnce(new AgentError('approval denied'));
+
+    const result = await executeCliRequest(request, context);
+
+    expect(result).toEqual({
+      ok: false,
+      exitCode: CliExitCode.ApprovalDenied,
+    });
   });
 
   it('closes the runtime host when sidecar flush fails', async () => {

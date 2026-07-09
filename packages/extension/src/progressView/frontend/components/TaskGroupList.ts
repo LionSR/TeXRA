@@ -22,6 +22,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 import { designTokens } from '@shared/styles';
+import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
 import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
@@ -295,7 +296,8 @@ export class TaskGroupList extends LitElement {
       const isRunGroup =
         !this.isToolUse &&
         (group.kind === 'round' ||
-          (group.kind === undefined && /^r\d+$/.test(group.name)));
+          (group.kind === undefined &&
+            parseWorkflowOutputRoundDir(group.name) !== null));
       const wasRunning = prev === STREAM_STATUS.RUNNING;
       const isNowComplete =
         group.status === STREAM_STATUS.READY ||

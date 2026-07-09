@@ -8,12 +8,16 @@ import {
   attachCliSessionProgressProjection,
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
-import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
+import {
+  STREAM_TRANSITION_CAUSE,
+  type StreamTransitionCause,
+} from '@common/constants/streamStatus';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type ExecutionId,
   type StreamTabId,
+  type UpdateStreamStatusPayload,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
@@ -71,6 +75,51 @@ function setupTraceProjection() {
       detachTrace();
     },
   };
+}
+
+type RunStatusProjectionPayload = UpdateStreamStatusPayload & {
+  cause: StreamTransitionCause;
+};
+
+const resumingStatusPayload: RunStatusProjectionPayload = {
+  streamId,
+  status: STREAM_PHASE.RUNNING,
+  previousStatus: STREAM_PHASE.WAITING,
+  cause: STREAM_TRANSITION_CAUSE.RESUME,
+  substate: STREAM_SUBSTATE.RESUMING,
+};
+
+function emitRunStatus(
+  events: SessionEventHub,
+  payload: RunStatusProjectionPayload,
+): void {
+  events.emit({
+    scope: 'run',
+    streamId,
+    event: {
+      type: 'status',
+      streamId: payload.streamId,
+      phase: payload.status,
+      cause: payload.cause,
+      ...(payload.previousStatus
+        ? { previousPhase: payload.previousStatus }
+        : {}),
+      ...(payload.substate ? { substate: payload.substate } : {}),
+    },
+  });
+}
+
+function emitSessionStatus(
+  events: SessionEventHub,
+  payload: UpdateStreamStatusPayload,
+): void {
+  events.emit({
+    scope: 'session',
+    event: {
+      type: 'updateStreamStatus',
+      payload,
+    },
+  });
 }
 
 describe('attachCliSessionProgressProjection', () => {
@@ -249,6 +298,69 @@ describe('attachCliSessionProgressProjection', () => {
           cause: STREAM_TRANSITION_CAUSE.RESUME,
           substate: STREAM_SUBSTATE.RESUMING,
         }),
+      );
+    } finally {
+      detach();
+    }
+  });
+
+  it('emits one NDJSON stream-status record for duplicate run-then-session status facts', () => {
+    const events = new SessionEventHub();
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
+
+    try {
+      emitRunStatus(events, resumingStatusPayload);
+      emitSessionStatus(events, resumingStatusPayload);
+
+      expect(writeRecord).toHaveBeenCalledTimes(1);
+      expect(writeRecord).toHaveBeenCalledWith(
+        progressRecord('updateStreamStatus', resumingStatusPayload),
+      );
+    } finally {
+      detach();
+    }
+  });
+
+  it('emits one NDJSON stream-status record for duplicate session-then-run status facts', () => {
+    const events = new SessionEventHub();
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
+
+    try {
+      emitSessionStatus(events, resumingStatusPayload);
+      emitRunStatus(events, resumingStatusPayload);
+
+      expect(writeRecord).toHaveBeenCalledTimes(1);
+      expect(writeRecord).toHaveBeenCalledWith(
+        progressRecord('updateStreamStatus', resumingStatusPayload),
+      );
+    } finally {
+      detach();
+    }
+  });
+
+  it('keeps same-phase stream-status records when substate changes', () => {
+    const events = new SessionEventHub();
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
+    const startingPayload: RunStatusProjectionPayload = {
+      ...resumingStatusPayload,
+      substate: STREAM_SUBSTATE.STARTING,
+    };
+
+    try {
+      emitRunStatus(events, resumingStatusPayload);
+      emitSessionStatus(events, startingPayload);
+
+      expect(writeRecord).toHaveBeenCalledTimes(2);
+      expect(writeRecord).toHaveBeenNthCalledWith(
+        1,
+        progressRecord('updateStreamStatus', resumingStatusPayload),
+      );
+      expect(writeRecord).toHaveBeenNthCalledWith(
+        2,
+        progressRecord('updateStreamStatus', startingPayload),
       );
     } finally {
       detach();

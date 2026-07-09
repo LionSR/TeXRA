@@ -104,10 +104,6 @@ export const DeleteMemoryMessageSchema = MemoryDeleteMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.DELETE_MEMORY),
 });
 
-export const GetMemoryEnabledMessageSchema = commandOnly(
-  MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED,
-);
-
 export const SetMemoryEnabledMessageSchema = MemoryEnabledMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED),
 });
