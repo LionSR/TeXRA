@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageLogService } from '@telemetry/UsageLogService';
-import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SkillSource } from '@skills/loadSkills';
@@ -10,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   authProvider: {
     isAuthenticated: vi.fn(),
   },
-  bootstrapPlatformAgentDirectories: vi.fn(),
+  bootstrapNodeAgentDirectories: vi.fn(),
   createPlatformAgentDirectories: vi.fn(() => ({
     custom: vi.fn(),
     builtIn: vi.fn(),
@@ -35,7 +34,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/index/platformAgentDirectories', () => ({
-  bootstrapPlatformAgentDirectories: mocks.bootstrapPlatformAgentDirectories,
   createPlatformAgentDirectories: mocks.createPlatformAgentDirectories,
 }));
 
@@ -68,6 +66,7 @@ vi.mock('@platform/platform', () => ({
 // nodeHost; stub it so the test exercises only the CLI-specific wiring and
 // feature registration does not run twice across cases.
 vi.mock('@platform/defaults/nodeHost', () => ({
+  bootstrapNodeAgentDirectories: mocks.bootstrapNodeAgentDirectories,
   createNodePlatform: mocks.createNodePlatform,
   initNodeAgentRuntime: mocks.initNodeAgentRuntime,
   initializeNodeGoalPrompts: mocks.initializeNodeGoalPrompts,
@@ -150,7 +149,7 @@ describe('CLI platform init', () => {
         update: vi.fn(),
       },
     });
-    mocks.bootstrapPlatformAgentDirectories.mockResolvedValue(undefined);
+    mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
     mocks.serverSideKeyService.setUseIncludedModelAccess.mockResolvedValue(
       undefined,
     );
@@ -224,38 +223,12 @@ describe('CLI platform init', () => {
     expect(mocks.initializeNodeGoalPrompts).toHaveBeenCalledWith(
       '/tmp/resources-versioned',
     );
-    expect(mocks.bootstrapPlatformAgentDirectories).toHaveBeenCalledWith(
-      expect.objectContaining({
-        channel: 'cli',
-        currentVersion: '1.2.3',
-      }),
-    );
-
-    const options =
-      mocks.bootstrapPlatformAgentDirectories.mock.calls.at(-1)?.[0];
-
-    // Verify the bundle source is the right class AND was constructed with the
-    // forwarded resourcesPath — not just that some PathAgentDirectoryBundleSource
-    // was passed.
-    expect(options?.bundleSource).toBeInstanceOf(
-      PathAgentDirectoryBundleSource,
-    );
-    expect(
-      (options?.bundleSource as { resourcesBasePath?: string })
-        .resourcesBasePath,
-    ).toBe('/tmp/resources-versioned');
-
-    expect(options?.versionStore.get()).toBe('1.2.2');
-
-    await options?.versionStore.update('1.2.3');
-    expect(globalState.update).toHaveBeenCalledWith(
-      GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-      '1.2.3',
-    );
-    expect(globalState.update).not.toHaveBeenCalledWith(
-      GlobalStateKey.LAST_KNOWN_VERSION,
-      expect.anything(),
-    );
+    expect(mocks.bootstrapNodeAgentDirectories).toHaveBeenCalledWith({
+      channel: 'cli',
+      resourcesPath: '/tmp/resources-versioned',
+      currentVersion: '1.2.3',
+      versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+    });
   });
 
   it('surfaces included-access auth probe failures by default', async () => {
