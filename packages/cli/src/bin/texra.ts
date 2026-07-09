@@ -15,8 +15,10 @@ try {
   process.exitCode = result.exitCode;
 } catch (error) {
   writeTextStderr(`TeXRA CLI failed: ${toErrorMessage(error)}`);
-  // Usage errors are handled inside runCli (exit 2) and never reach here; this
-  // catch only fires on UNEXPECTED crashes, so point the user at the tracker.
+  // Usage errors are handled inside runCli (exit 2) and classified run
+  // failures are consumed into an exit code at executeCliRequest (never
+  // rethrown past it — see runtime/runExecution.ts), so this catch only
+  // fires on genuinely UNEXPECTED crashes; point the user at the tracker.
   // formatCrashReportLine keeps the report link off the usage path even if a
   // usage error is ever rethrown.
   const reportLine = formatCrashReportLine(error, await readCliBugsUrl());
