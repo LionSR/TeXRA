@@ -20,9 +20,8 @@ import {
   type LogMessageData,
 } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/constants/outputProtocol';
-import { getBasename } from '@shared/utils/path';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
-import { formatCompactTokenCount } from '@utils/core';
+import { formatCompactTokenCount, getBasename } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - shared schemas

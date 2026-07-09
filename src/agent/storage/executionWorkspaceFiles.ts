@@ -1,10 +1,9 @@
 import * as path from 'node:path';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { normalizeFilePath } from '@shared/utils/path';
 import { AbsoluteFS } from '@utils/files';
+import { byStringProp, normalizeFilePath } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
-import { byStringProp } from '@utils/core';
 
 export interface ExecutionWorkspaceFile {
   readonly path: string;

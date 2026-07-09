@@ -12,8 +12,8 @@ import type { FileListEntry } from '@shared/schemas';
 import { hljs } from '@shared/highlighting/hljs';
 
 // Local imports - shared utilities
-import { getBasename } from '@shared/utils/path';
 import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
+import { getBasename } from '@utils/core';
 
 // Local imports - Lit template utilities
 import {

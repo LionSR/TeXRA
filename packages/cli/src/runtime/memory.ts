@@ -1,6 +1,5 @@
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import type { MemoryViewItem } from '@shared/schemas';
-import { normalizeFilePath } from '@shared/utils/path';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
 import {
@@ -8,7 +7,7 @@ import {
   formatSize,
   toDisplayPath,
 } from '@tools/memory/memoryUtils';
-import { filterNotNullish } from '@utils/core';
+import { filterNotNullish, normalizeFilePath } from '@utils/core';
 import {
   formatLocaleTimestamp,
   truncateSummary,
