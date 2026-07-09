@@ -123,10 +123,6 @@ function createLifecycleContext({
     setting,
     prompt,
     runScope,
-    streamId: runScope.streamId,
-    executionId: runScope.executionId,
-    runtimeHost: runScope.runtimeHost,
-    session: runScope.session,
     streamStatus,
     logger: noopTrace,
     parentStage: noopTrace.openStage('Run: test-agent'),
@@ -261,8 +257,10 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-run-config-before-running',
     );
     const trace = new TraceEmitter();
-    const detachTrace = ctx.session.attachRunTrace(trace, streamId);
-    const recorded = recordSessionEvents(ctx.session.events, { scope: 'run' });
+    const detachTrace = ctx.runScope.session.attachRunTrace(trace, streamId);
+    const recorded = recordSessionEvents(ctx.runScope.session.events, {
+      scope: 'run',
+    });
     ctx.logger = trace;
     ctx.disposeTrace = detachTrace;
 
@@ -508,8 +506,14 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, ctx } = lifecycleFixture(
       'lifecycle-subagent-waiting-kill',
     );
-    const followUpsRelease = vi.spyOn(ctx.session.followUps, 'release');
-    const transcriptsUpdate = vi.spyOn(ctx.session.transcripts, 'update');
+    const followUpsRelease = vi.spyOn(
+      ctx.runScope.session.followUps,
+      'release',
+    );
+    const transcriptsUpdate = vi.spyOn(
+      ctx.runScope.session.transcripts,
+      'update',
+    );
     storageMocks.deleteFlowRecord.mockClear();
 
     try {
