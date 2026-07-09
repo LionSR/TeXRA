@@ -19,6 +19,7 @@ const TARGET_ALIAS = '@cli/runtime/sessionProgressSubscription';
 const ALLOWED_IMPORTERS = [
   'packages/cli/src/runtime/runExecution.ts',
   'src/test-kernel/cli/CliSessionProgressSubscription.vitest.mts',
+  'src/test-kernel/cli/RunExecution.vitest.mts',
 ] as const;
 
 const SCAN_ROOTS = [
