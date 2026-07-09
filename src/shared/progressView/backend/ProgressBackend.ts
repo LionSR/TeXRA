@@ -9,7 +9,7 @@ import {
 import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import {
   ProgressFactApplier,
-  PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES,
+  PROGRESS_BACKEND_RUN_PROGRESS_EVENT_TYPES,
   type GetProgressStreamControls,
   type ProgressEventSubscription,
 } from '@shared/progressView/backend/events/ProgressFactApplier';
@@ -132,7 +132,7 @@ export class ProgressBackend {
           sessionEvent.event,
         );
       },
-      { scope: 'run', types: PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES },
+      { scope: 'run', types: PROGRESS_BACKEND_RUN_PROGRESS_EVENT_TYPES },
     );
     return {
       dispose: () => {

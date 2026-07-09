@@ -5,7 +5,7 @@ import type {
   SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { ConversationProgressSchema, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type {
   CliProgressEvent,
   CliProgressEventPayloads,
@@ -19,8 +19,8 @@ type CliProjectedProgressEvent = {
   };
 }[CliProgressEvent];
 
-const CLI_RUN_FACT_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
-  'domain',
+const CLI_RUN_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
+  'conversation.progress',
   'updateTodos',
   'updatePlan',
   'addOutputFiles',
@@ -99,19 +99,14 @@ function projectCliRunFact(
     };
   }
 
-  if (event.type === 'domain') {
-    if (event.key === 'conversationProgress') {
-      const progress = ConversationProgressSchema.safeParse(event.data);
-      if (!progress.success) return undefined;
-      return {
-        event: 'updateConversationProgress',
-        payload: {
-          streamId,
-          progress: progress.data,
-        },
-      };
-    }
-    return undefined;
+  if (event.type === 'conversation.progress') {
+    return {
+      event: 'updateConversationProgress',
+      payload: {
+        streamId,
+        progress: event.progress,
+      },
+    };
   }
 
   if (event.type === 'updateTodos') {
@@ -250,7 +245,7 @@ export function attachCliSessionProgressProjection(
       );
       if (projected) emitProjectedProgressEvent(runtimeHost, projected);
     },
-    { scope: 'run', types: CLI_RUN_FACT_PROGRESS_EVENT_TYPES },
+    { scope: 'run', types: CLI_RUN_PROGRESS_EVENT_TYPES },
   );
 
   return () => {

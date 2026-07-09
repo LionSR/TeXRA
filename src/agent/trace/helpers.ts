@@ -2,7 +2,7 @@
  * TeXRA sugar over {@link AgentTrace}, as plain functions.
  *
  * Every helper takes the trace as its first argument and reduces to a
- * single primitive call (`info` / `warn` / `error` / `domain` /
+ * single primitive call (`info` / `warn` / `error` / `domain` / `emit` /
  * `contextState`). Agent code uses these instead of the bigger
  * `error(msg, { data: buildErrorLogData(...), messageType })` blocks so
  * call sites stay 1 line.
@@ -191,7 +191,7 @@ export function logConversationProgress(
   data: ConversationProgress,
   stageId?: string,
 ): void {
-  trace.domain({ key: 'conversationProgress', data, stageId });
+  trace.emit({ type: 'conversation.progress', progress: data, stageId });
 }
 
 /** Missing-outputs notification — counts `missing` entries for the label. */

@@ -3115,9 +3115,8 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         scope: 'run',
         streamId: root,
         event: {
-          type: 'domain',
-          key: 'conversationProgress',
-          data: { toolCallCount: 3 },
+          type: 'conversation.progress',
+          progress: { toolCallCount: 3 },
         },
       });
 
