@@ -30,6 +30,11 @@ import {
 } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
+import {
+  getRunContextExecutionId,
+  getRunContextStreamId,
+  getRunContextWorkingDirectory,
+} from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   startChildRunLoop,
@@ -46,12 +51,7 @@ import type {
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import {
-  getRunContextExecutionId,
-  getRunContextStreamId,
-  getRunContextWorkingDirectory,
-  requireRunStream,
-} from '@tools/contextHelpers';
+import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

@@ -25,7 +25,11 @@ import {
   resolveExecutionWorkspaceFilePath,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextExecutionId,
+  getRunContextStreamId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   AgentExecutionHandle,
@@ -42,12 +46,7 @@ import {
 } from '@shared/constants/toolDefaults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import {
-  getRunContextExecutionId,
-  getRunContextStreamId,
-  requireRunStream,
-  requireStreamId,
-} from '@tools/contextHelpers';
+import { requireRunStream, requireStreamId } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { clamp, unique } from '@utils/core';

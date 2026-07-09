@@ -17,7 +17,10 @@ import {
   wakeQueuedFollowUpStream,
   type FollowUpWakeResult,
 } from '@agent/followUp/ToolUseFollowUp';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextSession,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import {
   defaultSession,
   type SessionHandle,
@@ -31,7 +34,6 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { formatRelativeTime } from '@shared/utils/string';
-import { getRunContextSession } from '@tools/contextHelpers';
 import { truncateSummary, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import {

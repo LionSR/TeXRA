@@ -4,7 +4,10 @@
  * break a blocking wait early.
  */
 
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextStreamId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import {
   ACTIVE_STATUSES,
   AgentExecutionHandle,
@@ -12,7 +15,6 @@ import {
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { onFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { STREAM_STATUS } from '@shared/schemas';
-import { getRunContextStreamId } from '@tools/contextHelpers';
 
 /**
  * Single-pass check: should the wait endpoint skip blocking on this execution?
