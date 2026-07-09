@@ -14,6 +14,7 @@ import {
   type ProgressBackendInteractionPayloads,
 } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
+import { hydrateProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryHydration';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
@@ -1043,6 +1044,14 @@ export class DesktopProgressBridge {
 
   syncFullView(): void {
     this.syncStreamContent(this.updateStreamMetadata());
+  }
+
+  async hydrateProgressViewInquiries(): Promise<void> {
+    await hydrateProgressViewInquiries({
+      webviewUpdater: this.backend.webviewUpdater,
+      externalInquiry: this.approvalHandlers.externalInquiry,
+      logger: this.logger,
+    });
   }
 
   replayPendingPrompts(): void {
