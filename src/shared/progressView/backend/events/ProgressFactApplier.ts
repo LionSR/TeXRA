@@ -46,6 +46,7 @@ import {
   type StreamExecutionState,
 } from '@shared/progressView/backend/state/ProgressViewState';
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
+import { assertNever } from '@utils/core';
 
 import { withEventErrorHandling } from './errorHandling';
 
@@ -205,6 +206,7 @@ export class ProgressFactApplier {
       case 'removeStream':
         return;
     }
+    assertNever(fact, 'Unhandled progress-view session fact');
   }
 
   handleRunFact(streamId: StreamTabId, event: AgentEvent): void {
