@@ -27,7 +27,10 @@ function getNodeRetryConfig(): { maxRetries: number; wait: number } {
     'texra.model.retry.maxAttempts',
     DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
   );
-  const backoffMs = getConfig<number>('texra.model.retry.backoffMs', 1000);
+  const backoffMs = getConfig<number>(
+    'texra.model.retry.backoffMs',
+    DEFAULT_CORE_SETTINGS.model.retry.backoffMs,
+  );
 
   return {
     maxRetries: 1 + Math.max(0, maxAutoAttempts),
