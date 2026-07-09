@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 
+import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type { StreamTabId } from '@shared/schemas';
-import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
 import { cleanupAllApprovals, releaseStreamResources } from '@tools/approval';
 
 import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '@controllers/progressView/ProgressStreamLifecycleController';

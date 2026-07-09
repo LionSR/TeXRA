@@ -1,15 +1,15 @@
-// Suites for src/shared/progressView/backend stream info helpers
+// Suites for src/controllers/progressView/backend stream info helpers
 // (streamOrdering + streamTabInfo).
 
 import { strict as assert } from 'node:assert';
 import { describe, expect, it } from 'vitest';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
-import { compareByNewestCreationTime } from '@shared/progressView/backend/streamOrdering';
+import { compareByNewestCreationTime } from '@controllers/progressView/backend/streamOrdering';
 import {
   buildStreamTabInfo,
   pickAgentCategory,
-} from '@shared/progressView/backend/streamTabInfo';
+} from '@controllers/progressView/backend/streamTabInfo';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
 // streamInfoUtils

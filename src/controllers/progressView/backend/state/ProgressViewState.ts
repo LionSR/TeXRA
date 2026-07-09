@@ -27,7 +27,6 @@ import {
   type RoundStage,
   type StreamTabId,
 } from '@shared/schemas';
-import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import {
   PersistedState,
   createBackendStorage,
@@ -36,6 +35,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { SessionStores } from './SessionStores';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 /** Bounded fan-out for the one-time legacy-instruction backfill at load(),
  *  mirroring `StreamSnapshotStore`'s own per-stream disk-read concurrency. */

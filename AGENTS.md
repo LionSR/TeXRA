@@ -281,7 +281,7 @@ Aim for code that looks like it was designed correctly from the start:
 
 For good separation of concerns and platform independence, core business logic should stay free of host-specific imports. This improves testability and keeps the door open for future reuse outside VS Code.
 
-1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of Concerns: VS Code Coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`.
+1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of Concerns: VS Code Coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`. Do not add new `@agent/*` imports under `src/shared/`; host-neutral orchestration belongs under `src/controllers/`.
 
 2. **Use platform-agnostic helpers instead of VS Code types:**
    - `isFile(type)` / `isDirectory(type)` from `@utils/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`

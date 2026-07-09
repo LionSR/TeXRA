@@ -1,3 +1,17 @@
+import {
+  WebviewUpdater,
+  type LogContentExtras,
+} from '@controllers/progressView/backend/WebviewUpdater';
+import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
+import { pickAgentCategory } from '@controllers/progressView/backend/streamTabInfo';
+import { mapToRecord } from '@controllers/progressView/backend/persistence/serializationUtils';
+import {
+  ProgressViewState,
+  type ActiveStreamId,
+  type StreamBadgeSnapshot,
+  type StreamExecutionState,
+} from '@controllers/progressView/backend/state/ProgressViewState';
+import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { TaskState } from '@agent/core/state/TaskState';
@@ -32,20 +46,6 @@ import {
   type UpdateTodosPayload,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
-import {
-  WebviewUpdater,
-  type LogContentExtras,
-} from '@shared/progressView/backend/WebviewUpdater';
-import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
-import { pickAgentCategory } from '@shared/progressView/backend/streamTabInfo';
-import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
-import {
-  ProgressViewState,
-  type ActiveStreamId,
-  type StreamBadgeSnapshot,
-  type StreamExecutionState,
-} from '@shared/progressView/backend/state/ProgressViewState';
-import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 import { assertNever } from '@utils/core';
 
 import { withEventErrorHandling } from './errorHandling';
