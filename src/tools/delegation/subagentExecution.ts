@@ -142,7 +142,8 @@ export async function executeSubagent(
   // child-run loop can still roll the child's cost into the parent run after
   // this tool call has returned. Subagents count toward parent usage totals
   // only — they never drive the loop.
-  const recordSubagentCost = getCurrentToolCallContext()?.recordSubagentCost;
+  const recordSubagentCost =
+    getCurrentToolCallContext()?.hooks?.recordSubagentCost;
   let subagentCostSettled = false;
   function settleSubagentCost(totalCostUsd: number | undefined): void {
     if (subagentCostSettled) return;
