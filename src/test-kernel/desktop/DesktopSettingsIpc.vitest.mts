@@ -1896,13 +1896,13 @@ describe('desktop settings IPC', () => {
 
   it('reports missing history items for rerun and restore instead of dropping them', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const infos: string[] = [];
+    const shownErrors: string[] = [];
     const settings = createDesktopSettingsIpc({
       workspaceState: new MemoryStateStore(),
       globalState: new MemoryStateStore(),
       postToRenderer: () => {},
-      showInfoMessage: async (message) => {
-        infos.push(message);
+      showErrorMessage: async (message) => {
+        shownErrors.push(message);
       },
     });
 
@@ -1916,7 +1916,107 @@ describe('desktop settings IPC', () => {
     });
     await flushAsyncWork();
 
-    expect(infos).toEqual(['History item not found', 'History item not found']);
+    expect(shownErrors).toEqual([
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+    ]);
+  });
+
+  it('errors instead of a false success when rerun has no runExecution dependency wired (Copilot #7827)', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const { getExecutionStore } = await import('@agent/storage');
+    const { AgentConfigSchema } =
+      await import('@agent/core/definition/AgentConfig');
+    const { AgentCategory } = await import('@shared/schemas/agent');
+
+    const historyId = 'cccc3333';
+    const config = AgentConfigSchema.parse({
+      agent: 'chat',
+      model: 'deepseekT',
+      instruction: 'Check a proof.',
+      agentCategory: AgentCategory.ToolUse,
+    });
+    await getExecutionStore(historyId).writeConfig(config);
+
+    const infos: string[] = [];
+    const errors: string[] = [];
+    // Deliberately omit `runExecution` — this is the desktop wiring gap the
+    // finding calls out: the IPC handler must not report success when the
+    // host never wired the execution bridge.
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      showInfoMessage: async (message) => {
+        infos.push(message);
+      },
+      showErrorMessage: async (message) => {
+        errors.push(message);
+      },
+    });
+
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+      historyId,
+    });
+    await flushAsyncWork();
+
+    expect(infos).toEqual([]);
+    expect(errors).toEqual([
+      'Rerunning agents from history is not available in this build',
+    ]);
+  });
+
+  it('surfaces a friendly error instead of throwing on a corrupted history config (Copilot/texra-review #7827)', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const { getExecutionStore } = await import('@agent/storage');
+
+    const historyId = 'dddd4444';
+    // Bypass writeConfig's AgentConfig contract to simulate a corrupt/legacy
+    // on-disk record — a wrong-typed `agent` field fails AgentConfigSchema
+    // outright (unlike a merely-missing field, which prefaults), the same
+    // "malformed stored config" scenario the review comments describe for
+    // AgentConfigSchema.parse(raw).
+    await getExecutionStore(historyId).write('config', {
+      agent: 42,
+    });
+
+    const infos: string[] = [];
+    const errors: string[] = [];
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      showInfoMessage: async (message) => {
+        infos.push(message);
+      },
+      showErrorMessage: async (message) => {
+        errors.push(message);
+      },
+      runExecution: async () => {},
+      restoreTaskState: async () => true,
+    });
+
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+      historyId,
+    });
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+      historyId,
+    });
+    await flushAsyncWork();
+
+    // Neither handler throws an unhandled ZodError; both report a graceful,
+    // user-visible message instead (the corrupt record fails schema
+    // validation at the storage layer already — readValidated returns null —
+    // so it surfaces as the unified "unreadable" error, not a raw parse
+    // exception).
+    expect(infos).toEqual([]);
+    expect(errors).toEqual([
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+    ]);
   });
 
   it('exports a history chat to Markdown via the shared ChatExportController', async () => {

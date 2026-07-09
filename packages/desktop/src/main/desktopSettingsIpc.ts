@@ -34,10 +34,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
@@ -539,37 +536,57 @@ export function createDesktopSettingsIpc(
     });
   }
 
+  // readConfig() already validates via readValidated and returns null for
+  // BOTH missing and corrupt/legacy configs (the storage layer's silent-null
+  // read — distinguishing the two needs the loud-reads policy at the store,
+  // not a re-parse here, which can never see invalid data).
+  const HISTORY_CONFIG_UNREADABLE_MESSAGE =
+    'History item not found or unreadable (missing, corrupt, or from an incompatible version)';
+
+  type HistoryConfigResult =
+    { status: 'ok'; config: AgentConfig } | { status: 'unreadable' };
+
   async function readHistoryConfig(
     historyId: string,
-  ): Promise<AgentConfig | undefined> {
-    const raw = await getExecutionStore(historyId as ExecutionId).readConfig();
-    return raw ? AgentConfigSchema.parse(raw) : undefined;
+  ): Promise<HistoryConfigResult> {
+    const config = await getExecutionStore(
+      historyId as ExecutionId,
+    ).readConfig();
+    if (!config) return { status: 'unreadable' };
+    return { status: 'ok', config };
   }
 
   async function rerunHistoryAgent(historyId: string): Promise<void> {
-    const config = await readHistoryConfig(historyId);
-    if (!config) {
-      await options.showInfoMessage?.('History item not found');
+    const result = await readHistoryConfig(historyId);
+    if (result.status === 'unreadable') {
+      await options.showErrorMessage?.(HISTORY_CONFIG_UNREADABLE_MESSAGE);
       return;
     }
-    const validated = validateExecutionRequest({ config });
+    const validated = validateExecutionRequest({ config: result.config });
     if (!validated.valid) {
       await options.showErrorMessage?.(validated.message);
       return;
     }
+    if (!options.runExecution) {
+      await options.showErrorMessage?.(
+        'Rerunning agents from history is not available in this build',
+      );
+      return;
+    }
     await options.showInfoMessage?.('Rerunning agent from history');
-    await options.runExecution?.(validated.request);
+    await options.runExecution(validated.request);
   }
 
   async function restoreHistoryAgent(historyId: string): Promise<void> {
-    const config = await readHistoryConfig(historyId);
-    if (!config) {
-      await options.showInfoMessage?.('History item not found');
+    const result = await readHistoryConfig(historyId);
+    if (result.status === 'unreadable') {
+      await options.showErrorMessage?.(HISTORY_CONFIG_UNREADABLE_MESSAGE);
       return;
     }
     const restored =
-      (await options.restoreTaskState?.(agentConfigToTaskState(config))) ??
-      false;
+      (await options.restoreTaskState?.(
+        agentConfigToTaskState(result.config),
+      )) ?? false;
     if (!restored) {
       await options.showErrorMessage?.('Failed to restore configuration');
     }
