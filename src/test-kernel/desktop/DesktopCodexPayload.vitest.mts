@@ -301,6 +301,10 @@ function createFakeDesktopPackage(
     join(appRoot, 'resources/tool_use_agents/example.yaml'),
     'name: example\n',
   );
+  writeText(
+    join(appRoot, 'resources/skills/example/SKILL.md'),
+    'name: example\n\ndescription: Example bundled skill.\n',
+  );
 
   for (const dependencyName of Object.keys(readDesktopDependencies())) {
     writeJson(join(appRoot, 'node_modules', dependencyName, 'package.json'), {
