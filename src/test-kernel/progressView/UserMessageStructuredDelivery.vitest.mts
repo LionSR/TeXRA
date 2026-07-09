@@ -27,8 +27,8 @@ async function mount(text: string): Promise<UserMessage> {
  * transcript (the claude-agent-result/error bug this suite guards against).
  */
 describe('user-message structured delivery', () => {
-  useLitComponentTestDom(() =>
-    import('@progressView/frontend/components/UserMessage'),
+  useLitComponentTestDom(
+    () => import('@progressView/frontend/components/UserMessage'),
   );
 
   for (const { tag, escaped } of DELIVERY_TAGS) {
