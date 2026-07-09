@@ -39,6 +39,7 @@ export type CliRuntimeHost = AgentRuntimeHost & {
 };
 
 function writeRuntimePresentationNdjson(
+  logger: Logger,
   event: RuntimePresentationEvent,
   payload: RuntimePresentationEventPayloads[RuntimePresentationEvent],
 ): void {
@@ -46,28 +47,16 @@ function writeRuntimePresentationNdjson(
     case 'requestShowError': {
       const errorPayload =
         payload as RuntimePresentationEventPayloads['requestShowError'];
-      writeNdjsonStdout({
-        kind: 'log',
-        ts: new Date().toISOString(),
-        level: 'error',
-        message: errorPayload.message,
-        fields: {},
-      });
+      logger.error(errorPayload.message);
       return;
     }
     case 'requestShowInstruction': {
       const instructionPayload =
         payload as RuntimePresentationEventPayloads['requestShowInstruction'];
-      writeNdjsonStdout({
-        kind: 'log',
-        ts: new Date().toISOString(),
-        level: 'info',
-        message: instructionPayload.message,
-        fields: {
-          key: instructionPayload.key,
-          actions: instructionPayload.actions,
-          showSuppress: instructionPayload.showSuppress,
-        },
+      logger.info(instructionPayload.message, {
+        key: instructionPayload.key,
+        actions: instructionPayload.actions,
+        showSuppress: instructionPayload.showSuppress,
       });
       return;
     }
@@ -124,6 +113,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       if (context.outputFormat === 'ndjson') {
         if (isRuntimePresentationEvent(event)) {
           writeRuntimePresentationNdjson(
+            ensureLogger(),
             event,
             payload as RuntimePresentationEventPayloads[RuntimePresentationEvent],
           );
