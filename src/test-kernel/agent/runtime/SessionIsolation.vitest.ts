@@ -95,9 +95,6 @@ function createLifecycleContext(
     setting,
     prompt,
     runScope,
-    streamId: runScope.streamId,
-    executionId: runScope.executionId,
-    runtimeHost: runScope.runtimeHost,
     streamStatus,
     logger: noopTrace,
     parentStage: noopTrace.openStage('Run: assistant'),
@@ -118,7 +115,6 @@ function createLifecycleContext(
       dispose: vi.fn(),
     } as unknown as AgentLaunchContext['modelHandler'],
     disposeTrace: vi.fn(),
-    session,
   };
 }
 
