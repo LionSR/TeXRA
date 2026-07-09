@@ -267,6 +267,7 @@ export class DesktopProgressBridge {
       },
       hasTarget: () => true,
       getStreamControls: getProgressStreamControls,
+      deleteStream: (stream) => this.deleteStream(stream),
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
       configureUi: ({ webviewUpdater }) => {

@@ -131,8 +131,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     context.subscriptions.push({ dispose: unsubscribeGoal });
   }
 
-  public removeStreamFromHost(streamId: StreamTabId): void {
-    void this.streamLifecycleController.deleteStream(streamId);
+  public removeStreamFromHost(streamId: StreamTabId): Promise<void> {
+    return this.streamLifecycleController.deleteStream(streamId);
   }
 
   /**
