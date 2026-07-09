@@ -2,10 +2,6 @@ import pRetry, { AbortError } from 'p-retry';
 
 import * as logger from '@logger/logUtils';
 
-export type NonIterableObject = Partial<Record<string, unknown>> & {
-  [Symbol.iterator]?: never;
-};
-
 /** Flow transition action - typically 'default' or a custom action name */
 export type Action = string;
 
