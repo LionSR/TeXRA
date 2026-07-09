@@ -1,7 +1,10 @@
 import { Mutex } from 'async-mutex';
 
 import { platform, tryWorkspaceState } from '@platform/platform';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextSession,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import {
   defaultSession,
   type SessionHandle,
@@ -13,7 +16,6 @@ import {
   type Goal,
   type GoalStatus,
 } from '@shared/schemas/goal';
-import { getRunContextSession } from '@tools/contextHelpers';
 import { filterNotNull, unique, hexId12 } from '@utils/core';
 
 const STREAM_KEY_PREFIX = 'goals:byStream:';

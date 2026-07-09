@@ -2,11 +2,13 @@
 import * as path from 'node:path';
 
 // Local imports - runtime
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextWorkingDirectory,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 
 // Local imports - tools
 import { ToolError } from '@shared/schemas/toolResult';
-import { getRunContextWorkingDirectory } from '@tools/contextHelpers';
 
 // Local imports - core utilities
 import { WorkspaceFS } from '@utils/files';
