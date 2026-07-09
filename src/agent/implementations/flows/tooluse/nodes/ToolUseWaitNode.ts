@@ -55,7 +55,8 @@ export class ToolUseWaitNode<C> extends Node<
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
     const { checkInterruption, session, streamStatus, isSubagent } =
       this.services;
-    const { streamId, runtimeHost } = useLaunchRunContext();
+    const { runScope } = useLaunchRunContext();
+    const { streamId, runtimeHost } = runScope;
 
     if (checkInterruption()) {
       return { kind: 'stop' };
@@ -157,7 +158,8 @@ export class ToolUseWaitNode<C> extends Node<
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
     const { onFollowUpConsumed, logger, streamStatus } = this.services;
-    const { streamId, runtimeHost } = useLaunchRunContext();
+    const { runScope } = useLaunchRunContext();
+    const { streamId, runtimeHost } = runScope;
 
     if (execRes.kind === 'waiting') {
       return FlowTransition.WAITING;

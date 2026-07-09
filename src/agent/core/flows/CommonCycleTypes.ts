@@ -100,7 +100,8 @@ export async function saveCycleDebug(
   services: AgentCore,
   fileOptions: CycleDebugFileOptions,
 ): Promise<void> {
-  const { executionId } = useLaunchRunContext();
+  const { runScope } = useLaunchRunContext();
+  const { executionId } = runScope;
   await maybeSaveDebugObject({
     object,
     objectType,
@@ -117,7 +118,8 @@ export async function saveCycleDebug(
 export function defaultPostCompactionContext(
   services: WorkspaceScopedCore,
 ): string | null {
-  const { session, streamId } = useLaunchRunContext();
+  const { runScope } = useLaunchRunContext();
+  const { session, streamId } = runScope;
   const { subagents, processes } =
     session.executions.getActiveChildren(streamId);
   return formatPostCompactionContext(
