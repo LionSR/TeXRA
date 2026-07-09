@@ -32,6 +32,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import {
   createRecordingHost,
   sessionWithInteractions,
@@ -141,6 +142,16 @@ function createModelInvocationNode(input: {
 }
 
 describe('RetryState', () => {
+  it('falls back to the canonical coreSettings default when texra.model.retry.maxAttempts is unset', () => {
+    const node = new ExposedRetryNode();
+
+    // Node.maxRetries counts the initial attempt plus auto-retries, so an
+    // unset config value should resolve to 1 + the coreSettings default.
+    expect(node.maxRetries).toBe(
+      1 + DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+    );
+  });
+
   it('treats user aborts as cancellations instead of failed invocations', () => {
     const node = new ExposedRetryNode();
     const abort = new DOMException('Request aborted', 'AbortError');
