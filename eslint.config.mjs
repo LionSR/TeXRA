@@ -90,6 +90,48 @@ const VSCODE_FREE_ZONE_DIRS = [
   'packages/extension/src/settingsView/frontend',
 ].map((dir) => path.join(__dirname, dir));
 
+const HOST_LAYER_RESTRICTED_IMPORT_PATHS = [
+  {
+    name: '@common/state',
+    message:
+      'Production src code must not import host-owned state helpers; route host access through platform or host adapters.',
+  },
+  {
+    name: '@common/webview',
+    message:
+      'Production src code must not import host-owned webview helpers; route host access through platform or host adapters.',
+  },
+];
+
+const HOST_LAYER_RESTRICTED_IMPORT_PATTERNS = [
+  {
+    group: [
+      '@webview/**',
+      '@commands/**',
+      '@progressView/**',
+      '@settingsView/**',
+      '@frontend/**',
+      '@extensionSchemas/**',
+      '@resources/**',
+      '@common/state/**',
+      '@common/webview/**',
+      '@cli/**',
+      '@desktop/**',
+    ],
+    message:
+      'Production src code must not import extension, CLI, or desktop host layers; route host access through platform or host adapters.',
+  },
+];
+
+const AGENT_CORE_RESTRICTED_IMPORT_PATTERNS = [
+  {
+    group: ['@agent/modelHandlers', '@agent/modelHandlers/**'],
+    message:
+      'Agent core must not import model handler implementations; move provider-neutral contracts to @agent/types or a core helper.',
+  },
+  ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
+];
+
 function isUnderDir(filename, dir) {
   const relativePath = path.relative(dir, filename);
   return (
@@ -492,37 +534,8 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: [
-            {
-              name: '@common/state',
-              message:
-                'Production src code must not import host-owned state helpers; route host access through platform or host adapters.',
-            },
-            {
-              name: '@common/webview',
-              message:
-                'Production src code must not import host-owned webview helpers; route host access through platform or host adapters.',
-            },
-          ],
-          patterns: [
-            {
-              group: [
-                '@webview/**',
-                '@commands/**',
-                '@progressView/**',
-                '@settingsView/**',
-                '@frontend/**',
-                '@extensionSchemas/**',
-                '@resources/**',
-                '@common/state/**',
-                '@common/webview/**',
-                '@cli/**',
-                '@desktop/**',
-              ],
-              message:
-                'Production src code must not import extension, CLI, or desktop host layers; route host access through platform or host adapters.',
-            },
-          ],
+          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
+          patterns: HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
         },
       ],
     },
@@ -536,13 +549,8 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          patterns: [
-            {
-              group: ['@agent/modelHandlers', '@agent/modelHandlers/**'],
-              message:
-                'Agent core must not import model handler implementations; move provider-neutral contracts to @agent/types or a core helper.',
-            },
-          ],
+          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
+          patterns: AGENT_CORE_RESTRICTED_IMPORT_PATTERNS,
         },
       ],
     },
