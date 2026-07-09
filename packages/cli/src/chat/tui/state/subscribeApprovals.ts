@@ -155,7 +155,11 @@ export function createTuiHostInteractions(
         request.streamId
       ) {
         setToolEditApprovalSessionBypass(request.streamId, true, host);
-        setTuiApprovalBypassState(request.streamId, 'toolEdit', true);
+        setTuiApprovalBypassState({
+          streamId: request.streamId,
+          kind: 'toolEdit',
+          bypassActive: true,
+        });
       }
       return decision.accepted
         ? { accepted: true, appliedContent: request.proposedContent }
@@ -238,6 +242,7 @@ export function createTuiHostInteractions(
     openExternalInquiry(request) {
       return openExternalInquiryInteraction(request, context);
     },
+    setApprovalBypassState: setTuiApprovalBypassState,
     resolve: () => false,
     cancel(selector: HostInteractionCancelSelector = {}) {
       // Retry routes live outside the modal queue (the pre-queue auto-switch
@@ -450,7 +455,11 @@ async function requestBashInteraction(
   const decision = await decideWithPolicy(context, 'bash', payload);
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true, host);
-    setTuiApprovalBypassState(request.streamId, 'bash', true);
+    setTuiApprovalBypassState({
+      streamId: request.streamId,
+      kind: 'bash',
+      bypassActive: true,
+    });
   }
   return {
     accepted: decision.accepted,
@@ -481,7 +490,11 @@ async function requestProposalInteraction(
     request.streamId
   ) {
     proposalApprovalState.setBypass(request.streamId, true, host);
-    setTuiApprovalBypassState(request.streamId, 'superYolo', true);
+    setTuiApprovalBypassState({
+      streamId: request.streamId,
+      kind: 'superYolo',
+      bypassActive: true,
+    });
   }
   const feedback = feedbackOnReject(decision);
   return decision.accepted
@@ -603,11 +616,15 @@ function markIfRejected(context: CliContext, decision: ApprovalDecision): void {
   if (!decision.accepted) markApprovalDenied(context);
 }
 
-function setTuiApprovalBypassState(
-  streamId: string,
-  kind: ApprovalBypassKind,
-  bypassActive: boolean,
-): void {
+function setTuiApprovalBypassState({
+  streamId,
+  kind,
+  bypassActive,
+}: {
+  readonly streamId: string;
+  readonly kind: ApprovalBypassKind;
+  readonly bypassActive: boolean;
+}): void {
   patchStream(streamId, (s) => ({
     ...s,
     bypass: { ...s.bypass, [kind]: bypassActive },
