@@ -104,10 +104,10 @@ import {
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
 import {
-  createDesktopProgressEventBridge,
+  createDesktopSessionProgressBridge,
   type DesktopPresentationPayloads,
-  type DesktopProgressEventBridge,
-} from './desktopProgressEventBridge.js';
+  type DesktopSessionProgressBridge,
+} from './desktopSessionProgressBridge.js';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 type DesktopUnavailableTool =
@@ -216,11 +216,11 @@ export class DesktopProgressBridge {
   private readonly toolEditApprovals: DesktopToolEditApprovalController;
   private readonly fileActions: DesktopProgressFileActions;
   /**
-   * Extracted progress-event bridge that owns ghost-stream hydration,
-   * stream-snapshot persistence, restored-display sending, and
-   * progress-event → rail-update translation.  See #6329.
+   * Extracted session-progress bridge that owns ghost-stream hydration,
+   * stream-snapshot persistence, restored-display sending, session/run facts,
+   * and window-local presentation requests.  See #6329.
    */
-  private readonly progressEvents: DesktopProgressEventBridge;
+  private readonly sessionProgress: DesktopSessionProgressBridge;
   private readonly restartRepair: Promise<void>;
 
   readonly runtimeHost: AgentRuntimeHost;
@@ -302,10 +302,10 @@ export class DesktopProgressBridge {
     });
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
-    // Compose the extracted progress-event bridge for ghost-stream hydration,
-    // stream-snapshot persistence, restored-display sending, and progress-event
-    // → rail-update translation.  See #6329.
-    this.progressEvents = createDesktopProgressEventBridge({
+    // Compose the extracted session-progress bridge for ghost-stream hydration,
+    // stream-snapshot persistence, restored-display sending, session/run facts,
+    // and window-local presentation requests.  See #6329.
+    this.sessionProgress = createDesktopSessionProgressBridge({
       state: this.state,
       streamStatus: this.session.status,
       streamSnapshotStore: options.streamSnapshotStore,
@@ -326,11 +326,11 @@ export class DesktopProgressBridge {
     });
     const backendSubscription = this.backend.setupEventListeners();
     const detachSessionProgressFacts = this.session.events.subscribe(
-      (event) => this.progressEvents.onSessionEvent(event),
+      (event) => this.sessionProgress.handleSessionEvent(event),
       { scope: 'session' },
     );
     const detachRunProgressFacts = this.session.events.subscribe(
-      (event) => this.progressEvents.onSessionEvent(event),
+      (event) => this.sessionProgress.handleSessionEvent(event),
       { scope: 'run', types: ['run.config', 'status'] },
     );
     this.restartRepair = this.repairOrphanedStreamsAfterRestart();
@@ -349,7 +349,7 @@ export class DesktopProgressBridge {
       detachRunProgressFacts();
       detachSessionProgressFacts();
       backendSubscription.dispose();
-      this.progressEvents.dispose();
+      this.sessionProgress.dispose();
       unsubscribeResult();
     };
     // Present terminal-error toasts from this window's run results (the run
@@ -716,7 +716,7 @@ export class DesktopProgressBridge {
     for (const handler of Object.values(this.approvalHandlers)) {
       handler.clear();
     }
-    // Ghost-stream state is owned by the extracted progressEvents bridge;
+    // Ghost-stream state is owned by the extracted sessionProgress bridge;
     // onAllStreamsDeleted handles clearing it.
   }
 
@@ -736,7 +736,7 @@ export class DesktopProgressBridge {
     ExecutionId
   > {
     const executionIds = new Map(this.state.snapshots.getExecutionIdMap());
-    for (const [streamId, snapshot] of this.progressEvents.restoredStreams) {
+    for (const [streamId, snapshot] of this.sessionProgress.restoredStreams) {
       if (snapshot.executionId && !executionIds.has(streamId)) {
         executionIds.set(streamId, snapshot.executionId);
       }
@@ -750,7 +750,7 @@ export class DesktopProgressBridge {
   } {
     const activeExecutionIds = new Set(getAllActiveExecutionIds());
     const allExecutionIds = this.getRestartRepairExecutionIdMap();
-    this.progressEvents.forgetActiveRestoredStreams(
+    this.sessionProgress.forgetActiveRestoredStreams(
       activeExecutionIds,
       allExecutionIds,
     );
@@ -797,7 +797,7 @@ export class DesktopProgressBridge {
         repairStreams.add(streamId);
       }
     }
-    for (const [streamId, snapshot] of this.progressEvents.restoredStreams) {
+    for (const [streamId, snapshot] of this.sessionProgress.restoredStreams) {
       const executionId = snapshot.executionId ?? allExecutionIds.get(streamId);
       if (executionId && activeExecutionIds.has(executionId)) {
         continue;
@@ -833,7 +833,7 @@ export class DesktopProgressBridge {
   private async repairOrphanedStreamsAfterRestart(): Promise<void> {
     try {
       await this.state.streamLogs.load();
-      this.progressEvents.hydrateRestoredStreams();
+      this.sessionProgress.hydrateRestoredStreams();
       const { activeExecutionIds, allExecutionIds } =
         this.refreshActiveExecutionIds();
       const executionIdMap = new Map(
@@ -875,7 +875,7 @@ export class DesktopProgressBridge {
         repairResult.failedStreams.length > 0 ||
         repairResult.closedWaitingGroups.length > 0 ||
         repairResult.closedFailedGroups.length > 0 ||
-        this.progressEvents.restoredStreams.size > 0
+        this.sessionProgress.restoredStreams.size > 0
       ) {
         this.syncFullView();
       }
@@ -886,7 +886,7 @@ export class DesktopProgressBridge {
           waitingStreams.add(streamId);
         }
       }
-      this.progressEvents.hydrateRestoredStreams();
+      this.sessionProgress.hydrateRestoredStreams();
       const { activeExecutionIds, allExecutionIds } =
         this.refreshActiveExecutionIds();
       let repairExecutionIds = allExecutionIds;
@@ -957,7 +957,7 @@ export class DesktopProgressBridge {
       }
       try {
         const fallbackRepairStreams = new Set([
-          ...this.progressEvents.restoredStreams.keys(),
+          ...this.sessionProgress.restoredStreams.keys(),
           ...waitingStreams,
         ]);
         const repairResult = await repairRestartedStreams({
@@ -1019,13 +1019,13 @@ export class DesktopProgressBridge {
 
     switch (event) {
       case 'requestEnsureProgressView':
-        this.progressEvents.onProgressEvent(
+        this.sessionProgress.handlePresentationEvent(
           event,
           payload as DesktopPresentationPayloads[typeof event],
         );
         return;
       case 'requestShowError':
-        this.progressEvents.onProgressEvent(
+        this.sessionProgress.handlePresentationEvent(
           event,
           payload as DesktopPresentationPayloads[typeof event],
         );
@@ -1068,12 +1068,12 @@ export class DesktopProgressBridge {
   async deleteStream(streamId: StreamTabId): Promise<void> {
     if (
       !this.streamLogs.has(streamId) &&
-      !this.progressEvents.hasRestoredStream(streamId)
+      !this.sessionProgress.hasRestoredStream(streamId)
     ) {
       return;
     }
     this.deletedStreams.add(streamId);
-    this.progressEvents.onStreamDeleted(streamId);
+    this.sessionProgress.onStreamDeleted(streamId);
 
     // Releases approval state (pending approvals, bypass flags, pending
     // requests) and the follow-up queue for this stream.
@@ -1093,7 +1093,7 @@ export class DesktopProgressBridge {
   async deleteAllStreams(): Promise<void> {
     const streamIds = new Set<StreamTabId>([
       ...this.streamLogs.keys(),
-      ...this.progressEvents.restoredStreams.keys(),
+      ...this.sessionProgress.restoredStreams.keys(),
     ]);
     // Approval cleanup (incl. retry/proposal/plan pending state) is scoped
     // to THIS window's streams via the per-stream helper, NOT the process-wide
@@ -1118,7 +1118,7 @@ export class DesktopProgressBridge {
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
     // ghosts come back zombie-style after relaunch.
-    await this.progressEvents.onAllStreamsDeleted();
+    await this.sessionProgress.onAllStreamsDeleted();
 
     await this.state.clearAll();
     this.clearDesktopSessionMaps();
@@ -1138,7 +1138,7 @@ export class DesktopProgressBridge {
       this.backend.factApplier.syncStreamContent(streamId, {
         includeActiveState: true,
       });
-      this.progressEvents.sendRestoredDisplay(streamId);
+      this.sessionProgress.sendRestoredDisplay(streamId);
     });
   }
 
