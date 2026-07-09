@@ -144,6 +144,9 @@ type DesktopExecution = {
 type RunExecutionRequest = (
   request: unknown,
   options: {
+    runtimeHost: {
+      emit(event: string, payload: unknown): void;
+    };
     openWorkflowOutput(result: {
       outcome: RunOutcome;
       outputs: Array<{ absolutePath: string }>;
@@ -175,7 +178,10 @@ interface DesktopAgentExecutionModule {
     postToRenderer(message: unknown): void;
     opener?: {
       openPath(filePath: string): Promise<void>;
-      openBuildDisplay?(location: { absolutePath: string }): Promise<void>;
+      openBuildDisplay?(
+        location: { absolutePath: string },
+        options?: { preserveFocus?: boolean },
+      ): Promise<void>;
     };
     showErrorMessage?: (message: string) => Promise<void> | void;
     onRunCompleted?: () => void;
@@ -440,7 +446,10 @@ async function createExecution(options: {
   postToRenderer?: (message: unknown) => void;
   opener?: {
     openPath(filePath: string): Promise<void>;
-    openBuildDisplay?(location: { absolutePath: string }): Promise<void>;
+    openBuildDisplay?(
+      location: { absolutePath: string },
+      options?: { preserveFocus?: boolean },
+    ): Promise<void>;
   };
   showErrorMessage?: (message: string) => Promise<void> | void;
   prepareMainViewExecutionRequest: (message: unknown) => unknown;
@@ -2674,6 +2683,47 @@ describe('DesktopProgressBridge', () => {
 
     try {
       await execution.handleExecute({ command: 'execute' });
+      expect(opener.openPath).not.toHaveBeenCalled();
+    } finally {
+      execution.dispose();
+    }
+  });
+
+  it('opens runtime requestOpenFile events through the desktop preview host', async () => {
+    const opener = {
+      openPath: vi.fn(async (_filePath: string) => {}),
+      openBuildDisplay: vi.fn(
+        async (
+          _location: { absolutePath: string },
+          _options?: { preserveFocus?: boolean },
+        ) => {},
+      ),
+    };
+    const runAgent = vi.fn(async (_request, options) => {
+      options.runtimeHost.emit('requestOpenFile', {
+        location: { absolutePath: '/tmp/result.pdf' },
+        preserveFocus: true,
+      });
+    });
+    const execution = await createExecution({
+      opener,
+      runAgent,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: true,
+        request: {
+          agentName: 'default',
+          filePath: 'main.tex',
+          prompt: 'run',
+        },
+      })),
+    });
+
+    try {
+      await execution.handleExecute({ command: 'execute' });
+      expect(opener.openBuildDisplay).toHaveBeenCalledWith(
+        { absolutePath: '/tmp/result.pdf' },
+        { preserveFocus: true },
+      );
       expect(opener.openPath).not.toHaveBeenCalled();
     } finally {
       execution.dispose();

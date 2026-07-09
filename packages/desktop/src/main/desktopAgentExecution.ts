@@ -1020,6 +1020,12 @@ export class DesktopProgressBridge {
     if (!isRuntimePresentationEvent(event)) return;
 
     switch (event) {
+      case 'requestOpenFile': {
+        const { location, preserveFocus } =
+          payload as DesktopPresentationPayloads[typeof event];
+        void this.options.openBuildDisplay?.(location, { preserveFocus });
+        return;
+      }
       case 'requestEnsureProgressView':
         this.sessionProgress.handlePresentationEvent(
           event,
