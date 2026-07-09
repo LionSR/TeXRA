@@ -1,3 +1,6 @@
+// Local imports - transcript
+import { canUseStreamDataDir } from '@transcript/streamDataPaths';
+
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
 
@@ -39,6 +42,8 @@ export class ProgressStreamLifecycleController {
   }
 
   async deleteStream(stream: StreamTabId): Promise<void> {
+    if (!canUseStreamDataDir(stream)) return;
+
     const hasStream =
       this.deps.state.hasStream(stream) || this.deps.state.hasTaskState(stream);
     if (!hasStream) {
