@@ -17,6 +17,7 @@ import type {
   AgentEvent,
   ContextStateData,
   LogEvent,
+  ResponseFinalizedEvent,
   StreamKind,
   TokenUsageStats,
   ToolStatus,
@@ -180,6 +181,13 @@ export interface AgentTrace {
     options?: StagedEmitOptions,
   ): void;
   domain(input: DomainEventInput): void;
+  /**
+   * Authoritative final assistant text for the round that just ended the
+   * turn (see {@link ResponseFinalizedEvent}). Call once, at the flow
+   * boundary where the final text is decided, for both a mid-run turn
+   * boundary and the terminal round.
+   */
+  responseFinalized(text: string, options?: StagedEmitOptions): void;
 
   // ─── Stage + stream handles ─────────────────────────────────────────
   openStage(label: string, options?: StageOptions): StageHandle;
