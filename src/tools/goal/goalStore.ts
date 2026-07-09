@@ -44,8 +44,8 @@ function emitGoalStateChanged(
   streamId: StreamTabId,
   session?: SessionHandle,
 ): void {
-  // Preserve emitRuntimeEvent's compatibility rule while deleting the bus
-  // dependency: older direct-node tests may carry a partial run session.
+  // Preserve the old fallback rule while deleting the bus dependency:
+  // older direct-node tests may carry a partial run session.
   const owner = session ?? tryUseRunContext()?.session;
   const target = owner?.events ? owner : defaultSession();
   target.events.emit({
