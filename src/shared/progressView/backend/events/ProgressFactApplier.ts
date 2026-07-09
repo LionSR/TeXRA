@@ -1,4 +1,3 @@
-
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
