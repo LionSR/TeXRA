@@ -12,7 +12,7 @@ import {
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { normalizeFilePath } from '@shared/utils/path';
+import { normalizeFilePath } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 
 import type {

@@ -15,9 +15,9 @@ import type {
   DocumentFileType,
   FileSelectConfig,
 } from '@shared/schemas';
-import { getBasename, normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import { getBasename, normalizeFilePath } from '@utils/core';
 import { capitalize } from '@utils/text/stringUtils';
 import { MainViewEvents } from '../events';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
