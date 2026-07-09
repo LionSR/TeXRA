@@ -45,6 +45,8 @@
     "build:safe": "npm run typecheck && npm run build:fast",
     "sync:package-contributes": "npm run compile:tsc-out && node scripts/sync-package-contributes.mjs",
     "check:package-contributes": "npm run compile:tsc-out && node scripts/sync-package-contributes.mjs --check",
+    "sync:tsconfig-paths": "node scripts/sync-tsconfig-paths.mjs",
+    "check:tsconfig-paths": "node scripts/sync-tsconfig-paths.mjs --check",
     "sync:extension-package-invariants": "node scripts/verify-extension-package-invariants.mjs --update",
     "check:extension-package-invariants": "node scripts/verify-extension-package-invariants.mjs",
     "check:vsix-contents": "node scripts/verify-vsix-contents.mjs",
