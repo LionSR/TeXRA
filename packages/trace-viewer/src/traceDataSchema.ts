@@ -46,6 +46,7 @@ const TraceAgentConfigSchema = NullableFileFieldsSchema.extend({
   agentSource: AgentSourceSchema.nullish(),
   model: z.string(),
   instruction: z.string(),
+  rootUserInstruction: z.string().nullish(),
   displayInstruction: z.string().nullish(),
   agentCategory: AgentCategorySchema,
   editedFiles: z.array(z.string()),

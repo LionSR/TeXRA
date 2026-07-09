@@ -73,6 +73,10 @@ export class ToolUseCycleNode<C> extends Node<
       roundIndex: prepRes.runState.totalRounds,
       roundResponseTimeMs: 0,
       systemPrompt: prepRes.systemPrompt,
+      currentUserInstruction:
+        typeof prepRes.userChannels.transient.INSTRUCTION === 'string'
+          ? prepRes.userChannels.transient.INSTRUCTION
+          : undefined,
     };
 
     const flow = createToolUseRoundFlow<C>();
@@ -136,6 +140,10 @@ export class ToolUseCycleNode<C> extends Node<
       }
       return { outcome: 'completed', messages: roundShared.messages };
     } finally {
+      if (roundShared.currentUserInstruction !== undefined) {
+        prepRes.userChannels.transient.INSTRUCTION =
+          roundShared.currentUserInstruction;
+      }
       prepRes.workspaceState.workPlan.clearOnUpdate();
       // Drain in-flight persist writes before returning so they don't
       // race with the projection's writeTodos after this node completes.
