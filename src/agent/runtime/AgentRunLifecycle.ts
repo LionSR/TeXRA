@@ -196,12 +196,13 @@ export async function finalizeRunTerminal(
 }
 
 function transitionRunStart(ctx: AgentLaunchContext): void {
+  const { streamId } = ctx.runScope;
   const options = {
     trace: ctx.logger,
   };
   if (
     ctx.streamStatus.transition(
-      ctx.streamId,
+      streamId,
       STREAM_PHASE.RUNNING,
       'lifecycle',
       options,
@@ -210,7 +211,7 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
     return;
   }
   const resumed = ctx.streamStatus.transition(
-    ctx.streamId,
+    streamId,
     STREAM_PHASE.RUNNING,
     'resume',
     options,
@@ -218,31 +219,32 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
   if (resumed) {
     return;
   }
-  if (ctx.streamStatus.get(ctx.streamId) === STREAM_PHASE.RUNNING) {
+  if (ctx.streamStatus.get(streamId) === STREAM_PHASE.RUNNING) {
     return;
   }
   logger.warn('Failed to transition run to RUNNING', {
     data: {
       agentIdentifier: ctx.config.agent,
-      streamId: ctx.streamId,
+      streamId,
     },
   });
 }
 
 function emitRunStart(ctx: AgentLaunchContext): void {
+  const { streamId, executionId } = ctx.runScope;
   // Launch construction receives already-normalized AgentConfig; descriptor
   // parse failures here indicate an internal run-contract violation.
   const descriptor = buildRunDescriptor({
-    streamId: ctx.streamId,
-    executionId: ctx.executionId,
+    streamId,
+    executionId,
     agent: ctx.config.agent,
     category: ctx.setting.agentCategory,
   });
   ctx.logger.emit({ type: 'run.start', descriptor });
   ctx.logger.emit({
     type: 'run.config',
-    streamId: ctx.streamId,
-    executionId: ctx.executionId,
+    streamId,
+    executionId,
     config: ctx.config,
   });
 }
@@ -261,7 +263,7 @@ export async function runFlowWithLifecycle(
   runner: (handle: AgentExecutionHandle) => Promise<AgentRuntimeFlowResult>,
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentRuntimeFlowResult> {
-  const { streamId, session } = ctx;
+  const { streamId, executionId, runtimeHost, session } = ctx.runScope;
   const agentIdentifier = ctx.config.agent;
   const category =
     ctx.setting.agentCategory === AgentCategory.ToolUse
@@ -269,12 +271,12 @@ export async function runFlowWithLifecycle(
       : 'workflow';
   const parentStreamId = options?.parentStreamId ?? streamId;
   const handle = new AgentExecutionHandle(
-    ctx.executionId,
+    executionId,
     parentStreamId,
     streamId,
     agentIdentifier,
     category,
-    ctx.runtimeHost,
+    runtimeHost,
     ctx.logger,
   );
   session.executions.track(handle);
@@ -332,15 +334,15 @@ export async function runFlowWithLifecycle(
       // no-oping — see AgentRunLifecycle/ExecutionRegistry issue #7287.
       const parentStageId = ctx.parentStage.id;
       handle.registerWaitingCleanup(() => {
-        ctx.session.followUps.release(streamId);
+        session.followUps.release(streamId);
         // Best-effort: this deletes the persisted flow-record for a run that
         // is already being torn down and has no caller left awaiting this
         // closure (it only fires from a later kill, well after the original
         // request context is gone) — a failed delete just leaves a stale
         // record on disk, not a correctness gap, so there is nothing useful
         // to propagate an error to.
-        void getExecutionStore(ctx.executionId)
-          .delete(flowKey(ctx.executionId))
+        void getExecutionStore(executionId)
+          .delete(flowKey(executionId))
           .catch(() => {});
         // Close this turn's "Run: ..." transcript group so a killed suspended
         // subagent doesn't leave it stuck at `running` forever (every other
@@ -360,7 +362,7 @@ export async function runFlowWithLifecycle(
         // `beginRunStage` call, including on resume), so this can never
         // double-close a stage some other turn already ended.
         if (parentStageId) {
-          ctx.session.transcripts.update(streamId, parentStageId, {
+          session.transcripts.update(streamId, parentStageId, {
             type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
             data: {
               status: legacyEndGroupStatusForOutcome(RUN_OUTCOME.CANCELLED),
@@ -448,7 +450,7 @@ export async function runFlowWithLifecycle(
         buildTerminalFlowResult(
           category,
           outcome,
-          ctx.executionId,
+          executionId,
           streamId,
           ctx.attachedMemoryMisses,
         ))
@@ -475,7 +477,7 @@ export async function runFlowWithLifecycle(
       return buildTerminalFlowResult(
         category,
         outcome,
-        ctx.executionId,
+        executionId,
         streamId,
         ctx.attachedMemoryMisses,
       );
