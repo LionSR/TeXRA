@@ -70,14 +70,14 @@ this pass.**
 ## Applied this pass — none (and why that is correct)
 
 **No code cleanup was applied this pass.** Every prior checkpoint applied one
-*unattended-safe* cleanup only because a clean dead-code deletion or type-only,
+_unattended-safe_ cleanup only because a clean dead-code deletion or type-only,
 zero-external-effect rename happened to be available (07-08:
 `CycleServices → WorkspaceScopedCore` private-alias rename; 07-06:
 `markdownFences.ts` dead-wrapper deletion; 07-05: `ModelFactory.ts` dead
 re-export). **This pass, the single pure-deletion candidate the fan-out produced
 turned out to be a false positive** (see below), and everything else is
-already-adjudicated reviewed-train — which the discipline says *record, don't
-sweep unattended*. Forcing a cleanup where none is unattended-safe would violate
+already-adjudicated reviewed-train — which the discipline says _record, don't
+sweep unattended_. Forcing a cleanup where none is unattended-safe would violate
 that discipline, so nothing was changed.
 
 ### False positive caught this pass — `textConnection.ts` "dead code" is live in `packages/**`
@@ -118,7 +118,7 @@ point, or a deliberate maintainer decision. Record, don't sweep.
    `createResponseCycleFlow<MyContext>()` as intended usage — the generic is a
    designed-in extension seam, not accidental. Stripping it is a mechanical,
    behavior-preserving 12-file readability win **but** removes a documented
-   extension point; leans *keep-or-defer*, and either way is a signature sweep
+   extension point; leans _keep-or-defer_, and either way is a signature sweep
    across 12 files, not an unattended-safe move.
 
 2. **`SdkToolCall` is a 6-variant clone union** _(LOW; DRY)_.
@@ -165,9 +165,9 @@ point, or a deliberate maintainer decision. Record, don't sweep.
    accuracy nuance, not a removal)_. The model-handler reader correctly notes
    that `types/IModelHandler.ts`'s doc claim that it "can never drift from the
    base class" is **overstated**: the `Pick<ModelHandler, ...>` member list is a
-   hand-written string union, so *adding* a public method to `ModelHandler` does
-   **not** auto-surface it here. What cannot drift is member *types* (a renamed
-   base member breaks the `Pick`); what is manual is the exposed *set*. This
+   hand-written string union, so _adding_ a public method to `ModelHandler` does
+   **not** auto-surface it here. What cannot drift is member _types_ (a renamed
+   base member breaks the `Pick`); what is manual is the exposed _set_. This
    **refines, does not overturn**, the standing "remove `IModelHandler`" trap
    ruling (removal still breaks a real import cycle — keep the port). Suggested:
    soften the doc comment to say "member types cannot drift; the exposed set is
@@ -178,29 +178,29 @@ point, or a deliberate maintainer decision. Record, don't sweep.
 The fan-out independently re-derived the following; each is already recorded and
 adjudicated. Rulings held, no new action.
 
-| Re-derived this pass | Already tracked at | Standing disposition |
-| --- | --- | --- |
-| Extract `getApiKey` rule-table / credential+tier policy out of the adapter base into a `CredentialResolver` (symmetry with `ProxyConfigResolver`) | audit `:2546-2547`, `:2928`; checkpoints `-06-26`, `-06-30`, `-07-08` | **Reviewed-train** — placement/signature change, not blind-safe. |
-| No single `runTurn()` entry over the ~40-member `IModelHandler` port | `-07-05`, `-07-06`, `-07-08` | **Strategic** — add a thin `runTurn`/`streamTurn` façade over the primitives; keep the port internal. |
-| Narrow `createChannelTrace` to a 4-method `ChannelLogger` (drops the ~10 inert `AgentTrace` members across ~25 module singletons) | `-07-05` #7, `-07-08`; `logger-surface-cleanup` PRD | **Reviewed-train** — ~25 call sites; deliberate polymorphism tradeoff. |
-| Provider-identity combinator getters in `ModelHandler` base → capability profile table | audit §7/§8; `-07-08` | **Reviewed-train** — behavioral gates already converted; base retains the display allow-list, guarded by the `#7101 triage` rationale in-file. |
-| Per-host session choreography duplicated 3× + `AgentRuntimeHost.emit` interaction arm parallel to the typed `interactions` port → a `runSession()` façade | `-07-03` (`toolHostUi`); surface B2/B5; `-07-08` | **Strategic** — the F6 / Stage-5 / #7560 train is paying this down incrementally. |
-| `ModelHandlerGoogleGenAI` is a feature-frozen duplicate of `ModelHandlerGoogleInteractions` | README `:14`, `ModelFactory.ts:194-204` (#7097) | **Deliberate** — kept as an explicit stateless fallback for the Interactions flag; documented "not tracked for behavioral parity." Not dead weight; collapse only if the fallback is formally dropped. |
-| `OpenAIResponse` WebSocket path + dual compaction inflate the handler vs the Anthropic reference | `openai-responses-api.md`; prior handler passes | **Strategic** — WS is a gated optional transport; removal is a feature decision measured on value, not a sweep. |
+| Re-derived this pass                                                                                                                                      | Already tracked at                                                    | Standing disposition                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Extract `getApiKey` rule-table / credential+tier policy out of the adapter base into a `CredentialResolver` (symmetry with `ProxyConfigResolver`)         | audit `:2546-2547`, `:2928`; checkpoints `-06-26`, `-06-30`, `-07-08` | **Reviewed-train** — placement/signature change, not blind-safe.                                                                                                                                       |
+| No single `runTurn()` entry over the ~40-member `IModelHandler` port                                                                                      | `-07-05`, `-07-06`, `-07-08`                                          | **Strategic** — add a thin `runTurn`/`streamTurn` façade over the primitives; keep the port internal.                                                                                                  |
+| Narrow `createChannelTrace` to a 4-method `ChannelLogger` (drops the ~10 inert `AgentTrace` members across ~25 module singletons)                         | `-07-05` #7, `-07-08`; `logger-surface-cleanup` PRD                   | **Reviewed-train** — ~25 call sites; deliberate polymorphism tradeoff.                                                                                                                                 |
+| Provider-identity combinator getters in `ModelHandler` base → capability profile table                                                                    | audit §7/§8; `-07-08`                                                 | **Reviewed-train** — behavioral gates already converted; base retains the display allow-list, guarded by the `#7101 triage` rationale in-file.                                                         |
+| Per-host session choreography duplicated 3× + `AgentRuntimeHost.emit` interaction arm parallel to the typed `interactions` port → a `runSession()` façade | `-07-03` (`toolHostUi`); surface B2/B5; `-07-08`                      | **Strategic** — the F6 / Stage-5 / #7560 train is paying this down incrementally.                                                                                                                      |
+| `ModelHandlerGoogleGenAI` is a feature-frozen duplicate of `ModelHandlerGoogleInteractions`                                                               | README `:14`, `ModelFactory.ts:194-204` (#7097)                       | **Deliberate** — kept as an explicit stateless fallback for the Interactions flag; documented "not tracked for behavioral parity." Not dead weight; collapse only if the fallback is formally dropped. |
+| `OpenAIResponse` WebSocket path + dual compaction inflate the handler vs the Anthropic reference                                                          | `openai-responses-api.md`; prior handler passes                       | **Strategic** — WS is a gated optional transport; removal is a feature decision measured on value, not a sweep.                                                                                        |
 
 ## Adjudicated traps the fan-out re-surfaced — rulings held
 
 No change.
 
-| Re-surfaced candidate | Ruling |
-| --- | --- |
-| Remove `IModelHandler` as a "duplicate" of `ModelHandler` | **Trap** — `Pick<ModelHandler>` + optional `createBatchedToolUseFollowUpMessages`; removal breaks a real import cycle. (Doc-accuracy nuance recorded above, ruling unchanged.) |
-| Inline `createResponse → withCreateResponseGuard → withSdkErrorTag → createResponseImpl` | **Keep** — each hook has distinct real overriders (impl ×6, tagger ×5, guard ×2). |
-| Inline the single-caller `executeAgent` wrappers `runReflectionAgent` / `runToolUseAgent` | **Keep** — each owns category-specific wiring; inlining bloats `executeAgent`. |
+| Re-surfaced candidate                                                                                       | Ruling                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                                                   | **Trap** — `Pick<ModelHandler>` + optional `createBatchedToolUseFollowUpMessages`; removal breaks a real import cycle. (Doc-accuracy nuance recorded above, ruling unchanged.)               |
+| Inline `createResponse → withCreateResponseGuard → withSdkErrorTag → createResponseImpl`                    | **Keep** — each hook has distinct real overriders (impl ×6, tagger ×5, guard ×2).                                                                                                            |
+| Inline the single-caller `executeAgent` wrappers `runReflectionAgent` / `runToolUseAgent`                   | **Keep** — each owns category-specific wiring; inlining bloats `executeAgent`.                                                                                                               |
 | Fold the single-caller flow factories `createResponseCycleFlow` / `createToolUseRoundFlow` into their Nodes | **Keep** — this **is** the prescribed `Node.exec() → createFlow() → run()` shape (CLAUDE.md), the same shape the deleted `ResponseCycle.ts`/`ToolUseCycle.ts` wrappers were refactored into. |
-| `runAgent` / `executeAgent` dual entry is redundant | **Keep** — `runAgent` owns executionId + register + workflow-output; `executeAgent` owns the run. Two documented responsibilities. |
-| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM/DashScope) to a config table | **Trap** — each carries real per-provider overrides; only DashScope is thin, and it is enum-mandated by the exhaustive route table. |
-| Delete `bestConnectionMethodAnthropic` / the `openaiApiKey` branch in `textConnection.ts` as dead code | **False positive (new this pass)** — both are live in `packages/extension/.../connectionTests.ts`. Do not delete. |
+| `runAgent` / `executeAgent` dual entry is redundant                                                         | **Keep** — `runAgent` owns executionId + register + workflow-output; `executeAgent` owns the run. Two documented responsibilities.                                                           |
+| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM/DashScope) to a config table               | **Trap** — each carries real per-provider overrides; only DashScope is thin, and it is enum-mandated by the exhaustive route table.                                                          |
+| Delete `bestConnectionMethodAnthropic` / the `openaiApiKey` branch in `textConnection.ts` as dead code      | **False positive (new this pass)** — both are live in `packages/extension/.../connectionTests.ts`. Do not delete.                                                                            |
 
 ## Also persisting unchanged — the three 07-08 genuinely-new candidates
 
@@ -297,7 +297,8 @@ reviewed-train items unattended.
   (`platform.ts:55-73`), `RoundPersistedFlow.run` (`roundPersistedFlow.ts:144`),
   and delegation-depth-tracked-but-ungated (`delegationPolicy.ts`).
 - No source files changed this pass; no build/typecheck run required (documentation
-  only, added under `docs/proposals/`, an internal directory excluded from the
-  texra.ai publish allowlist — not a root-level doc).
+only, added under `docs/proposals/`, an internal directory excluded from the
+texra.ai publish allowlist — not a root-level doc).
 </content>
+
 </invoke>
