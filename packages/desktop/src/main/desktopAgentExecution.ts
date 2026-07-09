@@ -75,6 +75,7 @@ import {
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
   type ExecutionId,
+  type RequestOpenFilePayload,
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
@@ -617,11 +618,15 @@ export class DesktopProgressBridge {
       },
       // Mirrors the extension's PROGRESS_VIEW_COMMANDS.RESTORE_STATE handler
       // (`texra.restoreState`): look up the stream's persisted task state and
-      // route the renderer to the main view with it.
-      restoreState: (data) => {
+      // route the renderer to the main view with it. Surfaces a failure the
+      // same way the extension's `texra.restoreState` command does when
+      // `buildMainViewState` throws on malformed/incompatible persisted data.
+      restoreState: async (data) => {
         const taskState = this.state.snapshots.getTaskState(data.stream);
-        if (taskState) {
-          this.restoreTaskState(taskState);
+        if (!taskState) return;
+        const restored = this.restoreTaskState(taskState);
+        if (!restored) {
+          await this.options.showErrorMessage?.('Failed to restore state');
         }
       },
       compactResponse: unsupported(
@@ -1022,6 +1027,19 @@ export class DesktopProgressBridge {
           payload as DesktopPresentationPayloads[typeof event],
         );
         return;
+      case 'requestOpenFile': {
+        // The extension previews via its LaTeX-Workshop build+view flow
+        // (openBuildDisplayIfTex); desktop has no such editor integration,
+        // so open the resolved path through the same preview-with-fallback
+        // host `openWorkflowOutput` already uses (see runExecution above).
+        const data = payload as RequestOpenFilePayload;
+        this.options.openPath?.(data.location.absolutePath).catch((error) => {
+          this.logger.warn('Failed to open requested file on desktop', {
+            data: toLogData(error),
+          });
+        });
+        return;
+      }
       default:
         return;
     }
@@ -1062,6 +1080,25 @@ export class DesktopProgressBridge {
     this.updateStreamMetadata();
     this.backend.webviewUpdater.setActiveStream(streamId);
     this.syncStreamContent(streamId);
+  }
+
+  /**
+   * Route this window to the progress view and select the given stream.
+   * Mirrors the extension's `revealProgressStream` for the desktop Settings
+   * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
+   * run works the same way on both hosts.
+   */
+  revealStream(streamId: StreamTabId): void {
+    if (!this.streamLogs.has(streamId)) {
+      return;
+    }
+    const filter = this.state.agentCategoryFilter;
+    const category = this.state.getStreamState(streamId)?.kind;
+    if (filter !== 'all' && filter !== category) {
+      this.state.agentCategoryFilter = 'all';
+    }
+    this.routeToProgress();
+    this.setActiveStream(streamId);
   }
 
   private setAgentFilter(filter: AgentCategoryFilter): void {

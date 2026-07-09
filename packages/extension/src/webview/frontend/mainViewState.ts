@@ -166,6 +166,19 @@ export function primaryInputFile(): string {
   return multiFiles$.get().inputFiles[0] ?? '';
 }
 
+/**
+ * Whether the currently selected tool-use agent is an orchestrator. Computed
+ * once here so `refreshInstructionPlaceholder` (placeholder copy) and
+ * `InstructionPanel`'s session hint (hint copy) can't derive divergent
+ * answers to the same question.
+ */
+export const isSelectedAgentOrchestrator$ = new Signal.Computed((): boolean => {
+  if (sessionType$.get() !== SESSION_TYPES.TOOL_USE) return false;
+  const agentId = toolUseAgent$.get();
+  const opt = toolUseAgentOptions$.get().find((o) => o.value === agentId);
+  return opt?.isOrchestrator ?? false;
+});
+
 // ---------------------------------------------------------------------------
 // Context derivations consumed by MainApp's @provide/@state fields
 // ---------------------------------------------------------------------------
@@ -194,6 +207,7 @@ export const sessionContext$ = new Signal.Computed((): SessionContextValue => ({
   isRecording: isRecording$.get(),
   isPolishing: isPolishing$.get(),
   debugMode: debugMode$.get(),
+  isOrchestratorSelected: isSelectedAgentOrchestrator$.get(),
 }));
 
 /**
