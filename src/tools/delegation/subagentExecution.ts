@@ -208,7 +208,6 @@ export async function executeSubagent(
         delegationDepth: parentDelegationDepth + 1,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-        toolEditApprovalHandler: parentContext.toolEditApprovalHandler,
         stopAfterCycle: true,
         onStreamResolved: inheritChildStreamApprovals,
         onRunError: (err) => {
@@ -273,7 +272,6 @@ export async function executeSubagent(
     workingDirectory,
     approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
     runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-    toolEditApprovalHandler: parentContext.toolEditApprovalHandler,
     onStreamResolved: inheritChildStreamApprovals,
   };
 
