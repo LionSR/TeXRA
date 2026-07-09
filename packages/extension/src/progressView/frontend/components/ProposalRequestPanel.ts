@@ -39,11 +39,11 @@ import {
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 
 // Local imports - shared utilities
-import { getBasename } from '@shared/utils/path';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderWorkflowExtractFlagBadges } from '@shared/wa/extractFlagBadges';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { getBasename } from '@utils/core';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';

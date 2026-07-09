@@ -10,7 +10,7 @@ import {
   prepareFileFilters,
   type PreparedFileFilters,
 } from '@common/files/fileListingRules';
-import { normalizeFilePath } from '@shared/utils/path';
+import { normalizeFilePath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 
 /** Create VS Code exclude pattern from directory list */

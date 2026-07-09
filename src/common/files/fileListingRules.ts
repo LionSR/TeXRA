@@ -1,9 +1,5 @@
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
-import {
-  getBasename,
-  getFileStem,
-  normalizeFilePath,
-} from '@shared/utils/path';
+import { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
 
 import {
   LEGACY_AUXILIARY_KEYWORDS_KEY,
