@@ -15,12 +15,13 @@ const REPO_ROOT = resolve(
 const LEGACY_MODULE = 'src/agent/runtime/hostProgressEvents.ts';
 const OLD_AGENT_RUNTIME_MODULE =
   'src/agent/runtime/agentRuntimeProgressEvents.ts';
-const CLI_MODULE = 'packages/cli/src/runtime/cliProgressEvents.ts';
+const OLD_CLI_MODULE = 'packages/cli/src/runtime/cliProgressEvents.ts';
+const CLI_NDJSON_MODULE = 'packages/cli/src/runtime/cliNdjsonProgressEvents.ts';
 const OLD_AGENT_RUNTIME_ALIAS = '@agent/runtime/agentRuntimeProgressEvents';
-const CLI_ALIAS = '@cli/runtime/cliProgressEvents';
+const OLD_CLI_ALIAS = '@cli/runtime/cliProgressEvents';
+const CLI_NDJSON_ALIAS = '@cli/runtime/cliNdjsonProgressEvents';
 
 const ALLOWED_PRODUCTION_IMPORTERS = [
-  'packages/cli/src/runtime/runtimeHost.ts',
   'packages/cli/src/runtime/sessionProgressSubscription.ts',
 ] as const;
 
@@ -105,7 +106,8 @@ function resolveAgentAlias(specifier: string): string | null {
 }
 
 function resolveCliAlias(specifier: string): string | null {
-  if (specifier === CLI_ALIAS) return CLI_MODULE;
+  if (specifier === OLD_CLI_ALIAS) return OLD_CLI_MODULE;
+  if (specifier === CLI_NDJSON_ALIAS) return CLI_NDJSON_MODULE;
   if (!specifier.startsWith('@cli/')) return null;
   return `packages/cli/src/${specifier.slice('@cli/'.length)}`;
 }
@@ -165,11 +167,21 @@ describe('agent runtime progress-event vocabulary boundary', () => {
     expect(importers).toEqual([]);
   });
 
-  it('keeps the CLI progress vocabulary scoped to the CLI package', () => {
-    expect(existsSync(resolve(REPO_ROOT, CLI_MODULE))).toBe(true);
+  it('removes the neutral CLI progress vocabulary module', () => {
+    expect(existsSync(resolve(REPO_ROOT, OLD_CLI_MODULE))).toBe(false);
 
     const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
-      .filter((file) => importsModule(file, CLI_MODULE))
+      .filter((file) => importsModule(file, OLD_CLI_MODULE))
+      .toSorted();
+
+    expect(importers).toEqual([]);
+  });
+
+  it('keeps the CLI compatibility vocabulary NDJSON-projection only', () => {
+    expect(existsSync(resolve(REPO_ROOT, CLI_NDJSON_MODULE))).toBe(true);
+
+    const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
+      .filter((file) => importsModule(file, CLI_NDJSON_MODULE))
       .toSorted();
 
     expect(importers).toEqual([...ALLOWED_PRODUCTION_IMPORTERS].toSorted());
