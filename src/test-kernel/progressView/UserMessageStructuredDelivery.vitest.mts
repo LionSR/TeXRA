@@ -23,7 +23,7 @@ async function mount(text: string): Promise<UserMessage> {
 /**
  * Pins the DELIVERY_TAGS list (@shared/deliveryTags) to the UserMessage
  * renderer: one case per tag so a future child-run kind added there without
- * a matching render behaves is caught here, not by raw XML leaking into the
+ * a matching render is caught here, not by raw XML leaking into the
  * transcript (the claude-agent-result/error bug this suite guards against).
  */
 describe('user-message structured delivery', () => {
