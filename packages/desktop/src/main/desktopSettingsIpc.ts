@@ -15,6 +15,7 @@ import {
   type ExportInputStatus,
 } from '@controllers/settingsView/ChatExportController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
 import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
@@ -95,6 +96,7 @@ import {
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
+import { GoalStore } from '@tools/goal';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { StorageFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -161,6 +163,8 @@ export interface DesktopSettingsIpcOptions {
   selectCustomAgentDirectory?: () => Promise<string | undefined>;
   openPath?: (filePath: string) => Promise<void>;
   revealPath?: (filePath: string) => Promise<void>;
+  /** Route this window to the progress view and select the given stream. */
+  revealStream?: (streamId: string) => Promise<void>;
   openExternalUrl?: (url: string) => Promise<void>;
   /**
    * Resolved `packages/extension/resources` tree (ElectronPlatformInitResult
@@ -255,6 +259,9 @@ export function createDesktopSettingsIpc(
     (() => platform().agentDirectories.custom());
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
+  const goalController = new SettingsGoalController({
+    listGoals: () => GoalStore.list(),
+  });
   const latexToolingController = new LatexToolingController({
     checkToolInstalled: (tool) => checkToolInstalled(tool, false),
     findPath: (tool) => BinaryResolver.findPath(tool),
@@ -768,9 +775,22 @@ export function createDesktopSettingsIpc(
     );
   }
 
+  /**
+   * Deliberate divergence from the extension: no `subscribeGoalStateChanges`
+   * push hook here. The initial post below, the webview-ready re-post, and
+   * the Goals tab's manual `getList` refresh cover the desktop settings
+   * panel — goal state only changes through agent runs, and returning to
+   * (or refreshing) the panel re-reads the store, so a live push adds a
+   * subscription surface without a user-visible gain.
+   */
+  function postGoalList(): void {
+    options.postToRenderer(goalController.getGoalListMessage());
+  }
+
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     postLatexConfigValues();
+    postGoalList();
     const memoryEnabledPosted = postMemoryEnabled();
     const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
@@ -1434,10 +1454,9 @@ export function createDesktopSettingsIpc(
       ),
     },
     goals: {
-      getList: unsupported('Goals are not available in the desktop app yet.'),
-      revealStream: unsupported(
-        'Goals are not available in the desktop app yet.',
-      ),
+      getList: postGoalList,
+      revealStream: (streamId) =>
+        options.revealStream?.(streamId) ?? Promise.resolve(),
     },
     desktopCrashReporting: {
       get: () => postDesktopCrashReportingStatus(),
@@ -1468,6 +1487,7 @@ export function createDesktopSettingsIpc(
           } else {
             postGitAuthorSettings();
             postLatexConfigValues();
+            postGoalList();
           }
         }
         return false;
