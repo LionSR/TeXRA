@@ -28,6 +28,7 @@ import type { ProgressViewState } from '@shared/progressView/backend/state/Progr
 import { AgentCategory } from '@shared/schemas/agent';
 import { isGoalInFlight, type GoalStatus } from '@shared/schemas/goal';
 import { GoalStore } from '@tools/goal';
+import { assertNever } from '@utils/core';
 import { toLogData } from './desktopLogUtils.js';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
@@ -451,9 +452,14 @@ class DesktopSessionProgressBridgeImpl implements DesktopSessionProgressBridge {
       case 'goalStateChanged':
         this.handleGoalStateChanged(fact.payload.streamId);
         return;
-      default:
+      case 'inquiryThreadUpdated':
+      case 'clearMissingOutputs':
+      case 'updateQueuedFollowUps':
+      case 'followUpSent':
+      case 'removeStream':
         return;
     }
+    assertNever(fact, 'Unhandled desktop session fact');
   }
 
   private handleRunEvent(event: AgentEvent): void {

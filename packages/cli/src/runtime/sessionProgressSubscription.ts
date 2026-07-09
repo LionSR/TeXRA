@@ -7,6 +7,7 @@ import type {
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { StreamTabId } from '@shared/schemas';
+import { assertNever } from '@utils/core';
 import { writeNdjsonStdout } from './logSinks';
 import type {
   CliNdjsonProgressEvent,
@@ -67,6 +68,7 @@ function projectCliSessionFact(
     case 'removeStream':
       return { event: 'removeStream', payload: fact.payload };
   }
+  assertNever(fact, 'Unhandled CLI NDJSON session fact');
 }
 
 function projectCliRunFact(
