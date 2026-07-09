@@ -1,6 +1,9 @@
+import { z } from 'zod';
+
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
+import type { RunFactEventName } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
@@ -153,34 +156,34 @@ export class ProgressFactApplier {
       case 'goalStateChanged':
         return;
       case 'inquiryThreadUpdated':
-        this.applyFact('failed to handle inquiryThreadUpdated fact', () =>
+        this.applyNamedFact(fact.type, () =>
           this.handleInquiryThreadUpdated(fact.payload),
         );
         return;
       case 'clearMissingOutputs':
-        this.applyFact('failed to handle clearMissingOutputs fact', () =>
+        this.applyNamedFact(fact.type, () =>
           this.handleClearMissingOutputs(fact.payload),
         );
         return;
       case 'updateQueuedFollowUps':
-        this.applyFact('failed to handle updateQueuedFollowUps fact', () =>
+        this.applyNamedFact(fact.type, () =>
           this.handleUpdateQueuedFollowUps(fact.payload),
         );
         return;
       case 'followUpSent':
         return;
       case 'setActiveStream':
-        this.applyFact('failed to handle setActiveStream fact', () =>
+        this.applyNamedFact(fact.type, () =>
           this.handleSetActiveStream(fact.payload),
         );
         return;
       case 'updateStreamDescription':
-        this.applyFact('failed to handle updateStreamDescription fact', () =>
+        this.applyNamedFact(fact.type, () =>
           this.handleUpdateStreamDescription(fact.payload),
         );
         return;
       case 'updateStreamStatus':
-        this.applyFact('failed to handle updateStreamStatus fact', () =>
+        this.applyNamedFact(fact.type, () =>
           this.setStreamStatus(
             fact.payload.streamId,
             fact.payload.status,
@@ -190,7 +193,7 @@ export class ProgressFactApplier {
         );
         return;
       case 'setParentStream':
-        this.applyFact('failed to handle setParentStream fact', () =>
+        this.applyNamedFact(fact.type, () =>
           this.handleSetParentStream(fact.payload),
         );
         return;
@@ -203,7 +206,7 @@ export class ProgressFactApplier {
     if (event.type === 'usage') {
       const payload = toUpdateStreamUsagePayload(event.data, streamId);
       if (payload) {
-        this.applyFact('failed to handle usage fact', () =>
+        this.applyNamedFact(event.type, () =>
           this.handleUpdateStreamUsage(payload),
         );
       }
@@ -211,7 +214,7 @@ export class ProgressFactApplier {
     }
 
     if (event.type === 'run.config') {
-      this.applyFact('failed to handle run.config fact', () =>
+      this.applyNamedFact(event.type, () =>
         this.handleSetTaskState({
           streamId: event.streamId,
           executionId: event.executionId,
@@ -222,7 +225,7 @@ export class ProgressFactApplier {
     }
 
     if (event.type === 'status') {
-      this.applyFact('failed to handle status fact', () =>
+      this.applyNamedFact(event.type, () =>
         this.setStreamStatus(
           event.streamId,
           event.phase,
@@ -237,7 +240,7 @@ export class ProgressFactApplier {
       if (event.key === 'conversationProgress') {
         const progress = ConversationProgressSchema.safeParse(event.data);
         if (progress.success) {
-          this.applyFact('failed to handle conversationProgress fact', () =>
+          this.applyNamedFact('conversationProgress', () =>
             this.handleUpdateConversationProgress({
               streamId,
               progress: progress.data,
@@ -248,55 +251,13 @@ export class ProgressFactApplier {
       }
 
       const factName = fromRunFactDomainKey(event.key);
-      if (factName === 'updateTodos') {
-        const payload = UpdateTodosPayloadSchema.safeParse(event.data);
-        if (payload.success) {
-          this.applyFact('failed to handle updateTodos fact', () =>
-            this.handleUpdateTodos(payload.data),
-          );
-        }
-        return;
-      }
-
-      if (factName === 'updatePlan') {
-        const payload = UpdatePlanPayloadSchema.safeParse(event.data);
-        if (payload.success) {
-          this.applyFact('failed to handle updatePlan fact', () =>
-            this.handleUpdatePlan(payload.data),
-          );
-        }
-        return;
-      }
-
-      if (factName === 'addOutputFiles' && isObject(event.data)) {
-        this.applyFact('failed to handle addOutputFiles fact', () =>
-          this.handleAddOutputFiles(event.data as AddOutputFilesPayload),
-        );
-        return;
-      }
-
-      if (factName === 'updateMissingOutputs' && isObject(event.data)) {
-        this.applyFact('failed to handle updateMissingOutputs fact', () =>
-          this.handleUpdateMissingOutputs(
-            event.data as UpdateMissingOutputsPayload,
-          ),
-        );
-        return;
-      }
-
-      if (factName === 'updateCompileFailures' && isObject(event.data)) {
-        this.applyFact('failed to handle updateCompileFailures fact', () =>
-          this.handleUpdateCompileFailures(
-            event.data as UpdateCompileFailuresPayload,
-          ),
-        );
-      }
+      if (factName) this.domainFactHandlers[factName]?.(event.data);
       return;
     }
 
     if (event.type === 'stage.start') {
       if (event.kind !== 'round') return;
-      this.applyFact('failed to handle stage.start fact', () =>
+      this.applyNamedFact(event.type, () =>
         this.handleUpdateRoundStage({
           streamId,
           roundStage: {
@@ -312,7 +273,7 @@ export class ProgressFactApplier {
 
     if (event.type === 'child.activity') {
       if (event.kind === 'subagents') {
-        this.applyFact('failed to handle subagent activity fact', () =>
+        this.applyNamedFact('subagent activity', () =>
           this.updateActiveChildren(event.parentStreamId, {
             activeField: 'activeSubagents',
             countField: 'finishedSubagentCount',
@@ -322,7 +283,7 @@ export class ProgressFactApplier {
         return;
       }
       if (event.kind === 'processes') {
-        this.applyFact('failed to handle process activity fact', () =>
+        this.applyNamedFact('process activity', () =>
           this.updateActiveChildren(event.parentStreamId, {
             activeField: 'activeProcesses',
             countField: 'finishedProcessCount',
@@ -335,7 +296,7 @@ export class ProgressFactApplier {
     }
 
     if (event.type === 'process.output') {
-      this.applyFact('failed to handle process.output fact', () =>
+      this.applyNamedFact(event.type, () =>
         this.handleUpdateProcessOutput({
           parentStreamId: event.parentStreamId,
           executionId: event.executionId,
@@ -349,6 +310,68 @@ export class ProgressFactApplier {
 
   private applyFact(context: string, handle: () => void | Promise<void>): void {
     withEventErrorHandling('ProgressFacts', context, handle);
+  }
+
+  /** {@link applyFact} with the standard `failed to handle <name> fact` context. */
+  private applyNamedFact(
+    name: string,
+    handle: () => void | Promise<void>,
+  ): void {
+    this.applyFact(`failed to handle ${name} fact`, handle);
+  }
+
+  /**
+   * `domain` run facts (keyed `runFact.<name>`) dispatch through this table:
+   * one entry per handled {@link RunFactEventName}. Adding a new projected fact
+   * is a single row here. `goalPaused` is intentionally absent — the progress
+   * backend does not project it (see `runFactEvents.ts`) — so an unlisted fact
+   * is silently ignored, matching the prior if-ladder's fall-through.
+   */
+  private readonly domainFactHandlers: Partial<
+    Record<RunFactEventName, (data: unknown) => void>
+  > = {
+    updateTodos: this.domainFact('updateTodos', UpdateTodosPayloadSchema, (p) =>
+      this.handleUpdateTodos(p),
+    ),
+    updatePlan: this.domainFact('updatePlan', UpdatePlanPayloadSchema, (p) =>
+      this.handleUpdatePlan(p),
+    ),
+    addOutputFiles: this.domainFactObject<AddOutputFilesPayload>(
+      'addOutputFiles',
+      (p) => this.handleAddOutputFiles(p),
+    ),
+    updateMissingOutputs: this.domainFactObject<UpdateMissingOutputsPayload>(
+      'updateMissingOutputs',
+      (p) => this.handleUpdateMissingOutputs(p),
+    ),
+    updateCompileFailures: this.domainFactObject<UpdateCompileFailuresPayload>(
+      'updateCompileFailures',
+      (p) => this.handleUpdateCompileFailures(p),
+    ),
+  };
+
+  /** Build a domain-fact handler that Zod-validates the payload before applying. */
+  private domainFact<T>(
+    name: RunFactEventName,
+    schema: z.ZodType<T>,
+    handle: (payload: T) => void,
+  ): (data: unknown) => void {
+    return (data) => {
+      const parsed = schema.safeParse(data);
+      if (!parsed.success) return;
+      this.applyNamedFact(name, () => handle(parsed.data));
+    };
+  }
+
+  /** Build a domain-fact handler that requires an object payload (no schema). */
+  private domainFactObject<T>(
+    name: RunFactEventName,
+    handle: (payload: T) => void,
+  ): (data: unknown) => void {
+    return (data) => {
+      if (!isObject(data)) return;
+      this.applyNamedFact(name, () => handle(data as T));
+    };
   }
 
   public handleInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void {
