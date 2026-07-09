@@ -3,7 +3,6 @@ import { BaseNode } from '@agent/node';
 import { logWebFetch, logWebSearch } from '@agent/trace';
 import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import { extractModelResponse } from '@agent/core/flows/CommonCycleTypes';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { appendFollowUpAsUserMessage } from '@agent/followUp/followUpMessages';
 import type { SdkToolCall } from '@agent/types/IModelHandler';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
@@ -83,7 +82,6 @@ interface ToolUseProcessPrepResult {
 /** Processes the model response to extract tool calls and usage data. */
 export class ToolUseProcessNode<C> extends BaseNode<
   ToolUseRoundShared,
-  FlowParams,
   ToolUseRoundServices<C>
 > {
   async prep(shared: ToolUseRoundShared): Promise<ToolUseProcessPrepResult> {

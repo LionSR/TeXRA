@@ -739,12 +739,25 @@ describe('DesktopProgressBridge', () => {
       bridge.handleInteractionEvent('requestShowError', {
         message: 'Root run failed',
       });
+      bridge.handleInteractionEvent('requestShowInstruction', {
+        key: 'missingApiKey',
+        message:
+          'API key not found. Set your API key in Settings and run again.',
+        actions: ['set-api-key', 'open-configuration-guide'],
+        showSuppress: false,
+      });
 
       expect(messages).toContainEqual({
         command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
         route: 'progress',
       });
       expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
+      // Folded into the same dialog surface as requestShowError — no second
+      // subscribe surface or dialog for instructions.
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        'API key not found. Set your API key in Settings and run again.',
+      );
+      expect(showErrorMessage).toHaveBeenCalledTimes(2);
     } finally {
       bridge.dispose();
     }
@@ -3150,6 +3163,60 @@ describe('DesktopProgressBridge', () => {
           id: 'proposal-1',
         }),
       ]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it("restores a stream's task state into the main view (history 'Setup' / Progress board restore)", async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      emitRunConfigFact(bridge, {
+        streamId: 'stream-1',
+        executionId: 'ec1002' as ExecutionId,
+        taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
+      });
+      await settleProgressEvents();
+      messages.length = 0;
+
+      const handleRestoreState = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.RESTORE_STATE
+        ],
+      );
+      expect(handleRestoreState).toBeTypeOf('function');
+      await handleRestoreState({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-1',
+      });
+
+      expect(messages).toEqual([
+        { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route: 'main' },
+        expect.objectContaining({ command: COMMON_COMMANDS.STATE_RESTORE }),
+      ]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('ignores restoreState for a stream with no persisted task state', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      const handleRestoreState = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.RESTORE_STATE
+        ],
+      );
+      await handleRestoreState({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-unknown',
+      });
+
+      expect(messages).toEqual([]);
     } finally {
       bridge.dispose();
     }

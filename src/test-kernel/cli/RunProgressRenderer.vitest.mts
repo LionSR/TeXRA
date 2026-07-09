@@ -16,6 +16,7 @@ import {
   type ActiveChildInfo,
   type ConversationProgress,
   type ExecutionId,
+  type InstructionAction,
   type RoundStage,
   type StreamPhase,
   type StreamTabId,
@@ -1068,6 +1069,66 @@ describe('CLI run progress renderer', () => {
 
     expect(stderr).toContain('polish paper.tex · 0s');
     expect(stdout).toBe('');
+  });
+
+  it('prints requestShowInstruction text and a human-readable action hint to stderr in text mode', async () => {
+    const output = await captureStreamWrites(process.stderr, async () => {
+      const host = createCliRuntimeHost(context({ outputFormat: 'text' }));
+
+      host.emit('requestShowInstruction', {
+        key: 'missingApiKey',
+        message:
+          'API key not found. Set your API key in Settings and run again.',
+        actions: ['set-api-key', 'open-configuration-guide'],
+        showSuppress: false,
+      });
+
+      await host.close();
+    });
+
+    // The raw InstructionAction tokens are translated to human phrasing
+    // (mirroring the extension's INSTRUCTION_ACTION_VIEW), not printed
+    // verbatim.
+    expect(output).toContain(
+      'API key not found. Set your API key in Settings and run again. (set your API key (texra config), see the configuration guide)',
+    );
+    expect(output).not.toContain('set-api-key');
+    expect(output).not.toContain('open-configuration-guide');
+  });
+
+  it('falls back to the raw token for an unrecognized action in the instruction hint', async () => {
+    const output = await captureStreamWrites(process.stderr, async () => {
+      const host = createCliRuntimeHost(context({ outputFormat: 'text' }));
+
+      host.emit('requestShowInstruction', {
+        key: 'futureInstruction',
+        message: 'Something needs attention.',
+        actions: ['some-future-action' as InstructionAction],
+        showSuppress: false,
+      });
+
+      await host.close();
+    });
+
+    expect(output).toContain('Something needs attention. (some-future-action)');
+  });
+
+  it('does not gate requestShowInstruction behind quietLogs in text mode', async () => {
+    const output = await captureStreamWrites(process.stderr, async () => {
+      const host = createCliRuntimeHost(
+        context({ outputFormat: 'text', quietLogs: true }),
+      );
+
+      host.emit('requestShowInstruction', {
+        key: 'missingApiKey',
+        message:
+          'API key not found. Set your API key in Settings and run again.',
+      });
+
+      await host.close();
+    });
+
+    expect(output).toContain('API key not found.');
   });
 
   it('writes projected subagent progress records to stdout in ndjson mode', async () => {

@@ -14,6 +14,7 @@ import {
   type ProgressBackendInteractionPayloads,
 } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
+import { hydrateProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryHydration';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
@@ -470,23 +471,7 @@ export class DesktopProgressBridge {
       agentProposal: {
         getPendingProposal: (proposalId) =>
           this.approvalHandlers.agentProposal.get(proposalId),
-        restoreTaskState: async (taskState) => {
-          let state: MainViewPersistedState;
-          try {
-            state = buildMainViewState(taskState);
-          } catch {
-            return false;
-          }
-          this.postToRenderer({
-            command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-            route: 'main',
-          });
-          this.postToRenderer({
-            command: COMMON_COMMANDS.STATE_RESTORE,
-            state,
-          });
-          return true;
-        },
+        restoreTaskState: async (taskState) => this.restoreTaskState(taskState),
         settleProposal: (proposalId, result) => {
           const resolved = this.session.interactions.resolve(proposalId, {
             kind: 'proposal',
@@ -631,10 +616,15 @@ export class DesktopProgressBridge {
       restoreProposalConfig: async (data) => {
         await this.agentProposalController.restoreProposalConfig(data.proposal);
       },
-      // Not yet wired on desktop.
-      restoreState: unsupported(
-        'Restoring a saved run is not available in the desktop app yet.',
-      ),
+      // Mirrors the extension's PROGRESS_VIEW_COMMANDS.RESTORE_STATE handler
+      // (`texra.restoreState`): look up the stream's persisted task state and
+      // route the renderer to the main view with it.
+      restoreState: (data) => {
+        const taskState = this.state.snapshots.getTaskState(data.stream);
+        if (taskState) {
+          this.restoreTaskState(taskState);
+        }
+      },
       compactResponse: unsupported(
         'Compacting a response is not available in the desktop app yet.',
       ),
@@ -1027,6 +1017,7 @@ export class DesktopProgressBridge {
         );
         return;
       case 'requestShowError':
+      case 'requestShowInstruction':
         this.sessionProgress.handlePresentationEvent(
           event,
           payload as DesktopPresentationPayloads[typeof event],
@@ -1059,6 +1050,14 @@ export class DesktopProgressBridge {
 
   syncFullView(): void {
     this.syncStreamContent(this.updateStreamMetadata());
+  }
+
+  async hydrateProgressViewInquiries(): Promise<void> {
+    await hydrateProgressViewInquiries({
+      webviewUpdater: this.backend.webviewUpdater,
+      externalInquiry: this.approvalHandlers.externalInquiry,
+      logger: this.logger,
+    });
   }
 
   replayPendingPrompts(): void {
@@ -1421,6 +1420,31 @@ export class DesktopProgressBridge {
 
   async openFileCompile(filePath: string): Promise<void> {
     await this.fileActions.openFileCompile(filePath);
+  }
+
+  /**
+   * Restore a task's setup into the main view: builds the host-neutral
+   * persisted-state snapshot and routes the renderer there. Shared by the
+   * in-session "restore this proposal" flow (`agentProposal.restoreTaskState`
+   * above) and desktop history's "Setup" action (settings IPC), which mirrors
+   * the extension's `texra.restoreState` command.
+   */
+  restoreTaskState(taskState: TaskState): boolean {
+    let state: MainViewPersistedState;
+    try {
+      state = buildMainViewState(taskState);
+    } catch {
+      return false;
+    }
+    this.postToRenderer({
+      command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+      route: 'main',
+    });
+    this.postToRenderer({
+      command: COMMON_COMMANDS.STATE_RESTORE,
+      state,
+    });
+    return true;
   }
 
   async runExecution(

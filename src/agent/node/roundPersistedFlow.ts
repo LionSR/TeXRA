@@ -100,9 +100,8 @@ export interface RoundCallbacks<S extends RoundAwareState> {
  */
 export class RoundPersistedFlow<
   S extends RoundAwareState = RoundAwareState,
-  P extends Record<string, unknown> = Record<string, unknown>,
   Svc = unknown,
-> extends PersistedFlow<S, P, Svc> {
+> extends PersistedFlow<S, Svc> {
   private readonly callbacks: RoundCallbacks<S>;
   private readonly parentStage: StageHandle | null;
   private currentRoundStage: StageHandle | null = null;
