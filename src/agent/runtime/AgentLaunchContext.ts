@@ -56,6 +56,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createRunContext,
   withRunContext,
+  type CreateLaunchRunContextOptions,
   type CreateRunContextOptions,
 } from './RunContext';
 import { createRunScope, type RunScope } from './RunScope';
@@ -76,10 +77,7 @@ export interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: StageHandle;
-  streamStatus: StreamStatusMachine;
   attachedMemoryMisses: AttachedMemoryMiss[];
-  /** Whether this tool-use run exits after one cycle instead of idling. */
-  stopAfterCycle?: boolean;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -134,30 +132,35 @@ const STATUS_MESSAGES: Record<string, string> = {
  */
 function agentContextToRunContext(
   ctx: AgentLaunchContext,
+  options: Pick<
+    CreateLaunchRunContextOptions,
+    | 'delegationDepth'
+    | 'approvalPromptsUnavailable'
+    | 'runtimeUnavailableTools'
+    | 'stopAfterCycle'
+  > = {},
 ): CreateRunContextOptions {
   return {
     runScope: ctx.runScope,
-    runtimeHost: ctx.runScope.runtimeHost,
-    streamId: ctx.runScope.streamId,
-    executionId: ctx.runScope.executionId,
     modelSource: 'live' as const,
     getModel: () => ctx.config.model,
-    agentName: ctx.runScope.agentName,
-    workingDirectory: ctx.runScope.workingDirectory,
-    delegationDepth: ctx.delegation?.delegationDepth,
-    approvalPromptsUnavailable: ctx.delegation?.approvalPromptsUnavailable,
-    runtimeUnavailableTools: ctx.runtimeUnavailableTools,
-    stopAfterCycle: ctx.stopAfterCycle,
-    session: ctx.runScope.session,
+    ...options,
   };
 }
 
 export async function withExecutionRunContext<T>(
   ctx: AgentLaunchContext,
+  options: Pick<
+    CreateLaunchRunContextOptions,
+    | 'delegationDepth'
+    | 'approvalPromptsUnavailable'
+    | 'runtimeUnavailableTools'
+    | 'stopAfterCycle'
+  >,
   fn: () => T | Promise<T>,
 ): Promise<T> {
   return await withRunContext(
-    createRunContext(agentContextToRunContext(ctx)),
+    createRunContext(agentContextToRunContext(ctx, options)),
     fn,
   );
 }

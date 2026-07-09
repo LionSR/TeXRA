@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { createRunScope, type RunScope } from './RunScope';
+import type { RunScope } from './RunScope';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { SessionHandle } from './SessionHandle';
@@ -47,42 +47,36 @@ export type RunContext = LaunchRunContext | BareRunContext;
 // static string (manual / test path).
 // ---------------------------------------------------------------------------
 
-interface CreateRunContextBase {
-  runtimeHost: AgentRuntimeHost;
-  runScope?: RunScope;
-  streamId?: StreamTabId;
-  executionId?: ExecutionId;
-  agentName?: string;
-  workingDirectory?: string;
+interface CreateRunContextCommon {
   delegationDepth?: number;
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
   stopAfterCycle?: boolean;
-  session?: SessionHandle;
 }
 
-type CreateLaunchRunContextFields = Required<
-  Pick<
-    CreateRunContextBase,
-    'streamId' | 'executionId' | 'agentName' | 'session'
-  >
->;
+interface CreateBareRunContextOptions extends CreateRunContextCommon {
+  runtimeHost: AgentRuntimeHost;
+  streamId?: StreamTabId;
+  executionId?: ExecutionId;
+  agentName?: string;
+  workingDirectory?: string;
+  session?: SessionHandle;
+  /** Discriminator — static model string (manual / test contexts). */
+  modelSource?: 'static';
+  model?: string;
+}
 
-export type CreateRunContextOptions = CreateRunContextBase &
-  (
-    | (CreateLaunchRunContextFields & {
-        /** Discriminator — live model provider (launch contexts). */
-        modelSource: 'live';
-        getModel: () => string | undefined;
-        /** Static fallback used when getModel() returns undefined. */
-        model?: string;
-      })
-    | {
-        /** Discriminator — static model string (manual / test contexts). */
-        modelSource?: 'static';
-        model?: string;
-      }
-  );
+export interface CreateLaunchRunContextOptions extends CreateRunContextCommon {
+  runScope: RunScope;
+  /** Discriminator — live model provider (launch contexts). */
+  modelSource: 'live';
+  getModel: () => string | undefined;
+  /** Static fallback used when getModel() returns undefined. */
+  model?: string;
+}
+
+export type CreateRunContextOptions =
+  CreateLaunchRunContextOptions | CreateBareRunContextOptions;
 
 const runContextScope = new AsyncLocalStorage<RunContext>();
 
@@ -109,7 +103,7 @@ type BareRunContextFieldNames =
  * Fields shared by both `RunContext` kinds, forwarded as-is from the input
  * options.
  */
-function commonRunContextFields<T extends CreateRunContextBase>(
+function commonRunContextFields<T extends CreateRunContextCommon>(
   options: T,
 ): Pick<T, CommonRunContextFieldNames> {
   return {
@@ -121,7 +115,7 @@ function commonRunContextFields<T extends CreateRunContextBase>(
 }
 
 /** Fields used only by the manually constructed `bare` context shape. */
-function bareRunContextFields<T extends CreateRunContextBase>(
+function bareRunContextFields<T extends CreateBareRunContextOptions>(
   options: T,
 ): Pick<T, BareRunContextFieldNames> {
   return {
@@ -144,22 +138,8 @@ function bareRunContextFields<T extends CreateRunContextBase>(
  * context for tests and one-shot tool environments.
  */
 export function createRunContext(options: CreateRunContextOptions): RunContext {
-  if (options.runtimeHost == null) {
-    throw new Error('createRunContext requires an explicit runtimeHost');
-  }
-
   if (options.modelSource === 'live') {
-    const { getModel, model } = options;
-    const runScope =
-      options.runScope ??
-      createRunScope({
-        runtimeHost: options.runtimeHost,
-        streamId: options.streamId,
-        executionId: options.executionId,
-        agentName: options.agentName,
-        workingDirectory: options.workingDirectory,
-        session: options.session,
-      });
+    const { getModel, model, runScope } = options;
     return Object.freeze({
       kind: 'launch',
       ...commonRunContextFields(options),
@@ -168,6 +148,10 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
         return getModel() ?? model;
       },
     });
+  }
+
+  if (options.runtimeHost == null) {
+    throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
   const { model } = options;
