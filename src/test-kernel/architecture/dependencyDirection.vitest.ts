@@ -64,6 +64,25 @@ const SHARED_AGENT_IMPORT_ALLOWLIST_SET = new Set<string>(
   SHARED_AGENT_IMPORT_ALLOWLIST,
 );
 
+const HOST_LAYER_IMPORT_SPECIFIERS = [
+  '@common/state',
+  '@common/webview',
+] as const;
+
+const HOST_LAYER_IMPORT_PREFIXES = [
+  '@webview/',
+  '@commands/',
+  '@progressView/',
+  '@settingsView/',
+  '@frontend/',
+  '@extensionSchemas/',
+  '@resources/',
+  '@common/state/',
+  '@common/webview/',
+  '@cli/',
+  '@desktop/',
+] as const;
+
 /** Drop comments so a prose mention like "do not import from 'vscode'" can't
  *  trip the import patterns. Naive `//` stripping is fine here: a real import
  *  precedes any trailing comment, and cutting mid-string only matters on lines
@@ -94,6 +113,13 @@ function sourceFilesUnder(zone: string): string[] {
     .map((rel) => join(absoluteZone, rel));
 }
 
+function productionSrcFiles(): string[] {
+  return sourceFilesUnder('src').filter((file) => {
+    const repoRelative = relative(REPO_ROOT, file).replaceAll('\\', '/');
+    return !repoRelative.startsWith('src/test-kernel/');
+  });
+}
+
 function importsVscode(file: string): boolean {
   const source = stripComments(readFileSync(file, 'utf8'));
   return VSCODE_IMPORT_PATTERNS.some((pattern) => pattern.test(source));
@@ -102,6 +128,23 @@ function importsVscode(file: string): boolean {
 function importsAgent(file: string): boolean {
   const source = stripComments(readFileSync(file, 'utf8'));
   return AGENT_IMPORT_PATTERNS.some((pattern) => pattern.test(source));
+}
+
+function importSpecifiers(file: string): string[] {
+  const source = stripComments(readFileSync(file, 'utf8'));
+  return [...source.matchAll(/\b(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)]
+    .map((match) => match[1])
+    .filter((specifier): specifier is string => specifier !== undefined);
+}
+
+function importsHostLayer(file: string): boolean {
+  return importSpecifiers(file).some(
+    (specifier) =>
+      HOST_LAYER_IMPORT_SPECIFIERS.includes(
+        specifier as (typeof HOST_LAYER_IMPORT_SPECIFIERS)[number],
+      ) ||
+      HOST_LAYER_IMPORT_PREFIXES.some((prefix) => specifier.startsWith(prefix)),
+  );
 }
 
 describe('VS Code-free zones never import vscode', () => {
@@ -132,5 +175,20 @@ describe('Shared layer dependency direction', () => {
       .toSorted();
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('Production core never imports host layers', () => {
+  it('has no imports from extension, CLI, or desktop aliases', () => {
+    const offenders = productionSrcFiles()
+      .filter(importsHostLayer)
+      .map((file) => relative(REPO_ROOT, file).replaceAll('\\', '/'))
+      .toSorted();
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('actually scans production src files', () => {
+    expect(productionSrcFiles().length).toBeGreaterThan(500);
   });
 });
