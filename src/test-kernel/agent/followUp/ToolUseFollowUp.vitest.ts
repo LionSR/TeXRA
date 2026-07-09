@@ -26,6 +26,7 @@ import {
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import {
+  presentFollowUpWakeResult,
   sendFollowUp,
   wakeQueuedFollowUpStream,
   wakeOrReleaseQueuedStream,
@@ -118,6 +119,27 @@ describe('ToolUseFollowUp', () => {
     SharedExecutionRegistry.track(handle);
     return executionId;
   }
+
+  it('maps wake outcomes to shared host presentation messages', () => {
+    assert.deepEqual(presentFollowUpWakeResult({ kind: 'dropped' }), {
+      severity: 'warning',
+      message:
+        'Message dropped because no session was available to receive it. Start a new agent task to continue.',
+      refreshQueuedFollowUps: true,
+    });
+    assert.deepEqual(
+      presentFollowUpWakeResult({ kind: 'queued_resume_failed' }),
+      {
+        severity: 'info',
+        message:
+          'Message queued. Auto-resume failed; start a new agent task to continue.',
+        refreshQueuedFollowUps: false,
+      },
+    );
+    assert.deepEqual(presentFollowUpWakeResult({ kind: 'resumed' }), {
+      severity: 'none',
+    });
+  });
 
   it('sends follow-ups to active flow contexts', async () => {
     const calls: string[] = [];

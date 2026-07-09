@@ -45,6 +45,7 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 // Local imports - CLI runtime
 import { applyCliGitAuthorConfig } from './gitAuthor';
+import { isCliResumeInFlight, tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { writeTextStderr } from './logSinks';
@@ -199,7 +200,10 @@ export async function initCliPlatform(
         storage: stateStores.storage,
         secrets: getCliSecrets(context.storageRoot),
         lifecycle,
-        agentResume: { tryResumeStream: async () => false },
+        agentResume: {
+          tryResumeStream: tryResumeCliStream,
+          isResumeInFlight: isCliResumeInFlight,
+        },
         agentDirectories,
         getWorkspacePath: () => cliWorkspaceCwd,
         toolAvailability: {

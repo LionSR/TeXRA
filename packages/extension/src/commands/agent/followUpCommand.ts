@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - agent
 import { deriveResumability } from '@agent/storage';
 import {
+  presentFollowUpWakeResult,
   sendFollowUp,
   wakeQueuedFollowUpStream,
   type SendFollowUpResult,
@@ -86,20 +87,21 @@ async function handleFollowUpResult(
       break;
     case 'queued':
       emitQueuedFollowUpsChanged(streamId);
-      switch ((await wakeQueuedFollowUpStream(streamId, result)).kind) {
-        case 'dropped':
-          emitQueuedFollowUpsChanged(streamId);
-          await vscode.window.showWarningMessage(
-            'Message dropped — no session available to receive it. Start a new agent task to continue.',
-          );
-          break;
-        case 'queued_resume_failed':
-          await vscode.window.showInformationMessage(
-            'Message queued. Auto-resume failed — start a new agent task to continue.',
-          );
-          break;
-        default:
-          break;
+      {
+        const presentation = presentFollowUpWakeResult(
+          await wakeQueuedFollowUpStream(streamId, result),
+        );
+        if (presentation.severity === 'warning') {
+          if (presentation.refreshQueuedFollowUps) {
+            emitQueuedFollowUpsChanged(streamId);
+          }
+          await vscode.window.showWarningMessage(presentation.message);
+        } else if (presentation.severity === 'info') {
+          if (presentation.refreshQueuedFollowUps) {
+            emitQueuedFollowUpsChanged(streamId);
+          }
+          await vscode.window.showInformationMessage(presentation.message);
+        }
       }
       break;
     case 'no_session':
