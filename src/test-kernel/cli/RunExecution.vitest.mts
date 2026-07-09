@@ -291,8 +291,6 @@ describe('executeCliRequest', () => {
       const { AgentConfigSchema } =
         await import('@agent/core/definition/AgentConfig');
       const { defaultSession } = await import('@agent/runtime/SessionHandle');
-      const { toRunFactDomainKey } =
-        await import('@agent/runtime/runFactEvents');
       const config = AgentConfigSchema.parse(toolUseConfig());
 
       await getExecutionStore(executionId).writeConfig(config);
@@ -310,12 +308,9 @@ describe('executeCliRequest', () => {
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('updateTodos'),
-          data: {
-            streamId,
-            todos: [todo],
-          },
+          type: 'updateTodos',
+          streamId,
+          todos: [todo],
         },
       });
       defaultSession().events.emit({

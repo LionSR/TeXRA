@@ -1,18 +1,11 @@
 import type { AgentEvent } from '@agent/trace';
-import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type {
   SessionEventHub,
   SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import {
-  ConversationProgressSchema,
-  UpdatePlanPayloadSchema,
-  UpdateTodosPayloadSchema,
-  type StreamTabId,
-} from '@shared/schemas';
-import { isObject } from '@utils/core';
+import { ConversationProgressSchema, type StreamTabId } from '@shared/schemas';
 import type {
   CliProgressEvent,
   CliProgressEventPayloads,
@@ -28,6 +21,12 @@ type CliProjectedProgressEvent = {
 
 const CLI_RUN_FACT_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
   'domain',
+  'updateTodos',
+  'updatePlan',
+  'addOutputFiles',
+  'updateMissingOutputs',
+  'updateCompileFailures',
+  'goalPaused',
   'run.config',
   'usage',
   'status',
@@ -112,26 +111,58 @@ function projectCliRunFact(
         },
       };
     }
+    return undefined;
+  }
 
-    const factName = fromRunFactDomainKey(event.key);
-    if (!factName || !isObject(event.data)) return undefined;
-    if (factName === 'updateTodos') {
-      const payload = UpdateTodosPayloadSchema.safeParse(event.data);
-      return payload.success
-        ? { event: 'updateTodos', payload: payload.data }
-        : undefined;
-    }
-    if (factName === 'updatePlan') {
-      const payload = UpdatePlanPayloadSchema.safeParse(event.data);
-      return payload.success
-        ? { event: 'updatePlan', payload: payload.data }
-        : undefined;
-    }
+  if (event.type === 'updateTodos') {
     return {
-      event: factName,
-      payload:
-        event.data as unknown as CliProgressEventPayloads[typeof factName],
-    } as CliProjectedProgressEvent;
+      event: 'updateTodos',
+      payload: { streamId: event.streamId, todos: event.todos },
+    };
+  }
+
+  if (event.type === 'updatePlan') {
+    return {
+      event: 'updatePlan',
+      payload: { streamId: event.streamId, plan: event.plan },
+    };
+  }
+
+  if (event.type === 'addOutputFiles') {
+    return {
+      event: 'addOutputFiles',
+      payload: {
+        streamId: event.streamId,
+        ...(event.executionId ? { executionId: event.executionId } : {}),
+        filesByRound: event.filesByRound,
+      },
+    };
+  }
+
+  if (event.type === 'updateMissingOutputs') {
+    return {
+      event: 'updateMissingOutputs',
+      payload: {
+        streamId: event.streamId,
+        ...(event.executionId ? { executionId: event.executionId } : {}),
+        filesByRound: event.filesByRound,
+      },
+    };
+  }
+
+  if (event.type === 'updateCompileFailures') {
+    return {
+      event: 'updateCompileFailures',
+      payload: {
+        streamId: event.streamId,
+        ...(event.executionId ? { executionId: event.executionId } : {}),
+        filesByRound: event.filesByRound,
+      },
+    };
+  }
+
+  if (event.type === 'goalPaused') {
+    return { event: 'goalPaused', payload: { streamId: event.streamId } };
   }
 
   if (event.type === 'stage.start') {
