@@ -4,7 +4,7 @@
  */
 import * as path from 'node:path';
 
-import { normalizeFilePath } from '@shared/utils/path';
+import { normalizeFilePath } from '@utils/core';
 
 import type { WorkspaceProvider } from '../interfaces';
 

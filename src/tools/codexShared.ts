@@ -14,7 +14,7 @@ import type {
   CodexTurnState,
   CodexTurnToolInput,
 } from '@shared/schemas/codex';
-import { getBasename } from '@shared/utils/path';
+import { getBasename } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 import type {
   CommandExecutionItem,
