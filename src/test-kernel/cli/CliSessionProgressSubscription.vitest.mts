@@ -3,10 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { logConversationProgress, TraceEmitter } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import type { CliProgressSink } from '@cli/runtime/cliProgressEvents';
-import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
+import {
+  attachCliSessionProgressProjection,
+  type CliNdjsonProgressRecordWriter,
+} from '@cli/runtime/sessionProgressSubscription';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 import {
   STREAM_PHASE,
@@ -38,29 +39,32 @@ function workflowConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   };
 }
 
-function hostWithInteractions(
-  interactions?: Partial<HostInteractions>,
-): CliProgressSink & { interactions: HostInteractions } {
-  return {
-    emit: vi.fn(),
-    interactions: {
-      resolve: () => false,
-      cancel: () => {},
-      ...interactions,
-    },
-  };
+function recordWriter(): CliNdjsonProgressRecordWriter {
+  return vi.fn() as CliNdjsonProgressRecordWriter;
+}
+
+function progressRecord(event: string, payload: unknown) {
+  return expect.objectContaining({
+    kind: 'progress',
+    event,
+    ts: expect.any(String),
+    payload,
+  });
 }
 
 function setupTraceProjection() {
   const events = new SessionEventHub();
-  const host = hostWithInteractions();
+  const writeRecord = recordWriter();
   const trace = new TraceEmitter();
   const detachTrace = trace.subscribe((event) =>
     events.emit({ scope: 'run', streamId, event }),
   );
-  const detachProjection = attachCliSessionProgressProjection(events, host);
+  const detachProjection = attachCliSessionProgressProjection(
+    events,
+    writeRecord,
+  );
   return {
-    host,
+    writeRecord,
     trace,
     detachAll: () => {
       detachProjection();
@@ -70,10 +74,10 @@ function setupTraceProjection() {
 }
 
 describe('attachCliSessionProgressProjection', () => {
-  it('re-emits retained session facts through the headless CLI host rail', () => {
+  it('writes retained session facts as public NDJSON progress records', () => {
     const events = new SessionEventHub();
-    const host = hostWithInteractions();
-    const detach = attachCliSessionProgressProjection(events, host);
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
 
     try {
       events.emit({
@@ -84,7 +88,9 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
 
-      expect(host.emit).toHaveBeenCalledWith('setActiveStream', { streamId });
+      expect(writeRecord).toHaveBeenCalledWith(
+        progressRecord('setActiveStream', { streamId }),
+      );
 
       detach();
       events.emit({
@@ -95,7 +101,7 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
 
-      expect(host.emit).toHaveBeenCalledTimes(1);
+      expect(writeRecord).toHaveBeenCalledTimes(1);
     } finally {
       detach();
     }
@@ -103,8 +109,8 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('keeps followUpSent session-local', () => {
     const events = new SessionEventHub();
-    const host = hostWithInteractions();
-    const detach = attachCliSessionProgressProjection(events, host);
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
 
     try {
       events.emit({
@@ -115,16 +121,16 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
 
-      expect(host.emit).not.toHaveBeenCalled();
+      expect(writeRecord).not.toHaveBeenCalled();
     } finally {
       detach();
     }
   });
 
-  it('re-emits removeStream through the headless CLI host rail', () => {
+  it('writes removeStream as a public NDJSON progress record', () => {
     const events = new SessionEventHub();
-    const host = hostWithInteractions();
-    const detach = attachCliSessionProgressProjection(events, host);
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
 
     try {
       events.emit({
@@ -135,18 +141,18 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
 
-      expect(host.emit).toHaveBeenCalledWith('removeStream', {
-        streamId,
-      });
+      expect(writeRecord).toHaveBeenCalledWith(
+        progressRecord('removeStream', { streamId }),
+      );
     } finally {
       detach();
     }
   });
 
-  it('re-emits valid retained run facts through the headless CLI host rail', () => {
+  it('writes valid retained run facts as public NDJSON progress records', () => {
     const events = new SessionEventHub();
-    const host = hostWithInteractions();
-    const detach = attachCliSessionProgressProjection(events, host);
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
 
     try {
       events.emit({
@@ -163,11 +169,13 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
 
-      expect(host.emit).toHaveBeenCalledWith('updateStreamUsage', {
-        streamId,
-        storageKey: 'run-a',
-        usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
-      });
+      expect(writeRecord).toHaveBeenCalledWith(
+        progressRecord('updateStreamUsage', {
+          streamId,
+          storageKey: 'run-a',
+          usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
+        }),
+      );
     } finally {
       detach();
     }
@@ -175,8 +183,8 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('projects run config facts to the public setTaskState event', () => {
     const events = new SessionEventHub();
-    const host = hostWithInteractions();
-    const detach = attachCliSessionProgressProjection(events, host);
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
     const config = workflowConfig({
       inputFiles: ['paper.tex', 'appendix.tex'],
       contextFiles: ['notes.md'],
@@ -194,19 +202,21 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
 
-      expect(host.emit).toHaveBeenCalledWith('setTaskState', {
-        streamId,
-        executionId,
-        taskState: {
-          agentConfig: config,
-          activeFiles: {
-            input: true,
-            context: true,
-            media: false,
-            output: false,
+      expect(writeRecord).toHaveBeenCalledWith(
+        progressRecord('setTaskState', {
+          streamId,
+          executionId,
+          taskState: {
+            agentConfig: config,
+            activeFiles: {
+              input: true,
+              context: true,
+              media: false,
+              output: false,
+            },
           },
-        },
-      });
+        }),
+      );
     } finally {
       detach();
     }
@@ -214,8 +224,8 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('projects status facts to the public stream-status event', () => {
     const events = new SessionEventHub();
-    const host = hostWithInteractions();
-    const detach = attachCliSessionProgressProjection(events, host);
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
 
     try {
       events.emit({
@@ -231,13 +241,15 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
 
-      expect(host.emit).toHaveBeenCalledWith('updateStreamStatus', {
-        streamId,
-        status: STREAM_PHASE.RUNNING,
-        previousStatus: STREAM_PHASE.WAITING,
-        cause: STREAM_TRANSITION_CAUSE.RESUME,
-        substate: STREAM_SUBSTATE.RESUMING,
-      });
+      expect(writeRecord).toHaveBeenCalledWith(
+        progressRecord('updateStreamStatus', {
+          streamId,
+          status: STREAM_PHASE.RUNNING,
+          previousStatus: STREAM_PHASE.WAITING,
+          cause: STREAM_TRANSITION_CAUSE.RESUME,
+          substate: STREAM_SUBSTATE.RESUMING,
+        }),
+      );
     } finally {
       detach();
     }
@@ -245,8 +257,8 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('drops malformed retained run facts instead of forwarding unchecked payloads', () => {
     const events = new SessionEventHub();
-    const host = hostWithInteractions();
-    const detach = attachCliSessionProgressProjection(events, host);
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
 
     try {
       events.emit({
@@ -274,42 +286,44 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
 
-      expect(host.emit).not.toHaveBeenCalled();
+      expect(writeRecord).not.toHaveBeenCalled();
     } finally {
       detach();
     }
   });
 
   it('derives updateConversationProgress from a typed conversation progress event', () => {
-    const { host, trace, detachAll } = setupTraceProjection();
+    const { writeRecord, trace, detachAll } = setupTraceProjection();
 
     try {
       logConversationProgress(trace, {
         toolCallCount: 5,
       });
 
-      expect(host.emit).toHaveBeenCalledWith('updateConversationProgress', {
-        streamId,
-        progress: { toolCallCount: 5 },
-      });
+      expect(writeRecord).toHaveBeenCalledWith(
+        progressRecord('updateConversationProgress', {
+          streamId,
+          progress: { toolCallCount: 5 },
+        }),
+      );
     } finally {
       detachAll();
     }
   });
 
   it('ignores unrelated domain events and stops forwarding after detach', () => {
-    const { host, trace, detachAll } = setupTraceProjection();
+    const { writeRecord, trace, detachAll } = setupTraceProjection();
 
     trace.domain({ key: 'webSearch', data: { query: 'irrelevant' } });
-    expect(host.emit).not.toHaveBeenCalled();
+    expect(writeRecord).not.toHaveBeenCalled();
 
     detachAll();
     logConversationProgress(trace, { toolCallCount: 0 });
-    expect(host.emit).not.toHaveBeenCalled();
+    expect(writeRecord).not.toHaveBeenCalled();
   });
 
   it('ignores legacy conversationProgress domain payloads', () => {
-    const { host, trace, detachAll } = setupTraceProjection();
+    const { writeRecord, trace, detachAll } = setupTraceProjection();
 
     try {
       trace.domain({ key: 'conversationProgress', data: undefined });
@@ -319,14 +333,14 @@ describe('attachCliSessionProgressProjection', () => {
       });
       trace.domain({ key: 'conversationProgress', data: 'not an object' });
 
-      expect(host.emit).not.toHaveBeenCalled();
+      expect(writeRecord).not.toHaveBeenCalled();
     } finally {
       detachAll();
     }
   });
 
   it('projects typed todo and plan run facts', () => {
-    const { host, trace, detachAll } = setupTraceProjection();
+    const { writeRecord, trace, detachAll } = setupTraceProjection();
     const todos = [
       {
         content: 'Check the compactness lemma.',
@@ -342,14 +356,20 @@ describe('attachCliSessionProgressProjection', () => {
       trace.emit({ type: 'updateTodos', streamId, todos });
       trace.emit({ type: 'updatePlan', streamId, plan });
 
-      expect(host.emit).toHaveBeenNthCalledWith(1, 'updateTodos', {
-        streamId,
-        todos,
-      });
-      expect(host.emit).toHaveBeenNthCalledWith(2, 'updatePlan', {
-        streamId,
-        plan,
-      });
+      expect(writeRecord).toHaveBeenNthCalledWith(
+        1,
+        progressRecord('updateTodos', {
+          streamId,
+          todos,
+        }),
+      );
+      expect(writeRecord).toHaveBeenNthCalledWith(
+        2,
+        progressRecord('updatePlan', {
+          streamId,
+          plan,
+        }),
+      );
     } finally {
       detachAll();
     }
