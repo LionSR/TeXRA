@@ -1619,10 +1619,10 @@ describe('ProgressBackend', () => {
     await writeExecutionConfig(orphanExecution);
     await writeExecutionConfig(historyExecution);
     await seed.flush();
-    await GoalStore.start(orphanStream, 'sweep this orphan');
 
     const { backend, session } = createIsolatedRecordingBackend();
     try {
+      await GoalStore.start(orphanStream, 'sweep this orphan');
       expect(await StorageFS.exists(streamDataDir(orphanStream))).toBe(true);
       expect(await StorageFS.exists(`executions/${orphanExecution}`)).toBe(
         true,

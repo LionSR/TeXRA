@@ -71,6 +71,7 @@ export function createProgressStreamLifecycleHarness(
     getStreamIds: () => streams,
     pickValidActiveStream: (availableStreams) => availableStreams[0] ?? '',
     clearStream: async (stream) => {
+      recorder.record('clearState', stream);
       streams = streams.filter((candidate) => candidate !== stream);
       if (activeStream === stream) {
         activeStream = streams[0] ?? '';
