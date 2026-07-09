@@ -1402,9 +1402,8 @@ describe('ProgressBackend', () => {
       backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
 
       backend.factApplier.handleRunFact(stream, {
-        type: 'domain',
-        key: 'conversationProgress',
-        data: { toolCallCount: 7 },
+        type: 'conversation.progress',
+        progress: { toolCallCount: 7 },
       });
 
       await backend.factApplier.setStreamStatus(

@@ -280,7 +280,7 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
-  it('derives updateConversationProgress from a conversationProgress domain event', () => {
+  it('derives updateConversationProgress from a typed conversation progress event', () => {
     const { host, trace, detachAll } = setupTraceProjection();
 
     try {
@@ -308,7 +308,7 @@ describe('attachCliSessionProgressProjection', () => {
     expect(host.emit).not.toHaveBeenCalled();
   });
 
-  it('drops malformed conversationProgress domain payloads', () => {
+  it('ignores legacy conversationProgress domain payloads', () => {
     const { host, trace, detachAll } = setupTraceProjection();
 
     try {
