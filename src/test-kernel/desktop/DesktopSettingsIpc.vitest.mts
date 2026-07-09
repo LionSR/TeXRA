@@ -287,6 +287,7 @@ function inactiveLatexSettingsStatus(): unknown {
 describe('desktop settings IPC', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     setGitAuthorEnv({});
     setWorktreeSupportEnabled(false);
   });
@@ -1854,6 +1855,58 @@ describe('desktop settings IPC', () => {
     await flushAsyncWork();
 
     expect(infos).toEqual(['History item not found', 'History item not found']);
+  });
+
+  it('reports malformed history configs without entering the dispatcher error path', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const { getExecutionStore } = await import('@agent/storage');
+    const logger = await import('@logger/logUtils');
+
+    const historyId = 'badc0f19';
+    await getExecutionStore(historyId).write('config', {
+      inputFiles: [],
+      outputFiles: ['orphaned-output.tex'],
+    });
+
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const showInfoMessage = vi.fn(async () => {});
+    const onError = vi.fn();
+    const runExecution = vi.fn(async () => {});
+    const restoreTaskState = vi.fn(async () => true);
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      modelListRefresh: Promise.resolve(),
+      showInfoMessage,
+      onError,
+      runExecution,
+      restoreTaskState,
+    });
+
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+      historyId,
+    });
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+      historyId,
+    });
+    await flushAsyncWork();
+
+    expect(showInfoMessage).toHaveBeenCalledTimes(2);
+    expect(showInfoMessage).toHaveBeenCalledWith('History item not found');
+    expect(onError).not.toHaveBeenCalled();
+    expect(runExecution).not.toHaveBeenCalled();
+    expect(restoreTaskState).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(
+        `Failed to parse execution ${historyId} config.json`,
+      ),
+      { data: expect.any(Error) },
+    );
   });
 
   it('exports a history chat to Markdown via the shared ChatExportController', async () => {

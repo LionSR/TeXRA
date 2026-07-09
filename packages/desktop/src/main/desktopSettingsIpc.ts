@@ -33,10 +33,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
@@ -532,11 +529,8 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  async function readHistoryConfig(
-    historyId: string,
-  ): Promise<AgentConfig | undefined> {
-    const raw = await getExecutionStore(historyId as ExecutionId).readConfig();
-    return raw ? AgentConfigSchema.parse(raw) : undefined;
+  function readHistoryConfig(historyId: string): Promise<AgentConfig | null> {
+    return getExecutionStore(historyId as ExecutionId).readConfig();
   }
 
   async function rerunHistoryAgent(historyId: string): Promise<void> {
