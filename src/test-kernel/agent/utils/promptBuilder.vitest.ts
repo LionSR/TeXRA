@@ -61,5 +61,13 @@ describe('PromptBuilder', () => {
       prompts.instructionSuffix,
       /use the `view` command with path `\/memories`/,
     );
+    assert.match(
+      prompts.instructionSuffix,
+      /When memory is relevant, consult pinned memories first/,
+    );
+    assert.doesNotMatch(
+      prompts.instructionSuffix,
+      /Always consult pinned memories at session start/,
+    );
   });
 });
