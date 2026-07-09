@@ -20,6 +20,7 @@ const ALLOWED_IMPORTERS = [
   'packages/cli/src/runtime/runExecution.ts',
   'src/test-kernel/cli/CliSessionProgressSubscription.vitest.mts',
   'src/test-kernel/cli/RunExecution.vitest.mts',
+  'src/test-kernel/cli/RunProgressRenderer.vitest.mts',
 ] as const;
 
 const SCAN_ROOTS = [
@@ -134,7 +135,7 @@ function importsTargetModule(file: string): boolean {
 }
 
 describe('CLI session progress projection boundary', () => {
-  it('keeps sessionProgressSubscription scoped to headless CLI output', () => {
+  it('keeps sessionProgressSubscription scoped to headless CLI NDJSON output', () => {
     expect(existsSync(resolve(REPO_ROOT, TARGET_MODULE))).toBe(true);
 
     const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
