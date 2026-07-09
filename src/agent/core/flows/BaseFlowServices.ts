@@ -11,10 +11,7 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { RunScope } from '@agent/runtime/RunScope';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 /** Callback invoked when a round/cycle completes for usage tracking. */
 export type RoundFinalizedCallback = (
@@ -42,24 +39,11 @@ export interface AgentCore<C = unknown> {
   logger: AgentTrace;
   streamStatus: StreamStatusMachine;
   userVarChannels: UserVariableChannels;
-  /** Working directory override for subagent tool calls (e.g. a git worktree). */
-  workingDirectory?: string;
   delegation?: DelegationPolicy;
   /** Tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
   /** Initial user row to log after the flow has inserted launch media. */
   initialUserMessageForTranscript?: string;
-}
-
-export interface AgentRunIdentity {
-  /** Canonical identity and session owner for this launched run. */
-  readonly runScope: RunScope;
-  /** Compatibility field; prefer `runScope.runtimeHost` for new code. */
-  readonly runtimeHost: AgentRuntimeHost;
-  /** Compatibility field; prefer `runScope.streamId` for new code. */
-  readonly streamId: StreamTabId;
-  /** Compatibility field; prefer `runScope.executionId` for new code. */
-  readonly executionId: ExecutionId;
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
