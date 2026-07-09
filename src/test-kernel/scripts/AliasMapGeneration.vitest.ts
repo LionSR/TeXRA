@@ -1,15 +1,27 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import {
+type TsconfigPaths = Record<string, string[]>;
+
+interface AliasUtilsModule {
+  deriveDesktopPaths(rootPaths: TsconfigPaths): TsconfigPaths;
+  deriveExtensionPaths(rootPaths: TsconfigPaths): TsconfigPaths;
+  EXTENSION_EXCLUDED_ALIASES: readonly string[];
+  loadRootPaths(rootDir: string): TsconfigPaths;
+}
+
+const rootDir = fileURLToPath(new URL('../../../', import.meta.url));
+const {
   deriveDesktopPaths,
   deriveExtensionPaths,
   EXTENSION_EXCLUDED_ALIASES,
   loadRootPaths,
-} from '../../../scripts/aliasUtils.mjs';
-import { rootDir } from '../../../scripts/aliases.mjs';
+} = (await import(
+  pathToFileURL(resolve(rootDir, 'scripts/aliasUtils.mjs')).href
+)) as AliasUtilsModule;
 
 const SAMPLE_ROOT_PATHS = {
   'vscode-jsonrpc/node': ['node_modules/vscode-jsonrpc/lib/node/main'],
