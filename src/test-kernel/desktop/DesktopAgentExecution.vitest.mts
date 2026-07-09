@@ -3156,7 +3156,6 @@ describe('DesktopProgressBridge', () => {
       windowB: WindowFixture;
       /** Same-registry runtime modules (the ones the bridges actually use). */
       registry: {
-        emitRuntimeEvent: typeof import('@agent/runtime/emitRuntimeEvent').emitRuntimeEvent;
         StreamStatusService: StreamStatusMachine;
         getDefaultStreamLogStore: typeof import('@transcript').getDefaultStreamLogStore;
       };
@@ -3168,12 +3167,10 @@ describe('DesktopProgressBridge', () => {
       // Same registry as the bridge module graph — identity comparisons
       // against process-wide defaults must use these instances, not the
       // statically imported copies from the pre-reset registry.
-      const [{ emitRuntimeEvent }, { StreamStatusService }, transcript] =
-        await Promise.all([
-          import('@agent/runtime/emitRuntimeEvent'),
-          import('@agent/runtime/StreamStatusService'),
-          import('@transcript'),
-        ]);
+      const [{ StreamStatusService }, transcript] = await Promise.all([
+        import('@agent/runtime/StreamStatusService'),
+        import('@transcript'),
+      ]);
       const makeWindow = (): WindowFixture => {
         const messages: unknown[] = [];
         const snapshots = createStreamSnapshotStore([]);
@@ -3205,7 +3202,6 @@ describe('DesktopProgressBridge', () => {
         windowA,
         windowB,
         registry: {
-          emitRuntimeEvent,
           StreamStatusService,
           getDefaultStreamLogStore: transcript.getDefaultStreamLogStore,
         },
@@ -3354,11 +3350,16 @@ describe('DesktopProgressBridge', () => {
             level: 'info',
             message: `${streamId} progress`,
           });
-          registry.emitRuntimeEvent(
-            'updateStreamDescription',
-            { streamId, description: `${streamId} description` },
-            window.session,
-          );
+          window.session.events.emit({
+            scope: 'session',
+            event: {
+              type: 'updateStreamDescription',
+              payload: {
+                streamId,
+                description: `${streamId} description`,
+              },
+            },
+          });
           trace.emit({
             type: 'result',
             outcome: RUN_OUTCOME.COMPLETED,
