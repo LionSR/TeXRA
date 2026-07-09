@@ -226,7 +226,9 @@ export function shouldVisitDirectory(
  * it for both call sites below.
  */
 const ROUND_TOKEN_SOURCE = '_r\\d+';
-const TRAILING_ROUND_TOKEN_REGEX = new RegExp(`^(.+?)(?:${ROUND_TOKEN_SOURCE})?$`);
+const TRAILING_ROUND_TOKEN_REGEX = new RegExp(
+  `^(.+?)(?:${ROUND_TOKEN_SOURCE})?$`,
+);
 const ROUND_TOKEN_REGEX = new RegExp(ROUND_TOKEN_SOURCE);
 
 function getBaseNameWithoutRound(baseName: string): string {

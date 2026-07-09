@@ -90,7 +90,8 @@ export class LatexDiffManager {
     if (workspaceRoot && location.kind !== 'external') {
       const separatorMatch = /^([^/\\]+)[/\\]/.exec(location.relativePath);
       const workspaceRelative =
-        separatorMatch && parseWorkflowOutputRoundDir(separatorMatch[1]) !== null
+        separatorMatch &&
+        parseWorkflowOutputRoundDir(separatorMatch[1]) !== null
           ? location.relativePath.slice(separatorMatch[0].length)
           : location.relativePath;
       return path.join(workspaceRoot, path.dirname(workspaceRelative));
