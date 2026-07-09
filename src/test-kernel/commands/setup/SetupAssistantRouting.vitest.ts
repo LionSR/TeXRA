@@ -10,6 +10,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const agentHandles = vi.fn<() => { agentName: string }[]>();
 
+// Single source of truth for the mocked provider list — both the
+// `SecretManager` mock and the `hasUsableSetupCredential` stand-in below
+// scan this same list, so they can't drift from each other. Declared via
+// `vi.hoisted` (not a plain `const`) because `vi.mock` factories run before
+// ordinary module-scope bindings are initialized.
+const MOCK_API_PROVIDERS = vi.hoisted(() => [
+  'openRouter',
+  'openai',
+  'anthropic',
+  'google',
+]);
+
 const mocks = vi.hoisted(() => ({
   getUseOpenRouter: vi.fn<() => boolean>(),
   hasUsableApiKey: vi.fn<(provider: string) => Promise<boolean>>(),
@@ -68,7 +80,7 @@ vi.mock('@utils/config/providerConfig', () => ({
 vi.mock('@frontend/secretManager', () => ({
   SecretManager: {
     hasUsableApiKey: mocks.hasUsableApiKey,
-    API_PROVIDERS: ['openRouter', 'openai', 'anthropic', 'google'] as string[],
+    API_PROVIDERS: MOCK_API_PROVIDERS,
     getApiKeySecretName: (provider: string) => `apiKey.${provider}`,
   },
 }));
@@ -108,7 +120,7 @@ vi.mock('@auth/serverKeys', () => ({
 // instead of hitting the (unstubbed) fake platform secrets store.
 vi.mock('@controllers/onboarding/onboardingFunnel', () => ({
   hasUsableSetupCredential: async () => {
-    for (const provider of ['openRouter', 'openai', 'anthropic', 'google']) {
+    for (const provider of MOCK_API_PROVIDERS) {
       if (await mocks.hasUsableApiKey(provider)) return true;
     }
     return false;
