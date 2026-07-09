@@ -19,10 +19,7 @@ import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
-import {
-  createHeadlessCliHostInteractions,
-  installCliApprovalHandlers,
-} from './approvalAdapter';
+import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
@@ -189,9 +186,6 @@ export async function executeCliRequest(
     runContext.outputFormat === 'ndjson'
       ? attachCliSessionProgressProjection(defaultSession().events)
       : () => undefined;
-  const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
-    beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
-  });
   const ownedExecutionId = options.registerExecution
     ? request.executionId
     : undefined;
@@ -251,7 +245,6 @@ export async function executeCliRequest(
     detachRunProgressRenderer();
     detachSessionProgressProjection();
     detachHostInteractions();
-    uninstallApprovalHandlers();
     try {
       try {
         flushPendingRunTraces();

@@ -212,17 +212,11 @@ export const NO_TOOL_AVAILABILITY_HOST: ToolAvailabilityHost = Object.freeze({
 // ---------------------------------------------------------------------------
 
 /**
- * Tool-edit approval handler, wired at `initPlatform` once per process and
- * consumed by the shared `requestToolEditApproval` entry point.
+ * Tool-edit approval request / result shapes.
  *
- * The handler receives the proposed edit (already carrying a `streamId` for
- * session routing, and enough content context to let the host surface the
- * change before returning a decision).  It replaces the prior
- * `setToolEditApprovalHandler` module-global singleton.
- *
- * Request / result shapes are defined here as the single Platform contract;
- * `@tools/approval/toolEditApproval` re-exports these types for existing
- * approval call sites.
+ * Hosts receive these through `SessionHandle.interactions`, not through the
+ * process-wide Platform object. `@tools/approval/toolEditApproval` re-exports
+ * these types for existing approval call sites.
  */
 
 /** Platform-level contract for a tool-edit approval request. */
@@ -243,10 +237,6 @@ export interface ToolEditApprovalResult {
   readonly lineChanges?: { readonly added: number; readonly removed: number };
   readonly startLine?: number;
 }
-
-export type ToolEditApprovalPort = (
-  request: ToolEditApprovalRequest,
-) => Promise<ToolEditApprovalResult>;
 
 // ---------------------------------------------------------------------------
 // Tool notifications

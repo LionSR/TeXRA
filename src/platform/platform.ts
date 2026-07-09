@@ -18,7 +18,6 @@ import type {
   LinterProvider,
   ToolMissingHandler,
   ToolNotificationHandler,
-  ToolEditApprovalPort,
   WorkspaceProvider,
   StorageProvider,
   LifecycleHost,
@@ -71,8 +70,6 @@ export interface Platform {
    * callers treat an absent port as a no-op.
    */
   readonly toolNotificationHandler?: ToolNotificationHandler;
-  /** Host-provided tool-edit approval UI (diff viewer + accept/reject). */
-  readonly toolEditApproval: ToolEditApprovalPort;
 }
 
 let _platform: Readonly<Platform> | null = null;
