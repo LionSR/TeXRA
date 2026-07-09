@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import {
   inferPersistedFlowModelHandlerCompatibilityKey,
   inferPersistedModelHandlerCompatibilityKey,

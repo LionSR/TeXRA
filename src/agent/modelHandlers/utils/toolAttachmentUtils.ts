@@ -2,10 +2,6 @@
 import {
   type ToolFileAttachment,
   type ToolResult,
-  type FileReference,
-  ToolFileAttachmentSchema,
-  ToolResultSchema,
-  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
 } from '@shared/schemas/toolResult';
 
 // Local imports - utils
@@ -21,105 +17,6 @@ import {
 } from '../contextManagementConstants';
 
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
-
-const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
-  'output',
-  'summary',
-  'lineChanges',
-  'edits',
-  'files',
-  'editedFiles',
-]);
-
-/**
- * Result from extracting attachments from a tool result.
- * Simple interface - no runtime validation needed for this structure.
- */
-export interface ExtractedToolAttachments {
-  /** Extracted file attachments with binary data */
-  attachments: ToolFileAttachment[];
-  /** Sanitized result payload without binary data */
-  sanitizedResult: ToolResult;
-}
-
-/**
- * Type guard to check if a value is a valid ToolFileAttachment.
- * Uses Zod schema for validation.
- */
-function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
-  return ToolFileAttachmentSchema.safeParse(value).success;
-}
-
-/**
- * Extracts file attachments from a tool result and returns a typed payload.
- * Binary data (base64Data, bytes) is stripped from the result.
- *
- * Uses the source-level `ToolResultSchema` discriminator; tools declare
- * success vs error before this projection sees the result.
- *
- * @param result - Raw tool result (may contain binary data)
- * @returns Extracted attachments and typed payload (without binary data)
- */
-export function extractToolAttachments(
-  result: ToolResult,
-): ExtractedToolAttachments {
-  // Extract attachments from files array
-  const attachmentsCandidate = result.files;
-  const attachments: ToolFileAttachment[] = Array.isArray(attachmentsCandidate)
-    ? attachmentsCandidate.filter(isToolFileAttachment)
-    : [];
-
-  const parsed = ToolResultSchema.parse(result);
-  const status = parsed.status;
-
-  // Build sanitized result, stripping binary data, undefined values, and redundant fields
-  const sanitizedResult: Record<string, unknown> = { status };
-
-  for (const [key, value] of Object.entries(parsed)) {
-    if (value === undefined) continue;
-    // Skip binary fields (these belong in files array attachments)
-    if (key === 'base64Data' || key === 'bytes') {
-      continue;
-    }
-    // Keep runtime values aligned with the discriminated union shape.
-    if (status === 'executed' && key === 'error') {
-      continue;
-    }
-    if (status === 'error' && ERROR_PAYLOAD_STRIPPED_KEYS.has(key)) {
-      continue;
-    }
-    // Simplify diagnostics: keep validation error details, remove verbose stack traces
-    if (key === 'diagnostics' && value && typeof value === 'object') {
-      const diag = value as Record<string, unknown>;
-      // For validation errors, keep the formatted details (useful for model)
-      if (diag.type === DIAGNOSTIC_TYPE_VALIDATION_ERROR && diag.formatted) {
-        sanitizedResult[key] = { type: diag.type, formatted: diag.formatted };
-        continue;
-      }
-      // For regular errors (ToolError), skip diagnostics entirely - the error
-      // message is already in the error field, and the stack trace just repeats it
-      continue;
-    }
-    sanitizedResult[key] = value;
-  }
-
-  // Strip binary data from file references, keep metadata
-  if (status === 'executed' && attachments.length > 0) {
-    sanitizedResult.files = attachments.map((file): FileReference => ({
-      path: file.path,
-      mimeType: file.mimeType,
-      ...(file.description ? { description: file.description } : {}),
-    }));
-  } else {
-    // Remove files key if no valid attachments
-    delete sanitizedResult.files;
-  }
-
-  return {
-    attachments,
-    sanitizedResult: ToolResultSchema.parse(sanitizedResult),
-  };
-}
 
 export function describeAttachments(
   attachments: ToolFileAttachment[],

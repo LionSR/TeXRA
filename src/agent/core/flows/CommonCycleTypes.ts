@@ -10,8 +10,8 @@ import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import {
   ProviderMessageArraySchema,
   type ProviderMessage,
-} from '@agent/modelHandlers/types/ProviderMessage';
-import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+} from '@agent/types/ProviderMessage';
+import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';

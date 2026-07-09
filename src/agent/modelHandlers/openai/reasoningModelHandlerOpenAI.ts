@@ -1,8 +1,11 @@
 // Local file imports
+import type {
+  DeepSeekToolCall,
+  OpenAIToolCall,
+} from '@agent/types/IModelHandler';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Type imports
-import type { DeepSeekToolCall, OpenAIToolCall } from '../types/IModelHandler';
 
 /**
  * Intermediate base for OpenAI-compatible providers that expose a separate

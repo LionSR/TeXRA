@@ -3,14 +3,14 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - utils
-import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
+import { isTokenLimitStopReason } from '@agent/types/StopReasonTypes';
 import {
   ANTHROPIC_STOP,
   GOOGLE_FINISH,
   MCP_STOP,
   OPENAI_CHAT_FINISH,
   OPENAI_COMPLETION_FINISH,
-} from '@agent/modelHandlers/types/StopReasonTypes';
+} from '@agent/types/StopReasonTypes';
 
 describe('isTokenLimitStopReason', () => {
   it('detects known enum values', () => {

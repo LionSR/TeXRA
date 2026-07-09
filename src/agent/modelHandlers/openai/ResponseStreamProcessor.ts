@@ -11,7 +11,7 @@ import {
   buildOpenAIWebSearchResult,
   hasOpenAIWebSearchData,
   type WebSearchResult,
-} from '../types/ServerToolTypes';
+} from '@agent/types/ServerToolTypes';
 import {
   isFunctionCallArgumentsDoneEvent,
   isOutputItemDoneEvent,
