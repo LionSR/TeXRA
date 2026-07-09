@@ -336,7 +336,8 @@ describe('createExtensionHostInteractions', () => {
   it('delegates tool edit approval to the native VS Code port', async () => {
     const nativeResult = { accepted: true };
     mocks.nativeRequestApproval.mockResolvedValue(nativeResult);
-    const interactions = createInteractions({ session: createTestSession() });
+    const session = createTestSession();
+    const interactions = createInteractions({ session });
     const request = {
       path: 'paper.tex',
       originalContent: 'A',
@@ -348,6 +349,8 @@ describe('createExtensionHostInteractions', () => {
     await expect(interactions.requestToolEditApproval?.(request)).resolves.toBe(
       nativeResult,
     );
-    expect(mocks.nativeRequestApproval).toHaveBeenCalledWith(request);
+    expect(mocks.nativeRequestApproval).toHaveBeenCalledWith(request, {
+      session,
+    });
   });
 });

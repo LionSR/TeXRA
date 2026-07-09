@@ -13,6 +13,13 @@ import type { StreamTabId } from '@shared/schemas';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 interface DesktopHostInteractions {
+  requestToolEditApproval(request: {
+    path: string;
+    originalContent: string;
+    proposedContent: string;
+    sourceTool: string;
+    streamId?: StreamTabId;
+  }): Promise<{ accepted: boolean }>;
   requestBashApproval(request: {
     command: string;
     streamId?: StreamTabId;
@@ -38,7 +45,9 @@ interface DesktopHostInteractionsModule {
     runtimeHost: { emit: (event: string, payload: unknown) => void };
     session: SessionHandle;
     getApprovalHandlers(): unknown;
-    getToolEditApprovals(): unknown;
+    getToolEditApprovals(): {
+      requestApproval: ReturnType<typeof vi.fn>;
+    };
   }): DesktopHostInteractions;
 }
 
@@ -78,6 +87,9 @@ async function createInteractions(handlers = createHandlers()) {
   )) as DesktopHostInteractionsModule;
   const runtimeHost = { emit: vi.fn() };
   const session = new SessionHandle();
+  const toolEditApprovals = {
+    requestApproval: vi.fn(async () => ({ accepted: true })),
+  };
   const sessionEvents: SessionEvent[] = [];
   session.events.subscribe((event) => sessionEvents.push(event), {
     scope: 'session',
@@ -88,15 +100,37 @@ async function createInteractions(handlers = createHandlers()) {
       runtimeHost,
       session,
       getApprovalHandlers: () => handlers,
-      getToolEditApprovals: () => ({}),
+      getToolEditApprovals: () => toolEditApprovals,
     }),
     handlers,
     runtimeHost,
     sessionEvents,
+    session,
+    toolEditApprovals,
   };
 }
 
 describe('createDesktopHostInteractions', () => {
+  it('delegates tool edit approvals with this window session', async () => {
+    const { interactions, session, toolEditApprovals } =
+      await createInteractions();
+    const request = {
+      path: '/workspace/paper.tex',
+      originalContent: 'old',
+      proposedContent: 'new',
+      sourceTool: 'edit',
+      streamId: 'stream-a' as StreamTabId,
+    };
+
+    await expect(
+      interactions.requestToolEditApproval(request),
+    ).resolves.toEqual({ accepted: true });
+    expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(
+      request,
+      session,
+    );
+  });
+
   it('rejects a resolution whose kind does not match the pending request', async () => {
     const handlers = createHandlers();
     const { interactions, runtimeHost, sessionEvents } =
