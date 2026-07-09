@@ -16,6 +16,9 @@
 // Node imports
 import { join } from 'node:path';
 
+// Local imports - skills
+import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+
 // Local imports - agent + tools (composition wiring)
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal/promptLoader';
@@ -32,6 +35,7 @@ import { platform } from '../platform';
 
 // Type imports
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
+import type { SkillSourceOptions } from '@skills/index';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,
@@ -69,6 +73,12 @@ export interface NodeAgentDirectoryBootstrapOptions {
   readonly resourcesPath: string;
   readonly currentVersion: string | undefined;
   readonly versionStateKey: string;
+}
+
+export interface NodeRuntimeSkillOptions {
+  readonly cwd: string;
+  readonly resourcesPath: string;
+  readonly skillSourceOptions?: SkillSourceOptions;
 }
 
 const bootstrappedAgentDirectoryResources = new Map<string, string>();
@@ -132,6 +142,28 @@ export function initNodeAgentRuntime(lifecycle: LifecycleHost): void {
  */
 export function initializeNodeGoalPrompts(resourcesPath: string): void {
   initializeGoalPrompts(join(resourcesPath, 'goal', 'goal.yaml'));
+}
+
+/**
+ * Register runtime skill sources for a Node host.
+ *
+ * The CLI and desktop hosts use the same precedence: explicit custom roots,
+ * project skills, user skills, and bundled skills. The CLI supplies custom and
+ * interop options from command-line flags; desktop uses the defaults so it
+ * always gets project, user, and bundled runtime skills.
+ */
+export function initializeNodeRuntimeSkills(
+  options: NodeRuntimeSkillOptions,
+): void {
+  setRuntimeSkillSources(
+    defaultSkillSources(
+      {
+        cwd: options.cwd,
+        resourcesPath: options.resourcesPath,
+      },
+      options.skillSourceOptions,
+    ),
+  );
 }
 
 /**
