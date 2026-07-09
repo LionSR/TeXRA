@@ -3252,6 +3252,51 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('surfaces an error when restoreState fails to build main-view state (cursor[bot] #7827)', async () => {
+    const messages: unknown[] = [];
+    const errors: string[] = [];
+    const bridge = await createBridge(messages, {
+      showErrorMessage: async (message) => {
+        errors.push(message);
+      },
+    });
+
+    try {
+      // inputFiles must be string[]; a non-array value makes
+      // MainViewPersistedStateSchema.parse() inside buildMainViewState throw,
+      // so restoreTaskState() returns false and the handler must surface it
+      // instead of silently doing nothing (unlike the extension's
+      // texra.restoreState, which shows RESTORE_MALFORMED_MESSAGE).
+      emitRunConfigFact(bridge, {
+        streamId: 'stream-1',
+        executionId: 'ec1003' as ExecutionId,
+        taskState: {
+          agentConfig: {
+            ...SEARCH_TOOL_USE_AGENT_CONFIG,
+            inputFiles: 12345,
+          },
+        },
+      });
+      await settleProgressEvents();
+      messages.length = 0;
+
+      const handleRestoreState = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.RESTORE_STATE
+        ],
+      );
+      await handleRestoreState({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-1',
+      });
+
+      expect(messages).toEqual([]);
+      expect(errors).toEqual(['Failed to restore state']);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('flushes debounced stream logs before shutdown can drop them', async () => {
     const streamId = 'shutdown-flush' as StreamTabId;
     const kvStoreBacking = new Map<string, unknown>();
