@@ -125,6 +125,7 @@ Mirrors [`docs/proposals/fewer-elements-2026-07.md`](../../../../docs/proposals/
 - **Net-element accounting (R6).** A `refactor:`/`simplify:`/`consolidate`/`dedupe`/`extract` PR body must report constructs added vs deleted (files from diffstat; exported symbols via `^[+-]export` over the diff; class/interface/enum declarations likewise) alongside net LoC. Positive element delta without a stated, staged reason is a merge blocker.
 - **Test budget (R7).** New test file only when the product module has no existing suite (one suite per module, path-mirrored under `src/test-kernel/`; or one suite per named cross-module scenario, stated in the PR body); otherwise extend. Tests pinning #6981-ledgered scaffolding carry an in-file expiry comment naming the row, and their LoC counts double in the R6 net accounting. ≥4 structurally identical cases use `test.each`.
 - **Consumer-grep before emitter deletion (R8).** A PR deleting or re-routing an emit path states the grepped subscriber count for every affected key in its body. Missing count on a deletion PR is a merge blocker (#7398 precedent: a live `bus.on` consumer was severed for 3.5h on main).
+- **Template enforcement.** Reject any `refactor:`/`simplify:`/`consolidate`/`dedupe`/`extract` PR whose body is missing the `## Net elements (R6)` or `## Consumer counts (R8)` sections from `.github/PULL_REQUEST_TEMPLATE.md` — letter-level compliance, not just spirit (#7736).
 
 ## 15. Error-handling and fallback discipline (2026-07 audit)
 
