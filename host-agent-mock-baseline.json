@@ -1,0 +1,93 @@
+{
+  "semantics": "vi.mock() call sites in host-side (CLI + desktop) test-kernel suites (src/test-kernel/cli/**, src/test-kernel/desktop/**) that mock an internal @agent/* module specifier. Each site pins @agent's current internal module layout from outside src/agent, per issue #7684 QA-2. The ratchet fails only when the current site count exceeds this baseline; a decrease is welcome and should shrink this file.",
+  "sites": [
+    {
+      "file": "src/test-kernel/cli/AgentResolution.vitest.mts",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/AgentsCommand.vitest.mts",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/AgentsRunCommand.vitest.mts",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/AgentsRunCommand.vitest.mts",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/ChatDefaults.vitest.mts",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/ChatDefaultsFastPath.vitest.mts",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
+      "specifier": "@agent/runtime/executionRegistry"
+    },
+    {
+      "file": "src/test-kernel/cli/CliInitPlatform.vitest.mts",
+      "specifier": "@agent/index/platformAgentDirectories"
+    },
+    {
+      "file": "src/test-kernel/cli/History.vitest.mts",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/InitCommand.vitest.mts",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/MultiAgentRunCommand.vitest.mts",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/MultiAgentRunCommand.vitest.mts",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/OnboardingGate.vitest.mts",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/RunChatConfig.vitest.mts",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/RunChatRegistration.vitest.mts",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/RunExecution.vitest.mts",
+      "specifier": "@agent/runtime/runAgent"
+    },
+    {
+      "file": "src/test-kernel/cli/RunExecution.vitest.mts",
+      "specifier": "@agent/storage"
+    },
+    {
+      "file": "src/test-kernel/cli/RunProgressRenderer.vitest.mts",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/SessionResumeResolution.vitest.mts",
+      "specifier": "@agent/runtime/SessionResumeRetrieval"
+    },
+    {
+      "file": "src/test-kernel/cli/SessionResumeResolution.vitest.mts",
+      "specifier": "@agent/runtime/streamTab"
+    },
+    {
+      "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.mts",
+      "specifier": "@agent/index"
+    },
+    {
+      "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.mts",
+      "specifier": "@agent/storage"
+    }
+  ]
+}
