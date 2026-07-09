@@ -119,6 +119,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private lastLine = '';
   private liveLine = false;
   private rootStreamId: StreamTabId | undefined;
+  private rootStreamStatus: StreamPhase | undefined;
   private rootStreamTerminal = false;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -297,7 +298,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
   private applyStatus(streamId: StreamTabId, status: StreamPhase): void {
     if (!this.isRootStream(streamId)) return;
+    if (this.rootStreamStatus === status) return;
 
+    this.rootStreamStatus = status;
     this.state.phase = formatRunProgressStatus(status);
     this.rootStreamTerminal = isTerminalStreamStatus(status);
     if (this.rootStreamTerminal) {
