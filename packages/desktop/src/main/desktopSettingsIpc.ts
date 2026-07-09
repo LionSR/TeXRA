@@ -532,37 +532,63 @@ export function createDesktopSettingsIpc(
     });
   }
 
+  const HISTORY_CONFIG_MALFORMED_MESSAGE =
+    'History item is malformed or from an incompatible version';
+
+  type HistoryConfigResult =
+    | { status: 'ok'; config: AgentConfig }
+    | { status: 'not_found' }
+    | { status: 'invalid' };
+
   async function readHistoryConfig(
     historyId: string,
-  ): Promise<AgentConfig | undefined> {
+  ): Promise<HistoryConfigResult> {
     const raw = await getExecutionStore(historyId as ExecutionId).readConfig();
-    return raw ? AgentConfigSchema.parse(raw) : undefined;
+    if (!raw) return { status: 'not_found' };
+    const parsed = AgentConfigSchema.safeParse(raw);
+    if (!parsed.success) return { status: 'invalid' };
+    return { status: 'ok', config: parsed.data };
   }
 
   async function rerunHistoryAgent(historyId: string): Promise<void> {
-    const config = await readHistoryConfig(historyId);
-    if (!config) {
+    const result = await readHistoryConfig(historyId);
+    if (result.status === 'not_found') {
       await options.showInfoMessage?.('History item not found');
       return;
     }
-    const validated = validateExecutionRequest({ config });
+    if (result.status === 'invalid') {
+      await options.showErrorMessage?.(HISTORY_CONFIG_MALFORMED_MESSAGE);
+      return;
+    }
+    const validated = validateExecutionRequest({ config: result.config });
     if (!validated.valid) {
       await options.showErrorMessage?.(validated.message);
       return;
     }
+    if (!options.runExecution) {
+      await options.showErrorMessage?.(
+        'Rerunning agents from history is not available in this build',
+      );
+      return;
+    }
     await options.showInfoMessage?.('Rerunning agent from history');
-    await options.runExecution?.(validated.request);
+    await options.runExecution(validated.request);
   }
 
   async function restoreHistoryAgent(historyId: string): Promise<void> {
-    const config = await readHistoryConfig(historyId);
-    if (!config) {
+    const result = await readHistoryConfig(historyId);
+    if (result.status === 'not_found') {
       await options.showInfoMessage?.('History item not found');
       return;
     }
+    if (result.status === 'invalid') {
+      await options.showErrorMessage?.(HISTORY_CONFIG_MALFORMED_MESSAGE);
+      return;
+    }
     const restored =
-      (await options.restoreTaskState?.(agentConfigToTaskState(config))) ??
-      false;
+      (await options.restoreTaskState?.(
+        agentConfigToTaskState(result.config),
+      )) ?? false;
     if (!restored) {
       await options.showErrorMessage?.('Failed to restore configuration');
     }
