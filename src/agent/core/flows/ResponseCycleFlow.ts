@@ -14,10 +14,11 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
-import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import {
+  isTokenLimitStopReason,
+  type ProviderStopReason,
+} from '@agent/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
-
-import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import { K_SLICE } from '@agent/core/constants';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';

@@ -28,6 +28,27 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { StandardPricingConfig } from '@agent/utils/priceUtils';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
+import {
+  ANTHROPIC_STOP,
+  GOOGLE_FINISH,
+  isTokenLimitStopReason,
+  OPENAI_CHAT_FINISH,
+} from '@agent/types/StopReasonTypes';
+import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
+import type {
+  CreateResponseOptions,
+  CreateResponseResult,
+  ExtractResponseResult,
+  SdkToolCall,
+  StopConditionsResult,
+  TokenCountOptions,
+  TokenValidationResult,
+} from '@agent/types/ModelHandlerContracts';
+import type {
+  ServerToolExtractionResult,
+  WebSearchResult,
+} from '@agent/types/ServerToolTypes';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAX_TIER, FREE_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -80,30 +101,9 @@ import {
   shouldUseOpenRouter,
   usesServerSideKeysRoute,
 } from './support/ProxyConfigResolver';
-import {
-  ANTHROPIC_STOP,
-  GOOGLE_FINISH,
-  OPENAI_CHAT_FINISH,
-} from './types/StopReasonTypes';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
-import { isTokenLimitStopReason } from './utils/stopReasonUtils';
 
 // Type imports
-import type { ProviderStopReason } from './types/StopReasonTypes';
-import type { ProviderMessage } from './types/ProviderMessage';
-import type {
-  CreateResponseOptions,
-  CreateResponseResult,
-  ExtractResponseResult,
-  SdkToolCall,
-  StopConditionsResult,
-  TokenCountOptions,
-  TokenValidationResult,
-} from './types/ModelHandlerContracts';
-import type {
-  ServerToolExtractionResult,
-  WebSearchResult,
-} from './types/ServerToolTypes';
 
 /**
  * Generic SDK error tagging wrapper used by the base model handler.
