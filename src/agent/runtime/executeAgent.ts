@@ -390,13 +390,13 @@ export async function executeAgent(
     session: options.session,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
   });
-  ctx.delegation = {
+  const runContextOptions = {
     delegationDepth: options.delegationDepth ?? 0,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+    runtimeUnavailableTools: options.runtimeUnavailableTools,
+    stopAfterCycle: options.stopAfterCycle,
   };
-  ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
-  ctx.stopAfterCycle = options.stopAfterCycle;
-  return withExecutionRunContext(ctx, async () => {
+  return withExecutionRunContext(ctx, runContextOptions, async () => {
     const { setting, config } = ctx;
     const {
       streamId: runStreamId,
@@ -492,24 +492,25 @@ export async function resumeToolUseFromSnapshot(
   // Recover delegation depth from the persisted parent-execution chain
   // so resumed subagents remain gated by the nested-delegation policy
   // instead of silently promoting to root.
-  ctx.delegation = {
-    delegationDepth: await computeDelegationDepthFromStorage(
-      snapshot.executionId,
-    ),
+  const delegationDepth = await computeDelegationDepthFromStorage(
+    snapshot.executionId,
+  );
+  const runContextOptions = {
+    delegationDepth,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+    runtimeUnavailableTools: options.runtimeUnavailableTools,
   };
-  ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
   const { setting } = ctx;
   const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
 
-  return withExecutionRunContext(ctx, async () => {
+  return withExecutionRunContext(ctx, runContextOptions, async () => {
     if (setting.agentCategory !== AgentCategory.ToolUse) {
       throw new AgentError(
         'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
       );
     }
 
-    const isSubagent = (ctx.delegation?.delegationDepth ?? 0) > 0;
+    const isSubagent = delegationDepth > 0;
     const result = await runFlowWithLifecycle(
       ctx,
       async (handle) => {
