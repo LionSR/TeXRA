@@ -16,10 +16,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
-import type {
-  AgentCore,
-  AgentRunIdentity,
-} from '@agent/core/flows/BaseFlowServices';
+import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -75,7 +72,7 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('AgentLaunchContext');
 
-export interface AgentLaunchContext extends AgentCore, AgentRunIdentity {
+export interface AgentLaunchContext extends AgentCore {
   runScope: RunScope;
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
@@ -89,16 +86,6 @@ export interface AgentLaunchContext extends AgentCore, AgentRunIdentity {
    * ambient {@link RunContext}. See `RunContext.toolEditApprovalHandler`.
    */
   toolEditApprovalHandler?: ToolEditApprovalPort;
-  /**
-   * Session that owns this run's coordination state. Always populated by
-   * {@link buildAgentLaunchContext} (defaults to `currentSession()` — the
-   * parent run's session for a delegated launch, the process default for a root
-   * launch) — hence required here, unlike the optional
-   * {@link AgentLaunchInput.session} launch param — and projected into the
-   * ambient {@link RunContext} so run-scoped code resolves it via
-   * `currentSession()`.
-   */
-  session: SessionHandle;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -474,8 +461,6 @@ async function assembleAgentLaunchContext(
     setting,
     prompt,
     modelHandler,
-    streamId,
-    executionId,
     logger: agentLogger,
     parentStage,
     storageKey,
@@ -483,13 +468,10 @@ async function assembleAgentLaunchContext(
     attachedMemoryMisses,
     usageMonitor,
     runScope,
-    runtimeHost: runScope.runtimeHost,
     streamStatus,
-    workingDirectory: runScope.workingDirectory,
     initialUserMessageForTranscript: initialMediaMayBeInserted
       ? initialInstruction
       : undefined,
-    session: runScope.session,
     disposeTrace: runTrace.dispose,
   };
 }
