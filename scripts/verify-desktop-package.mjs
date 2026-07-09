@@ -658,6 +658,13 @@ async function checkBundledResources(app, failures) {
       );
     }
   }
+
+  await checkExists(
+    app,
+    'resources/traceViewerStandalone/index.html',
+    'trace-viewer standalone HTML template',
+    failures,
+  );
 }
 
 async function checkMonacoWorkerAssets(app, failures) {
@@ -746,6 +753,7 @@ const summary = [
   '- dist/renderer/assets/*.css',
   '- dist/renderer/assets Monaco worker chunks',
   '- resources/agents, resources/tool_use_agents, and resources/skills',
+  '- resources/traceViewerStandalone/index.html',
   '- package.json runtime dependencies',
   '- node_modules runtime dependency packages',
   '- no VS Code extension host runtime import',
