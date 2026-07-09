@@ -8,10 +8,8 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { SessionHandle } from './SessionHandle';
 
 interface RunContextCommon {
-  readonly runtimeHost: AgentRuntimeHost;
   /** Current model short name for this run (e.g. "opus46T"). */
   readonly model?: string;
-  readonly workingDirectory?: string;
   readonly delegationDepth?: number;
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
@@ -30,20 +28,16 @@ interface RunContextCommon {
 export interface LaunchRunContext extends RunContextCommon {
   readonly kind: 'launch';
   readonly runScope: RunScope;
-  readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
-  /** Agent name (e.g. "orchestrator", "search-agent"). */
-  readonly agentName: string;
-  /** Session that owns this run's coordination state. */
-  readonly session: SessionHandle;
 }
 
 interface BareRunContext extends RunContextCommon {
   readonly kind: 'bare';
+  readonly runtimeHost: AgentRuntimeHost;
   readonly streamId?: StreamTabId;
   readonly executionId?: ExecutionId;
   /** Agent name (e.g. "orchestrator", "search-agent"). */
   readonly agentName?: string;
+  readonly workingDirectory?: string;
   /** Session that owns this run's coordination state. */
   readonly session?: SessionHandle;
 }
@@ -108,43 +102,50 @@ const runContextScope = new AsyncLocalStorage<RunContext>();
 // ---------------------------------------------------------------------------
 
 type CommonRunContextFieldNames =
-  | 'runtimeHost'
-  | 'runScope'
-  | 'streamId'
-  | 'executionId'
-  | 'agentName'
-  | 'workingDirectory'
   | 'delegationDepth'
   | 'approvalPromptsUnavailable'
   | 'runtimeUnavailableTools'
   | 'stopAfterCycle'
-  | 'session'
   | 'toolEditApprovalHandler';
+
+type BareRunContextFieldNames =
+  | CommonRunContextFieldNames
+  | 'runtimeHost'
+  | 'streamId'
+  | 'executionId'
+  | 'agentName'
+  | 'workingDirectory'
+  | 'session';
 
 /**
  * Fields shared by both `RunContext` kinds, forwarded as-is from the input
- * options. The return type is `Pick<T, ...>` (rather than inferred from the
- * function body) so the `live` branch's `CreateLaunchRunContextFields`
- * guarantees — e.g. a required `streamId` — survive the call instead of
- * widening back to the optional `bare` shape.
+ * options.
  */
 function commonRunContextFields<T extends CreateRunContextBase>(
   options: T,
 ): Pick<T, CommonRunContextFieldNames> {
   return {
-    runtimeHost: options.runtimeHost,
-    runScope: options.runScope,
-    streamId: options.streamId,
-    executionId: options.executionId,
-    agentName: options.agentName,
-    workingDirectory: options.workingDirectory,
     delegationDepth: options.delegationDepth,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
-    session: options.session,
     toolEditApprovalHandler: options.toolEditApprovalHandler,
   } as Pick<T, CommonRunContextFieldNames>;
+}
+
+/** Fields used only by the manually constructed `bare` context shape. */
+function bareRunContextFields<T extends CreateRunContextBase>(
+  options: T,
+): Pick<T, BareRunContextFieldNames> {
+  return {
+    ...commonRunContextFields(options),
+    runtimeHost: options.runtimeHost,
+    streamId: options.streamId,
+    executionId: options.executionId,
+    agentName: options.agentName,
+    workingDirectory: options.workingDirectory,
+    session: options.session,
+  } as Pick<T, BareRunContextFieldNames>;
 }
 
 /**
@@ -176,12 +177,6 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
       kind: 'launch',
       ...commonRunContextFields(options),
       runScope,
-      runtimeHost: runScope.runtimeHost,
-      streamId: runScope.streamId,
-      executionId: runScope.executionId,
-      agentName: runScope.agentName,
-      workingDirectory: runScope.workingDirectory,
-      session: runScope.session,
       get model() {
         return getModel() ?? model;
       },
@@ -191,7 +186,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
   const { model } = options;
   return Object.freeze({
     kind: 'bare',
-    ...commonRunContextFields(options),
+    ...bareRunContextFields(options),
     get model() {
       return model;
     },
