@@ -15,7 +15,7 @@ import type { DesktopProgressBridge } from './desktopAgentExecution.js';
 
 type DesktopProgressIpcBridge = Pick<
   DesktopProgressBridge,
-  'progressViewInboundHandlers' | 'syncFullView'
+  'progressViewInboundHandlers' | 'syncFullView' | 'replayPendingPrompts'
 >;
 
 export interface DesktopProgressIpcOptions {
@@ -88,9 +88,13 @@ export function createDesktopProgressIpc(
         const progress = getProgress();
         if (progress) {
           progress.syncFullView();
+          progress.replayPendingPrompts();
         } else if (ensureProgress) {
           void ensureProgress()
-            .then((loaded) => loaded.syncFullView())
+            .then((loaded) => {
+              loaded.syncFullView();
+              loaded.replayPendingPrompts();
+            })
             .catch(reportAsyncError);
         }
         return false;

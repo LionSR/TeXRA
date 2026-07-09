@@ -135,6 +135,18 @@ export function buildApprovalRequestHandlerSet(
   };
 }
 
+export function replayApprovalRequestHandlers(
+  handlers: ApprovalRequestHandlerSet,
+): void {
+  handlers.toolEdit.replay();
+  handlers.bash.replay();
+  handlers.externalInquiry.replay();
+  handlers.retry.replay();
+  handlers.agentProposal.replay();
+  handlers.planApproval.replay();
+  handlers.userQuestion.replay();
+}
+
 export interface ProgressBackendUiConfigParams {
   handlers: ApprovalRequestHandlerSet;
   /** Transport for the bypass-state pushes (handlers own their own transport). */
