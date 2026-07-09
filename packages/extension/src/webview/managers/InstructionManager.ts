@@ -7,6 +7,7 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundMessage } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
+import { filterNotNull } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   PASTED_DIR,
@@ -89,9 +90,9 @@ export class InstructionManager extends BaseWebviewManager {
       ['outputFiles', 'outputFilesActive'],
     ] as const;
     for (const [field, activeField] of multiFields) {
-      const files = message[field];
+      const files: (string | null)[] | undefined = message[field];
       if (message[activeField] && Array.isArray(files) && files.length > 0) {
-        context[field] = files;
+        context[field] = files.filter(filterNotNull);
       }
     }
 
