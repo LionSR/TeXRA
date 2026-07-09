@@ -239,6 +239,79 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('routes removeStream session facts through the shared lifecycle delete path', async () => {
+    const session = new SessionHandle();
+    const deletedStreams: StreamTabId[] = [];
+    const backendRef: { current?: ProgressBackend } = {};
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      session,
+      sendMessage: vi.fn(() => true),
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+      deleteStream: async (stream) => {
+        const currentBackend = backendRef.current;
+        if (!currentBackend) {
+          throw new Error('Progress backend was not initialized');
+        }
+        await currentBackend.state.clearStream(stream);
+        deletedStreams.push(stream);
+      },
+    });
+    backendRef.current = backend;
+    const subscription = backend.setupEventListeners();
+    const streamId = 'desktop-child-stream' as StreamTabId;
+
+    try {
+      backend.state.streamLogs.ensureStream(streamId);
+      backend.state.getOrCreateStreamState(streamId, AgentCategory.ToolUse);
+
+      session.events.emit({
+        scope: 'session',
+        event: { type: 'removeStream', payload: { streamId } },
+      });
+
+      await vi.waitFor(() => expect(deletedStreams).toEqual([streamId]));
+      expect(backend.state.streamLogs.has(streamId)).toBe(false);
+      expect(backend.state.getStreamState(streamId)).toBeUndefined();
+    } finally {
+      subscription.dispose();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('handles removeStream session facts before backend load', async () => {
+    const session = new SessionHandle();
+    const deletedStreams: StreamTabId[] = [];
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      session,
+      sendMessage: vi.fn(() => true),
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+      deleteStream: async (stream) => {
+        deletedStreams.push(stream);
+      },
+    });
+    const subscription = backend.setupEventListeners();
+    const streamId = 'preload-child-stream' as StreamTabId;
+
+    try {
+      session.events.emit({
+        scope: 'session',
+        event: { type: 'removeStream', payload: { streamId } },
+      });
+
+      await vi.waitFor(() => expect(deletedStreams).toEqual([streamId]));
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('uses the injected target predicate before sending messages', () => {
     const sent = vi.fn(() => true);
     let hasTarget = false;

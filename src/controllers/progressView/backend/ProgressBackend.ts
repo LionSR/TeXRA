@@ -6,6 +6,7 @@ import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater
 import {
   ProgressFactApplier,
   PROGRESS_BACKEND_RUN_PROGRESS_EVENT_TYPES,
+  type DeleteProgressStream,
   type GetProgressStreamControls,
   type ProgressEventSubscription,
 } from '@controllers/progressView/backend/events/ProgressFactApplier';
@@ -41,6 +42,7 @@ export interface ProgressBackendOptions {
   hasTarget(): boolean;
   configureUi(services: ProgressBackendServices): ProgressBackendUiConfig;
   getStreamControls?: GetProgressStreamControls;
+  deleteStream?: DeleteProgressStream;
   /** Session that owns this backend's coordination state (defaults to the process session). */
   session?: SessionHandle;
   /**
@@ -105,6 +107,7 @@ export class ProgressBackend {
       this.webviewBridge,
       ui.hasPendingPermissions,
       options.getStreamControls,
+      options.deleteStream,
     );
     this.interactionHandler = new ProgressInteractionHandler(ui.callbacks);
   }
