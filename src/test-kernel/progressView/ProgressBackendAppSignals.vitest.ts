@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  ProgressBackend,
+  type ProgressBackendUiConfig,
+} from '@controllers/progressView/backend/ProgressBackend';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 import type {
   AppSignal,
@@ -12,11 +16,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
-import {
-  ProgressBackend,
-  type ProgressBackendUiConfig,
-} from '@shared/progressView/backend/ProgressBackend';
-import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 class MemoryMementoStorage implements MementoStorage {
   private readonly values = new Map<string, unknown>();

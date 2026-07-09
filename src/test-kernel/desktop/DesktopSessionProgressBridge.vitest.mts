@@ -15,8 +15,8 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
-import type { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import type { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
 
 // ---------------------------------------------------------------------------
 // DesktopSessionProgressBridge

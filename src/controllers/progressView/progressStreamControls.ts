@@ -1,11 +1,11 @@
 import type { StreamTabId } from '@shared/schemas';
-import type { ProgressStreamControls } from '@shared/progressView/backend/events/ProgressFactApplier';
 import { isGoalInFlight } from '@shared/schemas/goal';
 import {
   isApprovalBypassedForStream,
   proposalApprovalState,
 } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
+import type { ProgressStreamControls } from '@controllers/progressView/backend/events/ProgressFactApplier';
 
 export function getProgressStreamControls(
   streamId: StreamTabId,

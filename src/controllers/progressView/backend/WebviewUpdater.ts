@@ -1,3 +1,12 @@
+import {
+  buildStreamInfo,
+  buildStreamInfos,
+} from '@controllers/progressView/backend/streamInfoUtils';
+import {
+  type ActiveStreamId,
+  ProgressViewState,
+  type StreamBadgeSnapshot,
+} from '@controllers/progressView/backend/state/ProgressViewState';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
@@ -22,15 +31,6 @@ import type {
   SyncStreamContentPayload,
   TokenUsageStats,
 } from '@shared/schemas';
-import {
-  buildStreamInfo,
-  buildStreamInfos,
-} from '@shared/progressView/backend/streamInfoUtils';
-import {
-  type ActiveStreamId,
-  ProgressViewState,
-  type StreamBadgeSnapshot,
-} from '@shared/progressView/backend/state/ProgressViewState';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import type { GoalStatus } from '@shared/schemas/goal';
 
