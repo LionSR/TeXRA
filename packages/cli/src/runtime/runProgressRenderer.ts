@@ -25,25 +25,6 @@ import {
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
-import type { CliProgressEventPayloads } from './cliProgressEvents';
-
-const RUN_PROGRESS_EVENTS = [
-  'setTaskState',
-  'updateConversationProgress',
-  'updateRoundStage',
-  'updateActiveProcesses',
-  'updateActiveSubagents',
-  'updateStreamStatus',
-  'updateStreamDescription',
-] as const satisfies readonly (keyof CliProgressEventPayloads)[];
-
-export type RunProgressEvent = (typeof RUN_PROGRESS_EVENTS)[number];
-
-const RunProgressEventSet: ReadonlySet<string> = new Set(RUN_PROGRESS_EVENTS);
-
-export function isRunProgressEvent(event: string): event is RunProgressEvent {
-  return RunProgressEventSet.has(event);
-}
 
 const RUN_PROGRESS_RUN_FACT_TYPES = [
   'conversation.progress',
