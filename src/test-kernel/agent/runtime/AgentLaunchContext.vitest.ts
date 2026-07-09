@@ -10,6 +10,7 @@ import {
 } from '@agent/runtime/AgentLaunchContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { useRunContext } from '@agent/runtime/RunContext';
+import { createRunScope } from '@agent/runtime/RunScope';
 
 import { createRecordingHost } from '../progressTestUtils';
 
@@ -37,21 +38,36 @@ describe('AgentLaunchContext', () => {
 
   it('projects model changes into the active run context', async () => {
     const explicit = createRecordingHost();
-    const ctx = {
+    const session = {} as AgentLaunchContext['session'];
+    const runScope = createRunScope({
       runtimeHost: explicit.host,
-      logger: noopTrace,
       streamId: 'launch-context-stream' as AgentLaunchContext['streamId'],
       executionId:
         'launch-context-execution' as AgentLaunchContext['executionId'],
+      agentName: 'chat',
+      session,
+    });
+    const ctx = {
+      runtimeHost: explicit.host,
+      runScope,
+      logger: noopTrace,
+      streamId: runScope.streamId,
+      executionId: runScope.executionId,
       config: {
-        agent: 'chat',
+        agent: runScope.agentName,
         model: 'deepseekT',
       },
-      session: {} as AgentLaunchContext['session'],
+      session,
     } as unknown as AgentLaunchContext;
 
     await withExecutionRunContext(ctx, async () => {
-      expect(useRunContext().model).toBe('deepseekT');
+      const context = useRunContext();
+      expect(context.model).toBe('deepseekT');
+      expect(context.kind).toBe('launch');
+      if (context.kind !== 'launch') {
+        throw new Error('expected launch context');
+      }
+      expect(context.runScope).toBe(runScope);
 
       ctx.config.model = 'sonnet46T';
 
