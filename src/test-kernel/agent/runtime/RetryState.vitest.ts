@@ -16,6 +16,7 @@ import type {
   RetryResult,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { createRunScope } from '@agent/runtime/RunScope';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   StreamStatusMachine,
@@ -90,14 +91,16 @@ async function withRetryRunContext<T>(
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => undefined,
-    runtimeHost: noopAgentRuntimeHost,
-    streamId,
-    executionId: `${streamId}-execution` as ExecutionId,
-    agentName: 'retry-test',
-    session: sessionWithInteractions({
-      requestRetry,
-      resolve: () => false,
-      cancel: () => {},
+    runScope: createRunScope({
+      runtimeHost: noopAgentRuntimeHost,
+      streamId,
+      executionId: `${streamId}-execution` as ExecutionId,
+      agentName: 'retry-test',
+      session: sessionWithInteractions({
+        requestRetry,
+        resolve: () => false,
+        cancel: () => {},
+      }),
     }),
   });
   return await withRunContext(context, fn);
@@ -112,11 +115,13 @@ async function withSessionRetryRunContext<T>(
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => undefined,
-    runtimeHost,
-    streamId,
-    executionId: `${streamId}-execution` as ExecutionId,
-    agentName: 'retry-test',
-    session,
+    runScope: createRunScope({
+      runtimeHost,
+      streamId,
+      executionId: `${streamId}-execution` as ExecutionId,
+      agentName: 'retry-test',
+      session,
+    }),
   });
   return await withRunContext(context, fn);
 }
