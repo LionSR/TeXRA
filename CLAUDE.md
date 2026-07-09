@@ -107,13 +107,13 @@ Key directories in `src/`:
 - `agent/` - Agent core, implementations, model handlers, runtime, output, storage, remote, node, trace, goal, review, export, followUp, templates, features
   - `implementations/flows/` - PocketFlow-based flow implementations (`reflection`, `tooluse`, `agentCreator`)
 - `platform/` - Platform abstraction layer (composition root). Hosts (VS Code, CLI, Electron) call `initPlatform()` once at startup; core code accesses host services via `platform()` from `@platform/platform`. See `src/platform/platform.ts`.
-- `controllers/` - Host-neutral orchestration for the main, progress, and settings views behind injected ports
+- `controllers/` - Host-neutral orchestration for the main, progress, and settings views behind injected ports, including the progress-view backend
 - `common/` - Backend-only helpers (errors, state, files, webview base classes)
 - `utils/` - Utilities shared between extension host and webviews
 - `tools/` - Tool implementations for tool-use agents
 - `model/` - Model configuration, registry, and providers
 - `latex/` - LaTeX processing (formatting, diff, TikZ, PDF)
-- `shared/` - Shared schemas and message handlers across webviews
+- `shared/` - Wire contracts, shared schemas, and UI-shared message types; do not put host orchestration or new `@agent/*` dependencies here
 - `auth/` - Authentication logic
 - `housekeeping/` - Cleanup and packing operations
 - `hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers
@@ -407,7 +407,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - `src/latex/` (LaTeX processing, formatting, diff)
 - `src/tools/` (tool implementations — use `@utils/files/fsEntryType` instead of `vscode.FileType`)
 - `src/controllers/` (host-neutral orchestration behind injected ports)
-- `src/shared/` (IPC schemas, message types)
+- `src/shared/` (wire contracts, IPC schemas, message types; no new `@agent/*` imports)
 - `src/replacement/` (text cleanup rules)
 - `src/eventBus/` (progress event system)
 - `src/hosts/` (host capability ports)

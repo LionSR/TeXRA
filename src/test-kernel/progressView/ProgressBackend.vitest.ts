@@ -8,6 +8,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { streamDataDir, StreamSnapshotStore } from '@transcript';
 
 // Local imports - agent
+import {
+  ProgressBackend,
+  type ProgressBackendServices,
+  type ProgressBackendUiConfig,
+} from '@controllers/progressView/backend/ProgressBackend';
+import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import type { AgentEvent } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -43,14 +49,8 @@ import {
   type TodoItem,
   type UpdateStreamDescriptionPayload,
 } from '@shared/schemas';
-import {
-  ProgressBackend,
-  type ProgressBackendServices,
-  type ProgressBackendUiConfig,
-} from '@shared/progressView/backend/ProgressBackend';
-import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
-import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { StorageFS } from '@utils/files';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 class MemoryMementoStorage implements MementoStorage {
   private readonly values = new Map<string, unknown>();

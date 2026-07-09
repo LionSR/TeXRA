@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - runtime
+import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -20,8 +21,7 @@ import {
   type ToolEditPermission,
   type UserQuestionPermission,
 } from '@shared/schemas';
-import { ApprovalRequestHandler } from '@shared/progressView/backend/ApprovalRequestHandler';
-import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
+import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 
 /**
  * Parity pins for the coordinator fold (#7487): plan approval, proposal, and

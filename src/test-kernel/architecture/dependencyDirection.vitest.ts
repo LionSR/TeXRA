@@ -49,6 +49,21 @@ const VSCODE_IMPORT_PATTERNS = [
   /\bimport\s*\(\s*['"]vscode['"]\s*\)/,
 ];
 
+const AGENT_IMPORT_PATTERNS = [
+  /\bfrom\s+['"]@agent\//,
+  /\brequire\s*\(\s*['"]@agent\//,
+  /\bimport\s*\(\s*['"]@agent\//,
+];
+
+const SHARED_AGENT_IMPORT_ALLOWLIST = [
+  // Existing pre-relocation edge. Keep this list fixed unless the edge is
+  // deleted; new shared-to-agent imports would recreate the moved inversion.
+  'src/shared/agent/terminalResultPresentation.ts',
+] as const;
+const SHARED_AGENT_IMPORT_ALLOWLIST_SET = new Set<string>(
+  SHARED_AGENT_IMPORT_ALLOWLIST,
+);
+
 /** Drop comments so a prose mention like "do not import from 'vscode'" can't
  *  trip the import patterns. Naive `//` stripping is fine here: a real import
  *  precedes any trailing comment, and cutting mid-string only matters on lines
@@ -84,6 +99,11 @@ function importsVscode(file: string): boolean {
   return VSCODE_IMPORT_PATTERNS.some((pattern) => pattern.test(source));
 }
 
+function importsAgent(file: string): boolean {
+  const source = stripComments(readFileSync(file, 'utf8'));
+  return AGENT_IMPORT_PATTERNS.some((pattern) => pattern.test(source));
+}
+
 describe('VS Code-free zones never import vscode', () => {
   for (const zone of VSCODE_FREE_ZONES) {
     it(`${zone} has no vscode imports`, () => {
@@ -100,5 +120,17 @@ describe('VS Code-free zones never import vscode', () => {
       0,
     );
     expect(scanned).toBeGreaterThan(100);
+  });
+});
+
+describe('Shared layer dependency direction', () => {
+  it('does not grow shared-to-agent imports', () => {
+    const offenders = sourceFilesUnder('src/shared')
+      .filter(importsAgent)
+      .map((file) => relative(REPO_ROOT, file).replaceAll('\\', '/'))
+      .filter((file) => !SHARED_AGENT_IMPORT_ALLOWLIST_SET.has(file))
+      .toSorted();
+
+    expect(offenders).toEqual([]);
   });
 });

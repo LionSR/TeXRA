@@ -22,7 +22,7 @@ import {
 } from '@agent/runtime/hostInteractionResultMappers';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
-import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
+import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,

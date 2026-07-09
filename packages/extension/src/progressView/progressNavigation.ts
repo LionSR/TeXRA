@@ -1,5 +1,5 @@
+import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import type { StreamTabId } from '@shared/schemas';
-import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 
 import {
   ProgressViewProvider,
