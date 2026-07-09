@@ -32,13 +32,11 @@ export interface SettingsViewCommandActions {
     readonly openFile: DataAction<typeof CMD.OPEN_MEMORY_FILE>;
     readonly openFolder: DataAction<typeof CMD.OPEN_MEMORY_FOLDER>;
     readonly delete: DataAction<typeof CMD.DELETE_MEMORY>;
-    readonly getEnabled: HandlerOrUnsupported;
     readonly setEnabled: EnabledAction;
     readonly pin: StoragePathAction;
     readonly unpin: StoragePathAction;
   };
   readonly history: {
-    readonly getData: HandlerOrUnsupported;
     readonly rerunAgent: DataAction<typeof CMD.RERUN_AGENT>;
     readonly restoreAgent: DataAction<typeof CMD.RESTORE_AGENT>;
     readonly deleteAgent: HandlerOrUnsupported<[string]>;
@@ -48,8 +46,6 @@ export interface SettingsViewCommandActions {
     readonly exportChatHtml: DataAction<typeof CMD.EXPORT_CHAT_HTML>;
   };
   readonly profile: {
-    readonly getData: HandlerOrUnsupported;
-    readonly selectAgent: StringAction;
     readonly signIn: HandlerOrUnsupported;
     readonly signOut: HandlerOrUnsupported;
     readonly setApiAccessMode: HandlerOrUnsupported<
@@ -79,7 +75,6 @@ export interface SettingsViewCommandActions {
     readonly openExternalUrl: StringAction;
   };
   readonly modelSelection: {
-    readonly getData: HandlerOrUnsupported;
     readonly setEnabled: HandlerOrUnsupported<
       [Message<typeof CMD.SET_MODEL_ENABLED>['modelName'], boolean]
     >;
@@ -93,13 +88,10 @@ export interface SettingsViewCommandActions {
     readonly setPreferShortModelNames: EnabledAction;
   };
   readonly orchestration: {
-    readonly getSuperYoloEnabled: HandlerOrUnsupported;
-    readonly setSuperYoloEnabled: HandlerOrUnsupported;
     readonly setAllowOrchestratorKill: EnabledAction;
     readonly setDetachSubagentsOnStop: EnabledAction;
   };
   readonly agentSelection: {
-    readonly getData: HandlerOrUnsupported;
     readonly setEnabled: HandlerOrUnsupported<
       [
         {
@@ -140,16 +132,13 @@ export interface SettingsViewCommandActions {
       ]
     >;
     readonly viewRemotePrompt: DataAction<typeof CMD.VIEW_REMOTE_AGENT_PROMPT>;
-    readonly getCustomDir: HandlerOrUnsupported;
     readonly setCustomDir: HandlerOrUnsupported;
     readonly resetCustomDir: HandlerOrUnsupported;
-    readonly getModePresets: HandlerOrUnsupported;
     readonly applyModePreset: StringAction;
     readonly saveModePreset: HandlerOrUnsupported;
     readonly deleteModePreset: StringAction;
   };
   readonly gitAuthor: {
-    readonly getSettings: HandlerOrUnsupported;
     readonly setMarkCommits: EnabledAction;
     readonly setName: StringAction;
     readonly setEmail: StringAction;
@@ -167,14 +156,12 @@ export interface SettingsViewCommandActions {
     >;
   };
   readonly chatGpt: {
-    readonly getAuthStatus: HandlerOrUnsupported;
     readonly signIn: HandlerOrUnsupported;
     readonly signOut: HandlerOrUnsupported;
     readonly setPreferSubscription: EnabledAction;
     readonly setSubscriptionToolUseOnly: EnabledAction;
   };
   readonly approval: {
-    readonly getSettings: HandlerOrUnsupported;
     readonly setBashApprovalEnabled: EnabledAction;
     readonly setCodexSandboxMode: StringAction;
     readonly setCodexReasoningEffort: StringAction;
@@ -184,7 +171,6 @@ export interface SettingsViewCommandActions {
     readonly setClaudeAgentEffort: StringAction;
   };
   readonly tools: {
-    readonly getDashboardData: HandlerOrUnsupported;
     readonly openInstallUrl: StringAction;
     readonly installExtension: StringAction;
     readonly recheckStatus: HandlerOrUnsupported;
@@ -201,11 +187,9 @@ export interface SettingsViewCommandActions {
     >;
   };
   readonly latex: {
-    readonly getSettingsStatus: HandlerOrUnsupported;
     readonly applySettings: DataAction<typeof CMD.APPLY_LATEX_SETTINGS>;
     readonly installLatexWorkshop: HandlerOrUnsupported;
     readonly runInstallCommand: StringAction;
-    readonly getConfigValues: HandlerOrUnsupported;
     readonly setConfigValue: HandlerOrUnsupported<
       [
         {
@@ -262,14 +246,12 @@ export function createSettingsViewCommandHandlers(
     openMemoryFile: mapAction(actions.memory.openFile, (data) => [data]),
     openMemoryFolder: noDataAction(actions.memory.openFolder),
     deleteMemory: mapAction(actions.memory.delete, (data) => [data]),
-    getMemoryEnabled: noDataAction(actions.memory.getEnabled),
     setMemoryEnabled: mapAction(actions.memory.setEnabled, (data) => [
       data.enabled,
     ]),
     pinMemory: mapAction(actions.memory.pin, (data) => [data.storagePath]),
     unpinMemory: mapAction(actions.memory.unpin, (data) => [data.storagePath]),
 
-    getHistoryData: noDataAction(actions.history.getData),
     rerunAgent: mapAction(actions.history.rerunAgent, (data) => [data]),
     restoreAgent: mapAction(actions.history.restoreAgent, (data) => [data]),
     deleteAgent: mapAction(actions.history.deleteAgent, (data) => [
@@ -280,10 +262,6 @@ export function createSettingsViewCommandHandlers(
     exportChatTex: mapAction(actions.history.exportChatTex, (data) => [data]),
     exportChatHtml: mapAction(actions.history.exportChatHtml, (data) => [data]),
 
-    getProfileData: noDataAction(actions.profile.getData),
-    selectAgent: mapAction(actions.profile.selectAgent, (data) => [
-      data.agentName,
-    ]),
     signIn: noDataAction(actions.profile.signIn),
     signOut: noDataAction(actions.profile.signOut),
     setApiAccessMode: mapAction(actions.profile.setApiAccessMode, (data) => [
@@ -320,7 +298,6 @@ export function createSettingsViewCommandHandlers(
       data.url,
     ]),
 
-    getModelSelection: noDataAction(actions.modelSelection.getData),
     setModelEnabled: mapAction(actions.modelSelection.setEnabled, (data) => [
       data.modelName,
       data.enabled,
@@ -337,12 +314,6 @@ export function createSettingsViewCommandHandlers(
       (data) => [data.enabled],
     ),
 
-    getSuperYoloEnabled: noDataAction(
-      actions.orchestration.getSuperYoloEnabled,
-    ),
-    setSuperYoloEnabled: noDataAction(
-      actions.orchestration.setSuperYoloEnabled,
-    ),
     setAllowOrchestratorKill: mapAction(
       actions.orchestration.setAllowOrchestratorKill,
       (data) => [data.enabled],
@@ -352,7 +323,6 @@ export function createSettingsViewCommandHandlers(
       (data) => [data.enabled],
     ),
 
-    getAgentSelection: noDataAction(actions.agentSelection.getData),
     setAgentEnabled: mapAction(actions.agentSelection.setEnabled, (data) => [
       {
         category: data.category,
@@ -392,10 +362,8 @@ export function createSettingsViewCommandHandlers(
       actions.agentSelection.viewRemotePrompt,
       (data) => [data],
     ),
-    getCustomAgentDir: noDataAction(actions.agentSelection.getCustomDir),
     setCustomAgentDir: noDataAction(actions.agentSelection.setCustomDir),
     resetCustomAgentDir: noDataAction(actions.agentSelection.resetCustomDir),
-    getAgentModePresets: noDataAction(actions.agentSelection.getModePresets),
     applyAgentModePreset: mapAction(
       actions.agentSelection.applyModePreset,
       (data) => [data.presetId],
@@ -406,7 +374,6 @@ export function createSettingsViewCommandHandlers(
       (data) => [data.presetId],
     ),
 
-    getGitAuthorSettings: noDataAction(actions.gitAuthor.getSettings),
     setGitMarkCommits: mapAction(actions.gitAuthor.setMarkCommits, (data) => [
       data.enabled,
     ]),
@@ -439,7 +406,6 @@ export function createSettingsViewCommandHandlers(
       (data) => [data],
     ),
 
-    getChatGptAuthStatus: noDataAction(actions.chatGpt.getAuthStatus),
     signInChatGpt: noDataAction(actions.chatGpt.signIn),
     signOutChatGpt: noDataAction(actions.chatGpt.signOut),
     setChatGptPreferSubscription: mapAction(
@@ -451,7 +417,6 @@ export function createSettingsViewCommandHandlers(
       (data) => [data.enabled],
     ),
 
-    getApprovalSettings: noDataAction(actions.approval.getSettings),
     setBashApprovalEnabled: mapAction(
       actions.approval.setBashApprovalEnabled,
       (data) => [data.enabled],
@@ -481,7 +446,6 @@ export function createSettingsViewCommandHandlers(
       (data) => [data.effort],
     ),
 
-    getToolDashboardData: noDataAction(actions.tools.getDashboardData),
     openToolInstallUrl: mapAction(actions.tools.openInstallUrl, (data) => [
       data.url,
     ]),
@@ -497,7 +461,6 @@ export function createSettingsViewCommandHandlers(
       { toolId: data.toolId, kind: data.kind },
     ]),
 
-    getLatexSettingsStatus: noDataAction(actions.latex.getSettingsStatus),
     applyLatexSettings: mapAction(actions.latex.applySettings, (data) => [
       data,
     ]),
@@ -505,7 +468,6 @@ export function createSettingsViewCommandHandlers(
     runInstallCommand: mapAction(actions.latex.runInstallCommand, (data) => [
       data.installCommand,
     ]),
-    getLatexConfigValues: noDataAction(actions.latex.getConfigValues),
     setLatexConfigValue: mapAction(actions.latex.setConfigValue, (data) => [
       { field: data.field, value: data.value },
     ]),
