@@ -180,16 +180,19 @@ export async function hasAnyProviderApiKey(
 
 /**
  * Single source of truth for "does the user have a usable credential to
- * proceed with setup": an active ChatGPT (Codex) subscription, relay access
- * to server-side keys, or a non-blank provider API key. `canUseServerSideKeys`
- * already gates on sign-in and included-model-access internally, so callers
- * don't need to re-check those first. Shared by all three hosts (extension,
- * desktop, CLI) so this credential-gating logic can't drift between them.
+ * proceed with setup": an active ChatGPT (Codex) subscription, a non-blank
+ * provider API key, or relay access to server-side keys. Provider keys are
+ * checked before `canUseServerSideKeys()` deliberately: the latter is a
+ * network round-trip that can prime the relay-quota cache and trigger a
+ * quota auto-switch, so a cheap local key that already satisfies the gate
+ * should short-circuit before that side effect fires. Shared by all three
+ * hosts (extension, desktop, CLI) so this credential-gating logic — and its
+ * check order — can't drift between them.
  */
 export async function hasUsableSetupCredential(
   secrets: PlatformSecrets,
 ): Promise<boolean> {
   if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
-  if (await getServerSideKeyService().canUseServerSideKeys()) return true;
-  return hasAnyProviderApiKey(secrets);
+  if (await hasAnyProviderApiKey(secrets)) return true;
+  return getServerSideKeyService().canUseServerSideKeys();
 }
