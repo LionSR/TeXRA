@@ -34,12 +34,14 @@ interface DesktopProgressIpcModule {
   createDesktopProgressIpc(options: {
     progress?: {
       syncFullView(): void;
+      hydrateProgressViewInquiries(): Promise<void>;
       replayPendingPrompts(): void;
       progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
     };
     getProgress?: () =>
       | {
           syncFullView(): void;
+          hydrateProgressViewInquiries(): Promise<void>;
           replayPendingPrompts(): void;
           progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
         }
@@ -51,6 +53,7 @@ interface DesktopProgressIpcModule {
     onAsyncError?: (error: unknown) => void;
     ensureProgress?: () => Promise<{
       syncFullView(): void;
+      hydrateProgressViewInquiries(): Promise<void>;
       replayPendingPrompts(): void;
       progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
     }>;
@@ -73,6 +76,7 @@ function createProgress(
 ) {
   return {
     syncFullView: vi.fn(),
+    hydrateProgressViewInquiries: vi.fn(async () => undefined),
     replayPendingPrompts: vi.fn(),
     progressViewInboundHandlers: fillRegistry(progressViewInboundHandlers),
   };
@@ -91,7 +95,10 @@ describe('desktop Progress IPC', () => {
     expect(
       ipc.handleMessage({ command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY }),
     ).toBe(false);
+    await Promise.resolve();
+
     expect(progress.syncFullView).toHaveBeenCalledTimes(1);
+    expect(progress.hydrateProgressViewInquiries).toHaveBeenCalledTimes(1);
     expect(progress.replayPendingPrompts).toHaveBeenCalledTimes(1);
   });
 
@@ -107,6 +114,7 @@ describe('desktop Progress IPC', () => {
     await Promise.resolve();
 
     expect(progress.syncFullView).toHaveBeenCalledTimes(1);
+    expect(progress.hydrateProgressViewInquiries).toHaveBeenCalledTimes(1);
     expect(progress.replayPendingPrompts).toHaveBeenCalledTimes(1);
   });
 
