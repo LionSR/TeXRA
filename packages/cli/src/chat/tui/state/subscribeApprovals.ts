@@ -1,8 +1,8 @@
-// Approval-event interception per docs/prds/cli-tui-ink/10-architecture.md §9.
+// TUI implementation of the session-owned HostInteractions approval port.
 //
-// Wraps the runtime host so approval-kind events get diverted to the typed
-// queue (-> ApprovalModal -> user) instead of the legacy stderr prompt.
-// When the modal resolves, the *original* resolvers run unchanged.
+// Approval requests are routed through the typed queue (-> ApprovalModal ->
+// user) instead of the legacy stderr prompt. When the modal resolves, the
+// interaction promise resolves with the same host-facing result shape.
 //
 // Policy is honored *before* the modal is shown — `immediateDecision` runs
 // first so `--approval-policy yolo` auto-approves without a modal, and
@@ -15,6 +15,7 @@
 import { nanoid } from 'nanoid';
 
 import { platform } from '@platform/platform';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   matchesCancelSelector,
   type HostBashApprovalRequest,
@@ -48,15 +49,17 @@ import {
 } from '@model/apiProviders';
 import { isUpstreamCreditDepletedError } from '@shared/schemas';
 import {
+  proposalApprovalState,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 import { notify } from '../notifications/terminalNotifier';
-import { patchSessionMeta } from './cliState';
+import { patchSessionMeta, patchStream } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
+  type ApprovalBypassKind,
   approvalPayloadStreamId,
   clearApprovalsWhere,
   clearRetryApprovalsForStream,
@@ -140,10 +143,10 @@ export function createTuiHostInteractions(
     async requestToolEditApproval(request) {
       let decision: ApprovalDecision | undefined = immediateDecision(context);
       if (!decision) {
-        decision = await enqueueTuiApproval(
-          { kind: 'toolEdit', payload: request },
-          host,
-        );
+        decision = await enqueueTuiApproval({
+          kind: 'toolEdit',
+          payload: request,
+        });
         markIfRejected(context, decision);
       }
       if (
@@ -152,6 +155,7 @@ export function createTuiHostInteractions(
         request.streamId
       ) {
         setToolEditApprovalSessionBypass(request.streamId, true, host);
+        setTuiApprovalBypassState(request.streamId, 'toolEdit', true);
       }
       return decision.accepted
         ? { accepted: true, appliedContent: request.proposedContent }
@@ -178,7 +182,7 @@ export function createTuiHostInteractions(
     },
     requestPlanApproval(request, options) {
       return withInteractionTimeout(
-        () => requestPlanInteraction(request, context, host),
+        () => requestPlanInteraction(request, context),
         options,
         { action: 'timeout' },
         () =>
@@ -206,7 +210,7 @@ export function createTuiHostInteractions(
     },
     requestRetry(request, options) {
       return withInteractionTimeout(
-        () => requestRetryInteraction(request, context, host, retryRoutes),
+        () => requestRetryInteraction(request, context, retryRoutes),
         options,
         { action: 'timeout' },
         () => {
@@ -219,7 +223,7 @@ export function createTuiHostInteractions(
     },
     askUserQuestion(request, options) {
       return withInteractionTimeout(
-        () => requestUserQuestionInteraction(request, context, host),
+        () => requestUserQuestionInteraction(request, context),
         options,
         { submitted: false, feedback: 'Approval request timed out.' },
         () =>
@@ -232,7 +236,7 @@ export function createTuiHostInteractions(
       );
     },
     openExternalInquiry(request) {
-      return openExternalInquiryInteraction(request, context, host);
+      return openExternalInquiryInteraction(request, context);
     },
     resolve: () => false,
     cancel(selector: HostInteractionCancelSelector = {}) {
@@ -382,7 +386,6 @@ async function decideWithPolicy<
   P,
 >(
   context: CliContext,
-  host: CliRuntimeHost,
   kind: K,
   payload: P,
   options: RouteWithPolicyOptions<P> = {},
@@ -415,7 +418,7 @@ async function decideWithPolicy<
       ApprovalPayload,
       { kind: K }
     >;
-    const decision = await enqueueTuiApproval(queuePayload, host);
+    const decision = await enqueueTuiApproval(queuePayload);
     if (options.isCurrent && !options.isCurrent()) {
       return { accepted: false, userMessage: 'Approval request was replaced.' };
     }
@@ -444,9 +447,10 @@ async function requestBashInteraction(
     allowBypass: true,
     streamId: request.streamId ?? '',
   };
-  const decision = await decideWithPolicy(context, host, 'bash', payload);
+  const decision = await decideWithPolicy(context, 'bash', payload);
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true, host);
+    setTuiApprovalBypassState(request.streamId, 'bash', true);
   }
   return {
     accepted: decision.accepted,
@@ -457,9 +461,8 @@ async function requestBashInteraction(
 async function requestPlanInteraction(
   request: RuntimeInteractionEventPayloads['showPlanApproval'],
   context: CliContext,
-  host: CliRuntimeHost,
 ): Promise<PlanApprovalResult> {
-  const decision = await decideWithPolicy(context, host, 'plan', request);
+  const decision = await decideWithPolicy(context, 'plan', request);
   const feedback = feedbackOnReject(decision);
   return decision.accepted
     ? { action: decision.planAction ?? 'approve' }
@@ -471,7 +474,15 @@ async function requestProposalInteraction(
   context: CliContext,
   host: CliRuntimeHost,
 ): Promise<ProposalResult> {
-  const decision = await decideWithPolicy(context, host, 'proposal', request);
+  const decision = await decideWithPolicy(context, 'proposal', request);
+  if (
+    decision.accepted &&
+    decision.bypass === 'superYolo' &&
+    request.streamId
+  ) {
+    proposalApprovalState.setBypass(request.streamId, true, host);
+    setTuiApprovalBypassState(request.streamId, 'superYolo', true);
+  }
   const feedback = feedbackOnReject(decision);
   return decision.accepted
     ? { action: 'approve' }
@@ -481,7 +492,6 @@ async function requestProposalInteraction(
 async function requestRetryInteraction(
   request: HostRetryRequest,
   context: CliContext,
-  host: CliRuntimeHost,
   retryRoutes: RetryRouteState,
 ): Promise<RetryResult> {
   cancelRetryRoute(retryRoutes, request.streamId);
@@ -500,7 +510,7 @@ async function requestRetryInteraction(
     };
 
     void (async () => {
-      const decision = await decideWithPolicy(context, host, 'retry', request, {
+      const decision = await decideWithPolicy(context, 'retry', request, {
         beforeQueue: maybeAutoSwitchRetry,
         isCurrent,
       });
@@ -532,7 +542,6 @@ async function requestRetryInteraction(
 async function requestUserQuestionInteraction(
   payload: RuntimeInteractionEventPayloads['showUserQuestion'],
   context: CliContext,
-  host: CliRuntimeHost,
 ): Promise<{
   submitted: boolean;
   answers?: ApprovalDecision['userQuestionAnswers'];
@@ -548,10 +557,7 @@ async function requestUserQuestionInteraction(
     };
   }
 
-  const decision = await enqueueTuiApproval(
-    { kind: 'userQuestion', payload },
-    host,
-  );
+  const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });
   markIfRejected(context, decision);
   return decision.accepted && decision.userQuestionAnswers
     ? { submitted: true, answers: decision.userQuestionAnswers }
@@ -564,20 +570,26 @@ async function requestUserQuestionInteraction(
 async function openExternalInquiryInteraction(
   payload: RuntimeInteractionEventPayloads['showExternalInquiry'],
   context: CliContext,
-  host: CliRuntimeHost,
 ): Promise<{ threadId: string }> {
-  handleExternalInquiry(payload, context, host);
+  handleExternalInquiry(payload, context);
   return { threadId: payload.threadId };
 }
 
 export function enqueueTuiApproval(
   payload: ApprovalPayload,
-  host: CliRuntimeHost,
 ): Promise<ApprovalDecision> {
   return enqueueApproval(payload, {
     onPresent: () => {
       const streamId = approvalPayloadStreamId(payload);
-      if (streamId) host.emit('setActiveStream', { streamId });
+      if (streamId) {
+        defaultSession().events.emit({
+          scope: 'session',
+          event: {
+            type: 'setActiveStream',
+            payload: { streamId },
+          },
+        });
+      }
       notify({ kind: 'approvalNeeded' });
     },
   });
@@ -589,6 +601,17 @@ function feedbackOnReject(decision: ApprovalDecision): string | undefined {
 
 function markIfRejected(context: CliContext, decision: ApprovalDecision): void {
   if (!decision.accepted) markApprovalDenied(context);
+}
+
+function setTuiApprovalBypassState(
+  streamId: string,
+  kind: ApprovalBypassKind,
+  bypassActive: boolean,
+): void {
+  patchStream(streamId, (s) => ({
+    ...s,
+    bypass: { ...s.bypass, [kind]: bypassActive },
+  }));
 }
 
 async function applyRetrySideEffects(
@@ -615,7 +638,6 @@ async function applyRetrySideEffects(
 function handleExternalInquiry(
   payload: RuntimeInteractionEventPayloads['showExternalInquiry'],
   context: CliContext,
-  host: CliRuntimeHost,
 ): void {
   const threadId = payload.threadId;
   if (!threadId) return;
@@ -628,7 +650,7 @@ function handleExternalInquiry(
     void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
     return;
   }
-  void enqueueTuiApproval({ kind: 'externalInquiry', payload }, host).then(
+  void enqueueTuiApproval({ kind: 'externalInquiry', payload }).then(
     (decision) => {
       markIfRejected(context, decision);
       // User-accept with text submits an answer; empty text, reject, and

@@ -65,10 +65,7 @@ import {
   type TuiSession,
 } from './tui/state/sessionRunState';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
-import {
-  attachTuiRunFactSubscription,
-  wrapRuntimeHost,
-} from './tui/state/subscribeRuntimeHost';
+import { attachTuiRunFactSubscription } from './tui/state/subscribeRuntimeHost';
 import { notify } from './tui/notifications/terminalNotifier';
 import {
   appendLocalErrorTranscript,
@@ -219,24 +216,23 @@ export function createChatSessionController(
       : CliExitCode.AgentError;
   };
 
-  // Build the wrapped runtime host shared by start and resume: attach the
+  // Build the runtime host shared by start and resume: attach the
   // terminal-result toast and the TUI approval pipeline, and return a
   // `finalize` teardown that both run promises invoke from their `.finally`.
   const setupRunHost = (
     sessionContext: CliContext,
   ): {
-    readonly wrapped: CliRuntimeHost;
+    readonly runtimeHost: CliRuntimeHost;
     readonly approvalsUnavailable: boolean;
     readonly finalize: () => void;
   } => {
     const runtimeHost = createCliRuntimeHost(sessionContext);
-    const wrapped = wrapRuntimeHost(runtimeHost);
     const detachHostInteractions = defaultSession().useHostInteractions(
-      createTuiHostInteractions(wrapped, sessionContext),
+      createTuiHostInteractions(runtimeHost, sessionContext),
     );
     disposers.push(detachHostInteractions);
     const interactiveHost: CliRuntimeHost = {
-      ...wrapped,
+      ...runtimeHost,
       interactions: defaultSession().interactions,
     };
     const detachResultToast = attachTerminalResultToast(
@@ -247,7 +243,7 @@ export function createChatSessionController(
       defaultSession().events,
     );
     return {
-      wrapped: interactiveHost,
+      runtimeHost: interactiveHost,
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
       finalize: (): void => {
         detachResultToast();
@@ -274,7 +270,7 @@ export function createChatSessionController(
       model: config.model,
       canDelegate: chatAgentSupportsDelegation(config.agent),
     });
-    const { wrapped, approvalsUnavailable, finalize } =
+    const { runtimeHost, approvalsUnavailable, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
     let waitingTurn = 0;
@@ -286,7 +282,7 @@ export function createChatSessionController(
       .then((registeredConfig) => {
         executionRegistered = true;
         return executeAgent(registeredConfig, executionId, {
-          runtimeHost: wrapped,
+          runtimeHost,
           enforceCategory: true,
           approvalPromptsUnavailable: approvalsUnavailable,
           runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
@@ -338,7 +334,7 @@ export function createChatSessionController(
         reportRunFailure(error);
       })
       .finally(finalize);
-    markChatTuiRunPending(session, runPromise, wrapped);
+    markChatTuiRunPending(session, runPromise, runtimeHost);
   };
 
   // -----------------------------------------------------------------------
@@ -398,13 +394,13 @@ export function createChatSessionController(
     projectStreamTranscript(resolution.streamId);
     activeStreamId.set(resolution.streamId);
 
-    const { wrapped, approvalsUnavailable, finalize } =
+    const { runtimeHost, approvalsUnavailable, finalize } =
       setupRunHost(sessionContext);
-    session.runtimeHost = wrapped;
+    session.runtimeHost = runtimeHost;
 
     session.runPromise = setCliHelperModel(currentModel)
       .then(() =>
-        resumeToolUseFromSnapshot(resolution.snapshot, wrapped, {
+        resumeToolUseFromSnapshot(resolution.snapshot, runtimeHost, {
           approvalPromptsUnavailable: approvalsUnavailable,
           runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
         }),

@@ -57,10 +57,7 @@ import {
 import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
-import {
-  attachTuiRunFactSubscription,
-  wrapRuntimeHost,
-} from '@cli/chat/tui/state/subscribeRuntimeHost';
+import { attachTuiRunFactSubscription } from '@cli/chat/tui/state/subscribeRuntimeHost';
 import {
   COMPLETED_PROCESS_TAIL_LINES,
   buildCompletedProcessTranscript,
@@ -220,10 +217,6 @@ describe('cliState Phase 4 fields', () => {
   });
 
   it('updates retained child rows when a failed subagent leaves the active list', () => {
-    const wrapped = wrapRuntimeHost({
-      emit: () => undefined,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
     const dispose = subscribeStreamStatus();
     try {
       patchStream(root, (s) => ({
@@ -1594,10 +1587,6 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('mirrors running child status events into focused child routing', () => {
-    const wrapped = wrapRuntimeHost({
-      emit: () => undefined,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
     const dispose = subscribeStreamStatus();
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
     patchStream(root, (s) => ({
@@ -1637,10 +1626,6 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('mirrors stopped child status events into focused child routing', () => {
-    const wrapped = wrapRuntimeHost({
-      emit: () => undefined,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
     const dispose = subscribeStreamStatus();
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
     patchStream(root, (s) => ({
@@ -2637,12 +2622,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
 
   it('applies typed updateTodos run facts without host emission', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
     const todos: TodoItem[] = [
       {
@@ -2664,22 +2643,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       });
 
       expect(streams.get().get(root)?.todos).toEqual(todos);
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
   it('applies typed updatePlan run facts without host emission', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
     const plan: Plan = {
       objective: 'Prove the local estimate and record the stopping criterion.',
@@ -2697,22 +2667,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       });
 
       expect(streams.get().get(root)?.plan).toEqual(plan);
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
   it('applies typed goalPaused run facts without host emission', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
 
     try {
@@ -2731,22 +2692,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           .get(root)
           ?.entries.map((entry) => entry.text),
       ).toEqual([GOAL_PAUSED_TRANSCRIPT_NOTICE]);
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
   it('applies direct stage.start(kind: round) events without host emission', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
 
     try {
@@ -2767,22 +2719,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         index: 1,
         total: 3,
       });
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
   it('ignores direct non-round stage.start events without host emission', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
 
     try {
@@ -2799,22 +2742,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       });
 
       expect(streams.get().get(root)?.roundStage).toBeUndefined();
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
   it('applies direct child activity and parent-link facts without host emission', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
     const child: ActiveChildInfo = {
       kind: 'subagent',
@@ -2850,22 +2784,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       expect(streams.get().get(root)?.childStreams).toEqual([child]);
       expect(parentStream.get().get(child1)).toBe(root);
       expect(parentStream.get().get(child2)).toBe(root);
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
   it('applies direct process.output events without host emission', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
 
     try {
@@ -2885,22 +2810,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         stdout: 'stdout chunk',
         stderr: 'stderr chunk',
       });
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
   it('applies direct child.activity(processes) completion and prunes output once', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
 
     try {
@@ -2957,22 +2873,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       expect(
         slice?.entries.filter((entry) => entry.role === 'process'),
       ).toHaveLength(1);
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
   it('applies direct usage events without host emission', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
     const storageKey = 'root-direct-run' as StorageKey;
     const usage = {
@@ -3011,22 +2918,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         cacheCreationInputTokens: 0,
         reasoningTokens: 7,
       });
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
   it('applies direct session stream facts without host emission', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
 
     try {
@@ -3068,22 +2966,13 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       });
 
       expect(streams.get().has(child1)).toBe(false);
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
   it('applies direct run config and conversation progress without host emission', () => {
     const hub = new SessionEventHub();
-    const hostEmit = vi.fn();
-    const wrapped = wrapRuntimeHost({
-      emit: hostEmit,
-      close: async () => {},
-    } as unknown as CliRuntimeHost);
-    const wrappedEmit = vi.spyOn(wrapped, 'emit');
     const detach = attachTuiRunFactSubscription(hub);
 
     try {
@@ -3125,11 +3014,8 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         category: AgentCategory.ToolUse,
         conversation: { toolCallCount: 3 },
       });
-      expect(wrappedEmit).not.toHaveBeenCalled();
-      expect(hostEmit).not.toHaveBeenCalled();
     } finally {
       detach();
-      wrappedEmit.mockRestore();
     }
   });
 
