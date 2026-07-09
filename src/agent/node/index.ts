@@ -10,7 +10,13 @@ export type NonIterableObject = Partial<Record<string, unknown>> & {
 export type Action = string;
 
 const CHANNEL = 'PocketFlow';
-const TERMINAL_ACTIONS = new Set<Action>(['complete']);
+// Actions that deliberately end a flow when a node returns them with no
+// registered successor. `finalize` is the reflection flow's terminal action on
+// failure (ResponseCycleNode.post → FlowTransition.FINALIZE); without listing it
+// here, getNextNode logs a spurious "Flow ends: 'finalize' not found" warning on
+// every reflection-flow failure even though ending is the intended behavior.
+// (`waiting` is not terminal — ToolUseWaitNode wires it as a self-loop successor.)
+const TERMINAL_ACTIONS = new Set<Action>(['complete', 'finalize']);
 logger.initialize(CHANNEL);
 
 /**
