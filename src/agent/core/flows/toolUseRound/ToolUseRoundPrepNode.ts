@@ -5,7 +5,6 @@ import {
   resetCycleState,
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
@@ -40,7 +39,6 @@ interface ToolUseRoundPrepResult {
  */
 export class ToolUseRoundPrepNode<C> extends BaseNode<
   ToolUseRoundShared,
-  FlowParams,
   ToolUseRoundServices<C>
 > {
   async prep(_shared: ToolUseRoundShared): Promise<ToolUseRoundPrepResult> {

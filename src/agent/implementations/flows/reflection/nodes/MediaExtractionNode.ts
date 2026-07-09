@@ -2,7 +2,6 @@ import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 
 import { getFilesForRound } from '../helpers';
@@ -18,7 +17,6 @@ interface PrepInput {
 
 export class MediaExtractionNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  FlowParams,
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {

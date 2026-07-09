@@ -4,7 +4,6 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 
@@ -25,7 +24,6 @@ type PrepareExecResult =
  */
 export class ToolUsePrepareNode<C> extends Node<
   ToolUseRunShared,
-  FlowParams,
   ToolUseServices<C>
 > {
   async exec(

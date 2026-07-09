@@ -1,4 +1,3 @@
-import type { NonIterableObject } from '@agent/node';
 import {
   type BaseInvocationPrepResult,
   type BaseInvocationSuccessData,
@@ -64,9 +63,8 @@ type InvocationServices = Pick<
 
 export class ModelInvocationNode<
   TShared extends BaseCycleFields,
-  TParams extends NonIterableObject = NonIterableObject,
   TServices extends InvocationServices = InvocationServices,
-> extends RetryableInvocationNode<TShared, TParams, TServices> {
+> extends RetryableInvocationNode<TShared, TServices> {
   private readonly _config: ModelInvocationConfig<TShared, TServices>;
 
   constructor(config: ModelInvocationConfig<TShared, TServices>) {

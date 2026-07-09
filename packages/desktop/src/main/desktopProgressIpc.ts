@@ -15,7 +15,10 @@ import type { DesktopProgressBridge } from './desktopAgentExecution.js';
 
 type DesktopProgressIpcBridge = Pick<
   DesktopProgressBridge,
-  'progressViewInboundHandlers' | 'syncFullView' | 'replayPendingPrompts'
+  | 'progressViewInboundHandlers'
+  | 'syncFullView'
+  | 'hydrateProgressViewInquiries'
+  | 'replayPendingPrompts'
 >;
 
 export interface DesktopProgressIpcOptions {
@@ -41,6 +44,15 @@ const passThroughCommands = new Set<string>([
   PROGRESS_VIEW_COMMANDS.THEME_SET,
   PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET,
 ]);
+
+function isProgressWebviewReadyMessage(
+  message: DesktopCommandMessage,
+): boolean {
+  return (
+    message.command === PROGRESS_VIEW_COMMANDS.WEBVIEW_READY &&
+    message.view === 'progress'
+  );
+}
 
 export function createDesktopProgressIpc(
   options: DesktopProgressIpcOptions,
@@ -85,14 +97,19 @@ export function createDesktopProgressIpc(
       // WEBVIEW_READY and pass-through commands return false so sibling
       // handlers in the chain still receive them.
       if (command === PROGRESS_VIEW_COMMANDS.WEBVIEW_READY) {
+        if (!isProgressWebviewReadyMessage(message)) return false;
         const progress = getProgress();
         if (progress) {
           progress.syncFullView();
+          void progress.hydrateProgressViewInquiries().catch(reportAsyncError);
           progress.replayPendingPrompts();
         } else if (ensureProgress) {
           void ensureProgress()
             .then((loaded) => {
               loaded.syncFullView();
+              void loaded
+                .hydrateProgressViewInquiries()
+                .catch(reportAsyncError);
               loaded.replayPendingPrompts();
             })
             .catch(reportAsyncError);

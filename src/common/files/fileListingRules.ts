@@ -218,8 +218,21 @@ export function shouldVisitDirectory(
   return !containsExcludedDirectory(relativePath, filters.excludeDirs);
 }
 
+/**
+ * Trailing/embedded `_r{N}` round token used by mid-era workflow output
+ * filenames (`<base>_r{round}`). No shared owner function covers this
+ * end-anchored form — `extractLastRoundMatch`'s `/_r(\d+)_/g` requires a
+ * trailing underscore and does not match it (verified) — so this module owns
+ * it for both call sites below.
+ */
+const ROUND_TOKEN_SOURCE = '_r\\d+';
+const TRAILING_ROUND_TOKEN_REGEX = new RegExp(
+  `^(.+?)(?:${ROUND_TOKEN_SOURCE})?$`,
+);
+const ROUND_TOKEN_REGEX = new RegExp(ROUND_TOKEN_SOURCE);
+
 function getBaseNameWithoutRound(baseName: string): string {
-  return baseName.match(/^(.+?)(?:_r\d+)?$/)?.[1] ?? baseName;
+  return baseName.match(TRAILING_ROUND_TOKEN_REGEX)?.[1] ?? baseName;
 }
 
 export function matchesEditedFile(
@@ -232,6 +245,7 @@ export function matchesEditedFile(
   const baseNameWithoutRound = getBaseNameWithoutRound(baseName);
   return (
     fileBase.startsWith(baseName) ||
-    (fileBase.startsWith(baseNameWithoutRound) && /_r\d+/.test(fileBase))
+    (fileBase.startsWith(baseNameWithoutRound) &&
+      ROUND_TOKEN_REGEX.test(fileBase))
   );
 }

@@ -2,7 +2,10 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
+import {
+  buildBetweenRoundDiffSuffix,
+  detectGeneratedLatexdiffArtifact,
+} from '@latex/latexdiff/diffFileNameManager';
 
 describe('detectGeneratedLatexdiffArtifact', () => {
   it.each([
@@ -39,5 +42,15 @@ describe('detectGeneratedLatexdiffArtifact', () => {
     { label: 'non-TeX files', input: '/paper/main-diffabc123.pdf' },
   ])('ignores $label', ({ input }) => {
     expect(detectGeneratedLatexdiffArtifact(input)).toBeNull();
+  });
+});
+
+describe('buildBetweenRoundDiffSuffix', () => {
+  it('builds the `_diffr{newer}r{older}` suffix from numeric rounds', () => {
+    expect(buildBetweenRoundDiffSuffix(2, 1)).toBe('_diffr2r1');
+  });
+
+  it('accepts string round captures (e.g. from a regex match)', () => {
+    expect(buildBetweenRoundDiffSuffix('2', '1')).toBe('_diffr2r1');
   });
 });
