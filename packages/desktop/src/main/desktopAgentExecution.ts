@@ -1027,6 +1027,7 @@ export class DesktopProgressBridge {
         );
         return;
       case 'requestShowError':
+      case 'requestShowInstruction':
         this.sessionProgress.handlePresentationEvent(
           event,
           payload as DesktopPresentationPayloads[typeof event],
