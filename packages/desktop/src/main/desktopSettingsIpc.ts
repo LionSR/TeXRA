@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import * as path from 'node:path';
+
 import { platform, tryPlatform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
@@ -7,13 +10,21 @@ import {
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
+import {
+  ChatExportController,
+  type ExportInputStatus,
+} from '@controllers/settingsView/ChatExportController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
-import { deleteAllExecutions, deleteExecution } from '@agent/storage';
+import {
+  deleteAllExecutions,
+  deleteExecution,
+  getExecutionStore,
+} from '@agent/storage';
 import {
   computeAgentOptionsData,
   getAgentsByCategory,
@@ -22,6 +33,16 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
+import {
+  validateExecutionRequest,
+  type ValidatedExecutionRequest,
+} from '@agent/core/state/executionRequests';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import type { TaskState } from '@agent/core/state/TaskState';
 import {
   codexCoordinator,
   getChatGptAuthStatus,
@@ -141,6 +162,27 @@ export interface DesktopSettingsIpcOptions {
   openPath?: (filePath: string) => Promise<void>;
   revealPath?: (filePath: string) => Promise<void>;
   openExternalUrl?: (url: string) => Promise<void>;
+  /**
+   * Resolved `packages/extension/resources` tree (ElectronPlatformInitResult
+   * .resourcesPath). Used to locate the chat-export LaTeX preamble and the
+   * bundled trace-viewer standalone template — the same assets the
+   * extension's `HistoryHandlers` loads, reached here via `fs` instead of an
+   * esbuild text import.
+   */
+  resourcesPath?: string;
+  /**
+   * Run an agent (history "Rerun"). Delegates to the same host-neutral
+   * `runAgent` the extension's `runExecuteCommand` calls, via the desktop
+   * agent-execution bridge's `DesktopProgressBridge.runExecution`.
+   */
+  runExecution?: (request: ValidatedExecutionRequest) => Promise<void>;
+  /**
+   * Restore a task's setup into the main view (history "Setup"). Delegates to
+   * `DesktopProgressBridge.restoreTaskState`, the desktop equivalent of the
+   * extension's `texra.restoreState` command. Returns `false` when the config
+   * failed to convert to a persisted main-view state.
+   */
+  restoreTaskState?: (taskState: TaskState) => Promise<boolean>;
   /**
    * Offer the ChatGPT sign-in URL as a copyable link. `openExternalUrl` only
    * targets the system default browser; this lets a user whose ChatGPT
@@ -488,6 +530,166 @@ export function createDesktopSettingsIpc(
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
     });
+  }
+
+  async function readHistoryConfig(
+    historyId: string,
+  ): Promise<AgentConfig | undefined> {
+    const raw = await getExecutionStore(historyId as ExecutionId).readConfig();
+    return raw ? AgentConfigSchema.parse(raw) : undefined;
+  }
+
+  async function rerunHistoryAgent(historyId: string): Promise<void> {
+    const config = await readHistoryConfig(historyId);
+    if (!config) {
+      await options.showInfoMessage?.('History item not found');
+      return;
+    }
+    const validated = validateExecutionRequest({ config });
+    if (!validated.valid) {
+      await options.showErrorMessage?.(validated.message);
+      return;
+    }
+    await options.showInfoMessage?.('Rerunning agent from history');
+    await options.runExecution?.(validated.request);
+  }
+
+  async function restoreHistoryAgent(historyId: string): Promise<void> {
+    const config = await readHistoryConfig(historyId);
+    if (!config) {
+      await options.showInfoMessage?.('History item not found');
+      return;
+    }
+    const restored =
+      (await options.restoreTaskState?.(agentConfigToTaskState(config))) ??
+      false;
+    if (!restored) {
+      await options.showErrorMessage?.('Failed to restore configuration');
+    }
+  }
+
+  /**
+   * Resolved `resources/` tree, throwing if the host wired the IPC without
+   * one — export is only reachable when `resourcesPath` is supplied (see
+   * `DesktopSettingsIpcOptions.resourcesPath`).
+   */
+  function getResourcesPath(): string {
+    if (!options.resourcesPath) {
+      throw new Error(
+        'Desktop settings IPC missing resourcesPath; cannot export chat.',
+      );
+    }
+    return options.resourcesPath;
+  }
+
+  let chatExportController: ChatExportController | undefined;
+  function getChatExportController(): ChatExportController {
+    if (!chatExportController) {
+      const latexPreamble = readFileSync(
+        path.join(getResourcesPath(), 'templates', 'chatExport.tex'),
+        'utf8',
+      );
+      chatExportController = new ChatExportController({ latexPreamble });
+    }
+    return chatExportController;
+  }
+
+  async function reportExportInputError(
+    status: Exclude<ExportInputStatus, 'ok'>,
+  ): Promise<void> {
+    switch (status) {
+      case 'config_missing':
+        await options.showInfoMessage?.('History item not found');
+        return;
+      case 'conversation_missing':
+        await options.showInfoMessage?.(
+          'No conversation data available for this execution',
+        );
+        return;
+    }
+  }
+
+  async function reportHtmlExportError(
+    status: 'config_missing' | 'streamLogs_missing',
+  ): Promise<void> {
+    switch (status) {
+      case 'config_missing':
+        await options.showInfoMessage?.('History item not found');
+        return;
+      case 'streamLogs_missing':
+        await options.showInfoMessage?.(
+          'No stored transcript available for this execution — it may predate transcript persistence.',
+        );
+        return;
+    }
+  }
+
+  async function exportHistoryChatHtml(historyId: string): Promise<void> {
+    const controller = getChatExportController();
+    const outcome = await controller.exportAsHtml(
+      historyId,
+      path.join(getResourcesPath(), 'traceViewerStandalone', 'index.html'),
+    );
+    if (outcome.status !== 'ok') {
+      await reportHtmlExportError(outcome.status);
+      return;
+    }
+    const { absolutePath, storagePath } = outcome.result;
+    await options.openPath?.(absolutePath);
+    await options.showInfoMessage?.(
+      `Chat exported: ${path.basename(storagePath)}`,
+    );
+  }
+
+  async function exportHistoryChat(
+    historyId: string,
+    format: 'md' | 'tex' | 'html',
+  ): Promise<void> {
+    if (format === 'html') {
+      await exportHistoryChatHtml(historyId);
+      return;
+    }
+
+    const controller = getChatExportController();
+    const result = await controller.buildExportInput(historyId);
+    if (result.status !== 'ok') {
+      await reportExportInputError(result.status);
+      return;
+    }
+    const { exportInput } = result;
+
+    if (format === 'md') {
+      const { absolutePath, storagePath } = await controller.exportAsMarkdown(
+        historyId,
+        exportInput,
+      );
+      await options.openPath?.(absolutePath);
+      await options.showInfoMessage?.(
+        `Chat exported: ${path.basename(storagePath)}`,
+      );
+      return;
+    }
+
+    const { absolutePath, storagePath, pdfPath, logTail } =
+      await controller.exportAsLatex(historyId, exportInput);
+    if (pdfPath) {
+      await options.openPath?.(pdfPath);
+      await options.showInfoMessage?.(
+        `Chat exported and compiled: ${path.basename(storagePath).replace('.tex', '.pdf')}`,
+      );
+      return;
+    }
+    if (logTail) {
+      onError(
+        new Error(
+          `LaTeX export compilation failed for ${storagePath}:\n${logTail}`,
+        ),
+      );
+    }
+    await options.openPath?.(absolutePath);
+    await options.showInfoMessage?.(
+      'LaTeX compilation failed. The .tex source file has been opened instead.',
+    );
   }
 
   async function postToolDashboardData(postOptions?: {
@@ -1073,21 +1275,11 @@ export function createDesktopSettingsIpc(
     history: {
       deleteAgent: (historyId) => deleteHistoryItem(historyId),
       clear: () => clearHistory(),
-      rerunAgent: unsupported(
-        'Rerun from history is not available in the desktop app yet.',
-      ),
-      restoreAgent: unsupported(
-        'Setup from history is not available in the desktop app yet.',
-      ),
-      exportChatMd: unsupported(
-        'Markdown export from history is not available in the desktop app yet.',
-      ),
-      exportChatTex: unsupported(
-        'LaTeX export from history is not available in the desktop app yet.',
-      ),
-      exportChatHtml: unsupported(
-        'HTML export from history is not available in the desktop app yet.',
-      ),
+      rerunAgent: (data) => rerunHistoryAgent(data.historyId),
+      restoreAgent: (data) => restoreHistoryAgent(data.historyId),
+      exportChatMd: (data) => exportHistoryChat(data.historyId, 'md'),
+      exportChatTex: (data) => exportHistoryChat(data.historyId, 'tex'),
+      exportChatHtml: (data) => exportHistoryChat(data.historyId, 'html'),
     },
     profile: {
       signIn: () => signIn(),
