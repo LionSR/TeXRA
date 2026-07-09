@@ -121,27 +121,27 @@ future calendar dates.
 
 ## 2. Scorecard
 
-| Subsystem / concern | Verdict | One-line reason | Carrying cost |
-| --- | --- | --- | --- |
-| Workspace topology (packages, aliases) | misshapen | 3 hand-synced alias maps; boundary fence never built while host deep-imports grow 1.4-1.9x/5wk | 3-edit alias tax + ~2.5 uncurated SDK migration sites/host/week |
-| Subsystem layering (`src/` graph) | misshapen | ~97%-real layering held only by convention; 16-node SCC; audits demonstrably don't stick | 7-8 fresh violations per audit round; every macro audit re-derives the matrix |
-| `src/shared` identity | misshapen | wire contract + UI kit + a whole progress backend under one alias; source of the largest inversion (shared→agent 23) | zone rule unwritable; Stage 5 deepens the miscategorized subtree |
-| `agent/` internal shape | misshapen | provider-neutral contracts live under provider implementations (core→modelHandlers/types 17×) | new handlers written against sibling internals; no internal zone rule expressible |
-| agent↔tools pair | sound | runtime-composes-registry / tools-consume-runtime is the SDK shape; 13 wiring files, 2 core/flows strays | near zero; fence the wiring list |
-| Three-host shape (ports, wiring) | sound / accepted-debt | contract sharing landed; per-host interaction registries are the deliberate post-#7316 resting state | ~5 touch points per new interaction kind; 250-650 LoC per new host |
-| Platform composition root | sound | 16 ports, 1 commit since April, optional contagion contained to 5 sites | n/a — fence |
-| Runtime end-state accounting | decision-needed | honest floor ~31-33 elements, not the promised ~26; six unpriced drivers | phantom-reduction campaigns if unamended; 94 legacy status refs tax every status PR |
-| Run-data lifecycle (hops) | decision-needed | per-host chains are earned; the one defect is the split status dual rail (10 apply-sites for 1 fact) | every new consumer must know the invisible trace-attached split rule |
-| Interface design (ports/IPC/YAML) | misshapen (edges) | HostInteractions 7× doubly-optional vs 6 runtime-hard-required; 16/106 settings commands dead | throw-site archaeology per kind; 5-file dead chains taxing every union audit |
-| Leaked conventions | misshapen | 3 unowned grammars (delivery tags, template tokens, output naming) with 2 live silent bugs | silent corruption/rendering drift per new producer |
-| Fallback chains | mixed; 6 of 11 masking | storage/config reads are loud; session-resolution and fact fan-out mask silently (shipped A1, A4 classes) | cross-session bugs and dropped facts discoverable only by manual audit |
-| Agent flow taxonomy | sound (needs ruling) | two real families + shared 955-LoC kernel; reflection is the batch-document contract, not legacy | 93-179 flat branch lines; zero per-provider cost |
-| Flow engine width | misshapen | BatchNode loop + entire params channel provably dead (18 signature sites, always-`{}` persisted field) | copied 3-type boilerplate per node; frozen forever if SDK ships first |
-| Storage macro | sound / finishing | facade 70% landed, loud reads, one store in the wrong medium (goals) | hand-paired goal forgets; CLI delete leaks sidecars |
-| Test architecture | accepted-debt + 1 hole | 83% mock-free, memfs core, R7 measurably working; but merge gate never runs the runtime | composition bugs reach main; 3 broken-main incidents in one overnight window |
-| Delivery & growth | decision-needed | relay is comment-enforced money; test plane has no detector; desktop has no update surface | silent billing drift; +100k test LoC/month; stale-install triage |
-| SDK consumability | misshapen | run API is SDK-shaped (runAgent 92 LoC); the tax is a ~20-import, 9-registration undocumented bootstrap incantation | measured host drift (agent-dir bootstrap already diverged); 1-2 days per new embedder |
-| Release verification | decision-needed | signed 3-OS installers with zero launch check while the smoke script sits built and unwired | emergency re-release risk, paid by external users |
+| Subsystem / concern                    | Verdict                | One-line reason                                                                                                      | Carrying cost                                                                         |
+| -------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Workspace topology (packages, aliases) | misshapen              | 3 hand-synced alias maps; boundary fence never built while host deep-imports grow 1.4-1.9x/5wk                       | 3-edit alias tax + ~2.5 uncurated SDK migration sites/host/week                       |
+| Subsystem layering (`src/` graph)      | misshapen              | ~97%-real layering held only by convention; 16-node SCC; audits demonstrably don't stick                             | 7-8 fresh violations per audit round; every macro audit re-derives the matrix         |
+| `src/shared` identity                  | misshapen              | wire contract + UI kit + a whole progress backend under one alias; source of the largest inversion (shared→agent 23) | zone rule unwritable; Stage 5 deepens the miscategorized subtree                      |
+| `agent/` internal shape                | misshapen              | provider-neutral contracts live under provider implementations (core→modelHandlers/types 17×)                        | new handlers written against sibling internals; no internal zone rule expressible     |
+| agent↔tools pair                       | sound                  | runtime-composes-registry / tools-consume-runtime is the SDK shape; 13 wiring files, 2 core/flows strays             | near zero; fence the wiring list                                                      |
+| Three-host shape (ports, wiring)       | sound / accepted-debt  | contract sharing landed; per-host interaction registries are the deliberate post-#7316 resting state                 | ~5 touch points per new interaction kind; 250-650 LoC per new host                    |
+| Platform composition root              | sound                  | 16 ports, 1 commit since April, optional contagion contained to 5 sites                                              | n/a — fence                                                                           |
+| Runtime end-state accounting           | decision-needed        | honest floor ~31-33 elements, not the promised ~26; six unpriced drivers                                             | phantom-reduction campaigns if unamended; 94 legacy status refs tax every status PR   |
+| Run-data lifecycle (hops)              | decision-needed        | per-host chains are earned; the one defect is the split status dual rail (10 apply-sites for 1 fact)                 | every new consumer must know the invisible trace-attached split rule                  |
+| Interface design (ports/IPC/YAML)      | misshapen (edges)      | HostInteractions 7× doubly-optional vs 6 runtime-hard-required; 16/106 settings commands dead                        | throw-site archaeology per kind; 5-file dead chains taxing every union audit          |
+| Leaked conventions                     | misshapen              | 3 unowned grammars (delivery tags, template tokens, output naming) with 2 live silent bugs                           | silent corruption/rendering drift per new producer                                    |
+| Fallback chains                        | mixed; 6 of 11 masking | storage/config reads are loud; session-resolution and fact fan-out mask silently (shipped A1, A4 classes)            | cross-session bugs and dropped facts discoverable only by manual audit                |
+| Agent flow taxonomy                    | sound (needs ruling)   | two real families + shared 955-LoC kernel; reflection is the batch-document contract, not legacy                     | 93-179 flat branch lines; zero per-provider cost                                      |
+| Flow engine width                      | misshapen              | BatchNode loop + entire params channel provably dead (18 signature sites, always-`{}` persisted field)               | copied 3-type boilerplate per node; frozen forever if SDK ships first                 |
+| Storage macro                          | sound / finishing      | facade 70% landed, loud reads, one store in the wrong medium (goals)                                                 | hand-paired goal forgets; CLI delete leaks sidecars                                   |
+| Test architecture                      | accepted-debt + 1 hole | 83% mock-free, memfs core, R7 measurably working; but merge gate never runs the runtime                              | composition bugs reach main; 3 broken-main incidents in one overnight window          |
+| Delivery & growth                      | decision-needed        | relay is comment-enforced money; test plane has no detector; desktop has no update surface                           | silent billing drift; +100k test LoC/month; stale-install triage                      |
+| SDK consumability                      | misshapen              | run API is SDK-shaped (runAgent 92 LoC); the tax is a ~20-import, 9-registration undocumented bootstrap incantation  | measured host drift (agent-dir bootstrap already diverged); 1-2 days per new embedder |
+| Release verification                   | decision-needed        | signed 3-OS installers with zero launch check while the smoke script sits built and unwired                          | emergency re-release risk, paid by external users                                     |
 
 ---
 
@@ -787,23 +787,23 @@ with zero consumers that can never delete the directory path.
 
 ### Minor findings (compact)
 
-| Finding | Key measurement | Verdict / direction | Trap |
-| --- | --- | --- | --- |
-| HOST-4 platform-edge accretion | 4 optional VS-Code-only ports; toolEditApproval sole reader + throw-stub default | Ride micro A2 exactly as specified (A2's fix text already deletes the port member + stub + factories); notification-port merge is ~net-zero, do only if in-file | HostCapabilities sub-record |
-| TD-5 four streamId module guards | 4 admission/dedup guards outside the sanctioned process-global list; stream-owned, no reachable cross-session divergence | Accept-and-fence, one ledger note; fold into session.runs/followUps on touch | a "finish the globals purge" sweep |
-| HOP-2 LogMessageData copy | types-only Zod sibling of StreamLogEntry, never parsed, 16 consumer files, 1 identity-copy fn | Fold into a derived type; ~−10 LoC; frontend takes `text?: string` honestly | typing `StreamLogEntry.data` as a giant union |
-| IF-3 AgentDefinition dark fields | 0 uses across 30 bundled YAMLs for 4 fields; but `inherits` is kernel-tested and requiredFiles shares its helper — truly dark: `filePatternsContain`, `internal`, one branch | Dated deprecate-or-exercise ruling for the 2 dark fields (stripLegacySettingFields warn pattern); keep+test the rest | silent strictObject deletion (breaks third-party agents); YAML migration framework |
-| MIL-4 binary agent category | 38 literal comparisons / 30 files; schema-owned enum; agentCreator exempt by design | Accept-and-fence; record "category is permanently binary" in agent-sdk-readiness | predicate farm; folding agentCreator in |
-| FB-3 config double-defaults | 28 inline getConfig defaults, 27/28 byte-agree with DEFAULT_CORE_SETTINGS; the 1 drift is retry maxAttempts (micro EP-1) | Sound + one CLAUDE.md fence line: inline defaults reference `DEFAULT_CORE_SETTINGS.<path>` or a shared constant | migrating all 28 to getValidatedConfig; a typed config facade |
-| FB-4 compatibility-key sniff tier | key-first ?? Google-gated shape-sniff; read-failure warns, sniff-success traceless; module 115 LoC (~65-90 deletable) | Accept + dated #6981 row (calendar, not version — executions/ has no TTL) + 1 `logger.info` when the sniff decides | deleting the sniff now; a persisted-schema-version framework |
-| TAX-3 agentCreator | 505-LoC host-side YAML wizard, one VS Code caller, zero runtime touchpoints; 15% the size of a real family | Accept-and-fence: OUT of any SDK surface; flatten to a plain fn when touched (−80 LoC) | promoting it to a third category |
-| DS-3 schema governance | Non-compliance census corrected 5→~1-2 of 12 formats (goal records; config.json version prong); repo converging without the rule | One-sentence "born versioned + loud" rule + checklist row (~10 doc lines); drop the census test | versioned-store library; standalone census test file (R7) |
-| DS-4 FS stack | 1,157 LoC / 8 modules; real class chain is 3 hops (the "5-hop chain" doesn't exist — leaf modules sit on node:fs directly) | Sound; fence against unification; two touch-time micro-folds only | injected-FS DI accretion |
-| QA-3 R7 is working | Net −7 suites over 107 merges; all 11 replacement folds rode module deletions; 3.3k pinned cohort died on schedule; expiry-marker adoption = 1 file | Covered-by-design; reviewer nudge: scheduled-scaffolding suites must carry their #6981-row comment | treating 297 micro-suites as a fold backlog |
-| QA-4 release-path smoke | 3-OS signed installers, zero launch verification on any lane; `desktop:package:smoke` built and unwired; validate:pack manual-only | Wire smoke into desktop-package.yml per-OS jobs + validate:pack into the CLI lane (~1-3 lines each; gate macOS/Windows if Linux flakes) | a full post-release E2E matrix (E2E budget belongs on D2) |
-| S6 ink patch | 164 lines, exact-version keyed (loud on bump); zero tracker artifacts state permanence | Write the permanent-until-upstream ruling into the patch header/proposal; nothing else ever | forking ink; re-litigating v1/v2/v3 resize history |
-| NS-5 vocabulary leaks | StreamTabId: 229 files / 1,593 occurrences, single-sourced; 6 of 11 `show*` arms are dead (micro), live ones die with A2 | Accept under R4; alias-at-boundary at package time (one line); dead arms ride the micro deletion | a clean-vocabulary sweep (maximal churn vs in-flight Stage 5) |
-| MONO-4 test-kernel carve-out | All 41+15+2 host-package imports from src/ live in test-kernel (85k-LoC by its own count; design-intentional single kernel) | Sound; MONO-1 R-a scopes `ignores: ['src/test-kernel/**']` and must cover @cli/@desktop too | relocating/splitting test-kernel (fractures shared fakes, R7) |
+| Finding                           | Key measurement                                                                                                                                                              | Verdict / direction                                                                                                                                             | Trap                                                                               |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| HOST-4 platform-edge accretion    | 4 optional VS-Code-only ports; toolEditApproval sole reader + throw-stub default                                                                                             | Ride micro A2 exactly as specified (A2's fix text already deletes the port member + stub + factories); notification-port merge is ~net-zero, do only if in-file | HostCapabilities sub-record                                                        |
+| TD-5 four streamId module guards  | 4 admission/dedup guards outside the sanctioned process-global list; stream-owned, no reachable cross-session divergence                                                     | Accept-and-fence, one ledger note; fold into session.runs/followUps on touch                                                                                    | a "finish the globals purge" sweep                                                 |
+| HOP-2 LogMessageData copy         | types-only Zod sibling of StreamLogEntry, never parsed, 16 consumer files, 1 identity-copy fn                                                                                | Fold into a derived type; ~−10 LoC; frontend takes `text?: string` honestly                                                                                     | typing `StreamLogEntry.data` as a giant union                                      |
+| IF-3 AgentDefinition dark fields  | 0 uses across 30 bundled YAMLs for 4 fields; but `inherits` is kernel-tested and requiredFiles shares its helper — truly dark: `filePatternsContain`, `internal`, one branch | Dated deprecate-or-exercise ruling for the 2 dark fields (stripLegacySettingFields warn pattern); keep+test the rest                                            | silent strictObject deletion (breaks third-party agents); YAML migration framework |
+| MIL-4 binary agent category       | 38 literal comparisons / 30 files; schema-owned enum; agentCreator exempt by design                                                                                          | Accept-and-fence; record "category is permanently binary" in agent-sdk-readiness                                                                                | predicate farm; folding agentCreator in                                            |
+| FB-3 config double-defaults       | 28 inline getConfig defaults, 27/28 byte-agree with DEFAULT_CORE_SETTINGS; the 1 drift is retry maxAttempts (micro EP-1)                                                     | Sound + one CLAUDE.md fence line: inline defaults reference `DEFAULT_CORE_SETTINGS.<path>` or a shared constant                                                 | migrating all 28 to getValidatedConfig; a typed config facade                      |
+| FB-4 compatibility-key sniff tier | key-first ?? Google-gated shape-sniff; read-failure warns, sniff-success traceless; module 115 LoC (~65-90 deletable)                                                        | Accept + dated #6981 row (calendar, not version — executions/ has no TTL) + 1 `logger.info` when the sniff decides                                              | deleting the sniff now; a persisted-schema-version framework                       |
+| TAX-3 agentCreator                | 505-LoC host-side YAML wizard, one VS Code caller, zero runtime touchpoints; 15% the size of a real family                                                                   | Accept-and-fence: OUT of any SDK surface; flatten to a plain fn when touched (−80 LoC)                                                                          | promoting it to a third category                                                   |
+| DS-3 schema governance            | Non-compliance census corrected 5→~1-2 of 12 formats (goal records; config.json version prong); repo converging without the rule                                             | One-sentence "born versioned + loud" rule + checklist row (~10 doc lines); drop the census test                                                                 | versioned-store library; standalone census test file (R7)                          |
+| DS-4 FS stack                     | 1,157 LoC / 8 modules; real class chain is 3 hops (the "5-hop chain" doesn't exist — leaf modules sit on node:fs directly)                                                   | Sound; fence against unification; two touch-time micro-folds only                                                                                               | injected-FS DI accretion                                                           |
+| QA-3 R7 is working                | Net −7 suites over 107 merges; all 11 replacement folds rode module deletions; 3.3k pinned cohort died on schedule; expiry-marker adoption = 1 file                          | Covered-by-design; reviewer nudge: scheduled-scaffolding suites must carry their #6981-row comment                                                              | treating 297 micro-suites as a fold backlog                                        |
+| QA-4 release-path smoke           | 3-OS signed installers, zero launch verification on any lane; `desktop:package:smoke` built and unwired; validate:pack manual-only                                           | Wire smoke into desktop-package.yml per-OS jobs + validate:pack into the CLI lane (~1-3 lines each; gate macOS/Windows if Linux flakes)                         | a full post-release E2E matrix (E2E budget belongs on D2)                          |
+| S6 ink patch                      | 164 lines, exact-version keyed (loud on bump); zero tracker artifacts state permanence                                                                                       | Write the permanent-until-upstream ruling into the patch header/proposal; nothing else ever                                                                     | forking ink; re-litigating v1/v2/v3 resize history                                 |
+| NS-5 vocabulary leaks             | StreamTabId: 229 files / 1,593 occurrences, single-sourced; 6 of 11 `show*` arms are dead (micro), live ones die with A2                                                     | Accept under R4; alias-at-boundary at package time (one line); dead arms ride the micro deletion                                                                | a clean-vocabulary sweep (maximal churn vs in-flight Stage 5)                      |
+| MONO-4 test-kernel carve-out      | All 41+15+2 host-package imports from src/ live in test-kernel (85k-LoC by its own count; design-intentional single kernel)                                                  | Sound; MONO-1 R-a scopes `ignores: ['src/test-kernel/**']` and must cover @cli/@desktop too                                                                     | relocating/splitting test-kernel (fractures shared fakes, R7)                      |
 
 **Already covered — existing programs own these; do not re-open:** HOST-1
 (desktop-as-second-extension-host: superseded by landed host-contract sharing;
@@ -821,31 +821,31 @@ precedence and schedule the deletion).
 
 ### 5a. Contract surfaces
 
-| Surface | Width | Optionality | Ownership | Verdict |
-| --- | --- | --- | --- | --- |
-| `HostInteractions` | 10 members / 7 request kinds | 7 doubly-optional; 6 runtime-hard-required | port + 4 per-host impls (297/247/321/651 LoC) | convert 6/7 required (IF-1); toolEdit optionality is load-bearing until #6890 |
-| `Platform` | 16 ports | 4 optional, contagion = 5 sites | composition roots per host | sound — fence; A2 deletes toolEditApproval member → 14 ports |
-| uiHosts | 4 ports / 12 members / 128 LoC | required at call sites | parameter-injected | sound |
-| `AgentRuntimeHost` | 1 emit / 16 event keys | partial-host contract | per-session | 6 phantom arms → relocate to CLI types (TD-2c / micro A6) |
-| `SessionFact` | 10 arms | consumers may ignore | SessionEventHub | sound vocabulary; 0/4 consumers compile-loud (FB-2) |
-| Settings host contract | 102 actions / 16 groups | desktop: 25 explicit `unsupported()` | one shared handler table | sound — the reference pattern |
-| Settings inbound IPC | 106 commands | — | schema union (102 members) | 16 dead pull commands → delete (IF-2) |
-| Agent YAML definition | 19 fields (10 settings) | strictObject + legacy strip | AgentDataclass | lean; 2 dark fields need a dated ruling (IF-3) |
-| `ITool`/`defineTool` | 3 members / 4 spec fields / 52 callers | parallelSafe? only | ToolTypes.ts | flagship DEEP — ship as-is |
-| CLI JSON/NDJSON | 22-key rail + 3 `@deprecated` fields | frozen | sessionProgressSubscription boundary | start the R2(3) clock (D3) |
-| `texra.*` catalog | 67 unique ids | — | catalog.ts SSOT, satisfies-checked ×2 hosts | sound |
-| Relay tier constants | 3 constants ×2 runtimes | — | comments (pointer rotted) | fence with equality test (D7) |
+| Surface                | Width                                  | Optionality                                | Ownership                                     | Verdict                                                                       |
+| ---------------------- | -------------------------------------- | ------------------------------------------ | --------------------------------------------- | ----------------------------------------------------------------------------- |
+| `HostInteractions`     | 10 members / 7 request kinds           | 7 doubly-optional; 6 runtime-hard-required | port + 4 per-host impls (297/247/321/651 LoC) | convert 6/7 required (IF-1); toolEdit optionality is load-bearing until #6890 |
+| `Platform`             | 16 ports                               | 4 optional, contagion = 5 sites            | composition roots per host                    | sound — fence; A2 deletes toolEditApproval member → 14 ports                  |
+| uiHosts                | 4 ports / 12 members / 128 LoC         | required at call sites                     | parameter-injected                            | sound                                                                         |
+| `AgentRuntimeHost`     | 1 emit / 16 event keys                 | partial-host contract                      | per-session                                   | 6 phantom arms → relocate to CLI types (TD-2c / micro A6)                     |
+| `SessionFact`          | 10 arms                                | consumers may ignore                       | SessionEventHub                               | sound vocabulary; 0/4 consumers compile-loud (FB-2)                           |
+| Settings host contract | 102 actions / 16 groups                | desktop: 25 explicit `unsupported()`       | one shared handler table                      | sound — the reference pattern                                                 |
+| Settings inbound IPC   | 106 commands                           | —                                          | schema union (102 members)                    | 16 dead pull commands → delete (IF-2)                                         |
+| Agent YAML definition  | 19 fields (10 settings)                | strictObject + legacy strip                | AgentDataclass                                | lean; 2 dark fields need a dated ruling (IF-3)                                |
+| `ITool`/`defineTool`   | 3 members / 4 spec fields / 52 callers | parallelSafe? only                         | ToolTypes.ts                                  | flagship DEEP — ship as-is                                                    |
+| CLI JSON/NDJSON        | 22-key rail + 3 `@deprecated` fields   | frozen                                     | sessionProgressSubscription boundary          | start the R2(3) clock (D3)                                                    |
+| `texra.*` catalog      | 67 unique ids                          | —                                          | catalog.ts SSOT, satisfies-checked ×2 hosts   | sound                                                                         |
+| Relay tier constants   | 3 constants ×2 runtimes                | —                                          | comments (pointer rotted)                     | fence with equality test (D7)                                                 |
 
 ### 5b. Leaked conventions (ranked: sites × change-likelihood × silent-failure)
 
-| Rank | Convention | Owner? | Stray sites | Failure mode | Action |
-| --- | --- | --- | --- | --- | --- |
-| 1 | Template tokens (MIL-2) | none (3 rotted lists) | 2 TS lists + N templates | **live bug**: silent agent corruption at creation | fix now + one exported list |
-| 2 | Delivery tags (MIL-1) | structure yes, tag-set no | 5 producer modules, 2 render hand-lists | **live drift**: raw XML rendered silently | one DELIVERY_TAGS const |
-| 3 | Output naming grammar (MIL-3) | 3 partial owners | ~10-11 strays / 6-7 subsystems | silent misclassification on any 4th-era change | point strays at owners + 1 tiny export |
-| 4 | Legacy STREAM_STATUS | tracked (D1) | 94 refs / 24 prod files | two vocabularies on every status PR | execute Sweep 2 (dated by D3 decision) |
-| 5 | Agent category binary (MIL-4) | schema-owned | 38 comparisons / 30 files | latent only (3rd value misroutes) | one recorded sentence: permanently binary |
-| 6 | `ei_` id length (leakage fence check) | hexId12 owner + 1 re-encode | 1 file (`inquiry.ts:23`) + stale owner comment | 2-file edit on length change | derive or annotate; fix "8-char" comment |
+| Rank | Convention                            | Owner?                      | Stray sites                                    | Failure mode                                      | Action                                    |
+| ---- | ------------------------------------- | --------------------------- | ---------------------------------------------- | ------------------------------------------------- | ----------------------------------------- |
+| 1    | Template tokens (MIL-2)               | none (3 rotted lists)       | 2 TS lists + N templates                       | **live bug**: silent agent corruption at creation | fix now + one exported list               |
+| 2    | Delivery tags (MIL-1)                 | structure yes, tag-set no   | 5 producer modules, 2 render hand-lists        | **live drift**: raw XML rendered silently         | one DELIVERY_TAGS const                   |
+| 3    | Output naming grammar (MIL-3)         | 3 partial owners            | ~10-11 strays / 6-7 subsystems                 | silent misclassification on any 4th-era change    | point strays at owners + 1 tiny export    |
+| 4    | Legacy STREAM_STATUS                  | tracked (D1)                | 94 refs / 24 prod files                        | two vocabularies on every status PR               | execute Sweep 2 (dated by D3 decision)    |
+| 5    | Agent category binary (MIL-4)         | schema-owned                | 38 comparisons / 30 files                      | latent only (3rd value misroutes)                 | one recorded sentence: permanently binary |
+| 6    | `ei_` id length (leakage fence check) | hexId12 owner + 1 re-encode | 1 file (`inquiry.ts:23`) + stale owner comment | 2-file edit on length change                      | derive or annotate; fix "8-char" comment  |
 
 ### 5c. Fallback-chain inventory
 
@@ -853,19 +853,19 @@ Headline: **6 of 11 inventoried chains mask** (silent on the failure/divergence
 path); the loud ones are all in storage/config, the masking ones are all in
 session/fact routing.
 
-| Chain | Loud or masking | Verdict / action |
-| --- | --- | --- |
-| `?? defaultSession()` session resolution (9 seams, ~72 lines) | **masking** (zero detection; shipped micro-A4 class) | sanctioned alias; add the 5-10 LoC tripwire (C1) |
-| SessionFact fan-out defaults (4 switches) | **masking** (shipped A1, live at HEAD) | never-checks, +15-20 LoC (FB-2) |
-| toolEditApproval 3-channel dispatch (`undefined` as routing) | **masking-adjacent** (precedence in one comment) | dies with micro A2 + #6890 (IF-1) |
-| Status dual rail (trace arm vs fact) | **masking** (wiring one arm compiles clean) | D4 atomic completion |
-| Goal-record reads (safeParse→null) | **masking** | DS-2 rung A; version on relocation |
-| compatibility-key sniff success | **masking** (traceless guess) | +1 log line; dated retirement row (FB-4) |
-| ExecutionKVStore.readValidated | loud (warn + #6966/#7210 citations) | fence; fix readChildren's 2-line warn gap on touch |
-| getValidatedConfig | loud where it matters (warn iff explicitly set) | fence |
-| StreamLog reads post-#7464 | loud + raw-preserving | fence |
-| Inline config defaults (28 sites) | benign (27/28 byte-agree) | one fence line; EP-1 already ticketed |
-| CLI input-history line skip | documented lossy-by-design | none |
+| Chain                                                         | Loud or masking                                      | Verdict / action                                   |
+| ------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------- |
+| `?? defaultSession()` session resolution (9 seams, ~72 lines) | **masking** (zero detection; shipped micro-A4 class) | sanctioned alias; add the 5-10 LoC tripwire (C1)   |
+| SessionFact fan-out defaults (4 switches)                     | **masking** (shipped A1, live at HEAD)               | never-checks, +15-20 LoC (FB-2)                    |
+| toolEditApproval 3-channel dispatch (`undefined` as routing)  | **masking-adjacent** (precedence in one comment)     | dies with micro A2 + #6890 (IF-1)                  |
+| Status dual rail (trace arm vs fact)                          | **masking** (wiring one arm compiles clean)          | D4 atomic completion                               |
+| Goal-record reads (safeParse→null)                            | **masking**                                          | DS-2 rung A; version on relocation                 |
+| compatibility-key sniff success                               | **masking** (traceless guess)                        | +1 log line; dated retirement row (FB-4)           |
+| ExecutionKVStore.readValidated                                | loud (warn + #6966/#7210 citations)                  | fence; fix readChildren's 2-line warn gap on touch |
+| getValidatedConfig                                            | loud where it matters (warn iff explicitly set)      | fence                                              |
+| StreamLog reads post-#7464                                    | loud + raw-preserving                                | fence                                              |
+| Inline config defaults (28 sites)                             | benign (27/28 byte-agree)                            | one fence line; EP-1 already ticketed              |
+| CLI input-history line skip                                   | documented lossy-by-design                           | none                                               |
 
 ---
 
@@ -874,21 +874,21 @@ session/fact routing.
 What the session-runtime program should now promise honestly, so the next
 quarter plans against reality. Ruling per unbuilt promise:
 
-| Promise (fewer-elements / design doc) | Status at HEAD | Ruling |
-| --- | --- | --- |
-| End-state element census ~26 | falsified: coordinator fold landed, floor is ~31-33 | **amend §8 to ~32; record "parity, bought correctness"** (D3) |
-| Coordinator fold (−4 classes, −5 maps) | **landed** (#7316 lineage; grep = 0) | done — credit it |
-| "Buffer never reimplemented" (design :612) | false: ExtensionPresentationEventBus has a real 1000-event buffer | keep the buffer; amend the mapping table line |
-| Interaction/presentation vocabulary split (11+5) | permanent | keep; narrow the 6 phantom arms via relocate (TD-2c) |
-| HostInteractions conformance obligations | 3 per-host suites already encode the spec | **drop** the proposed 300-500 LoC suite; parameterize on touch only (HOST-2) |
-| Required request methods (Plane 2) | unbuilt | build as 6/7 (IF-1); 7th gated on #6890 |
-| CLI 22-key rail deletion | frozen, clock never started | keep rail; **start the 3-field deprecation clock now** (D3/S3) |
-| Triple-channel status | live (10 apply-sites) | complete via D4 in one atomic PR |
-| `defaultSession()` as transitional shim | permanent by economics (40 uses / 24 files) | **sanction it**; invariant = "no session-scoped mutable module export"; execute micro A10 inversion (TD-3) |
-| D1 bullet 5 ("hosts construct sessions explicitly") | satisfiable but zero-value for single-session hosts | reword; do not let it stall or fake-close Sweep 2 |
-| `ProgressEventPayloads` types-zombie rule | 4 prod files remain, 0 test refs | on track; enforce at Sweep 1 (#6968) |
-| 3 host interaction impls + ApprovalRequestHandler replay | justified divergence | keep; fence |
-| Four streamId module guards | outside the sanctioned global list, no reachable divergence | ledger note; fold on touch (TD-5) |
+| Promise (fewer-elements / design doc)                    | Status at HEAD                                                    | Ruling                                                                                                     |
+| -------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| End-state element census ~26                             | falsified: coordinator fold landed, floor is ~31-33               | **amend §8 to ~32; record "parity, bought correctness"** (D3)                                              |
+| Coordinator fold (−4 classes, −5 maps)                   | **landed** (#7316 lineage; grep = 0)                              | done — credit it                                                                                           |
+| "Buffer never reimplemented" (design :612)               | false: ExtensionPresentationEventBus has a real 1000-event buffer | keep the buffer; amend the mapping table line                                                              |
+| Interaction/presentation vocabulary split (11+5)         | permanent                                                         | keep; narrow the 6 phantom arms via relocate (TD-2c)                                                       |
+| HostInteractions conformance obligations                 | 3 per-host suites already encode the spec                         | **drop** the proposed 300-500 LoC suite; parameterize on touch only (HOST-2)                               |
+| Required request methods (Plane 2)                       | unbuilt                                                           | build as 6/7 (IF-1); 7th gated on #6890                                                                    |
+| CLI 22-key rail deletion                                 | frozen, clock never started                                       | keep rail; **start the 3-field deprecation clock now** (D3/S3)                                             |
+| Triple-channel status                                    | live (10 apply-sites)                                             | complete via D4 in one atomic PR                                                                           |
+| `defaultSession()` as transitional shim                  | permanent by economics (40 uses / 24 files)                       | **sanction it**; invariant = "no session-scoped mutable module export"; execute micro A10 inversion (TD-3) |
+| D1 bullet 5 ("hosts construct sessions explicitly")      | satisfiable but zero-value for single-session hosts               | reword; do not let it stall or fake-close Sweep 2                                                          |
+| `ProgressEventPayloads` types-zombie rule                | 4 prod files remain, 0 test refs                                  | on track; enforce at Sweep 1 (#6968)                                                                       |
+| 3 host interaction impls + ApprovalRequestHandler replay | justified divergence                                              | keep; fence                                                                                                |
+| Four streamId module guards                              | outside the sanctioned global list, no reachable divergence       | ledger note; fold on touch (TD-5)                                                                          |
 
 Net: the honest end-state is **~32 elements at parity with pre-campaign**,
 with the campaign's purchase being session isolation, one emit rail, typed
@@ -927,9 +927,9 @@ reference examples. Everything in this section is sequenced against that.
 **Step 0 — Enforcement ratchet (now; no preconditions).** MONO-1 R-a
 (core→host lint at zero baseline) + LAY-1 edge baseline + QA-2 host-side mock
 ratchet + D8's test-LoC detector. All reuse the proven
-eslint+vitest+baseline-script patterns; all are config-only. *Existing
-trackers:* agent-sdk-readiness "lint gate" step (the never-built half of
-#7099); #7152 for the readiness program. *New decision needed:* none — these
+eslint+vitest+baseline-script patterns; all are config-only. _Existing
+trackers:_ agent-sdk-readiness "lint gate" step (the never-built half of
+#7099); #7152 for the readiness program. _New decision needed:_ none — these
 are the already-ruled gates, finally built.
 
 **Step 1 — Surface definition (gate: Stage-5 interactions/session work
@@ -939,9 +939,9 @@ derived surface seed. Execute the TD-2 quartet: IF-1's 6/7 required
 conversion riding micro A2's −300..−450 deletion; the phantom-arm relocate;
 D4's atomic status completion; v0.41 prefix retirement. D2 option B lands the
 consumer-contract suite as the **executable** surface definition (one suite,
-shared with NS-1's embedder smoke). *Existing trackers:* #6968 (Stage-5
+shared with NS-1's embedder smoke). _Existing trackers:_ #6968 (Stage-5
 close-out), #6890 (toolEdit channel), #6982/#6984 (sweeps), micro A2/A5/A6
-rows in #7636's follow-up set. *New decision needed:* the D4 trace-arm ruling
+rows in #7636's follow-up set. _New decision needed:_ the D4 trace-arm ruling
 (one paragraph, this week).
 
 **Step 2 — CLI as the canonical example (gate: Step 1's port shape frozen).**
@@ -950,9 +950,9 @@ behind its small desktop-behavior decision); NS-3's ceremony compression
 toward the ≤~40-line host run loop as SessionHandle absorbs
 attach/load/flush/toast (the #7560 train); QA-1 option A keeps `validate:run`
 green in CI throughout. Acceptance: the embedder smoke test constructs a
-working host from documented steps only. *Existing trackers:* session-runtime
+working host from documented steps only. _Existing trackers:_ session-runtime
 §Persistence bullets (#6966 Stage 3c), readiness checkpoint's runSession
-strategic row (as the metric, not the wrapper). *New decision needed:* the
+strategic row (as the metric, not the wrapper). _New decision needed:_ the
 desktop-skill-sources question (small, product-level).
 
 **Step 3 — Packaging (gate: an actual external consumer exists AND R-a/R-b
@@ -961,8 +961,8 @@ intersection; `packages/extension/resources` moves out in the **same change**
 that creates the SDK package (MONO-3's dated trigger); NS-5's
 StreamTabId alias at the boundary; HOST-3's four-tier publication shape
 (never a flat options bag). The #7099 lesson is the standing gate: no package
-without the import gate already enforcing its boundary. *Existing trackers:*
-agent-sdk-readiness packaging step; #7152. *New decision needed:* none until
+without the import gate already enforcing its boundary. _Existing trackers:_
+agent-sdk-readiness packaging step; #7152. _New decision needed:_ none until
 the consumer exists.
 
 ---
@@ -1103,22 +1103,22 @@ single-caller extractions anywhere in the above (standing ban).
 
 ### This week — decisions, zero code
 
-| # | Decision | Owner / tracker |
-| --- | --- | --- |
-| 1 | R2(3): CLI JSON deprecation paragraph into [Unreleased] (D3/S3) | release PR; #6981 row 33 |
-| 2 | Calendar-date D1 in #6982 itself, bypassing the failed checkpoint venue | #6982 |
-| 3 | Amend fewer-elements §8: end state ~32, "parity, bought correctness"; fix design-doc :612 buffer line | fewer-elements-2026-07.md |
-| 4 | HOP-1 trace-arm ruling: retain-as-SDK-per-run-contract (recommended) or delete with the projector arms | **new decision paragraph** on #6968 (no new issue needed) |
-| 5 | TAX-1 ruling: both flow families first-class; kernel-only capability rule | agent-sdk-readiness.md |
-| 6 | MIL-4 sentence: agent category permanently binary | agent-sdk-readiness.md |
-| 7 | TD-3 posture: `defaultSession()` sanctioned; invariant = no session-scoped mutable module export | session-scoped-runtime-architecture.md + #6982 |
-| 8 | QA-1 option A approved (validate:run into ci.yml) | ci.yml PR — **new, genuinely needs a decision** (no QA-gate row exists anywhere) |
-| 9 | S1 option (a): relay equality test + exact pin + deploy script | **new small issue** (no tracker owns the relay surface) |
-| 10 | S2 arm (a): R7 detector; R3 owner dates the ~40 undated ledger rows | fewer-elements R7/R3; #6981 |
-| 11 | S5 arm (b): desktop version-check toast, post-Stage-5 | **new product issue** (surface has no owner) |
-| 12 | DS-2 rung B dated row (goal-store medium, trigger = SDK packaging); DS-3 one-line rule + checklist row | #6981; code-review SKILL.md |
-| 13 | S6 permanence paragraph on the ink patch | ink-practices proposal / patch header |
-| 14 | NS-4 option (a): document port-injection as the embedding path | agent-sdk-readiness.md |
+| #   | Decision                                                                                               | Owner / tracker                                                                  |
+| --- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| 1   | R2(3): CLI JSON deprecation paragraph into [Unreleased] (D3/S3)                                        | release PR; #6981 row 33                                                         |
+| 2   | Calendar-date D1 in #6982 itself, bypassing the failed checkpoint venue                                | #6982                                                                            |
+| 3   | Amend fewer-elements §8: end state ~32, "parity, bought correctness"; fix design-doc :612 buffer line  | fewer-elements-2026-07.md                                                        |
+| 4   | HOP-1 trace-arm ruling: retain-as-SDK-per-run-contract (recommended) or delete with the projector arms | **new decision paragraph** on #6968 (no new issue needed)                        |
+| 5   | TAX-1 ruling: both flow families first-class; kernel-only capability rule                              | agent-sdk-readiness.md                                                           |
+| 6   | MIL-4 sentence: agent category permanently binary                                                      | agent-sdk-readiness.md                                                           |
+| 7   | TD-3 posture: `defaultSession()` sanctioned; invariant = no session-scoped mutable module export       | session-scoped-runtime-architecture.md + #6982                                   |
+| 8   | QA-1 option A approved (validate:run into ci.yml)                                                      | ci.yml PR — **new, genuinely needs a decision** (no QA-gate row exists anywhere) |
+| 9   | S1 option (a): relay equality test + exact pin + deploy script                                         | **new small issue** (no tracker owns the relay surface)                          |
+| 10  | S2 arm (a): R7 detector; R3 owner dates the ~40 undated ledger rows                                    | fewer-elements R7/R3; #6981                                                      |
+| 11  | S5 arm (b): desktop version-check toast, post-Stage-5                                                  | **new product issue** (surface has no owner)                                     |
+| 12  | DS-2 rung B dated row (goal-store medium, trigger = SDK packaging); DS-3 one-line rule + checklist row | #6981; code-review SKILL.md                                                      |
+| 13  | S6 permanence paragraph on the ink patch                                                               | ink-practices proposal / patch header                                            |
+| 14  | NS-4 option (a): document port-injection as the embedding path                                         | agent-sdk-readiness.md                                                           |
 
 Per R4, only three genuinely new issues are warranted (8, 9, 11); everything
 else lands as rows, paragraphs, or comments on existing trackers.
@@ -1144,24 +1144,24 @@ else lands as rows, paragraphs, or comments on existing trackers.
 
 ### Then — deletion-led moves (each net-negative or net-zero, no middles)
 
-| Move | Size | Tracker |
-| --- | --- | --- |
-| MIL-2 `ALL_CONTEXTS` one-line bug fix (ships first, alone) | +1 line | new small bug issue — user-visible corruption |
-| IF-2 dead settings-command sweep | −200..−400 | standalone PR |
-| TAX-2 BatchNode + params channel | −80..−120 | standalone PR (before any SDK doc freezes it) |
-| S4(1) dead desktop-package-targets script + self-test | ~−80 | standalone PR |
-| MONO-2 alias dedup (delete `@/*`, extend root ×2) | ~−85 JSON lines | standalone PR |
-| HOP-1 status-rail completion (after decision 4) | −30..−40, ONE atomic PR | #6968 |
-| IF-1 6/7 required conversion + micro A2 ride-along (re-pin sites post-RunScope) | −25..−50 (+A2's −300..−450) | #7636 follow-ups / Stage 5 |
-| TD-2c phantom-arm relocate | net ~0, −6 contract arms | micro A6 row |
-| LAY-2 backend relocation (mapToRecord first; LAY-3 item 1 alongside) | ~22 path-rewrite files | standalone PR after Sweep-1 window |
-| LAY-4 types sideways move to `agent/types` | 1 PR, 34 importers | when-touched or paired with M1 baseline |
-| LAY-3 burn-down (~8 small edges) | sub-PR each | fold into touching PRs |
-| TD-3 singleton inversion (micro A10) | 16 edits, −3 exports | #6982 |
-| DS-1 items 1-2 (goal-forget injection; CLI deleteByExecutionId) | ~+50/−25 | #6966 Stage 3c |
-| MIL-1 tag list + claude-agent fix; MIL-3 stray sweep | ~0 net each | standalone small PRs |
-| HOP-2 LogMessageData fold | ~−10 | opportunistic |
-| NS-1 nodeHost agent-dir fold (skill-sources behind its decision) | ~net 0 | Stage-5 / readiness Step 6-7 |
+| Move                                                                            | Size                        | Tracker                                       |
+| ------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------- |
+| MIL-2 `ALL_CONTEXTS` one-line bug fix (ships first, alone)                      | +1 line                     | new small bug issue — user-visible corruption |
+| IF-2 dead settings-command sweep                                                | −200..−400                  | standalone PR                                 |
+| TAX-2 BatchNode + params channel                                                | −80..−120                   | standalone PR (before any SDK doc freezes it) |
+| S4(1) dead desktop-package-targets script + self-test                           | ~−80                        | standalone PR                                 |
+| MONO-2 alias dedup (delete `@/*`, extend root ×2)                               | ~−85 JSON lines             | standalone PR                                 |
+| HOP-1 status-rail completion (after decision 4)                                 | −30..−40, ONE atomic PR     | #6968                                         |
+| IF-1 6/7 required conversion + micro A2 ride-along (re-pin sites post-RunScope) | −25..−50 (+A2's −300..−450) | #7636 follow-ups / Stage 5                    |
+| TD-2c phantom-arm relocate                                                      | net ~0, −6 contract arms    | micro A6 row                                  |
+| LAY-2 backend relocation (mapToRecord first; LAY-3 item 1 alongside)            | ~22 path-rewrite files      | standalone PR after Sweep-1 window            |
+| LAY-4 types sideways move to `agent/types`                                      | 1 PR, 34 importers          | when-touched or paired with M1 baseline       |
+| LAY-3 burn-down (~8 small edges)                                                | sub-PR each                 | fold into touching PRs                        |
+| TD-3 singleton inversion (micro A10)                                            | 16 edits, −3 exports        | #6982                                         |
+| DS-1 items 1-2 (goal-forget injection; CLI deleteByExecutionId)                 | ~+50/−25                    | #6966 Stage 3c                                |
+| MIL-1 tag list + claude-agent fix; MIL-3 stray sweep                            | ~0 net each                 | standalone small PRs                          |
+| HOP-2 LogMessageData fold                                                       | ~−10                        | opportunistic                                 |
+| NS-1 nodeHost agent-dir fold (skill-sources behind its decision)                | ~net 0                      | Stage-5 / readiness Step 6-7                  |
 
 The through-line: this review found **no rotten core**. The run API, the tool
 contract, the schema layer, the test kernel, and the storage read discipline
