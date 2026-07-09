@@ -29,7 +29,7 @@ export type TerminalResultToast =
     };
 
 const MISSING_API_KEY_MESSAGE =
-  'API key not found. Set your API key in the extension settings and run again.';
+  'API key not found. Set your API key in Settings and run again.';
 
 /**
  * Map a terminal `result` event to the toast a host should present, or `null`

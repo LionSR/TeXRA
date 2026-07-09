@@ -411,6 +411,28 @@ describe('DesktopSessionProgressBridge', () => {
         bridge.dispose();
       }
     });
+
+    it('folds requestShowInstruction into the same dialog surface as requestShowError', () => {
+      const onShowError = vi.fn();
+      const bridge = createBridge({ onShowError });
+
+      try {
+        bridge.handlePresentationEvent('requestShowInstruction', {
+          key: 'missingApiKey',
+          message:
+            'API key not found. Set your API key in Settings and run again.',
+          actions: ['set-api-key', 'open-configuration-guide'],
+          showSuppress: false,
+        });
+
+        expect(onShowError).toHaveBeenCalledTimes(1);
+        expect(onShowError).toHaveBeenCalledWith(
+          'API key not found. Set your API key in Settings and run again.',
+        );
+      } finally {
+        bridge.dispose();
+      }
+    });
   });
 
   describe('handleSessionEvent', () => {

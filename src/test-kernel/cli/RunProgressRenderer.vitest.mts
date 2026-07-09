@@ -1070,6 +1070,44 @@ describe('CLI run progress renderer', () => {
     expect(stdout).toBe('');
   });
 
+  it('prints requestShowInstruction text and action hint to stderr in text mode', async () => {
+    const output = await captureStreamWrites(process.stderr, async () => {
+      const host = createCliRuntimeHost(context({ outputFormat: 'text' }));
+
+      host.emit('requestShowInstruction', {
+        key: 'missingApiKey',
+        message:
+          'API key not found. Set your API key in Settings and run again.',
+        actions: ['set-api-key', 'open-configuration-guide'],
+        showSuppress: false,
+      });
+
+      await host.close();
+    });
+
+    expect(output).toContain(
+      'API key not found. Set your API key in Settings and run again. (set-api-key, open-configuration-guide)',
+    );
+  });
+
+  it('does not gate requestShowInstruction behind quietLogs in text mode', async () => {
+    const output = await captureStreamWrites(process.stderr, async () => {
+      const host = createCliRuntimeHost(
+        context({ outputFormat: 'text', quietLogs: true }),
+      );
+
+      host.emit('requestShowInstruction', {
+        key: 'missingApiKey',
+        message:
+          'API key not found. Set your API key in Settings and run again.',
+      });
+
+      await host.close();
+    });
+
+    expect(output).toContain('API key not found.');
+  });
+
   it('writes projected subagent progress records to stdout in ndjson mode', async () => {
     const output = await captureStreamWrites(process.stdout, async () => {
       const events = new SessionEventHub();

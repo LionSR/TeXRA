@@ -149,6 +149,20 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         return;
       }
 
+      if (event === 'requestShowInstruction') {
+        // Not gated by quietLogs (below): unlike the debug fallback, this is
+        // an actionable instruction (e.g. missing API key), not routine
+        // progress noise.
+        runProgress?.preserve();
+        const instructionPayload =
+          payload as RuntimePresentationEventPayloads['requestShowInstruction'];
+        const hint = instructionPayload.actions?.length
+          ? ` (${instructionPayload.actions.join(', ')})`
+          : '';
+        ensureLogger().info(`${instructionPayload.message}${hint}`);
+        return;
+      }
+
       if (context.quietLogs) return;
 
       ensureLogger().debug(`Runtime event: ${String(event)}`);
