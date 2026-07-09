@@ -1585,6 +1585,24 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('forgets goal entries when clearing never-registered streams', async () => {
+    const stream = 'tool@deepseek#missing' as StreamTabId;
+    const { backend, session } = createIsolatedRecordingBackend();
+
+    try {
+      await GoalStore.start(stream, 'forget this unregistered goal');
+
+      await backend.state.clearStream(stream);
+
+      expect(GoalStore.getForStream(stream)).toBeNull();
+    } finally {
+      await GoalStore.forget(stream);
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('forgets goal entries when clearing all streams', async () => {
     const stream = 'tool@deepseek#b6966b' as StreamTabId;
     const { backend, session } = createIsolatedRecordingBackend();
@@ -1609,20 +1627,21 @@ describe('ProgressBackend', () => {
     const orphanStream = 'tool@deepseek#b6966b' as StreamTabId;
     const orphanExecution = 'b6966b' as ExecutionId;
     const historyExecution = 'c6966c' as ExecutionId;
-    const seed = new StreamSnapshotStore();
-    await seed.load([orphanStream]);
-    seed.setTaskState(
-      orphanStream,
-      toolUseTaskState('search', 'deepseekproT'),
-      orphanExecution,
-    );
-    await writeExecutionConfig(orphanExecution);
-    await writeExecutionConfig(historyExecution);
-    await seed.flush();
-    await GoalStore.start(orphanStream, 'sweep this orphan');
 
     const { backend, session } = createIsolatedRecordingBackend();
     try {
+      const seed = new StreamSnapshotStore();
+      await seed.load([orphanStream]);
+      seed.setTaskState(
+        orphanStream,
+        toolUseTaskState('search', 'deepseekproT'),
+        orphanExecution,
+      );
+      await writeExecutionConfig(orphanExecution);
+      await writeExecutionConfig(historyExecution);
+      await seed.flush();
+      await GoalStore.start(orphanStream, 'sweep this orphan');
+
       expect(await StorageFS.exists(streamDataDir(orphanStream))).toBe(true);
       expect(await StorageFS.exists(`executions/${orphanExecution}`)).toBe(
         true,

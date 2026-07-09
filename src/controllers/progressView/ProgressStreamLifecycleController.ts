@@ -41,7 +41,10 @@ export class ProgressStreamLifecycleController {
   async deleteStream(stream: StreamTabId): Promise<void> {
     const hasStream =
       this.deps.state.hasStream(stream) || this.deps.state.hasTaskState(stream);
-    if (!hasStream) return;
+    if (!hasStream) {
+      await this.deps.state.clearStream(stream);
+      return;
+    }
 
     if (this.deps.host.isStreamInFlight(stream)) {
       // Finished streams should not get synthetic STOPPED transitions or child
