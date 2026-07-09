@@ -1161,6 +1161,60 @@ describe('CLI run progress renderer', () => {
     ]);
   });
 
+  it('routes runtime presentation requests to ndjson logs, not progress events', async () => {
+    const output = await captureStreamWrites(process.stdout, async () => {
+      const host = createCliRuntimeHost(
+        context({ mode: 'headless', outputFormat: 'ndjson' }),
+      );
+
+      host.emit('requestShowError', { message: 'Provider returned 500.' });
+      host.emit('requestShowInstruction', {
+        key: 'latex-compile-failed',
+        message: 'Inspect the log before retrying.',
+        actions: ['open-configuration-guide'],
+        showSuppress: true,
+      });
+      host.emit('requestEnsureProgressView', {});
+
+      await host.close();
+    });
+
+    const records = output
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        kind: 'log',
+        level: 'error',
+        message: 'Provider returned 500.',
+      }),
+      expect.objectContaining({
+        kind: 'log',
+        level: 'info',
+        message: 'Inspect the log before retrying.',
+        fields: {
+          key: 'latex-compile-failed',
+          actions: ['open-configuration-guide'],
+          showSuppress: true,
+        },
+      }),
+    ]);
+    expect(records).not.toContainEqual(
+      expect.objectContaining({
+        kind: 'progress',
+        event: 'requestShowError',
+      }),
+    );
+    expect(records).not.toContainEqual(
+      expect.objectContaining({
+        kind: 'progress',
+        event: 'requestShowInstruction',
+      }),
+    );
+  });
+
   it('maps the global quiet flag into CLI context args', () => {
     expect(
       pickGlobalArgs({
