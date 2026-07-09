@@ -35,7 +35,13 @@ interface FlowCursor {
 export interface FlowRecord {
   schemaVersion?: number;
   flowName: string;
-  params: Record<string, unknown>;
+  /**
+   * Legacy per-execution params, always `{}` in practice — the params
+   * channel was removed from the node/flow engine. Kept optional so a
+   * tolerant reader still accepts records written before the removal;
+   * new records omit it entirely.
+   */
+  params?: Record<string, unknown>;
   shared: unknown;
   createdAt: string;
   /**
@@ -80,14 +86,12 @@ export interface StepResult<S> {
  * - Resume replays by navigating the graph, not re-executing nodes
  *
  * @template S - Shared state type (must be serializable via structuredClone)
- * @template P - Params type (must be serializable)
  * @template Svc - Services type (NOT serialized - injected at runtime)
  */
 export class PersistedFlow<
   S = Record<string, unknown>,
-  P extends Record<string, unknown> = Record<string, unknown>,
   Svc = unknown,
-> extends Flow<S, P, Svc> {
+> extends Flow<S, Svc> {
   protected readonly runId: string;
   protected readonly kv: ExecutionKVStore;
 
@@ -192,14 +196,12 @@ export class PersistedFlow<
       };
     }
 
-    const params = flow.params as P;
     const shared = flow.shared as S;
 
     if (!shared) {
       throw new Error('Missing shared state in flow record');
     }
 
-    cursor.setParams(params);
     cursor.setServices(this._services);
     const action = await cursor._run(shared);
     const waiting = action === FlowTransition.WAITING;
@@ -358,7 +360,6 @@ export class PersistedFlow<
     const record: FlowRecord = {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       flowName: 'texra',
-      params: this._params as Record<string, unknown>,
       shared: this.serializeShared(shared),
       createdAt: new Date().toISOString(),
       cursor: { nextNodeId: this.idForNode(this.start) },

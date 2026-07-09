@@ -33,7 +33,3 @@ export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
   onInterrupt?: () => void;
   onRoundFinalized?: RoundFinalizedCallback;
 }
-
-export interface FlowParams {
-  [key: string]: unknown;
-}
