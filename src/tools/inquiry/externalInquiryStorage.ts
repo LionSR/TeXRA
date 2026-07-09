@@ -18,8 +18,8 @@ import {
   type InquiryDraft,
   type InquiryThreadStatus,
 } from '@shared/schemas';
-import { normalizeFilePath } from '@shared/utils/path';
 import { ToolError } from '@shared/schemas/toolResult';
+import { normalizeFilePath } from '@utils/core';
 import {
   isObject,
   toNewestFirstByTimestamp,

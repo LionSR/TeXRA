@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { getBasename } from '@utils/core';
 import {
   type FileLocation,
   FileLocationSchema,
@@ -7,7 +8,6 @@ import {
   OutputFileInfoSchema,
 } from './output';
 import { RoundNumberSchema } from './roundIndexed';
-import { getBasename } from '../utils/path';
 
 export const DiffStatusSchema = z.enum(['success', 'error']);
 export type DiffStatus = z.infer<typeof DiffStatusSchema>;

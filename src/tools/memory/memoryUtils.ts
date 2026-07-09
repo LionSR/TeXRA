@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import { normalizeFilePath } from '@shared/utils/path';
+import { normalizeFilePath } from '@utils/core';
 
 import { MEMORY_DISPLAY_ROOT } from './constants';
 
