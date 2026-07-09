@@ -9,10 +9,7 @@ import {
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
 import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
@@ -151,11 +148,11 @@ export async function runToolUseFlow<C = unknown>(
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
   const { logger, setting, onInterrupt } = input;
-  const { runtimeHost, streamId, executionId } = useLaunchRunContext();
-  // Capture the run's session at setup (inside the run's ALS). The interrupt
-  // closure below fires from the host thread outside the ALS, so it must use
-  // this captured handle, not a fresh currentSession() lookup.
-  const runSession = currentSession();
+  const { runScope } = useLaunchRunContext();
+  const { runtimeHost, streamId, executionId, session: runSession } = runScope;
+  // Capture the run's scope at setup. The interrupt closure below fires from
+  // the host thread outside the ALS, so it must use this captured session
+  // handle instead of asking for an ambient current session later.
   const sessionLifecycle = new ToolUseSessionLifecycle(
     streamId,
     runSession.followUps,

@@ -10,7 +10,6 @@ import {
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
-import { currentSession } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
@@ -105,10 +104,10 @@ export async function runReflectionFlow<C = unknown>(
     checkInterruption,
     onRoundFinalized = async () => {},
   } = input;
-  const { runtimeHost, streamId, executionId } = useLaunchRunContext();
-  // Capture the run's session at setup (inside the run's ALS); the interrupt
-  // closure below fires from the host thread outside the ALS.
-  const runSession = currentSession();
+  const { runScope } = useLaunchRunContext();
+  const { runtimeHost, streamId, executionId, session: runSession } = runScope;
+  // Capture the run's scope at setup; the interrupt closure below fires from
+  // the host thread outside the ALS.
 
   let outcome: RunOutcome = RUN_OUTCOME.CANCELLED;
   let shared: ReflectionFlowShared | undefined;
