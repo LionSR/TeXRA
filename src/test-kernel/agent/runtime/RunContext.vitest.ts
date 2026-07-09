@@ -56,15 +56,18 @@ describe('RunContext', () => {
 
   it('reads the current model from a live provider', () => {
     let currentModel: string | undefined = 'deepseekT';
-    const context = createRunContext({
+    const runScope = createRunScope({
       runtimeHost: createRuntimeHost(),
       streamId: 'live-model-stream' as StreamTabId,
       executionId: 'live-model-execution' as ExecutionId,
+      agentName: 'test-agent',
+      session: {} as SessionHandle,
+    });
+    const context = createRunContext({
+      runScope,
       modelSource: 'live',
       model: 'fallback-model',
       getModel: () => currentModel,
-      agentName: 'test-agent',
-      session: {} as SessionHandle,
     });
 
     expect(Object.getOwnPropertyDescriptor(context, 'model')?.get).toBeTypeOf(
@@ -94,14 +97,9 @@ describe('RunContext', () => {
       session: {} as SessionHandle,
     });
     const context = createRunContext({
-      runtimeHost,
       runScope,
-      streamId: runScope.streamId,
-      executionId: runScope.executionId,
       modelSource: 'live',
       getModel: () => 'deepseekT',
-      agentName: runScope.agentName,
-      session: runScope.session,
     });
 
     expect(Object.isFrozen(runScope)).toBe(true);

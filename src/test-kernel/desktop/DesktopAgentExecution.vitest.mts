@@ -40,6 +40,7 @@ import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import { SETUP_PLATFORM_TOOL_NAMES } from '@tools/setup/platform';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -74,6 +75,7 @@ type TestableBridge = Bridge & {
   syncFullView(): void;
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
   setActiveStream(streamId: StreamTabId): void;
+  revealStream(streamId: StreamTabId): void;
   deleteStream(streamId: StreamTabId): Promise<void>;
   deleteAllStreams(): Promise<void>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
@@ -168,6 +170,7 @@ interface DesktopAgentExecutionModule {
       streamSnapshotStore?: TestDesktopStreamSnapshotStore;
       progressSnapshotStore?: ProgressSnapshotStore;
       showErrorMessage?: (message: string) => Promise<void> | void;
+      openPath?: (filePath: string, line?: number) => Promise<void>;
     },
   ) => Bridge;
   createDesktopAgentExecution(options: {
@@ -194,6 +197,7 @@ type CreateBridgeOptions = {
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
   activeExecutionIds?: readonly string[] | (() => readonly string[]);
   showErrorMessage?: (message: string) => Promise<void> | void;
+  openPath?: (filePath: string, line?: number) => Promise<void>;
 };
 
 type TestDesktopStreamSnapshotStore = {
@@ -431,6 +435,7 @@ async function createBridge(
       streamSnapshotStore: options.streamSnapshotStore,
       progressSnapshotStore,
       showErrorMessage: options.showErrorMessage,
+      openPath: options.openPath,
     },
   ) as TestableBridge;
 }
@@ -734,12 +739,48 @@ describe('DesktopProgressBridge', () => {
       bridge.handleInteractionEvent('requestShowError', {
         message: 'Root run failed',
       });
+      bridge.handleInteractionEvent('requestShowInstruction', {
+        key: 'missingApiKey',
+        message:
+          'API key not found. Set your API key in Settings and run again.',
+        actions: ['set-api-key', 'open-configuration-guide'],
+        showSuppress: false,
+      });
 
       expect(messages).toContainEqual({
         command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
         route: 'progress',
       });
       expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
+      // Folded into the same dialog surface as requestShowError — no second
+      // subscribe surface or dialog for instructions.
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        'API key not found. Set your API key in Settings and run again.',
+      );
+      expect(showErrorMessage).toHaveBeenCalledTimes(2);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('routes requestOpenFile to the desktop preview host (issue #7751 FS3)', async () => {
+    const messages: unknown[] = [];
+    const openPath = vi.fn(async () => {});
+    const bridge = await createBridge(messages, { openPath });
+
+    try {
+      bridge.handleInteractionEvent('requestOpenFile', {
+        location: {
+          kind: 'runStorage',
+          absolutePath: '/runs/exec-1/output/paper.pdf',
+          relativePath: 'output/paper.pdf',
+          executionId: 'abc123',
+        },
+        preserveFocus: true,
+      });
+      await settleProgressEvents();
+
+      expect(openPath).toHaveBeenCalledWith('/runs/exec-1/output/paper.pdf');
     } finally {
       bridge.dispose();
     }
@@ -1719,6 +1760,65 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('revealStream routes to progress and selects the stream (issue #7751 FS6)', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      emitSessionFact(bridge, 'setActiveStream', {
+        streamId: 'goal-owning-stream',
+        agentCategory: AgentCategory.Workflow,
+      });
+      await settleProgressEvents();
+      const filterStreams = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.FILTER_STREAMS
+        ],
+      );
+      await filterStreams({
+        command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS,
+        filter: 'toolUse',
+      });
+      messages.length = 0;
+
+      bridge.revealStream('goal-owning-stream');
+
+      expect(messages).toContainEqual({
+        command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+        route: 'progress',
+      });
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
+      ).toContainEqual({
+        activeStream: 'goal-owning-stream',
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      });
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+          -1,
+        ),
+      ).toMatchObject({
+        activeStream: 'goal-owning-stream',
+        agentFilter: 'all',
+      });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('revealStream keeps the current route when the stream is unknown', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.revealStream('missing-goal-stream');
+
+      expect(messages).toEqual([]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('restores a ghost stream display from shared streamData sidecars', async () => {
     const messages: unknown[] = [];
     const plan = {
@@ -2515,7 +2615,7 @@ describe('DesktopProgressBridge', () => {
         expect.objectContaining({
           openWorkflowOutput: expect.any(Function),
           runtimeUnavailableTools: [
-            'list_api_keys',
+            ...SETUP_PLATFORM_TOOL_NAMES,
             'inline_comment',
             DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
           ],
@@ -3093,6 +3193,105 @@ describe('DesktopProgressBridge', () => {
           id: 'proposal-1',
         }),
       ]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it("restores a stream's task state into the main view (history 'Setup' / Progress board restore)", async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      emitRunConfigFact(bridge, {
+        streamId: 'stream-1',
+        executionId: 'ec1002' as ExecutionId,
+        taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
+      });
+      await settleProgressEvents();
+      messages.length = 0;
+
+      const handleRestoreState = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.RESTORE_STATE
+        ],
+      );
+      expect(handleRestoreState).toBeTypeOf('function');
+      await handleRestoreState({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-1',
+      });
+
+      expect(messages).toEqual([
+        { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route: 'main' },
+        expect.objectContaining({ command: COMMON_COMMANDS.STATE_RESTORE }),
+      ]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('ignores restoreState for a stream with no persisted task state', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      const handleRestoreState = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.RESTORE_STATE
+        ],
+      );
+      await handleRestoreState({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-unknown',
+      });
+
+      expect(messages).toEqual([]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('surfaces an error when restoreState fails to build main-view state (cursor[bot] #7827)', async () => {
+    const messages: unknown[] = [];
+    const errors: string[] = [];
+    const bridge = await createBridge(messages, {
+      showErrorMessage: async (message) => {
+        errors.push(message);
+      },
+    });
+
+    try {
+      // inputFiles must be string[]; a non-array value makes
+      // MainViewPersistedStateSchema.parse() inside buildMainViewState throw,
+      // so restoreTaskState() returns false and the handler must surface it
+      // instead of silently doing nothing (unlike the extension's
+      // texra.restoreState, which shows RESTORE_MALFORMED_MESSAGE).
+      emitRunConfigFact(bridge, {
+        streamId: 'stream-1',
+        executionId: 'ec1003' as ExecutionId,
+        taskState: {
+          agentConfig: {
+            ...SEARCH_TOOL_USE_AGENT_CONFIG,
+            inputFiles: 12345,
+          },
+        },
+      });
+      await settleProgressEvents();
+      messages.length = 0;
+
+      const handleRestoreState = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.RESTORE_STATE
+        ],
+      );
+      await handleRestoreState({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-1',
+      });
+
+      expect(messages).toEqual([]);
+      expect(errors).toEqual(['Failed to restore state']);
     } finally {
       bridge.dispose();
     }

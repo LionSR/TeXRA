@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { SkillSource } from '@skills/loadSkills';
 
 const mocks = vi.hoisted(() => ({
   authProvider: {
@@ -18,13 +18,12 @@ const mocks = vi.hoisted(() => ({
   createNodePlatform: vi.fn(() => ({})),
   initializeCliSupabaseAuth: vi.fn(),
   initializeNodeGoalPrompts: vi.fn(),
+  initializeNodeRuntimeSkills: vi.fn(),
   initNodeAgentRuntime: vi.fn(),
   initializeServerSideKeyAccess: vi.fn(),
   serverSideKeyService: {
     setUseIncludedModelAccess: vi.fn(),
   },
-  defaultSkillSources: vi.fn<() => SkillSource[]>(() => []),
-  setRuntimeSkillSources: vi.fn(),
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   invalidateModelOptionsCache: vi.fn(),
   tryPlatform: vi.fn(),
@@ -70,11 +69,7 @@ vi.mock('@platform/defaults/nodeHost', () => ({
   createNodePlatform: mocks.createNodePlatform,
   initNodeAgentRuntime: mocks.initNodeAgentRuntime,
   initializeNodeGoalPrompts: mocks.initializeNodeGoalPrompts,
-}));
-
-vi.mock('@skills/index', () => ({
-  defaultSkillSources: mocks.defaultSkillSources,
-  setRuntimeSkillSources: mocks.setRuntimeSkillSources,
+  initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
 }));
 
 vi.mock('@telemetry/UsageLogService', () => ({
@@ -201,6 +196,45 @@ describe('CLI platform init', () => {
     expect(vi.mocked(UsageLogService.dispose)).toHaveBeenCalled();
   });
 
+  it('installs a CLI agent resume port that delegates to the active handler', async () => {
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
+    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+
+    await initCliPlatform(cliContext({ installSignalHandlers: false }));
+
+    type NodePlatformOptions = {
+      readonly agentResume: {
+        tryResumeStream(streamId: string): Promise<boolean>;
+        isResumeInFlight(streamId: string): boolean;
+      };
+    };
+    const createNodePlatformCalls = mocks.createNodePlatform.mock
+      .calls as unknown as Array<[NodePlatformOptions]>;
+    const nodePlatformOptions = createNodePlatformCalls[0]?.[0];
+    expect(nodePlatformOptions?.agentResume).toBeDefined();
+    if (!nodePlatformOptions) throw new Error('expected node platform options');
+
+    const tryResumeStream = vi.fn(async () => true);
+    const isResumeInFlight = vi.fn(() => true);
+    const dispose = setCliAgentResumeHandler({
+      tryResumeStream,
+      isResumeInFlight,
+    });
+
+    try {
+      await expect(
+        nodePlatformOptions.agentResume.tryResumeStream('stream:cli-resume'),
+      ).resolves.toBe(true);
+      expect(tryResumeStream).toHaveBeenCalledWith('stream:cli-resume');
+      expect(
+        nodePlatformOptions.agentResume.isResumeInFlight('stream:cli-resume'),
+      ).toBe(true);
+      expect(isResumeInFlight).toHaveBeenCalledWith('stream:cli-resume');
+    } finally {
+      dispose();
+    }
+  });
+
   it('bootstraps bundled agents with the CLI version store', async () => {
     const globalState = {
       get: vi.fn((key: string, defaultValue: unknown) =>
@@ -296,16 +330,7 @@ describe('CLI platform init', () => {
     ).toHaveBeenCalledWith(true);
   });
 
-  it('registers CLI runtime skill sources from context options', async () => {
-    const sources: SkillSource[] = [
-      {
-        scope: 'custom' as const,
-        path: '/tmp/project/vendor/skills',
-        label: 'custom',
-        required: true,
-      },
-    ];
-    mocks.defaultSkillSources.mockReturnValueOnce(sources);
+  it('registers CLI runtime skill sources through the shared Node host helper', async () => {
     mocks.authProvider.isAuthenticated.mockResolvedValueOnce(false);
 
     await initCliPlatform(
@@ -317,16 +342,13 @@ describe('CLI platform init', () => {
       }),
     );
 
-    expect(mocks.defaultSkillSources).toHaveBeenCalledWith(
-      {
-        cwd: '/tmp/project',
-        resourcesPath: '/tmp/resources',
-      },
-      {
+    expect(mocks.initializeNodeRuntimeSkills).toHaveBeenCalledWith({
+      cwd: '/tmp/project',
+      resourcesPath: '/tmp/resources',
+      skillSourceOptions: {
         includeInterop: true,
         additionalPaths: ['vendor/skills'],
       },
-    );
-    expect(mocks.setRuntimeSkillSources).toHaveBeenCalledWith(sources);
+    });
   });
 });

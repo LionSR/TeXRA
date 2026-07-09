@@ -25,7 +25,12 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  presentFollowUpWakeResult,
+  sendFollowUp,
+  wakeQueuedFollowUpStream,
+} from '@agent/followUp/ToolUseFollowUp';
+import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import {
   type CliContext,
   readCliVersion,
@@ -488,6 +493,12 @@ export async function runChat(
     followUpQueue,
     snapshotStore,
   });
+  disposers.push(
+    setCliAgentResumeHandler({
+      tryResumeStream: (streamId) => chatController.tryResumeStream(streamId),
+      isResumeInFlight: (streamId) => chatController.isResumeInFlight(streamId),
+    }),
+  );
 
   const interruptActive = (): void => {
     chatController.stop();
@@ -676,6 +687,15 @@ export async function runChat(
     void followUpQueue.add(async () => {
       let delivered = false;
       let followUpTarget = childFollowUpTarget;
+      const emitQueuedFollowUpsChanged = (streamId: StreamTabId): void => {
+        defaultSession().events.emit({
+          scope: 'session',
+          event: {
+            type: 'updateQueuedFollowUps',
+            payload: { streamId },
+          },
+        });
+      };
       try {
         while (
           !followUpTarget &&
@@ -692,7 +712,25 @@ export async function runChat(
           mediaFiles,
           prepared.displayInstruction,
         );
-        delivered = result.status === 'sent' || result.status === 'queued';
+        if (result.status === 'sent') {
+          emitQueuedFollowUpsChanged(followUpTarget);
+          delivered = true;
+        } else if (result.status === 'queued') {
+          emitQueuedFollowUpsChanged(followUpTarget);
+          const wake = await wakeQueuedFollowUpStream(followUpTarget, result);
+          const presentation = presentFollowUpWakeResult(wake);
+          if (presentation.severity !== 'none') {
+            if (presentation.refreshQueuedFollowUps) {
+              emitQueuedFollowUpsChanged(followUpTarget);
+            }
+            appendLocalAssistantTranscript(
+              presentation.message,
+              followUpTarget,
+            );
+          }
+          delivered =
+            wake.kind !== 'dropped' && wake.kind !== 'queued_resume_failed';
+        }
         if (result.status === 'no_session') {
           // Child stream ids are keys in parentStream; the root session id is not.
           if (followUpTarget === session.streamId) {

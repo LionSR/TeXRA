@@ -9,7 +9,6 @@ import {
 } from '@agent/core/flows/ToolUseRoundFlow';
 import { withModelClient } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { buildFailedRetryInfo } from '@common/errors';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import type { RetryErrorInfo } from '@shared/schemas';
@@ -34,7 +33,6 @@ type ToolUseCycleOutcome =
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,
-  FlowParams,
   ToolUseServices<C>
 > {
   async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {

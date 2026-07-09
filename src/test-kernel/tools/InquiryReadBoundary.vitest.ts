@@ -17,7 +17,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 import { setupPlatform } from '@test/support/setupPlatform';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { hydrateOpenInquiryPermissions } from '@controllers/progressView/backend/externalInquiryHydration';
 import {
   type ExternalInquiryPermission,
   type ExternalInquiryThreadId,
@@ -111,30 +111,44 @@ function createProgressProviderShell(): {
   hydrate: () => Promise<void>;
   show: ReturnType<typeof vi.fn>;
 } {
-  const provider = Object.create(
-    ProgressViewProvider.prototype,
-  ) as ProgressViewProvider;
-  const show = vi.fn();
-  const shell = provider as unknown as {
-    hydrateOpenInquiries(): Promise<void>;
-    webviewUpdater: { isAvailable(): boolean };
-    approvalHandlers: {
-      externalInquiry: {
-        pendingSize: number;
-        show(permission: ExternalInquiryPermission): void;
-      };
-    };
-    logger: { debug(message: string): void };
+  const show = vi.fn<(permission: ExternalInquiryPermission) => void>();
+  return {
+    hydrate: () =>
+      hydrateOpenInquiryPermissions({
+        webviewUpdater: {
+          isAvailable: () => true,
+          syncInquiryThreads: vi.fn(),
+        },
+        externalInquiry: {
+          pendingSize: 0,
+          show,
+        },
+        logger: { debug: vi.fn() },
+      }),
+    show,
   };
-  shell.webviewUpdater = { isAvailable: () => true };
-  shell.approvalHandlers = {
-    externalInquiry: {
-      pendingSize: 0,
-      show,
-    },
+}
+
+function createHydrationShellWithPendingInquiry(): {
+  hydrate: () => Promise<void>;
+  show: ReturnType<typeof vi.fn>;
+} {
+  const show = vi.fn<(permission: ExternalInquiryPermission) => void>();
+  return {
+    hydrate: () =>
+      hydrateOpenInquiryPermissions({
+        webviewUpdater: {
+          isAvailable: () => true,
+          syncInquiryThreads: vi.fn(),
+        },
+        externalInquiry: {
+          pendingSize: 1,
+          show,
+        },
+        logger: { debug: vi.fn() },
+      }),
+    show,
   };
-  shell.logger = { debug: vi.fn() };
-  return { hydrate: () => shell.hydrateOpenInquiries(), show };
 }
 
 describe('external inquiry read boundary', () => {
@@ -197,5 +211,16 @@ describe('external inquiry read boundary', () => {
         ]),
       }),
     );
+  });
+
+  it('does not rehydrate durable inquiries when pending state is already warm', async () => {
+    await seedThread(OPEN_THREAD, openFollowUpLegacyManifest(), {
+      't1/answer.txt': 'Legacy A',
+    });
+    const { hydrate, show } = createHydrationShellWithPendingInquiry();
+
+    await hydrate();
+
+    expect(show).not.toHaveBeenCalled();
   });
 });

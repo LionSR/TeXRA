@@ -173,37 +173,39 @@ class NdjsonStdoutSink implements LogSink {
   }
 
   private ensureDrain(): Promise<void> {
-    this.drainPromise ??= this.drain();
+    if (!this.drainPromise) {
+      const promise = this.drain();
+      this.drainPromise = promise;
+      void promise.finally(() => {
+        if (this.drainPromise === promise) {
+          this.drainPromise = undefined;
+        }
+        if (!this.stdoutClosed && this.queue.length > 0) {
+          void this.ensureDrain().catch(() => undefined);
+        }
+      });
+    }
     return this.drainPromise;
   }
 
   private async drain(): Promise<void> {
-    try {
-      while (!this.stdoutClosed && this.queue.length > 0) {
-        const record = this.queue.shift();
-        if (!record) continue;
-        const lineRecord: CliNdjsonRecord = { kind: 'log', ...record };
-        const line = `${JSON.stringify(lineRecord)}\n`;
-        let canContinue: boolean;
-        try {
-          canContinue = process.stdout.write(line);
-        } catch {
-          this.stdoutClosed = true;
-          this.queue.length = 0;
-          return;
-        }
-        if (!canContinue && !(await this.waitForStdoutDrain())) {
-          this.stdoutClosed = true;
-          this.queue.length = 0;
-          return;
-        }
+    while (!this.stdoutClosed && this.queue.length > 0) {
+      const record = this.queue.shift();
+      if (!record) continue;
+      const lineRecord: CliNdjsonRecord = { kind: 'log', ...record };
+      const line = `${JSON.stringify(lineRecord)}\n`;
+      let canContinue: boolean;
+      try {
+        canContinue = process.stdout.write(line);
+      } catch {
+        this.stdoutClosed = true;
+        this.queue.length = 0;
+        return;
       }
-    } finally {
-      if (!this.stdoutClosed && this.queue.length > 0) {
-        this.drainPromise = this.drain();
-        await this.drainPromise;
-      } else {
-        this.drainPromise = undefined;
+      if (!canContinue && !(await this.waitForStdoutDrain())) {
+        this.stdoutClosed = true;
+        this.queue.length = 0;
+        return;
       }
     }
   }

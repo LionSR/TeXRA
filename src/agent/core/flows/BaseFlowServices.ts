@@ -15,19 +15,6 @@ export type RoundFinalizedCallback = (
   run: AgentRunStateSnapshot,
 ) => void | Promise<void>;
 
-/** Delegation-scoped policy flags, grouped so they travel together on `AgentCore`. */
-interface DelegationPolicy {
-  /**
-   * Delegation depth: 0 for root (user-initiated), N for a subagent N levels deep.
-   * Set by executeAgent from ExecuteAgentOptions.delegationDepth. Used by the
-   * tool-use flow to gate delegation tools and by the delegation tool itself
-   * to compute the child's depth.
-   */
-  delegationDepth?: number;
-  /** Whether approval or user prompts cannot be answered by the current host. */
-  approvalPromptsUnavailable?: boolean;
-}
-
 export interface AgentCore<C = unknown> {
   modelHandler: IModelHandler<ProviderMessage, unknown, SdkToolCall, C>;
   config: AgentConfig;
@@ -36,9 +23,6 @@ export interface AgentCore<C = unknown> {
   logger: AgentTrace;
   streamStatus: StreamStatusMachine;
   userVarChannels: UserVariableChannels;
-  delegation?: DelegationPolicy;
-  /** Tools unavailable because the current host/runtime cannot support them. */
-  runtimeUnavailableTools?: readonly string[];
   /** Initial user row to log after the flow has inserted launch media. */
   initialUserMessageForTranscript?: string;
 }
@@ -48,8 +32,4 @@ export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
   setAbortController: (ctrl: AbortController | null) => void;
   onInterrupt?: () => void;
   onRoundFinalized?: RoundFinalizedCallback;
-}
-
-export interface FlowParams {
-  [key: string]: unknown;
 }

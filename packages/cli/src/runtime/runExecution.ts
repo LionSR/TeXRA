@@ -6,6 +6,7 @@ import {
   StreamSnapshotStore,
 } from '@transcript';
 import { writeTerminalStatus } from '@agent/storage';
+import { AgentError } from '@common/errors';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -19,10 +20,7 @@ import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
-import {
-  createHeadlessCliHostInteractions,
-  installCliApprovalHandlers,
-} from './approvalAdapter';
+import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
@@ -104,11 +102,15 @@ export async function executeCliConfig<
     return { ok: false, exitCode: CliExitCode.Usage };
   }
 
-  const { result, terminalStatus } = await executeCliRequest(
+  const execution = await executeCliRequest(
     validation.request,
     runContext,
     executeOptions,
   );
+  if (!execution.ok) {
+    return execution;
+  }
+  const { result, terminalStatus } = execution;
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
     await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
@@ -155,12 +157,27 @@ export async function executeCliToolUseConfig(
  * wrapped), always close the host, and resolve the terminal status.
  * Centralizing this stops the three runners from drifting apart on host
  * lifecycle and status handling, which is how their behavior diverged before.
+ *
+ * A classified run failure (AgentRunLifecycle already ran it through
+ * `classifyAgentError` and wrote the terminal outcome before rethrowing an
+ * `AgentError` for the extension host) is consumed here into a non-zero exit
+ * code instead of being rethrown — otherwise it reaches `bin/texra.ts`'s
+ * crash handler and gets misreported as an unexpected crash, printed a
+ * second time alongside a "please report it" line (issue #7645). Flows' own
+ * rethrow stays untouched; only this CLI boundary stops propagating it
+ * further. Only `AgentError` — the classified, already-handled shape — takes
+ * this path; any other rejection (e.g. `registerExecution` disk I/O,
+ * `workspaceState.update` failures) is genuinely unexpected and is rethrown
+ * so the crash handler still reports it.
  */
 export async function executeCliRequest(
   request: ValidatedExecutionRequest,
   runContext: CliContext,
   options: CliExecuteOptions = {},
-): Promise<{ result: ExecuteAgentResult; terminalStatus: ExecutionStatus }> {
+): Promise<
+  | { ok: true; result: ExecuteAgentResult; terminalStatus: ExecutionStatus }
+  | { ok: false; exitCode: CliExitCode }
+> {
   const runtimeHost = createCliRuntimeHost(runContext);
   const snapshotStore = new StreamSnapshotStore();
   const detachSnapshotEvents = snapshotStore.attachSessionEvents(
@@ -189,9 +206,6 @@ export async function executeCliRequest(
     runContext.outputFormat === 'ndjson'
       ? attachCliSessionProgressProjection(defaultSession().events)
       : () => undefined;
-  const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
-    beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
-  });
   const ownedExecutionId = options.registerExecution
     ? request.executionId
     : undefined;
@@ -232,14 +246,23 @@ export async function executeCliRequest(
     // Persistence stays disabled; the run still executes in-memory as before.
   }
 
-  let result: ExecuteAgentResult;
+  let runResult:
+    | { readonly ok: true; readonly result: ExecuteAgentResult }
+    | { readonly ok: false } = { ok: false };
   try {
-    result = await (options.wrap ? options.wrap(invoke) : invoke());
-  } catch (error) {
+    const result = await (options.wrap ? options.wrap(invoke) : invoke());
+    runResult = { ok: true, result };
+  } catch (err) {
+    // Only a classified, already-handled AgentError resolves to a non-zero
+    // exit code here; anything else (e.g. registerExecution disk I/O,
+    // workspaceState.update failures) is unexpected and must keep
+    // propagating to bin/texra.ts's crash handler.
+    if (!(err instanceof AgentError)) {
+      throw err;
+    }
     if (options.markErrorOnThrow && request.executionId) {
       await writeTerminalStatus(request.executionId, EXECUTION_STATUS.ERROR);
     }
-    throw error;
   } finally {
     disposeShutdownStatus?.dispose();
     // If the run settles while shutdown is in progress, keep the
@@ -251,7 +274,6 @@ export async function executeCliRequest(
     detachRunProgressRenderer();
     detachSessionProgressProjection();
     detachHostInteractions();
-    uninstallApprovalHandlers();
     try {
       try {
         flushPendingRunTraces();
@@ -264,6 +286,17 @@ export async function executeCliRequest(
     }
   }
 
-  const terminalStatus = await readCliTerminalStatus(result);
-  return { result, terminalStatus };
+  if (!runResult.ok) {
+    // The message was already presented once via the run's `result` event
+    // (attachTerminalResultToast → requestShowError); nothing more to print
+    // here. Reuse the same status→exit-code mapping the non-throw ERROR path
+    // uses below, so approval-denied stays distinct from a generic failure.
+    return {
+      ok: false,
+      exitCode: terminalStatusExitCode(EXECUTION_STATUS.ERROR, runContext),
+    };
+  }
+
+  const terminalStatus = await readCliTerminalStatus(runResult.result);
+  return { ok: true, result: runResult.result, terminalStatus };
 }

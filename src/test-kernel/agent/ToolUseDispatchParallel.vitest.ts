@@ -84,7 +84,7 @@ function dispatchHarness(opts: HarnessOptions) {
   return { node, dispose: () => runTrace.dispose() };
 }
 
-/** prep() then the batch executor, mirroring BatchNode's _run sequence. */
+/** prep() then the batch executor, mirroring Node's _run sequence. */
 async function runDispatch(
   node: ToolUseDispatchNode<unknown>,
   calls: SdkToolCall[],

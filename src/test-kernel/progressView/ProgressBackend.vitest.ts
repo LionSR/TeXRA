@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - transcript
 import { streamDataDir, StreamSnapshotStore } from '@transcript';
+import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
 
 // Local imports - agent
 import {
@@ -232,6 +233,79 @@ describe('ProgressBackend', () => {
 
       expect(backend.state.activeStream).toBe(streamId);
       expect(backend.state.streamLogs.has(streamId)).toBe(true);
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('routes removeStream session facts through the shared lifecycle delete path', async () => {
+    const session = new SessionHandle();
+    const deletedStreams: StreamTabId[] = [];
+    const backendRef: { current?: ProgressBackend } = {};
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      session,
+      sendMessage: vi.fn(() => true),
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+      deleteStream: async (stream) => {
+        const currentBackend = backendRef.current;
+        if (!currentBackend) {
+          throw new Error('Progress backend was not initialized');
+        }
+        await currentBackend.state.clearStream(stream);
+        deletedStreams.push(stream);
+      },
+    });
+    backendRef.current = backend;
+    const subscription = backend.setupEventListeners();
+    const streamId = 'desktop-child-stream' as StreamTabId;
+
+    try {
+      backend.state.streamLogs.ensureStream(streamId);
+      backend.state.getOrCreateStreamState(streamId, AgentCategory.ToolUse);
+
+      session.events.emit({
+        scope: 'session',
+        event: { type: 'removeStream', payload: { streamId } },
+      });
+
+      await vi.waitFor(() => expect(deletedStreams).toEqual([streamId]));
+      expect(backend.state.streamLogs.has(streamId)).toBe(false);
+      expect(backend.state.getStreamState(streamId)).toBeUndefined();
+    } finally {
+      subscription.dispose();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('handles removeStream session facts before backend load', async () => {
+    const session = new SessionHandle();
+    const deletedStreams: StreamTabId[] = [];
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      session,
+      sendMessage: vi.fn(() => true),
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+      deleteStream: async (stream) => {
+        deletedStreams.push(stream);
+      },
+    });
+    const subscription = backend.setupEventListeners();
+    const streamId = 'preload-child-stream' as StreamTabId;
+
+    try {
+      session.events.emit({
+        scope: 'session',
+        event: { type: 'removeStream', payload: { streamId } },
+      });
+
+      await vi.waitFor(() => expect(deletedStreams).toEqual([streamId]));
     } finally {
       subscription.dispose();
       backend.dispose();
@@ -1585,6 +1659,43 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('forgets goal entries when clearing never-registered streams', async () => {
+    const stream = 'tool@deepseek#missing' as StreamTabId;
+    const { backend, session } = createIsolatedRecordingBackend();
+
+    try {
+      await GoalStore.start(stream, 'forget this unregistered goal');
+
+      await backend.state.clearStream(stream);
+
+      expect(GoalStore.getForStream(stream)).toBeNull();
+    } finally {
+      await GoalStore.forget(stream);
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('clearStream refuses reserved stream ids before durable store cleanup', async () => {
+    const sentinel = path.join(STREAM_DATA_DIR, 'sentinel.json');
+    await StorageFS.ensureDir(STREAM_DATA_DIR);
+    await StorageFS.write(sentinel, '{}');
+
+    const { backend, session } = createIsolatedRecordingBackend();
+    try {
+      await backend.state.clearStream('' as StreamTabId);
+      await backend.state.clearStream('.' as StreamTabId);
+      await backend.state.clearStream('..' as StreamTabId);
+
+      expect(await StorageFS.exists(sentinel)).toBe(true);
+    } finally {
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('forgets goal entries when clearing all streams', async () => {
     const stream = 'tool@deepseek#b6966b' as StreamTabId;
     const { backend, session } = createIsolatedRecordingBackend();
@@ -1609,20 +1720,21 @@ describe('ProgressBackend', () => {
     const orphanStream = 'tool@deepseek#b6966b' as StreamTabId;
     const orphanExecution = 'b6966b' as ExecutionId;
     const historyExecution = 'c6966c' as ExecutionId;
-    const seed = new StreamSnapshotStore();
-    await seed.load([orphanStream]);
-    seed.setTaskState(
-      orphanStream,
-      toolUseTaskState('search', 'deepseekproT'),
-      orphanExecution,
-    );
-    await writeExecutionConfig(orphanExecution);
-    await writeExecutionConfig(historyExecution);
-    await seed.flush();
-    await GoalStore.start(orphanStream, 'sweep this orphan');
 
     const { backend, session } = createIsolatedRecordingBackend();
     try {
+      const seed = new StreamSnapshotStore();
+      await seed.load([orphanStream]);
+      seed.setTaskState(
+        orphanStream,
+        toolUseTaskState('search', 'deepseekproT'),
+        orphanExecution,
+      );
+      await writeExecutionConfig(orphanExecution);
+      await writeExecutionConfig(historyExecution);
+      await seed.flush();
+      await GoalStore.start(orphanStream, 'sweep this orphan');
+
       expect(await StorageFS.exists(streamDataDir(orphanStream))).toBe(true);
       expect(await StorageFS.exists(`executions/${orphanExecution}`)).toBe(
         true,

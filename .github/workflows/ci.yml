@@ -5,6 +5,9 @@ on:
     branches:
       - main
   pull_request:
+  merge_group:
+  schedule:
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -90,8 +93,14 @@ jobs:
       - name: Check dead-code ratchet
         run: pnpm run check:dead-code-ratchet
 
+      - name: Check test-kernel LoC growth (warn-only)
+        run: pnpm run check:test-loc-growth
+
       - name: Check extension package invariants
         run: pnpm run check:extension-package-invariants
+
+      - name: Check tsconfig paths are in sync with the root
+        run: pnpm run check:tsconfig-paths
 
       - name: Kernel tests
         run: pnpm run test
@@ -178,6 +187,48 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  runtime-validation:
+    name: runtime validation (linux)
+    needs: changes
+    if: github.event_name != 'pull_request' && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate CLI real-runtime run path
+        run: |
+          set +e
+          start_time="$(date +%s)"
+          pnpm --filter @texra-ai/cli validate:run
+          status="$?"
+          end_time="$(date +%s)"
+          duration="$((end_time - start_time))"
+          {
+            echo '### CLI real-runtime validation'
+            echo
+            echo "- Command: \`pnpm --filter @texra-ai/cli validate:run\`"
+            echo "- Duration: ${duration}s"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
   docs-check:
     name: docs build
     needs: changes
@@ -213,6 +264,7 @@ jobs:
       - changes
       - validate
       - webview-smoke
+      - runtime-validation
       - docs-check
     if: always()
 
@@ -228,6 +280,10 @@ jobs:
           fi
           if [ '${{ needs.webview-smoke.result }}' != 'success' ] && [ '${{ needs.webview-smoke.result }}' != 'skipped' ]; then
             echo 'Webview smoke result: ${{ needs.webview-smoke.result }}'
+            exit 1
+          fi
+          if [ '${{ needs.runtime-validation.result }}' != 'success' ] && [ '${{ needs.runtime-validation.result }}' != 'skipped' ]; then
+            echo 'Runtime validation result: ${{ needs.runtime-validation.result }}'
             exit 1
           fi
           if [ '${{ needs.docs-check.result }}' != 'success' ] && [ '${{ needs.docs-check.result }}' != 'skipped' ]; then

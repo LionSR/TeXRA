@@ -63,6 +63,7 @@ import { mapToRecord } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import {
+  canUseStreamDataDir,
   decodeStreamId,
   STREAM_DATA_DIR,
   STREAM_DATA_KEYS,
@@ -728,6 +729,10 @@ export class StreamSnapshotStore {
     const pending = this.cancelPendingWritesForStream(stream);
     this.evict(stream);
     await Promise.all(pending);
+    // Keep this after pending-write cancellation so reserved ids cannot leave
+    // older write chains free to recreate a non-stream-owned sidecar path.
+    if (!canUseStreamDataDir(stream)) return;
+
     await this.kv(stream).deleteDir();
   }
 

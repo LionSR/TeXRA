@@ -1,6 +1,5 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { getTeXCountStats } from '@latex/texcount';
 import type { FileLocation } from '@shared/schemas';
 
@@ -10,7 +9,6 @@ import type { ReflectionServices } from '../ReflectionServices';
 
 export class TeXCountNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  FlowParams,
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<FileLocation[]> {

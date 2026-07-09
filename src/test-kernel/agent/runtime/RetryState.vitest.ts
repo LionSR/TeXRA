@@ -7,7 +7,6 @@ import {
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
 import { noopTrace, type AgentTrace } from '@agent/trace';
-import type { NonIterableObject } from '@agent/node';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { RetryableInvocationNode } from '@agent/core/flows/RetryState';
@@ -16,6 +15,7 @@ import type {
   RetryResult,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { createRunScope } from '@agent/runtime/RunScope';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   StreamStatusMachine,
@@ -32,6 +32,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import {
   createRecordingHost,
   sessionWithInteractions,
@@ -47,7 +48,6 @@ interface TestRetryServices {
 
 class ExposedRetryNode extends RetryableInvocationNode<
   unknown,
-  NonIterableObject,
   TestRetryServices
 > {
   protected getOperationName(): string {
@@ -90,14 +90,16 @@ async function withRetryRunContext<T>(
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => undefined,
-    runtimeHost: noopAgentRuntimeHost,
-    streamId,
-    executionId: `${streamId}-execution` as ExecutionId,
-    agentName: 'retry-test',
-    session: sessionWithInteractions({
-      requestRetry,
-      resolve: () => false,
-      cancel: () => {},
+    runScope: createRunScope({
+      runtimeHost: noopAgentRuntimeHost,
+      streamId,
+      executionId: `${streamId}-execution` as ExecutionId,
+      agentName: 'retry-test',
+      session: sessionWithInteractions({
+        requestRetry,
+        resolve: () => false,
+        cancel: () => {},
+      }),
     }),
   });
   return await withRunContext(context, fn);
@@ -112,11 +114,13 @@ async function withSessionRetryRunContext<T>(
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => undefined,
-    runtimeHost,
-    streamId,
-    executionId: `${streamId}-execution` as ExecutionId,
-    agentName: 'retry-test',
-    session,
+    runScope: createRunScope({
+      runtimeHost,
+      streamId,
+      executionId: `${streamId}-execution` as ExecutionId,
+      agentName: 'retry-test',
+      session,
+    }),
   });
   return await withRunContext(context, fn);
 }
@@ -138,6 +142,16 @@ function createModelInvocationNode(input: {
 }
 
 describe('RetryState', () => {
+  it('falls back to the canonical coreSettings default when texra.model.retry.maxAttempts is unset', () => {
+    const node = new ExposedRetryNode();
+
+    // Node.maxRetries counts the initial attempt plus auto-retries, so an
+    // unset config value should resolve to 1 + the coreSettings default.
+    expect(node.maxRetries).toBe(
+      1 + DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+    );
+  });
+
   it('treats user aborts as cancellations instead of failed invocations', () => {
     const node = new ExposedRetryNode();
     const abort = new DOMException('Request aborted', 'AbortError');

@@ -1,5 +1,6 @@
 import type { RegisteredToolName } from '@tools/registry';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import { SETUP_PLATFORM_TOOL_NAMES } from '@tools/setup/platform';
 
 type CliUnavailableTool =
   RegisteredToolName | typeof DIAGNOSTICS_ADD_RUNTIME_CAPABILITY;
@@ -14,9 +15,9 @@ type CliUnavailableTool =
  * that flow, so the `inquiry` tool is excluded from the agent's effective tool
  * list for all CLI runs.
  *
- * The `list_api_keys` audit tool depends on the setup-platform adapter that is
- * currently wired by the VS Code extension host. Hide it until the CLI provides
- * the same SecretStorage enumeration surface.
+ * The setup-platform-backed tools are currently wired only by the VS Code
+ * extension host. Hide them until the CLI provides an honest SetupPlatform
+ * adapter for secrets, commands, extensions, auth, config, and terminal runs.
  *
  * The `inline_comment` tool is backed by VS Code's CommentController, which the
  * CLI has no equivalent for, so it is hidden too.
@@ -30,7 +31,7 @@ type CliUnavailableTool =
  */
 export const CLI_UNAVAILABLE_TOOLS: readonly CliUnavailableTool[] = [
   'inquiry',
-  'list_api_keys',
+  ...SETUP_PLATFORM_TOOL_NAMES,
   'inline_comment',
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
 ];

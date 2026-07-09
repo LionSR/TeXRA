@@ -17,7 +17,10 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextStreamId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import { isChildRunLoopActive } from '@agent/runtime/childRunLoop';
 import {
   sendFollowUp,
@@ -42,7 +45,7 @@ import {
   formatSubagentError,
 } from '@tools/subagentResults';
 import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
-import { getRunContextStreamId, requireRunStream } from '@tools/contextHelpers';
+import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - utils

@@ -876,7 +876,7 @@
             "type": "number",
             "default": 0,
             "minimum": 0,
-            "description": "Number of automatic retry attempts before surfacing a manual retry option for model calls. Set to 0 for no automatic retries (manual retry button only).",
+            "description": "Flow-managed retry attempts (Google, OpenRouter 429/408, background transients). Anthropic/OpenAI/OpenAIResponse retries are provider-managed by their SDKs (default 2); this setting does not affect them.",
             "scope": "resource"
           },
           "texra.model.retry.backoffMs": {

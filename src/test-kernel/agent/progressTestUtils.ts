@@ -13,6 +13,7 @@ import {
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { createRunScope } from '@agent/runtime/RunScope';
 import type {
   SessionEvent,
   SessionEventHub,
@@ -343,16 +344,25 @@ export function withTestRunContext<T>(
   runtimeHost: AgentRuntimeHost,
   streamId: string,
   fn: () => Promise<T>,
+  options: {
+    delegationDepth?: number;
+    approvalPromptsUnavailable?: boolean;
+    runtimeUnavailableTools?: readonly string[];
+    stopAfterCycle?: boolean;
+  } = {},
 ): Promise<T> {
   return withRunContext(
     createRunContext({
-      runtimeHost,
-      streamId: streamId as StreamTabId,
-      executionId: 'deadbeef' as ExecutionId,
+      runScope: createRunScope({
+        runtimeHost,
+        streamId: streamId as StreamTabId,
+        executionId: 'deadbeef' as ExecutionId,
+        agentName: 'test-agent',
+        session: sessionWithInteractions(runtimeHost.interactions),
+      }),
       modelSource: 'live',
       getModel: () => undefined,
-      agentName: 'test-agent',
-      session: sessionWithInteractions(runtimeHost.interactions),
+      ...options,
     }),
     fn,
   ) as Promise<T>;
