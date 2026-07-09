@@ -7,12 +7,13 @@
  * paths (PR / repo / issue).
  */
 
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { isNonEmptyString } from '@utils/core';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type { GhIssueComment } from './prTypes';
 
-const WEBHOOK_TAG = 'github-webhook-activity';
+const WEBHOOK_TAG = DELIVERY_TAG.githubWebhookActivity;
 
 /**
  * Wrap formatter output in the `<github-webhook-activity>` envelope. The

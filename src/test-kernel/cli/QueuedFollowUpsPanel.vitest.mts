@@ -44,6 +44,24 @@ describe('CLI queued follow-up panel display model', () => {
     ]);
   });
 
+  // Regression coverage (issue #7679, codex P2): the recognizer in
+  // subagentFollowup.ts is derived from the full DELIVERY_TAGS vocabulary,
+  // not just `<subagent-*>` — agent-CLI child-run families (codex,
+  // claude-agent) must also render summarized here instead of raw XML.
+  it('summarizes queued claude-agent-result follow-up payloads', () => {
+    const display = queuedFollowUpPanelDisplay({
+      messages: [
+        '<orchestrator-followup><claude-agent-result id="child-q" session-id="s1"><response>Done.</response></claude-agent-result></orchestrator-followup>',
+      ],
+      maxRows: 3,
+      width: 80,
+    });
+
+    expect(display.rows.map((row) => row.text)).toEqual([
+      '1. ✓ claude-agent completed Done.',
+    ]);
+  });
+
   it('keeps malformed queued follow-up entries renderable', () => {
     const display = queuedFollowUpPanelDisplay({
       messages: [undefined as unknown as string],
