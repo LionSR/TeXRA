@@ -20,7 +20,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { ProviderMessageArraySchema } from '@agent/modelHandlers/types/ProviderMessage';
+import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
 import {
   migrateSharedState,
   StateSlicesSchema,

@@ -1,10 +1,10 @@
 // Local imports - agent components
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
-import type { ModelHandler } from '../ModelHandler';
 import type { ProviderMessage } from './ProviderMessage';
 import type { SdkToolCall } from './ModelHandlerContracts';
 

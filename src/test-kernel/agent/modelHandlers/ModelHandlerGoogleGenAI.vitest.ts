@@ -21,7 +21,7 @@ import {
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { validateGoogleMessageHistory } from '@agent/modelHandlers/google/googleMessageHelpers';
-import { extractToolAttachments } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Type imports

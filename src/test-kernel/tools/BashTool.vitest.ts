@@ -39,8 +39,8 @@ import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 // Type imports
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
+import type { SdkToolCall } from '@agent/types/IModelHandler';
 
 // Internal imports
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';

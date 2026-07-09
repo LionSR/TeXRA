@@ -507,20 +507,40 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@webview/*',
-                '@commands/*',
-                '@progressView/*',
-                '@settingsView/*',
-                '@frontend/*',
-                '@extensionSchemas/*',
-                '@resources/*',
-                '@common/state/*',
-                '@common/webview/*',
-                '@cli/*',
-                '@desktop/*',
+                '@webview/**',
+                '@commands/**',
+                '@progressView/**',
+                '@settingsView/**',
+                '@frontend/**',
+                '@extensionSchemas/**',
+                '@resources/**',
+                '@common/state/**',
+                '@common/webview/**',
+                '@cli/**',
+                '@desktop/**',
               ],
               message:
                 'Production src code must not import extension, CLI, or desktop host layers; route host access through platform or host adapters.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Agent core is the neutral execution layer. It may depend on shared agent
+  // contracts, but not on concrete provider-handler implementations.
+  {
+    files: ['src/agent/core/**/*.{ts,tsx,mts,cts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@agent/modelHandlers', '@agent/modelHandlers/**'],
+              message:
+                'Agent core must not import model handler implementations; move provider-neutral contracts to @agent/types or a core helper.',
             },
           ],
         },

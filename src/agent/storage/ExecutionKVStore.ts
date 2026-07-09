@@ -17,7 +17,7 @@ import {
 import {
   normalizeProviderMessages,
   ProviderMessageArraySchema,
-} from '@agent/modelHandlers/types/ProviderMessage';
+} from '@agent/types/ProviderMessage';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import {
