@@ -24,6 +24,7 @@ import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCap
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   detachRunProgressRenderer: vi.fn(),
+  detachSessionProgressProjection: vi.fn(),
   createHeadlessCliHostInteractions: vi.fn(),
   createCliRuntimeHost: vi.fn(),
   installCliApprovalHandlers: vi.fn(),
@@ -77,6 +78,12 @@ vi.mock('@cli/runtime/approvalAdapter', () => ({
 vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/terminalStatus')>()),
   readCliTerminalStatus: mocks.readCliTerminalStatus,
+}));
+
+vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
+  attachCliSessionProgressProjection: vi.fn(
+    () => mocks.detachSessionProgressProjection,
+  ),
 }));
 
 vi.mock('@cli/runtime/logSinks', () => ({
@@ -153,6 +160,39 @@ describe('executeCliRequest', () => {
         .splice(0)
         .map((dir) => rm(dir, { recursive: true, force: true })),
     );
+  });
+
+  it.each(['text', 'json'] as const)(
+    'does not attach the CLI progress projection for %s output',
+    async (outputFormat) => {
+      const { executeCliRequest } = await import('@cli/runtime/runExecution');
+      const { attachCliSessionProgressProjection } =
+        await import('@cli/runtime/sessionProgressSubscription');
+      const attachProjection = vi.mocked(attachCliSessionProgressProjection);
+      const request = baseRequest();
+
+      await executeCliRequest(request, cliContext({ outputFormat }));
+
+      expect(attachProjection).not.toHaveBeenCalled();
+      expect(mocks.detachSessionProgressProjection).not.toHaveBeenCalled();
+    },
+  );
+
+  it('attaches the CLI progress projection for NDJSON output before the run starts', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { attachCliSessionProgressProjection } =
+      await import('@cli/runtime/sessionProgressSubscription');
+    const attachProjection = vi.mocked(attachCliSessionProgressProjection);
+    const request = baseRequest();
+
+    await executeCliRequest(request, cliContext({ outputFormat: 'ndjson' }));
+
+    expect(attachProjection).toHaveBeenCalledTimes(1);
+    expect(mocks.runAgent).toHaveBeenCalledTimes(1);
+    expect(attachProjection.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.runAgent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(mocks.detachSessionProgressProjection).toHaveBeenCalledTimes(1);
   });
 
   it('marks headless never runs as approval-unavailable for agent execution', async () => {

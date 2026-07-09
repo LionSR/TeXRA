@@ -29,7 +29,6 @@ import {
 import {
   attachRunProgressRenderer,
   createRunProgressRenderer,
-  isRunProgressEvent,
 } from './runProgressRenderer';
 import type { CliContext } from './cliContext';
 import type {
@@ -109,15 +108,6 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
           (payload as RuntimePresentationEventPayloads['requestShowError'])
             .message,
         );
-        return;
-      }
-
-      if (
-        !isRuntimePresentationEvent(event) &&
-        !isRuntimeInteractionEvent(event) &&
-        isRunProgressEvent(event) &&
-        runProgress
-      ) {
         return;
       }
 
