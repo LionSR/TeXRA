@@ -151,7 +151,9 @@ describe('QA-2 host-side @agent mock ratchet', () => {
     const baseline = readBaseline();
     const sortedSites = baseline.sites.toSorted(
       (a, b) =>
-        a.file.localeCompare(b.file) || a.specifier.localeCompare(b.specifier),
+        a.file.localeCompare(b.file) ||
+        a.form.localeCompare(b.form) ||
+        a.specifier.localeCompare(b.specifier),
     );
 
     expect(baseline.sites).toEqual(sortedSites);
