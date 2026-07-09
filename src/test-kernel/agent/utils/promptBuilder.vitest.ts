@@ -4,7 +4,7 @@ import { describe, it } from 'vitest';
 
 // Type imports
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
-import { PromptBuilder } from '@utils/prompt';
+import { buildInitialToolUsePrompts, PromptBuilder } from '@utils/prompt';
 
 describe('PromptBuilder', () => {
   it('uses array-based userRequest entries for reflections', async () => {
@@ -39,5 +39,27 @@ describe('PromptBuilder', () => {
     // Single-template agents reuse the template for subsequent rounds
     const reflectPrompt = await builder.buildUserRequest(1);
     assert.equal(reflectPrompt, 'initial only');
+  });
+
+  it('keeps memory checks relevant and schema-valid', async () => {
+    const prompts = await buildInitialToolUsePrompts(
+      {
+        systemPrompt: 'system',
+        userPrefix: '',
+        userRequest: 'request',
+      } as AgentPrompt,
+      {},
+      undefined,
+      { resolvedToolNames: ['memory'] },
+    );
+
+    assert.match(
+      prompts.instructionSuffix,
+      /For a self-contained request, do not inspect or write memory/,
+    );
+    assert.match(
+      prompts.instructionSuffix,
+      /use the `view` command with path `\/memories`/,
+    );
   });
 });
