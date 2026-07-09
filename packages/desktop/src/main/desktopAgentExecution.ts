@@ -617,11 +617,15 @@ export class DesktopProgressBridge {
       },
       // Mirrors the extension's PROGRESS_VIEW_COMMANDS.RESTORE_STATE handler
       // (`texra.restoreState`): look up the stream's persisted task state and
-      // route the renderer to the main view with it.
-      restoreState: (data) => {
+      // route the renderer to the main view with it. Surfaces a failure the
+      // same way the extension's `texra.restoreState` command does when
+      // `buildMainViewState` throws on malformed/incompatible persisted data.
+      restoreState: async (data) => {
         const taskState = this.state.snapshots.getTaskState(data.stream);
-        if (taskState) {
-          this.restoreTaskState(taskState);
+        if (!taskState) return;
+        const restored = this.restoreTaskState(taskState);
+        if (!restored) {
+          await this.options.showErrorMessage?.('Failed to restore state');
         }
       },
       compactResponse: unsupported(
