@@ -7,7 +7,7 @@ import {
 
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
-import { GOOGLE_FINISH } from '@agent/modelHandlers/types/StopReasonTypes';
+import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
 import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;

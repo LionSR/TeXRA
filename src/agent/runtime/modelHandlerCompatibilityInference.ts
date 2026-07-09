@@ -3,7 +3,7 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import {
   normalizeProviderMessages,
   type ProviderMessage,
-} from '@agent/modelHandlers/types/ProviderMessage';
+} from '@agent/types/ProviderMessage';
 import { isObject } from '@utils/core';
 import {
   ModelHandlerCompatibilityKeySchema,

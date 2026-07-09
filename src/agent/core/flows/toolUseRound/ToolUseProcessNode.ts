@@ -5,10 +5,10 @@ import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import { extractModelResponse } from '@agent/core/flows/CommonCycleTypes';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { appendFollowUpAsUserMessage } from '@agent/followUp/followUpMessages';
-import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
-import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import type { SdkToolCall } from '@agent/types/IModelHandler';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
+import type { ServerToolContentBlock } from '@agent/types/ServerToolTypes';
+import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Local imports - logging

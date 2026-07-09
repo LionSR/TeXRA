@@ -11,6 +11,21 @@ import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState'
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
+import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
+import {
+  extractOpenAIWebSearchResults,
+  isOpenAIReasoningItem,
+  isOpenAIServerToolContent,
+  isOpenAIWebSearchCall,
+  type ServerToolExtractionResult,
+} from '@agent/types/ServerToolTypes';
+import type {
+  CreateResponseOptions,
+  CreateResponseResult,
+  ExtractResponseResult,
+  OpenAIResponseToolCall,
+  TokenCountOptions,
+} from '@agent/types/IModelHandler';
 import {
   buildErrorLogData,
   getSdkErrorMessage,
@@ -56,7 +71,6 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../utils/toolAttachmentUtils';
-import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { toOpenAIResponseTools } from '../toolConversion';
 import { ModelHandler } from '../ModelHandler';
 import {
@@ -69,13 +83,6 @@ import {
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
 } from '../contextManagementConstants';
-import {
-  extractOpenAIWebSearchResults,
-  isOpenAIReasoningItem,
-  isOpenAIServerToolContent,
-  isOpenAIWebSearchCall,
-  type ServerToolExtractionResult,
-} from '../types/ServerToolTypes';
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
 import { OpenAIResponseWebSocketTransport } from './OpenAIResponseWebSocketTransport';
 import { BackgroundRunLifecycle } from './BackgroundRunLifecycle';
@@ -95,13 +102,6 @@ import {
   type UploadedOpenAIResponseAttachment,
 } from './openAIResponseFileUploads';
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
-import type {
-  CreateResponseOptions,
-  CreateResponseResult,
-  ExtractResponseResult,
-  OpenAIResponseToolCall,
-  TokenCountOptions,
-} from '../types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
 import type {

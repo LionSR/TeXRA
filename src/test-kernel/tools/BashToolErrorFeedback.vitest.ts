@@ -7,8 +7,8 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import { extractToolAttachments } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import type { OpenAIResponseToolCall } from '@agent/modelHandlers/types/IModelHandler';
+import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
+import type { OpenAIResponseToolCall } from '@agent/types/IModelHandler';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 
 // Local imports - tools
