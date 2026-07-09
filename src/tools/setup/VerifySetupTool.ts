@@ -87,7 +87,7 @@ export class VerifySetupTool extends defineTool({
     );
     if (!hasMagick && !hasGm) missingCore.push('gm/magick');
 
-    const latexWorkshopInstalled = platform.extensions.isInstalled(
+    const latexWorkshopInstalled = platform.extensions?.isInstalled(
       LATEX_WORKSHOP_EXT_ID,
     );
 
@@ -98,7 +98,9 @@ export class VerifySetupTool extends defineTool({
       lines.push(`Core LaTeX tools MISSING: ${missingCore.join(', ')}.`);
     }
     lines.push(
-      `LaTeX Workshop extension: ${latexWorkshopInstalled ? 'installed' : 'NOT installed'}.`,
+      latexWorkshopInstalled === undefined
+        ? 'LaTeX Workshop extension: not applicable outside VS Code.'
+        : `LaTeX Workshop extension: ${latexWorkshopInstalled ? 'installed' : 'NOT installed'}.`,
     );
     // A usable model credential can be a direct provider key, ChatGPT
     // subscription, or Researcher Access with Included Access on. A bare
@@ -116,7 +118,9 @@ export class VerifySetupTool extends defineTool({
     lines.push(`Credentials: ${credSummary}.`);
 
     const ready =
-      missingCore.length === 0 && latexWorkshopInstalled && hasUsableCredential;
+      missingCore.length === 0 &&
+      (latexWorkshopInstalled === undefined || latexWorkshopInstalled) &&
+      hasUsableCredential;
 
     let verificationSummary: string;
     if (ready) {

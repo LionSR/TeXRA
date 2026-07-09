@@ -76,6 +76,11 @@ export class InvokeCommandTool extends defineTool({
       );
     }
 
+    if (!platform.commands) {
+      throw new ToolError(
+        'VS Code command invocation is unavailable in this host.',
+      );
+    }
     await platform.commands.invoke(commandId, ...input.args);
 
     // Never echo raw `args` back into the transcript: if the model passed
