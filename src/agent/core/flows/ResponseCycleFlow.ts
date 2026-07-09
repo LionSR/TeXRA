@@ -20,6 +20,7 @@ import {
 } from '@agent/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import { K_SLICE } from '@agent/core/constants';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
@@ -206,19 +207,17 @@ type ContinuationNodeResult = SkippableNodeResult<{
 }>;
 
 export function responseCycleToolsForModel<C>(
-  services: Pick<
-    ResponseCycleServices<C>,
-    'delegation' | 'modelHandler' | 'runtimeUnavailableTools' | 'setting'
-  >,
+  services: Pick<ResponseCycleServices<C>, 'modelHandler' | 'setting'>,
 ): ToolDefinition[] | undefined {
   if (!services.modelHandler.capabilities.supportsFunctionCalling) {
     return undefined;
   }
-  const runtimeUnavailable = new Set(services.runtimeUnavailableTools ?? []);
+  const runContext = useLaunchRunContext();
+  const runtimeUnavailable = new Set(runContext.runtimeUnavailableTools ?? []);
   return services.setting.tools.filter(
     (tool) =>
       !runtimeUnavailable.has(tool.name) &&
-      (services.delegation?.approvalPromptsUnavailable !== true ||
+      (runContext.approvalPromptsUnavailable !== true ||
         !isApprovalGatedToolName(tool.name)),
   );
 }
