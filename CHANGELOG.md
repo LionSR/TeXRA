@@ -51,6 +51,14 @@ All notable changes to this project will be documented in this file.
   (`/executions/{id}/result`), so follow-on agents can chain on data instead
   of parsing prose.
 
+### Desktop
+
+#### Improvements
+
+- **Runtime skills are available in desktop agent runs** — desktop now loads
+  project, user, and bundled skills through the same shared Node-host defaults
+  as the CLI.
+
 ## [0.39.3] - 2026-07-03
 
 ### Shared (all surfaces)

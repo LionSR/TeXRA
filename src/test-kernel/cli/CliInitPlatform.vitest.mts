@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { SkillSource } from '@skills/loadSkills';
 
 const mocks = vi.hoisted(() => ({
   authProvider: {
@@ -18,13 +17,12 @@ const mocks = vi.hoisted(() => ({
   createNodePlatform: vi.fn(() => ({})),
   initializeCliSupabaseAuth: vi.fn(),
   initializeNodeGoalPrompts: vi.fn(),
+  initializeNodeRuntimeSkills: vi.fn(),
   initNodeAgentRuntime: vi.fn(),
   initializeServerSideKeyAccess: vi.fn(),
   serverSideKeyService: {
     setUseIncludedModelAccess: vi.fn(),
   },
-  defaultSkillSources: vi.fn<() => SkillSource[]>(() => []),
-  setRuntimeSkillSources: vi.fn(),
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   invalidateModelOptionsCache: vi.fn(),
   tryPlatform: vi.fn(),
@@ -70,11 +68,7 @@ vi.mock('@platform/defaults/nodeHost', () => ({
   createNodePlatform: mocks.createNodePlatform,
   initNodeAgentRuntime: mocks.initNodeAgentRuntime,
   initializeNodeGoalPrompts: mocks.initializeNodeGoalPrompts,
-}));
-
-vi.mock('@skills/index', () => ({
-  defaultSkillSources: mocks.defaultSkillSources,
-  setRuntimeSkillSources: mocks.setRuntimeSkillSources,
+  initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
 }));
 
 vi.mock('@telemetry/UsageLogService', () => ({
@@ -296,16 +290,7 @@ describe('CLI platform init', () => {
     ).toHaveBeenCalledWith(true);
   });
 
-  it('registers CLI runtime skill sources from context options', async () => {
-    const sources: SkillSource[] = [
-      {
-        scope: 'custom' as const,
-        path: '/tmp/project/vendor/skills',
-        label: 'custom',
-        required: true,
-      },
-    ];
-    mocks.defaultSkillSources.mockReturnValueOnce(sources);
+  it('registers CLI runtime skill sources through the shared Node host helper', async () => {
     mocks.authProvider.isAuthenticated.mockResolvedValueOnce(false);
 
     await initCliPlatform(
@@ -317,16 +302,13 @@ describe('CLI platform init', () => {
       }),
     );
 
-    expect(mocks.defaultSkillSources).toHaveBeenCalledWith(
-      {
-        cwd: '/tmp/project',
-        resourcesPath: '/tmp/resources',
-      },
-      {
+    expect(mocks.initializeNodeRuntimeSkills).toHaveBeenCalledWith({
+      cwd: '/tmp/project',
+      resourcesPath: '/tmp/resources',
+      skillSourceOptions: {
         includeInterop: true,
         additionalPaths: ['vendor/skills'],
       },
-    );
-    expect(mocks.setRuntimeSkillSources).toHaveBeenCalledWith(sources);
+    });
   });
 });
