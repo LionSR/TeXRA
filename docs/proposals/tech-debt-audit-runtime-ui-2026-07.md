@@ -1074,21 +1074,21 @@ targeted diagnostic for custom files.
 Per fewer-elements R1, no dual-system may rest without an open delete PR or a dated
 #6981 row. This audit's live duals:
 
-| #   | Finding                                         | Kind                        | Open delete PR     | #6981 row        | Note                                                       |
-| --- | ----------------------------------------------- | --------------------------- | ------------------ | ---------------- | ---------------------------------------------------------- |
-| A2  | tool-edit approval fallback                     | triple-wired routes         | none               | none             | target design prescribes deletion; stage 2-then-3          |
+| #   | Finding                                         | Kind                        | Open delete PR                   | #6981 row        | Note                                                       |
+| --- | ----------------------------------------------- | --------------------------- | -------------------------------- | ---------------- | ---------------------------------------------------------- |
+| A2  | tool-edit approval fallback                     | triple-wired routes         | none                             | none             | target design prescribes deletion; stage 2-then-3          |
 | A3  | CLI synthetic-entry machinery                   | old+new for one message     | issue #7086 → in-flight PR #7601 | none             | gated on recorder stable-id upsert                         |
-| A5  | `AgentRuntimeHost.interactions`                 | dual access path (identity) | none               | none             | cannot diverge in prod                                     |
-| A6  | 6 phantom emit arms                             | types-only zombie           | none               | none             | relocate to CLI-local map                                  |
-| A10 | `Shared*` singletons / `defaultSession()` alias | identity alias              | none               | none             | **one of the ten known duals**                             |
-| A12 | dead CLI `removeStream` arm                     | dead migration leftover     | none               | none             | not truly divergent                                        |
-| A14 | `TaskGroup.index/total`                         | dead write-only duplicate   | none               | none             |                                                            |
-| A15 | `TaskGroupList` `/^r\d+$/`                      | string-vs-typed encoding    | none               | none             | inert on HEAD runs                                         |
-| A16 | `ApprovalRequestHandler` replay                 | complementary registries    | none               | none             | **won't-do closure** (justified split)                     |
-| B1  | KV dual-write todos+conversation                | code-to-code dual-write     | none               | pending #7246 D1 | **two of the ten known duals**                             |
-| B2  | bag↔RunContext 5 fields                         | internal core dual          | none               | none             | corpus B6 residual; single write owner                     |
-| B3  | `TaskState` parallel shape                      | derived-only shape          | none               | none             | **one of the ten known duals**; delete gated on CLI freeze |
-| B10 | `executions/` + `taskRuns/`                     | dual dir names              | none               | none             | external-data-adjacent; needs dated row                    |
+| A5  | `AgentRuntimeHost.interactions`                 | dual access path (identity) | none                             | none             | cannot diverge in prod                                     |
+| A6  | 6 phantom emit arms                             | types-only zombie           | none                             | none             | relocate to CLI-local map                                  |
+| A10 | `Shared*` singletons / `defaultSession()` alias | identity alias              | none                             | none             | **one of the ten known duals**                             |
+| A12 | dead CLI `removeStream` arm                     | dead migration leftover     | none                             | none             | not truly divergent                                        |
+| A14 | `TaskGroup.index/total`                         | dead write-only duplicate   | none                             | none             |                                                            |
+| A15 | `TaskGroupList` `/^r\d+$/`                      | string-vs-typed encoding    | none                             | none             | inert on HEAD runs                                         |
+| A16 | `ApprovalRequestHandler` replay                 | complementary registries    | none                             | none             | **won't-do closure** (justified split)                     |
+| B1  | KV dual-write todos+conversation                | code-to-code dual-write     | none                             | pending #7246 D1 | **two of the ten known duals**                             |
+| B2  | bag↔RunContext 5 fields                         | internal core dual          | none                             | none             | corpus B6 residual; single write owner                     |
+| B3  | `TaskState` parallel shape                      | derived-only shape          | none                             | none             | **one of the ten known duals**; delete gated on CLI freeze |
+| B10 | `executions/` + `taskRuns/`                     | dual dir names              | none                             | none             | external-data-adjacent; needs dated row                    |
 
 **Mapping to the ten known duals (fewer-elements:58-60).** Given full treatment
 here: `setTaskState` compat (B3), completed-run todos dual-owner + tool-use
