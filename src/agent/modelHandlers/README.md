@@ -1,7 +1,8 @@
 # Model handlers — provider sub-domains
 
 `agent/modelHandlers` is the **model-provider bounded context**: it adapts each
-LLM provider's SDK to the shared `IModelHandler` port (`types/IModelHandler.ts`).
+LLM provider's SDK to the shared `IModelHandler` port
+(`src/agent/types/IModelHandler.ts`).
 Provider-specific code lives in a sub-directory per provider family so the
 ubiquitous language is visible in the layout; genuinely cross-provider code
 stays at the root.
@@ -14,7 +15,6 @@ stays at the root.
 | `google/`     | `modelHandlerGoogleInteractions` (Interactions API, flag-gated via `texra.model.useGoogleInteractionsAPI`, default on) is the default, actively developed handler — new Google-facing features land there only. `modelHandlerGoogleGenAI` (chat / `generateContent`) is a **feature-frozen** stateless fallback for when the flag is off; it is not tracked for behavioral parity with the Interactions handler (#7097). Plus Google helpers (`googleUsage`, `googleInteractionsUsage`, `googleMessageHelpers`, `googleSdkError`) |
 | `openrouter/` | `modelHandlerOpenRouterNative`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `support/`    | Cross-provider runtime collaborators (stream handling, media, proxy, usage, SDK error adapters)                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `types/`      | The `IModelHandler` port and provider-neutral message/stop-reason types                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `utils/`      | Stateless cross-provider helpers (argument parsing, tool accumulation, etc.)                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ## Conventions
@@ -24,7 +24,7 @@ stays at the root.
   directory; their `./modelHandlerOpenAI` import is intentional.
 - **Shared, not duplicated.** Anything imported by more than one provider family
   (tool conversion, context-window constants, the base class, `support/`,
-  `types/`, `utils/`) lives at the root or in a shared sub-directory — never
+  `utils/`) lives at the root or in a shared sub-directory — never
   copied into a provider folder.
 - **Import via the `@agent/modelHandlers/<provider>/<File>` alias**, e.g.
   `@agent/modelHandlers/anthropic/modelHandlerAnthropic`. There is no barrel and

@@ -2,10 +2,10 @@
 import { ReasoningEffort } from 'llm-zoo';
 
 // Local file imports
+import type { DeepSeekToolCall } from '@agent/types/IModelHandler';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 // Type imports
-import type { DeepSeekToolCall } from '../types/IModelHandler';
 
 // DeepSeek usage format includes prompt_cache_hit_tokens which the base class
 // already handles via rawUsage.prompt_cache_hit_tokens in normalizeUsage().

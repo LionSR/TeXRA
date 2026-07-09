@@ -24,6 +24,13 @@ import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/media
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
+import type {
+  CreateResponseOptions,
+  CreateResponseResult,
+  ExtractResponseResult,
+  GoogleToolCall,
+  TokenCountOptions,
+} from '@agent/types/IModelHandler';
 import {
   handleStreamingFailure,
   takeTail,
@@ -76,13 +83,6 @@ import type {
 } from '@google/genai';
 
 // Type imports
-import type {
-  CreateResponseOptions,
-  CreateResponseResult,
-  ExtractResponseResult,
-  GoogleToolCall,
-  TokenCountOptions,
-} from '../types/IModelHandler';
 
 /**
  * Handler for Google models using the native @google/genai SDK and Chat API.

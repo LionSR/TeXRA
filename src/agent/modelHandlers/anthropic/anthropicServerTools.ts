@@ -11,7 +11,6 @@
 import type { AgentTrace } from '@agent/trace';
 
 // Local imports - model handlers
-import { LONG_CACHE_CONTROL } from './anthropicContextManagement';
 import {
   extractAnthropicWebFetchResults,
   extractAnthropicWebSearchResults,
@@ -20,7 +19,8 @@ import {
   isAnthropicWebFetchResult,
   isAnthropicWebSearchResult,
   type ServerToolExtractionResult,
-} from '../types/ServerToolTypes';
+} from '@agent/types/ServerToolTypes';
+import { LONG_CACHE_CONTROL } from './anthropicContextManagement';
 
 // Type imports - Anthropic SDK
 import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
