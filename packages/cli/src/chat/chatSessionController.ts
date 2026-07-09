@@ -8,7 +8,11 @@
 import PQueue from 'p-queue';
 
 import { getDefaultStreamLogStore, StreamSnapshotStore } from '@transcript';
-import { registerExecution, writeTerminalStatus } from '@agent/storage';
+import {
+  getExecutionStore,
+  registerExecution,
+  writeTerminalStatus,
+} from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -21,6 +25,11 @@ import {
   executeAgent,
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
+import {
+  isResumeInFlight,
+  resolveAndResumeStream,
+} from '@agent/runtime/resolveAndResumeStream';
+import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
@@ -44,6 +53,7 @@ import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import {
   EXECUTION_STATUS,
   type ExecutionId,
+  type StreamTabId,
   sumUsageStats,
 } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
@@ -158,6 +168,12 @@ export interface ChatSessionController {
 
   /** Request stop of the active run (idempotent). */
   stop(): void;
+
+  /** Resume a queued follow-up target from the CLI platform resume port. */
+  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
+
+  /** Whether a stream resume accepted by this controller is still preparing. */
+  isResumeInFlight(streamId: StreamTabId): boolean;
 
   /** Whether a new root run can be started right now. */
   canStartRootRun(): boolean;
@@ -400,6 +416,92 @@ export function createChatSessionController(
     publishChatTuiRootRunStartAvailability(session);
   };
 
+  const tryResumeStream = async (streamId: StreamTabId): Promise<boolean> => {
+    if (!chatTuiCanStartRootRun(session)) return false;
+
+    await snapshotStore.preload([streamId]);
+    const executionId =
+      snapshotStore.getExecutionId(streamId) ??
+      (await snapshotStore.readPersistedExecutionId(streamId));
+    if (!executionId) return false;
+
+    const config =
+      snapshotStore.getRunConfig(streamId) ??
+      (await getExecutionStore(executionId).readConfig());
+    if (!config) return false;
+
+    const currentModel = config.model;
+    const sessionContext = getSessionContext(currentModel);
+    patchSessionMeta({
+      agent: config.agent,
+      model: config.model,
+      modelSource: 'history',
+      canDelegate: chatAgentSupportsDelegation(config.agent),
+    });
+
+    const { runtimeHost, approvalsUnavailable, finalize } =
+      setupRunHost(sessionContext);
+    session.runtimeHost = runtimeHost;
+    session.streamId = streamId;
+    session.executionId = executionId;
+    rootStreamId.set(streamId);
+    activeStreamId.set(streamId);
+    session.runCompleted = false;
+    session.stopRequested = false;
+    session.runExitCode = CliExitCode.Success;
+    publishChatTuiRootRunStartAvailability(session);
+
+    const runPromise = setCliHelperModel(currentModel)
+      .then(() =>
+        resolveAndResumeStream(streamId, {
+          runtimeHost,
+          streamStatus: defaultSession().status,
+          resolveResumeState: async () => ({
+            runState: config,
+            executionId,
+            parentStreamId: snapshotStore.getParentStreamId(streamId),
+          }),
+          resumeToolUseSnapshot: (snapshot) =>
+            resumeQueuedToolUseSnapshot(streamId, snapshot, runtimeHost, {
+              session: defaultSession(),
+              approvalPromptsUnavailable: approvalsUnavailable,
+              runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+              onError: reportRunFailure,
+            }),
+          executeWorkflow: async () => {
+            throw new Error(
+              'CLI chat cannot auto-resume workflow streams from follow-up wake.',
+            );
+          },
+          reportNoResumableSession: () => {
+            appendLocalAssistantTranscript(
+              'Message queued. Auto-resume found no resumable session state; resume the session manually or start a new agent task.',
+              streamId,
+            );
+          },
+          reportFailure: (_failedStream, error) => reportRunFailure(error),
+        }),
+      )
+      .then((resumed) => {
+        if (session.streamId) {
+          projectStreamTranscript(session.streamId, { finalize: true });
+        }
+        if (resumed) {
+          session.runExitCode = CliExitCode.Success;
+          notify({ kind: 'agentFinished' });
+        }
+        return resumed;
+      })
+      .catch((error: unknown) => {
+        reportRunFailure(error);
+        return false;
+      })
+      .finally(finalize);
+    session.runPromise = runPromise.then(() => undefined);
+
+    return runPromise;
+  };
+
   // -----------------------------------------------------------------------
   // stop
   // -----------------------------------------------------------------------
@@ -413,6 +515,8 @@ export function createChatSessionController(
     startRootRun,
     resume,
     stop,
+    tryResumeStream,
+    isResumeInFlight,
     canStartRootRun: () => chatTuiCanStartRootRun(session),
   };
 }
