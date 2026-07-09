@@ -66,12 +66,8 @@ export interface RunToolUseFlowInput<
    *  blocking in-flow for the next follow-up — the child-run loop owns
    *  delivery and turn-to-turn continuation. */
   isSubagent?: boolean;
-  /** Tools unavailable because the current host/runtime cannot support them. */
-  runtimeUnavailableTools?: readonly string[];
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Stop after one cycle instead of waiting for a conversational follow-up. */
-  stopAfterCycle?: boolean;
   /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
   onIdle?: (lastResponse: string | undefined) => void;
   /** Fires after a running tool-use chat changes its model. */
@@ -148,7 +144,8 @@ export async function runToolUseFlow<C = unknown>(
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
   const { logger, setting, onInterrupt } = input;
-  const { runScope } = useLaunchRunContext();
+  const runContext = useLaunchRunContext();
+  const { runScope } = runContext;
   const { runtimeHost, streamId, executionId, session: runSession } = runScope;
   // Capture the run's scope at setup. The interrupt closure below fires from
   // the host thread outside the ALS, so it must use this captured session
@@ -158,13 +155,12 @@ export async function runToolUseFlow<C = unknown>(
     runSession.followUps,
   );
   const registry = toolRegistry ?? getDefaultToolRegistry();
-  const delegationDepth = input.delegation?.delegationDepth ?? 0;
   const { tools: resolvedTools } = await resolveAgentTools({
     tools: setting.tools,
     registry,
     logger,
-    approvalPromptsUnavailable: input.delegation?.approvalPromptsUnavailable,
-    runtimeUnavailableTools: input.runtimeUnavailableTools,
+    approvalPromptsUnavailable: runContext.approvalPromptsUnavailable,
+    runtimeUnavailableTools: runContext.runtimeUnavailableTools,
     toolInjections: input.toolInjections,
   });
 
@@ -179,7 +175,6 @@ export async function runToolUseFlow<C = unknown>(
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
     persistTodos: (todos) => kv.writeTodos(todos),
     fileService: new TaskRunFileService(executionId),
-    delegation: { ...input.delegation, delegationDepth },
   };
   const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();
   let activePersistedFlow: ToolUsePersistedFlow<C> | undefined;
