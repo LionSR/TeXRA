@@ -32,7 +32,7 @@ import type {
 } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
-import { extractMimeSubtype, joinNonEmpty } from '@utils/text/stringUtils';
+import { extractMimeSubtype } from '@utils/text/stringUtils';
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { tagOpenAISdkError } from './openAISdkError';
@@ -41,6 +41,11 @@ import { tagOpenAISdkError } from './openAISdkError';
 import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import {
+  appendUserTextToChatMessages,
+  createChatRoundMessages,
+  createChatUserFollowUpMessages,
+  extractChatAssistantText,
+  initializeChatMessages,
   insertMediaIntoChatUserMessage,
   normalizeOpenAIMessageContent,
   prependTextToChatUserMessage,
@@ -712,67 +717,14 @@ export class ModelHandlerOpenAI<
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const messages: ChatCompletionMessageParam[] = [];
-
-    // Handle system prompt differently for O1 models
-    // O1 mini and O1 preview models do not support system prompt; use 'user' role instead.
-    // For openai native o1 full or above reasoning models, "developer" is the new name but "system" still works.
-    if (systemPrompt) {
-      const role = this.capabilities.supportsSystemPrompt ? 'system' : 'user';
-      messages.push({
-        role,
-        content: [{ type: 'text', text: systemPrompt }],
-      });
-    }
-
-    // Create content list for the user message (only add non-empty prefix)
-    const userMessageContent: ChatCompletionContentPart[] = [];
-    if (userPrefix) {
-      userMessageContent.push({ type: 'text', text: userPrefix });
-    }
-
-    // Add media if provided
-    if (
-      mediaFiles?.length &&
-      (this.capabilities.supportsVision ||
-        this.capabilities.supportsNativeAudio)
-    ) {
-      // createMediaMessage returns an array of objects formatted by createMediaContent
-      const formattedMediaContent = await this.createMediaForRound(
-        mediaFiles,
-        'initial',
-      );
-      userMessageContent.push(...formattedMediaContent);
-    }
-
-    // Append content to last user message, or create new user message
-    const lastMsg = messages.at(-1);
-    if (lastMsg?.role === 'user' && Array.isArray(lastMsg.content)) {
-      lastMsg.content.push(...userMessageContent);
-    } else {
-      messages.push({ role: 'user', content: userMessageContent });
-    }
-
-    // Add final user request
-    const requestRole = this.capabilities.supportsIntermDevMsgs
-      ? 'system'
-      : 'user';
-    const lastMessage = messages.at(-1);
-
-    if (
-      requestRole === 'user' &&
-      lastMessage?.role === 'user' &&
-      Array.isArray(lastMessage.content)
-    ) {
-      lastMessage.content.push({ type: 'text', text: userRequest });
-    } else {
-      messages.push({
-        role: requestRole,
-        content: [{ type: 'text', text: userRequest }],
-      });
-    }
-
-    return messages;
+    return initializeChatMessages(
+      userPrefix,
+      userRequest,
+      mediaFiles,
+      systemPrompt,
+      this.capabilities,
+      (files, context) => this.createMediaForRound(files, context),
+    );
   }
 
   /** Adds user message content for subsequent rounds. */
@@ -781,40 +733,20 @@ export class ModelHandlerOpenAI<
     userMessage: string,
     mediaFiles?: FileLocation[],
   ): Promise<ChatCompletionMessageParam[]> {
-    const roundContent: ChatCompletionContentPart[] = [];
-
-    if (
-      mediaFiles?.length &&
-      (this.capabilities.supportsVision ||
-        this.capabilities.supportsNativeAudio)
-    ) {
-      const formattedMediaContent = await this.createMediaForRound(
-        mediaFiles,
-        'followUp',
-      );
-      roundContent.push(...formattedMediaContent);
-    }
-    // Only add text content if non-empty to avoid API "text content is empty" errors
-    if (userMessage) {
-      roundContent.push({ type: 'text', text: userMessage });
-    }
-
-    // Only push message if there's content (media or text)
-    if (roundContent.length > 0) {
-      messages.push({ role: 'user', content: roundContent });
-    }
-    return messages;
+    return createChatRoundMessages(
+      messages,
+      userMessage,
+      mediaFiles,
+      this.capabilities,
+      (files, context) => this.createMediaForRound(files, context),
+    );
   }
 
   async createUserFollowUpMessages(
     messages: ChatCompletionMessageParam[],
     userMessage: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    messages.push({
-      role: 'user',
-      content: [{ type: 'text', text: userMessage }],
-    });
-    return messages;
+    return createChatUserFollowUpMessages(messages, userMessage);
   }
 
   createAssistantMessage(text: string): ChatCompletionMessageParam {
@@ -842,15 +774,7 @@ export class ModelHandlerOpenAI<
   override extractAssistantText(
     message: ChatCompletionMessageParam,
   ): string | undefined {
-    if (message.role !== 'assistant') return undefined;
-    const { content } = message;
-    if (typeof content === 'string') return content;
-    if (!Array.isArray(content)) return undefined;
-    return joinNonEmpty(
-      content
-        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-        .map((p) => p.text),
-    );
+    return extractChatAssistantText(message);
   }
 
   /** Builds the default content parts for inline vision requests. */
@@ -1025,25 +949,12 @@ export class ModelHandlerOpenAI<
     text: string,
     placement: 'last-user' | 'continuation',
   ): void {
-    if (placement === 'continuation') {
-      const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-      messages.push({ role, content: [{ type: 'text', text }] });
-      return;
-    }
-
-    const lastMessage = messages.at(-1);
-    if (lastMessage && Array.isArray(lastMessage.content)) {
-      lastMessage.content.push({ type: 'text', text });
-      return;
-    }
-    if (lastMessage && typeof lastMessage.content === 'string') {
-      lastMessage.content = [
-        { type: 'text', text: lastMessage.content },
-        { type: 'text', text },
-      ];
-      return;
-    }
-    messages.push({ role: 'user', content: [{ type: 'text', text }] });
+    appendUserTextToChatMessages(
+      messages,
+      text,
+      placement,
+      this.capabilities.supportsIntermDevMsgs,
+    );
   }
 
   protected appendTextToLastAssistantMessage(

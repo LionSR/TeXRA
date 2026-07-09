@@ -14,7 +14,11 @@ import {
   runCleanRunDir,
 } from '@housekeeping';
 import * as logger from '@logger/logUtils';
-import { FileOpParamsSchema, fileOpConfigFields } from './fileOpSchemas';
+import {
+  FileOpParamsSchema,
+  fileOpConfigFields,
+  mergeRunDirAndWorkspaceResult,
+} from './fileOpSchemas';
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'cleanCommands';
@@ -159,18 +163,7 @@ async function handleClean(config: unknown): Promise<void> {
   if (executionId) {
     const runDirResult = await runCleanRunDir(executionId);
     const workspaceResult = await runWorkspaceClean();
-    // Surface errors from either leg — a failed runDir removal (e.g.
-    // permission-denied) must not be masked by a successful workspace
-    // sweep, or the user sees "Cleanup complete" while `executions/{id}`
-    // remains on disk.
-    if (runDirResult.status === 'error') {
-      result = runDirResult;
-    } else if (workspaceResult.status === 'error') {
-      result = workspaceResult;
-    } else {
-      result =
-        workspaceResult.status !== 'noFiles' ? workspaceResult : runDirResult;
-    }
+    result = mergeRunDirAndWorkspaceResult(runDirResult, workspaceResult);
   } else {
     result = await runWorkspaceClean();
   }
