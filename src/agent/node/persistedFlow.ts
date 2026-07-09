@@ -8,6 +8,7 @@ import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { BaseNode, Flow, type Action } from '.';
+import type { z } from 'zod';
 
 /** KV key for a flow record. Single source of truth for the prefix. */
 export function flowKey(runId: string): string {
@@ -96,6 +97,15 @@ export class PersistedFlow<
   protected readonly kv: ExecutionKVStore;
 
   /**
+   * Optional schema for the persisted `shared` blob. When provided, every
+   * read of `flow.shared` off the KV store is parsed through it instead of
+   * blindly asserted as `S` — a corrupted or stale-schema record then fails
+   * loudly at the point of resume rather than propagating a wrongly-shaped
+   * object under a trusted type.
+   */
+  private readonly sharedSchema: z.ZodType<S> | undefined;
+
+  /**
    * In-memory cache of the flow record.
    *
    * Since a PersistedFlow instance is the sole owner/mutator of its record,
@@ -124,10 +134,29 @@ export class PersistedFlow<
    * @param kv - Storage backend (ExecutionKVStore)
    * @param runId - Optional run identifier. Defaults to kv.getExecutionId().
    */
-  constructor(start: BaseNode, kv: ExecutionKVStore, runId?: string) {
+  constructor(
+    start: BaseNode,
+    kv: ExecutionKVStore,
+    runId?: string,
+    sharedSchema?: z.ZodType<S>,
+  ) {
     super(start);
     this.kv = kv;
     this.runId = runId ?? kv.getExecutionId();
+    this.sharedSchema = sharedSchema;
+  }
+
+  /** Single canonical cast site for trusting a persisted `shared` blob as `S`. */
+  private readShared(raw: unknown): S {
+    if (!this.sharedSchema) return raw as S;
+    const result = this.sharedSchema.safeParse(raw);
+    if (!result.success) {
+      throw new Error(
+        `Persisted shared state for flow run "${this.runId}" failed schema validation`,
+        { cause: result.error },
+      );
+    }
+    return result.data;
   }
 
   /** Register a write-through projection that fires after each persist. */
@@ -192,11 +221,11 @@ export class PersistedFlow<
       return {
         hasMore: false,
         action: flow.cursor?.lastAction ?? flow.nodes.at(-1)?.action,
-        shared: flow.shared as S,
+        shared: this.readShared(flow.shared),
       };
     }
 
-    const shared = flow.shared as S;
+    const shared = this.readShared(flow.shared);
 
     if (!shared) {
       throw new Error('Missing shared state in flow record');
@@ -235,7 +264,9 @@ export class PersistedFlow<
       this.cachedRecord ??
       (await this.kv.read<FlowRecord>(flowKey(this.runId)));
     if (flow) this.cachedRecord = flow;
-    return flow?.shared as S | undefined;
+    return flow?.shared === undefined
+      ? undefined
+      : this.readShared(flow.shared);
   }
 
   async setShared(newShared: S): Promise<void> {

@@ -220,6 +220,16 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     if (!shared) {
+      if (flowRecord) {
+        // A record already exists but its `shared` failed schema validation
+        // (or was missing) — it's stale/corrupt, not resumable. Delete it so
+        // PersistedFlow.ensureRecord() doesn't silently re-adopt the invalid
+        // record instead of the freshly-built `shared` below; otherwise the
+        // very next stepWithResult() would read that same invalid blob and
+        // fail sharedSchema validation again, crashing the run instead of
+        // starting over.
+        await kv.delete(flowKey(executionId));
+      }
       shared = {
         currentRound: 0,
         totalRounds,
@@ -264,6 +274,7 @@ export async function runReflectionFlow<C = unknown>(
       ReflectionServices<C>
     >(prepContextNode, kv, {
       parentStage,
+      sharedSchema: ReflectionFlowStateSchema,
       callbacks: {
         createRoundStage: (roundIndex, parent, shared) =>
           logger.openStage(`r${roundIndex}`, {

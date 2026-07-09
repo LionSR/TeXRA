@@ -66,22 +66,22 @@ const SUMMARY_MAX_LENGTH = 60;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
 /**
- * Subset of the SDK's `SDKAssistantMessage.message` shape we need to log
- * (kept as `unknown` indices in the public type to avoid importing the
+ * Subset of the SDK's `SDKAssistantMessage.message` content blocks we need to
+ * log, hand-declared as a discriminated union (rather than importing the
  * private MessageParam shape from `@anthropic-ai/sdk` into VS Code-free
- * zones).
+ * zones). Narrowing on `type` gives each variant only its own fields, so a
+ * caller can't accidentally read e.g. `tool_use_id` off a `text` block.
  */
-export interface ClaudeMessageBlock {
-  type: string;
-  id?: string;
-  text?: string;
-  thinking?: string;
-  name?: string;
-  input?: unknown;
-  tool_use_id?: string;
-  content?: unknown;
-  is_error?: boolean;
-}
+export type ClaudeMessageBlock =
+  | { type: 'text'; text?: string }
+  | { type: 'thinking'; thinking?: string }
+  | { type: 'tool_use'; id?: string; name?: string; input?: unknown }
+  | {
+      type: 'tool_result';
+      tool_use_id?: string;
+      content?: unknown;
+      is_error?: boolean;
+    };
 
 /** Format a usage object into TeXRA's TokenUsageStats. */
 export function buildClaudeUsageStats(usage: {
