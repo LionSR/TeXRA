@@ -9,6 +9,7 @@ import {
   createNodePlatform,
   initNodeAgentRuntime,
   initializeNodeGoalPrompts,
+  initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -182,6 +183,10 @@ export async function initializeElectronPlatform(
   // before the Lean adapter dispose.
   initNodeAgentRuntime(lifecycle);
   initializeNodeGoalPrompts(resourcesPath);
+  initializeNodeRuntimeSkills({
+    cwd: workspacePath ?? userDataPath,
+    resourcesPath,
+  });
 
   await bootstrapNodeAgentDirectories({
     channel: 'desktop',
