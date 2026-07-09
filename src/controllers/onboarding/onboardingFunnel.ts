@@ -185,9 +185,16 @@ export async function hasAnyProviderApiKey(
  * checked before `canUseServerSideKeys()` deliberately: the latter is a
  * network round-trip that can prime the relay-quota cache and trigger a
  * quota auto-switch, so a cheap local key that already satisfies the gate
- * should short-circuit before that side effect fires. Shared by all three
- * hosts (extension, desktop, CLI) so this credential-gating logic — and its
- * check order — can't drift between them.
+ * should short-circuit before that side effect fires.
+ *
+ * Extension and desktop call this directly, so neither can drift from the
+ * other on what counts as "usable" or in what order. The CLI's credential
+ * gate (`packages/cli/src/runtime/credentialStatus.ts`) does not call this
+ * predicate — it needs an `apiMode`-aware policy (included-relay vs.
+ * personal-key sign-in must each unlock their own mode) — but it composes
+ * the same underlying primitives (`hasAnyProviderApiKey`,
+ * `isCodexSubscriptionActive`) so the individual checks stay consistent even
+ * though the CLI's combination policy differs.
  */
 export async function hasUsableSetupCredential(
   secrets: PlatformSecrets,
