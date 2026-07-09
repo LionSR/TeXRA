@@ -7,6 +7,7 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
+import { getRunContextWorkingDirectory } from '@tools/contextHelpers';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -117,7 +118,7 @@ export class DiagnosticsTool extends defineTool({
 
   /** Resolve an input path to an absolute path against the active working directory. */
   private resolveAbsolutePath(filePath: string): string {
-    const workingDirectory = tryUseRunContext()?.workingDirectory;
+    const workingDirectory = getRunContextWorkingDirectory(tryUseRunContext());
     return resolveWorkspaceRelativePath(filePath, workingDirectory).absolute;
   }
 

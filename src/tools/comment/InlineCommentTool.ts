@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import * as logger from '@logger/logUtils';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { getRunContextWorkingDirectory } from '@tools/contextHelpers';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -166,7 +167,8 @@ export class InlineCommentTool extends defineTool({
       throw new ToolError('endLine must be greater than or equal to line.');
     }
     try {
-      const workingDirectory = tryUseRunContext()?.workingDirectory;
+      const workingDirectory =
+        getRunContextWorkingDirectory(tryUseRunContext());
       const resolved = resolveWorkspaceRelativePath(path, workingDirectory);
       const result = provider.add({
         absolutePath: resolved.absolute,
@@ -224,7 +226,8 @@ export class InlineCommentTool extends defineTool({
   private list(input: InlineCommentInput): ToolResult {
     let absolutePath: string | undefined;
     if (input.path != null) {
-      const workingDirectory = tryUseRunContext()?.workingDirectory;
+      const workingDirectory =
+        getRunContextWorkingDirectory(tryUseRunContext());
       absolutePath = resolveWorkspaceRelativePath(
         input.path,
         workingDirectory,

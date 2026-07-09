@@ -16,9 +16,15 @@ const mocks = vi.hoisted(() => ({
   deliverChildRunFollowUp: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/RunContext', () => ({
-  tryUseRunContext: mocks.tryUseRunContext,
-}));
+vi.mock('@agent/runtime/RunContext', () => {
+  const readRunContextField = (context: any, field: string) =>
+    context?.kind === 'launch' ? context.runScope[field] : context?.[field];
+  return {
+    tryUseRunContext: mocks.tryUseRunContext,
+    getRunContextStreamId: (context: any) =>
+      readRunContextField(context, 'streamId'),
+  };
+});
 
 vi.mock('@agent/runtime/SessionHandle', () => ({
   currentSession: mocks.currentSession,

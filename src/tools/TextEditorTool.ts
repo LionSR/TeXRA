@@ -14,6 +14,7 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
+import { getRunContextExecutionId } from '@tools/contextHelpers';
 import {
   appendApprovalDiffNote,
   requestApprovedEditContent,
@@ -658,7 +659,7 @@ export class TextEditorTool extends defineTool({
    * (tests/manual) it collapses to the prior path-only behavior.
    */
   private historyKey(filePath: string): string {
-    return `${tryUseRunContext()?.executionId ?? ''}\u0000${filePath}`;
+    return `${getRunContextExecutionId(tryUseRunContext()) ?? ''}\u0000${filePath}`;
   }
 
   private addToHistory(filePath: string, content: string): void {
