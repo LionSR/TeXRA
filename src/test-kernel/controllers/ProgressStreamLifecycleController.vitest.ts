@@ -6,14 +6,17 @@ import { describe, it } from 'vitest';
 import { createProgressStreamLifecycleHarness } from '../support/ProgressControllerHarnesses';
 
 describe('ProgressStreamLifecycleController', () => {
-  it('ignores deletion for unknown streams', async () => {
+  it('runs durable cleanup for unknown streams without rendered cleanup', async () => {
     const { controller, recorder, streams } =
       createProgressStreamLifecycleHarness();
 
     await controller.deleteStream('missing');
 
     assert.deepEqual(streams(), ['stream-a', 'stream-b']);
-    assert.equal(recorder.calls.size, 0);
+    assert.deepEqual(recorder.calls.get('clearStream'), ['missing']);
+    assert.deepEqual(recorder.calls.get('cleanupApprovals'), undefined);
+    assert.deepEqual(recorder.calls.get('deleteWebview'), undefined);
+    assert.deepEqual(recorder.calls.get('setActiveStream'), undefined);
   });
 
   it('deletes inactive streams without stopping finished work', async () => {
