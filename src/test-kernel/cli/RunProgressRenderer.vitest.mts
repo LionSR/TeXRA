@@ -16,6 +16,7 @@ import {
   type ActiveChildInfo,
   type ConversationProgress,
   type ExecutionId,
+  type InstructionAction,
   type RoundStage,
   type StreamPhase,
   type StreamTabId,
@@ -1070,7 +1071,7 @@ describe('CLI run progress renderer', () => {
     expect(stdout).toBe('');
   });
 
-  it('prints requestShowInstruction text and action hint to stderr in text mode', async () => {
+  it('prints requestShowInstruction text and a human-readable action hint to stderr in text mode', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const host = createCliRuntimeHost(context({ outputFormat: 'text' }));
 
@@ -1085,9 +1086,31 @@ describe('CLI run progress renderer', () => {
       await host.close();
     });
 
+    // The raw InstructionAction tokens are translated to human phrasing
+    // (mirroring the extension's INSTRUCTION_ACTION_VIEW), not printed
+    // verbatim.
     expect(output).toContain(
-      'API key not found. Set your API key in Settings and run again. (set-api-key, open-configuration-guide)',
+      'API key not found. Set your API key in Settings and run again. (set your API key (texra config), see the configuration guide)',
     );
+    expect(output).not.toContain('set-api-key');
+    expect(output).not.toContain('open-configuration-guide');
+  });
+
+  it('falls back to the raw token for an unrecognized action in the instruction hint', async () => {
+    const output = await captureStreamWrites(process.stderr, async () => {
+      const host = createCliRuntimeHost(context({ outputFormat: 'text' }));
+
+      host.emit('requestShowInstruction', {
+        key: 'futureInstruction',
+        message: 'Something needs attention.',
+        actions: ['some-future-action' as InstructionAction],
+        showSuppress: false,
+      });
+
+      await host.close();
+    });
+
+    expect(output).toContain('Something needs attention. (some-future-action)');
   });
 
   it('does not gate requestShowInstruction behind quietLogs in text mode', async () => {
