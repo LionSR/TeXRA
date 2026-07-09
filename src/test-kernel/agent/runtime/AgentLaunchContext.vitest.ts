@@ -8,6 +8,7 @@ import {
   withExecutionRunContext,
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { useRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
@@ -38,26 +39,21 @@ describe('AgentLaunchContext', () => {
 
   it('projects model changes into the active run context', async () => {
     const explicit = createRecordingHost();
-    const session = {} as AgentLaunchContext['session'];
+    const session = {} as SessionHandle;
     const runScope = createRunScope({
       runtimeHost: explicit.host,
-      streamId: 'launch-context-stream' as AgentLaunchContext['streamId'],
-      executionId:
-        'launch-context-execution' as AgentLaunchContext['executionId'],
+      streamId: 'launch-context-stream',
+      executionId: 'launch-context-execution',
       agentName: 'chat',
       session,
     });
     const ctx = {
-      runtimeHost: explicit.host,
       runScope,
       logger: noopTrace,
-      streamId: runScope.streamId,
-      executionId: runScope.executionId,
       config: {
         agent: runScope.agentName,
         model: 'deepseekT',
       },
-      session,
     } as unknown as AgentLaunchContext;
 
     await withExecutionRunContext(ctx, async () => {
