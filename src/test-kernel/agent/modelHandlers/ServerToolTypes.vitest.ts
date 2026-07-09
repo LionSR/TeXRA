@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-import { capWebFetchContent } from '@agent/modelHandlers/types/ServerToolTypes';
+import { capWebFetchContent } from '@agent/types/ServerToolTypes';
 
 describe('capWebFetchContent', () => {
   it('includes the ellipsis in the advertised maximum length', () => {

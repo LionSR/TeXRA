@@ -4,7 +4,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/state/AgentWorkspaceState';
 import { UserVariableChannelsSchema } from '@agent/core/definition/AgentCycleOptions';
-import { ProviderMessageArraySchema } from '@agent/modelHandlers/types/ProviderMessage';
+import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { ExecutionIdSchema, StreamTabIdSchema } from '@shared/schemas';
 

@@ -8,7 +8,7 @@ import {
   type ToolUseRoundShared,
 } from '@agent/core/flows/ToolUseRoundFlow';
 import { withModelClient } from '@agent/core/flows/CycleServices';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { buildFailedRetryInfo } from '@common/errors';
 import { MESSAGE_TYPES } from '@shared/schemas';

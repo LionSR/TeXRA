@@ -15,7 +15,7 @@ import {
 import {
   ProviderMessageArraySchema,
   type ProviderMessage,
-} from '@agent/modelHandlers/types/ProviderMessage';
+} from '@agent/types/ProviderMessage';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import type { RetryErrorInfo } from '@shared/schemas';

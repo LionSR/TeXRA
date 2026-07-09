@@ -11,7 +11,7 @@ import {
   type ToolUseRoundShared,
 } from '@agent/core/flows/ToolUseRoundFlow';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { withTestRunContext } from '../progressTestUtils';

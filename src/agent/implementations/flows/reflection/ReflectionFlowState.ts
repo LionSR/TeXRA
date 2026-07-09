@@ -7,7 +7,7 @@ import {
   ConversationRoundStateSnapshotSchema,
 } from '@agent/core/state/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/state/AgentWorkspaceState';
-import { ProviderMessageArraySchema } from '@agent/modelHandlers/types/ProviderMessage';
+import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import {
   AgentFileLocationSchema,

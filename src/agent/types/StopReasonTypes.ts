@@ -68,3 +68,25 @@ export type ProviderStopReason =
   | GoogleFinishReason
   | MCPStopReason
   | string;
+
+/** Known stop reasons that indicate token limit was hit. */
+const TOKEN_LIMIT_STOP_REASONS: readonly ProviderStopReason[] = [
+  OPENAI_CHAT_FINISH.LENGTH,
+  OPENAI_COMPLETION_FINISH.LENGTH,
+  ANTHROPIC_STOP.MAX_TOKENS,
+  MCP_STOP.MAX_TOKENS,
+  GOOGLE_FINISH.MAX_TOKENS,
+];
+
+/**
+ * Determines whether a provider stop reason represents a token limit hit.
+ *
+ * Every supported SDK reports a clean enum stop reason for this condition, so
+ * this is a direct membership check against the known enum values.
+ */
+export function isTokenLimitStopReason(
+  reason: ProviderStopReason | undefined,
+): boolean {
+  if (!reason) return false;
+  return TOKEN_LIMIT_STOP_REASONS.includes(reason);
+}
