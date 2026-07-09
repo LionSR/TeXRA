@@ -1,7 +1,7 @@
 # Host-parity audit: CLI / extension / desktop behavior divergences (2026-07)
 
 > **Status:** Adjudicated audit (2026-07-09), pinned to HEAD `cf138f802` in an
-> isolated worktree. origin/main moved 6 commits *during* adjudication and one
+> isolated worktree. origin/main moved 6 commits _during_ adjudication and one
 > draft finding (#7693 goal-entry leak) was fixed mid-audit by PR #7729 —
 > the re-verify-at-HEAD trap is live; re-open every cited site before acting.
 
@@ -39,16 +39,16 @@ The maintainer's framing, which this audit uses as its verdict vocabulary:
 
 ## 1. The parity scoreboard
 
-| Domain                                    | rows |     parity | deserved | drift | false-simpl. | copy-parity |
-| ----------------------------------------- | ---: | ---------: | -------: | ----: | -----------: | ----------: |
-| 1. Run lifecycle (launch/stop/resume/wake) |    7 |          0 |        3 |     1 |            1 |           2 |
-| 2. Interactions & approvals                |    9 |          1 |        2 |     4 |            1 |           1 |
-| 3. Fact-family rendering                   |    8 |          1 |        2 |     3 |            1 |           1 |
-| 4. Capability matrix (tools/settings)      |    8 |          2 |        0 |     3 |            3 |           0 |
-| 5. History, sessions & continuation        |    7 |          1 |        1 |     2 |            3 |           0 |
-| 6. CLI: TUI vs headless                    |    8 |          0 |        1 |     4 |            2 |           1 |
-| **Total (as adjudicated)**                 |   47 |      **5** |    **9** |**17** |       **11** |       **5** |
-| **Deduped**¹                               |   45 |          5 |        9 |    16 |           10 |           5 |
+| Domain                                     | rows | parity | deserved |  drift | false-simpl. | copy-parity |
+| ------------------------------------------ | ---: | -----: | -------: | -----: | -----------: | ----------: |
+| 1. Run lifecycle (launch/stop/resume/wake) |    7 |      0 |        3 |      1 |            1 |           2 |
+| 2. Interactions & approvals                |    9 |      1 |        2 |      4 |            1 |           1 |
+| 3. Fact-family rendering                   |    8 |      1 |        2 |      3 |            1 |           1 |
+| 4. Capability matrix (tools/settings)      |    8 |      2 |        0 |      3 |            3 |           0 |
+| 5. History, sessions & continuation        |    7 |      1 |        1 |      2 |            3 |           0 |
+| 6. CLI: TUI vs headless                    |    8 |      0 |        1 |      4 |            2 |           1 |
+| **Total (as adjudicated)**                 |   47 |  **5** |    **9** | **17** |       **11** |       **5** |
+| **Deduped**¹                               |   45 |      5 |        9 |     16 |           10 |           5 |
 
 ¹ Two cross-matrix dedups: (a) the TUI output-file-facts row appears in domains
 3 and 6 with **conflicting verdicts** (deserved vs false-simplification);
@@ -100,7 +100,7 @@ landed → convergence.
   `deliverResumeWakeFailure`), plus `children_running` edges
   (`childRunLoop.ts:419-424` silent drop; inquiry threads parked at
   `resumeOutcome 'queued'`, `inquiryContinuation.ts:131-146`).
-- **Where the complexity landed:** in the *shared* wake/delivery code, which
+- **Where the complexity landed:** in the _shared_ wake/delivery code, which
   now reports `queued_resume_failed`/terminal errors for what is actually an
   unwired host port.
 - **Convergence:** the single owner exists and the CLI has both halves
@@ -218,7 +218,7 @@ landed → convergence.
   (`desktopSettingsIpc.ts:1078-1083`, `desktopAgentExecution.ts:631`) — and the
   shared frontend grew an `unsupportedCommands` hide-the-buttons mechanism
   specifically to mask them (`HistoryItemElement.ts:59-68`, post-#7084, which
-  was closed *by choosing to hide rather than wire*).
+  was closed _by choosing to hide rather than wire_).
 - **Where the complexity landed:** a masking mechanism in the shared frontend —
   the complexity-cost, not the fix.
 - **Convergence:** both building blocks are host-neutral and dual-consumed
@@ -251,7 +251,7 @@ landed → convergence.
 - **Where the complexity landed:** an implicit public API made of names the
   codebase reserves the right to rename.
 - **Convergence:** the TUI/headless-text instruction-drop half is **#7644**
-  (OPEN, maintainer-approved direction) — but its fix lands *below* the ndjson
+  (OPEN, maintainer-approved direction) — but its fix lands _below_ the ndjson
   gate and won't touch this. Decide one owner: project
   showError/showInstruction through the frozen projection in
   `sessionProgressSubscription.ts` (deleting the raw passthrough — net-delete),
@@ -268,7 +268,7 @@ re-explained.
 
 - **DR1. Pending-interaction cleanup on stop, three shapes.** Extension:
   kind-scoped retry-cancel, conditional; desktop: same block copy-pasted,
-  unconditional; CLI: `clearApprovals()` settles *every* kind, *every* stream
+  unconditional; CLI: `clearApprovals()` settles _every_ kind, _every_ stream
   (`approvalQueue.ts:242-267`). Shared flows already cancel stream-scoped
   interactions for live runs (`runToolUseFlow.ts:285,469`;
   `executeAgent.ts:236-242`) — residual divergence is only the post-run retry
@@ -318,7 +318,7 @@ re-explained.
 - **DR7. Run-completion/approval notifications: desktop is the silent host.**
   CLI notifies (OSC 99/9 + BEL, capability-gated); extension = platform-norm
   editor chrome (fenced); desktop = **zero** (`grep new
-  Notification|flashFrame|setBadge` = 0) — the one host users background as a
+Notification|flashFrame|setBadge` = 0) — the one host users background as a
   standalone app. → Map the same two moments the CLI keys off (session result,
   approval-pending) to Electron `Notification`. Fold into the **#7682**
   desktop-notification-surface decision (fits #7728), don't file in isolation.
@@ -356,7 +356,7 @@ re-explained.
 - **DR13. History outcome labels: two parallel projections over one
   `ExecutionListingEntry`.** Settings tab (ext+desktop, shared
   `HistoryMessageBuilder`) shows no status, startup model, filters process
-  entries; CLI shows resumable/terminalStatus, *current* model, no filter.
+  entries; CLI shows resumable/terminalStatus, _current_ model, no filter.
   → Decide once at the existing shared owner (a legit outcome is "settings
   stays config-oriented; Progress board owns status") — no new reducer. **NEW**
   (decision).
@@ -430,7 +430,7 @@ adjudicated matrices; spot-verified at `cf138f802`.
 
 1. CLI lacks tool-edit mid-flight actions (openDiff/preview/latexdiff) and
    user-edited apply — and note **desktop has full parity** here via
-   `desktopToolEditApproval.ts`, so this is *not* an extension-only capability.
+   `desktopToolEditApproval.ts`, so this is _not_ an extension-only capability.
 2. Auto-open final output (`texra.agentOutputs.autoOpenFinal`) is
    GUI-host-only; shared `selectAutoOpenFinalOutput` policy, hosts supply the
    open verb; document the key as having no CLI effect.
@@ -443,7 +443,7 @@ adjudicated matrices; spot-verified at `cf138f802`.
    host-gated by design. Watch item: TUI approve can't override model/agent.
 6. CLI single-root-run concurrency (one conversation per terminal, child
    streams underneath) vs N parallel streams — same shared per-stream lock.
-7. Per-host status-label *projectors* (webview vs `sessionStatus.ts`) atop the
+7. Per-host status-label _projectors_ (webview vs `sessionStatus.ts`) atop the
    one shared `streamStatusDisplay` table.
 
 **Headless-parity discipline (clig: never require a prompt; stdout byte-parity):**
@@ -461,7 +461,7 @@ adjudicated matrices; spot-verified at `cf138f802`.
     one-shot process; documented in the feedback itself.
 11. Headless plan approval never returns `approve_and_goal` — auto-entering
     interactive supervision from a yolo policy would be wrong.
-12. Headless bypass absence — `--approval-policy yolo` *is* the bypass.
+12. Headless bypass absence — `--approval-policy yolo` _is_ the bypass.
 13. `followUpSent` kept session-local off the NDJSON rail (pinned by test) —
     `updateQueuedFollowUps` is the public fact.
 14. No content streaming in headless output (final result = `lastResponse` +
