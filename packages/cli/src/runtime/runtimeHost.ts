@@ -4,16 +4,12 @@ import type {
   AgentRuntimeEventPayloads,
   AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import type { SetTaskStatePayload } from '@agent/runtime/taskStateProgressPayload';
 import {
   isRuntimeInteractionEvent,
   type RuntimeInteractionEvent,
   type RuntimeInteractionEventPayloads,
 } from '@agent/runtime/runtimeInteractionEvents';
-import {
-  isRuntimePresentationEvent,
-  type RuntimePresentationEventPayloads,
-} from '@agent/runtime/runtimePresentationEvents';
+import type { RuntimePresentationEventPayloads } from '@agent/runtime/runtimePresentationEvents';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 
@@ -31,22 +27,12 @@ import {
   createRunProgressRenderer,
 } from './runProgressRenderer';
 import type { CliContext } from './cliContext';
-import type {
-  CliProgressEvent,
-  CliProgressEventPayloads,
-  CliProgressSink,
-} from './cliProgressEvents';
 
-export type CliRuntimeEventPayloads = AgentRuntimeEventPayloads &
-  CliProgressEventPayloads;
-export type CliRuntimeEvent = AgentRuntimeEvent | CliProgressEvent;
-
-export type CliRuntimeHost = AgentRuntimeHost &
-  CliProgressSink & {
-    attachRunProgressRenderer(events: SessionEventHub): () => void;
-    prepareInteractivePrompt?: () => void;
-    close(): Promise<void>;
-  };
+export type CliRuntimeHost = AgentRuntimeHost & {
+  attachRunProgressRenderer(events: SessionEventHub): () => void;
+  prepareInteractivePrompt?: () => void;
+  close(): Promise<void>;
+};
 
 export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let sink: LogSink | undefined;
@@ -71,9 +57,9 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   return {
     attachRunProgressRenderer: attachProgressRenderer,
     prepareInteractivePrompt,
-    emit<K extends CliRuntimeEvent>(
+    emit<K extends AgentRuntimeEvent>(
       event: K,
-      payload: CliRuntimeEventPayloads[K],
+      payload: AgentRuntimeEventPayloads[K],
     ) {
       if (closed) return;
 
@@ -113,15 +99,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
 
       if (context.quietLogs) return;
 
-      if (event === 'setTaskState') {
-        const data = payload as SetTaskStatePayload;
-        ensureLogger().info('Task state registered', {
-          streamId: data.streamId,
-        });
-        return;
-      }
-
-      ensureLogger().debug(`Progress event: ${String(event)}`);
+      ensureLogger().debug(`Runtime event: ${String(event)}`);
     },
     async close() {
       closed = true;

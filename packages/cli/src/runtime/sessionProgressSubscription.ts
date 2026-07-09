@@ -5,19 +5,22 @@ import type {
   SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { StreamTabId } from '@shared/schemas';
+import { writeNdjsonStdout } from './logSinks';
 import type {
-  CliProgressEvent,
-  CliProgressEventPayloads,
-  CliProgressSink,
-} from './cliProgressEvents';
+  CliNdjsonProgressEvent,
+  CliNdjsonProgressEventPayloads,
+} from './cliNdjsonProgressEvents';
 
-type CliProjectedProgressEvent = {
-  [K in CliProgressEvent]: {
+type CliProjectedNdjsonProgressEvent = {
+  [K in CliNdjsonProgressEvent]: {
     readonly event: K;
-    readonly payload: CliProgressEventPayloads[K];
+    readonly payload: CliNdjsonProgressEventPayloads[K];
   };
-}[CliProgressEvent];
+}[CliNdjsonProgressEvent];
+
+export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 
 const CLI_RUN_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
   'conversation.progress',
@@ -36,12 +39,12 @@ const CLI_RUN_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
 ];
 
 /**
- * Project session facts onto the frozen host-progress vocabulary for headless
- * CLI public output. `followUpSent` is intentionally session-local.
+ * Project session facts onto the frozen NDJSON progress-event vocabulary.
+ * `followUpSent` is intentionally session-local.
  */
 function projectCliSessionFact(
   fact: SessionFact,
-): CliProjectedProgressEvent | undefined {
+): CliProjectedNdjsonProgressEvent | undefined {
   switch (fact.type) {
     case 'goalStateChanged':
       return { event: 'goalStateChanged', payload: fact.payload };
@@ -69,7 +72,7 @@ function projectCliSessionFact(
 function projectCliRunFact(
   streamId: StreamTabId,
   event: AgentEvent,
-): CliProjectedProgressEvent | undefined {
+): CliProjectedNdjsonProgressEvent | undefined {
   if (event.type === 'usage') {
     const payload = toUpdateStreamUsagePayload(event.data, streamId);
     return payload ? { event: 'updateStreamUsage', payload } : undefined;
@@ -213,26 +216,31 @@ function projectCliRunFact(
 }
 
 function emitProjectedProgressEvent(
-  runtimeHost: CliProgressSink,
-  projected: CliProjectedProgressEvent,
+  writeRecord: CliNdjsonProgressRecordWriter,
+  projected: CliProjectedNdjsonProgressEvent,
 ): void {
-  runtimeHost.emit(projected.event, projected.payload);
+  writeRecord({
+    kind: 'progress',
+    event: projected.event,
+    ts: new Date().toISOString(),
+    payload: projected.payload,
+  });
 }
 
 /**
- * Headless CLI compatibility adapter. Public CLI output still speaks the
- * frozen host progress-event vocabulary, so this boundary alone re-emits
- * session facts through `runtimeHost.emit`.
+ * Headless CLI compatibility adapter. Public NDJSON output still speaks the
+ * frozen progress-event vocabulary inside `kind: "progress"` records, so this
+ * boundary alone projects session/run facts into that public wire shape.
  */
 export function attachCliSessionProgressProjection(
   events: SessionEventHub,
-  runtimeHost: CliProgressSink,
+  writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
 ): () => void {
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'session') return;
       const projected = projectCliSessionFact(sessionEvent.event);
-      if (projected) emitProjectedProgressEvent(runtimeHost, projected);
+      if (projected) emitProjectedProgressEvent(writeRecord, projected);
     },
     { scope: 'session' },
   );
@@ -243,7 +251,7 @@ export function attachCliSessionProgressProjection(
         sessionEvent.streamId,
         sessionEvent.event,
       );
-      if (projected) emitProjectedProgressEvent(runtimeHost, projected);
+      if (projected) emitProjectedProgressEvent(writeRecord, projected);
     },
     { scope: 'run', types: CLI_RUN_PROGRESS_EVENT_TYPES },
   );
