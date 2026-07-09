@@ -33,9 +33,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
-import {
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
@@ -539,8 +537,7 @@ export function createDesktopSettingsIpc(
     'History item not found or unreadable (missing, corrupt, or from an incompatible version)';
 
   type HistoryConfigResult =
-    | { status: 'ok'; config: AgentConfig }
-    | { status: 'unreadable' };
+    { status: 'ok'; config: AgentConfig } | { status: 'unreadable' };
 
   async function readHistoryConfig(
     historyId: string,
