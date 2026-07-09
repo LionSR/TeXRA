@@ -5,7 +5,10 @@ import { promises as fs } from 'node:fs';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { type ExecutionId, type FileLocation } from '@shared/schemas';
-import { WORKFLOW_OUTPUT_BASENAME } from '@shared/constants/workflowOutput';
+import {
+  WORKFLOW_OUTPUT_BASENAME,
+  workflowOutputRoundDir,
+} from '@shared/constants/workflowOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
@@ -274,7 +277,7 @@ export class TaskRunFileService {
    *     revised content.
    */
   public async ensureMirroredInRoundDir(round: number): Promise<void> {
-    await this.ensureMirroredInRunSubdir(`r${round}`, {
+    await this.ensureMirroredInRunSubdir(workflowOutputRoundDir(round), {
       protectPrimaryOutput: true,
     });
   }
@@ -285,9 +288,10 @@ export class TaskRunFileService {
    * artifacts live.
    */
   public async ensureMirroredInDiffRoundDir(round: number): Promise<void> {
-    await this.ensureMirroredInRunSubdir(path.join('diff', `r${round}`), {
-      protectPrimaryOutput: false,
-    });
+    await this.ensureMirroredInRunSubdir(
+      path.join('diff', workflowOutputRoundDir(round)),
+      { protectPrimaryOutput: false },
+    );
   }
 
   private async ensureMirroredInRunSubdir(
