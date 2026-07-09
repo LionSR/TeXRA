@@ -21,6 +21,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { assertNever } from '@utils/core';
 
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
@@ -170,9 +171,17 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           );
         }
         return true;
-      default:
+      case 'goalStateChanged':
+      case 'inquiryThreadUpdated':
+      case 'clearMissingOutputs':
+      case 'updateQueuedFollowUps':
+      case 'followUpSent':
+      case 'setActiveStream':
+      case 'setParentStream':
+      case 'removeStream':
         return false;
     }
+    return assertNever(event, 'Unhandled run-progress renderer session fact');
   }
 
   private handleRunFact(streamId: StreamTabId, event: AgentEvent): boolean {
