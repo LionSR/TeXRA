@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - transcript
 import { streamDataDir, StreamSnapshotStore } from '@transcript';
+import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
 
 // Local imports - agent
 import {
@@ -1670,6 +1671,25 @@ describe('ProgressBackend', () => {
       expect(GoalStore.getForStream(stream)).toBeNull();
     } finally {
       await GoalStore.forget(stream);
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('clearStream refuses reserved stream ids before durable store cleanup', async () => {
+    const sentinel = path.join(STREAM_DATA_DIR, 'sentinel.json');
+    await StorageFS.ensureDir(STREAM_DATA_DIR);
+    await StorageFS.write(sentinel, '{}');
+
+    const { backend, session } = createIsolatedRecordingBackend();
+    try {
+      await backend.state.clearStream('' as StreamTabId);
+      await backend.state.clearStream('.' as StreamTabId);
+      await backend.state.clearStream('..' as StreamTabId);
+
+      expect(await StorageFS.exists(sentinel)).toBe(true);
+    } finally {
       await backend.state.clearAll();
       backend.dispose();
       session.dispose();
