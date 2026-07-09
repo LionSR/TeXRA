@@ -67,6 +67,18 @@ export function unique<T>(iterable: Iterable<T>): T[] {
   return [...new Set(iterable)];
 }
 
+/**
+ * Serialize a Map to a plain Record object. Keys are stringified.
+ * @example mapToRecord(new Map([['a', 1]])) // { a: 1 }
+ */
+export function mapToRecord<K extends string | number, V>(
+  map: Map<K, V>,
+): Record<string, V> {
+  return Object.fromEntries(
+    [...map].map(([key, value]) => [String(key), value]),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // pathBasics (browser-safe; Node-dependent path helpers live in pathCore.ts)
 // ---------------------------------------------------------------------------
