@@ -297,8 +297,5 @@ reviewed-train items unattended.
   (`platform.ts:55-73`), `RoundPersistedFlow.run` (`roundPersistedFlow.ts:144`),
   and delegation-depth-tracked-but-ungated (`delegationPolicy.ts`).
 - No source files changed this pass; no build/typecheck run required (documentation
-only, added under `docs/proposals/`, an internal directory excluded from the
-texra.ai publish allowlist — not a root-level doc).
-</content>
-
-</invoke>
+  only, added under `docs/proposals/`, an internal directory excluded from the
+  texra.ai publish allowlist — not a root-level doc).
