@@ -1035,9 +1035,15 @@ export class ModelHandlerOpenAI<
     return isNonEmptyString(reasoning) ? reasoning : null;
   }
 
-  protected extractReasoningFromResponse(responseObject: any): string | null {
+  protected extractReasoningFromResponse(
+    responseObject: ChatCompletion,
+  ): string | null {
+    // extractReasoningFromMessage takes a loose bag, not ChatCompletionMessage,
+    // because provider-specific overrides (e.g. MiniMax's reasoning_details)
+    // read fields the official SDK type doesn't declare.
     return this.extractReasoningFromMessage(
-      responseObject?.choices?.[0]?.message,
+      responseObject?.choices?.[0]?.message as unknown as
+        Record<string, unknown> | undefined,
     );
   }
 
@@ -1048,7 +1054,7 @@ export class ModelHandlerOpenAI<
    * @returns The extracted reasoning content or null if none found
    */
   processThinkingBlock(
-    responseObject: any,
+    responseObject: ChatCompletion,
     workspaceState?: AgentWorkspaceState,
   ): string | null {
     const reasoning = this.extractReasoningFromResponse(responseObject);
