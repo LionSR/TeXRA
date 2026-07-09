@@ -17,6 +17,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { CopyButtonController } from '@shared/litControllers';
 import { compactIconActionButtonStyles } from '@shared/styles';
 import { decodeXmlEntities } from '@shared/subagentFollowup';
+import { DELIVERY_TAGS } from '@shared/deliveryTags';
 import { designTokens } from '@shared/styles/litStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -26,30 +27,14 @@ import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { formatDisplayTimestamp } from '../formatters/timestampUtils';
 
-const STRUCTURED_DELIVERY_TAGS = [
-  'background-result',
-  'background-error',
-  'codex-result',
-  'codex-error',
-  'execution-activity',
-  'github-webhook-activity',
-  'subagent-progress',
-  'subagent-result',
-  'subagent-error',
-] as const;
+// Derived from the single owned DELIVERY_TAGS list (@shared/deliveryTags) so
+// a new child-run kind only needs one entry there — see that module for the
+// escaped-subset rationale.
+const STRUCTURED_DELIVERY_TAGS = DELIVERY_TAGS.map((entry) => entry.tag);
 
-// Subset whose content is XML-entity-escaped and needs decoding for display.
-// subagent-progress is included because the "todos" variant runs todo text
-// through escapeText(), producing &amp;/&lt; entities in the body.
-const XML_ESCAPED_TAGS = new Set([
-  'background-result',
-  'background-error',
-  'codex-result',
-  'codex-error',
-  'subagent-progress',
-  'subagent-result',
-  'subagent-error',
-]);
+const XML_ESCAPED_TAGS = new Set(
+  DELIVERY_TAGS.filter((entry) => entry.escaped).map((entry) => entry.tag),
+);
 
 const STRUCTURED_DELIVERY_PATTERN = new RegExp(
   `^\\s*<(${STRUCTURED_DELIVERY_TAGS.join('|')})(\\s|>)`,
