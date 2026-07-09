@@ -16,7 +16,6 @@ import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import type {
   CompileFailure,
@@ -192,45 +191,45 @@ describe('StreamSnapshotStore', () => {
       scope: 'run',
       streamId: STREAM,
       event: {
-        type: 'domain',
-        key: toRunFactDomainKey('updateTodos'),
-        data: { streamId: STREAM, todos: [TODO] },
+        type: 'updateTodos',
+        streamId: STREAM,
+        todos: [TODO],
       },
     });
     events.emit({
       scope: 'run',
       streamId: STREAM,
       event: {
-        type: 'domain',
-        key: toRunFactDomainKey('updatePlan'),
-        data: { streamId: STREAM, plan: PLAN },
+        type: 'updatePlan',
+        streamId: STREAM,
+        plan: PLAN,
       },
     });
     events.emit({
       scope: 'run',
       streamId: STREAM,
       event: {
-        type: 'domain',
-        key: toRunFactDomainKey('addOutputFiles'),
-        data: { streamId: STREAM, filesByRound: { 1: [output] } },
+        type: 'addOutputFiles',
+        streamId: STREAM,
+        filesByRound: { 1: [output] },
       },
     });
     events.emit({
       scope: 'run',
       streamId: STREAM,
       event: {
-        type: 'domain',
-        key: toRunFactDomainKey('updateMissingOutputs'),
-        data: { streamId: STREAM, filesByRound: { 1: ['paper.pdf'] } },
+        type: 'updateMissingOutputs',
+        streamId: STREAM,
+        filesByRound: { 1: ['paper.pdf'] },
       },
     });
     events.emit({
       scope: 'run',
       streamId: STREAM,
       event: {
-        type: 'domain',
-        key: toRunFactDomainKey('updateCompileFailures'),
-        data: { streamId: STREAM, filesByRound: { 1: [failure] } },
+        type: 'updateCompileFailures',
+        streamId: STREAM,
+        filesByRound: { 1: [failure] },
       },
     });
     events.emit({
@@ -250,9 +249,8 @@ describe('StreamSnapshotStore', () => {
       scope: 'run',
       streamId: OTHER_STREAM,
       event: {
-        type: 'domain',
-        key: toRunFactDomainKey('goalPaused'),
-        data: { streamId: OTHER_STREAM },
+        type: 'goalPaused',
+        streamId: OTHER_STREAM,
       },
     });
     events.emit({

@@ -71,10 +71,10 @@ describe('codex progress events', () => {
     publishCodexTodos(streamId, todos, trace);
     publishAgentCliStreamUsage(streamId, executionId, usage, trace);
 
-    expect(runEventsOfType(recorded.events, 'domain')).toMatchObject([
+    expect(runEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
       {
-        key: 'runFact.updateTodos',
-        data: { streamId, todos },
+        streamId,
+        todos,
       },
     ]);
     expect(runEventsOfType(recorded.events, 'usage')).toMatchObject([

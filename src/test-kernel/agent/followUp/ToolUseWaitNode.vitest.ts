@@ -404,10 +404,9 @@ describe('ToolUseWaitNode', () => {
       expect(exec.kind).toBe('stop');
       expect(waitForFollowUp).not.toHaveBeenCalled();
       expect(goal?.status).toBe('paused');
-      expect(runEventsOfType(recorded.events, 'domain')).toContainEqual(
+      expect(runEventsOfType(recorded.events, 'goalPaused')).toContainEqual(
         expect.objectContaining({
-          key: 'runFact.goalPaused',
-          data: { streamId },
+          streamId,
         }),
       );
       expect(runtimeHost.emit).toHaveBeenCalledWith(

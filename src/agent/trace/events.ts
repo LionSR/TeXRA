@@ -14,6 +14,8 @@ import type { AgentErrorKind } from '@common/errors';
 import type { StreamTransitionCause } from '@common/constants/streamStatus';
 import type {
   ActiveChildInfo,
+  AddOutputFilesPayload,
+  GoalPausedPayload,
   EndGroupStatus,
   ExecutionId,
   RetryErrorInfo,
@@ -21,6 +23,10 @@ import type {
   StreamPhase,
   StreamSubstate,
   StreamTabId,
+  UpdateCompileFailuresPayload,
+  UpdateMissingOutputsPayload,
+  UpdatePlanPayload,
+  UpdateTodosPayload,
 } from '@shared/schemas';
 import type { RunDescriptor } from '@shared/schemas/runDescriptor';
 
@@ -178,6 +184,33 @@ export interface ProcessOutputEvent extends StageStamp {
   readonly stderr: string;
 }
 
+/** Durable TeXRA run facts carried by the run trace with fact-native names. */
+export type RunFactEvent =
+  | (StageStamp &
+      UpdateTodosPayload & {
+        readonly type: 'updateTodos';
+      })
+  | (StageStamp &
+      UpdatePlanPayload & {
+        readonly type: 'updatePlan';
+      })
+  | (StageStamp &
+      AddOutputFilesPayload & {
+        readonly type: 'addOutputFiles';
+      })
+  | (StageStamp &
+      UpdateMissingOutputsPayload & {
+        readonly type: 'updateMissingOutputs';
+      })
+  | (StageStamp &
+      UpdateCompileFailuresPayload & {
+        readonly type: 'updateCompileFailures';
+      })
+  | (StageStamp &
+      GoalPausedPayload & {
+        readonly type: 'goalPaused';
+      });
+
 /** Context window utilisation snapshot. */
 export interface ContextStateEvent extends StageStamp {
   readonly type: 'context.state';
@@ -309,6 +342,7 @@ export type AgentEvent =
   | StatusEvent
   | ChildActivityEvent
   | ProcessOutputEvent
+  | RunFactEvent
   | ContextStateEvent
   | StreamStartEvent
   | StreamChunkEvent

@@ -14,7 +14,6 @@ import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUti
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import {
   activeStreamId,
   rootRunStartAvailable,
@@ -2636,7 +2635,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     status: 'running',
   };
 
-  it('applies direct runFact.updateTodos events without host emission', () => {
+  it('applies typed updateTodos run facts without host emission', () => {
     const hub = new SessionEventHub();
     const hostEmit = vi.fn();
     const wrapped = wrapRuntimeHost({
@@ -2658,9 +2657,9 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         scope: 'run',
         streamId: root,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('updateTodos'),
-          data: { streamId: root, todos },
+          type: 'updateTodos',
+          streamId: root,
+          todos,
         },
       });
 
@@ -2673,7 +2672,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     }
   });
 
-  it('applies direct runFact.updatePlan events without host emission', () => {
+  it('applies typed updatePlan run facts without host emission', () => {
     const hub = new SessionEventHub();
     const hostEmit = vi.fn();
     const wrapped = wrapRuntimeHost({
@@ -2691,9 +2690,9 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         scope: 'run',
         streamId: root,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('updatePlan'),
-          data: { streamId: root, plan },
+          type: 'updatePlan',
+          streamId: root,
+          plan,
         },
       });
 
@@ -2706,7 +2705,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     }
   });
 
-  it('applies direct runFact.goalPaused events without host emission', () => {
+  it('applies typed goalPaused run facts without host emission', () => {
     const hub = new SessionEventHub();
     const hostEmit = vi.fn();
     const wrapped = wrapRuntimeHost({
@@ -2721,9 +2720,8 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         scope: 'run',
         streamId: root,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('goalPaused'),
-          data: { streamId: root },
+          type: 'goalPaused',
+          streamId: root,
         },
       });
 
