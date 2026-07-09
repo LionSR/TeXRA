@@ -41,10 +41,10 @@ export async function refreshApiKeyCaches(
 ): Promise<void> {
   invalidateModelOptionsCache();
   invalidateApiKeyCache();
+  const commands = platform.commands;
+  if (!commands) return;
   await Promise.all([
-    platform.commands
-      .invoke('texra.refreshApiKeyStatus')
-      .catch(() => undefined),
-    platform.commands.invoke('texra.refreshAllOptions').catch(() => undefined),
+    commands.invoke('texra.refreshApiKeyStatus').catch(() => undefined),
+    commands.invoke('texra.refreshAllOptions').catch(() => undefined),
   ]);
 }
