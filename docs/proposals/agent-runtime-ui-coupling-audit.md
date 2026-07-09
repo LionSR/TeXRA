@@ -1,6 +1,12 @@
 # Agent-runtime ↔ UI coupling audit (2026-07-02)
 
-**Status:** Partially landed (2026-07-04 refresh). Finding #1's runtime bug is
+**Status:** Landed (2026-07-09 refresh: the 2026-07-08 runtime↔UI audit —
+`tech-debt-audit-runtime-ui-2026-07.md`, finding OC1 — verified at HEAD that
+the remaining trackers #6887/#6889/#6890 are resolved by the session-scoped
+migration: desktop restart-repair runs via the shared `restartRepair.ts`
+owner, the process bus is deleted, and `setToolEditApprovalHandler` is gone.
+Residual scope lives in #6951. Historical status below.) Previously:
+partially landed (2026-07-04 refresh). Finding #1's runtime bug is
 closed by #6908, finding #2 is closed by #6906, and finding #4 is closed by
 #6904. Finding #3's CLI/headless sidecar persistence and TUI bus-mirror scope is
 closed by #6905; remaining scope is the intentionally retained desktop-wide
@@ -18,7 +24,7 @@ There is no single mega-unifying redesign hiding underneath the symptoms. Two ca
 
 The closest thing to a root cause is a **discoverability/naming mismatch**: the directory CLAUDE.md documents as "host-neutral orchestration for the main, progress, and settings views" (`src/controllers/`) turns out to only handle _inbound_ UI→runtime requests. The actual _outbound_ runtime→UI event-consumption code lives in a differently-named sibling, `src/shared/progressView/backend/` — a deliberate relocation from issue #5451 (2026-06-07, "Unify the progress-view backend across extension + desktop"), which chose "shared core" as the destination rather than aligning with the later-established `controllers/` convention. That naming gap has already caused the project's own internal audits to miss it twice: once in a sharing roadmap (`tui-extension-sharing.md`) that silently omitted this directory when cataloging "the host-neutral layer," and once in the confirmed bug that is finding #1 below.
 
-**As of this writing, 4 of the original 5 candidate findings remain open** — the 5th (dead `ClipboardHost`/`TerminalHost` ports) was fixed by PR #6883 while this audit was in flight, and that same PR made partial progress on finding #4 (folded 4 _other_ module-level setters into `Platform`, per `dependency-injection-cleanup.md` Step 1) without touching the one setter this audit flags. This repo iterates fast on exactly this territory — re-verify line numbers against current `HEAD` before acting on anything below.
+**As of the original writing, 4 of the 5 candidate findings remained open** (all now closed — see Status) — the 5th (dead `ClipboardHost`/`TerminalHost` ports) was fixed by PR #6883 while this audit was in flight, and that same PR made partial progress on finding #4 (folded 4 _other_ module-level setters into `Platform`, per `dependency-injection-cleanup.md` Step 1) without touching the one setter this audit flags. This repo iterates fast on exactly this territory — re-verify line numbers against current `HEAD` before acting on anything below.
 
 ## Verified findings (issues filed)
 
