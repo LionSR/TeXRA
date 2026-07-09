@@ -54,7 +54,8 @@ export class ToolUseCycleNode<C> extends Node<
 
   async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
     const { setting, resolvedTools, modelHandler } = this.services;
-    const { streamId } = useLaunchRunContext();
+    const { runScope } = useLaunchRunContext();
+    const { streamId } = runScope;
 
     if (prepRes.shouldSkipCycle) {
       const { todos, plan } = prepRes.workspaceState.workPlan;
