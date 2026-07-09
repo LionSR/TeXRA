@@ -133,7 +133,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   public removeStreamFromHost(streamId: StreamTabId): void {
     void this.streamLifecycleController.deleteStream(streamId);
-    void GoalStore.forget(streamId);
   }
 
   /**
