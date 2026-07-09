@@ -12,3 +12,9 @@ export const SpendingStatusSchema = z.object({
   percentUsed: z.number().finite().nonnegative(),
 });
 export type SpendingStatus = z.infer<typeof SpendingStatusSchema>;
+
+/** The exhausted boundary: single source of truth for `TierService` and the
+ *  Settings quota meter, so the two can't drift on what "exhausted" means. */
+export function isSpendingQuotaExceeded(status: SpendingStatus): boolean {
+  return status.remaining <= 0;
+}
