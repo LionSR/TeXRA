@@ -31,7 +31,9 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
   readExternalInquiryThread: readExternalInquiryThreadMock,
 }));
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { createRecordingHost } from '@test/agent/progressTestUtils';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExternalInquiryThreadId, StreamTabId } from '@shared/schemas';
 import {
   injectContinuationForAnsweredThread,
@@ -110,6 +112,158 @@ describe('external inquiry continuation session routing', () => {
       undefined,
       session,
     );
+  });
+
+  it('emits inquiry thread updates through the explicit session hub', async () => {
+    const session = new SessionHandle();
+    const explicitFacts: unknown[] = [];
+    const defaultFacts: unknown[] = [];
+    const detachExplicitFacts = session.events.subscribe((event) => {
+      explicitFacts.push(event);
+    });
+    const detachDefaultFacts = defaultSession().events.subscribe((event) => {
+      defaultFacts.push(event);
+    });
+
+    try {
+      await injectContinuationForAnsweredThread(
+        THREAD,
+        answeredManifest(),
+        session,
+      );
+
+      expect(explicitFacts).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'inquiryThreadUpdated',
+            payload: {
+              threadId: THREAD,
+              parentStreamId: STREAM,
+              status: 'answered',
+              lastQuestionPreview: 'Check the boundary case.',
+              lastActivityIso: '2026-06-14T08:01:00.000Z',
+              turnCount: 1,
+              resumeOutcome: 'sent',
+            },
+          },
+        },
+      ]);
+      expect(defaultFacts).toEqual([]);
+    } finally {
+      detachExplicitFacts();
+      detachDefaultFacts();
+      session.dispose();
+    }
+  });
+
+  it("emits inquiry thread updates through the active run's session when no explicit session is provided", async () => {
+    const { host } = createRecordingHost();
+    const session = new SessionHandle();
+    const runFacts: unknown[] = [];
+    const defaultFacts: unknown[] = [];
+    const detachRunFacts = session.events.subscribe((event) => {
+      runFacts.push(event);
+    });
+    const detachDefaultFacts = defaultSession().events.subscribe((event) => {
+      defaultFacts.push(event);
+    });
+
+    try {
+      await withRunContext(
+        createRunContext({
+          runtimeHost: host,
+          session,
+        }),
+        () => injectContinuationForAnsweredThread(THREAD, answeredManifest()),
+      );
+
+      expect(runFacts).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'inquiryThreadUpdated',
+            payload: expect.objectContaining({
+              threadId: THREAD,
+              resumeOutcome: 'sent',
+            }),
+          },
+        },
+      ]);
+      expect(defaultFacts).toEqual([]);
+    } finally {
+      detachRunFacts();
+      detachDefaultFacts();
+      session.dispose();
+    }
+  });
+
+  it('falls back to the default session when the selected session has no event hub', async () => {
+    const { host } = createRecordingHost();
+    const runSession = new SessionHandle();
+    const runFacts: unknown[] = [];
+    const defaultFacts: unknown[] = [];
+    const detachRunFacts = runSession.events.subscribe((event) => {
+      runFacts.push(event);
+    });
+    const detachDefaultFacts = defaultSession().events.subscribe((event) => {
+      defaultFacts.push(event);
+    });
+
+    try {
+      await withRunContext(
+        createRunContext({
+          runtimeHost: host,
+          session: runSession,
+        }),
+        () =>
+          injectContinuationForAnsweredThread(
+            THREAD,
+            answeredManifest(),
+            {} as SessionHandle,
+          ),
+      );
+
+      expect(runFacts).toEqual([]);
+      expect(defaultFacts).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'inquiryThreadUpdated',
+            payload: expect.objectContaining({
+              threadId: THREAD,
+              resumeOutcome: 'sent',
+            }),
+          },
+        },
+      ]);
+    } finally {
+      detachRunFacts();
+      detachDefaultFacts();
+      runSession.dispose();
+    }
+  });
+
+  it('does not emit an inquiry thread update when no summary is returned', async () => {
+    const session = new SessionHandle();
+    const facts: unknown[] = [];
+    const detachFacts = session.events.subscribe((event) => {
+      facts.push(event);
+    });
+    getThreadSummaryMock.mockResolvedValueOnce(null);
+
+    try {
+      await injectContinuationForAnsweredThread(
+        THREAD,
+        answeredManifest(),
+        session,
+      );
+
+      expect(facts).toEqual([]);
+    } finally {
+      detachFacts();
+      session.dispose();
+    }
   });
 
   it('delegates queued wake decisions to the follow-up owner, threading the session', async () => {
