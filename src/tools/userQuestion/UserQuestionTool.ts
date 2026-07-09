@@ -1,7 +1,10 @@
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextStreamId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createChannelTrace } from '@logger';
 import {
@@ -10,10 +13,7 @@ import {
   type UserQuestionAnswers,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import {
-  getRunContextStreamId,
-  requireRuntimeHost,
-} from '@tools/contextHelpers';
+import { requireRuntimeHost } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
 const logger = createChannelTrace('UserQuestionTool');

@@ -19,7 +19,11 @@ import {
   getAgentFlowErrorResult,
   type AgentFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextExecutionId,
+  getRunContextRuntimeHost,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
@@ -38,10 +42,6 @@ import {
   enableYoloOnChildStream,
   inheritBashBypassOnChildStream,
 } from '@tools/approval';
-import {
-  getRunContextExecutionId,
-  getRunContextRuntimeHost,
-} from '@tools/contextHelpers';
 import {
   buildSubagentFailureResultMeta,
   formatSubagentError,
