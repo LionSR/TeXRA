@@ -90,15 +90,6 @@ type CommonRunContextFieldNames =
   | 'runtimeUnavailableTools'
   | 'stopAfterCycle';
 
-type BareRunContextFieldNames =
-  | CommonRunContextFieldNames
-  | 'runtimeHost'
-  | 'streamId'
-  | 'executionId'
-  | 'agentName'
-  | 'workingDirectory'
-  | 'session';
-
 /**
  * Fields shared by both `RunContext` kinds, forwarded as-is from the input
  * options.
@@ -111,22 +102,7 @@ function commonRunContextFields<T extends CreateRunContextCommon>(
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
-  } as Pick<T, CommonRunContextFieldNames>;
-}
-
-/** Fields used only by the manually constructed `bare` context shape. */
-function bareRunContextFields<T extends CreateBareRunContextOptions>(
-  options: T,
-): Pick<T, BareRunContextFieldNames> {
-  return {
-    ...commonRunContextFields(options),
-    runtimeHost: options.runtimeHost,
-    streamId: options.streamId,
-    executionId: options.executionId,
-    agentName: options.agentName,
-    workingDirectory: options.workingDirectory,
-    session: options.session,
-  } as Pick<T, BareRunContextFieldNames>;
+  } satisfies Pick<T, CommonRunContextFieldNames>;
 }
 
 /**
@@ -157,11 +133,17 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
   const { model } = options;
   return Object.freeze({
     kind: 'bare',
-    ...bareRunContextFields(options),
+    ...commonRunContextFields(options),
+    runtimeHost: options.runtimeHost,
+    streamId: options.streamId,
+    executionId: options.executionId,
+    agentName: options.agentName,
+    workingDirectory: options.workingDirectory,
+    session: options.session,
     get model() {
       return model;
     },
-  });
+  } satisfies BareRunContext);
 }
 
 // ---------------------------------------------------------------------------
