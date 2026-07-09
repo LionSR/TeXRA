@@ -433,7 +433,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - Use `isFileNotFoundError()` from `@common/errors` instead of `instanceof vscode.FileSystemError`
 - Return error results instead of calling `vscode.window.show*Message()` from business logic — let the caller (command layer) handle UI
 - Add typed `Platform` ports (like `toolAvailability.isVscodeExtensionInstalled`) for platform-specific capabilities needed in agnostic code
-- New run-scoped facts extend `AgentEvent` (trace) or `ProgressEventPayloads` emitted via the run's `runtimeHost` — never a new `bus.emit` from a VS Code-free zone, and never a new subscribe surface. (Ruled in `docs/proposals/error-pipeline-and-ownership.md`. The direct `bus.emit` sites in `src/tools` that this rule once grandfathered have since been migrated to `emitRuntimeEvent()` — see `src/agent/runtime/emitRuntimeEvent.ts` — so the exception no longer applies; a new direct `bus.emit` from a VS Code-free zone is a rule violation, not a grandfathered pattern.)
+- New run-scoped facts extend `AgentEvent` (trace), and session-scoped facts extend `SessionFact` — never a new `bus.emit` from a VS Code-free zone, and never a new subscribe surface. (Ruled in `docs/proposals/error-pipeline-and-ownership.md`. The direct `bus.emit` sites in `src/tools` that this rule once grandfathered have since been migrated to `emitRuntimeEvent()` — see `src/agent/runtime/emitRuntimeEvent.ts` — so the exception no longer applies; a new direct `bus.emit` from a VS Code-free zone is a rule violation, not a grandfathered pattern.)
 
 ### Path Aliases
 
