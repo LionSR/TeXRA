@@ -8,6 +8,13 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - tools and utils
+import type {
+  CreateResponseOptions,
+  CreateResponseResult,
+  ExtractResponseResult,
+  SdkToolCall,
+} from '@agent/types/IModelHandler';
+import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
@@ -20,13 +27,6 @@ import { ModelHandler } from './ModelHandler';
 import type { ModelConfig } from 'llm-zoo';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { CompletionUsage } from 'openai/resources/completions';
-import type {
-  CreateResponseOptions,
-  CreateResponseResult,
-  ExtractResponseResult,
-  SdkToolCall,
-} from './types/IModelHandler';
-import type { ProviderStopReason } from './types/StopReasonTypes';
 
 interface ValidationResponse {
   text: string;

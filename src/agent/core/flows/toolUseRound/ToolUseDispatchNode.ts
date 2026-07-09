@@ -5,11 +5,11 @@ import {
   endToolUseCard,
   startToolUseCard,
 } from '@agent/trace';
-import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
+import type { SdkToolCall } from '@agent/types/IModelHandler';
 import {
   extractToolAttachments,
   type ExtractedToolAttachments,
-} from '@agent/modelHandlers/utils/toolAttachmentUtils';
+} from '@agent/core/tools/toolAttachmentExtraction';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type {
   FileInteractionState,

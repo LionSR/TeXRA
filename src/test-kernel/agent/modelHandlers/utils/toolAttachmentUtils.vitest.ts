@@ -5,9 +5,9 @@ import { describe, it } from 'vitest';
 // Local imports - utils
 import {
   checkToolResultTextLimit,
-  extractToolAttachments,
   formatToolResultAsText,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import {
   MAX_TOOL_RESULT_TEXT_LENGTH,
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
