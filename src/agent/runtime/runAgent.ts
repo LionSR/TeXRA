@@ -19,7 +19,6 @@ export interface RunAgentOptions extends Pick<
   | 'stopAfterCycle'
   | 'approvalPromptsUnavailable'
   | 'runtimeUnavailableTools'
-  | 'toolEditApprovalHandler'
   | 'session'
   | 'modelHandlerCompatibilityKey'
   | 'onRun'
@@ -80,7 +79,6 @@ export async function runAgent(
     stopAfterCycle: options.stopAfterCycle,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
-    toolEditApprovalHandler: options.toolEditApprovalHandler,
     session: options.session,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
     onRun: options.onRun,

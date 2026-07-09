@@ -35,7 +35,6 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import type { ToolEditApprovalPort } from '@platform/interfaces';
 
 import {
   buildSubagentFailureResultMeta,
@@ -55,7 +54,6 @@ export interface NativeToolUseStrategyParams {
   readonly workingDirectory?: string;
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
-  readonly toolEditApprovalHandler?: ToolEditApprovalPort;
   /** Fires with the resolved child stream id — the caller inherits approvals onto it. */
   readonly onStreamResolved: (streamId: StreamTabId) => void;
 }
@@ -145,7 +143,6 @@ export function createNativeToolUseStrategy(
           delegationDepth: params.delegationDepth,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
-          toolEditApprovalHandler: params.toolEditApprovalHandler,
           allowWaitingResult: true,
           onStreamResolved: params.onStreamResolved,
           onProgress: (update) => ports.notify(update),
@@ -193,7 +190,6 @@ export function createNativeToolUseStrategy(
             session: params.parentSession,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             runtimeUnavailableTools: params.runtimeUnavailableTools,
-            toolEditApprovalHandler: params.toolEditApprovalHandler,
             parentStreamId: params.orchestratorStreamId,
             allowWaitingResult: true,
             // The loop's queue never admits synthetic (goal-continuation)
