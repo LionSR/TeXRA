@@ -34,6 +34,7 @@ const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
 const validationFlagContent = 'texra-cli-run-validation\n';
 const validationBundleMarker = validationFlagContent.trim();
+const VALIDATION_FAKE_API_KEY = 'texra-validation-fake-key';
 const ESC = String.fromCharCode(27);
 const validationProviderApiKeyEnv = [
   'OPENAI_API_KEY',
@@ -47,6 +48,9 @@ const validationProviderApiKeyEnv = [
   'MINIMAX_API_KEY',
   'GLM_API_KEY',
 ];
+const validationModelProviderEnv = Object.fromEntries(
+  validationProviderApiKeyEnv.map((name) => [name, VALIDATION_FAKE_API_KEY]),
+);
 
 function isolatedCliHomeEnv(home, overrides = {}) {
   return {
@@ -73,6 +77,7 @@ function run(command, args, options = {}) {
     if (!options.validationFlagPath) {
       throw new Error('validationModel requires validationFlagPath');
     }
+    Object.assign(env, validationModelProviderEnv);
     env[validationEnv] = '1';
     env[validationFlagEnv] = options.validationFlagPath;
   }
@@ -732,7 +737,7 @@ async function validateOrchestrateOnboardingPickers() {
   await validateOrchestrateOnboardingPicker({
     label: 'texra orchestrate included-mode onboarding',
     args: ['orchestrate', '--api-mode', 'included'],
-    env: { ANTHROPIC_API_KEY: 'texra-validation-fake-key' },
+    env: { ANTHROPIC_API_KEY: VALIDATION_FAKE_API_KEY },
     expected: [
       'Subscription or included access needs sign-in for this run:',
       'Use ChatGPT subscription',
