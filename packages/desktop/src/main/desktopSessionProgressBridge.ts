@@ -1,5 +1,5 @@
 /**
- * Desktop progress-event bridge.
+ * Desktop session-progress bridge.
  *
  * Extracted from DesktopProgressBridge to own the ghost-stream hydration,
  * stream-snapshot persistence, restored-display sending, and desktop-local
@@ -33,7 +33,7 @@ import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-export interface DesktopProgressEventBridgeOptions {
+export interface DesktopSessionProgressBridgeOptions {
   /** The owning bridge's progress-view state. */
   state: ProgressViewState;
   /** Session-owned stream status plane for this desktop window. */
@@ -66,12 +66,11 @@ export interface DesktopPresentationPayloads {
   requestShowError: RequestShowErrorPayload;
 }
 
-export type DesktopPresentationProgressEvent =
-  keyof DesktopPresentationPayloads;
+export type DesktopPresentationEvent = keyof DesktopPresentationPayloads;
 
 // ── Public interface ────────────────────────────────────────────────────────
 
-export interface DesktopProgressEventBridge {
+export interface DesktopSessionProgressBridge {
   /** All currently-hydrated ghost streams (keyed by streamId). */
   readonly restoredStreams: ReadonlyMap<StreamTabId, RestoredStreamSnapshot>;
 
@@ -93,16 +92,16 @@ export interface DesktopProgressEventBridge {
   /**
    * Handle a desktop presentation event emitted through the runtime host.
    *
-   * Session and run facts reach this bridge through `onSessionEvent`; this path
+   * Session and run facts reach this bridge through `handleSessionEvent`; this path
    * is only for window-local host requests that have no durable session fact.
    */
-  onProgressEvent<K extends DesktopPresentationProgressEvent>(
+  handlePresentationEvent<K extends DesktopPresentationEvent>(
     event: K,
     payload: DesktopPresentationPayloads[K],
   ): void;
 
   /** Handle session/run facts emitted by this window's SessionEventHub. */
-  onSessionEvent(event: SessionEvent): void;
+  handleSessionEvent(event: SessionEvent): void;
 
   /**
    * Restore a ghost stream's persisted sidecar display (todos, plan, usage,
@@ -128,7 +127,7 @@ export interface DesktopProgressEventBridge {
 
 // ── Implementation ──────────────────────────────────────────────────────────
 
-class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
+class DesktopSessionProgressBridgeImpl implements DesktopSessionProgressBridge {
   readonly restoredStreams = new Map<StreamTabId, RestoredStreamSnapshot>();
 
   /** Ghost streams whose persisted display has already been restored this session. */
@@ -146,7 +145,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
   /** True once `dispose()` has torn down this bridge. */
   private disposed = false;
 
-  constructor(private readonly opts: DesktopProgressEventBridgeOptions) {
+  constructor(private readonly opts: DesktopSessionProgressBridgeOptions) {
     // Hydrate previously-persisted "ghost" streams so the rail shows
     // the user's prior runs at launch (audit item D / trajectory #19).
     // We seed creation timestamps, statuses, descriptions, executionIds,
@@ -159,7 +158,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
 
     // Desktop presentation requests are window-owned: root/runtime-host events
     // reach this bridge through `DesktopProgressBridge.handleInteractionEvent` and
-    // then `onProgressEvent` — never through any process-global channel,
+    // then `handlePresentationEvent` — never through any process-global channel,
     // which would make root UI actions cross window boundaries and outlive
     // the owning renderer.
   }
@@ -211,9 +210,9 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     }
   }
 
-  // ── Progress events ──────────────────────────────────────────────────────
+  // ── Presentation events ──────────────────────────────────────────────────
 
-  onProgressEvent<K extends DesktopPresentationProgressEvent>(
+  handlePresentationEvent<K extends DesktopPresentationEvent>(
     event: K,
     payload: DesktopPresentationPayloads[K],
   ): void {
@@ -237,7 +236,7 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
     }
   }
 
-  onSessionEvent(event: SessionEvent): void {
+  handleSessionEvent(event: SessionEvent): void {
     if (this.disposed) return;
     if (event.scope === 'session') {
       this.handleSessionFact(event.event);
@@ -516,12 +515,12 @@ class DesktopProgressEventBridgeImpl implements DesktopProgressEventBridge {
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 /**
- * Create a desktop progress-event bridge that owns ghost-stream hydration,
- * stream-snapshot persistence, restored-display sending, and progress-event →
- * rail-update translation.
+ * Create a desktop session-progress bridge that owns ghost-stream hydration,
+ * stream-snapshot persistence, restored-display sending, session/run fact
+ * handling, and window-local presentation requests.
  */
-export function createDesktopProgressEventBridge(
-  options: DesktopProgressEventBridgeOptions,
-): DesktopProgressEventBridge {
-  return new DesktopProgressEventBridgeImpl(options);
+export function createDesktopSessionProgressBridge(
+  options: DesktopSessionProgressBridgeOptions,
+): DesktopSessionProgressBridge {
+  return new DesktopSessionProgressBridgeImpl(options);
 }
