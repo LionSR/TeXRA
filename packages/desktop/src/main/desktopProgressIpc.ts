@@ -42,6 +42,15 @@ const passThroughCommands = new Set<string>([
   PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET,
 ]);
 
+function isProgressWebviewReadyMessage(
+  message: DesktopCommandMessage,
+): boolean {
+  return (
+    message.command === PROGRESS_VIEW_COMMANDS.WEBVIEW_READY &&
+    message.view === 'progress'
+  );
+}
+
 export function createDesktopProgressIpc(
   options: DesktopProgressIpcOptions,
 ): DesktopProgressIpc {
@@ -85,6 +94,7 @@ export function createDesktopProgressIpc(
       // WEBVIEW_READY and pass-through commands return false so sibling
       // handlers in the chain still receive them.
       if (command === PROGRESS_VIEW_COMMANDS.WEBVIEW_READY) {
+        if (!isProgressWebviewReadyMessage(message)) return false;
         const progress = getProgress();
         if (progress) {
           progress.syncFullView();
