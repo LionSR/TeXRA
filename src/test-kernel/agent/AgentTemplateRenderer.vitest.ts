@@ -9,6 +9,10 @@ import {
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
   renderAgentTemplateString,
 } from '@agent/templates/agentTemplateRenderer';
+import {
+  buildUserVarPassthrough,
+  USER_VAR_RUNTIME_TOKENS,
+} from '@agent/utils/userVars';
 
 describe('renderAgentTemplateString', () => {
   it('preserves agent runtime variables for the generated agent', () => {
@@ -59,5 +63,17 @@ describe('renderAgentTemplateString', () => {
     });
 
     assert.match(rendered, /\{\{ ALL_CONTEXTS \}\}/);
+  });
+
+  it('derives passthrough variables from the shared user-vars owner', () => {
+    assert.ok(USER_VAR_RUNTIME_TOKENS.includes('ALL_CONTEXTS'));
+    assert.ok(USER_VAR_RUNTIME_TOKENS.includes('LIST_OF_ALL_CONTEXTS'));
+
+    const passthrough = buildUserVarPassthrough();
+    assert.equal(passthrough.ALL_CONTEXTS, '{{ ALL_CONTEXTS }}');
+    assert.equal(
+      passthrough.LIST_OF_ALL_CONTEXTS,
+      '{{ LIST_OF_ALL_CONTEXTS }}',
+    );
   });
 });
