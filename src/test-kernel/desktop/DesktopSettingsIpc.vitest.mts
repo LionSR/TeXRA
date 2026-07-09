@@ -1853,7 +1853,10 @@ describe('desktop settings IPC', () => {
     });
     await flushAsyncWork();
 
-    expect(shownErrors).toEqual(['History item not found or unreadable (missing, corrupt, or from an incompatible version)', 'History item not found or unreadable (missing, corrupt, or from an incompatible version)']);
+    expect(shownErrors).toEqual([
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+    ]);
   });
 
   it('errors instead of a false success when rerun has no runExecution dependency wired (Copilot #7827)', async () => {
@@ -1947,7 +1950,10 @@ describe('desktop settings IPC', () => {
     // so it surfaces as the unified "unreadable" error, not a raw parse
     // exception).
     expect(infos).toEqual([]);
-    expect(errors).toEqual(['History item not found or unreadable (missing, corrupt, or from an incompatible version)', 'History item not found or unreadable (missing, corrupt, or from an incompatible version)']);
+    expect(errors).toEqual([
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
+    ]);
   });
 
   it('exports a history chat to Markdown via the shared ChatExportController', async () => {
