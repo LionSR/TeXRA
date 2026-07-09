@@ -13,7 +13,6 @@ const REPO_ROOT = resolve(
 
 const ALLOWED_PRODUCTION_REFERENCES = [
   'src/agent/runtime/emitRuntimeEvent.ts',
-  'src/agent/runtime/executeAgent.ts',
   'src/tools/approval/toolEditApproval.ts',
   'src/tools/inquiry/inquiryContinuation.ts',
 ] as const;

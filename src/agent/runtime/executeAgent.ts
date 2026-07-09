@@ -7,7 +7,6 @@ import {
   runToolUseFlow,
   type RunToolUseFlowResult,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import {
   runReflectionFlow,
@@ -115,7 +114,13 @@ function wrapOnFollowUpConsumed(
   onFollowUpConsumed?: () => void,
 ): () => void {
   return () => {
-    emitRuntimeEvent('updateQueuedFollowUps', { streamId: ctx.streamId });
+    ctx.session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'updateQueuedFollowUps',
+        payload: { streamId: ctx.streamId },
+      },
+    });
     onFollowUpConsumed?.();
   };
 }
