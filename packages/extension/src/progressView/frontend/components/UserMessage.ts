@@ -45,8 +45,7 @@ function getStructuredDeliveryTag(text: string): DeliveryTagName | null {
   // (DeliveryTagName[]), so a match can only capture one of those values.
   return (
     (STRUCTURED_DELIVERY_PATTERN.exec(text)?.[1] as
-      | DeliveryTagName
-      | undefined) ?? null
+      DeliveryTagName | undefined) ?? null
   );
 }
 
