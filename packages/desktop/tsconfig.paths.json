@@ -2,6 +2,7 @@
   "compilerOptions": {
     "baseUrl": "../..",
     "paths": {
+      "vscode-jsonrpc/node": ["node_modules/vscode-jsonrpc/lib/node/main"],
       "@/*": ["packages/extension/src/*", "src/*"],
       "@shared/*": ["src/shared/*"],
       "@common/state": ["packages/extension/src/common/state"],
@@ -38,7 +39,6 @@
       "@auth/*": ["src/auth/*"],
       "@platform/*": ["src/platform/*"],
       "turndown-plugin-gfm": ["src/types/ambient.d.ts"],
-      "vscode-jsonrpc/node": ["node_modules/vscode-jsonrpc/lib/node/main"],
       "@openrouter/sdk": ["node_modules/@openrouter/sdk/esm/index.d.ts"],
       "@openrouter/sdk/models": [
         "node_modules/@openrouter/sdk/esm/models/index.d.ts"
