@@ -253,7 +253,9 @@ describe('summarizeSubagentFollowup', () => {
       '<wall-time>3sec</wall-time>',
       '</background-result>',
     ].join('\n');
-    expect(summarizeSubagentFollowup(xml)).toBe('✓ background completed · 3sec');
+    expect(summarizeSubagentFollowup(xml)).toBe(
+      '✓ background completed · 3sec',
+    );
   });
 
   it('summarizes a codex-result block without an agent attribute', () => {
