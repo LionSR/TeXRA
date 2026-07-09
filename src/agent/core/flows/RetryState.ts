@@ -254,7 +254,8 @@ export abstract class RetryableInvocationNode<
     error: Error,
   ): Promise<ManualRetryPromptResult> {
     const { logger, streamStatus } = this.services;
-    const { session, streamId } = useLaunchRunContext();
+    const { runScope } = useLaunchRunContext();
+    const { session, streamId } = runScope;
     const operationName = this.getOperationName();
     const formatted = normalizeProviderError(error);
 
