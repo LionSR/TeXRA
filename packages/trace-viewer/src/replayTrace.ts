@@ -196,7 +196,7 @@ export function replayTrace(
     queuedFollowUps: [],
     // Workflow-only display fields (empty records/arrays for tool-use
     // traces) — the same rename the desktop ghost-stream restore path uses
-    // (packages/desktop/src/main/desktopProgressEventBridge.ts).
+    // (packages/desktop/src/main/desktopSessionProgressBridge.ts).
     workflowFiles: snapshot.outputFilesByRound,
     workflowMissingOutputs: snapshot.missingOutputsByRound,
     workflowCompileFailures: snapshot.compileFailuresByRound,
