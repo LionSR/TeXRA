@@ -13,6 +13,7 @@ import {
   type Goal,
   type GoalStatus,
 } from '@shared/schemas/goal';
+import { getRunContextSession } from '@tools/contextHelpers';
 import { filterNotNull, unique, hexId12 } from '@utils/core';
 
 const STREAM_KEY_PREFIX = 'goals:byStream:';
@@ -46,7 +47,7 @@ function emitGoalStateChanged(
 ): void {
   // Preserve the old fallback rule while deleting the bus dependency:
   // older direct-node tests may carry a partial run session.
-  const owner = session ?? tryUseRunContext()?.session;
+  const owner = session ?? getRunContextSession(tryUseRunContext());
   const target = owner?.events ? owner : defaultSession();
   target.events.emit({
     scope: 'session',

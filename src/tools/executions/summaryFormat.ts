@@ -22,6 +22,7 @@ import {
   getAvailablePaths,
   getExecutionStatusInfo,
 } from '../executionFormatters';
+import { getRunContextStreamId } from '../contextHelpers';
 
 /** Options controlling how showSummary renders a result report. */
 export interface ExecutionSummaryOptions {
@@ -52,7 +53,10 @@ export function shouldSuppressAutoDeliveredSubagentReport(
   handle: unknown,
 ): boolean {
   if (!options.suppressAutoDeliveredSubagentReport) return false;
-  return isCallerParentOfToolUseSubagent(handle, tryUseRunContext()?.streamId);
+  return isCallerParentOfToolUseSubagent(
+    handle,
+    getRunContextStreamId(tryUseRunContext()),
+  );
 }
 
 /** Build the header line for the paginated /executions listing. */

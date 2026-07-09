@@ -30,7 +30,11 @@ import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/constants/toolDefaults';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
-import { requireRunStream } from '@tools/contextHelpers';
+import {
+  getRunContextExecutionId,
+  getRunContextWorkingDirectory,
+  requireRunStream,
+} from '@tools/contextHelpers';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -142,7 +146,7 @@ export class BashTool extends defineTool({
     const callContext = contexts?.callContext;
     const runContext = contexts?.runContext;
     const cwd =
-      parseWorkingDirectory(runContext?.workingDirectory) ??
+      parseWorkingDirectory(getRunContextWorkingDirectory(runContext)) ??
       tryPlatform()?.workspace.getWorkspacePath();
 
     // Request approval before executing the command.
@@ -170,7 +174,7 @@ export class BashTool extends defineTool({
         input.command,
         timeoutMs,
         streamId,
-        runContext?.executionId,
+        getRunContextExecutionId(runContext),
         runtimeHost,
         cwd,
       );

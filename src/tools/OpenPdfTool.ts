@@ -7,6 +7,7 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 // Type imports
 import type { FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { getRunContextExecutionId } from '@tools/contextHelpers';
 
 // Local imports - tools
 import {
@@ -93,7 +94,7 @@ function resolvePdfLocation(rawPath: string): FileLocation {
     throw new ToolError('path is required.');
   }
 
-  const executionId = tryUseRunContext()?.executionId;
+  const executionId = getRunContextExecutionId(tryUseRunContext());
   const runStorageLocation = executionId
     ? runStorageLocationFromAbsolutePath(trimmed, executionId)
     : undefined;
