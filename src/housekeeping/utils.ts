@@ -11,6 +11,7 @@ import {
   midEraWorkflowOutputStem,
   normalizeLegacyModel,
 } from '@agent/output/workflowOutputLayout';
+import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
@@ -61,7 +62,9 @@ function getFilePatterns(
       `r${round}/${midEraStem}_thinking`,
     );
     if (round > 0) {
-      patterns.push(`r${round}/${midEraStem}_diffr${round}r${round - 1}`);
+      patterns.push(
+        `r${round}/${midEraStem}${buildBetweenRoundDiffSuffix(round, round - 1)}`,
+      );
     }
   }
 
@@ -79,7 +82,7 @@ function getFilePatterns(
       `${legacyStem}_thinking`,
     );
     if (round > 0) {
-      const diffSuffix = `_diffr${round}r${round - 1}`;
+      const diffSuffix = buildBetweenRoundDiffSuffix(round, round - 1);
       patterns.push(
         `${legacyStem}${diffSuffix}`,
         `${legacyPrefix}_full_${legacyModel}${diffSuffix}`,
