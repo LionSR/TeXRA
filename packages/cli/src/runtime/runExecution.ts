@@ -166,6 +166,9 @@ export async function executeCliRequest(
   const detachSnapshotEvents = snapshotStore.attachSessionEvents(
     defaultSession().events,
   );
+  const detachRunProgressRenderer = runtimeHost.attachRunProgressRenderer(
+    defaultSession().events,
+  );
   const detachHostInteractions = defaultSession().useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
@@ -245,6 +248,7 @@ export async function executeCliRequest(
       await writeTerminalStatus(ownedExecutionId, EXECUTION_STATUS.INTERRUPTED);
     }
     detachResultToast();
+    detachRunProgressRenderer();
     detachSessionProgressProjection();
     detachHostInteractions();
     uninstallApprovalHandlers();
