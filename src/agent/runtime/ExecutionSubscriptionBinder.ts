@@ -20,13 +20,14 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { createChannelTrace } from '@logger';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { StreamTabId } from '@shared/schemas';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
 import { currentSession, type SessionHandle } from './SessionHandle';
 
 const logger = createChannelTrace('ExecutionSubscriptionBinder');
 
-const TAG = 'execution-activity';
+const TAG = DELIVERY_TAG.executionActivity;
 
 interface Disposable {
   dispose: () => void;
