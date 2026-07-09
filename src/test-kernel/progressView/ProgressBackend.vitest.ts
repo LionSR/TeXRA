@@ -49,6 +49,7 @@ import {
   type TodoItem,
   type UpdateStreamDescriptionPayload,
 } from '@shared/schemas';
+import { GoalStore } from '@tools/goal';
 import { StorageFS } from '@utils/files';
 import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
@@ -1566,6 +1567,7 @@ describe('ProgressBackend', () => {
       );
       await writeExecutionConfig(executionId);
       await backend.state.flush();
+      await GoalStore.start(stream, 'finish the cleanup');
 
       expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
       expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
@@ -1574,7 +1576,29 @@ describe('ProgressBackend', () => {
 
       expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
       expect(await StorageFS.exists(streamDataDir(stream))).toBe(false);
+      expect(GoalStore.getForStream(stream)).toBeNull();
     } finally {
+      await GoalStore.forget(stream);
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('forgets goal entries when clearing all streams', async () => {
+    const stream = 'tool@deepseek#b6966b' as StreamTabId;
+    const { backend, session } = createIsolatedRecordingBackend();
+
+    try {
+      await backend.state.streamLogs.load();
+      backend.state.streamLogs.ensureStream(stream);
+      await GoalStore.start(stream, 'clear this goal');
+
+      await backend.state.clearAll();
+
+      expect(GoalStore.getForStream(stream)).toBeNull();
+    } finally {
+      await GoalStore.forget(stream);
       await backend.state.clearAll();
       backend.dispose();
       session.dispose();
@@ -1595,6 +1619,7 @@ describe('ProgressBackend', () => {
     await writeExecutionConfig(orphanExecution);
     await writeExecutionConfig(historyExecution);
     await seed.flush();
+    await GoalStore.start(orphanStream, 'sweep this orphan');
 
     const { backend, session } = createIsolatedRecordingBackend();
     try {
@@ -1615,7 +1640,9 @@ describe('ProgressBackend', () => {
       expect(await StorageFS.exists(`executions/${historyExecution}`)).toBe(
         true,
       );
+      expect(GoalStore.getForStream(orphanStream)).toBeNull();
     } finally {
+      await GoalStore.forget(orphanStream);
       await getExecutionStore(historyExecution).clear();
       await backend.state.clearAll();
       backend.dispose();
