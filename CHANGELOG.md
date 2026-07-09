@@ -62,6 +62,12 @@ All notable changes to this project will be documented in this file.
 
 ### Desktop
 
+#### Bug Fixes
+
+- **HTML chat export works in packaged desktop builds** — desktop packaging now
+  includes the standalone trace-viewer template used to create self-contained
+  HTML exports.
+
 #### Improvements
 
 - **Runtime skills are available in desktop agent runs** — desktop now loads

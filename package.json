@@ -19,7 +19,7 @@
     "validate:tui": "corepack pnpm --filter @texra-ai/cli validate:tui",
     "workspace:typecheck": "corepack pnpm --recursive --if-present typecheck",
     "workspace:build": "corepack pnpm --recursive --if-present build",
-    "desktop:build": "corepack pnpm --filter @texra/desktop build",
+    "desktop:build": "corepack pnpm --filter @texra/trace-viewer run build && corepack pnpm --filter @texra/desktop build",
     "desktop:package:local": "node scripts/run-desktop-package-local.mjs",
     "desktop:package:dist": "corepack pnpm run desktop:build && corepack pnpm --filter @texra/desktop package:dist",
     "desktop:package:smoke": "node scripts/smoke-desktop-package-launch.mjs",
