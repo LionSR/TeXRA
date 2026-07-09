@@ -17,6 +17,7 @@ import { ProgressBackend } from '@controllers/progressView/backend/ProgressBacke
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
+  replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
 import {
@@ -1042,6 +1043,10 @@ export class DesktopProgressBridge {
 
   syncFullView(): void {
     this.syncStreamContent(this.updateStreamMetadata());
+  }
+
+  replayPendingPrompts(): void {
+    replayApprovalRequestHandlers(this.approvalHandlers);
   }
 
   setActiveStream(streamId: StreamTabId): void {
