@@ -10,6 +10,10 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { debug } from '@logger/logUtils';
 import { formatRelativeTime } from '@shared/utils/string';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import {
+  getRunContextAgentName,
+  getRunContextExecutionId,
+} from '@tools/contextHelpers';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
@@ -194,7 +198,11 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     existingMeta?: MemoryFileMeta | null,
   ): Promise<void> {
     const ctx = tryUseRunContext();
-    const meta = createMeta(ctx?.agentName, ctx?.executionId, existingMeta);
+    const meta = createMeta(
+      getRunContextAgentName(ctx),
+      getRunContextExecutionId(ctx),
+      existingMeta,
+    );
     await StorageFS.write(resolvedPath, buildFile(content, meta));
   }
 

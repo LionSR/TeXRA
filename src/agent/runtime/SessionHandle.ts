@@ -38,7 +38,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
-import { tryUseRunContext } from './RunContext';
+import { getRunContextSession, tryUseRunContext } from './RunContext';
 import {
   ExecutionRegistry,
   SharedExecutionRegistry,
@@ -330,5 +330,5 @@ export function defaultSession(): SessionHandle {
  * inject an isolated session per run.
  */
 export function currentSession(): SessionHandle {
-  return tryUseRunContext()?.session ?? defaultSession();
+  return getRunContextSession(tryUseRunContext()) ?? defaultSession();
 }
