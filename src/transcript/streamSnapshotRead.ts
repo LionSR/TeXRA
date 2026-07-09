@@ -11,7 +11,6 @@
 
 import { z } from 'zod';
 
-import { mapToRecord } from '@controllers/progressView/backend/persistence/serializationUtils';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import {
@@ -37,7 +36,7 @@ import {
   type TokenUsageStats,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
-import { isObject } from '@utils/core';
+import { isObject, mapToRecord } from '@utils/core';
 
 import { STREAM_DATA_KEYS } from './streamDataPaths';
 
