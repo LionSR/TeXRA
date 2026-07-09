@@ -1,10 +1,10 @@
 /**
  * Regression test for a dedup bug fixed alongside the `permissionId()`
- * helper (TeXRA data-structure refactor PR #7762): the old `UPDATE_PERMISSION`
- * "show" handler hardcoded `'requestId'` as the id field for every permission
- * kind except `RETRY`, so `PLAN_APPROVAL` — whose id field is `approvalId` —
- * never matched an existing entry and duplicate plan-approval prompts were
- * never deduplicated on `replay()`.
+ * helper: the old `UPDATE_PERMISSION` "show" handler hardcoded `'requestId'`
+ * as the id field for every permission kind except `RETRY`, so
+ * `PLAN_APPROVAL` — whose id field is `approvalId` — never matched an
+ * existing entry and duplicate plan-approval prompts were never
+ * deduplicated on `replay()`.
  */
 import { describe, expect, it, vi } from 'vitest';
 
