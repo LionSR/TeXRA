@@ -179,7 +179,7 @@ describe('desktop main-view IPC', () => {
     const settings = {
       handleMessage: vi.fn(
         (message: { command: string }) =>
-          message.command === SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
+          message.command === SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
       ),
     };
     const progress = {
@@ -237,10 +237,10 @@ describe('desktop main-view IPC', () => {
 
     rendererListener?.(
       { sender: webContents },
-      { command: SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS },
+      { command: SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME },
     );
     expect(settings.handleMessage).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
+      command: SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
     });
 
     rendererListener?.(
