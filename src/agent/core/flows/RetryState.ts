@@ -2,7 +2,7 @@
 
 import { StatusCodes } from 'http-status-codes';
 
-import { Node, type NonIterableObject } from '@agent/node';
+import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -77,9 +77,8 @@ async function tryRefreshClient(
 /** Base class for model/tool invocation nodes with retry support. */
 export abstract class RetryableInvocationNode<
   S,
-  P extends NonIterableObject = NonIterableObject,
   Svc extends RetryableNodeServices = RetryableNodeServices,
-> extends Node<S, P, Svc> {
+> extends Node<S, Svc> {
   protected _userCancelled = false;
   protected _hasAttemptedTokenRefresh = false;
   protected _persistent401Error: Error | null = null;

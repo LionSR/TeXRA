@@ -4,7 +4,6 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { appendCompileFailureRoundContext } from '@agent/output/compileFailureRoundContext';
 
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import type {
   ReflectionFlowShared,
   RoundContext,
@@ -19,7 +18,6 @@ interface PrepInput {
 
 export class PrepareContextNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  FlowParams,
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
