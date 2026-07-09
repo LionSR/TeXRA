@@ -12,7 +12,7 @@ const REPO_ROOT = resolve(
 );
 
 const RETIRED_MODULE =
-  'src/shared/progressView/backend/events/ProgressEventHandler.ts';
+  'src/controllers/progressView/backend/events/ProgressEventHandler.ts';
 const RETIRED_EXTENSION_PROGRESS_MODULE =
   'packages/extension/src/frontend/events/extensionProgressEvents.ts';
 const RETIRED_SYMBOL = /\bProgressEventHandler\b/;

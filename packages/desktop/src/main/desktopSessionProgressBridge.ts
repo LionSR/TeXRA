@@ -10,6 +10,7 @@
  * This is Slice 1 of the desktopAgentExecution.ts refactor (issue #6329).
  */
 
+import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -23,13 +24,12 @@ import {
   type SetActiveStreamPayload,
   type StreamTabId,
 } from '@shared/schemas';
-import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
-import type { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import { AgentCategory } from '@shared/schemas/agent';
 import { isGoalInFlight, type GoalStatus } from '@shared/schemas/goal';
 import { GoalStore } from '@tools/goal';
 import { assertNever } from '@utils/core';
 import { toLogData } from './desktopLogUtils.js';
+import type { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────

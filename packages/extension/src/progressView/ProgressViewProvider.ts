@@ -1,6 +1,14 @@
 import * as vscode from 'vscode';
 
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
+import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
+import {
+  buildApprovalRequestHandlerSet,
+  createProgressBackendUiConfig,
+  type ApprovalRequestHandlerSet,
+} from '@controllers/progressView/backend/progressBackendUiConfig';
+import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
+import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 import {
@@ -35,15 +43,6 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
-import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
-import type { ProgressBackendInteractionPayloads } from '@shared/progressView/backend/events/ProgressInteractionHandler';
-import {
-  buildApprovalRequestHandlerSet,
-  createProgressBackendUiConfig,
-  type ApprovalRequestHandlerSet,
-} from '@shared/progressView/backend/progressBackendUiConfig';
-import { repairRestartedStreams } from '@shared/progressView/backend/restartRepair';
-import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
@@ -57,6 +56,7 @@ import {
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { createExtensionHostInteractions } from './extensionHostInteractions';
 import { attachProgressBackendAppSignals } from './progressBackendAppSignals';
+import type { ProgressBackendInteractionPayloads } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 
 import type { MainViewProvider } from '../MainViewProvider';
 
