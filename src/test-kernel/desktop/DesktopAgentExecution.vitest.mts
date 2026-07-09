@@ -75,6 +75,7 @@ type TestableBridge = Bridge & {
   syncFullView(): void;
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
   setActiveStream(streamId: StreamTabId): void;
+  revealStream(streamId: StreamTabId): void;
   deleteStream(streamId: StreamTabId): Promise<void>;
   deleteAllStreams(): Promise<void>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
@@ -1741,6 +1742,35 @@ describe('DesktopProgressBridge', () => {
       bridge.setActiveStream('ghost-stream');
 
       expect(messages).toEqual([]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('revealStream routes to progress and selects the stream (issue #7751 FS6)', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      emitSessionFact(bridge, 'setActiveStream', {
+        streamId: 'goal-owning-stream',
+        agentCategory: AgentCategory.Workflow,
+      });
+      await settleProgressEvents();
+      messages.length = 0;
+
+      bridge.revealStream('goal-owning-stream');
+
+      expect(messages).toContainEqual({
+        command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+        route: 'progress',
+      });
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
+      ).toContainEqual({
+        activeStream: 'goal-owning-stream',
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      });
     } finally {
       bridge.dispose();
     }

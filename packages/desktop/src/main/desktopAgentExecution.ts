@@ -1079,6 +1079,17 @@ export class DesktopProgressBridge {
     this.syncStreamContent(streamId);
   }
 
+  /**
+   * Route this window to the progress view and select the given stream.
+   * Mirrors the extension's `revealProgressStream` for the desktop Settings
+   * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
+   * run works the same way on both hosts.
+   */
+  revealStream(streamId: StreamTabId): void {
+    this.routeToProgress();
+    this.setActiveStream(streamId);
+  }
+
   private setAgentFilter(filter: AgentCategoryFilter): void {
     this.state.agentCategoryFilter = filter;
     this.syncStreamContent(this.updateStreamMetadata());
