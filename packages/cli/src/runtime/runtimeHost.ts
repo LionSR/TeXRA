@@ -49,8 +49,7 @@ export type CliRuntimeHost = AgentRuntimeHost & {
  */
 const INSTRUCTION_ACTION_HINT: Partial<Record<InstructionAction, string>> = {
   [INSTRUCTION_ACTION.SET_API_KEY]: 'set your API key (texra config)',
-  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]:
-    'see the configuration guide',
+  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'see the configuration guide',
   [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'see the model documentation',
 };
 
