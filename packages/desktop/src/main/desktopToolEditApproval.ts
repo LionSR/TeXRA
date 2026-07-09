@@ -28,7 +28,6 @@ import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { createTexraTempDir } from './desktopTempDir.js';
-import { setDesktopToolEditApprovalHandler } from './platform/index.js';
 
 export interface DesktopToolEditApprovalOptions {
   runtimeHost: AgentRuntimeHost;
@@ -46,12 +45,6 @@ export interface DesktopToolEditApprovalController {
     action: ToolEditApprovalAction;
     feedback?: string;
   }): boolean;
-  /**
-   * This window's tool-edit approval handler. Pass this to `runAgent`/
-   * `resumeToolUseSnapshot` as `toolEditApprovalHandler` so a request always
-   * resolves through this window's controller, not whichever window's
-   * controller last wrote the shared `platform().toolEditApproval` fallback.
-   */
   requestApproval(
     request: ToolEditApprovalRequest,
     session?: SessionHandle,
@@ -74,11 +67,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   private readonly pending = new Map<string, DesktopPendingToolEditApproval>();
   private disposed = false;
 
-  constructor(private readonly options: DesktopToolEditApprovalOptions) {
-    setDesktopToolEditApprovalHandler((request) =>
-      this.requestApproval(request),
-    );
-  }
+  constructor(private readonly options: DesktopToolEditApprovalOptions) {}
 
   async requestApproval(
     request: ToolEditApprovalRequest,
@@ -162,7 +151,6 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    setDesktopToolEditApprovalHandler(undefined);
     for (const requestId of [...this.pending.keys()]) {
       this.settle(requestId, { accepted: false });
     }

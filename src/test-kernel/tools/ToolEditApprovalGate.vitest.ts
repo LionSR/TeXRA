@@ -8,6 +8,7 @@ import { installPlatform as installFakePlatform } from '@test/support/setupPlatf
 // Local imports - agent types
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 
 // Local imports - tools
 import type { StreamTabId } from '@shared/schemas';
@@ -37,20 +38,20 @@ async function installPlatform(
   files: Record<string, string | Uint8Array> = {},
 ) {
   testApprovalHandler = undefined;
-  await installFakePlatform(
-    { workspacePath: '/workspace', config, files },
-    {
-      toolEditApproval: (request) => {
-        const handler = testApprovalHandler;
-        if (!handler) {
-          throw new Error(
-            'No test approval handler configured. Set `testApprovalHandler` first.',
-          );
-        }
-        return handler(request);
-      },
+  await installFakePlatform({ workspacePath: '/workspace', config, files });
+  defaultSession().useHostInteractions({
+    requestToolEditApproval: (request) => {
+      const handler = testApprovalHandler;
+      if (!handler) {
+        throw new Error(
+          'No test approval handler configured. Set `testApprovalHandler` first.',
+        );
+      }
+      return handler(request);
     },
-  );
+    resolve: () => false,
+    cancel: () => undefined,
+  });
 }
 
 async function callTextEditorInRun(
@@ -89,6 +90,7 @@ describe('Tool edit approval gating', () => {
     WorkspaceFS.write = originalWrite;
     WorkspaceFS.appendFile = originalAppend;
     testApprovalHandler = undefined;
+    defaultSession().interactions.dispose();
     cleanupAllApprovals();
   });
 

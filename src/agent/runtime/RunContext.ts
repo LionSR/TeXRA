@@ -2,7 +2,6 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createRunScope, type RunScope } from './RunScope';
-import type { ToolEditApprovalPort } from '@platform/interfaces';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { SessionHandle } from './SessionHandle';
@@ -14,15 +13,6 @@ interface RunContextCommon {
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
   readonly stopAfterCycle?: boolean;
-  /**
-   * Per-run override for the host's tool-edit approval UI. Takes priority over
-   * `platform().toolEditApproval` when present — hosts that manage more than
-   * one concurrent session per process (e.g. desktop's one window per
-   * `DesktopAgentExecution`) thread their session-scoped handler here instead
-   * of relying on the frozen, process-wide Platform port, which only ever
-   * holds one active handler at a time.
-   */
-  readonly toolEditApprovalHandler?: ToolEditApprovalPort;
 }
 
 export interface LaunchRunContext extends RunContextCommon {
@@ -69,7 +59,6 @@ interface CreateRunContextBase {
   runtimeUnavailableTools?: readonly string[];
   stopAfterCycle?: boolean;
   session?: SessionHandle;
-  toolEditApprovalHandler?: ToolEditApprovalPort;
 }
 
 type CreateLaunchRunContextFields = Required<
@@ -105,8 +94,7 @@ type CommonRunContextFieldNames =
   | 'delegationDepth'
   | 'approvalPromptsUnavailable'
   | 'runtimeUnavailableTools'
-  | 'stopAfterCycle'
-  | 'toolEditApprovalHandler';
+  | 'stopAfterCycle';
 
 type BareRunContextFieldNames =
   | CommonRunContextFieldNames
@@ -129,7 +117,6 @@ function commonRunContextFields<T extends CreateRunContextBase>(
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
-    toolEditApprovalHandler: options.toolEditApprovalHandler,
   } as Pick<T, CommonRunContextFieldNames>;
 }
 
