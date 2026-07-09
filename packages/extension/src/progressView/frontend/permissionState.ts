@@ -18,6 +18,7 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { assertNever } from '@utils/core';
 
 export type PermissionState =
   | { kind: typeof PERMISSION_KIND.TOOL_EDIT; data: ToolEditPermission }
@@ -61,5 +62,7 @@ export function permissionId(permission: PermissionState): string {
     case PERMISSION_KIND.EXTERNAL_INQUIRY:
     case PERMISSION_KIND.USER_QUESTION:
       return permission.data.requestId;
+    default:
+      return assertNever(permission, 'Unhandled PermissionState kind');
   }
 }
