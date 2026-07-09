@@ -1,26 +1,26 @@
 import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import {
   WebviewBridge,
   type ProgressViewMessageSender,
-} from '@shared/progressView/backend/WebviewBridge';
-import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
+} from '@controllers/progressView/backend/WebviewBridge';
+import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import {
   ProgressFactApplier,
   PROGRESS_BACKEND_RUN_PROGRESS_EVENT_TYPES,
   type GetProgressStreamControls,
   type ProgressEventSubscription,
-} from '@shared/progressView/backend/events/ProgressFactApplier';
+} from '@controllers/progressView/backend/events/ProgressFactApplier';
 import {
   ProgressInteractionHandler,
   type ProgressBackendInteractionEvent,
   type ProgressBackendInteractionPayloads,
   type UICallbacks,
-} from '@shared/progressView/backend/events/ProgressInteractionHandler';
-import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
-import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
+} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
+import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import type { StreamSnapshotStore } from '@transcript';
 
 export interface ProgressBackendServices {

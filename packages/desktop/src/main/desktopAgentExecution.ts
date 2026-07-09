@@ -9,6 +9,20 @@ import { getProgressStreamControls } from '@controllers/progressView/progressStr
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
 import { StreamSnapshotStore } from '@transcript';
+import {
+  isProgressBackendInteractionEvent,
+  type ProgressBackendInteractionPayloads,
+} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
+import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
+import {
+  buildApprovalRequestHandlerSet,
+  createProgressBackendUiConfig,
+  type ApprovalRequestHandlerSet,
+} from '@controllers/progressView/backend/progressBackendUiConfig';
+import {
+  repairRestartedStreams,
+  RESTART_REPAIR_PHASES,
+} from '@controllers/progressView/backend/restartRepair';
 import type { AgentTrace } from '@agent/trace';
 import {
   validateExecutionRequest,
@@ -61,22 +75,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
-import {
-  isProgressBackendInteractionEvent,
-  type ProgressBackendInteractionPayloads,
-} from '@shared/progressView/backend/events/ProgressInteractionHandler';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
-import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
-import {
-  buildApprovalRequestHandlerSet,
-  createProgressBackendUiConfig,
-  type ApprovalRequestHandlerSet,
-} from '@shared/progressView/backend/progressBackendUiConfig';
-import {
-  repairRestartedStreams,
-  RESTART_REPAIR_PHASES,
-} from '@shared/progressView/backend/restartRepair';
-import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
@@ -108,6 +107,7 @@ import {
   type DesktopPresentationPayloads,
   type DesktopSessionProgressBridge,
 } from './desktopSessionProgressBridge.js';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 type DesktopUnavailableTool =
