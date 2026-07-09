@@ -734,12 +734,25 @@ describe('DesktopProgressBridge', () => {
       bridge.handleInteractionEvent('requestShowError', {
         message: 'Root run failed',
       });
+      bridge.handleInteractionEvent('requestShowInstruction', {
+        key: 'missingApiKey',
+        message:
+          'API key not found. Set your API key in Settings and run again.',
+        actions: ['set-api-key', 'open-configuration-guide'],
+        showSuppress: false,
+      });
 
       expect(messages).toContainEqual({
         command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
         route: 'progress',
       });
       expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
+      // Folded into the same dialog surface as requestShowError — no second
+      // subscribe surface or dialog for instructions.
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        'API key not found. Set your API key in Settings and run again.',
+      );
+      expect(showErrorMessage).toHaveBeenCalledTimes(2);
     } finally {
       bridge.dispose();
     }
