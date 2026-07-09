@@ -12,8 +12,8 @@
 import { randomUUID } from 'node:crypto';
 
 // Local imports
-import { normalizeFilePath } from '@shared/utils/path';
 import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
+import { normalizeFilePath } from '@utils/core';
 
 export const REVIEW_SEVERITIES = ['critical', 'warning', 'info'] as const;
 export type ReviewSeverity = (typeof REVIEW_SEVERITIES)[number];

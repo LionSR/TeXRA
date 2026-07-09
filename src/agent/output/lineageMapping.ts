@@ -8,7 +8,7 @@
 import * as path from 'node:path';
 
 import type { FileLocation } from '@shared/schemas';
-import { normalizeFilePath } from '@shared/utils/path';
+import { normalizeFilePath } from '@utils/core';
 import { createFileMapping, getComparablePath } from '@utils/files';
 
 import type { OutputState } from './outputState';
