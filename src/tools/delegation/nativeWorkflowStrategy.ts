@@ -14,7 +14,6 @@ import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import type { ToolEditApprovalPort } from '@platform/interfaces';
 
 import {
   buildSubagentFailureResultMeta,
@@ -34,7 +33,6 @@ export interface NativeWorkflowStrategyParams {
   readonly workingDirectory?: string;
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
-  readonly toolEditApprovalHandler?: ToolEditApprovalPort;
   readonly onStreamResolved: (streamId: StreamTabId) => void;
 }
 
@@ -79,7 +77,6 @@ export function createNativeWorkflowStrategy(
           delegationDepth: params.delegationDepth,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
-          toolEditApprovalHandler: params.toolEditApprovalHandler,
           onStreamResolved: params.onStreamResolved,
           onProgress: (update) => ports.notify(update),
           onRunError: (err) => {

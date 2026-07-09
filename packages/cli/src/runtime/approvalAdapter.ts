@@ -20,7 +20,6 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
-import { setActiveCliToolEditApprovalHandler } from './initPlatform';
 
 import { type CliDecisionApprovalEvent } from './approvalEvents';
 import { type CliContext } from './cliContext';
@@ -89,18 +88,6 @@ async function decideToolEdit(
     hooks,
   );
   return toToolEditResult(decision, request.proposedContent);
-}
-
-export function installCliApprovalHandlers(
-  context: CliContext,
-  hooks: CliApprovalPromptHooks = {},
-): () => void {
-  setActiveCliToolEditApprovalHandler((request) =>
-    decideToolEdit(request, context, hooks),
-  );
-  return () => {
-    setActiveCliToolEditApprovalHandler(undefined);
-  };
 }
 
 async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(

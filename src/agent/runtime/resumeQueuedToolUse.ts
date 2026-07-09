@@ -85,7 +85,6 @@ export async function resumeQueuedToolUseSnapshot(
       session: options.session,
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
-      toolEditApprovalHandler: options.toolEditApprovalHandler,
       parentStreamId:
         options.parentStreamId ?? snapshot.parentStreamId ?? undefined,
       allowWaitingResult: options.allowWaitingResult,

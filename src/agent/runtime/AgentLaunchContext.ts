@@ -67,7 +67,6 @@ import {
 import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import type { StreamStatusMachine } from './StreamStatusService';
-import type { ToolEditApprovalPort } from '@platform/interfaces';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('AgentLaunchContext');
@@ -81,11 +80,6 @@ export interface AgentLaunchContext extends AgentCore {
   attachedMemoryMisses: AttachedMemoryMiss[];
   /** Whether this tool-use run exits after one cycle instead of idling. */
   stopAfterCycle?: boolean;
-  /**
-   * Per-run override for the host's tool-edit approval UI, projected onto the
-   * ambient {@link RunContext}. See `RunContext.toolEditApprovalHandler`.
-   */
-  toolEditApprovalHandler?: ToolEditApprovalPort;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -155,7 +149,6 @@ function agentContextToRunContext(
     runtimeUnavailableTools: ctx.runtimeUnavailableTools,
     stopAfterCycle: ctx.stopAfterCycle,
     session: ctx.runScope.session,
-    toolEditApprovalHandler: ctx.toolEditApprovalHandler,
   };
 }
 

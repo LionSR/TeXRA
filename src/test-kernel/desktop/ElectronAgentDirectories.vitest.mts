@@ -131,9 +131,6 @@ describe('desktop agent directory bootstrap', () => {
       addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
       toolMissingHandler: () => {},
       toolNotificationHandler: () => {},
-      toolEditApproval: () => {
-        throw new Error('Tool edit approval not available in this test.');
-      },
     });
 
     return {

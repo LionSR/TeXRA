@@ -31,7 +31,7 @@ import {
 } from '../desktopAgentResume.js';
 
 // Type imports - platform
-import type { LifecycleHost, ToolEditApprovalPort } from '@platform/interfaces';
+import type { LifecycleHost } from '@platform/interfaces';
 
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;
@@ -52,37 +52,6 @@ export interface ElectronPlatformInitResult {
 
 const WORKSPACE_CONFIG_MIGRATED_KEY =
   'desktop.workspaceConfigMigratedToProject';
-
-// ---------------------------------------------------------------------------
-// Session-scoped tool-edit approval handler
-// ---------------------------------------------------------------------------
-//
-// The Platform port `toolEditApproval` is frozen at initPlatform time, but the
-// DesktopToolEditApprovalController is created per session.  The delegating
-// handler installed below reads this mutable reference so the active controller
-// can register and unregister itself via `setDesktopToolEditApprovalHandler`.
-
-let activeDesktopToolEditApprovalHandler: ToolEditApprovalPort | undefined;
-
-/**
- * Register the active session's desktop tool-edit approval handler.
- * Called by {@link DesktopToolEditApprovalControllerImpl} constructor / dispose.
- */
-export function setDesktopToolEditApprovalHandler(
-  handler: ToolEditApprovalPort | undefined,
-): void {
-  activeDesktopToolEditApprovalHandler = handler;
-}
-
-export function createDesktopToolEditApprovalPort(): ToolEditApprovalPort {
-  return (request) => {
-    const handler = activeDesktopToolEditApprovalHandler;
-    if (!handler) {
-      throw new Error('No active desktop tool-edit approval controller.');
-    }
-    return handler(request);
-  };
-}
 
 export async function initializeElectronPlatform(
   mainDirname: string,
@@ -186,7 +155,6 @@ export async function initializeElectronPlatform(
       },
       agentDirectories,
       getWorkspacePath: () => workspacePath,
-      toolEditApproval: createDesktopToolEditApprovalPort(),
     }),
   );
 
