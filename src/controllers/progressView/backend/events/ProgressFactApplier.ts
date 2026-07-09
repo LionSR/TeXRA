@@ -4,7 +4,6 @@ import {
 } from '@controllers/progressView/backend/WebviewUpdater';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import { pickAgentCategory } from '@controllers/progressView/backend/streamTabInfo';
-import { mapToRecord } from '@controllers/progressView/backend/persistence/serializationUtils';
 import {
   ProgressViewState,
   type ActiveStreamId,
@@ -46,7 +45,7 @@ import {
   type UpdateTodosPayload,
 } from '@shared/schemas';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
-import { assertNever } from '@utils/core';
+import { assertNever, mapToRecord } from '@utils/core';
 
 import { withEventErrorHandling } from './errorHandling';
 
