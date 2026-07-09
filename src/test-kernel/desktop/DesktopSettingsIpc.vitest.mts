@@ -1833,13 +1833,13 @@ describe('desktop settings IPC', () => {
 
   it('reports missing history items for rerun and restore instead of dropping them', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const infos: string[] = [];
+    const shownErrors: string[] = [];
     const settings = createDesktopSettingsIpc({
       workspaceState: new MemoryStateStore(),
       globalState: new MemoryStateStore(),
       postToRenderer: () => {},
-      showInfoMessage: async (message) => {
-        infos.push(message);
+      showErrorMessage: async (message) => {
+        shownErrors.push(message);
       },
     });
 
@@ -1853,7 +1853,7 @@ describe('desktop settings IPC', () => {
     });
     await flushAsyncWork();
 
-    expect(infos).toEqual(['History item not found', 'History item not found']);
+    expect(shownErrors).toEqual(['History item not found or unreadable (missing, corrupt, or from an incompatible version)', 'History item not found or unreadable (missing, corrupt, or from an incompatible version)']);
   });
 
   it('errors instead of a false success when rerun has no runExecution dependency wired (Copilot #7827)', async () => {
@@ -1943,10 +1943,11 @@ describe('desktop settings IPC', () => {
 
     // Neither handler throws an unhandled ZodError; both report a graceful,
     // user-visible message instead (the corrupt record fails schema
-    // validation at the storage layer already, so it surfaces as "not
-    // found" rather than a raw parse exception).
-    expect(errors).toEqual([]);
-    expect(infos).toEqual(['History item not found', 'History item not found']);
+    // validation at the storage layer already — readValidated returns null —
+    // so it surfaces as the unified "unreadable" error, not a raw parse
+    // exception).
+    expect(infos).toEqual([]);
+    expect(errors).toEqual(['History item not found or unreadable (missing, corrupt, or from an incompatible version)', 'History item not found or unreadable (missing, corrupt, or from an incompatible version)']);
   });
 
   it('exports a history chat to Markdown via the shared ChatExportController', async () => {

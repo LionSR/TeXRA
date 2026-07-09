@@ -34,7 +34,6 @@ import {
 } from '@agent/index/agentRegistry';
 import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
 import {
-  AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import {
@@ -532,32 +531,31 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  const HISTORY_CONFIG_MALFORMED_MESSAGE =
-    'History item is malformed or from an incompatible version';
+  // readConfig() already validates via readValidated and returns null for
+  // BOTH missing and corrupt/legacy configs (the storage layer's silent-null
+  // read — distinguishing the two needs the loud-reads policy at the store,
+  // not a re-parse here, which can never see invalid data).
+  const HISTORY_CONFIG_UNREADABLE_MESSAGE =
+    'History item not found or unreadable (missing, corrupt, or from an incompatible version)';
 
   type HistoryConfigResult =
     | { status: 'ok'; config: AgentConfig }
-    | { status: 'not_found' }
-    | { status: 'invalid' };
+    | { status: 'unreadable' };
 
   async function readHistoryConfig(
     historyId: string,
   ): Promise<HistoryConfigResult> {
-    const raw = await getExecutionStore(historyId as ExecutionId).readConfig();
-    if (!raw) return { status: 'not_found' };
-    const parsed = AgentConfigSchema.safeParse(raw);
-    if (!parsed.success) return { status: 'invalid' };
-    return { status: 'ok', config: parsed.data };
+    const config = await getExecutionStore(
+      historyId as ExecutionId,
+    ).readConfig();
+    if (!config) return { status: 'unreadable' };
+    return { status: 'ok', config };
   }
 
   async function rerunHistoryAgent(historyId: string): Promise<void> {
     const result = await readHistoryConfig(historyId);
-    if (result.status === 'not_found') {
-      await options.showInfoMessage?.('History item not found');
-      return;
-    }
-    if (result.status === 'invalid') {
-      await options.showErrorMessage?.(HISTORY_CONFIG_MALFORMED_MESSAGE);
+    if (result.status === 'unreadable') {
+      await options.showErrorMessage?.(HISTORY_CONFIG_UNREADABLE_MESSAGE);
       return;
     }
     const validated = validateExecutionRequest({ config: result.config });
@@ -577,12 +575,8 @@ export function createDesktopSettingsIpc(
 
   async function restoreHistoryAgent(historyId: string): Promise<void> {
     const result = await readHistoryConfig(historyId);
-    if (result.status === 'not_found') {
-      await options.showInfoMessage?.('History item not found');
-      return;
-    }
-    if (result.status === 'invalid') {
-      await options.showErrorMessage?.(HISTORY_CONFIG_MALFORMED_MESSAGE);
+    if (result.status === 'unreadable') {
+      await options.showErrorMessage?.(HISTORY_CONFIG_UNREADABLE_MESSAGE);
       return;
     }
     const restored =
