@@ -70,7 +70,7 @@ export class WolframTool extends defineTool({
       );
     }
 
-    getCurrentToolContexts()?.callContext?.onExecutionReady?.();
+    getCurrentToolContexts()?.callContext?.hooks?.onExecutionReady?.();
 
     const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
     const result = await executeWolframCode(input.code, {
