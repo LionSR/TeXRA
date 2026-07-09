@@ -209,13 +209,10 @@ describe('output progress events', () => {
       );
 
       expect(transition).toBe('default');
-      expect(runEventsOfType(events, 'domain')).toMatchObject([
+      expect(runEventsOfType(events, 'addOutputFiles')).toMatchObject([
         {
-          key: 'runFact.addOutputFiles',
-          data: {
-            streamId: 'stream:output-node',
-            filesByRound: { 2: [fileInfo] },
-          },
+          streamId: 'stream:output-node',
+          filesByRound: { 2: [fileInfo] },
         },
       ]);
       expect(hostEvents).toEqual([
@@ -376,16 +373,10 @@ describe('output progress events', () => {
         createLocation('/tmp/raw-output.xml'),
       );
 
-      expect(
-        runEventsOfType(events, 'domain').filter(
-          (event) => event.key === 'runFact.updateMissingOutputs',
-        ),
-      ).toMatchObject([
+      expect(runEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
-          data: {
-            streamId: 'stream:processor',
-            filesByRound: { 3: [] },
-          },
+          streamId: 'stream:processor',
+          filesByRound: { 3: [] },
         },
       ]);
       expect(roundData.get(3)?.outputs).toEqual([]);
@@ -419,16 +410,10 @@ describe('output progress events', () => {
         createLocation('/tmp/raw-output.xml'),
       );
 
-      expect(
-        runEventsOfType(events, 'domain').filter(
-          (event) => event.key === 'runFact.updateMissingOutputs',
-        ),
-      ).toMatchObject([
+      expect(runEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
-          data: {
-            streamId: 'stream:processor',
-            filesByRound: { 4: [] },
-          },
+          streamId: 'stream:processor',
+          filesByRound: { 4: [] },
         },
       ]);
       expect(roundData.get(4)?.outputs).toEqual([]);
@@ -477,13 +462,10 @@ describe('output progress events', () => {
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('no files could be extracted');
       // The missing-output signal is still emitted alongside the warning.
-      expect(
-        runEventsOfType(events, 'domain').filter(
-          (event) => event.key === 'runFact.updateMissingOutputs',
-        ),
-      ).toMatchObject([
+      expect(runEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
-          data: { streamId: 'stream:processor', filesByRound: { 5: [] } },
+          streamId: 'stream:processor',
+          filesByRound: { 5: [] },
         },
       ]);
     } finally {

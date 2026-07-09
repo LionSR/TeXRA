@@ -4,7 +4,6 @@
 
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -17,8 +16,6 @@ import type {
 } from '@cli/runtime/runtimeHost';
 import {
   ConversationProgressSchema,
-  UpdatePlanPayloadSchema,
-  UpdateTodosPayloadSchema,
   type ActiveChildInfo,
   type GoalPausedPayload,
   type RemoveStreamPayload,
@@ -217,15 +214,6 @@ function applyParentStream(payload: {
   setParentStream(payload.childStreamId, payload.parentStreamId);
 }
 
-function isGoalPausedPayload(value: unknown): value is GoalPausedPayload {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'streamId' in value &&
-    typeof value.streamId === 'string'
-  );
-}
-
 function applyDirectTuiDomainEvent(
   event: Extract<AgentEvent, { type: 'domain' }>,
   fallbackStreamId: StreamTabId,
@@ -239,38 +227,7 @@ function applyDirectTuiDomainEvent(
     }));
     return true;
   }
-
-  const factName = fromRunFactDomainKey(event.key);
-  if (!factName) return false;
-
-  switch (factName) {
-    case 'updateTodos': {
-      const payload = UpdateTodosPayloadSchema.safeParse(event.data);
-      if (!payload.success) return false;
-      patchStream(payload.data.streamId, (s) => ({
-        ...s,
-        todos: payload.data.todos,
-      }));
-      return true;
-    }
-    case 'updatePlan': {
-      const payload = UpdatePlanPayloadSchema.safeParse(event.data);
-      if (!payload.success) return false;
-      patchStream(payload.data.streamId, (s) => ({
-        ...s,
-        plan: payload.data.plan,
-      }));
-      return true;
-    }
-    case 'goalPaused':
-      if (!isGoalPausedPayload(event.data)) return false;
-      appendGoalPausedTranscriptNotice(event.data);
-      return true;
-    case 'addOutputFiles':
-    case 'updateMissingOutputs':
-    case 'updateCompileFailures':
-      return false;
-  }
+  return false;
 }
 
 function applyDirectTuiRunEvent(
@@ -289,6 +246,25 @@ function applyDirectTuiRunEvent(
     }
     case 'domain':
       return applyDirectTuiDomainEvent(event, fallbackStreamId);
+    case 'updateTodos':
+      patchStream(event.streamId, (s) => ({
+        ...s,
+        todos: event.todos,
+      }));
+      return true;
+    case 'updatePlan':
+      patchStream(event.streamId, (s) => ({
+        ...s,
+        plan: event.plan,
+      }));
+      return true;
+    case 'goalPaused':
+      appendGoalPausedTranscriptNotice(event);
+      return true;
+    case 'addOutputFiles':
+    case 'updateMissingOutputs':
+    case 'updateCompileFailures':
+      return false;
     case 'stage.start':
       if (event.kind !== 'round') return false;
       applyRoundStage({
@@ -444,6 +420,12 @@ export function attachTuiRunFactSubscription(
       scope: 'run',
       types: [
         'domain',
+        'updateTodos',
+        'updatePlan',
+        'addOutputFiles',
+        'updateMissingOutputs',
+        'updateCompileFailures',
+        'goalPaused',
         'run.config',
         'usage',
         'stage.start',
