@@ -864,7 +864,6 @@ export class DesktopProgressBridge {
         closeRunningGroups: (streamIds, status, now) =>
           this.closeRunningTaskGroupsForStreams(streamIds, status, now),
         statusEmitOptions: {
-          runtimeHost: this.runtimeHost,
           trace: this.logger,
         },
         logger: this.logger,
@@ -968,7 +967,6 @@ export class DesktopProgressBridge {
           closeRunningGroups: (streamIds, status, now) =>
             this.closeRunningTaskGroupsForStreams(streamIds, status, now),
           statusEmitOptions: {
-            runtimeHost: this.runtimeHost,
             trace: this.logger,
           },
           logger: this.logger,
