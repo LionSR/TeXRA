@@ -8,6 +8,7 @@ import {
 } from '@controllers/settingsView/LatexToolingController';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
 import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
@@ -74,6 +75,7 @@ import {
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
+import { GoalStore } from '@tools/goal';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { StorageFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -140,6 +142,8 @@ export interface DesktopSettingsIpcOptions {
   selectCustomAgentDirectory?: () => Promise<string | undefined>;
   openPath?: (filePath: string) => Promise<void>;
   revealPath?: (filePath: string) => Promise<void>;
+  /** Route this window to the progress view and select the given stream. */
+  revealStream?: (streamId: string) => Promise<void>;
   openExternalUrl?: (url: string) => Promise<void>;
   /**
    * Offer the ChatGPT sign-in URL as a copyable link. `openExternalUrl` only
@@ -213,6 +217,9 @@ export function createDesktopSettingsIpc(
     (() => platform().agentDirectories.custom());
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
+  const goalController = new SettingsGoalController({
+    listGoals: () => GoalStore.list(),
+  });
   const latexToolingController = new LatexToolingController({
     checkToolInstalled: (tool) => checkToolInstalled(tool, false),
     findPath: (tool) => BinaryResolver.findPath(tool),
@@ -1260,10 +1267,11 @@ export function createDesktopSettingsIpc(
       ),
     },
     goals: {
-      getList: unsupported('Goals are not available in the desktop app yet.'),
-      revealStream: unsupported(
-        'Goals are not available in the desktop app yet.',
-      ),
+      getList: () => {
+        options.postToRenderer(goalController.getGoalListMessage());
+      },
+      revealStream: (streamId) =>
+        options.revealStream?.(streamId) ?? Promise.resolve(),
     },
     desktopCrashReporting: {
       get: () => postDesktopCrashReportingStatus(),
