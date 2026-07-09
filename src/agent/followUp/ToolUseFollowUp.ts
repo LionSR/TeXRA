@@ -14,9 +14,10 @@ import { platform } from '@platform/platform';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
 import {
   currentSession,
+  defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import type { FollowUpQueueInput } from './FollowUpQueue';
@@ -145,7 +146,15 @@ export function notifyFollowUpSent(
       });
     }
   }
-  emitRuntimeEvent('followUpSent', { streamId }, session);
+  followUpSentSession(session).events.emit({
+    scope: 'session',
+    event: { type: 'followUpSent', payload: { streamId } },
+  });
+}
+
+function followUpSentSession(session?: SessionHandle): SessionHandle {
+  const owner = session ?? tryUseRunContext()?.session;
+  return owner?.events ? owner : defaultSession();
 }
 
 /**
