@@ -1,164 +1,204 @@
 {
-  "semantics": "vi.mock()/vi.doMock() call sites in host-side (CLI + desktop) test-kernel suites (src/test-kernel/cli/**, src/test-kernel/desktop/**) that mock an internal @agent/* module specifier. Each site pins @agent's current internal module layout from outside src/agent, per issue #7684 QA-2. The ratchet fails only when the current site count exceeds this baseline; a decrease is welcome and should shrink this file.",
+  "semantics": "vi.mock() and vi.doMock() call sites in host-side (CLI + desktop) test-kernel suites (src/test-kernel/cli/**, src/test-kernel/desktop/**) that mock an internal @agent/* module specifier. Each site pins @agent's current internal module layout from outside src/agent, per issue #7684 QA-2. The ratchet fails only when the current count for either mock form exceeds this baseline; a decrease is welcome and should shrink this file.",
   "sites": [
     {
       "file": "src/test-kernel/cli/AgentResolution.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/index"
     },
     {
       "file": "src/test-kernel/cli/AgentsCommand.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/index"
     },
     {
       "file": "src/test-kernel/cli/AgentsRunCommand.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/index"
     },
     {
       "file": "src/test-kernel/cli/AgentsRunCommand.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/ChatDefaults.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/ChatDefaultsFastPath.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/runtime/executionRegistry"
     },
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/runtime/resolveAndResumeStream"
     },
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/runtime/resumeQueuedToolUse"
     },
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/runtime/SessionHandle"
     },
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/runtime/terminalResultToast"
     },
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/CliInitPlatform.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/index/platformAgentDirectories"
     },
     {
       "file": "src/test-kernel/cli/History.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/InitCommand.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/index"
     },
     {
       "file": "src/test-kernel/cli/MultiAgentRunCommand.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/index"
     },
     {
       "file": "src/test-kernel/cli/MultiAgentRunCommand.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/OnboardingGate.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/RunChatConfig.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/index"
     },
     {
       "file": "src/test-kernel/cli/RunChatRegistration.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/RunExecution.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/runtime/runAgent"
     },
     {
       "file": "src/test-kernel/cli/RunExecution.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/RunProgressRenderer.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/index"
     },
     {
       "file": "src/test-kernel/cli/SessionResumeResolution.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/runtime/SessionResumeRetrieval"
     },
     {
       "file": "src/test-kernel/cli/SessionResumeResolution.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/runtime/streamTab"
     },
     {
       "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/index"
     },
     {
       "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/executeAgent"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/executeAgent"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/ProgressViewBridge"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/ProgressViewBridge"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/runAgent"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/runAgent"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/SessionHandle"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/SessionResumeRetrieval"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/SessionResumeRetrieval"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/storage/detectWaitingStreams"
     },
     {
       "file": "src/test-kernel/desktop/DesktopSessionProgressBridge.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/StreamStatusService"
     },
     {
       "file": "src/test-kernel/desktop/DesktopToolEditApproval.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/runtime/RunContext"
     },
     {
       "file": "src/test-kernel/desktop/ElectronMainViewIpc.vitest.mts",
+      "form": "doMock",
       "specifier": "@agent/index/agentRegistry"
     }
   ]
