@@ -8,9 +8,8 @@ import type { FileOpResult } from '@shared/schemas/opResults';
 
 // Local imports - log
 import {
-  WORKFLOW_DOCUMENT_OUTPUT_EXT,
   parseWorkflowOutputRoundDir,
-  workflowOutputPath,
+  workflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -209,10 +208,7 @@ function packDestinationName(file: string): string {
   for (const segment of segments.toReversed()) {
     const round = parseWorkflowOutputRoundDir(segment);
     if (round !== null) {
-      const roundDir = path.dirname(
-        workflowOutputPath({ ext: WORKFLOW_DOCUMENT_OUTPUT_EXT, round }),
-      );
-      return `${roundDir}_${base}`;
+      return `${workflowOutputRoundDir(round)}_${base}`;
     }
   }
   return base;
