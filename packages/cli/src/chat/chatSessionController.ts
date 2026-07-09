@@ -416,88 +416,108 @@ export function createChatSessionController(
     publishChatTuiRootRunStartAvailability(session);
   };
 
-  const tryResumeStream = async (streamId: StreamTabId): Promise<boolean> => {
-    if (!chatTuiCanStartRootRun(session)) return false;
+  const tryResumeStream = (streamId: StreamTabId): Promise<boolean> => {
+    if (!chatTuiCanStartRootRun(session)) {
+      return Promise.resolve(true);
+    }
 
-    await snapshotStore.preload([streamId]);
-    const executionId =
-      snapshotStore.getExecutionId(streamId) ??
-      (await snapshotStore.readPersistedExecutionId(streamId));
-    if (!executionId) return false;
-
-    const config =
-      snapshotStore.getRunConfig(streamId) ??
-      (await getExecutionStore(executionId).readConfig());
-    if (!config) return false;
-
-    const currentModel = config.model;
-    const sessionContext = getSessionContext(currentModel);
-    patchSessionMeta({
-      agent: config.agent,
-      model: config.model,
-      modelSource: 'history',
-      canDelegate: chatAgentSupportsDelegation(config.agent),
+    let resolveRun: (resumed: boolean) => void = () => {};
+    let rejectRun: (error: unknown) => void = () => {};
+    const runPromise = new Promise<boolean>((resolve, reject) => {
+      resolveRun = resolve;
+      rejectRun = reject;
     });
+    markChatTuiRunPending(
+      session,
+      runPromise.then(() => undefined),
+    );
 
-    const { runtimeHost, approvalsUnavailable, finalize } =
-      setupRunHost(sessionContext);
-    session.runtimeHost = runtimeHost;
-    session.streamId = streamId;
-    session.executionId = executionId;
-    rootStreamId.set(streamId);
-    activeStreamId.set(streamId);
-    session.runCompleted = false;
-    session.stopRequested = false;
-    session.runExitCode = CliExitCode.Success;
-    publishChatTuiRootRunStartAvailability(session);
+    const runResume = async (): Promise<boolean> => {
+      let finalize = (): void => markChatTuiRunCompleted(session);
+      try {
+        await snapshotStore.preload([streamId]);
+        const executionId =
+          snapshotStore.getExecutionId(streamId) ??
+          (await snapshotStore.readPersistedExecutionId(streamId));
+        if (!executionId) return false;
 
-    const runPromise = setCliHelperModel(currentModel)
-      .then(() =>
-        resolveAndResumeStream(streamId, {
-          runtimeHost,
-          streamStatus: defaultSession().status,
-          resolveResumeState: async () => ({
-            runState: config,
-            executionId,
-            parentStreamId: snapshotStore.getParentStreamId(streamId),
-          }),
-          resumeToolUseSnapshot: (snapshot) =>
-            resumeQueuedToolUseSnapshot(streamId, snapshot, runtimeHost, {
-              session: defaultSession(),
-              approvalPromptsUnavailable: approvalsUnavailable,
-              runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
-              onError: reportRunFailure,
+        const config =
+          snapshotStore.getRunConfig(streamId) ??
+          (await getExecutionStore(executionId).readConfig());
+        if (!config) return false;
+        if (session.stopRequested) return false;
+
+        const currentModel = config.model;
+        const sessionContext = getSessionContext(currentModel);
+        patchSessionMeta({
+          agent: config.agent,
+          model: config.model,
+          modelSource: 'history',
+          canDelegate: chatAgentSupportsDelegation(config.agent),
+        });
+
+        const runHost = setupRunHost(sessionContext);
+        finalize = runHost.finalize;
+        const { runtimeHost, approvalsUnavailable } = runHost;
+        session.runtimeHost = runtimeHost;
+        session.streamId = streamId;
+        session.executionId = executionId;
+        rootStreamId.set(streamId);
+        activeStreamId.set(streamId);
+        session.runCompleted = false;
+        session.stopRequested = false;
+        session.runExitCode = CliExitCode.Success;
+        publishChatTuiRootRunStartAvailability(session);
+
+        const resumed = await setCliHelperModel(currentModel).then(() =>
+          resolveAndResumeStream(streamId, {
+            runtimeHost,
+            streamStatus: defaultSession().status,
+            resolveResumeState: async () => ({
+              runState: config,
+              executionId,
+              parentStreamId: snapshotStore.getParentStreamId(streamId),
             }),
-          executeWorkflow: async () => {
-            throw new Error(
-              'CLI chat cannot auto-resume workflow streams from follow-up wake.',
-            );
-          },
-          reportNoResumableSession: () => {
-            appendLocalAssistantTranscript(
-              'Message queued. Auto-resume found no resumable session state; resume the session manually or start a new agent task.',
-              streamId,
-            );
-          },
-          reportFailure: (_failedStream, error) => reportRunFailure(error),
-        }),
-      )
-      .then((resumed) => {
-        if (session.streamId) {
-          projectStreamTranscript(session.streamId, { finalize: true });
-        }
+            resumeToolUseSnapshot: (snapshot) =>
+              resumeQueuedToolUseSnapshot(streamId, snapshot, runtimeHost, {
+                session: defaultSession(),
+                approvalPromptsUnavailable: approvalsUnavailable,
+                runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+                allowWaitingResult: true,
+                onError: reportRunFailure,
+              }),
+            executeWorkflow: async () => {
+              throw new Error(
+                'CLI chat cannot auto-resume workflow streams from follow-up wake.',
+              );
+            },
+            reportNoResumableSession: () => {
+              appendLocalAssistantTranscript(
+                'Message queued. Auto-resume found no resumable session state; resume the session manually or start a new agent task.',
+                streamId,
+              );
+            },
+            reportFailure: (_failedStream, error) => reportRunFailure(error),
+          }),
+        );
+
         if (resumed) {
+          if (session.streamId) {
+            projectStreamTranscript(session.streamId, { finalize: true });
+          }
           session.runExitCode = CliExitCode.Success;
           notify({ kind: 'agentFinished' });
         }
         return resumed;
-      })
-      .catch((error: unknown) => {
+      } catch (error: unknown) {
         reportRunFailure(error);
         return false;
-      })
-      .finally(finalize);
-    session.runPromise = runPromise.then(() => undefined);
+      } finally {
+        finalize();
+      }
+    };
+
+    void runResume().then(resolveRun, rejectRun);
 
     return runPromise;
   };
