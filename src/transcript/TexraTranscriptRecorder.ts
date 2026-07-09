@@ -37,7 +37,6 @@ import {
 import { type StreamLogStore } from './StreamLogStore';
 
 const STREAM_UPDATE_THROTTLE_MS = 50;
-const RUN_FACT_DOMAIN_PREFIX = 'runFact.';
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -377,7 +376,6 @@ export function attachTranscriptRecorder(
         // progress events; it fires on every round/turn and would spam a
         // transcript row per tick, so it adds none here.
         if (event.key === 'conversationProgress') return;
-        if (event.key.startsWith(RUN_FACT_DOMAIN_PREFIX)) return;
         // filesLoaded has a richer payload shape; format the text accordingly.
         if (event.key === 'filesLoaded') {
           const payload = event.data as
@@ -401,6 +399,14 @@ export function attachTranscriptRecorder(
         });
         return;
       }
+
+      case 'updateTodos':
+      case 'updatePlan':
+      case 'addOutputFiles':
+      case 'updateMissingOutputs':
+      case 'updateCompileFailures':
+      case 'goalPaused':
+        return;
 
       case 'result':
         // The terminal outcome is consumed by hosts via `session.onResult`.

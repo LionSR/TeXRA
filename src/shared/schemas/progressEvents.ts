@@ -14,7 +14,7 @@ import type { TokenUsageStats } from './usage';
  * Fact-native payload vocabulary for session- and run-scoped runtime facts.
  *
  * These named types are the single source for the payloads carried by
- * `SessionFact` arms, `runFact.*` trace domain events, and retained
+ * `SessionFact` arms, typed run-fact trace events, and retained
  * runtime-host progress projections. New facts get a named payload here —
  * never a new key on a host compatibility map.
  */
