@@ -1,13 +1,13 @@
-// Suites for packages/desktop DesktopProgressEventBridge (stream routing,
+// Suites for packages/desktop DesktopSessionProgressBridge (stream routing,
 // snapshot hydration, dispose guard).
 
 import { strict as assert } from 'node:assert';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import {
-  createDesktopProgressEventBridge,
-  type DesktopProgressEventBridgeOptions,
-} from '@desktop/main/desktopProgressEventBridge';
+  createDesktopSessionProgressBridge,
+  type DesktopSessionProgressBridgeOptions,
+} from '@desktop/main/desktopSessionProgressBridge';
 import {
   AgentCategory,
   type RestoredStreamSnapshot,
@@ -19,14 +19,14 @@ import type { ProgressViewState } from '@shared/progressView/backend/state/Progr
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 // ---------------------------------------------------------------------------
-// DesktopProgressEventBridge
+// DesktopSessionProgressBridge
 // ---------------------------------------------------------------------------
 
 /**
- * Unit tests for the extracted DesktopProgressEventBridge module (issue #6329).
+ * Unit tests for the extracted DesktopSessionProgressBridge module (issue #6329).
  *
  * Covers ghost-stream hydration, snapshot persistence, restored-display
- * sending, progress-event handling, and stream-lifecycle callbacks.
+ * sending, presentation-event handling, and stream-lifecycle callbacks.
  *
  * Desktop presentation routing (requestEnsureProgressView, requestShowError)
  * and session-progress handling are tested through the bridge's public API and
@@ -50,7 +50,7 @@ function createSnapshot(
 }
 
 type BridgeOptions = Parameters<
-  typeof import('@desktop/main/desktopProgressEventBridge').createDesktopProgressEventBridge
+  typeof import('@desktop/main/desktopSessionProgressBridge').createDesktopSessionProgressBridge
 >[0];
 type SnapshotStore = NonNullable<BridgeOptions['streamSnapshotStore']>;
 
@@ -123,7 +123,7 @@ function settleMicrotasks(): Promise<void> {
 // ── Module loading ────────────────────────────────────────────────────────
 
 async function loadBridgeModule(): Promise<
-  typeof import('@desktop/main/desktopProgressEventBridge')
+  typeof import('@desktop/main/desktopSessionProgressBridge')
 > {
   vi.resetModules();
   vi.doMock('@logger', () => ({
@@ -146,8 +146,8 @@ async function loadBridgeModule(): Promise<
   }));
 
   return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopProgressEventBridge.ts'))
-  ) as Promise<typeof import('@desktop/main/desktopProgressEventBridge')>;
+    moduleFileUrl(desktopSourcePath('main', 'desktopSessionProgressBridge.ts'))
+  ) as Promise<typeof import('@desktop/main/desktopSessionProgressBridge')>;
 }
 
 // Use hoisted vi.mock for modules that need importOriginal to preserve
@@ -162,7 +162,7 @@ vi.mock(import('@shared/schemas/goal'), async (importOriginal) => {
 
 // ── Tests ─────────────────────────────────────────────────────────────────
 
-describe('DesktopProgressEventBridge', () => {
+describe('DesktopSessionProgressBridge', () => {
   let module: Awaited<ReturnType<typeof loadBridgeModule>>;
 
   beforeEach(async () => {
@@ -174,7 +174,7 @@ describe('DesktopProgressEventBridge', () => {
   });
 
   function createBridge(overrides: Partial<BridgeOptions> = {}) {
-    return module.createDesktopProgressEventBridge({
+    return module.createDesktopSessionProgressBridge({
       state: makeMockState(),
       streamStatus: {
         get: vi.fn(() => STREAM_PHASE.CANCELLED),
@@ -326,7 +326,7 @@ describe('DesktopProgressEventBridge', () => {
 
       try {
         expect(bridge.hasRestoredStream('live-stream')).toBe(true);
-        bridge.onSessionEvent({
+        bridge.handleSessionEvent({
           scope: 'run',
           streamId: 'live-stream',
           event: {
@@ -381,15 +381,15 @@ describe('DesktopProgressEventBridge', () => {
     });
   });
 
-  // ── Progress events ─────────────────────────────────────────────────────
+  // ── Presentation events ─────────────────────────────────────────────────
 
-  describe('onProgressEvent', () => {
+  describe('handlePresentationEvent', () => {
     it('routes window-local ensure-progress requests from runtime-host events', () => {
       const routeToProgress = vi.fn();
       const bridge = createBridge({ routeToProgress });
 
       try {
-        bridge.onProgressEvent('requestEnsureProgressView', {});
+        bridge.handlePresentationEvent('requestEnsureProgressView', {});
 
         expect(routeToProgress).toHaveBeenCalledTimes(1);
       } finally {
@@ -402,7 +402,7 @@ describe('DesktopProgressEventBridge', () => {
       const bridge = createBridge({ onShowError });
 
       try {
-        bridge.onProgressEvent('requestShowError', {
+        bridge.handlePresentationEvent('requestShowError', {
           message: 'Root run failed',
         });
 
@@ -413,8 +413,8 @@ describe('DesktopProgressEventBridge', () => {
     });
   });
 
-  describe('onSessionEvent', () => {
-    it('handles session stream facts without progress-event projection', async () => {
+  describe('handleSessionEvent', () => {
+    it('handles session stream facts without presentation-event projection', async () => {
       const upsert = vi.fn(async () => {});
       const streamStatus = {
         get: vi.fn(() => STREAM_PHASE.WAITING),
@@ -429,7 +429,7 @@ describe('DesktopProgressEventBridge', () => {
       });
 
       try {
-        bridge.onSessionEvent({
+        bridge.handleSessionEvent({
           scope: 'session',
           event: {
             type: 'updateStreamStatus',
@@ -468,7 +468,7 @@ describe('DesktopProgressEventBridge', () => {
       });
 
       try {
-        bridge.onSessionEvent({
+        bridge.handleSessionEvent({
           scope: 'run',
           streamId: 'run-fact-stream',
           event: {
@@ -482,7 +482,7 @@ describe('DesktopProgressEventBridge', () => {
             },
           } as any,
         });
-        bridge.onSessionEvent({
+        bridge.handleSessionEvent({
           scope: 'run',
           streamId: 'run-fact-stream',
           event: {
@@ -508,7 +508,7 @@ describe('DesktopProgressEventBridge', () => {
       const bridge = createBridge({ onGoalStateChanged });
 
       try {
-        bridge.onSessionEvent({
+        bridge.handleSessionEvent({
           scope: 'session',
           event: {
             type: 'goalStateChanged',
@@ -542,8 +542,8 @@ describe('DesktopProgressEventBridge', () => {
       });
 
       try {
-        bridge.onProgressEvent('requestEnsureProgressView', {});
-        bridge.onProgressEvent('requestShowError', {
+        bridge.handlePresentationEvent('requestEnsureProgressView', {});
+        bridge.handlePresentationEvent('requestShowError', {
           message: 'Root run failed',
         });
 
@@ -749,7 +749,7 @@ describe('DesktopProgressEventBridge', () => {
       bridge.dispose();
 
       // These should not throw
-      bridge.onProgressEvent('requestShowError', {
+      bridge.handlePresentationEvent('requestShowError', {
         message: 'test',
       });
       bridge.onStreamDeleted('test');
@@ -796,7 +796,7 @@ describe('DesktopProgressEventBridge', () => {
 });
 
 // ---------------------------------------------------------------------------
-// desktopProgressEventBridge
+// desktopSessionProgressBridge
 // ---------------------------------------------------------------------------
 
 /**
@@ -808,7 +808,7 @@ describe('DesktopProgressEventBridge', () => {
  */
 function makeBridge() {
   const calls = { showError: [] as string[], routeToProgress: 0 };
-  const options: DesktopProgressEventBridgeOptions = {
+  const options: DesktopSessionProgressBridgeOptions = {
     // Only the requestShowError / requestEnsureProgressView paths are exercised;
     // neither dereferences `state`, and with no snapshot store constructor-time
     // hydration is a no-op, so a cast placeholder is sufficient here.
@@ -826,28 +826,30 @@ function makeBridge() {
       calls.showError.push(message);
     },
   };
-  return { bridge: createDesktopProgressEventBridge(options), calls };
+  return { bridge: createDesktopSessionProgressBridge(options), calls };
 }
 
-describe('DesktopProgressEventBridge dispose guard (#7377)', () => {
+describe('DesktopSessionProgressBridge dispose guard (#7377)', () => {
   it('routes events before dispose', () => {
     const { bridge, calls } = makeBridge();
 
-    bridge.onProgressEvent('requestShowError', { message: 'boom' });
-    bridge.onProgressEvent('requestEnsureProgressView', {});
+    bridge.handlePresentationEvent('requestShowError', { message: 'boom' });
+    bridge.handlePresentationEvent('requestEnsureProgressView', {});
 
     assert.deepEqual(calls.showError, ['boom']);
     assert.equal(calls.routeToProgress, 1);
   });
 
-  it('no-ops progress events delivered after dispose', () => {
+  it('no-ops presentation events delivered after dispose', () => {
     const { bridge, calls } = makeBridge();
 
     bridge.dispose();
 
     assert.doesNotThrow(() => {
-      bridge.onProgressEvent('requestShowError', { message: 'after-dispose' });
-      bridge.onProgressEvent('requestEnsureProgressView', {});
+      bridge.handlePresentationEvent('requestShowError', {
+        message: 'after-dispose',
+      });
+      bridge.handlePresentationEvent('requestEnsureProgressView', {});
     });
 
     assert.deepEqual(calls.showError, []);

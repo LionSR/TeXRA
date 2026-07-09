@@ -16,6 +16,11 @@ const RETIRED_MODULE =
 const RETIRED_EXTENSION_PROGRESS_MODULE =
   'packages/extension/src/frontend/events/extensionProgressEvents.ts';
 const RETIRED_SYMBOL = /\bProgressEventHandler\b/;
+const RETIRED_DESKTOP_PROGRESS_BRIDGE_TERMS = [
+  'DesktopProgressEventBridge',
+  'desktopProgressEventBridge',
+  'progress-event bridge',
+] as const;
 
 const SCAN_ROOTS = [
   'packages/cli/src',
@@ -61,6 +66,13 @@ function mentionsRetiredSymbol(file: string): boolean {
   return RETIRED_SYMBOL.test(source);
 }
 
+function mentionsRetiredDesktopProgressBridgeTerm(file: string): boolean {
+  const source = readFileSync(resolve(REPO_ROOT, file), 'utf8');
+  return RETIRED_DESKTOP_PROGRESS_BRIDGE_TERMS.some((term) =>
+    source.includes(term),
+  );
+}
+
 describe('ProgressEventHandler retirement boundary', () => {
   it('removes the retired ProgressEventHandler module', () => {
     expect(existsSync(resolve(REPO_ROOT, RETIRED_MODULE))).toBe(false);
@@ -75,6 +87,14 @@ describe('ProgressEventHandler retirement boundary', () => {
   it('removes the ProgressEventHandler class name from production sources', () => {
     const offenders = SCAN_ROOTS.flatMap(sourceFilesUnder)
       .filter(mentionsRetiredSymbol)
+      .toSorted();
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('removes retired desktop progress bridge vocabulary from production desktop sources', () => {
+    const offenders = sourceFilesUnder('packages/desktop/src')
+      .filter(mentionsRetiredDesktopProgressBridgeTerm)
       .toSorted();
 
     expect(offenders).toEqual([]);
