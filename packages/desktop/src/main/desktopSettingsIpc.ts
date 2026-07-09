@@ -775,9 +775,14 @@ export function createDesktopSettingsIpc(
     );
   }
 
+  function postGoalList(): void {
+    options.postToRenderer(goalController.getGoalListMessage());
+  }
+
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     postLatexConfigValues();
+    postGoalList();
     const memoryEnabledPosted = postMemoryEnabled();
     const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
@@ -1441,9 +1446,7 @@ export function createDesktopSettingsIpc(
       ),
     },
     goals: {
-      getList: () => {
-        options.postToRenderer(goalController.getGoalListMessage());
-      },
+      getList: postGoalList,
       revealStream: (streamId) =>
         options.revealStream?.(streamId) ?? Promise.resolve(),
     },
@@ -1476,6 +1479,7 @@ export function createDesktopSettingsIpc(
           } else {
             postGitAuthorSettings();
             postLatexConfigValues();
+            postGoalList();
           }
         }
         return false;

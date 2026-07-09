@@ -349,6 +349,10 @@ describe('desktop settings IPC', () => {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
         values: {},
       },
+      {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+        items: [],
+      },
     ]);
   }, 15_000);
 
