@@ -113,12 +113,13 @@ export function attachTranscriptRecorder(
   // rely on that distinction to tell a root run's terminal status apart from
   // a round's (see toStreamLifecycleStatus in packages/trace-viewer).
   const stageKinds = new Map<string, 'run' | 'round' | 'phase' | 'session'>();
-  // Id of the round's own MODEL_RESPONSE stream entry, so a subsequent
-  // `response.finalized` event (#7086) can upsert that entry's text instead
-  // of appending a duplicate row. Set on `stream.start` for a MODEL_RESPONSE
-  // stream, consumed (and cleared) by `response.finalized`, and reset at
-  // every round boundary so a round that never streamed can't accidentally
-  // reuse an earlier round's stream id.
+  // Id of the current model invocation's MODEL_RESPONSE stream entry, so a
+  // subsequent `response.finalized` event (#7086) can upsert that entry's text
+  // instead of appending a duplicate row. Set on `stream.start` for a
+  // MODEL_RESPONSE stream, consumed (and cleared) by `response.finalized`, and
+  // reset when the invocation proceeds to tool execution. A single tool-use
+  // round stage can contain several model invocations, so the outer round
+  // stage is too coarse to be the only reset boundary.
   let pendingModelResponseId: string | undefined;
 
   const flushStream = (state: StreamSinkState, id: string): void => {
@@ -256,6 +257,7 @@ export function attachTranscriptRecorder(
       }
 
       case 'tool.start':
+        pendingModelResponseId = undefined;
         // event.logId is the canonical id — SDK consumers correlate
         // tool.start/end by it and the store entry shares the same id so
         // callers can lookup with store.get(streamId).find(e => e.id === logId).
