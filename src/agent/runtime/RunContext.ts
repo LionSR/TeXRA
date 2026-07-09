@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { createRunScope, type RunScope } from './RunScope';
 import type { ToolEditApprovalPort } from '@platform/interfaces';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -28,6 +29,7 @@ interface RunContextCommon {
 
 export interface LaunchRunContext extends RunContextCommon {
   readonly kind: 'launch';
+  readonly runScope: RunScope;
   readonly streamId: StreamTabId;
   readonly executionId: ExecutionId;
   /** Agent name (e.g. "orchestrator", "search-agent"). */
@@ -63,6 +65,7 @@ export type RunContext = LaunchRunContext | BareRunContext;
 
 interface CreateRunContextBase {
   runtimeHost: AgentRuntimeHost;
+  runScope?: RunScope;
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   agentName?: string;
@@ -106,6 +109,7 @@ const runContextScope = new AsyncLocalStorage<RunContext>();
 
 type CommonRunContextFieldNames =
   | 'runtimeHost'
+  | 'runScope'
   | 'streamId'
   | 'executionId'
   | 'agentName'
@@ -129,6 +133,7 @@ function commonRunContextFields<T extends CreateRunContextBase>(
 ): Pick<T, CommonRunContextFieldNames> {
   return {
     runtimeHost: options.runtimeHost,
+    runScope: options.runScope,
     streamId: options.streamId,
     executionId: options.executionId,
     agentName: options.agentName,
@@ -157,9 +162,26 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
 
   if (options.modelSource === 'live') {
     const { getModel, model } = options;
+    const runScope =
+      options.runScope ??
+      createRunScope({
+        runtimeHost: options.runtimeHost,
+        streamId: options.streamId,
+        executionId: options.executionId,
+        agentName: options.agentName,
+        workingDirectory: options.workingDirectory,
+        session: options.session,
+      });
     return Object.freeze({
       kind: 'launch',
       ...commonRunContextFields(options),
+      runScope,
+      runtimeHost: runScope.runtimeHost,
+      streamId: runScope.streamId,
+      executionId: runScope.executionId,
+      agentName: runScope.agentName,
+      workingDirectory: runScope.workingDirectory,
+      session: runScope.session,
       get model() {
         return getModel() ?? model;
       },

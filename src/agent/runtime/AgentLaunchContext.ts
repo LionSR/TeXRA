@@ -61,6 +61,7 @@ import {
   withRunContext,
   type CreateRunContextOptions,
 } from './RunContext';
+import { createRunScope, type RunScope } from './RunScope';
 import {
   countMediaFilesNeedingVision,
   formatMediaNeedsVisionWarning,
@@ -75,6 +76,7 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 const logger = createChannelTrace('AgentLaunchContext');
 
 export interface AgentLaunchContext extends AgentCore, AgentRunIdentity {
+  runScope: RunScope;
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: StageHandle;
@@ -153,18 +155,19 @@ function agentContextToRunContext(
   ctx: AgentLaunchContext,
 ): CreateRunContextOptions {
   return {
-    runtimeHost: ctx.runtimeHost,
-    streamId: ctx.streamId,
-    executionId: ctx.executionId,
+    runScope: ctx.runScope,
+    runtimeHost: ctx.runScope.runtimeHost,
+    streamId: ctx.runScope.streamId,
+    executionId: ctx.runScope.executionId,
     modelSource: 'live' as const,
     getModel: () => ctx.config.model,
-    agentName: ctx.config.agent,
-    workingDirectory: ctx.workingDirectory,
+    agentName: ctx.runScope.agentName,
+    workingDirectory: ctx.runScope.workingDirectory,
     delegationDepth: ctx.delegation?.delegationDepth,
     approvalPromptsUnavailable: ctx.delegation?.approvalPromptsUnavailable,
     runtimeUnavailableTools: ctx.runtimeUnavailableTools,
     stopAfterCycle: ctx.stopAfterCycle,
-    session: ctx.session,
+    session: ctx.runScope.session,
     toolEditApprovalHandler: ctx.toolEditApprovalHandler,
   };
 }
@@ -456,6 +459,15 @@ async function assembleAgentLaunchContext(
       agentCategory: setting.agentCategory,
     },
   );
+  const workingDirectory = configPayload.workingDirectory?.trim() || undefined;
+  const runScope = createRunScope({
+    runtimeHost,
+    streamId,
+    executionId,
+    agentName: config.agent,
+    workingDirectory,
+    session,
+  });
 
   return {
     config,
@@ -470,13 +482,14 @@ async function assembleAgentLaunchContext(
     userVarChannels,
     attachedMemoryMisses,
     usageMonitor,
-    runtimeHost,
+    runScope,
+    runtimeHost: runScope.runtimeHost,
     streamStatus,
-    workingDirectory: configPayload.workingDirectory?.trim() || undefined,
+    workingDirectory: runScope.workingDirectory,
     initialUserMessageForTranscript: initialMediaMayBeInserted
       ? initialInstruction
       : undefined,
-    session,
+    session: runScope.session,
     disposeTrace: runTrace.dispose,
   };
 }
