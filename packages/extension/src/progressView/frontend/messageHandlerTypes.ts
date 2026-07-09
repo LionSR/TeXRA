@@ -25,7 +25,7 @@ import type { PermissionState } from './permissionState';
  * Context passed to frontend event handlers providing access to state and refs.
  *
  * Note: Named "FrontendEventHandlerContext" to distinguish from the backend
- * EventHandlerContext in @shared/progressView/backend/events has different
+ * EventHandlerContext in @controllers/progressView/backend/events has different
  * shape (state manager + webview updater vs getters/setters).
  */
 export interface FrontendEventHandlerContext {

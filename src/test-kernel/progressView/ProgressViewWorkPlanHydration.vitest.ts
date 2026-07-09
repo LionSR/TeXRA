@@ -2,6 +2,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { ProgressFactApplier } from '@controllers/progressView/backend/events/ProgressFactApplier';
+import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
 import { AgentCategory } from '@shared/schemas';
 import type {
   ActiveChildInfo,
@@ -15,11 +17,9 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { ProgressFactApplier } from '@shared/progressView/backend/events/ProgressFactApplier';
-import type { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
-import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
-import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
-import type { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
+import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
+import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 
 class MemoryMementoStorage implements MementoStorage {
   private readonly values = new Map<string, unknown>();
