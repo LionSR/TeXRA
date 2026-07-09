@@ -7,7 +7,6 @@ import {
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
 import { noopTrace, type AgentTrace } from '@agent/trace';
-import type { NonIterableObject } from '@agent/node';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { RetryableInvocationNode } from '@agent/core/flows/RetryState';
@@ -48,7 +47,6 @@ interface TestRetryServices {
 
 class ExposedRetryNode extends RetryableInvocationNode<
   unknown,
-  NonIterableObject,
   TestRetryServices
 > {
   protected getOperationName(): string {

@@ -261,7 +261,6 @@ export async function runReflectionFlow<C = unknown>(
 
     const pf = new RoundPersistedFlow<
       ReflectionFlowShared,
-      Record<string, unknown>,
       ReflectionServices<C>
     >(prepContextNode, kv, {
       parentStage,
