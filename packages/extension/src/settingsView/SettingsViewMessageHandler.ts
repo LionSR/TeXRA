@@ -34,7 +34,6 @@ import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import {
   applyGitAuthorConfig,
   readGitAuthorSettings,
@@ -252,8 +251,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         openFile: (data) => this.handleOpenMemoryFile(data),
         openFolder: () => this.handleOpenMemoryFolder(),
         delete: (data) => this.handleDeleteMemory(data),
-        getEnabled: () =>
-          this.withActiveWebview((w) => this.sendMemoryEnabled(w)),
         setEnabled: (enabled) =>
           this.handleSetMemoryEnabled({
             command: SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
@@ -263,10 +260,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         unpin: (storagePath) => this.setMemoryPinned(storagePath, false),
       },
       history: {
-        getData: () =>
-          this.withActiveWebview((w) =>
-            this.historyHandlers.sendHistoryData(w),
-          ),
         rerunAgent: (data) => this.historyHandlers.handleRerunAgent(data),
         restoreAgent: (data) => this.historyHandlers.handleRestoreAgent(data),
         deleteAgent: (historyId) =>
@@ -283,13 +276,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.historyHandlers.handleExportChat(data, 'html'),
       },
       profile: {
-        getData: () => this.withActiveWebview((w) => this.sendProfileData(w)),
-        selectAgent: async (agentName) => {
-          await selectAgentInMainView(agentName, {
-            showSuccessMessage: true,
-            copyToClipboardOnFailure: false,
-          });
-        },
         signIn: () =>
           safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
         signOut: () =>
@@ -326,8 +312,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         openExternalUrl: (url) => this.openExternalUrl(url),
       },
       modelSelection: {
-        getData: () =>
-          this.withActiveWebview((w) => this.sendModelSelectionData(w)),
         setEnabled: (modelName, enabled) =>
           this.setModelEnabled(modelName, enabled),
         setHelperModel: (modelName) =>
@@ -350,10 +334,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           }),
       },
       orchestration: {
-        getSuperYoloEnabled: () =>
-          this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
-        setSuperYoloEnabled: () =>
-          this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
         setAllowOrchestratorKill: (enabled) =>
           this.updateBooleanAndSendSuperYolo(
             StateKeys.ALLOW_ORCHESTRATOR_KILL,
@@ -366,10 +346,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           ),
       },
       agentSelection: {
-        getData: () =>
-          this.withActiveWebview((w) =>
-            this.agentHandlers.sendAgentSelectionData(w),
-          ),
         openYaml: ({ source, name }) =>
           this.agentHandlers.handleOpenAgentYaml({
             command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
@@ -404,16 +380,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           }),
         viewRemotePrompt: (data) =>
           this.agentHandlers.handleViewRemoteAgentPrompt(data),
-        getCustomDir: () =>
-          this.withActiveWebview((w) =>
-            this.agentHandlers.sendCustomAgentDir(w),
-          ),
         setCustomDir: () => this.agentHandlers.handleSetCustomAgentDir(),
         resetCustomDir: () => this.agentHandlers.handleResetCustomAgentDir(),
-        getModePresets: () =>
-          this.withActiveWebview((w) =>
-            this.agentHandlers.sendAgentModePresets(w),
-          ),
         applyModePreset: (presetId) =>
           this.agentHandlers.handleApplyAgentModePreset({
             command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
@@ -430,8 +398,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           }),
       },
       gitAuthor: {
-        getSettings: () =>
-          this.withActiveWebview((w) => this.sendGitAuthorSettings(w)),
         setMarkCommits: (enabled) =>
           setGitAuthor(StateKeys.GIT_MARK_COMMITS, enabled),
         setName: (name) => setGitAuthor(StateKeys.GIT_AUTHOR_NAME, name),
@@ -456,10 +422,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.githubHandlers.handleOpenPRSubscriptionStream(data),
       },
       chatGpt: {
-        getAuthStatus: () =>
-          this.withActiveWebview((w) =>
-            this.chatgptHandlers.sendChatGptAuthStatus(w),
-          ),
         signIn: () => this.chatgptHandlers.handleSignInChatGpt(),
         signOut: () => this.chatgptHandlers.handleSignOutChatGpt(),
         setPreferSubscription: (enabled) =>
@@ -468,8 +430,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.chatgptHandlers.handleSetSubscriptionToolUseOnly(enabled),
       },
       approval: {
-        getSettings: () =>
-          this.withActiveWebview((w) => this.sendApprovalSettings(w)),
         setBashApprovalEnabled: (enabled) =>
           this.handleSetApprovalEnabled(enabled),
         setCodexSandboxMode: (mode) =>
@@ -486,8 +446,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           setAgent(StateKeys.CLAUDE_AGENT_EFFORT, effort),
       },
       tools: {
-        getDashboardData: () =>
-          this.withActiveWebview((w) => this.sendToolDashboardData(w)),
         openInstallUrl: (url) => this.openExternalUrl(url),
         installExtension: (extensionId) =>
           this.latexHandlers.installExtension(extensionId),
@@ -506,10 +464,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           }),
       },
       latex: {
-        getSettingsStatus: () =>
-          this.withActiveWebview((w) =>
-            this.latexHandlers.sendLatexSettingsStatus(w),
-          ),
         applySettings: (data) =>
           this.latexHandlers.handleApplyLatexSettings(data),
         installLatexWorkshop: () =>
@@ -519,10 +473,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
             command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
             installCommand,
           }),
-        getConfigValues: () =>
-          this.withActiveWebview((w) =>
-            this.latexHandlers.sendLatexConfigValues(w),
-          ),
         setConfigValue: ({ field, value }) =>
           this.latexHandlers.handleSetLatexConfigValue({
             command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
