@@ -100,6 +100,20 @@ export interface SetupPlatform {
   terminal: SetupTerminalAdapter;
 }
 
+/** Tools whose implementation calls {@link getSetupPlatform}. */
+export const SETUP_PLATFORM_TOOL_NAMES = [
+  'probe_environment',
+  'verify_setup',
+  'set_api_key',
+  'unset_api_key',
+  'list_api_keys',
+  'invoke_command',
+  'install_vscode_extension',
+  'read_config',
+  'update_config',
+  'send_to_terminal',
+] as const;
+
 let platform: SetupPlatform | undefined;
 
 /** Register the platform implementation. Called once from `extension.ts`. */
