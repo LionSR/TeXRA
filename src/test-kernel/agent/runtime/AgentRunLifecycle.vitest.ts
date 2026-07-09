@@ -71,12 +71,10 @@ async function initLifecycleTestPlatform(firstRunDone: boolean) {
 function createLifecycleContext({
   executionId,
   streamId,
-  streamStatus,
   agent = 'test-agent',
 }: {
   executionId: ExecutionId;
   streamId: StreamTabId;
-  streamStatus: StreamStatusMachine;
   agent?: string;
 }): {
   ctx: AgentLaunchContext;
@@ -123,7 +121,6 @@ function createLifecycleContext({
     setting,
     prompt,
     runScope,
-    streamStatus,
     logger: noopTrace,
     parentStage: noopTrace.openStage('Run: test-agent'),
     storageKey,
@@ -168,11 +165,10 @@ function lifecycleFixture(
   const executionId =
     `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as ExecutionId;
   const streamId = `stream-${slug}` as StreamTabId;
-  const streamStatus = new StreamStatusMachine();
+  const streamStatus = defaultSession().status;
   const { ctx, explicit } = createLifecycleContext({
     executionId,
     streamId,
-    streamStatus,
     agent,
   });
   return { executionId, streamId, streamStatus, ctx, explicit };
@@ -222,21 +218,15 @@ describe('runFlowWithLifecycle', () => {
     });
   }
 
-  it('finalizes the stream status owner from the launch context', async () => {
+  it('finalizes the status machine owned by the run session', async () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-status-owner',
     );
 
     try {
-      seedStreamStatusForTest(
-        StreamStatusService,
-        streamId,
-        STREAM_STATUS.WAITING,
-      );
-
       // The lifecycle owns the whole transition (RUNNING on entry, terminal
-      // on exit) against the ctx-owned registry; the module-global
-      // StreamStatusService must stay untouched.
+      // on exit) against the run session's one status machine.
+      expect(streamStatus).toBe(ctx.runScope.session.status);
       await runFlowWithLifecycle(ctx, async () => ({
         category: 'toolUse',
         outcome: RUN_OUTCOME.COMPLETED,
@@ -245,10 +235,8 @@ describe('runFlowWithLifecycle', () => {
       }));
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
-      expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.WAITING);
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
-      clearStreamStatusForTest(StreamStatusService, streamId);
     }
   });
 

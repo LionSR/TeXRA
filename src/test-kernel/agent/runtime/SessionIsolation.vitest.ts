@@ -20,7 +20,6 @@ import {
   defaultSession,
 } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
@@ -51,7 +50,6 @@ function initTestPlatform(): Promise<void> {
 function createLifecycleContext(
   executionId: ExecutionId,
   streamId: StreamTabId,
-  streamStatus: StreamStatusMachine,
   session: SessionHandle,
 ): AgentLaunchContext {
   const explicit = createRecordingHost();
@@ -95,7 +93,6 @@ function createLifecycleContext(
     setting,
     prompt,
     runScope,
-    streamStatus,
     logger: noopTrace,
     parentStage: noopTrace.openStage('Run: assistant'),
     storageKey,
@@ -168,14 +165,8 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
     await initTestPlatform();
     const executionId = 'e15001' as ExecutionId;
     const streamId = 'stream:iso-track' as StreamTabId;
-    const streamStatus = new StreamStatusMachine();
     const sessionB = new SessionHandle();
-    const ctx = createLifecycleContext(
-      executionId,
-      streamId,
-      streamStatus,
-      sessionB,
-    );
+    const ctx = createLifecycleContext(executionId, streamId, sessionB);
 
     try {
       await runFlowWithLifecycle(ctx, async () => {
@@ -198,7 +189,7 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
         defaultSession().executions.getHandle(executionId),
       ).toBeUndefined();
     } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearStreamStatusForTest(sessionB.status, streamId);
       sessionB.dispose();
     }
   });

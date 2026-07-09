@@ -54,9 +54,9 @@ export interface ModelInvocationConfig<TShared, TServices> {
  */
 type InvocationServices = Pick<
   AgentCore,
-  'modelHandler' | 'logger' | 'setting' | 'config' | 'streamStatus'
+  'modelHandler' | 'logger' | 'setting' | 'config'
 > &
-  Pick<BaseFlowContextInit, 'setAbortController'> & {
+  Pick<BaseFlowContextInit, 'setAbortController' | 'streamStatus'> & {
     readonly client: unknown;
     readonly refreshClient?: () => Promise<void>;
   };
