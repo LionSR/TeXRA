@@ -31,6 +31,7 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { formatRelativeTime } from '@shared/utils/string';
+import { getRunContextSession } from '@tools/contextHelpers';
 import { truncateSummary, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import {
@@ -48,7 +49,7 @@ const QUESTION_TRUNCATION = 400;
 const ANSWER_TRUNCATION = 2000;
 
 function inquiryThreadUpdateSession(session?: SessionHandle): SessionHandle {
-  const owner = session ?? tryUseRunContext()?.session;
+  const owner = session ?? getRunContextSession(tryUseRunContext());
   return owner?.events ? owner : defaultSession();
 }
 

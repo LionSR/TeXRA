@@ -31,6 +31,12 @@ import {
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  startChildRunLoop,
+  type ChildRunPorts,
+  type ChildRunStrategy,
+} from '@agent/runtime/childRunLoop';
+import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import type {
   StreamTabId,
   ExecutionId,
@@ -40,7 +46,12 @@ import type {
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { requireRunStream } from '@tools/contextHelpers';
+import {
+  getRunContextExecutionId,
+  getRunContextStreamId,
+  getRunContextWorkingDirectory,
+  requireRunStream,
+} from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -62,12 +73,6 @@ import {
   formatChildRunDelivery,
   formatChildRunError,
 } from './deliveryEnvelope';
-import {
-  startChildRunLoop,
-  type ChildRunPorts,
-  type ChildRunStrategy,
-} from '@agent/runtime/childRunLoop';
-import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
@@ -515,7 +520,7 @@ export class CodexTool extends defineTool({
           return resumeAgentCliSession(CodexThreads, {
             id: input.thread_id,
             prompt: input.prompt,
-            callerStreamId: runContext?.streamId,
+            callerStreamId: getRunContextStreamId(runContext),
             labels: {
               notActiveLabel: 'Codex thread',
               idParamName: 'thread_id',
@@ -530,8 +535,8 @@ export class CodexTool extends defineTool({
         return launchCodexSession(
           input,
           streamId,
-          runContext?.executionId,
-          runContext?.workingDirectory,
+          getRunContextExecutionId(runContext),
+          getRunContextWorkingDirectory(runContext),
           runtimeHost,
         );
       },
