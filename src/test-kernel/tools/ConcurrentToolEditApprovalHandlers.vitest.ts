@@ -8,6 +8,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 // Local imports - agent types
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - tools
 import type { StreamTabId } from '@shared/schemas';
@@ -19,26 +20,13 @@ import {
 } from '@tools/approval/toolEditApproval';
 
 /**
- * Proves the desktop multi-window fix: two runs with distinct
- * `toolEditApprovalHandler`s on their `RunContext` never cross-talk, even when
- * both requests are in flight at once (the shared approval queue serializes
- * execution but must not leak which handler a given request resolves through).
- * Before this fix, every host routed through the single process-wide
- * `platform().toolEditApproval` port, so a second window's handler silently
- * stole the first window's in-flight prompt.
+ * Proves the desktop multi-window invariant: two runs owned by distinct
+ * sessions never cross-talk, even when both requests are in flight at once.
+ * The approval queue is shared, but each request must resolve through the
+ * `SessionHandle.interactions` owner captured by its run context.
  */
-describe('Concurrent per-run tool edit approval handlers', () => {
-  setupPlatform(
-    { workspacePath: '/workspace', config: {}, files: {} },
-    {
-      toolEditApproval: () => {
-        throw new Error(
-          'platform().toolEditApproval should not be reached when the ' +
-            'RunContext supplies its own toolEditApprovalHandler',
-        );
-      },
-    },
-  );
+describe('Concurrent session tool edit approval handlers', () => {
+  setupPlatform({ workspacePath: '/workspace', config: {}, files: {} });
 
   beforeEach(() => {
     cleanupAllApprovals();
@@ -48,7 +36,7 @@ describe('Concurrent per-run tool edit approval handlers', () => {
     cleanupAllApprovals();
   });
 
-  it('routes each in-flight request through its own run handler, never the other', async () => {
+  it('routes each in-flight request through its owning session', async () => {
     const seenByA: ToolEditApprovalRequest[] = [];
     const seenByB: ToolEditApprovalRequest[] = [];
 
@@ -65,15 +53,28 @@ describe('Concurrent per-run tool edit approval handlers', () => {
       return { accepted: true, appliedContent: 'from-b' };
     };
 
+    const sessionA = new SessionHandle();
+    const sessionB = new SessionHandle();
+    sessionA.useHostInteractions({
+      requestToolEditApproval: handlerA,
+      resolve: () => false,
+      cancel: () => undefined,
+    });
+    sessionB.useHostInteractions({
+      requestToolEditApproval: handlerB,
+      resolve: () => false,
+      cancel: () => undefined,
+    });
+
     const contextA = createRunContext({
       runtimeHost: noopAgentRuntimeHost,
       streamId: 'windowA@model: test.tex' as StreamTabId,
-      toolEditApprovalHandler: handlerA,
+      session: sessionA,
     });
     const contextB = createRunContext({
       runtimeHost: noopAgentRuntimeHost,
       streamId: 'windowB@model: test.tex' as StreamTabId,
-      toolEditApprovalHandler: handlerB,
+      session: sessionB,
     });
 
     const requestA: ToolEditApprovalRequest = {

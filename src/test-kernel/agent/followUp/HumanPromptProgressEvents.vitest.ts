@@ -6,6 +6,7 @@ import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { StreamTabId } from '@shared/schemas';
 import { AskUserQuestionTool } from '@tools/userQuestion';
@@ -30,10 +31,9 @@ let testApprovalHandler:
   | undefined;
 
 function installTestPlatform(): Promise<void> {
-  return installPlatform(
-    {},
-    {
-      toolEditApproval: (request) => {
+  return installPlatform({}).then(() => {
+    defaultSession().useHostInteractions({
+      requestToolEditApproval: (request) => {
         const handler = testApprovalHandler;
         if (!handler) {
           throw new Error(
@@ -42,8 +42,10 @@ function installTestPlatform(): Promise<void> {
         }
         return handler(request);
       },
-    },
-  );
+      resolve: () => false,
+      cancel: () => undefined,
+    });
+  });
 }
 
 function inToolContext<T>(
@@ -64,6 +66,7 @@ describe('human prompt progress events', () => {
 
   afterEach(() => {
     cleanupAllApprovals();
+    defaultSession().interactions.dispose();
     testApprovalHandler = undefined;
   });
 

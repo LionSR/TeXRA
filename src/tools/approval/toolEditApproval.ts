@@ -1,7 +1,9 @@
-import { platform } from '@platform/platform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
@@ -9,7 +11,7 @@ import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import {
-  getRunContextRuntimeHost,
+  getRunContextSession,
   getRunContextStreamId,
 } from '@tools/contextHelpers';
 import { WorkspaceFS } from '@utils/files';
@@ -238,24 +240,16 @@ export async function requestToolEditApproval(
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
 
-  const hostInteraction =
-    getRunContextRuntimeHost(context)?.interactions?.requestToolEditApproval?.(
-      preparedRequest,
-    );
+  const hostInteraction = (
+    getRunContextSession(context) ?? defaultSession()
+  ).interactions.requestToolEditApproval(preparedRequest);
   if (hostInteraction) {
     return finalizeApprovalResult(await hostInteraction, preparedRequest);
   }
 
-  const result = await toolEditApprovalController.enqueue(async () => {
-    // Prefer the run's own approval channel (set by hosts that manage more
-    // than one concurrent session per process, e.g. desktop's one window per
-    // run) over the frozen, process-wide Platform port, which only ever holds
-    // one active handler at a time.
-    const handler =
-      context?.toolEditApprovalHandler ?? platform().toolEditApproval;
-    return handler(preparedRequest);
-  });
-  return finalizeApprovalResult(result, preparedRequest);
+  throw new Error(
+    'Tool edit approval requires session.interactions.requestToolEditApproval.',
+  );
 }
 
 function finalizeApprovalResult(
