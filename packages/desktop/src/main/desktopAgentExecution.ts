@@ -84,7 +84,6 @@ import {
 } from '@tools/approval';
 import type { RegisteredToolName } from '@tools/registry';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
-import { GoalStore } from '@tools/goal';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -1081,7 +1080,6 @@ export class DesktopProgressBridge {
 
     this.releaseApprovalsForStream(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
-    await GoalStore.forget(streamId, this.session);
     await this.state.clearStream(streamId);
     this.send({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
@@ -1114,7 +1112,6 @@ export class DesktopProgressBridge {
     // interactions after the visible per-stream sweep. This is session-scoped
     // and does not touch sibling windows.
     this.session.interactions.cancel({ cause: 'All streams deleted.' });
-    await GoalStore.forgetMany([...streamIds], this.session);
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
     // ghosts come back zombie-style after relaunch.
