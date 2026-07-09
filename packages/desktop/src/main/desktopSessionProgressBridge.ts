@@ -456,7 +456,9 @@ class DesktopSessionProgressBridgeImpl implements DesktopSessionProgressBridge {
       case 'clearMissingOutputs':
       case 'updateQueuedFollowUps':
       case 'followUpSent':
+        return;
       case 'removeStream':
+        // Shared ProgressBackend fact handling owns lifecycle deletion.
         return;
     }
     assertNever(fact, 'Unhandled desktop session fact');
