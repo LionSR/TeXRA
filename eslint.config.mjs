@@ -482,6 +482,52 @@ export default tseslint.config(
     },
   },
 
+  // Production core code must not reach back into host-owned layers. The only
+  // intentional prose reference in this area is a JSDoc note in
+  // src/shared/state/PersistedState.ts; import declarations stay forbidden.
+  {
+    files: ['src/**/*.{ts,tsx,mts,cts}'],
+    ignores: ['src/test-kernel/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@common/state',
+              message:
+                'Production src code must not import host-owned state helpers; route host access through platform or host adapters.',
+            },
+            {
+              name: '@common/webview',
+              message:
+                'Production src code must not import host-owned webview helpers; route host access through platform or host adapters.',
+            },
+          ],
+          patterns: [
+            {
+              group: [
+                '@webview/*',
+                '@commands/*',
+                '@progressView/*',
+                '@settingsView/*',
+                '@frontend/*',
+                '@extensionSchemas/*',
+                '@resources/*',
+                '@common/state/*',
+                '@common/webview/*',
+                '@cli/*',
+                '@desktop/*',
+              ],
+              message:
+                'Production src code must not import extension, CLI, or desktop host layers; route host access through platform or host adapters.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Configuration for JavaScript view modules
   {
     files: [
