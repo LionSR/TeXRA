@@ -76,7 +76,9 @@ class DesktopHostInteractions implements HostInteractions {
   requestToolEditApproval(
     request: ToolEditApprovalRequest,
   ): Promise<ToolEditApprovalResult> {
-    return this.options.getToolEditApprovals().requestApproval(request);
+    return this.options
+      .getToolEditApprovals()
+      .requestApproval(request, this.options.session);
   }
 
   requestBashApproval(

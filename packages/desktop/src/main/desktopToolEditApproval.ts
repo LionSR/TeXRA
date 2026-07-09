@@ -4,6 +4,7 @@ import path from 'node:path';
 import { nanoid } from 'nanoid';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { DiffViewHost } from '@hosts/uiHosts';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
@@ -31,6 +32,7 @@ import { setDesktopToolEditApprovalHandler } from './platform/index.js';
 
 export interface DesktopToolEditApprovalOptions {
   runtimeHost: AgentRuntimeHost;
+  session: SessionHandle;
   openPath?: (filePath: string) => Promise<void>;
   openBuildDisplay?: BuildDisplayFn;
   openDiff?: DiffViewHost['openDiff'];
@@ -52,6 +54,7 @@ export interface DesktopToolEditApprovalController {
    */
   requestApproval(
     request: ToolEditApprovalRequest,
+    session?: SessionHandle,
   ): Promise<ToolEditApprovalResult>;
   dispose(): void;
 }
@@ -79,6 +82,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
 
   async requestApproval(
     request: ToolEditApprovalRequest,
+    session: SessionHandle = this.options.session,
   ): Promise<ToolEditApprovalResult> {
     if (this.disposed) {
       throw new Error('Desktop tool edit approval controller is disposed.');
@@ -109,7 +113,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
         isSettled: () => settled,
         settle: (value) => this.settle(requestId, value),
       });
-      this.showProgressPermission(requestId, request, lineChanges);
+      this.showProgressPermission(session, requestId, request, lineChanges);
     });
 
     if (result.accepted && result.appliedContent != null) return result;
@@ -196,6 +200,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   }
 
   private showProgressPermission(
+    session: SessionHandle,
     requestId: string,
     request: ToolEditApprovalRequest,
     lineChanges: { added: number; removed: number },
@@ -203,7 +208,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     // Activate the stream that needs approval and post the prompt (shared with
     // the VS Code host); the desktop host has no workspace API, so it falls
     // back to a basename when computing the relative display path.
-    emitToolEditApprovalPrompt(this.options.runtimeHost, {
+    emitToolEditApprovalPrompt(this.options.runtimeHost, session, {
       requestId,
       request,
       relativePath: this.relativeDisplayPath(request.path),
