@@ -95,11 +95,9 @@ export function isOAuthProvider(
 /**
  * Single source of truth for tier values used in server-side API key access.
  *
- * CROSS-REFERENCE: These exact string values are duplicated in:
- *   supabase/functions/relay/models.ts (lines 143-145)
- * Deno Edge Functions cannot import TypeScript source, so the values must
- * be kept in sync manually. If you change any value here, you MUST also
- * update the corresponding constants in that file.
+ * The relay edge function cannot import this client-side module. Keep the
+ * duplicated relay tier constants in sync; parity is enforced by
+ * src/test-kernel/supabase/RelaySharedConfigParity.vitest.ts.
  *
  * The schema enum order is: 'free', 'Max', 'Ultra' (ascending privilege).
  */
@@ -117,10 +115,8 @@ export const SERVER_SIDE_CACHE_TTL_MS = 5 * 60 * 1000;
 /**
  * Monthly relay spending limits in USD.
  *
- * CROSS-REFERENCE: These values are duplicated in:
- *   supabase/functions/relay/models.ts
- * Deno Edge Functions cannot import this source file, so update both files
- * when changing relay spending policy.
+ * The relay edge function duplicates these values in its Deno module graph;
+ * src/test-kernel/supabase/RelaySharedConfigParity.vitest.ts enforces parity.
  */
 const RELAY_TIER_SPENDING_LIMITS: Record<UserTier, number> = {
   [FREE_TIER]: 10,
