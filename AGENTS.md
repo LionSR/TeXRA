@@ -87,7 +87,7 @@ aliases until a future SDK surface is enforced with a build and import-boundary 
   - `packages/extension/src/common/state/` - State managers including `pendingStateManager`
   - `packages/extension/src/common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
 - `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
-  - `utils/core/` - Async, type-guard, math, comparator, and URL primitives (`debounce`, `delay`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`); re-exports string primitives from `utils/text/stringUtils` for browser-safe barrel access
+  - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `delay`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`); re-exports string primitives from `utils/text/stringUtils` for browser-safe barrel access
   - `utils/files/` - Filesystem utilities, rules, and vars
   - `utils/config/` - Settings helpers (`getConfig`, `updateConfig`, `watchConfig`)
   - `utils/system/` - Shell command execution (`execUtils`)
