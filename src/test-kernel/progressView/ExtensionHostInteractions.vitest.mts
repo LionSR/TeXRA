@@ -4,7 +4,7 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 import type { StreamTabId } from '@shared/schemas';
-import type { ApprovalRequestHandlerSet } from '@shared/progressView/backend/progressBackendUiConfig';
+import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 
 const mocks = vi.hoisted(() => ({
   nativeRequestApproval: vi.fn(),

@@ -1,7 +1,7 @@
 import type {
   ProgressBackendInteractionEvent,
   ProgressBackendInteractionPayloads,
-} from '@shared/progressView/backend/events/ProgressInteractionHandler';
+} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 
 type ExtensionInteractionEventSink = <
   K extends ProgressBackendInteractionEvent,
