@@ -97,7 +97,7 @@ export type CycleDebugFileOptions = {
 export async function saveCycleDebug(
   object: unknown,
   objectType: 'messages' | 'response',
-  services: AgentCore,
+  services: Pick<AgentCore, 'logger' | 'config'>,
   fileOptions: CycleDebugFileOptions,
 ): Promise<void> {
   const { runScope } = useLaunchRunContext();
@@ -116,7 +116,7 @@ export async function saveCycleDebug(
 }
 
 export function defaultPostCompactionContext(
-  services: WorkspaceScopedCore,
+  services: Pick<WorkspaceScopedCore, 'workspace'>,
 ): string | null {
   const { runScope } = useLaunchRunContext();
   const { session, streamId } = runScope;
@@ -152,7 +152,7 @@ export function extractModelResponse(
   response: unknown,
   responseTimeMs: number | undefined,
   endTag: string,
-  services: WorkspaceScopedCore,
+  services: Pick<WorkspaceScopedCore, 'modelHandler' | 'workspace' | 'logger'>,
   options: ExtractModelResponseOptions = {},
 ): ExtractedModelResponse {
   const { modelHandler, workspace, logger } = services;
