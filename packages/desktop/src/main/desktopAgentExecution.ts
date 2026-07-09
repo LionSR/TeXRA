@@ -361,6 +361,7 @@ export class DesktopProgressBridge {
     );
     this.toolEditApprovals = createDesktopToolEditApprovalController({
       runtimeHost: this.runtimeHost,
+      session: this.session,
       openPath: options.openPath,
       openBuildDisplay: options.openBuildDisplay,
       openDiff: options.openDiff,
@@ -1200,7 +1201,10 @@ export class DesktopProgressBridge {
           session: this.session,
           runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
           toolEditApprovalHandler: (approvalRequest) =>
-            this.toolEditApprovals.requestApproval(approvalRequest),
+            this.toolEditApprovals.requestApproval(
+              approvalRequest,
+              this.session,
+            ),
           reportFailure: (error) => this.reportResumeFailure(streamId, error),
         }),
       executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
@@ -1410,7 +1414,7 @@ export class DesktopProgressBridge {
       session: this.session,
       runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
       toolEditApprovalHandler: (approvalRequest) =>
-        this.toolEditApprovals.requestApproval(approvalRequest),
+        this.toolEditApprovals.requestApproval(approvalRequest, this.session),
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       openWorkflowOutput: async (result) => {
         // Gate, outcome check, and final-output selection are shared policy

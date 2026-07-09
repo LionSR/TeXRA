@@ -161,7 +161,7 @@ export function createExtensionHostInteractions(
     requestToolEditApproval(
       request: ToolEditApprovalRequest,
     ): Promise<ToolEditApprovalResult> {
-      return nativeRequestApproval(request);
+      return nativeRequestApproval(request, { session: options.session });
     },
 
     requestBashApproval(
