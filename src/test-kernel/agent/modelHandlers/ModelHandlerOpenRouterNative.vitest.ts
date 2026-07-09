@@ -174,3 +174,40 @@ describe('ModelHandlerOpenRouterNative retry ownership', () => {
     );
   });
 });
+
+describe('ModelHandlerOpenRouterNative getClient retryConfig', () => {
+  it('bounds the SDK retry window instead of the 1h default (#7643)', async () => {
+    class TestableHandler extends ModelHandlerOpenRouterNative {
+      protected override async getApiKey(): Promise<string> {
+        return 'test-api-key';
+      }
+
+      override getBaseUrl(): string | null {
+        return null;
+      }
+    }
+
+    const handler = new TestableHandler(buildConfig());
+    const client = await handler.getClient();
+
+    // Constructing the SDK client is synchronous, local option-merging (no
+    // network call), so inspecting the stored options is safe here.
+    // Reaches into the SDK client's private `_options` (no public accessor).
+    // A future @openrouter/sdk bump renaming it makes `options` undefined and
+    // the deepEqual below throw — a loud failure, not silent under-assertion.
+    // Re-check this access on SDK bumps.
+    const options = (client as unknown as { _options: Record<string, unknown> })
+      ._options;
+
+    assert.deepEqual(options.retryConfig, {
+      strategy: 'backoff',
+      backoff: {
+        initialInterval: 500,
+        maxInterval: 8_000,
+        exponent: 1.5,
+        maxElapsedTime: 30_000,
+      },
+      retryConnectionErrors: true,
+    });
+  });
+});
