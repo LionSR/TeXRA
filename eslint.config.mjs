@@ -75,6 +75,39 @@ const ALIAS_CONFIGS = [
   aliasConfigForRoot(__dirname),
 ];
 
+const PRODUCTION_HOST_LAYER_RESTRICTED_IMPORT_PATHS = [
+  {
+    name: '@common/state',
+    message:
+      'Production src code must not import host-owned state helpers; route host access through platform or host adapters.',
+  },
+  {
+    name: '@common/webview',
+    message:
+      'Production src code must not import host-owned webview helpers; route host access through platform or host adapters.',
+  },
+];
+
+const PRODUCTION_HOST_LAYER_RESTRICTED_IMPORT_PATTERNS = [
+  {
+    group: [
+      '@webview/**',
+      '@commands/**',
+      '@progressView/**',
+      '@settingsView/**',
+      '@frontend/**',
+      '@extensionSchemas/**',
+      '@resources/**',
+      '@common/state/**',
+      '@common/webview/**',
+      '@cli/**',
+      '@desktop/**',
+    ],
+    message:
+      'Production src code must not import extension, CLI, or desktop host layers; route host access through platform or host adapters.',
+  },
+];
+
 const VSCODE_FREE_ZONE_DIRS = [
   'src/agent',
   'src/model',
@@ -492,37 +525,8 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: [
-            {
-              name: '@common/state',
-              message:
-                'Production src code must not import host-owned state helpers; route host access through platform or host adapters.',
-            },
-            {
-              name: '@common/webview',
-              message:
-                'Production src code must not import host-owned webview helpers; route host access through platform or host adapters.',
-            },
-          ],
-          patterns: [
-            {
-              group: [
-                '@webview/**',
-                '@commands/**',
-                '@progressView/**',
-                '@settingsView/**',
-                '@frontend/**',
-                '@extensionSchemas/**',
-                '@resources/**',
-                '@common/state/**',
-                '@common/webview/**',
-                '@cli/**',
-                '@desktop/**',
-              ],
-              message:
-                'Production src code must not import extension, CLI, or desktop host layers; route host access through platform or host adapters.',
-            },
-          ],
+          paths: PRODUCTION_HOST_LAYER_RESTRICTED_IMPORT_PATHS,
+          patterns: PRODUCTION_HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
         },
       ],
     },
@@ -536,12 +540,14 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
+          paths: PRODUCTION_HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: [
             {
               group: ['@agent/modelHandlers', '@agent/modelHandlers/**'],
               message:
                 'Agent core must not import model handler implementations; move provider-neutral contracts to @agent/types or a core helper.',
             },
+            ...PRODUCTION_HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
           ],
         },
       ],
