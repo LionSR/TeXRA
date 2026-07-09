@@ -8,6 +8,7 @@ import {
   replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
+import { hydrateProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryHydration';
 import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { computeAgentOptionsData } from '@agent/index';
@@ -38,21 +39,12 @@ import {
 import {
   AgentCategory,
   type AgentProposalPermission,
-  type ExternalInquiryPermission,
   type ProgressViewOutboundMessage,
   type ProgressViewPlacement,
   type StreamTabId,
 } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
-import {
-  getOpenTurnDraft,
-  listThreadsByStatus,
-  listOpenThreads,
-  manifestToTranscript,
-  readExternalInquiryThread,
-} from '@tools/inquiry/externalInquiryStorage';
 
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { createExtensionHostInteractions } from './extensionHostInteractions';
@@ -61,7 +53,6 @@ import type { ProgressBackendInteractionPayloads } from '@controllers/progressVi
 
 import type { MainViewProvider } from '../MainViewProvider';
 
-const MAX_INQUIRY_THREAD_HYDRATION = 100;
 export type ProgressStreamRevealResult = 'revealed' | 'missing';
 
 /**
@@ -365,94 +356,19 @@ export class ProgressViewProvider
     this._pendingUpdateOptions = null;
     this._panelJustDisposed = false;
     this.syncFullView({ forceRebuild: true });
-    // Manifest-backed open inquiries must be re-shown after a full
-    // extension reload — ApprovalRequestHandler.pending is in-memory and
-    // empty at construction. Fire-and-forget: the replay below covers
-    // anything already in-memory; this fills in the durable rows.
-    void this.syncInquiryThreads();
-    void this.hydrateOpenInquiries();
+    // Manifest-backed inquiry state is durable, but handler pending state is
+    // in-memory. Fire-and-forget: replay covers warm targets, hydration covers
+    // host restarts.
+    void this.hydrateProgressViewInquiries();
     this.replayPendingPrompts();
   }
 
-  private async syncInquiryThreads(): Promise<void> {
-    if (!this.webviewUpdater.isAvailable()) return;
-
-    try {
-      const threads = await listThreadsByStatus({
-        status: 'any',
-        scope: 'all',
-        limit: MAX_INQUIRY_THREAD_HYDRATION,
-      });
-      this.webviewUpdater.syncInquiryThreads(threads);
-    } catch {
-      // A damaged manifest should not prevent the progress view from
-      // showing streams or replaying pending request panels.
-    }
-  }
-
-  /**
-   * Read every open inquiry thread from durable storage and re-emit
-   * its `showExternalInquiry` payload so the panel reappears after an
-   * extension reload. No-op when the webview can't accept messages or
-   * when in-memory `pending` already covers everything (a sidebar
-   * toggle, not a fresh reload). `show()` itself is idempotent on
-   * `requestId` via `delivered`, so this gate is a perf optimization,
-   * not a correctness fix.
-   */
-  private async hydrateOpenInquiries(): Promise<void> {
-    if (!this.webviewUpdater.isAvailable()) return;
-    if (this.approvalHandlers.externalInquiry.pendingSize > 0) return;
-
-    const open = await listOpenThreads().catch((error) => {
-      // A storage read failure here silently skips inquiry hydration; log
-      // it so the missing panel reappearance is diagnosable.
-      this.logger.debug(`Failed to list open inquiry threads: ${error}`);
-      return undefined;
+  public async hydrateProgressViewInquiries(): Promise<void> {
+    await hydrateProgressViewInquiries({
+      webviewUpdater: this.webviewUpdater,
+      externalInquiry: this.approvalHandlers.externalInquiry,
+      logger: this.logger,
     });
-    if (!open) return;
-
-    for (const summary of open) {
-      try {
-        const manifest = await readExternalInquiryThread(summary.threadId);
-        if (!manifest || manifest.status !== 'open') continue;
-        if (!manifest.parentStreamId) continue;
-        const lastTurn = manifest.turns.at(-1);
-        if (!lastTurn || lastTurn.kind !== 'open') continue;
-        const isFollowUp = manifest.turns.length > 1;
-        const sessionLinks = collectKnownSessionLinks(manifest);
-        const draft = getOpenTurnDraft(manifest);
-        const transcript = manifestToTranscript(manifest);
-        const hydrationFields = {
-          sessionLinks,
-          draft,
-          transcript,
-        };
-        const basePermission = {
-          requestId: manifest.threadId,
-          threadId: manifest.threadId,
-          question: lastTurn.question,
-          context: lastTurn.context ?? undefined,
-          suggestSearch: lastTurn.suggestSearch ?? undefined,
-          attachFiles: lastTurn.attachFiles ?? undefined,
-          allowBypass: false,
-          streamId: manifest.parentStreamId,
-        };
-        const permission: ExternalInquiryPermission = isFollowUp
-          ? {
-              ...basePermission,
-              ...hydrationFields,
-              mode: 'followUp',
-            }
-          : {
-              ...basePermission,
-              ...hydrationFields,
-              mode: 'new',
-            };
-        this.approvalHandlers.externalInquiry.show(permission);
-      } catch {
-        // Skip threads whose manifest can't be read; surface logs elsewhere.
-      }
-    }
   }
 
   private replayPendingPrompts(): void {
