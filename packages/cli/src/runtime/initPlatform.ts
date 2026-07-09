@@ -53,7 +53,7 @@ import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 
 // Type imports - platform and CLI runtime
-import type { LifecycleHost, ToolEditApprovalPort } from '@platform/interfaces';
+import type { LifecycleHost } from '@platform/interfaces';
 import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 
@@ -62,49 +62,6 @@ let cliWorkspaceCwd = '';
 let quietPlatformLogs = false;
 let shutdownHandlersInstalled = false;
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
-
-// ---------------------------------------------------------------------------
-// Session-scoped tool-edit approval handler
-// ---------------------------------------------------------------------------
-//
-// The Platform port `toolEditApproval` is frozen at initPlatform time, but the
-// actual approval UI is session-scoped — the CLI opens and closes a TUI session
-// (or a headless approval prompt) independently of the platform life span.
-//
-// We bridge the two lifetimes with a single mutable reference: `initCliPlatform`
-// installs a delegating handler that reads this reference; `subscribeApprovals`
-// (TUI) and `installCliApprovalHandlers` (headless) write and clear it per
-// session, exactly as they did with the defunct `setToolEditApprovalHandler`.
-
-let activeCliToolEditApprovalHandler: ToolEditApprovalPort | undefined;
-
-/** Install the active session's tool-edit approval handler (or clear it). */
-export function setActiveCliToolEditApprovalHandler(
-  handler: ToolEditApprovalPort | undefined,
-): void {
-  activeCliToolEditApprovalHandler = handler;
-}
-
-/**
- * Return a Platform-compatible `toolEditApproval` port that delegates to the
- * handler installed by {@link setActiveCliToolEditApprovalHandler}.
- *
- * Used both by {@link initCliPlatform} (wired into the frozen Platform at
- * startup) and by unit tests that exercise the CLI approval adapter against a
- * {@link createFakePlatform}.
- */
-export function createCliToolEditApprovalPort(): ToolEditApprovalPort {
-  return (request) => {
-    const handler = activeCliToolEditApprovalHandler;
-    if (!handler) {
-      throw new Error(
-        'No active session for tool edit approval. ' +
-          'Start a chat session or use --print with an approval policy.',
-      );
-    }
-    return handler(request);
-  };
-}
 
 type CliPlatformInitOptions = Pick<
   CliContext,
@@ -249,7 +206,6 @@ export async function initCliPlatform(
           isTexraCliEntrypoint: () =>
             isTexraCliEntrypointPath(readCliEntrypointPath()),
         },
-        toolEditApproval: createCliToolEditApprovalPort(),
       }),
     );
     if (context.installSignalHandlers !== false) {
