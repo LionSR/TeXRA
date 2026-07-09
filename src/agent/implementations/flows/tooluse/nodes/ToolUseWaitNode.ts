@@ -9,7 +9,6 @@ import {
   followUpDisplayText,
   type AppendFollowUpResult,
 } from '@agent/followUp/followUpMessages';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { STREAM_PHASE } from '@shared/schemas';
 import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
 
@@ -29,7 +28,6 @@ interface WaitPrepResult {
 
 export class ToolUseWaitNode<C> extends Node<
   ToolUseRunShared,
-  FlowParams,
   ToolUseServices<C>
 > {
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
