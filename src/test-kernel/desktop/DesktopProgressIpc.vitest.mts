@@ -32,15 +32,28 @@ function fillRegistry(
 
 interface DesktopProgressIpcModule {
   createDesktopProgressIpc(options: {
-    progress: {
+    progress?: {
       syncFullView(): void;
+      replayPendingPrompts(): void;
       progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
     };
+    getProgress?: () =>
+      | {
+          syncFullView(): void;
+          replayPendingPrompts(): void;
+          progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
+        }
+      | undefined;
     onUnsupportedCommand?: (
       message: { command: string },
       reason?: string,
     ) => void;
     onAsyncError?: (error: unknown) => void;
+    ensureProgress?: () => Promise<{
+      syncFullView(): void;
+      replayPendingPrompts(): void;
+      progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
+    }>;
   }): {
     handleMessage(
       message: { command: string } & Record<string, unknown>,
@@ -60,6 +73,7 @@ function createProgress(
 ) {
   return {
     syncFullView: vi.fn(),
+    replayPendingPrompts: vi.fn(),
     progressViewInboundHandlers: fillRegistry(progressViewInboundHandlers),
   };
 }
@@ -78,6 +92,22 @@ describe('desktop Progress IPC', () => {
       ipc.handleMessage({ command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY }),
     ).toBe(false);
     expect(progress.syncFullView).toHaveBeenCalledTimes(1);
+    expect(progress.replayPendingPrompts).toHaveBeenCalledTimes(1);
+  });
+
+  it('replays pending prompts after lazy Progress readiness load', async () => {
+    const progress = createProgress();
+    const ipc = createDesktopProgressIpc({
+      ensureProgress: async () => progress,
+    });
+
+    expect(
+      ipc.handleMessage({ command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY }),
+    ).toBe(false);
+    await Promise.resolve();
+
+    expect(progress.syncFullView).toHaveBeenCalledTimes(1);
+    expect(progress.replayPendingPrompts).toHaveBeenCalledTimes(1);
   });
 
   it('dispatches recognized Progress commands through the bridge registry', async () => {
