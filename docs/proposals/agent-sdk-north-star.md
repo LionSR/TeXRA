@@ -25,8 +25,10 @@ _environment boundary_, not the run surface:
   typed fact stream; `AgentFlowResult` returns typed outcome + usage.
 - The landed session-runtime surface — `SessionHandle`, `session.events`
   (`SessionEventHub`), `session.interactions` (`HostInteractions`),
-  `session.runs`/`session.status` — measured **~80% consumer-worthy**
-  (runtime-endstate TD-2); the remaining deltas are migration residue, all
+  `session.runs`/`session.status` — assessed **~80% consumer-worthy**
+  (runtime-endstate TD-2 — qualitative: the run/config/event/result surfaces
+  pass the embedder test as-is; the four residue deltas in §2 item 3 are
+  the remainder); the remaining deltas are migration residue, all
   finish-the-endgame deletions on the existing surface, none redesign.
 - The **empirical SDK surface already exists**: exactly **15 `@agent/*`
   modules are imported by all three hosts** (AgentConfig,

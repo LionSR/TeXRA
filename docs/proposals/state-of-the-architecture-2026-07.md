@@ -1,11 +1,15 @@
 # State of the architecture: macroscopic review (2026-07)
 
 > **Status:** Synthesis of the 2026-07-09 macroscopic architecture review at
-> HEAD `4b402d75a`. 66 structural findings across 12 system-level areas
+> HEAD `4b402d75a`. 66 structural findings across 13 system-level areas
 > survived adversarial challenge (every number below was recomputed at pinned
 > HEAD by an independent verifier; corrections are folded in silently and the
-> original over-claims are gone). This is the **macro companion** to the
-> 2026-07-08 micro audit (PR #7636, `doc-runtime-ui.md` + `error-draft.md`):
+> original over-claims are gone; counts are verified survivor findings —
+> compact-table rows may pack several sub-findings, and fence-verification
+> checks count as findings). This is the **macro companion** to the
+> 2026-07-08 micro audit (PR #7636,
+> [`tech-debt-audit-runtime-ui-2026-07.md`](./tech-debt-audit-runtime-ui-2026-07.md) +
+> [`tech-debt-error-ownership-2026-07.md`](./tech-debt-error-ownership-2026-07.md)):
 > that audit owns file-level defects; this one owns topology, boundaries,
 > planes, and trajectory. Where a macro finding subsumes a micro finding it is
 > cited as evidence (micro A1/A2/A4/A6/A10, EP-1, DUAL-n), not restated.
@@ -294,7 +298,9 @@ synchronous rail — do not unify.
 #### D5. Rule on the four SDK-surface deltas as one package (TD-2, decision-needed, CONFIRMED)
 
 **Measurement.** The landed quartet (SessionHandle / SessionEventHub /
-HostInteractions / AgentRuntimeHost) is ~80% consumer-worthy. Four migration
+HostInteractions / AgentRuntimeHost) is ~80% consumer-worthy (qualitative:
+the run/config/event/result surfaces pass the embedder test as-is; the four
+named residue deltas are the remainder). Four migration
 residues an external consumer trips on: (a) 7 doubly-optional request methods
 returning `Promise|undefined`, with the `context?.toolEditApprovalHandler ??
 platform().toolEditApproval` fallback reachable only via the test-only noop
@@ -524,7 +530,7 @@ configs); core prod references it 0 times (runtime access via
 `AgentDirectoriesPort`). Desktop's main renderer imports the extension's
 progress webview wholesale (18 named handlers). Binding constraint: vsce packs
 only files under `packages/extension` (machine-enforced by
-`verify-extension-package-invariants.mjs:44-45`). Debt is flat, not
+`verify-extension-package-invariants.mjs` (`REQUIRED_PACKAGED_PATHS`/`findExtensionPackagePath`)). Debt is flat, not
 compounding. **Direction:** accept-and-fence with a dated trigger — resources
 move OUT in the SAME change that creates the SDK package (first moment a
 better home exists); until then list the 8 sites as a comment block in
@@ -1116,7 +1122,7 @@ single-caller extractions anywhere in the above (standing ban).
 | 9   | S1 option (a): relay equality test + exact pin + deploy script                                         | **new small issue** (no tracker owns the relay surface)                          |
 | 10  | S2 arm (a): R7 detector; R3 owner dates the ~40 undated ledger rows                                    | fewer-elements R7/R3; #6981                                                      |
 | 11  | S5 arm (b): desktop version-check toast, post-Stage-5                                                  | **new product issue** (surface has no owner)                                     |
-| 12  | DS-2 rung B dated row (goal-store medium, trigger = SDK packaging); DS-3 one-line rule + checklist row | #6981; code-review SKILL.md                                                      |
+| 12  | DS-2 rung B dated row (goal-store medium, trigger = SDK packaging); DS-3 one-line rule + checklist row | #6981; `.claude/skills/code-review/SKILL.md` §13/§14                                                      |
 | 13  | S6 permanence paragraph on the ink patch                                                               | ink-practices proposal / patch header                                            |
 | 14  | NS-4 option (a): document port-injection as the embedding path                                         | agent-sdk-readiness.md                                                           |
 
