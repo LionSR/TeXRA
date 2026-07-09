@@ -1,5 +1,9 @@
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextSession,
+  getRunContextStreamId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import {
   defaultSession,
   type SessionHandle,
@@ -10,10 +14,6 @@ import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { recordToolFileRead } from '@tools/fileInteractions';
-import {
-  getRunContextSession,
-  getRunContextStreamId,
-} from '@tools/contextHelpers';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import {
