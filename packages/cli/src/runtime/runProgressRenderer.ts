@@ -1,11 +1,26 @@
 import path from 'node:path';
 
-// Local imports - agent metadata
+// Local imports - agent runtime and trace
 import { getAgent } from '@agent/index';
+import type { AgentEvent } from '@agent/trace';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type {
+  SessionEvent,
+  SessionEventHub,
+  SessionFact,
+} from '@agent/runtime/SessionEventHub';
 
 // Local imports - shared schemas
-import { STREAM_PHASE, STREAM_STATUS, type StreamPhase } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  STREAM_STATUS,
+  type ActiveChildInfo,
+  type ConversationProgress,
+  type RoundStage,
+  type StreamPhase,
+  type StreamTabId,
+} from '@shared/schemas';
 
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
@@ -35,6 +50,14 @@ export function isRunProgressEvent(event: string): event is RunProgressEvent {
   return RunProgressEventSet.has(event);
 }
 
+const RUN_PROGRESS_RUN_FACT_TYPES = [
+  'conversation.progress',
+  'run.config',
+  'status',
+  'stage.start',
+  'child.activity',
+] as const satisfies readonly AgentEvent['type'][];
+
 // Carriage return + erase-line (CSI 2K): rewind to column 0 and clear the row
 // so the single live status line can be repainted in place.
 const CLEAR_LINE = '\r\x1b[2K';
@@ -51,6 +74,7 @@ interface RenderState {
 }
 
 export interface RunProgressRenderer {
+  handleSessionEvent(event: SessionEvent): boolean;
   handle(event: RunProgressEvent, payload: unknown): boolean;
   clear(): void;
   preserve(): void;
@@ -80,6 +104,31 @@ export function createRunProgressRenderer(
   return new DefaultRunProgressRenderer(init);
 }
 
+export function attachRunProgressRenderer(
+  events: SessionEventHub,
+  renderer: RunProgressRenderer | undefined,
+): () => void {
+  if (!renderer) return () => undefined;
+
+  const detachSessionFacts = events.subscribe(
+    (event) => {
+      renderer.handleSessionEvent(event);
+    },
+    { scope: 'session' },
+  );
+  const detachRunFacts = events.subscribe(
+    (event) => {
+      renderer.handleSessionEvent(event);
+    },
+    { scope: 'run', types: RUN_PROGRESS_RUN_FACT_TYPES },
+  );
+
+  return () => {
+    detachRunFacts();
+    detachSessionFacts();
+  };
+}
+
 class DefaultRunProgressRenderer implements RunProgressRenderer {
   private readonly state: RenderState = {};
   private readonly startedAt: number;
@@ -93,7 +142,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private lastRenderAt = 0;
   private lastLine = '';
   private liveLine = false;
-  private rootStreamId: string | undefined;
+  private rootStreamId: StreamTabId | undefined;
   private rootStreamTerminal = false;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -106,6 +155,13 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.clearInterval = init.clearInterval ?? clearInterval;
     this.ansi = init.colorEnabled;
     this.startedAt = this.nowMs();
+  }
+
+  handleSessionEvent(event: SessionEvent): boolean {
+    if (event.scope === 'session') {
+      return this.handleSessionFact(event.event);
+    }
+    return this.handleRunFact(event.streamId, event.event);
   }
 
   handle(event: RunProgressEvent, payload: unknown): boolean {
@@ -122,22 +178,23 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         return true;
       case 'updateConversationProgress':
         if (this.rootStreamTerminal) return true;
-        if (
-          this.applyConversationProgress(
-            payload as RunProgressEventPayloads['updateConversationProgress'],
-          )
-        ) {
+        {
+          const data =
+            payload as RunProgressEventPayloads['updateConversationProgress'];
+          if (!this.applyConversationProgress(data.streamId, data.progress)) {
+            return true;
+          }
           this.updateHeartbeat();
           this.render();
         }
         return true;
       case 'updateRoundStage':
         if (this.rootStreamTerminal) return true;
-        if (
-          this.applyRoundStage(
-            payload as RunProgressEventPayloads['updateRoundStage'],
-          )
-        ) {
+        {
+          const data = payload as RunProgressEventPayloads['updateRoundStage'];
+          if (!this.applyRoundStage(data.streamId, data.roundStage)) {
+            return true;
+          }
           this.updateHeartbeat();
           this.render();
         }
@@ -146,13 +203,13 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       case 'updateActiveSubagents':
         if (this.rootStreamTerminal) return true;
         if (event === 'updateActiveProcesses') {
-          this.applyActiveProcesses(
-            payload as RunProgressEventPayloads['updateActiveProcesses'],
-          );
+          const data =
+            payload as RunProgressEventPayloads['updateActiveProcesses'];
+          this.applyActiveProcesses(data.parentStreamId, data.processes);
         } else {
-          this.applyActiveSubagents(
-            payload as RunProgressEventPayloads['updateActiveSubagents'],
-          );
+          const data =
+            payload as RunProgressEventPayloads['updateActiveSubagents'];
+          this.applyActiveSubagents(data.parentStreamId, data.children);
         }
         this.updateHeartbeat();
         this.render(true);
@@ -161,27 +218,14 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         {
           const data =
             payload as RunProgressEventPayloads['updateStreamStatus'];
-          if (!this.isRootStream(data.streamId)) return true;
-          const { status } = data;
-          this.state.phase = formatRunProgressStatus(status);
-          this.rootStreamTerminal = isTerminalStreamStatus(status);
-          if (this.rootStreamTerminal) {
-            this.state.activeProcesses = undefined;
-            this.state.activeSubagents = undefined;
-          }
-          this.updateHeartbeat();
-          this.render(true);
+          this.applyStatus(data.streamId, data.status);
         }
         return true;
       case 'updateStreamDescription': {
         if (this.rootStreamTerminal) return true;
         const data =
           payload as RunProgressEventPayloads['updateStreamDescription'];
-        if (this.isRootStream(data.streamId)) {
-          this.state.phase = data.description;
-          this.updateHeartbeat();
-          this.render(true);
-        }
+        this.applyStreamDescription(data.streamId, data.description);
         return true;
       }
       default:
@@ -208,9 +252,79 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private applyTaskState(
     payload: RunProgressEventPayloads['setTaskState'],
   ): boolean {
-    if (!this.claimRootStream(payload.streamId)) return false;
+    return this.applyRunConfig(payload.streamId, payload.taskState.agentConfig);
+  }
 
-    const config = payload.taskState.agentConfig;
+  private handleSessionFact(event: SessionFact): boolean {
+    switch (event.type) {
+      case 'updateStreamStatus': {
+        const { status, streamId } = event.payload;
+        this.applyStatus(streamId, status);
+        return true;
+      }
+      case 'updateStreamDescription':
+        if (!this.rootStreamTerminal) {
+          this.applyStreamDescription(
+            event.payload.streamId,
+            event.payload.description,
+          );
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private handleRunFact(streamId: StreamTabId, event: AgentEvent): boolean {
+    switch (event.type) {
+      case 'run.config':
+        if (this.applyRunConfig(event.streamId, event.config)) {
+          this.updateHeartbeat();
+          this.render(true);
+        }
+        return true;
+      case 'status':
+        this.applyStatus(event.streamId, event.phase);
+        return true;
+      case 'conversation.progress':
+        if (this.rootStreamTerminal) return true;
+        if (this.applyConversationProgress(streamId, event.progress)) {
+          this.updateHeartbeat();
+          this.render();
+        }
+        return true;
+      case 'stage.start':
+        if (this.rootStreamTerminal || event.kind !== 'round') return true;
+        if (
+          this.applyRoundStage(streamId, {
+            index: event.index ?? 0,
+            ...(event.total !== undefined && event.total > 0
+              ? { total: event.total }
+              : {}),
+          })
+        ) {
+          this.updateHeartbeat();
+          this.render();
+        }
+        return true;
+      case 'child.activity':
+        if (this.rootStreamTerminal) return true;
+        if (event.kind === 'processes') {
+          this.applyActiveProcesses(event.parentStreamId, event.processes);
+        } else {
+          this.applyActiveSubagents(event.parentStreamId, event.children);
+        }
+        this.updateHeartbeat();
+        this.render(true);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private applyRunConfig(streamId: StreamTabId, config: AgentConfig): boolean {
+    if (!this.claimRootStream(streamId)) return false;
+
     this.state.agent = config.agent;
     this.state.inputLabel = formatInputLabel(config.inputFiles);
     this.state.plannedRounds =
@@ -222,58 +336,86 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private applyConversationProgress(
-    payload: RunProgressEventPayloads['updateConversationProgress'],
+    streamId: StreamTabId,
+    progress: ConversationProgress,
   ): boolean {
-    if (!this.claimRootStream(payload.streamId)) return false;
+    if (!this.claimRootStream(streamId)) return false;
 
-    this.state.toolCallCount = payload.progress.toolCallCount || undefined;
+    this.state.toolCallCount = progress.toolCallCount || undefined;
     this.state.phase ??= 'running';
     return true;
   }
 
   private applyRoundStage(
-    payload: RunProgressEventPayloads['updateRoundStage'],
+    streamId: StreamTabId,
+    roundStage: RoundStage,
   ): boolean {
-    if (!this.claimRootStream(payload.streamId)) return false;
+    if (!this.claimRootStream(streamId)) return false;
 
-    this.state.round = payload.roundStage.index + 1;
-    if (payload.roundStage.total !== undefined) {
-      this.state.plannedRounds = payload.roundStage.total;
+    this.state.round = roundStage.index + 1;
+    if (roundStage.total !== undefined) {
+      this.state.plannedRounds = roundStage.total;
     }
     this.state.phase ??= 'running';
     return true;
   }
 
   private applyActiveProcesses(
-    payload: RunProgressEventPayloads['updateActiveProcesses'],
+    parentStreamId: StreamTabId,
+    processes: readonly ActiveChildInfo[],
   ): void {
-    if (!this.claimRootStream(payload.parentStreamId)) return;
+    if (!this.claimRootStream(parentStreamId)) return;
 
     this.state.activeProcesses = formatActiveChildren(
       'tool',
-      payload.processes.map(
+      processes.map(
         (activeProcess) => activeProcess.toolName ?? activeProcess.agentName,
       ),
     );
   }
 
   private applyActiveSubagents(
-    payload: RunProgressEventPayloads['updateActiveSubagents'],
+    parentStreamId: StreamTabId,
+    children: readonly ActiveChildInfo[],
   ): void {
-    if (!this.claimRootStream(payload.parentStreamId)) return;
+    if (!this.claimRootStream(parentStreamId)) return;
 
     this.state.activeSubagents = formatActiveChildren(
       'subagent',
-      payload.children.map((child) => child.agentName),
+      children.map((child) => child.agentName),
     );
   }
 
-  private claimRootStream(streamId: string): boolean {
+  private applyStatus(streamId: StreamTabId, status: StreamPhase): void {
+    if (!this.isRootStream(streamId)) return;
+
+    this.state.phase = formatRunProgressStatus(status);
+    this.rootStreamTerminal = isTerminalStreamStatus(status);
+    if (this.rootStreamTerminal) {
+      this.state.activeProcesses = undefined;
+      this.state.activeSubagents = undefined;
+    }
+    this.updateHeartbeat();
+    this.render(true);
+  }
+
+  private applyStreamDescription(
+    streamId: StreamTabId,
+    description: string,
+  ): void {
+    if (!this.isRootStream(streamId)) return;
+
+    this.state.phase = description;
+    this.updateHeartbeat();
+    this.render(true);
+  }
+
+  private claimRootStream(streamId: StreamTabId): boolean {
     this.rootStreamId ??= streamId;
     return this.rootStreamId === streamId;
   }
 
-  private isRootStream(streamId: string): boolean {
+  private isRootStream(streamId: StreamTabId): boolean {
     return this.rootStreamId === streamId;
   }
 

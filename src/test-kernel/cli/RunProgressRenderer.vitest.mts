@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import {
   createRunProgressRenderer,
@@ -8,7 +9,13 @@ import {
 } from '@cli/runtime/runProgressRenderer';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { STREAM_PHASE, STREAM_STATUS } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
+import {
+  STREAM_PHASE,
+  STREAM_STATUS,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   getAgent: vi.fn(),
@@ -110,6 +117,23 @@ function toolUseTaskState(
       },
     },
   };
+}
+
+function emitWorkflowRunConfig(
+  events: SessionEventHub,
+  taskState = workflowTaskState(),
+): void {
+  const streamId = taskState.streamId as StreamTabId;
+  events.emit({
+    scope: 'run',
+    streamId,
+    event: {
+      type: 'run.config',
+      streamId,
+      executionId: 'execution-1' as ExecutionId,
+      config: taskState.taskState.agentConfig,
+    },
+  });
 }
 
 function outputBuffer(): { write: (chunk: string) => void; text: string } {
@@ -347,6 +371,97 @@ describe('CLI run progress renderer', () => {
       'polish paper.tex · 0s\n' +
         'polish paper.tex · drafting · 0s\n' +
         'polish paper.tex · drafting · tool: Bash · 0s\n',
+    );
+  });
+
+  it('renders the live line from direct session and run facts', () => {
+    const output = outputBuffer();
+    const renderer = createRunProgressRenderer(
+      context({ colorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: output.write,
+        minIntervalMs: 0,
+        nowMs: () => 0,
+      },
+    );
+    const streamId = 'stream-1' as StreamTabId;
+    const taskState = workflowTaskState();
+
+    renderer?.handleSessionEvent({
+      scope: 'run',
+      streamId,
+      event: {
+        type: 'run.config',
+        streamId,
+        executionId: 'execution-1' as ExecutionId,
+        config: taskState.taskState.agentConfig,
+      },
+    });
+    renderer?.handleSessionEvent({
+      scope: 'run',
+      streamId,
+      event: {
+        type: 'conversation.progress',
+        progress: { toolCallCount: 3 },
+      },
+    });
+    renderer?.handleSessionEvent({
+      scope: 'run',
+      streamId,
+      event: {
+        type: 'stage.start',
+        id: 'round-1',
+        label: 'Round 1',
+        kind: 'round',
+        index: 0,
+        total: 2,
+      },
+    });
+    renderer?.handleSessionEvent({
+      scope: 'session',
+      event: {
+        type: 'updateStreamDescription',
+        payload: { streamId, description: 'drafting' },
+      },
+    });
+    renderer?.handleSessionEvent({
+      scope: 'run',
+      streamId,
+      event: {
+        type: 'child.activity',
+        kind: 'subagents',
+        parentStreamId: streamId,
+        children: [
+          {
+            kind: 'subagent',
+            executionId: 'child-1',
+            childStreamId: 'child-stream',
+            agentName: 'review',
+            status: 'running',
+          },
+        ],
+      },
+    });
+    renderer?.handleSessionEvent({
+      scope: 'run',
+      streamId,
+      event: {
+        type: 'status',
+        streamId,
+        phase: STREAM_PHASE.COMPLETED,
+        previousPhase: STREAM_PHASE.RUNNING,
+        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      },
+    });
+
+    expect(output.text).toBe(
+      'polish paper.tex · 0s\n' +
+        'polish paper.tex · tools: 3 · 0s\n' +
+        '[r1/2] · polish paper.tex · tools: 3 · 0s\n' +
+        '[r1/2] · polish paper.tex · drafting · tools: 3 · 0s\n' +
+        '[r1/2] · polish paper.tex · drafting · subagent: review · 0s\n' +
+        '[r1/2] · polish paper.tex · done · tools: 3 · 0s\n',
     );
   });
 
@@ -747,10 +862,13 @@ describe('CLI run progress renderer', () => {
 
   it('routes progress events even when ordinary CLI logs are quiet', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
+      const events = new SessionEventHub();
       const host = createCliRuntimeHost(
         context({ quietLogs: true, renderRunProgress: true }),
       );
-      host.emit('setTaskState', workflowTaskState());
+      const detach = host.attachRunProgressRenderer(events);
+      emitWorkflowRunConfig(events);
+      detach();
       await host.close();
     });
 
@@ -759,6 +877,7 @@ describe('CLI run progress renderer', () => {
 
   it('preserves the live progress line before interactive prompts', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
+      const events = new SessionEventHub();
       const host = createCliRuntimeHost(
         context({
           approvalPolicy: 'ask',
@@ -766,9 +885,11 @@ describe('CLI run progress renderer', () => {
         }),
       );
 
-      host.emit('setTaskState', workflowTaskState());
+      const detach = host.attachRunProgressRenderer(events);
+      emitWorkflowRunConfig(events);
       host.prepareInteractivePrompt?.();
       await Promise.resolve();
+      detach();
       await host.close();
     });
 
@@ -779,6 +900,7 @@ describe('CLI run progress renderer', () => {
     let stderr = '';
     const stdout = await captureStreamWrites(process.stdout, async () => {
       stderr = await captureStreamWrites(process.stderr, async () => {
+        const events = new SessionEventHub();
         const host = createCliRuntimeHost(
           context({
             outputFormat: 'json',
@@ -786,7 +908,9 @@ describe('CLI run progress renderer', () => {
             renderRunProgress: true,
           }),
         );
-        host.emit('setTaskState', workflowTaskState());
+        const detach = host.attachRunProgressRenderer(events);
+        emitWorkflowRunConfig(events);
+        detach();
         await host.close();
       });
     });
