@@ -191,7 +191,7 @@ Foundation Checkpoint C (#6980) is absorbed by this pass and should close when
 - **L1 still live:** `createRunTrace` still defaults to the process default
   stream-log store (`src/transcript/runTrace.ts:32`), and every
   `ProgressViewState` constructor still installs its store as that default
-  (`src/shared/progressView/backend/state/ProgressViewState.ts:155`). The
+  (`src/controllers/progressView/backend/state/ProgressViewState.ts:155`). The
   default getter/setter live at `src/transcript/StreamLogStore.ts:824`.
 - **L2 still live:** each desktop backend subscribes to the process bus
   (`packages/desktop/src/main/desktopAgentExecution.ts:299`), and desktop
@@ -201,7 +201,7 @@ Foundation Checkpoint C (#6980) is absorbed by this pass and should close when
   default `StreamStatusMachine`, not the old registry alias
   (`src/agent/runtime/StreamStatusService.ts:303`). Delete-all still clears a
   window's status view through its backend state
-  (`src/shared/progressView/backend/state/ProgressViewState.ts:343`).
+  (`src/controllers/progressView/backend/state/ProgressViewState.ts:343`).
 - **Child-stream activation ordering is no longer active evidence:** #6993
   fixed the ordering. Child streams now attach session trace/projector
   subscribers before activation (`src/tools/childStream.ts:83`) and assert that
@@ -228,7 +228,7 @@ Foundation Checkpoint C (#6980) is absorbed by this pass and should close when
   `src/agent/storage/ExecutionKVStore.ts:192`.
 - **Tab deletion scope corrected:** `ProgressViewState.clearStream` still
   deletes stream logs and stream data but not `executions/{id}`
-  (`src/shared/progressView/backend/state/ProgressViewState.ts:322`). Goal
+  (`src/controllers/progressView/backend/state/ProgressViewState.ts:322`). Goal
   entries are now explicitly forgotten by the extension and desktop delete
   paths, so Stage 3c should keep that as regression coverage rather than cite it
   as an open leak.

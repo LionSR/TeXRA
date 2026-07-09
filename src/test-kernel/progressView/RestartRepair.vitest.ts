@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
+import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
 import { getExecutionStore } from '@agent/storage';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
@@ -13,7 +14,6 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { repairRestartedStreams } from '@shared/progressView/backend/restartRepair';
 
 setupPlatform({ workspacePath: '/workspace' });
 

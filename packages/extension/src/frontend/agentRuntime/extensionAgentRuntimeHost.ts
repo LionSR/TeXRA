@@ -1,3 +1,7 @@
+import {
+  isProgressBackendInteractionEvent,
+  type ProgressBackendInteractionPayloads,
+} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
@@ -7,10 +11,6 @@ import {
   isExtensionPresentationEvent,
 } from '@frontend/events/extensionPresentationEvents';
 import { emitExtensionInteractionEvent } from '@frontend/events/extensionInteractionEvents';
-import {
-  isProgressBackendInteractionEvent,
-  type ProgressBackendInteractionPayloads,
-} from '@shared/progressView/backend/events/ProgressInteractionHandler';
 
 export const extensionAgentRuntimeHost: AgentRuntimeHost = {
   interactions: defaultSession().interactions,
