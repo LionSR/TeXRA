@@ -16,6 +16,7 @@ import {
 } from '@agent/runtime/runtimePresentationEvents';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
 
 // Local imports - CLI runtime
 import { handleCliApprovalEvent } from './approvalAdapter';
@@ -36,6 +37,20 @@ export type CliRuntimeHost = AgentRuntimeHost & {
   attachRunProgressRenderer(events: SessionEventHub): () => void;
   prepareInteractivePrompt?: () => void;
   close(): Promise<void>;
+};
+
+/**
+ * Human-readable phrasing for {@link InstructionAction} tokens printed to
+ * stderr in text mode. Mirrors what the VS Code extension's
+ * `INSTRUCTION_ACTION_VIEW` (packages/extension/src/frontend/events/
+ * agentEventListeners.ts) conveys via its button titles, translated to CLI
+ * phrasing since there's no button to click here. Unknown/future tokens fall
+ * back to the raw token rather than failing.
+ */
+const INSTRUCTION_ACTION_HINT: Partial<Record<InstructionAction, string>> = {
+  [INSTRUCTION_ACTION.SET_API_KEY]: 'set your API key (texra config)',
+  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'see the configuration guide',
+  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'see the model documentation',
 };
 
 function writeRuntimePresentationNdjson(
@@ -136,6 +151,22 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
           (payload as RuntimePresentationEventPayloads['requestShowError'])
             .message,
         );
+        return;
+      }
+
+      if (event === 'requestShowInstruction') {
+        // Not gated by quietLogs (below): unlike the debug fallback, this is
+        // an actionable instruction (e.g. missing API key), not routine
+        // progress noise.
+        runProgress?.preserve();
+        const instructionPayload =
+          payload as RuntimePresentationEventPayloads['requestShowInstruction'];
+        const hint = instructionPayload.actions?.length
+          ? ` (${instructionPayload.actions
+              .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
+              .join(', ')})`
+          : '';
+        ensureLogger().info(`${instructionPayload.message}${hint}`);
         return;
       }
 

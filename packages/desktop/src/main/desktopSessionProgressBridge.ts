@@ -20,6 +20,7 @@ import {
   type ProgressViewOutboundMessage,
   type RequestEnsureProgressViewPayload,
   type RequestShowErrorPayload,
+  type RequestShowInstructionPayload,
   type RestoredStreamSnapshot,
   type SetActiveStreamPayload,
   type StreamTabId,
@@ -58,13 +59,17 @@ export interface DesktopSessionProgressBridgeOptions {
     active: boolean,
     opts?: { status?: GoalStatus; objective?: string },
   ) => void;
-  /** Called when a `requestShowError` event fires. */
+  /**
+   * Called when a `requestShowError` (or `requestShowInstruction`, folded
+   * into the same dialog surface) event fires.
+   */
   onShowError: (message: string) => void;
 }
 
 export interface DesktopPresentationPayloads {
   requestEnsureProgressView: RequestEnsureProgressViewPayload;
   requestShowError: RequestShowErrorPayload;
+  requestShowInstruction: RequestShowInstructionPayload;
 }
 
 export type DesktopPresentationEvent = keyof DesktopPresentationPayloads;
@@ -231,6 +236,13 @@ class DesktopSessionProgressBridgeImpl implements DesktopSessionProgressBridge {
         return;
       case 'requestShowError': {
         const data = payload as RequestShowErrorPayload;
+        this.opts.onShowError(data.message);
+        return;
+      }
+      case 'requestShowInstruction': {
+        // No second dialog surface: fold the instruction into the same
+        // error-dialog path `requestShowError` uses (one dialog per host).
+        const data = payload as RequestShowInstructionPayload;
         this.opts.onShowError(data.message);
         return;
       }
