@@ -5,7 +5,7 @@
  * Problems panel, like a linter.
  *
  * Two ingest paths:
- *   1. Session run facts keyed by `runFact.addOutputFiles` parse each output
+ *   1. Session run facts keyed by `addOutputFiles` parse each output
  *      `.tex` file. Universal — any agent that writes the macro participates.
  *   2. The `diagnostics` tool's `add` command routes through
  *      `pushManualCriticism` here for tool-use agents that want to flag issues
