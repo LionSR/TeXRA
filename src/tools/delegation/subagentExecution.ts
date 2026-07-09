@@ -39,6 +39,10 @@ import {
   inheritBashBypassOnChildStream,
 } from '@tools/approval';
 import {
+  getRunContextExecutionId,
+  getRunContextRuntimeHost,
+} from '@tools/contextHelpers';
+import {
   buildSubagentFailureResultMeta,
   formatSubagentError,
 } from '@tools/subagentResults';
@@ -46,10 +50,10 @@ import {
   persistChildRunReport,
   persistChildRunResultMeta,
 } from '@tools/childRunDelivery';
+import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
-import { generateExecutionId } from '@utils/core';
 import { subagentDeliveryMessage } from './subagentDeliveryFormat';
 // `createNativeToolUseStrategy`/`createNativeWorkflowStrategy` are lazy-
 // imported below, alongside `executeAgent` — both strategy modules import
@@ -118,7 +122,8 @@ export async function executeSubagent(
   // dynamic RemoteAgentLoader import in agentRegistry.
   const { executeAgent } = await import('@agent/runtime/executeAgent');
   const parentContext = tryUseRunContext();
-  if (!parentContext?.runtimeHost) {
+  const runtimeHost = getRunContextRuntimeHost(parentContext);
+  if (!parentContext || !runtimeHost) {
     return {
       status: 'error',
       summary: 'Delegation tool runtime host unavailable',
@@ -130,9 +135,8 @@ export async function executeSubagent(
       },
     };
   }
-  const parentExecutionId = parentContext.executionId;
+  const parentExecutionId = getRunContextExecutionId(parentContext);
   const parentDelegationDepth = parentContext.delegationDepth ?? 0;
-  const runtimeHost = parentContext.runtimeHost;
   const parentSession = currentSession();
   // Captured now (while the launching tool call's ALS frame is live) so the
   // child-run loop can still roll the child's cost into the parent run after

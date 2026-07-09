@@ -17,7 +17,10 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextSession,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import type { FollowUpQueueInput } from './FollowUpQueue';
@@ -153,7 +156,7 @@ export function notifyFollowUpSent(
 }
 
 function followUpSentSession(session?: SessionHandle): SessionHandle {
-  const owner = session ?? tryUseRunContext()?.session;
+  const owner = session ?? getRunContextSession(tryUseRunContext());
   return owner?.events ? owner : defaultSession();
 }
 

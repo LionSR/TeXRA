@@ -21,7 +21,10 @@ import { z } from 'zod';
 
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { requireRunStream } from '@tools/contextHelpers';
+import {
+  getRunContextWorkingDirectory,
+  requireRunStream,
+} from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
@@ -443,7 +446,7 @@ async function execFindCurrent(
   await requireToken();
   const cwd =
     parseWorkingDirectory(input.working_directory) ??
-    tryUseRunContext()?.workingDirectory;
+    getRunContextWorkingDirectory(tryUseRunContext());
   if (!cwd) {
     throw new ToolError(
       'No working_directory available. Provide one explicitly.',

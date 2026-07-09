@@ -42,7 +42,12 @@ import {
 } from '@shared/constants/toolDefaults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { requireRunStream } from '@tools/contextHelpers';
+import {
+  getRunContextExecutionId,
+  getRunContextStreamId,
+  requireRunStream,
+  requireStreamId,
+} from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { clamp, unique } from '@utils/core';
@@ -301,13 +306,13 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
 
   private resolveExecutionId(id: string): ExecutionId {
     if (id === 'current') {
-      const ctx = tryUseRunContext();
-      if (!ctx?.executionId) {
+      const executionId = getRunContextExecutionId();
+      if (!executionId) {
         throw new ToolError(
           'No active execution. Use a specific execution ID instead of "current".',
         );
       }
-      return ctx.executionId;
+      return executionId;
     }
     const result = ExecutionIdSchema.safeParse(id);
     if (!result.success) {
@@ -538,9 +543,9 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
 
   private handleKill(executionId: ExecutionId): ToolResult {
     const ctx = tryUseRunContext();
-    const callerStreamId = ctx?.streamId;
+    const callerStreamId = getRunContextStreamId(ctx);
 
-    if (ctx?.executionId === executionId) {
+    if (getRunContextExecutionId(ctx) === executionId) {
       return {
         status: 'error',
         error: `Cannot kill your own execution (${executionId}).`,
@@ -594,21 +599,21 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
   }
 
   private handleSubscribe(executionId: ExecutionId): ToolResult {
-    const { streamId, context: ctx } = requireRunStream('subscribe');
+    const {
+      streamId,
+      runtimeHost,
+      context: ctx,
+    } = requireRunStream('subscribe');
     // Subscribing to your own execution would feed every status transition
     // back into the same session, creating a self-sustaining loop of
     // <execution-activity> follow-ups.
-    if (ctx.executionId === executionId) {
+    if (getRunContextExecutionId(ctx) === executionId) {
       throw new ToolError(
         `Cannot subscribe to your own execution (${executionId}).`,
       );
     }
     try {
-      currentSession().subscriptions.bind(
-        streamId,
-        executionId,
-        ctx.runtimeHost,
-      );
+      currentSession().subscriptions.bind(streamId, executionId, runtimeHost);
     } catch (err) {
       throw new ToolError(toErrorMessage(err));
     }
@@ -620,12 +625,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
   }
 
   private handleUnsubscribe(executionId: ExecutionId): ToolResult {
-    const streamId = tryUseRunContext()?.streamId;
-    if (!streamId) {
-      throw new ToolError(
-        'unsubscribe must be called from within an agent stream.',
-      );
-    }
+    const streamId = requireStreamId('unsubscribe');
     const removed = currentSession().subscriptions.unbind(
       streamId,
       executionId,
