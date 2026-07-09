@@ -1,23 +1,13 @@
-// Wrap a runtime host's `emit` so host-local focus and approval-bypass updates
-// patch `cliState` while still flowing through the original emitter. Durable
-// progress facts enter through `attachTuiRunFactSubscription`.
+// Project durable session and run facts into the local TUI state.
 
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
-import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
-import type {
-  CliRuntimeEvent,
-  CliRuntimeEventPayloads,
-  CliRuntimeHost,
-} from '@cli/runtime/runtimeHost';
 import {
   type ActiveChildInfo,
   type GoalPausedPayload,
-  type RemoveStreamPayload,
   type SetActiveStreamPayload,
   type StreamTabId,
   type UpdateActiveProcessesPayload,
@@ -47,16 +37,6 @@ import { appendLocalAssistantTranscript } from './transcript';
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
-
-type CliStateRuntimeEventPayloads = {
-  setActiveStream: SetActiveStreamPayload;
-  removeStream: RemoveStreamPayload;
-  updateToolEditApprovalBypassState: RuntimeInteractionEventPayloads['updateToolEditApprovalBypassState'];
-  updateBashApprovalBypassState: RuntimeInteractionEventPayloads['updateBashApprovalBypassState'];
-  updateSuperYoloBypassState: RuntimeInteractionEventPayloads['updateSuperYoloBypassState'];
-};
-
-type CliStateRuntimeEvent = keyof CliStateRuntimeEventPayloads;
 
 function appendGoalPausedTranscriptNotice(payload: GoalPausedPayload): void {
   // Without a transcript line, an auto-paused goal is indistinguishable
@@ -334,28 +314,6 @@ function applyStreamMeta(
   );
 }
 
-export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
-  const original = host.emit;
-  const emit = <K extends CliRuntimeEvent>(
-    event: K,
-    payload: CliRuntimeEventPayloads[K],
-  ) => {
-    if (!isRuntimePresentationEvent(event)) {
-      applyToState(
-        event as CliStateRuntimeEvent,
-        payload as CliStateRuntimeEventPayloads[CliStateRuntimeEvent],
-      );
-    }
-    return (
-      original as (
-        event: CliRuntimeEvent,
-        payload: CliRuntimeEventPayloads[CliRuntimeEvent],
-      ) => void
-    )(event, payload);
-  };
-  return { ...host, emit };
-}
-
 export function attachTuiRunFactSubscription(
   events: SessionEventHub,
 ): () => void {
@@ -425,51 +383,4 @@ export function attachTuiRunFactSubscription(
     detachRunFacts();
     detachSessionFacts();
   };
-}
-
-function applyToState<K extends CliStateRuntimeEvent>(
-  event: K,
-  payload: CliStateRuntimeEventPayloads[K],
-): void {
-  switch (event) {
-    case 'setActiveStream': {
-      const p = payload as CliStateRuntimeEventPayloads['setActiveStream'];
-      applySetActiveStream(p);
-      return;
-    }
-    case 'removeStream':
-      removeStream(
-        (payload as CliStateRuntimeEventPayloads['removeStream']).streamId,
-      );
-      return;
-    case 'updateToolEditApprovalBypassState': {
-      const p =
-        payload as CliStateRuntimeEventPayloads['updateToolEditApprovalBypassState'];
-      patchStream(p.streamId, (s) => ({
-        ...s,
-        bypass: { ...s.bypass, toolEdit: p.bypassActive },
-      }));
-      return;
-    }
-    case 'updateBashApprovalBypassState': {
-      const p =
-        payload as CliStateRuntimeEventPayloads['updateBashApprovalBypassState'];
-      patchStream(p.streamId, (s) => ({
-        ...s,
-        bypass: { ...s.bypass, bash: p.bypassActive },
-      }));
-      return;
-    }
-    case 'updateSuperYoloBypassState': {
-      const p =
-        payload as CliStateRuntimeEventPayloads['updateSuperYoloBypassState'];
-      patchStream(p.streamId, (s) => ({
-        ...s,
-        bypass: { ...s.bypass, superYolo: p.bypassActive },
-      }));
-      return;
-    }
-    default:
-      return;
-  }
 }
