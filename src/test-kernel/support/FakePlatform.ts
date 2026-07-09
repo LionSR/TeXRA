@@ -472,12 +472,20 @@ export class FakeSecrets implements PlatformSecrets {
     return this.values.get(key);
   }
 
+  async getStored(key: string): Promise<string | undefined> {
+    return this.values.get(key);
+  }
+
   async set(key: string, value: string): Promise<void> {
     this.values.set(key, value);
   }
 
   async delete(key: string): Promise<void> {
     this.values.delete(key);
+  }
+
+  async listStoredKeys(): Promise<readonly string[]> {
+    return [...this.values.keys()];
   }
 
   getEnv(name: string): string | undefined {
