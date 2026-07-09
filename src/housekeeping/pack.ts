@@ -7,7 +7,11 @@ import { getCleanAgentName } from '@shared/schemas/agent';
 import type { FileOpResult } from '@shared/schemas/opResults';
 
 // Local imports - log
-import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
+import {
+  WORKFLOW_DOCUMENT_OUTPUT_EXT,
+  parseWorkflowOutputRoundDir,
+  workflowOutputPath,
+} from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -204,7 +208,12 @@ function packDestinationName(file: string): string {
   const segments = path.dirname(file).split(/[\\/]+/);
   for (const segment of segments.toReversed()) {
     const round = parseWorkflowOutputRoundDir(segment);
-    if (round !== null) return `r${round}_${base}`;
+    if (round !== null) {
+      const roundDir = path.dirname(
+        workflowOutputPath({ ext: WORKFLOW_DOCUMENT_OUTPUT_EXT, round }),
+      );
+      return `${roundDir}_${base}`;
+    }
   }
   return base;
 }

@@ -16,6 +16,7 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
+import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -87,7 +88,11 @@ export class LatexDiffManager {
   private resolveWorkspaceSourceDir(location: FileLocation): string {
     const workspaceRoot = WorkspaceFS.getPath();
     if (workspaceRoot && location.kind !== 'external') {
-      const workspaceRelative = location.relativePath.replace(/^r\d+[/\\]/, '');
+      const separatorMatch = /^([^/\\]+)[/\\]/.exec(location.relativePath);
+      const workspaceRelative =
+        separatorMatch && parseWorkflowOutputRoundDir(separatorMatch[1]) !== null
+          ? location.relativePath.slice(separatorMatch[0].length)
+          : location.relativePath;
       return path.join(workspaceRoot, path.dirname(workspaceRelative));
     }
     return path.dirname(location.absolutePath);
