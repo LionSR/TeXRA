@@ -85,6 +85,7 @@ import {
 } from '@tools/approval';
 import type { RegisteredToolName } from '@tools/registry';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import { SETUP_PLATFORM_TOOL_NAMES } from '@tools/setup/platform';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -114,7 +115,7 @@ type DesktopUnavailableTool =
   RegisteredToolName | typeof DIAGNOSTICS_ADD_RUNTIME_CAPABILITY;
 
 const DESKTOP_UNAVAILABLE_TOOLS: readonly DesktopUnavailableTool[] = [
-  'list_api_keys',
+  ...SETUP_PLATFORM_TOOL_NAMES,
   'inline_comment',
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
 ];
