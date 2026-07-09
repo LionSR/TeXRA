@@ -775,6 +775,14 @@ export function createDesktopSettingsIpc(
     );
   }
 
+  /**
+   * Deliberate divergence from the extension: no `subscribeGoalStateChanges`
+   * push hook here. The initial post below, the webview-ready re-post, and
+   * the Goals tab's manual `getList` refresh cover the desktop settings
+   * panel — goal state only changes through agent runs, and returning to
+   * (or refreshing) the panel re-reads the store, so a live push adds a
+   * subscription surface without a user-visible gain.
+   */
   function postGoalList(): void {
     options.postToRenderer(goalController.getGoalListMessage());
   }
