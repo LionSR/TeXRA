@@ -17,6 +17,8 @@ const OLD_AGENT_RUNTIME_MODULE =
   'src/agent/runtime/agentRuntimeProgressEvents.ts';
 const OLD_CLI_MODULE = 'packages/cli/src/runtime/cliProgressEvents.ts';
 const CLI_NDJSON_MODULE = 'packages/cli/src/runtime/cliNdjsonProgressEvents.ts';
+const OLD_TASK_STATE_PAYLOAD_MODULE =
+  'src/agent/runtime/taskStateProgressPayload.ts';
 const OLD_AGENT_RUNTIME_ALIAS = '@agent/runtime/agentRuntimeProgressEvents';
 const OLD_CLI_ALIAS = '@cli/runtime/cliProgressEvents';
 const CLI_NDJSON_ALIAS = '@cli/runtime/cliNdjsonProgressEvents';
@@ -172,6 +174,18 @@ describe('agent runtime progress-event vocabulary boundary', () => {
 
     const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
       .filter((file) => importsModule(file, OLD_CLI_MODULE))
+      .toSorted();
+
+    expect(importers).toEqual([]);
+  });
+
+  it('removes the agent-runtime task-state compatibility payload module', () => {
+    expect(existsSync(resolve(REPO_ROOT, OLD_TASK_STATE_PAYLOAD_MODULE))).toBe(
+      false,
+    );
+
+    const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
+      .filter((file) => importsModule(file, OLD_TASK_STATE_PAYLOAD_MODULE))
       .toSorted();
 
     expect(importers).toEqual([]);
