@@ -12,6 +12,7 @@ import {
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { onFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { STREAM_STATUS } from '@shared/schemas';
+import { getRunContextStreamId } from '@tools/contextHelpers';
 
 /**
  * Single-pass check: should the wait endpoint skip blocking on this execution?
@@ -59,10 +60,9 @@ export function shouldSkipWait(executionId: string): boolean {
  * Returns a cleanup function that removes the listener.
  */
 export function listenForFollowUp(ac: AbortController): () => void {
-  const ctx = tryUseRunContext();
-  if (!ctx?.streamId) return () => {};
+  const streamId = getRunContextStreamId(tryUseRunContext());
+  if (!streamId) return () => {};
 
-  const streamId = ctx.streamId;
   return onFollowUpSent((followUpStreamId) => {
     if (followUpStreamId === streamId) ac.abort();
   });

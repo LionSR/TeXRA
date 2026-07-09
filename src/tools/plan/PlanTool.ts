@@ -35,7 +35,11 @@ import {
 } from '@shared/schemas/goal';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { proposalApprovalState } from '@tools/approval';
-import { requireStreamId } from '@tools/contextHelpers';
+import {
+  getRunContextRuntimeHost,
+  getRunContextStreamId,
+  requireStreamId,
+} from '@tools/contextHelpers';
 import {
   GoalStore,
   isGoalEnabled,
@@ -153,19 +157,16 @@ Best practices:
     // Every update is a (re-)proposal: with no step statuses to record,
     // the only reason to call update is a new or changed objective, and
     // that decision belongs to the user.
-    if (!runContext?.streamId) {
+    const streamId = getRunContextStreamId(runContext);
+    if (!streamId) {
       logger.warn('Plan created without streamId — skipping approval gate');
       return this.buildApprovedResult({ autoApproved: false });
     }
-    if (proposalApprovalState.isBypassed(runContext.streamId)) {
+    if (proposalApprovalState.isBypassed(streamId)) {
       logger.info('Plan auto-approved via delegated-task auto-approval');
       return this.buildApprovedResult({ autoApproved: true });
     }
-    return this.requestApproval(
-      plan,
-      runContext.streamId,
-      callContext.workPlanState,
-    );
+    return this.requestApproval(plan, streamId, callContext.workPlanState);
   }
 
   private async executePause(
@@ -207,7 +208,9 @@ Best practices:
     streamId: string,
     enabled: boolean,
   ): Promise<void> {
-    const runtimeHost = getCurrentToolContexts()?.runContext?.runtimeHost;
+    const runtimeHost = getRunContextRuntimeHost(
+      getCurrentToolContexts()?.runContext,
+    );
     if (runtimeHost) {
       await setGoalSessionBashAutoApproval(streamId, enabled, runtimeHost);
     }

@@ -230,6 +230,60 @@ export function tryUseRunContext(): RunContext | undefined {
   return runContextScope.getStore();
 }
 
+/** Return the runtime host for a context, reading launch contexts through RunScope. */
+export function getRunContextRuntimeHost(
+  context: RunContext | undefined = tryUseRunContext(),
+): AgentRuntimeHost | undefined {
+  return context?.kind === 'launch'
+    ? context.runScope.runtimeHost
+    : context?.runtimeHost;
+}
+
+/** Return the stream id for a context, reading launch contexts through RunScope. */
+export function getRunContextStreamId(
+  context: RunContext | undefined = tryUseRunContext(),
+): StreamTabId | undefined {
+  return context?.kind === 'launch'
+    ? context.runScope.streamId
+    : context?.streamId;
+}
+
+/** Return the execution id for a context, reading launch contexts through RunScope. */
+export function getRunContextExecutionId(
+  context: RunContext | undefined = tryUseRunContext(),
+): ExecutionId | undefined {
+  return context?.kind === 'launch'
+    ? context.runScope.executionId
+    : context?.executionId;
+}
+
+/** Return the agent name for a context, reading launch contexts through RunScope. */
+export function getRunContextAgentName(
+  context: RunContext | undefined = tryUseRunContext(),
+): string | undefined {
+  return context?.kind === 'launch'
+    ? context.runScope.agentName
+    : context?.agentName;
+}
+
+/** Return the working directory for a context, reading launch contexts through RunScope. */
+export function getRunContextWorkingDirectory(
+  context: RunContext | undefined = tryUseRunContext(),
+): string | undefined {
+  return context?.kind === 'launch'
+    ? context.runScope.workingDirectory
+    : context?.workingDirectory;
+}
+
+/** Return the owner session for a context, reading launch contexts through RunScope. */
+export function getRunContextSession(
+  context: RunContext | undefined = tryUseRunContext(),
+): SessionHandle | undefined {
+  return context?.kind === 'launch'
+    ? context.runScope.session
+    : context?.session;
+}
+
 /**
  * Return the active run context, asserting it is a `launch` context (i.e.
  * `streamId`/`executionId`/`runtimeHost` are guaranteed present).

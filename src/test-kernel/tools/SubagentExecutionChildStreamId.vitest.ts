@@ -28,9 +28,17 @@ vi.mock('@agent/storage', () => ({
   registerExecution: mocks.registerExecution,
 }));
 
-vi.mock('@agent/runtime/RunContext', () => ({
-  tryUseRunContext: mocks.tryUseRunContext,
-}));
+vi.mock('@agent/runtime/RunContext', () => {
+  const readRunContextField = (context: any, field: string) =>
+    context?.kind === 'launch' ? context.runScope[field] : context?.[field];
+  return {
+    tryUseRunContext: mocks.tryUseRunContext,
+    getRunContextExecutionId: (context: any) =>
+      readRunContextField(context, 'executionId'),
+    getRunContextRuntimeHost: (context: any) =>
+      readRunContextField(context, 'runtimeHost'),
+  };
+});
 
 vi.mock('@agent/runtime/SessionHandle', () => ({
   currentSession: mocks.currentSession,
