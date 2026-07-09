@@ -1,3 +1,8 @@
+// Local imports
+import type { FileLocation } from '@shared/schemas';
+import { joinNonEmpty } from '@utils/text/stringUtils';
+import type { MediaAttachmentContext } from '../support/mediaAttachmentPolicy';
+
 /** Options for normalizing OpenAI-style chat messages. */
 export interface NormalizeOpenAIMessageContentOptions {
   /** Merge consecutive messages that share the same role. */
@@ -185,7 +190,7 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
 }
 
 /** Minimal structural view of a chat content part (text or media). */
-type ChatContentPart = { type: string };
+type ChatContentPart = { type: string; text?: string };
 
 /**
  * Prepend `text` to the last user message in a chat-shaped conversation.
@@ -239,4 +244,191 @@ export function insertMediaIntoChatUserMessage(
   } else if (Array.isArray(content)) {
     content.unshift(...formattedMedia);
   }
+}
+
+/** Capability flags `initializeChatMessages`/`createChatRoundMessages` need from the handler. */
+export interface ChatMessageRoutingCapabilities {
+  supportsSystemPrompt: boolean;
+  supportsIntermDevMsgs: boolean;
+  supportsVision: boolean;
+  supportsNativeAudio: boolean;
+}
+
+/** Formats a round's media files into the provider's own content-part shape. */
+type CreateMediaForRound = (
+  mediaFiles: FileLocation[],
+  context: MediaAttachmentContext,
+) => Promise<readonly ChatContentPart[]>;
+
+/**
+ * Builds the initial message array for a chat-shaped provider (OpenAI,
+ * OpenRouter): an optional system/developer-role prompt, then a user turn
+ * carrying the prefix and any media, then the user request — routed to the
+ * "system" role instead of "user" when the model requires intermediate
+ * messages in that role (`supportsIntermDevMsgs`).
+ */
+export async function initializeChatMessages<T extends MessageLike>(
+  userPrefix: string,
+  userRequest: string,
+  mediaFiles: FileLocation[] | undefined,
+  systemPrompt: string | undefined,
+  capabilities: ChatMessageRoutingCapabilities,
+  createMediaForRound: CreateMediaForRound,
+): Promise<T[]> {
+  const messages: T[] = [];
+
+  // Handle system prompt differently for O1 models
+  // O1 mini and O1 preview models do not support system prompt; use 'user' role instead.
+  // For openai native o1 full or above reasoning models, "developer" is the new name but "system" still works.
+  if (systemPrompt) {
+    const role = capabilities.supportsSystemPrompt ? 'system' : 'user';
+    messages.push({
+      role,
+      content: [{ type: 'text', text: systemPrompt }],
+    } as T);
+  }
+
+  // Create content list for the user message (only add non-empty prefix)
+  const userMessageContent: ChatContentPart[] = [];
+  if (userPrefix) {
+    userMessageContent.push({ type: 'text', text: userPrefix });
+  }
+
+  // Add media if provided
+  if (
+    mediaFiles?.length &&
+    (capabilities.supportsVision || capabilities.supportsNativeAudio)
+  ) {
+    const formattedMediaContent = await createMediaForRound(
+      mediaFiles,
+      'initial',
+    );
+    userMessageContent.push(...formattedMediaContent);
+  }
+
+  // Append content to last user message, or create new user message
+  const lastMsg = messages.at(-1);
+  if (lastMsg?.role === 'user' && Array.isArray(lastMsg.content)) {
+    (lastMsg.content as ChatContentPart[]).push(...userMessageContent);
+  } else {
+    messages.push({ role: 'user', content: userMessageContent } as T);
+  }
+
+  // Add final user request
+  const requestRole = capabilities.supportsIntermDevMsgs ? 'system' : 'user';
+  const lastMessage = messages.at(-1);
+
+  if (
+    requestRole === 'user' &&
+    lastMessage?.role === 'user' &&
+    Array.isArray(lastMessage.content)
+  ) {
+    (lastMessage.content as ChatContentPart[]).push({
+      type: 'text',
+      text: userRequest,
+    });
+  } else {
+    messages.push({
+      role: requestRole,
+      content: [{ type: 'text', text: userRequest }],
+    } as T);
+  }
+
+  return messages;
+}
+
+/** Adds user message content for subsequent rounds. */
+export async function createChatRoundMessages<T extends MessageLike>(
+  messages: T[],
+  userMessage: string,
+  mediaFiles: FileLocation[] | undefined,
+  capabilities: Pick<
+    ChatMessageRoutingCapabilities,
+    'supportsVision' | 'supportsNativeAudio'
+  >,
+  createMediaForRound: CreateMediaForRound,
+): Promise<T[]> {
+  const roundContent: ChatContentPart[] = [];
+
+  if (
+    mediaFiles?.length &&
+    (capabilities.supportsVision || capabilities.supportsNativeAudio)
+  ) {
+    const formattedMedia = await createMediaForRound(mediaFiles, 'followUp');
+    roundContent.push(...formattedMedia);
+  }
+  // Only add text content if non-empty to avoid API "text content is empty" errors
+  if (userMessage) {
+    roundContent.push({ type: 'text', text: userMessage });
+  }
+
+  // Only push message if there's content (media or text)
+  if (roundContent.length > 0) {
+    messages.push({ role: 'user', content: roundContent } as T);
+  }
+  return messages;
+}
+
+/** Appends a plain user-turn message; used for user follow-up rounds. */
+export function createChatUserFollowUpMessages<T extends MessageLike>(
+  messages: T[],
+  userMessage: string,
+): T[] {
+  messages.push({
+    role: 'user',
+    content: [{ type: 'text', text: userMessage }],
+  } as T);
+  return messages;
+}
+
+/** Extracts the joined text content of a chat-shaped assistant message. */
+export function extractChatAssistantText<T extends MessageLike>(
+  message: T,
+): string | undefined {
+  if (message.role !== 'assistant') return undefined;
+  const { content } = message;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return undefined;
+  return joinNonEmpty(
+    (content as ChatContentPart[])
+      .filter(
+        (p): p is { type: 'text'; text: string } =>
+          p.type === 'text' &&
+          typeof (p as { text?: unknown }).text === 'string',
+      )
+      .map((p) => p.text),
+  );
+}
+
+/**
+ * Appends `text` to the conversation as a user turn: for a continuation
+ * prompt, a fresh message (routed to "system" when the model requires
+ * intermediate messages in that role); otherwise merged into the trailing
+ * message's content.
+ */
+export function appendUserTextToChatMessages<T extends MessageLike>(
+  messages: T[],
+  text: string,
+  placement: 'last-user' | 'continuation',
+  supportsIntermDevMsgs: boolean,
+): void {
+  if (placement === 'continuation') {
+    const role = supportsIntermDevMsgs ? 'system' : 'user';
+    messages.push({ role, content: [{ type: 'text', text }] } as T);
+    return;
+  }
+
+  const lastMessage = messages.at(-1);
+  if (lastMessage && Array.isArray(lastMessage.content)) {
+    (lastMessage.content as ChatContentPart[]).push({ type: 'text', text });
+    return;
+  }
+  if (lastMessage && typeof lastMessage.content === 'string') {
+    lastMessage.content = [
+      { type: 'text', text: lastMessage.content },
+      { type: 'text', text },
+    ];
+    return;
+  }
+  messages.push({ role: 'user', content: [{ type: 'text', text }] } as T);
 }
