@@ -27,7 +27,6 @@ import {
 } from '@agent/output/compileFailureRoundContext';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { tryOperation } from '@agent/output/outputOperations';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import {
   MESSAGE_TYPES,
   type AgentFileLocation,
@@ -59,7 +58,6 @@ interface OutputExecResult {
 
 export class OutputNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  FlowParams,
   ReflectionServices<C>
 > {
   private outputDependencies(): OutputDependencies {

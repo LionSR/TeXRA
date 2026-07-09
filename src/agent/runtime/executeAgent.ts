@@ -56,7 +56,6 @@ import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
 import type { SessionHandle } from './SessionHandle';
-import type { ToolEditApprovalPort } from '@platform/interfaces';
 import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -312,13 +311,6 @@ export interface SubagentRunOptions {
   /** Session owning this run's coordination state. Defaults to the process session. */
   session?: SessionHandle;
   /**
-   * Per-run override for the host's tool-edit approval UI. Hosts that manage
-   * more than one concurrent session per process (e.g. desktop, one window per
-   * run) pass their session-scoped handler here instead of relying on the
-   * frozen, process-wide `platform().toolEditApproval` port.
-   */
-  toolEditApprovalHandler?: ToolEditApprovalPort;
-  /**
    * Fires when the subagent run itself fails, so a caller can report the
    * failure up the delegation chain. Distinct from a host-level failure
    * surface such as `ResumeQueuedToolUseOptions.onError` (log + toast for a
@@ -398,14 +390,13 @@ export async function executeAgent(
     session: options.session,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
   });
-  ctx.delegation = {
+  const runContextOptions = {
     delegationDepth: options.delegationDepth ?? 0,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+    runtimeUnavailableTools: options.runtimeUnavailableTools,
+    stopAfterCycle: options.stopAfterCycle,
   };
-  ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
-  ctx.stopAfterCycle = options.stopAfterCycle;
-  ctx.toolEditApprovalHandler = options.toolEditApprovalHandler;
-  return withExecutionRunContext(ctx, async () => {
+  return withExecutionRunContext(ctx, runContextOptions, async () => {
     const { setting, config } = ctx;
     const {
       streamId: runStreamId,
@@ -501,25 +492,25 @@ export async function resumeToolUseFromSnapshot(
   // Recover delegation depth from the persisted parent-execution chain
   // so resumed subagents remain gated by the nested-delegation policy
   // instead of silently promoting to root.
-  ctx.delegation = {
-    delegationDepth: await computeDelegationDepthFromStorage(
-      snapshot.executionId,
-    ),
+  const delegationDepth = await computeDelegationDepthFromStorage(
+    snapshot.executionId,
+  );
+  const runContextOptions = {
+    delegationDepth,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+    runtimeUnavailableTools: options.runtimeUnavailableTools,
   };
-  ctx.runtimeUnavailableTools = options.runtimeUnavailableTools;
-  ctx.toolEditApprovalHandler = options.toolEditApprovalHandler;
   const { setting } = ctx;
   const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
 
-  return withExecutionRunContext(ctx, async () => {
+  return withExecutionRunContext(ctx, runContextOptions, async () => {
     if (setting.agentCategory !== AgentCategory.ToolUse) {
       throw new AgentError(
         'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
       );
     }
 
-    const isSubagent = (ctx.delegation?.delegationDepth ?? 0) > 0;
+    const isSubagent = delegationDepth > 0;
     const result = await runFlowWithLifecycle(
       ctx,
       async (handle) => {

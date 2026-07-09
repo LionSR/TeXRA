@@ -3,7 +3,6 @@ import { BaseNode } from '@agent/node';
 import { logWebFetch, logWebSearch } from '@agent/trace';
 import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import { extractModelResponse } from '@agent/core/flows/CommonCycleTypes';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { appendFollowUpAsUserMessage } from '@agent/followUp/followUpMessages';
 import type { SdkToolCall } from '@agent/types/IModelHandler';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
@@ -70,6 +69,7 @@ type ToolUseProcessExecResult =
       serverToolContentBlocks?: ServerToolContentBlock[];
       lastAssistantContent?: unknown[];
       normalizedUsage?: NormalizedUsage;
+      useStreaming: boolean;
     };
 
 /** Prep result for ToolUseProcessNode - captures shared state snapshot for exec. */
@@ -82,7 +82,6 @@ interface ToolUseProcessPrepResult {
 /** Processes the model response to extract tool calls and usage data. */
 export class ToolUseProcessNode<C> extends BaseNode<
   ToolUseRoundShared,
-  FlowParams,
   ToolUseRoundServices<C>
 > {
   async prep(shared: ToolUseRoundShared): Promise<ToolUseProcessPrepResult> {
@@ -159,6 +158,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
       serverToolContentBlocks: serverToolData.contentBlocks,
       lastAssistantContent,
       normalizedUsage,
+      useStreaming,
     };
   }
 
@@ -167,7 +167,8 @@ export class ToolUseProcessNode<C> extends BaseNode<
     prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
-    const { run, workspace, onRoundFinalized, modelHandler } = this.services;
+    const { run, workspace, onRoundFinalized, modelHandler, logger } =
+      this.services;
 
     if (execRes.kind === 'skipped') {
       return FlowTransition.COMPLETE;
@@ -230,6 +231,17 @@ export class ToolUseProcessNode<C> extends BaseNode<
           ),
         );
         workspace.assembly.lastResponse = execRes.text;
+        // The round's own MODEL_RESPONSE stream (below, in `exec()`) writes
+        // raw provider chunks in real time, before replacement rules run —
+        // so its persisted transcript text can trivially differ from this
+        // authoritative post-replacement value (#7086). Reconcile the two
+        // here, once, at the turn boundary that both a mid-run WAITING pause
+        // and the terminal round go through. Non-streaming responses already
+        // log their own (formatted) MODEL_RESPONSE line directly in `exec()`,
+        // so this only fires for the streamed case it now finalizes.
+        if (execRes.useStreaming) {
+          logger.responseFinalized(execRes.text);
+        }
       }
       workspace.resetServerToolContent();
       workspace.resetReasoning();

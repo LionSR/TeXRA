@@ -33,6 +33,13 @@ export interface ApprovalRequestHandlerSet {
   userQuestion: ApprovalRequestHandler<UserQuestionPermission, 'requestId'>;
 }
 
+type ReplayableApprovalRequestHandlerSet = {
+  [K in keyof ApprovalRequestHandlerSet]: Pick<
+    ApprovalRequestHandlerSet[K],
+    'replay'
+  >;
+};
+
 /**
  * Host-specific show/resolve transport for one approval kind. retry and
  * agentProposal differ across hosts (the extension shows a retry panel and
@@ -133,6 +140,26 @@ export function buildApprovalRequestHandlerSet(
       canSend,
     ),
   };
+}
+
+export function replayApprovalRequestHandlers(
+  handlers: ReplayableApprovalRequestHandlerSet,
+): void {
+  const replayOrder = {
+    toolEdit: true,
+    bash: true,
+    externalInquiry: true,
+    retry: true,
+    agentProposal: true,
+    planApproval: true,
+    userQuestion: true,
+  } satisfies Record<keyof ApprovalRequestHandlerSet, true>;
+
+  for (const key of Object.keys(replayOrder) as Array<
+    keyof ApprovalRequestHandlerSet
+  >) {
+    handlers[key].replay();
+  }
 }
 
 export interface ProgressBackendUiConfigParams {

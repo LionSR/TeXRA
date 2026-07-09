@@ -56,6 +56,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createRunContext,
   withRunContext,
+  type CreateLaunchRunContextOptions,
   type CreateRunContextOptions,
 } from './RunContext';
 import { createRunScope, type RunScope } from './RunScope';
@@ -67,7 +68,6 @@ import {
 import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import type { StreamStatusMachine } from './StreamStatusService';
-import type { ToolEditApprovalPort } from '@platform/interfaces';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('AgentLaunchContext');
@@ -77,15 +77,7 @@ export interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: StageHandle;
-  streamStatus: StreamStatusMachine;
   attachedMemoryMisses: AttachedMemoryMiss[];
-  /** Whether this tool-use run exits after one cycle instead of idling. */
-  stopAfterCycle?: boolean;
-  /**
-   * Per-run override for the host's tool-edit approval UI, projected onto the
-   * ambient {@link RunContext}. See `RunContext.toolEditApprovalHandler`.
-   */
-  toolEditApprovalHandler?: ToolEditApprovalPort;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -130,41 +122,43 @@ const STATUS_MESSAGES: Record<string, string> = {
  * This is the single owner of the launch-context → ambient-context mapping, so
  * new per-run flags (e.g. `stopAfterCycle`, `approvalPromptsUnavailable`,
  * `runtimeUnavailableTools`) live in one place and are never silently dropped.
- * The ambient context is intentionally a flat projection, so two fields are
- * renamed from their nested `AgentCore` positions:
- *  - `AgentConfig.agent`  → `RunContext.agentName`
- *  - `AgentConfig.model`  → `RunContext.model`
- *
- * `RunContext.model` reads through `getModel` so tools observe model switches
- * applied to `AgentLaunchContext.config.model` during an interactive session.
+ * Run identity (`streamId`/`executionId`/`agentName`/`workingDirectory`)
+ * travels via `ctx.runScope` unchanged; only `AgentConfig.model` is renamed
+ * here, to `RunContext.model`, reading through `getModel` so tools observe
+ * model switches applied to `AgentLaunchContext.config.model` during an
+ * interactive session.
  */
 function agentContextToRunContext(
   ctx: AgentLaunchContext,
+  options: Pick<
+    CreateLaunchRunContextOptions,
+    | 'delegationDepth'
+    | 'approvalPromptsUnavailable'
+    | 'runtimeUnavailableTools'
+    | 'stopAfterCycle'
+  > = {},
 ): CreateRunContextOptions {
   return {
     runScope: ctx.runScope,
-    runtimeHost: ctx.runScope.runtimeHost,
-    streamId: ctx.runScope.streamId,
-    executionId: ctx.runScope.executionId,
     modelSource: 'live' as const,
     getModel: () => ctx.config.model,
-    agentName: ctx.runScope.agentName,
-    workingDirectory: ctx.runScope.workingDirectory,
-    delegationDepth: ctx.delegation?.delegationDepth,
-    approvalPromptsUnavailable: ctx.delegation?.approvalPromptsUnavailable,
-    runtimeUnavailableTools: ctx.runtimeUnavailableTools,
-    stopAfterCycle: ctx.stopAfterCycle,
-    session: ctx.runScope.session,
-    toolEditApprovalHandler: ctx.toolEditApprovalHandler,
+    ...options,
   };
 }
 
 export async function withExecutionRunContext<T>(
   ctx: AgentLaunchContext,
+  options: Pick<
+    CreateLaunchRunContextOptions,
+    | 'delegationDepth'
+    | 'approvalPromptsUnavailable'
+    | 'runtimeUnavailableTools'
+    | 'stopAfterCycle'
+  >,
   fn: () => T | Promise<T>,
 ): Promise<T> {
   return await withRunContext(
-    createRunContext(agentContextToRunContext(ctx)),
+    createRunContext(agentContextToRunContext(ctx, options)),
     fn,
   );
 }

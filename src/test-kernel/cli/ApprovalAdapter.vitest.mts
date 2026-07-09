@@ -7,11 +7,8 @@ vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
 }));
 
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
-import {
-  setActiveCliToolEditApprovalHandler,
-  createCliToolEditApprovalPort,
-} from '@cli/runtime/initPlatform';
 import {
   appendCliApiSwitchHint,
   approvalPromptAllowed,
@@ -23,10 +20,10 @@ import {
   hasCliApprovalDenied,
   humanInputDenialFeedback,
   immediateDecisionForApproval,
-  installCliApprovalHandlers,
   isCliApiSwitchableRetry,
 } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
+import type { CliApprovalPromptHooks } from '@cli/runtime/approval/approvalPolicy';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -49,6 +46,15 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
   };
 }
 
+function useCliHostInteractions(
+  cliContext: CliContext,
+  hooks: CliApprovalPromptHooks = {},
+): void {
+  defaultSession().useHostInteractions(
+    createHeadlessCliHostInteractions(cliContext, hooks),
+  );
+}
+
 const credentialExhaustedRetry: RuntimeInteractionEventPayloads['showRetryRequest'] =
   {
     streamId:
@@ -63,20 +69,13 @@ const credentialExhaustedRetry: RuntimeInteractionEventPayloads['showRetryReques
   };
 
 beforeEach(async () => {
-  // Wire the Platform with a delegating port that reads the CLI's active
-  // approval handler — the same pattern used by `initCliPlatform`.
   const { initPlatform: init } = await import('@platform/platform');
   const { createFakePlatform } = await import('@test/support/FakePlatform');
-  init(
-    createFakePlatform(
-      {},
-      { toolEditApproval: createCliToolEditApprovalPort() },
-    ),
-  );
+  init(createFakePlatform());
 });
 
 afterEach(() => {
-  setActiveCliToolEditApprovalHandler(undefined);
+  defaultSession().interactions.dispose();
   handleExternalInquiryActionMock.mockClear();
 });
 
@@ -291,7 +290,7 @@ describe('formatToolEditApprovalSummary', () => {
 
   it('passes the diff summary to the interactive approval prompt', async () => {
     let promptSummary = '';
-    installCliApprovalHandlers(
+    useCliHostInteractions(
       context({
         approvalPrompt: async (request) => {
           promptSummary = request.summary;
@@ -315,7 +314,7 @@ describe('formatToolEditApprovalSummary', () => {
 
   it('runs the before-prompt hook for tool edit approvals', async () => {
     const events: string[] = [];
-    installCliApprovalHandlers(
+    useCliHostInteractions(
       context({
         approvalPrompt: async () => {
           events.push('prompt');
@@ -341,7 +340,7 @@ describe('formatToolEditApprovalSummary', () => {
   });
 
   it('passes one-line rejection feedback to the tool result', async () => {
-    installCliApprovalHandlers(
+    useCliHostInteractions(
       context({
         approvalPrompt: async () => 'n proof misses the p = 5 case',
       }),
@@ -364,7 +363,7 @@ describe('formatToolEditApprovalSummary', () => {
     const prompts: string[] = [];
     const summaries: string[] = [];
     const answers = ['n', 'use the workspace-local file path'];
-    installCliApprovalHandlers(
+    useCliHostInteractions(
       context({
         approvalPrompt: async (request) => {
           prompts.push(request.prompt);
@@ -423,7 +422,7 @@ describe('formatToolEditApprovalSummary', () => {
   });
 
   it('skips prompting for auto-approved edits', async () => {
-    installCliApprovalHandlers(
+    useCliHostInteractions(
       context({
         approvalPolicy: 'yolo',
         approvalPrompt: async () => {

@@ -9,7 +9,12 @@ import {
   createNodePlatform,
   initNodeAgentRuntime,
   initializeNodeGoalPrompts,
+  initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
+import {
+  TEXRA_CONFIG_FILE_NAME,
+  workspaceTexraConfigPath,
+} from '@platform/defaults/nodeStorage';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
 
@@ -17,11 +22,6 @@ import { initPlatform, platform, tryPlatform } from '@platform/platform';
 import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local imports - agent index
-import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
-import {
-  TEXRA_CONFIG_FILE_NAME,
-  workspaceTexraConfigPath,
-} from '@platform/defaults/nodeStorage';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - auth
@@ -45,6 +45,7 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 // Local imports - CLI runtime
 import { applyCliGitAuthorConfig } from './gitAuthor';
+import { isCliResumeInFlight, tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { writeTextStderr } from './logSinks';
@@ -53,7 +54,7 @@ import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 
 // Type imports - platform and CLI runtime
-import type { LifecycleHost, ToolEditApprovalPort } from '@platform/interfaces';
+import type { LifecycleHost } from '@platform/interfaces';
 import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 
@@ -62,49 +63,6 @@ let cliWorkspaceCwd = '';
 let quietPlatformLogs = false;
 let shutdownHandlersInstalled = false;
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
-
-// ---------------------------------------------------------------------------
-// Session-scoped tool-edit approval handler
-// ---------------------------------------------------------------------------
-//
-// The Platform port `toolEditApproval` is frozen at initPlatform time, but the
-// actual approval UI is session-scoped — the CLI opens and closes a TUI session
-// (or a headless approval prompt) independently of the platform life span.
-//
-// We bridge the two lifetimes with a single mutable reference: `initCliPlatform`
-// installs a delegating handler that reads this reference; `subscribeApprovals`
-// (TUI) and `installCliApprovalHandlers` (headless) write and clear it per
-// session, exactly as they did with the defunct `setToolEditApprovalHandler`.
-
-let activeCliToolEditApprovalHandler: ToolEditApprovalPort | undefined;
-
-/** Install the active session's tool-edit approval handler (or clear it). */
-export function setActiveCliToolEditApprovalHandler(
-  handler: ToolEditApprovalPort | undefined,
-): void {
-  activeCliToolEditApprovalHandler = handler;
-}
-
-/**
- * Return a Platform-compatible `toolEditApproval` port that delegates to the
- * handler installed by {@link setActiveCliToolEditApprovalHandler}.
- *
- * Used both by {@link initCliPlatform} (wired into the frozen Platform at
- * startup) and by unit tests that exercise the CLI approval adapter against a
- * {@link createFakePlatform}.
- */
-export function createCliToolEditApprovalPort(): ToolEditApprovalPort {
-  return (request) => {
-    const handler = activeCliToolEditApprovalHandler;
-    if (!handler) {
-      throw new Error(
-        'No active session for tool edit approval. ' +
-          'Start a chat session or use --print with an approval policy.',
-      );
-    }
-    return handler(request);
-  };
-}
 
 type CliPlatformInitOptions = Pick<
   CliContext,
@@ -242,14 +200,16 @@ export async function initCliPlatform(
         storage: stateStores.storage,
         secrets: getCliSecrets(context.storageRoot),
         lifecycle,
-        agentResume: { tryResumeStream: async () => false },
+        agentResume: {
+          tryResumeStream: tryResumeCliStream,
+          isResumeInFlight: isCliResumeInFlight,
+        },
         agentDirectories,
         getWorkspacePath: () => cliWorkspaceCwd,
         toolAvailability: {
           isTexraCliEntrypoint: () =>
             isTexraCliEntrypointPath(readCliEntrypointPath()),
         },
-        toolEditApproval: createCliToolEditApprovalPort(),
       }),
     );
     if (context.installSignalHandlers !== false) {
@@ -321,13 +281,9 @@ export async function initCliPlatform(
     versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
   });
 
-  setRuntimeSkillSources(
-    defaultSkillSources(
-      {
-        cwd: context.cwd,
-        resourcesPath: context.resourcesPath,
-      },
-      context.skillSourceOptions,
-    ),
-  );
+  initializeNodeRuntimeSkills({
+    cwd: context.cwd,
+    resourcesPath: context.resourcesPath,
+    skillSourceOptions: context.skillSourceOptions,
+  });
 }

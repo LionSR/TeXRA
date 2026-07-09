@@ -2,18 +2,58 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
+// Local imports - shared
+import type { StreamTabId } from '@shared/schemas';
+
 // Local imports - test support
 import { createProgressStreamLifecycleHarness } from '../support/ProgressControllerHarnesses';
 
 describe('ProgressStreamLifecycleController', () => {
-  it('ignores deletion for unknown streams', async () => {
+  it('runs durable cleanup for unknown streams without rendered cleanup', async () => {
     const { controller, recorder, streams } =
       createProgressStreamLifecycleHarness();
 
     await controller.deleteStream('missing');
 
     assert.deepEqual(streams(), ['stream-a', 'stream-b']);
-    assert.equal(recorder.calls.size, 0);
+    assert.deepEqual(recorder.calls.get('clearStream'), ['missing']);
+    assert.deepEqual(recorder.calls.get('cleanupApprovals'), undefined);
+    assert.deepEqual(recorder.calls.get('deleteWebview'), undefined);
+    assert.deepEqual(recorder.calls.get('setActiveStream'), undefined);
+  });
+
+  it('refuses reserved unknown stream ids before durable cleanup', async () => {
+    const { controller, recorder, streams } =
+      createProgressStreamLifecycleHarness();
+
+    await controller.deleteStream('' as StreamTabId);
+    await controller.deleteStream('.' as StreamTabId);
+    await controller.deleteStream('..' as StreamTabId);
+
+    assert.deepEqual(streams(), ['stream-a', 'stream-b']);
+    assert.deepEqual(recorder.calls.get('clearStream'), undefined);
+  });
+
+  it('refuses reserved known stream ids before rendered or durable cleanup', async () => {
+    const reservedStreams = [
+      '' as StreamTabId,
+      '.' as StreamTabId,
+      '..' as StreamTabId,
+    ];
+    const { controller, recorder, streams } =
+      createProgressStreamLifecycleHarness({
+        streams: [...reservedStreams, 'stream-a'],
+        activeStream: 'stream-a',
+      });
+
+    for (const stream of reservedStreams) {
+      await controller.deleteStream(stream);
+    }
+
+    assert.deepEqual(streams(), ['', '.', '..', 'stream-a']);
+    assert.deepEqual(recorder.calls.get('clearStream'), undefined);
+    assert.deepEqual(recorder.calls.get('cleanupApprovals'), undefined);
+    assert.deepEqual(recorder.calls.get('deleteWebview'), undefined);
   });
 
   it('deletes inactive streams without stopping finished work', async () => {

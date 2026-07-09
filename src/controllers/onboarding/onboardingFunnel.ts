@@ -14,7 +14,10 @@
  * sources and reads the flags below from its `platform().globalState`.
  */
 
+import { isCodexSubscriptionActive } from '@auth/codex';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
+import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import type { OnboardingFunnelState } from '@shared/schemas/onboarding';
@@ -173,4 +176,30 @@ export async function hasAnyProviderApiKey(
     if (isNonEmptyString(key)) return true;
   }
   return false;
+}
+
+/**
+ * Single source of truth for "does the user have a usable credential to
+ * proceed with setup": an active ChatGPT (Codex) subscription, a non-blank
+ * provider API key, or relay access to server-side keys. Provider keys are
+ * checked before `canUseServerSideKeys()` deliberately: the latter is a
+ * network round-trip that can prime the relay-quota cache and trigger a
+ * quota auto-switch, so a cheap local key that already satisfies the gate
+ * should short-circuit before that side effect fires.
+ *
+ * Extension and desktop call this directly, so neither can drift from the
+ * other on what counts as "usable" or in what order. The CLI's credential
+ * gate (`packages/cli/src/runtime/credentialStatus.ts`) does not call this
+ * predicate — it needs an `apiMode`-aware policy (included-relay vs.
+ * personal-key sign-in must each unlock their own mode) — but it composes
+ * the same underlying primitives (`hasAnyProviderApiKey`,
+ * `isCodexSubscriptionActive`) so the individual checks stay consistent even
+ * though the CLI's combination policy differs.
+ */
+export async function hasUsableSetupCredential(
+  secrets: PlatformSecrets,
+): Promise<boolean> {
+  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
+  if (await hasAnyProviderApiKey(secrets)) return true;
+  return getServerSideKeyService().canUseServerSideKeys();
 }

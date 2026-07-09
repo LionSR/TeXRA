@@ -14,6 +14,7 @@ import {
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
 import { getExecutionStore } from '@agent/storage';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
@@ -769,6 +770,19 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
 
     expect(await StorageFS.exists(dir)).toBe(false);
+  });
+
+  it('deleteStream refuses reserved stream ids before sidecar directory removal', async () => {
+    const sentinel = path.join(STREAM_DATA_DIR, 'sentinel.json');
+    await StorageFS.ensureDir(STREAM_DATA_DIR);
+    await StorageFS.write(sentinel, '{}');
+
+    const store = new StreamSnapshotStore();
+    await store.deleteStream('' as StreamTabId);
+    await store.deleteStream('.' as StreamTabId);
+    await store.deleteStream('..' as StreamTabId);
+
+    expect(await StorageFS.exists(sentinel)).toBe(true);
   });
 
   it('returns a frozen shared empty work plan default', async () => {

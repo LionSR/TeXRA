@@ -1,5 +1,7 @@
 import * as nunjucks from 'nunjucks';
 
+import { buildUserVarPassthrough } from '@agent/utils/userVars';
+
 export type AgentTemplateKind = 'toolUse' | 'workflowSingle';
 
 export const AGENT_TEMPLATE_FILES: Record<AgentTemplateKind, string> = {
@@ -25,32 +27,9 @@ export interface AgentTemplateVars {
 // otherwise set for every other caller.
 const env = new nunjucks.Environment(null, { autoescape: false });
 
-/**
- * Tokens that the generated agent itself needs to keep literal. They are
- * consumed by the agent runtime when the agent runs, not at template-render
- * time. Map each to its literal form so Nunjucks leaves it alone.
- */
-const AGENT_RUNTIME_TOKENS = [
-  'INSTRUCTION',
-  'INPUT_FILE',
-  'INPUT_CONTENT',
-  'INPUT_FILES',
-  'ALL_INPUTS',
-  'ALL_AUXILIARYS',
-  'ALL_REFERENCES',
-  'ADDITIONAL_INPUTS',
-  'REFERENCE_CONTENT',
-  'AUXILIARY_CONTENT',
-  'OUTPUT_FILES',
-] as const;
-
 // Frozen so the shared module-level instance can't be mutated even if a
 // caller forgets to spread it before passing to nunjucks.renderString.
-const PASSTHROUGH: Readonly<Record<string, string>> = Object.freeze(
-  Object.fromEntries(
-    AGENT_RUNTIME_TOKENS.map((token) => [token, `{{ ${token} }}`]),
-  ),
-);
+const PASSTHROUGH = buildUserVarPassthrough();
 
 export const DEFAULT_AGENT_TEMPLATE_TOOLS_YAML = [
   'bash',

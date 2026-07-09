@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { AgentError } from '@common/errors';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
@@ -20,6 +21,7 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import { SETUP_PLATFORM_TOOL_NAMES } from '@tools/setup/platform';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -27,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   detachSessionProgressProjection: vi.fn(),
   createHeadlessCliHostInteractions: vi.fn(),
   createCliRuntimeHost: vi.fn(),
-  installCliApprovalHandlers: vi.fn(),
+  disposeHostInteractions: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
   readCliTerminalStatus: vi.fn(),
   runAgent: vi.fn(),
@@ -70,9 +72,9 @@ vi.mock('@cli/runtime/runtimeHost', () => ({
   createCliRuntimeHost: mocks.createCliRuntimeHost,
 }));
 
-vi.mock('@cli/runtime/approvalAdapter', () => ({
+vi.mock('@cli/runtime/approvalAdapter', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/approvalAdapter')>()),
   createHeadlessCliHostInteractions: mocks.createHeadlessCliHostInteractions,
-  installCliApprovalHandlers: mocks.installCliApprovalHandlers,
 }));
 
 vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
@@ -133,8 +135,8 @@ function stubRunExecutionDeps(): void {
     pending: vi.fn(() => []),
     resolve: vi.fn(() => false),
     cancel: vi.fn(),
+    dispose: mocks.disposeHostInteractions,
   });
-  mocks.installCliApprovalHandlers.mockReturnValue(vi.fn());
   mocks.createCliRuntimeHost.mockReturnValue({
     emit: vi.fn(),
     attachRunProgressRenderer: vi.fn(() => mocks.detachRunProgressRenderer),
@@ -253,7 +255,7 @@ describe('executeCliRequest', () => {
         approvalPromptsUnavailable: false,
         runtimeUnavailableTools: [
           'inquiry',
-          'list_api_keys',
+          ...SETUP_PLATFORM_TOOL_NAMES,
           'inline_comment',
           DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
         ],
@@ -274,7 +276,7 @@ describe('executeCliRequest', () => {
       expect.objectContaining({
         runtimeUnavailableTools: [
           'inquiry',
-          'list_api_keys',
+          ...SETUP_PLATFORM_TOOL_NAMES,
           'inline_comment',
           DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
           'custom_tool',
@@ -283,36 +285,37 @@ describe('executeCliRequest', () => {
     );
   });
 
-  it('installs CLI approval handlers with the runtime prompt hook', async () => {
+  it('installs CLI host interactions with the runtime prompt hook', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
     const context = cliContext({ mode: 'interactive', approvalPolicy: 'ask' });
 
     await executeCliRequest(request, context);
 
-    expect(mocks.installCliApprovalHandlers).toHaveBeenCalledWith(
+    expect(mocks.createHeadlessCliHostInteractions).toHaveBeenCalledWith(
       context,
       expect.objectContaining({ beforePrompt: expect.any(Function) }),
     );
 
-    const hooks = mocks.installCliApprovalHandlers.mock.calls[0]?.[1] as {
+    const hooks = mocks.createHeadlessCliHostInteractions.mock
+      .calls[0]?.[1] as {
       beforePrompt?: () => void;
     };
     hooks.beforePrompt?.();
     expect(mocks.prepareInteractivePrompt).toHaveBeenCalledTimes(1);
   });
 
-  it('restores CLI approval handlers before closing the runtime host', async () => {
+  it('restores CLI host interactions before closing the runtime host', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
-    const uninstall = vi.fn();
-    mocks.installCliApprovalHandlers.mockReturnValue(uninstall);
 
     await executeCliRequest(request, cliContext());
 
-    expect(uninstall).toHaveBeenCalledTimes(1);
+    expect(mocks.disposeHostInteractions).toHaveBeenCalledTimes(1);
     expect(mocks.close).toHaveBeenCalledTimes(1);
-    expect(uninstall.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(
+      mocks.disposeHostInteractions.mock.invocationCallOrder[0],
+    ).toBeLessThan(
       mocks.close.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
   });
@@ -457,14 +460,75 @@ describe('executeCliRequest', () => {
     const store = getDefaultStreamLogStore();
     const loadSpy = vi.spyOn(store, 'load').mockResolvedValue(undefined);
     const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
-    mocks.runAgent.mockRejectedValueOnce(new Error('boom'));
+    mocks.runAgent.mockRejectedValueOnce(new AgentError('boom'));
 
-    await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
-      'boom',
-    );
+    // #7645: a classified run failure resolves to a non-zero exit code
+    // instead of rethrowing — otherwise it reaches bin/texra.ts's crash
+    // handler and gets misreported as an unexpected crash (double-printed
+    // message + a false "please report it" line).
+    const result = await executeCliRequest(request, cliContext());
 
+    expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
     expect(loadSpy).toHaveBeenCalledTimes(1);
     expect(flushSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('rethrows a non-AgentError rejection instead of swallowing it into an exit code', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { getDefaultStreamLogStore } = await import('@transcript');
+    const request = baseRequest();
+    const store = getDefaultStreamLogStore();
+    const loadSpy = vi.spyOn(store, 'load').mockResolvedValue(undefined);
+    const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
+    // An unclassified failure (e.g. registerExecution disk I/O,
+    // workspaceState.update) is genuinely unexpected — it must keep
+    // propagating so bin/texra.ts's crash handler reports it, instead of
+    // being swallowed into a bare non-zero exit with no stderr.
+    mocks.runAgent.mockRejectedValueOnce(new Error('disk full'));
+
+    await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
+      'disk full',
+    );
+
+    // Cleanup still runs via `finally` even though the error propagates.
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves a classified run failure to a non-zero exit code without rethrowing', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = baseRequest();
+    mocks.runAgent.mockRejectedValueOnce(new AgentError('provider boom'));
+
+    const result = await executeCliRequest(request, cliContext(), {
+      markErrorOnThrow: true,
+    });
+
+    expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+    // markErrorOnThrow still records the terminal status, same as before.
+    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
+      'exec-1',
+      EXECUTION_STATUS.ERROR,
+    );
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps a classified run failure to ApprovalDenied when the run denied approval', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { markApprovalDenied } =
+      await import('@cli/runtime/approval/approvalPolicy');
+    const request = baseRequest();
+    const context = cliContext();
+    markApprovalDenied(context);
+    mocks.runAgent.mockRejectedValueOnce(new AgentError('approval denied'));
+
+    const result = await executeCliRequest(request, context);
+
+    expect(result).toEqual({
+      ok: false,
+      exitCode: CliExitCode.ApprovalDenied,
+    });
   });
 
   it('closes the runtime host when sidecar flush fails', async () => {

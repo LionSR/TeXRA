@@ -39,6 +39,14 @@ interface NodeHostModule {
     currentVersion: string | undefined;
     versionStateKey: string;
   }): Promise<void>;
+  initializeNodeRuntimeSkills(options: {
+    cwd: string;
+    resourcesPath: string;
+    skillSourceOptions?: {
+      includeInterop?: boolean;
+      additionalPaths?: readonly string[];
+    };
+  }): void;
 }
 
 interface PlatformAgentDirectoriesModule {
@@ -87,6 +95,7 @@ describe('desktop agent directory bootstrap', () => {
         join(resourcesPath, 'tool_use_agents', 'researcher.yaml'),
         'name: researcher\n',
       ),
+      mkdir(join(resourcesPath, 'skills'), { recursive: true }),
       mkdir(workspacePath, { recursive: true }),
     ]);
 
@@ -131,9 +140,6 @@ describe('desktop agent directory bootstrap', () => {
       addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
       toolMissingHandler: () => {},
       toolNotificationHandler: () => {},
-      toolEditApproval: () => {
-        throw new Error('Tool edit approval not available in this test.');
-      },
     });
 
     return {
@@ -244,5 +250,44 @@ describe('desktop agent directory bootstrap', () => {
     expect(
       globalStateStore.get(GlobalStateKey.LAST_KNOWN_VERSION),
     ).toBeUndefined();
+  });
+
+  it('registers runtime skills through the shared Node host defaults', async () => {
+    const { resourcesPath } = await createHarness();
+    const { initializeNodeRuntimeSkills } =
+      await loadPlatformDefaultsModule<NodeHostModule>('nodeHost.ts');
+    const { listRuntimeSkillSources } = await import('@skills/runtimeSkills');
+
+    initializeNodeRuntimeSkills({
+      cwd: '/tmp/project',
+      resourcesPath,
+      skillSourceOptions: {
+        includeInterop: true,
+        additionalPaths: ['vendor/skills'],
+      },
+    });
+
+    const sources = listRuntimeSkillSources();
+    expect(sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          scope: 'custom',
+          path: '/tmp/project/vendor/skills',
+          required: true,
+        }),
+        expect.objectContaining({
+          scope: 'project',
+          path: '/tmp/project/.texra/skills',
+        }),
+        expect.objectContaining({
+          scope: 'interop',
+          path: '/tmp/project/.codex/skills',
+        }),
+        expect.objectContaining({
+          scope: 'bundled',
+          path: join(resourcesPath, 'skills'),
+        }),
+      ]),
+    );
   });
 });

@@ -8,6 +8,15 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **OpenRouter transient server errors no longer stall a request for up to an
+  hour** — the OpenRouter SDK's built-in retry window is now capped at 30
+  seconds, so a persistent 5XX surfaces through TeXRA's visible retry/failure
+  path instead of backing off invisibly inside a single attempt.
+- **Retry-attempt defaults are now consistent across hosts** — with
+  `texra.model.retry.maxAttempts` unset, CLI and desktop runs previously fell
+  back to 1 flow-managed retry while VS Code used the documented default of
+  0; all hosts now use the documented default. Set the option explicitly to
+  restore extra automatic retries.
 - **Web search/fetch links now block dangerous URL schemes** — a link
   surfaced from a web search result or fetched page can no longer use a
   `javascript:`/`data:`/`vbscript:`/`file:` URL to become a live,
@@ -50,6 +59,14 @@ All notable changes to this project will be documented in this file.
   references, outcome, and cost are readable as JSON via the executions tool
   (`/executions/{id}/result`), so follow-on agents can chain on data instead
   of parsing prose.
+
+### Desktop
+
+#### Improvements
+
+- **Runtime skills are available in desktop agent runs** — desktop now loads
+  project, user, and bundled skills through the same shared Node-host defaults
+  as the CLI.
 
 ## [0.39.3] - 2026-07-03
 

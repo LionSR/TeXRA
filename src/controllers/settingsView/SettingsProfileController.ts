@@ -29,7 +29,7 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
     key: 'texra.model.retry.maxAttempts',
     label: 'Retry attempts',
     description:
-      'Automatic retry attempts before showing a manual retry button. Set to 0 for manual-only.',
+      'Flow-managed retry attempts (Google, OpenRouter rate limits, background transients). Anthropic/OpenAI retries are managed by their SDKs and unaffected.',
     min: 0,
     defaultValue: 0,
   },

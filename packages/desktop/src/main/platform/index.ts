@@ -9,6 +9,7 @@ import {
   createNodePlatform,
   initNodeAgentRuntime,
   initializeNodeGoalPrompts,
+  initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -31,7 +32,7 @@ import {
 } from '../desktopAgentResume.js';
 
 // Type imports - platform
-import type { LifecycleHost, ToolEditApprovalPort } from '@platform/interfaces';
+import type { LifecycleHost } from '@platform/interfaces';
 
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;
@@ -48,41 +49,17 @@ export interface ElectronPlatformInitResult {
    * (`extension.ts` LAST_KNOWN_VERSION comment).
    */
   hasPriorInstall: boolean;
+  /**
+   * Resolved `packages/extension/resources` tree (bundled verbatim as
+   * `extraResources` — see `electron-builder.yml`). Threaded out so callers
+   * that need a specific bundled asset (e.g. the chat-export templates) don't
+   * each re-resolve it.
+   */
+  resourcesPath: string;
 }
 
 const WORKSPACE_CONFIG_MIGRATED_KEY =
   'desktop.workspaceConfigMigratedToProject';
-
-// ---------------------------------------------------------------------------
-// Session-scoped tool-edit approval handler
-// ---------------------------------------------------------------------------
-//
-// The Platform port `toolEditApproval` is frozen at initPlatform time, but the
-// DesktopToolEditApprovalController is created per session.  The delegating
-// handler installed below reads this mutable reference so the active controller
-// can register and unregister itself via `setDesktopToolEditApprovalHandler`.
-
-let activeDesktopToolEditApprovalHandler: ToolEditApprovalPort | undefined;
-
-/**
- * Register the active session's desktop tool-edit approval handler.
- * Called by {@link DesktopToolEditApprovalControllerImpl} constructor / dispose.
- */
-export function setDesktopToolEditApprovalHandler(
-  handler: ToolEditApprovalPort | undefined,
-): void {
-  activeDesktopToolEditApprovalHandler = handler;
-}
-
-export function createDesktopToolEditApprovalPort(): ToolEditApprovalPort {
-  return (request) => {
-    const handler = activeDesktopToolEditApprovalHandler;
-    if (!handler) {
-      throw new Error('No active desktop tool-edit approval controller.');
-    }
-    return handler(request);
-  };
-}
 
 export async function initializeElectronPlatform(
   mainDirname: string,
@@ -186,7 +163,6 @@ export async function initializeElectronPlatform(
       },
       agentDirectories,
       getWorkspacePath: () => workspacePath,
-      toolEditApproval: createDesktopToolEditApprovalPort(),
     }),
   );
 
@@ -214,6 +190,10 @@ export async function initializeElectronPlatform(
   // before the Lean adapter dispose.
   initNodeAgentRuntime(lifecycle);
   initializeNodeGoalPrompts(resourcesPath);
+  initializeNodeRuntimeSkills({
+    cwd: workspacePath ?? app.getPath('home'),
+    resourcesPath,
+  });
 
   await bootstrapNodeAgentDirectories({
     channel: 'desktop',
@@ -227,5 +207,6 @@ export async function initializeElectronPlatform(
     lifecycle,
     progressSnapshotStore: snapshotStore,
     hasPriorInstall,
+    resourcesPath,
   };
 }

@@ -14,9 +14,11 @@ import {
   type ProgressBackendInteractionPayloads,
 } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
+import { hydrateProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryHydration';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
+  replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
 import {
@@ -50,6 +52,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import {
+  presentFollowUpWakeResult,
   sendFollowUp,
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
@@ -72,6 +75,7 @@ import {
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
   type ExecutionId,
+  type RequestOpenFilePayload,
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
@@ -84,6 +88,7 @@ import {
 } from '@tools/approval';
 import type { RegisteredToolName } from '@tools/registry';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import { SETUP_PLATFORM_TOOL_NAMES } from '@tools/setup/platform';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -113,7 +118,7 @@ type DesktopUnavailableTool =
   RegisteredToolName | typeof DIAGNOSTICS_ADD_RUNTIME_CAPABILITY;
 
 const DESKTOP_UNAVAILABLE_TOOLS: readonly DesktopUnavailableTool[] = [
-  'list_api_keys',
+  ...SETUP_PLATFORM_TOOL_NAMES,
   'inline_comment',
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
 ];
@@ -267,6 +272,7 @@ export class DesktopProgressBridge {
       },
       hasTarget: () => true,
       getStreamControls: getProgressStreamControls,
+      deleteStream: (stream) => this.deleteStream(stream),
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
       configureUi: ({ webviewUpdater }) => {
@@ -465,23 +471,7 @@ export class DesktopProgressBridge {
       agentProposal: {
         getPendingProposal: (proposalId) =>
           this.approvalHandlers.agentProposal.get(proposalId),
-        restoreTaskState: async (taskState) => {
-          let state: MainViewPersistedState;
-          try {
-            state = buildMainViewState(taskState);
-          } catch {
-            return false;
-          }
-          this.postToRenderer({
-            command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-            route: 'main',
-          });
-          this.postToRenderer({
-            command: COMMON_COMMANDS.STATE_RESTORE,
-            state,
-          });
-          return true;
-        },
+        restoreTaskState: async (taskState) => this.restoreTaskState(taskState),
         settleProposal: (proposalId, result) => {
           const resolved = this.session.interactions.resolve(proposalId, {
             kind: 'proposal',
@@ -626,10 +616,19 @@ export class DesktopProgressBridge {
       restoreProposalConfig: async (data) => {
         await this.agentProposalController.restoreProposalConfig(data.proposal);
       },
-      // Not yet wired on desktop.
-      restoreState: unsupported(
-        'Restoring a saved run is not available in the desktop app yet.',
-      ),
+      // Mirrors the extension's PROGRESS_VIEW_COMMANDS.RESTORE_STATE handler
+      // (`texra.restoreState`): look up the stream's persisted task state and
+      // route the renderer to the main view with it. Surfaces a failure the
+      // same way the extension's `texra.restoreState` command does when
+      // `buildMainViewState` throws on malformed/incompatible persisted data.
+      restoreState: async (data) => {
+        const taskState = this.state.snapshots.getTaskState(data.stream);
+        if (!taskState) return;
+        const restored = this.restoreTaskState(taskState);
+        if (!restored) {
+          await this.options.showErrorMessage?.('Failed to restore state');
+        }
+      },
       compactResponse: unsupported(
         'Compacting a response is not available in the desktop app yet.',
       ),
@@ -864,7 +863,6 @@ export class DesktopProgressBridge {
         closeRunningGroups: (streamIds, status, now) =>
           this.closeRunningTaskGroupsForStreams(streamIds, status, now),
         statusEmitOptions: {
-          runtimeHost: this.runtimeHost,
           trace: this.logger,
         },
         logger: this.logger,
@@ -968,7 +966,6 @@ export class DesktopProgressBridge {
           closeRunningGroups: (streamIds, status, now) =>
             this.closeRunningTaskGroupsForStreams(streamIds, status, now),
           statusEmitOptions: {
-            runtimeHost: this.runtimeHost,
             trace: this.logger,
           },
           logger: this.logger,
@@ -1024,11 +1021,25 @@ export class DesktopProgressBridge {
         );
         return;
       case 'requestShowError':
+      case 'requestShowInstruction':
         this.sessionProgress.handlePresentationEvent(
           event,
           payload as DesktopPresentationPayloads[typeof event],
         );
         return;
+      case 'requestOpenFile': {
+        // The extension previews via its LaTeX-Workshop build+view flow
+        // (openBuildDisplayIfTex); desktop has no such editor integration,
+        // so open the resolved path through the same preview-with-fallback
+        // host `openWorkflowOutput` already uses (see runExecution above).
+        const data = payload as RequestOpenFilePayload;
+        this.options.openPath?.(data.location.absolutePath).catch((error) => {
+          this.logger.warn('Failed to open requested file on desktop', {
+            data: toLogData(error),
+          });
+        });
+        return;
+      }
       default:
         return;
     }
@@ -1045,6 +1056,18 @@ export class DesktopProgressBridge {
     this.syncStreamContent(this.updateStreamMetadata());
   }
 
+  async hydrateProgressViewInquiries(): Promise<void> {
+    await hydrateProgressViewInquiries({
+      webviewUpdater: this.backend.webviewUpdater,
+      externalInquiry: this.approvalHandlers.externalInquiry,
+      logger: this.logger,
+    });
+  }
+
+  replayPendingPrompts(): void {
+    replayApprovalRequestHandlers(this.approvalHandlers);
+  }
+
   setActiveStream(streamId: StreamTabId): void {
     if (!this.streamLogs.has(streamId)) {
       return;
@@ -1057,6 +1080,25 @@ export class DesktopProgressBridge {
     this.updateStreamMetadata();
     this.backend.webviewUpdater.setActiveStream(streamId);
     this.syncStreamContent(streamId);
+  }
+
+  /**
+   * Route this window to the progress view and select the given stream.
+   * Mirrors the extension's `revealProgressStream` for the desktop Settings
+   * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
+   * run works the same way on both hosts.
+   */
+  revealStream(streamId: StreamTabId): void {
+    if (!this.streamLogs.has(streamId)) {
+      return;
+    }
+    const filter = this.state.agentCategoryFilter;
+    const category = this.state.getStreamState(streamId)?.kind;
+    if (filter !== 'all' && filter !== category) {
+      this.state.agentCategoryFilter = 'all';
+    }
+    this.routeToProgress();
+    this.setActiveStream(streamId);
   }
 
   private setAgentFilter(filter: AgentCategoryFilter): void {
@@ -1197,11 +1239,6 @@ export class DesktopProgressBridge {
           runtimeHost: this.runtimeHost,
           session: this.session,
           runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-          toolEditApprovalHandler: (approvalRequest) =>
-            this.toolEditApprovals.requestApproval(
-              approvalRequest,
-              this.session,
-            ),
           reportFailure: (error) => this.reportResumeFailure(streamId, error),
         }),
       executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
@@ -1372,21 +1409,18 @@ export class DesktopProgressBridge {
         },
         this.session,
       );
-      if (wake.kind === 'dropped') {
-        this.session.events.emit({
-          scope: 'session',
-          event: {
-            type: 'updateQueuedFollowUps',
-            payload: { streamId },
-          },
-        });
-        await this.options.showInfoMessage?.(
-          'Message dropped because no session was available to receive it. Start a new agent task to continue.',
-        );
-      } else if (wake.kind === 'queued_resume_failed') {
-        await this.options.showInfoMessage?.(
-          'Message queued. Auto-resume failed; start a new agent task to continue.',
-        );
+      const presentation = presentFollowUpWakeResult(wake);
+      if (presentation.severity !== 'none') {
+        if (presentation.refreshQueuedFollowUps) {
+          this.session.events.emit({
+            scope: 'session',
+            event: {
+              type: 'updateQueuedFollowUps',
+              payload: { streamId },
+            },
+          });
+        }
+        await this.options.showInfoMessage?.(presentation.message);
       }
       return;
     }
@@ -1400,6 +1434,31 @@ export class DesktopProgressBridge {
     await this.fileActions.openFileCompile(filePath);
   }
 
+  /**
+   * Restore a task's setup into the main view: builds the host-neutral
+   * persisted-state snapshot and routes the renderer there. Shared by the
+   * in-session "restore this proposal" flow (`agentProposal.restoreTaskState`
+   * above) and desktop history's "Setup" action (settings IPC), which mirrors
+   * the extension's `texra.restoreState` command.
+   */
+  restoreTaskState(taskState: TaskState): boolean {
+    let state: MainViewPersistedState;
+    try {
+      state = buildMainViewState(taskState);
+    } catch {
+      return false;
+    }
+    this.postToRenderer({
+      command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+      route: 'main',
+    });
+    this.postToRenderer({
+      command: COMMON_COMMANDS.STATE_RESTORE,
+      state,
+    });
+    return true;
+  }
+
   async runExecution(
     request: ValidatedExecutionRequest,
     options: DesktopRunExecutionOptions = {},
@@ -1410,8 +1469,6 @@ export class DesktopProgressBridge {
       runtimeHost: this.runtimeHost,
       session: this.session,
       runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-      toolEditApprovalHandler: (approvalRequest) =>
-        this.toolEditApprovals.requestApproval(approvalRequest, this.session),
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       openWorkflowOutput: async (result) => {
         // Gate, outcome check, and final-output selection are shared policy

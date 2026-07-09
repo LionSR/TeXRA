@@ -9,9 +9,14 @@ import {
   type RuntimeInteractionEvent,
   type RuntimeInteractionEventPayloads,
 } from '@agent/runtime/runtimeInteractionEvents';
-import type { RuntimePresentationEventPayloads } from '@agent/runtime/runtimePresentationEvents';
+import {
+  isRuntimePresentationEvent,
+  type RuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
 
 // Local imports - CLI runtime
 import { handleCliApprovalEvent } from './approvalAdapter';
@@ -33,6 +38,49 @@ export type CliRuntimeHost = AgentRuntimeHost & {
   prepareInteractivePrompt?: () => void;
   close(): Promise<void>;
 };
+
+/**
+ * Human-readable phrasing for {@link InstructionAction} tokens printed to
+ * stderr in text mode. Mirrors what the VS Code extension's
+ * `INSTRUCTION_ACTION_VIEW` (packages/extension/src/frontend/events/
+ * agentEventListeners.ts) conveys via its button titles, translated to CLI
+ * phrasing since there's no button to click here. Unknown/future tokens fall
+ * back to the raw token rather than failing.
+ */
+const INSTRUCTION_ACTION_HINT: Partial<Record<InstructionAction, string>> = {
+  [INSTRUCTION_ACTION.SET_API_KEY]: 'set your API key (texra config)',
+  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'see the configuration guide',
+  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'see the model documentation',
+};
+
+function writeRuntimePresentationNdjson(
+  logger: Logger,
+  event: RuntimePresentationEvent,
+  payload: RuntimePresentationEventPayloads[RuntimePresentationEvent],
+): void {
+  switch (event) {
+    case 'requestShowError': {
+      const errorPayload =
+        payload as RuntimePresentationEventPayloads['requestShowError'];
+      logger.error(errorPayload.message);
+      return;
+    }
+    case 'requestShowInstruction': {
+      const instructionPayload =
+        payload as RuntimePresentationEventPayloads['requestShowInstruction'];
+      logger.info(instructionPayload.message, {
+        key: instructionPayload.key,
+        actions: instructionPayload.actions,
+        showSuppress: instructionPayload.showSuppress,
+      });
+      return;
+    }
+    case 'requestOpenFile':
+    case 'showAgentConfigBanner':
+    case 'requestEnsureProgressView':
+      return;
+  }
+}
 
 export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let sink: LogSink | undefined;
@@ -78,6 +126,15 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       }
 
       if (context.outputFormat === 'ndjson') {
+        if (isRuntimePresentationEvent(event)) {
+          writeRuntimePresentationNdjson(
+            ensureLogger(),
+            event,
+            payload as RuntimePresentationEventPayloads[RuntimePresentationEvent],
+          );
+          return;
+        }
+
         const record: CliNdjsonRecord = {
           kind: 'progress',
           event,
@@ -94,6 +151,22 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
           (payload as RuntimePresentationEventPayloads['requestShowError'])
             .message,
         );
+        return;
+      }
+
+      if (event === 'requestShowInstruction') {
+        // Not gated by quietLogs (below): unlike the debug fallback, this is
+        // an actionable instruction (e.g. missing API key), not routine
+        // progress noise.
+        runProgress?.preserve();
+        const instructionPayload =
+          payload as RuntimePresentationEventPayloads['requestShowInstruction'];
+        const hint = instructionPayload.actions?.length
+          ? ` (${instructionPayload.actions
+              .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
+              .join(', ')})`
+          : '';
+        ensureLogger().info(`${instructionPayload.message}${hint}`);
         return;
       }
 

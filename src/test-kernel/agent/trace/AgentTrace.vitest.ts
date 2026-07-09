@@ -50,6 +50,41 @@ describe('TraceEmitter stage metadata', () => {
 });
 
 // ---------------------------------------------------------------------------
+// responseFinalized (issue #7086)
+// ---------------------------------------------------------------------------
+
+describe('TraceEmitter responseFinalized', () => {
+  it('emits a response.finalized event carrying the given text', () => {
+    const trace = new TraceEmitter();
+    const events: AgentEvent[] = [];
+    trace.subscribe((event) => events.push(event));
+
+    trace.responseFinalized('The answer is 2.');
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'response.finalized',
+        text: 'The answer is 2.',
+      }),
+    ]);
+  });
+
+  it('stamps the ambient stage id when no explicit stageId is given', () => {
+    const trace = new TraceEmitter();
+    const events: AgentEvent[] = [];
+    trace.subscribe((event) => events.push(event));
+
+    const stage = trace.openStage('r0', { kind: 'round' });
+    void stage.within(() => {
+      trace.responseFinalized('Final answer.');
+    });
+
+    const finalized = events.find((e) => e.type === 'response.finalized');
+    expect(finalized).toMatchObject({ stageId: stage.id });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // EmitToolUseCard
 // ---------------------------------------------------------------------------
 

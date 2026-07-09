@@ -30,6 +30,11 @@ import {
 } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
+import {
+  getRunContextExecutionId,
+  getRunContextStreamId,
+  getRunContextWorkingDirectory,
+} from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   startChildRunLoop,
@@ -43,15 +48,11 @@ import type {
   TodoItem,
   ToolUseLog,
 } from '@shared/schemas';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import {
-  getRunContextExecutionId,
-  getRunContextStreamId,
-  getRunContextWorkingDirectory,
-  requireRunStream,
-} from '@tools/contextHelpers';
+import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -143,7 +144,7 @@ function formatCodexDelivery(
 ): string {
   return formatChildRunDelivery(
     {
-      tag: 'codex-result',
+      tag: DELIVERY_TAG.codexResult,
       executionId,
       prompt,
       attributes: [{ name: 'thread-id', value: threadId || null }],
@@ -431,7 +432,7 @@ function startCodexLoop(params: {
       formatCodexDelivery(executionId, lastPrompt, wallTimeMs, turn, thread.id),
     formatError: (_turn, err) =>
       formatChildRunError(
-        { tag: 'codex-error', executionId, prompt: lastPrompt },
+        { tag: DELIVERY_TAG.codexError, executionId, prompt: lastPrompt },
         { message: toErrorMessage(err) },
       ),
     onSessionCleanup: () => {
