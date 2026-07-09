@@ -154,12 +154,17 @@ async function runToolUseAgent(
     'isSubagent' | 'onFollowUpConsumed' | 'onProgress' | 'onIdle'
   >,
 ): Promise<AgentRuntimeFlowResult> {
-  const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
+  const {
+    streamId: runStreamId,
+    executionId: runExecutionId,
+    session: runSession,
+  } = ctx.runScope;
   const onRoundFinalized = createUsageRecordingCallback(ctx);
   try {
     const result = await runToolUseFlow(
       {
         ...ctx,
+        streamStatus: runSession.status,
         ...createInterruptCallbacks(),
         onRoundFinalized,
         setting,
@@ -244,6 +249,7 @@ async function runReflectionAgent(
   try {
     result = await runReflectionFlow({
       ...ctx,
+      streamStatus: runSession.status,
       ...interruptCallbacks,
       onRoundFinalized,
       setting,
@@ -501,7 +507,11 @@ export async function resumeToolUseFromSnapshot(
     runtimeUnavailableTools: options.runtimeUnavailableTools,
   };
   const { setting } = ctx;
-  const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
+  const {
+    streamId: runStreamId,
+    executionId: runExecutionId,
+    session: runSession,
+  } = ctx.runScope;
 
   return withExecutionRunContext(ctx, runContextOptions, async () => {
     if (setting.agentCategory !== AgentCategory.ToolUse) {
@@ -517,6 +527,7 @@ export async function resumeToolUseFromSnapshot(
         const result = await runToolUseFlow(
           {
             ...ctx,
+            streamStatus: runSession.status,
             ...createInterruptCallbacks(),
             onRoundFinalized: createUsageRecordingCallback(ctx),
             setting,
