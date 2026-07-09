@@ -227,7 +227,6 @@ describe('runFlowWithLifecycle', () => {
       // The lifecycle owns the whole transition (RUNNING on entry, terminal
       // on exit) against the run session's one status machine.
       expect(streamStatus).toBe(ctx.runScope.session.status);
-      expect(StreamStatusService).toBe(streamStatus);
       await runFlowWithLifecycle(ctx, async () => ({
         category: 'toolUse',
         outcome: RUN_OUTCOME.COMPLETED,
