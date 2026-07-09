@@ -108,6 +108,14 @@ export type PendingInteractionKind =
   | 'userQuestion'
   | 'externalInquiry';
 
+export type ApprovalBypassKind = 'bash' | 'toolEdit' | 'superYolo';
+
+export interface HostApprovalBypassStateUpdate {
+  readonly streamId: StreamTabId;
+  readonly kind: ApprovalBypassKind;
+  readonly bypassActive: boolean;
+}
+
 /**
  * Selector for {@link HostInteractions.cancel}.
  *
@@ -176,6 +184,7 @@ export interface HostInteractions {
   openExternalInquiry?(
     request: HostExternalInquiryRequest,
   ): Promise<HostExternalInquiryHandle> | undefined;
+  setApprovalBypassState?(update: HostApprovalBypassStateUpdate): void;
   resolve(requestId: string, result: HostInteractionResolution): boolean;
   /** Settle pending requests matching the selector with their reject/cancel defaults. */
   cancel(selector?: HostInteractionCancelSelector): void;
@@ -254,6 +263,10 @@ export class SessionHostInteractions implements HostInteractions {
     request: HostExternalInquiryRequest,
   ): Promise<HostExternalInquiryHandle> | undefined {
     return this.active.openExternalInquiry?.(request);
+  }
+
+  setApprovalBypassState(update: HostApprovalBypassStateUpdate): void {
+    this.active.setApprovalBypassState?.(update);
   }
 
   resolve(requestId: string, result: HostInteractionResolution): boolean {

@@ -10,6 +10,7 @@
 import { signal, type Signal } from '@lit-labs/signals';
 import PQueue from 'p-queue';
 
+import type { ApprovalBypassKind as HostApprovalBypassKind } from '@agent/runtime/HostInteractions';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { StreamTabId } from '@shared/schemas';
 import type {
@@ -26,7 +27,7 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 import { assertNever } from '@utils/core';
 
-export type ApprovalBypassKind = 'bash' | 'toolEdit' | 'superYolo';
+export type ApprovalBypassKind = HostApprovalBypassKind;
 export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 export type ApprovalPayload =

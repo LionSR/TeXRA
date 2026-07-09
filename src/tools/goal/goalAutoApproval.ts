@@ -28,4 +28,9 @@ export async function setGoalSessionBashAutoApproval(
   const { setBashApprovalSessionBypass } =
     await import('@tools/approval/bashApproval');
   setBashApprovalSessionBypass(streamId, enabled, runtimeHost);
+  runtimeHost.interactions?.setApprovalBypassState?.({
+    streamId,
+    kind: 'bash',
+    bypassActive: enabled,
+  });
 }

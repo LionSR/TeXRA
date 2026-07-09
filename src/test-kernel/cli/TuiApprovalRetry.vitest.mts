@@ -97,6 +97,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { AgentCategory } from '@shared/schemas';
+import { setGoalSessionBashAutoApproval } from '@tools/goal';
 
 function context(): CliContext {
   return {
@@ -216,6 +217,46 @@ describe('TUI retry approvals', () => {
       );
     } finally {
       dispose();
+    }
+  });
+
+  it('updates TUI bash bypass state when goal auto-approval is enabled and cleared', async () => {
+    const runtimeHost = host();
+    const interactions = createTuiHostInteractions(runtimeHost, context());
+    const hostWithInteractions = {
+      ...runtimeHost,
+      interactions,
+    } satisfies CliRuntimeHost;
+    try {
+      await setGoalSessionBashAutoApproval(
+        'goal-bypass-stream',
+        true,
+        hostWithInteractions,
+      );
+      expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(true);
+      expect(runtimeHost.emit).toHaveBeenCalledWith(
+        'updateBashApprovalBypassState',
+        {
+          streamId: 'goal-bypass-stream',
+          bypassActive: true,
+        },
+      );
+
+      await setGoalSessionBashAutoApproval(
+        'goal-bypass-stream',
+        false,
+        hostWithInteractions,
+      );
+      expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(false);
+      expect(runtimeHost.emit).toHaveBeenCalledWith(
+        'updateBashApprovalBypassState',
+        {
+          streamId: 'goal-bypass-stream',
+          bypassActive: false,
+        },
+      );
+    } finally {
+      interactions.dispose?.();
     }
   });
 
