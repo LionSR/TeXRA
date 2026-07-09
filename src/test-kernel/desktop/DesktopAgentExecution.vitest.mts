@@ -169,6 +169,7 @@ interface DesktopAgentExecutionModule {
       streamSnapshotStore?: TestDesktopStreamSnapshotStore;
       progressSnapshotStore?: ProgressSnapshotStore;
       showErrorMessage?: (message: string) => Promise<void> | void;
+      openPath?: (filePath: string, line?: number) => Promise<void>;
     },
   ) => Bridge;
   createDesktopAgentExecution(options: {
@@ -195,6 +196,7 @@ type CreateBridgeOptions = {
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
   activeExecutionIds?: readonly string[] | (() => readonly string[]);
   showErrorMessage?: (message: string) => Promise<void> | void;
+  openPath?: (filePath: string, line?: number) => Promise<void>;
 };
 
 type TestDesktopStreamSnapshotStore = {
@@ -432,6 +434,7 @@ async function createBridge(
       streamSnapshotStore: options.streamSnapshotStore,
       progressSnapshotStore,
       showErrorMessage: options.showErrorMessage,
+      openPath: options.openPath,
     },
   ) as TestableBridge;
 }
@@ -741,6 +744,29 @@ describe('DesktopProgressBridge', () => {
         route: 'progress',
       });
       expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('routes requestOpenFile to the desktop preview host (issue #7751 FS3)', async () => {
+    const messages: unknown[] = [];
+    const openPath = vi.fn(async () => {});
+    const bridge = await createBridge(messages, { openPath });
+
+    try {
+      bridge.handleInteractionEvent('requestOpenFile', {
+        location: {
+          kind: 'runStorage',
+          absolutePath: '/runs/exec-1/output/paper.pdf',
+          relativePath: 'output/paper.pdf',
+          executionId: 'abc123',
+        },
+        preserveFocus: true,
+      });
+      await settleProgressEvents();
+
+      expect(openPath).toHaveBeenCalledWith('/runs/exec-1/output/paper.pdf');
     } finally {
       bridge.dispose();
     }

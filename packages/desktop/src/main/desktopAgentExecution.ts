@@ -74,6 +74,7 @@ import {
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
   type ExecutionId,
+  type RequestOpenFilePayload,
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
@@ -1031,6 +1032,19 @@ export class DesktopProgressBridge {
           payload as DesktopPresentationPayloads[typeof event],
         );
         return;
+      case 'requestOpenFile': {
+        // The extension previews via its LaTeX-Workshop build+view flow
+        // (openBuildDisplayIfTex); desktop has no such editor integration,
+        // so open the resolved path through the same preview-with-fallback
+        // host `openWorkflowOutput` already uses (see runExecution above).
+        const data = payload as RequestOpenFilePayload;
+        this.options.openPath?.(data.location.absolutePath).catch((error) => {
+          this.logger.warn('Failed to open requested file on desktop', {
+            data: toLogData(error),
+          });
+        });
+        return;
+      }
       default:
         return;
     }
