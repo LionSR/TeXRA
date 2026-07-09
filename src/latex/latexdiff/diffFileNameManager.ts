@@ -15,6 +15,19 @@ export interface GeneratedLatexdiffArtifact {
 }
 
 /**
+ * Build the `_diffr{newer}r{older}` suffix used to name a between-round diff
+ * artifact. Sole owner of this grammar — other call sites that need this
+ * suffix (rather than the full filename from `generateDiffFileName`) should
+ * import this instead of re-encoding the template themselves.
+ */
+export function buildBetweenRoundDiffSuffix(
+  newerRound: number | string,
+  olderRound: number | string,
+): string {
+  return `_diffr${newerRound}r${olderRound}`;
+}
+
+/**
  * Generate a diff filename based on input and edited file names.
  * Uses round-based naming only for between-round diffs (same operation chain).
  * Falls back to suffix for round-vs-original diffs (edited builds on input).
@@ -63,7 +76,7 @@ export function generateDiffFileName(
     const baseName = editedBaseName.slice(0, endIndex);
     const modelSuffix = sameModel ? `_${editedRoundMatch[2]}` : '';
 
-    return `${baseName}${modelSuffix}_diffr${secondRound}r${firstRound}.tex`;
+    return `${baseName}${modelSuffix}${buildBetweenRoundDiffSuffix(secondRound, firstRound)}.tex`;
   }
 
   return `${editedBaseName}${suffix}.tex`;

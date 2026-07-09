@@ -11,7 +11,10 @@ import { FlexibleFS, pathToLocation } from '@utils/files';
 import { executeCommand } from '@utils/system';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { runLatexFormatter } from './texFormatter';
-import { generateDiffFileName } from './latexdiff/diffFileNameManager';
+import {
+  buildBetweenRoundDiffSuffix,
+  generateDiffFileName,
+} from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
 import type { MathMarkupOption } from './latexdiff/mathMarkup';
@@ -270,7 +273,10 @@ export class LaTeXdiffService {
         return { success: false, message };
       }
 
-      const diffSuffix = `_diffr${secondRoundMatch[1]}r${firstRoundMatch[1]}`;
+      const diffSuffix = buildBetweenRoundDiffSuffix(
+        secondRoundMatch[1],
+        firstRoundMatch[1],
+      );
       return await this.runDiff(
         firstLocation,
         secondLocation,
