@@ -1,4 +1,4 @@
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 
 /**
  * How to identify the workflow tab(s) whose missing-outputs marker should be
@@ -23,12 +23,20 @@ export function emitClearMissingOutputs(
   options: ClearMissingOutputsOptions,
 ): void {
   if (options.streamIdOverride !== undefined) {
-    emitRuntimeEvent('clearMissingOutputs', {
-      streamId: options.streamIdOverride,
+    defaultSession().events.emit({
+      scope: 'session',
+      event: {
+        type: 'clearMissingOutputs',
+        payload: { streamId: options.streamIdOverride },
+      },
     });
     return;
   }
-  emitRuntimeEvent('clearMissingOutputs', {
-    streamConfig: options.streamConfig,
+  defaultSession().events.emit({
+    scope: 'session',
+    event: {
+      type: 'clearMissingOutputs',
+      payload: { streamConfig: options.streamConfig },
+    },
   });
 }

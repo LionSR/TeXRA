@@ -8,7 +8,6 @@ import {
   wakeQueuedFollowUpStream,
   type SendFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResumeDetection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -22,6 +21,16 @@ import type { StreamTabId } from '@shared/schemas';
 const logger = createChannelTrace('followUpCommand');
 
 const inFlightDetections = new Set<StreamTabId>();
+
+function emitQueuedFollowUpsChanged(streamId: StreamTabId): void {
+  defaultSession().events.emit({
+    scope: 'session',
+    event: {
+      type: 'updateQueuedFollowUps',
+      payload: { streamId },
+    },
+  });
+}
 
 async function lazyDetectWaitingStatus(
   streamId: StreamTabId,
@@ -73,13 +82,13 @@ async function handleFollowUpResult(
 ): Promise<void> {
   switch (result.status) {
     case 'sent':
-      emitRuntimeEvent('updateQueuedFollowUps', { streamId });
+      emitQueuedFollowUpsChanged(streamId);
       break;
     case 'queued':
-      emitRuntimeEvent('updateQueuedFollowUps', { streamId });
+      emitQueuedFollowUpsChanged(streamId);
       switch ((await wakeQueuedFollowUpStream(streamId, result)).kind) {
         case 'dropped':
-          emitRuntimeEvent('updateQueuedFollowUps', { streamId });
+          emitQueuedFollowUpsChanged(streamId);
           await vscode.window.showWarningMessage(
             'Message dropped — no session available to receive it. Start a new agent task to continue.',
           );
