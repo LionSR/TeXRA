@@ -5,6 +5,7 @@ import { ProgressBackend } from '@controllers/progressView/backend/ProgressBacke
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
+  replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
@@ -459,15 +460,9 @@ export class ProgressViewProvider
       return;
     }
 
-    this.approvalHandlers.toolEdit.replay();
-    this.approvalHandlers.bash.replay();
-    this.approvalHandlers.externalInquiry.replay();
+    replayApprovalRequestHandlers(this.approvalHandlers);
     // YOLO / Super YOLO state is already sent by syncFullView() which is
     // always called before replayPendingPrompts() in markWebviewReady().
-
-    this.approvalHandlers.retry.replay();
-    this.approvalHandlers.agentProposal.replay();
-    this.approvalHandlers.planApproval.replay();
   }
 
   public getPendingAgentProposal(
