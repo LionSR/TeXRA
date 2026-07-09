@@ -185,10 +185,13 @@ export async function executeCliRequest(
     defaultSession(),
     interactionHost,
   );
-  const detachSessionProgressProjection = attachCliSessionProgressProjection(
-    defaultSession().events,
-    interactionHost,
-  );
+  const detachSessionProgressProjection =
+    runContext.outputFormat === 'ndjson'
+      ? attachCliSessionProgressProjection(
+          defaultSession().events,
+          interactionHost,
+        )
+      : () => undefined;
   const uninstallApprovalHandlers = installCliApprovalHandlers(runContext, {
     beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
   });
