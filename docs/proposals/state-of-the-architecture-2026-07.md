@@ -1122,7 +1122,7 @@ single-caller extractions anywhere in the above (standing ban).
 | 9   | S1 option (a): relay equality test + exact pin + deploy script                                         | **new small issue** (no tracker owns the relay surface)                          |
 | 10  | S2 arm (a): R7 detector; R3 owner dates the ~40 undated ledger rows                                    | fewer-elements R7/R3; #6981                                                      |
 | 11  | S5 arm (b): desktop version-check toast, post-Stage-5                                                  | **new product issue** (surface has no owner)                                     |
-| 12  | DS-2 rung B dated row (goal-store medium, trigger = SDK packaging); DS-3 one-line rule + checklist row | #6981; `.claude/skills/code-review/SKILL.md` §13/§14                                                      |
+| 12  | DS-2 rung B dated row (goal-store medium, trigger = SDK packaging); DS-3 one-line rule + checklist row | #6981; `.claude/skills/code-review/SKILL.md` §13/§14                             |
 | 13  | S6 permanence paragraph on the ink patch                                                               | ink-practices proposal / patch header                                            |
 | 14  | NS-4 option (a): document port-injection as the embedding path                                         | agent-sdk-readiness.md                                                           |
 
