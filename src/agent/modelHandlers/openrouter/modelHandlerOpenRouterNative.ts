@@ -138,6 +138,24 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       apiKey,
       appTitle: 'TeXRA.ai',
       ...(baseUrl ? { serverURL: baseUrl } : {}),
+      // @openrouter/sdk@0.13.31 chatSend.js:46-58 defaults retryConfig to a
+      // 3_600_000ms (1h) maxElapsedTime backoff, so a transient 5XX can hang
+      // inside a single "attempt" for up to an hour before TeXRA's flow-level
+      // retry ever sees it (#7643). Bound it here instead: same backoff shape,
+      // maxElapsedTime capped to 30s (~5 attempts of transient-blip
+      // resilience), then the failure surfaces through the flow's visible
+      // retry/failure path. Ownership of 5XX retries is unchanged — see
+      // isAutoRetryManagedByProvider below.
+      retryConfig: {
+        strategy: 'backoff',
+        backoff: {
+          initialInterval: 500,
+          maxInterval: 8_000,
+          exponent: 1.5,
+          maxElapsedTime: 30_000,
+        },
+        retryConnectionErrors: true,
+      },
     });
   }
 
@@ -150,8 +168,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     const statusCode = detectStatusCode(error);
-    // @openrouter/sdk v0.13.21 defaults chatSend retryCodes to ["5XX"];
-    // 429/408 HTTP responses remain owned by TeXRA's flow retry.
+    // @openrouter/sdk v0.13.21 defaults chatSend retryCodes to ["5XX"]; the
+    // SDK's retry window is now bounded to 30s (see getClient() above), but
+    // ownership is unchanged — 5XX HTTP responses remain provider-managed here,
+    // and 429/408 HTTP responses remain owned by TeXRA's flow retry.
     return statusCode !== undefined && statusCode >= 500;
   }
 
