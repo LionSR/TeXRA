@@ -101,7 +101,7 @@
     "zod-v3-to-v4": "^1.21.3"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.204",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.205",
     "@anthropic-ai/sdk": "^0.110.0",
     "@awesome.me/webawesome": "^3.10.0",
     "@cantoo/pdf-lib": "^2.7.1",
@@ -115,8 +115,8 @@
     "@octokit/request": "^10.0.11",
     "@octokit/request-error": "^7.1.0",
     "@openai/codex-sdk": "^0.143.0",
-    "@openrouter/sdk": "^0.13.31",
-    "@supabase/supabase-js": "2.110.1",
+    "@openrouter/sdk": "^0.13.33",
+    "@supabase/supabase-js": "2.110.2",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "arxiv-client": "^0.0.9",
