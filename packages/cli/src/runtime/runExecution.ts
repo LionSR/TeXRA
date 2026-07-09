@@ -253,15 +253,15 @@ export async function executeCliRequest(
     const result = await (options.wrap ? options.wrap(invoke) : invoke());
     runResult = { ok: true, result };
   } catch (err) {
+    if (options.markErrorOnThrow && request.executionId) {
+      await writeTerminalStatus(request.executionId, EXECUTION_STATUS.ERROR);
+    }
     // Only a classified, already-handled AgentError resolves to a non-zero
     // exit code here; anything else (e.g. registerExecution disk I/O,
     // workspaceState.update failures) is unexpected and must keep
     // propagating to bin/texra.ts's crash handler.
     if (!(err instanceof AgentError)) {
       throw err;
-    }
-    if (options.markErrorOnThrow && request.executionId) {
-      await writeTerminalStatus(request.executionId, EXECUTION_STATUS.ERROR);
     }
   } finally {
     disposeShutdownStatus?.dispose();
