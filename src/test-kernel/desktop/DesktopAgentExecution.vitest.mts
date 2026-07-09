@@ -3112,6 +3112,60 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it("restores a stream's task state into the main view (history 'Setup' / Progress board restore)", async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      emitRunConfigFact(bridge, {
+        streamId: 'stream-1',
+        executionId: 'ec1002' as ExecutionId,
+        taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
+      });
+      await settleProgressEvents();
+      messages.length = 0;
+
+      const handleRestoreState = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.RESTORE_STATE
+        ],
+      );
+      expect(handleRestoreState).toBeTypeOf('function');
+      await handleRestoreState({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-1',
+      });
+
+      expect(messages).toEqual([
+        { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route: 'main' },
+        expect.objectContaining({ command: COMMON_COMMANDS.STATE_RESTORE }),
+      ]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('ignores restoreState for a stream with no persisted task state', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      const handleRestoreState = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.RESTORE_STATE
+        ],
+      );
+      await handleRestoreState({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-unknown',
+      });
+
+      expect(messages).toEqual([]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('flushes debounced stream logs before shutdown can drop them', async () => {
     const streamId = 'shutdown-flush' as StreamTabId;
     const kvStoreBacking = new Map<string, unknown>();
