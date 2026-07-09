@@ -43,6 +43,7 @@ import {
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { type ToolResult } from '@shared/schemas/toolResult';
@@ -158,7 +159,7 @@ function formatClaudeDelivery(
       : undefined;
   return formatChildRunDelivery(
     {
-      tag: 'claude-agent-result',
+      tag: DELIVERY_TAG.claudeAgentResult,
       executionId,
       prompt,
       attributes: [{ name: 'session-id', value: turn.sessionId || null }],
@@ -485,7 +486,7 @@ function startClaudeAgentLoop(params: {
       formatClaudeDelivery(executionId, lastPrompt, wallTimeMs, turn),
     formatError: (turn, err) =>
       formatChildRunError(
-        { tag: 'claude-agent-error', executionId, prompt: lastPrompt },
+        { tag: DELIVERY_TAG.claudeAgentError, executionId, prompt: lastPrompt },
         {
           message: toErrorMessage(
             err ?? turn?.errorMessage ?? turn?.finalResponse,

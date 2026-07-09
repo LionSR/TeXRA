@@ -1,7 +1,8 @@
 // QA-2 host-side mock ratchet (issue #7684). Host suites (CLI + desktop, in
 // src/test-kernel/cli and src/test-kernel/desktop) reach into `@agent/*`
-// internals via `vi.mock('@agent/...')`, pinning agent's current internal
-// module layout from outside src/agent. Clones the checked-in-baseline +
+// internals via `vi.mock('@agent/...')` or `vi.doMock('@agent/...')`,
+// pinning agent's current internal module layout from outside src/agent.
+// Clones the checked-in-baseline +
 // AST-scanning vitest pattern from LAY-1 (subsystemEdgeRatchet.vitest.ts,
 // PR #7774): baseline the current site count and fail only on an increase;
 // a decrease (or an @agent restructor removing the need for a mock) is
@@ -9,7 +10,7 @@
 
 // Node imports
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Third-party imports
@@ -50,13 +51,15 @@ function sourceFilesUnder(dir: string): string[] {
     .map((entry) => join(dir, entry));
 }
 
+const VI_MOCK_METHODS = new Set(['mock', 'doMock']);
+
 function isViMockCall(node: ts.Node): node is ts.CallExpression {
   return (
     ts.isCallExpression(node) &&
     ts.isPropertyAccessExpression(node.expression) &&
     ts.isIdentifier(node.expression.expression) &&
     node.expression.expression.text === 'vi' &&
-    node.expression.name.text === 'mock'
+    VI_MOCK_METHODS.has(node.expression.name.text)
   );
 }
 
@@ -100,7 +103,7 @@ function readBaseline(): MockBaseline {
 }
 
 describe('QA-2 host-side @agent mock ratchet', () => {
-  it("does not increase the count of vi.mock('@agent/...') sites in CLI/desktop suites", () => {
+  it("does not increase the count of vi.mock()/vi.doMock('@agent/...') sites in CLI/desktop suites", () => {
     const baseline = readBaseline();
     const current = collectHostAgentMockSites();
 
@@ -112,14 +115,13 @@ describe('QA-2 host-side @agent mock ratchet', () => {
     ).toBeLessThanOrEqual(baseline.sites.length);
   });
 
-  it('keeps the baseline non-empty and ordered', () => {
+  it('keeps the baseline ordered (an empty baseline is a valid, welcome outcome)', () => {
     const baseline = readBaseline();
     const sortedSites = baseline.sites.toSorted(
       (a, b) =>
         a.file.localeCompare(b.file) || a.specifier.localeCompare(b.specifier),
     );
 
-    expect(baseline.sites.length).toBeGreaterThan(0);
     expect(baseline.sites).toEqual(sortedSites);
   });
 });
