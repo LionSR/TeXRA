@@ -39,11 +39,6 @@ const RUN_PROGRESS_EVENTS = [
 
 export type RunProgressEvent = (typeof RUN_PROGRESS_EVENTS)[number];
 
-type RunProgressEventPayloads = Pick<
-  CliProgressEventPayloads,
-  RunProgressEvent
->;
-
 const RunProgressEventSet: ReadonlySet<string> = new Set(RUN_PROGRESS_EVENTS);
 
 export function isRunProgressEvent(event: string): event is RunProgressEvent {
@@ -75,7 +70,6 @@ interface RenderState {
 
 export interface RunProgressRenderer {
   handleSessionEvent(event: SessionEvent): boolean;
-  handle(event: RunProgressEvent, payload: unknown): boolean;
   clear(): void;
   preserve(): void;
 }
@@ -164,75 +158,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return this.handleRunFact(event.streamId, event.event);
   }
 
-  handle(event: RunProgressEvent, payload: unknown): boolean {
-    switch (event) {
-      case 'setTaskState':
-        if (
-          this.applyTaskState(
-            payload as RunProgressEventPayloads['setTaskState'],
-          )
-        ) {
-          this.updateHeartbeat();
-          this.render(true);
-        }
-        return true;
-      case 'updateConversationProgress':
-        if (this.rootStreamTerminal) return true;
-        {
-          const data =
-            payload as RunProgressEventPayloads['updateConversationProgress'];
-          if (!this.applyConversationProgress(data.streamId, data.progress)) {
-            return true;
-          }
-          this.updateHeartbeat();
-          this.render();
-        }
-        return true;
-      case 'updateRoundStage':
-        if (this.rootStreamTerminal) return true;
-        {
-          const data = payload as RunProgressEventPayloads['updateRoundStage'];
-          if (!this.applyRoundStage(data.streamId, data.roundStage)) {
-            return true;
-          }
-          this.updateHeartbeat();
-          this.render();
-        }
-        return true;
-      case 'updateActiveProcesses':
-      case 'updateActiveSubagents':
-        if (this.rootStreamTerminal) return true;
-        if (event === 'updateActiveProcesses') {
-          const data =
-            payload as RunProgressEventPayloads['updateActiveProcesses'];
-          this.applyActiveProcesses(data.parentStreamId, data.processes);
-        } else {
-          const data =
-            payload as RunProgressEventPayloads['updateActiveSubagents'];
-          this.applyActiveSubagents(data.parentStreamId, data.children);
-        }
-        this.updateHeartbeat();
-        this.render(true);
-        return true;
-      case 'updateStreamStatus':
-        {
-          const data =
-            payload as RunProgressEventPayloads['updateStreamStatus'];
-          this.applyStatus(data.streamId, data.status);
-        }
-        return true;
-      case 'updateStreamDescription': {
-        if (this.rootStreamTerminal) return true;
-        const data =
-          payload as RunProgressEventPayloads['updateStreamDescription'];
-        this.applyStreamDescription(data.streamId, data.description);
-        return true;
-      }
-      default:
-        return false;
-    }
-  }
-
   clear(): void {
     this.stopHeartbeat();
     if (this.ansi && this.liveLine) {
@@ -247,12 +172,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       this.write('\n');
       this.liveLine = false;
     }
-  }
-
-  private applyTaskState(
-    payload: RunProgressEventPayloads['setTaskState'],
-  ): boolean {
-    return this.applyRunConfig(payload.streamId, payload.taskState.agentConfig);
   }
 
   private handleSessionFact(event: SessionFact): boolean {

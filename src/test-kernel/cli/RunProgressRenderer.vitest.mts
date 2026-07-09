@@ -12,8 +12,11 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 import {
   STREAM_PHASE,
-  STREAM_STATUS,
+  type ActiveChildInfo,
+  type ConversationProgress,
   type ExecutionId,
+  type RoundStage,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -136,6 +139,127 @@ function emitWorkflowRunConfig(
   });
 }
 
+type TestRunProgressRenderer = ReturnType<typeof createRunProgressRenderer>;
+
+function handleRunConfig(
+  renderer: TestRunProgressRenderer,
+  taskState:
+    | ReturnType<typeof workflowTaskState>
+    | ReturnType<typeof toolUseTaskState> = workflowTaskState(),
+): void {
+  const streamId = taskState.streamId as StreamTabId;
+  renderer?.handleSessionEvent({
+    scope: 'run',
+    streamId,
+    event: {
+      type: 'run.config',
+      streamId,
+      executionId: 'execution-1' as ExecutionId,
+      config: taskState.taskState.agentConfig,
+    },
+  });
+}
+
+function handleRoundStage(
+  renderer: TestRunProgressRenderer,
+  streamId: string,
+  roundStage: RoundStage,
+): void {
+  renderer?.handleSessionEvent({
+    scope: 'run',
+    streamId: streamId as StreamTabId,
+    event: {
+      type: 'stage.start',
+      id: `round-${roundStage.index}`,
+      label: `Round ${roundStage.index + 1}`,
+      kind: 'round',
+      index: roundStage.index,
+      ...(roundStage.total !== undefined ? { total: roundStage.total } : {}),
+    },
+  });
+}
+
+function handleConversationProgress(
+  renderer: TestRunProgressRenderer,
+  streamId: string,
+  progress: ConversationProgress,
+): void {
+  renderer?.handleSessionEvent({
+    scope: 'run',
+    streamId: streamId as StreamTabId,
+    event: {
+      type: 'conversation.progress',
+      progress,
+    },
+  });
+}
+
+function handleStreamStatus(
+  renderer: TestRunProgressRenderer,
+  streamId: string,
+  status: StreamPhase,
+): void {
+  renderer?.handleSessionEvent({
+    scope: 'run',
+    streamId: streamId as StreamTabId,
+    event: {
+      type: 'status',
+      streamId: streamId as StreamTabId,
+      phase: status,
+      previousPhase: STREAM_PHASE.RUNNING,
+      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    },
+  });
+}
+
+function handleStreamDescription(
+  renderer: TestRunProgressRenderer,
+  streamId: string,
+  description: string,
+): void {
+  renderer?.handleSessionEvent({
+    scope: 'session',
+    event: {
+      type: 'updateStreamDescription',
+      payload: { streamId: streamId as StreamTabId, description },
+    },
+  });
+}
+
+function handleActiveProcesses(
+  renderer: TestRunProgressRenderer,
+  parentStreamId: string,
+  processes: readonly ActiveChildInfo[],
+): void {
+  renderer?.handleSessionEvent({
+    scope: 'run',
+    streamId: parentStreamId as StreamTabId,
+    event: {
+      type: 'child.activity',
+      kind: 'processes',
+      parentStreamId: parentStreamId as StreamTabId,
+      processes,
+    },
+  });
+}
+
+function handleActiveSubagents(
+  renderer: TestRunProgressRenderer,
+  parentStreamId: string,
+  children: readonly ActiveChildInfo[],
+): void {
+  renderer?.handleSessionEvent({
+    scope: 'run',
+    streamId: parentStreamId as StreamTabId,
+    event: {
+      type: 'child.activity',
+      kind: 'subagents',
+      parentStreamId: parentStreamId as StreamTabId,
+      children,
+    },
+  });
+}
+
 function outputBuffer(): { write: (chunk: string) => void; text: string } {
   const buffer = {
     text: '',
@@ -197,14 +321,11 @@ describe('CLI run progress renderer', () => {
     });
 
     expect(renderer).toBeDefined();
-    renderer?.handle('setTaskState', workflowTaskState());
+    handleRunConfig(renderer, workflowTaskState());
     expect(output.text).toBe('\r\x1b[2Kpolish paper.tex · 0s');
 
     now = 1200;
-    renderer?.handle('updateRoundStage', {
-      streamId: 'stream-1',
-      roundStage: { index: 1 },
-    });
+    handleRoundStage(renderer, 'stream-1', { index: 1 });
     expect(output.text).toContain('\r\x1b[2K[r2] · polish paper.tex · 1s');
 
     renderer?.clear();
@@ -221,7 +342,7 @@ describe('CLI run progress renderer', () => {
     });
 
     now = 3_600_000;
-    renderer?.handle('setTaskState', workflowTaskState());
+    handleRunConfig(renderer, workflowTaskState());
 
     expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 60m 00s');
   });
@@ -244,7 +365,7 @@ describe('CLI run progress renderer', () => {
       }) as typeof clearInterval,
     });
 
-    renderer?.handle('setTaskState', workflowTaskState());
+    handleRunConfig(renderer, workflowTaskState());
 
     expect(heartbeat).toBeDefined();
     now = 1000;
@@ -255,11 +376,7 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 1s');
     expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 2s');
 
-    renderer?.handle('updateStreamStatus', {
-      streamId: 'stream-1',
-      status: STREAM_PHASE.CANCELLED,
-      previousStatus: STREAM_PHASE.RUNNING,
-    });
+    handleStreamStatus(renderer, 'stream-1', STREAM_PHASE.CANCELLED);
     expect(clearCount).toBe(1);
   });
 
@@ -274,8 +391,8 @@ describe('CLI run progress renderer', () => {
       },
     );
 
-    renderer?.handle(
-      'setTaskState',
+    handleRunConfig(
+      renderer,
       workflowTaskState({
         inputFiles: ['number-theory.tex', 'algebra.tex'],
       }),
@@ -299,11 +416,8 @@ describe('CLI run progress renderer', () => {
       },
     );
 
-    renderer?.handle('setTaskState', workflowTaskState());
-    renderer?.handle('updateRoundStage', {
-      streamId: 'stream-1',
-      roundStage: { index: 0 },
-    });
+    handleRunConfig(renderer, workflowTaskState());
+    handleRoundStage(renderer, 'stream-1', { index: 0 });
 
     expect(mocks.getAgent).toHaveBeenCalledWith(
       'polish',
@@ -328,8 +442,8 @@ describe('CLI run progress renderer', () => {
       },
     );
 
-    renderer?.handle(
-      'setTaskState',
+    handleRunConfig(
+      renderer,
       toolUseTaskState({
         inputFiles: [],
       }),
@@ -350,22 +464,17 @@ describe('CLI run progress renderer', () => {
       },
     );
 
-    renderer?.handle('setTaskState', workflowTaskState());
-    renderer?.handle('updateStreamDescription', {
-      streamId: 'stream-1',
-      description: 'drafting',
-    });
-    renderer?.handle('updateActiveProcesses', {
-      parentStreamId: 'stream-1',
-      processes: [
-        {
-          executionId: 'process-1',
-          agentName: 'bash',
-          toolName: 'Bash',
-          status: 'running',
-        },
-      ],
-    });
+    handleRunConfig(renderer, workflowTaskState());
+    handleStreamDescription(renderer, 'stream-1', 'drafting');
+    handleActiveProcesses(renderer, 'stream-1', [
+      {
+        kind: 'process',
+        executionId: 'process-1',
+        agentName: 'bash',
+        toolName: 'Bash',
+        status: 'running',
+      },
+    ]);
 
     expect(output.text).toBe(
       'polish paper.tex · 0s\n' +
@@ -476,49 +585,46 @@ describe('CLI run progress renderer', () => {
       },
     );
 
-    renderer?.handle(
-      'setTaskState',
+    handleRunConfig(
+      renderer,
       workflowTaskState({
         streamId: 'root-stream',
         agent: 'coordinator',
         inputFiles: ['main.tex'],
       }),
     );
-    renderer?.handle(
-      'setTaskState',
+    handleRunConfig(
+      renderer,
       workflowTaskState({
         streamId: 'child-stream',
         agent: 'reviewer',
         inputFiles: ['chapter.tex'],
       }),
     );
-    renderer?.handle('updateStreamDescription', {
-      streamId: 'child-stream',
-      description: 'reviewing chapter.tex',
-    });
-    renderer?.handle('updateActiveSubagents', {
-      parentStreamId: 'root-stream',
-      children: [
-        {
-          executionId: 'child-1',
-          childStreamId: 'child-stream',
-          agentName: 'reviewer',
-          status: 'running',
-        },
-        {
-          executionId: 'child-2',
-          childStreamId: 'child-stream-2',
-          agentName: 'compiler',
-          status: 'running',
-        },
-        {
-          executionId: 'child-3',
-          childStreamId: 'child-stream-3',
-          agentName: 'proofreader',
-          status: 'running',
-        },
-      ],
-    });
+    handleStreamDescription(renderer, 'child-stream', 'reviewing chapter.tex');
+    handleActiveSubagents(renderer, 'root-stream', [
+      {
+        kind: 'subagent',
+        executionId: 'child-1',
+        childStreamId: 'child-stream',
+        agentName: 'reviewer',
+        status: 'running',
+      },
+      {
+        kind: 'subagent',
+        executionId: 'child-2',
+        childStreamId: 'child-stream-2',
+        agentName: 'compiler',
+        status: 'running',
+      },
+      {
+        kind: 'subagent',
+        executionId: 'child-3',
+        childStreamId: 'child-stream-3',
+        agentName: 'proofreader',
+        status: 'running',
+      },
+    ]);
 
     expect(output.text).toBe(
       'coordinator main.tex · 0s\n' +
@@ -544,8 +650,8 @@ describe('CLI run progress renderer', () => {
       }) as typeof clearInterval,
     });
 
-    renderer?.handle(
-      'setTaskState',
+    handleRunConfig(
+      renderer,
       workflowTaskState({
         streamId: 'root-stream',
         agent: 'orchestrator',
@@ -553,17 +659,15 @@ describe('CLI run progress renderer', () => {
       }),
     );
     now = 950;
-    renderer?.handle('updateActiveSubagents', {
-      parentStreamId: 'root-stream',
-      children: [
-        {
-          executionId: 'child-1',
-          childStreamId: 'child-stream',
-          agentName: 'review',
-          status: 'running',
-        },
-      ],
-    });
+    handleActiveSubagents(renderer, 'root-stream', [
+      {
+        kind: 'subagent',
+        executionId: 'child-1',
+        childStreamId: 'child-stream',
+        agentName: 'review',
+        status: 'running',
+      },
+    ]);
 
     expect(heartbeat).toBeDefined();
     now = 1000;
@@ -578,11 +682,7 @@ describe('CLI run progress renderer', () => {
       '\r\x1b[2Korchestrator · subagent: review · 2s',
     );
 
-    renderer?.handle('updateStreamStatus', {
-      streamId: 'root-stream',
-      status: STREAM_PHASE.CANCELLED,
-      previousStatus: STREAM_PHASE.RUNNING,
-    });
+    handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.CANCELLED);
     expect(clearCount).toBe(1);
   });
 
@@ -600,25 +700,23 @@ describe('CLI run progress renderer', () => {
       }) as unknown as typeof setInterval,
     });
 
-    renderer?.handle(
-      'setTaskState',
+    handleRunConfig(
+      renderer,
       workflowTaskState({
         streamId: 'root-stream',
         agent: 'orchestrator',
         inputFiles: [],
       }),
     );
-    renderer?.handle('updateActiveSubagents', {
-      parentStreamId: 'root-stream',
-      children: [
-        {
-          executionId: 'child-1',
-          childStreamId: 'child-stream',
-          agentName: '',
-          status: 'running',
-        },
-      ],
-    });
+    handleActiveSubagents(renderer, 'root-stream', [
+      {
+        kind: 'subagent',
+        executionId: 'child-1',
+        childStreamId: 'child-stream',
+        agentName: '',
+        status: 'running',
+      },
+    ]);
 
     expect(heartbeat).toBeDefined();
     now = 1200;
@@ -642,25 +740,23 @@ describe('CLI run progress renderer', () => {
       }) as typeof clearInterval,
     });
 
-    renderer?.handle(
-      'setTaskState',
+    handleRunConfig(
+      renderer,
       workflowTaskState({
         streamId: 'root-stream',
         agent: 'orchestrator',
         inputFiles: [],
       }),
     );
-    renderer?.handle('updateActiveSubagents', {
-      parentStreamId: 'root-stream',
-      children: [
-        {
-          executionId: 'child-1',
-          childStreamId: 'child-stream',
-          agentName: 'review',
-          status: 'running',
-        },
-      ],
-    });
+    handleActiveSubagents(renderer, 'root-stream', [
+      {
+        kind: 'subagent',
+        executionId: 'child-1',
+        childStreamId: 'child-stream',
+        agentName: 'review',
+        status: 'running',
+      },
+    ]);
 
     renderer?.preserve();
 
@@ -680,16 +776,10 @@ describe('CLI run progress renderer', () => {
       },
     );
 
-    renderer?.handle('updateConversationProgress', {
-      streamId: 'root-stream',
-      progress: { toolCallCount: 4 },
-    });
-    renderer?.handle('updateRoundStage', {
-      streamId: 'root-stream',
-      roundStage: { index: 1 },
-    });
-    renderer?.handle(
-      'setTaskState',
+    handleConversationProgress(renderer, 'root-stream', { toolCallCount: 4 });
+    handleRoundStage(renderer, 'root-stream', { index: 1 });
+    handleRunConfig(
+      renderer,
       workflowTaskState({
         streamId: 'child-stream',
         agent: 'reviewer',
@@ -713,23 +803,22 @@ describe('CLI run progress renderer', () => {
       },
     );
 
-    renderer?.handle('setTaskState', workflowTaskState());
-    renderer?.handle('updateActiveProcesses', {
-      parentStreamId: 'stream-1',
-      processes: [
-        {
-          executionId: 'process-1',
-          agentName: '',
-          toolName: '',
-          status: 'running',
-        },
-        {
-          executionId: 'process-2',
-          agentName: 'latexmk',
-          status: 'running',
-        },
-      ],
-    });
+    handleRunConfig(renderer, workflowTaskState());
+    handleActiveProcesses(renderer, 'stream-1', [
+      {
+        kind: 'process',
+        executionId: 'process-1',
+        agentName: '',
+        toolName: '',
+        status: 'running',
+      },
+      {
+        kind: 'process',
+        executionId: 'process-2',
+        agentName: 'latexmk',
+        status: 'running',
+      },
+    ]);
 
     expect(output.text).toBe(
       'polish paper.tex · 0s\npolish paper.tex · tool: latexmk · 0s\n',
@@ -749,54 +838,41 @@ describe('CLI run progress renderer', () => {
       },
     );
 
-    renderer?.handle(
-      'setTaskState',
+    handleRunConfig(
+      renderer,
       workflowTaskState({
         streamId: 'root-stream',
         agent: 'orchestrator',
         inputFiles: [],
       }),
     );
-    renderer?.handle('updateActiveProcesses', {
-      parentStreamId: 'root-stream',
-      processes: [
-        {
-          executionId: 'tool-1',
-          agentName: 'bash',
-          toolName: 'Bash',
-          status: 'running',
-        },
-      ],
-    });
+    handleActiveProcesses(renderer, 'root-stream', [
+      {
+        kind: 'process',
+        executionId: 'tool-1',
+        agentName: 'bash',
+        toolName: 'Bash',
+        status: 'running',
+      },
+    ]);
     now = 11000;
-    renderer?.handle('updateStreamStatus', {
-      streamId: 'root-stream',
-      status: STREAM_PHASE.COMPLETED,
-      previousStatus: STREAM_STATUS.RUNNING,
-    });
-    renderer?.handle('updateStreamDescription', {
-      streamId: 'root-stream',
-      description: 'Running Mathematician multi-agent preset',
-    });
-    renderer?.handle('updateRoundStage', {
-      streamId: 'root-stream',
-      roundStage: { index: 2 },
-    });
-    renderer?.handle('updateConversationProgress', {
-      streamId: 'root-stream',
-      progress: { toolCallCount: 9 },
-    });
-    renderer?.handle('updateActiveProcesses', {
-      parentStreamId: 'root-stream',
-      processes: [
-        {
-          executionId: 'tool-2',
-          agentName: 'late-tool',
-          toolName: 'LateTool',
-          status: 'running',
-        },
-      ],
-    });
+    handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.COMPLETED);
+    handleStreamDescription(
+      renderer,
+      'root-stream',
+      'Running Mathematician multi-agent preset',
+    );
+    handleRoundStage(renderer, 'root-stream', { index: 2 });
+    handleConversationProgress(renderer, 'root-stream', { toolCallCount: 9 });
+    handleActiveProcesses(renderer, 'root-stream', [
+      {
+        kind: 'process',
+        executionId: 'tool-2',
+        agentName: 'late-tool',
+        toolName: 'LateTool',
+        status: 'running',
+      },
+    ]);
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
@@ -817,19 +893,15 @@ describe('CLI run progress renderer', () => {
       },
     );
 
-    renderer?.handle(
-      'setTaskState',
+    handleRunConfig(
+      renderer,
       workflowTaskState({
         streamId: 'root-stream',
         agent: 'orchestrator',
         inputFiles: [],
       }),
     );
-    renderer?.handle('updateStreamStatus', {
-      streamId: 'root-stream',
-      status: STREAM_PHASE.CANCELLED,
-      previousStatus: STREAM_STATUS.RUNNING,
-    });
+    handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.CANCELLED);
 
     expect(output.text).toBe(
       'orchestrator · 0s\norchestrator · interrupted · 0s\n',
