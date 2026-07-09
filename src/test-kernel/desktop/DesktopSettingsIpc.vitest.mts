@@ -366,46 +366,6 @@ describe('desktop settings IPC', () => {
     expect(isWorktreeSupportEnabled()).toBe(true);
   });
 
-  it('serves Git author read requests without reapplying process env', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const workspaceState = new MemoryStateStore();
-    workspaceState.values.set(WorkspaceStateKey.GIT_AUTHOR_NAME, 'Applied');
-    workspaceState.values.set(
-      WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-      'applied@example.com',
-    );
-    const posted: unknown[] = [];
-
-    const settings = createDesktopSettingsIpc({
-      workspaceState,
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
-    });
-
-    workspaceState.values.set(WorkspaceStateKey.GIT_AUTHOR_NAME, 'Read Only');
-    workspaceState.values.set(
-      WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-      'read@example.com',
-    );
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
-      }),
-    ).toBe(true);
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      authorName: 'Read Only',
-      authorEmail: 'read@example.com',
-    });
-    expect(getGitAuthorEnv()).toEqual({
-      GIT_AUTHOR_NAME: 'Applied',
-      GIT_AUTHOR_EMAIL: 'applied@example.com',
-      GIT_COMMITTER_NAME: 'Applied',
-      GIT_COMMITTER_EMAIL: 'applied@example.com',
-    });
-  });
-
   it('round-trips desktop crash reporting settings through global state and secrets', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const globalState = new MemoryStateStore();
@@ -488,90 +448,6 @@ describe('desktop settings IPC', () => {
     expect(initializeCalls).toBe(1);
   });
 
-  it('serves storage-backed LaTeX config reads through workspace state', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const workspaceState = new MemoryStateStore();
-    workspaceState.values.set(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, false);
-    workspaceState.values.set(
-      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-      30_000,
-    );
-    workspaceState.values.set(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, 5_000);
-    workspaceState.values.set(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP, 'fine');
-    workspaceState.values.set(WorkspaceStateKey.LATEX_FORMATTER, 'tex-fmt');
-    workspaceState.values.set('texra.invalidLatexValue', 'ignored');
-    const posted: unknown[] = [];
-
-    const settings = createDesktopSettingsIpc({
-      workspaceState,
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_LATEX_CONFIG_VALUES,
-      }),
-    ).toBe(true);
-
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values: {
-        workflowAutoCompile: false,
-        workflowAutoCompileTimeoutMs: 30_000,
-        latexdiffTimeoutMs: 5_000,
-        latexdiffMathMarkup: 'fine',
-        latexFormatter: 'tex-fmt',
-      },
-    });
-  });
-
-  it('loads desktop LaTeX tooling status instead of leaving the tab spinning', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const posted: unknown[] = [];
-
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      detectLatexSettingsStatus: async () => ({
-        outDir: true,
-        autoRevealExclude: true,
-        texDistributionInstalled: true,
-        latexWorkshopInstalled: false,
-        latexdiffInstalled: true,
-        latexindentInstalled: false,
-        texcountInstalled: true,
-        imageProcessingInstalled: false,
-        platform: 'darwin',
-        pdflatexPath: '/Library/TeX/texbin/pdflatex',
-        latexmkPath: '/Library/TeX/texbin/latexmk',
-        latexdiffPath: '/opt/homebrew/bin/latexdiff',
-        latexindentPath: null,
-        texcountPath: '/opt/homebrew/bin/texcount',
-        ghostscriptPath: null,
-        graphicsmagickPath: null,
-        packageManager: 'brew',
-      }),
-      postToRenderer: (message) => posted.push(message),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-      settings: expect.objectContaining({
-        platform: 'darwin',
-        texDistributionInstalled: true,
-        latexdiffInstalled: true,
-      }),
-    });
-  });
-
   it('runs allowlisted LaTeX install commands through the desktop host', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const commands: string[] = [];
@@ -645,20 +521,6 @@ describe('desktop settings IPC', () => {
         infoMessages.push(message);
       },
       postToRenderer: (message) => posted.push(message),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      providerKeyStatuses: expect.arrayContaining([
-        expect.objectContaining({ provider: 'google', status: 'not-set' }),
-      ]),
     });
 
     expect(
@@ -763,23 +625,6 @@ describe('desktop settings IPC', () => {
       postToRenderer: (message) => posted.push(message),
     });
 
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_CHATGPT_AUTH_STATUS,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      status: {
-        signedIn: false,
-        preferSubscription: false,
-        subscriptionToolUseOnly: false,
-      },
-    });
-
-    posted.length = 0;
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
@@ -1198,17 +1043,6 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items: [expect.objectContaining({ id: 'zotero', enabled: true })],
-    });
-
-    expect(
-      settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
         toolId: 'zotero',
         enabled: false,
@@ -1230,7 +1064,7 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
     expect(refreshCount).toBe(1);
-    expect(buildCalls.length).toBeGreaterThanOrEqual(3);
+    expect(buildCalls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('refreshes launcher agent options after agent visibility changes', async () => {
@@ -1812,55 +1646,6 @@ describe('desktop settings IPC', () => {
     ]);
   });
 
-  it('waits for desktop model-list refresh before serving model selection', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const refreshGate = createDeferred();
-    const globalState = new (class extends MemoryStateStore {
-      override async update(key: string, value: unknown): Promise<void> {
-        if (key === GlobalStateKey.ENABLED_MODELS) {
-          await refreshGate.promise;
-        }
-        await super.update(key, value);
-      }
-    })();
-    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 12);
-    globalState.values.set(GlobalStateKey.ENABLED_MODELS, ['custom-model']);
-    const posted: unknown[] = [];
-
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState,
-      postToRenderer: (message) => posted.push(message),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION,
-      }),
-    ).toBe(true);
-    await Promise.resolve();
-
-    expect(posted).toEqual([]);
-
-    refreshGate.resolve();
-    await flushAsyncWork();
-
-    expect(globalState.values.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
-      MODEL_LIST_VERSION,
-    );
-    expect(
-      (posted.at(-1) as { command?: string; models?: Array<{ name: string }> })
-        .command,
-    ).toBe(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION);
-    expect(
-      (posted.at(-1) as { models?: Array<{ name: string }> }).models,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: DEFAULT_MODELS[0] }),
-      ]),
-    );
-  });
-
   it('does not duplicate profile refresh after delegated desktop sign-out', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const posted: unknown[] = [];
@@ -1907,16 +1692,6 @@ describe('desktop settings IPC', () => {
       workspaceState: new MemoryStateStore(),
       globalState,
       postToRenderer: (message) => posted.push(message),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED,
-      }),
-    ).toBe(true);
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled: true,
     });
 
     expect(

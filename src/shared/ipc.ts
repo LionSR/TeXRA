@@ -232,7 +232,6 @@ export const PROGRESS_VIEW_COMMANDS = {
 
 export const HISTORY_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
-  GET_HISTORY_DATA: 'getHistoryData',
   UPDATE_HISTORY: 'updateHistory',
   CLEAR_HISTORY: 'clearHistory',
   HISTORY_CLEARED: 'historyCleared',
@@ -246,9 +245,7 @@ export const HISTORY_VIEW_COMMANDS = {
 
 export const PROFILE_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
-  GET_PROFILE_DATA: 'getProfileData',
   UPDATE_PROFILE: 'updateProfile',
-  SELECT_AGENT: 'selectAgent',
   SIGN_IN: 'signIn',
   SIGN_OUT: 'signOut',
   // API access mode toggle (Ultra tier)
@@ -264,7 +261,6 @@ export const MEMORY_VIEW_COMMANDS = {
   OPEN_MEMORY_FILE: 'openMemoryFile',
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
   DELETE_MEMORY: 'deleteMemory',
-  GET_MEMORY_ENABLED: 'getMemoryEnabled',
   SET_MEMORY_ENABLED: 'setMemoryEnabled',
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
   PIN_MEMORY: 'pinMemory',
@@ -290,12 +286,10 @@ export const SETTINGS_VIEW_CMD = {
   OPEN_MEMORY_FILE: MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE,
   OPEN_MEMORY_FOLDER: MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
   DELETE_MEMORY: MEMORY_VIEW_COMMANDS.DELETE_MEMORY,
-  GET_MEMORY_ENABLED: MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED,
   SET_MEMORY_ENABLED: MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED,
   PIN_MEMORY: MEMORY_VIEW_COMMANDS.PIN_MEMORY,
   UNPIN_MEMORY: MEMORY_VIEW_COMMANDS.UNPIN_MEMORY,
   // History commands
-  GET_HISTORY_DATA: HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA,
   RERUN_AGENT: HISTORY_VIEW_COMMANDS.RERUN_AGENT,
   RESTORE_AGENT: HISTORY_VIEW_COMMANDS.RESTORE_AGENT,
   DELETE_AGENT: HISTORY_VIEW_COMMANDS.DELETE_AGENT,
@@ -304,8 +298,6 @@ export const SETTINGS_VIEW_CMD = {
   EXPORT_CHAT_TEX: HISTORY_VIEW_COMMANDS.EXPORT_CHAT_TEX,
   EXPORT_CHAT_HTML: HISTORY_VIEW_COMMANDS.EXPORT_CHAT_HTML,
   // Profile commands
-  GET_PROFILE_DATA: PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA,
-  SELECT_AGENT: PROFILE_VIEW_COMMANDS.SELECT_AGENT,
   SIGN_IN: PROFILE_VIEW_COMMANDS.SIGN_IN,
   SIGN_OUT: PROFILE_VIEW_COMMANDS.SIGN_OUT,
   SET_API_ACCESS_MODE: PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE,
@@ -318,13 +310,11 @@ export const SETTINGS_VIEW_CMD = {
   SET_PROVIDER_VSCODE_SETTING: 'setProviderVscodeSetting',
   OPEN_EXTERNAL_URL: 'openExternalUrl',
   // Model selection commands
-  GET_MODEL_SELECTION: 'getModelSelection',
   SET_MODEL_ENABLED: 'setModelEnabled',
   SET_HELPER_MODEL: 'setPolishModel',
   SET_MODEL_REASONING_LEVEL: 'setModelReasoningLevel',
   SET_PREFER_SHORT_MODEL_NAMES: 'setPreferShortModelNames',
   // Agent selection commands
-  GET_AGENT_SELECTION: 'getAgentSelection',
   OPEN_AGENT_YAML: 'openAgentYaml',
   SET_AGENT_ENABLED: 'setAgentEnabled',
   SET_ALL_AGENTS_ENABLED: 'setAllAgentsEnabled',
@@ -335,20 +325,15 @@ export const SETTINGS_VIEW_CMD = {
   REVEAL_AGENT_FILE: 'revealAgentFile',
   VIEW_REMOTE_AGENT_PROMPT: 'viewRemoteAgentPrompt',
   // Custom agent directory commands
-  GET_CUSTOM_AGENT_DIR: 'getCustomAgentDir',
   SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
   RESET_CUSTOM_AGENT_DIR: 'resetCustomAgentDir',
   // Multi-Agent commands
-  GET_SUPER_YOLO_ENABLED: 'getSuperYoloEnabled',
-  SET_SUPER_YOLO_ENABLED: 'setSuperYoloEnabled',
   SET_ALLOW_ORCHESTRATOR_KILL: 'setAllowOrchestratorKill',
   SET_DETACH_SUBAGENTS_ON_STOP: 'setDetachSubagentsOnStop',
   APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
   SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
   DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
-  GET_AGENT_MODE_PRESETS: 'getAgentModePresets',
   // Approval settings commands
-  GET_APPROVAL_SETTINGS: 'getApprovalSettings',
   SET_BASH_APPROVAL_ENABLED: 'setBashApprovalEnabled',
   SET_CODEX_SANDBOX_MODE: 'setCodexSandboxMode',
   SET_CODEX_REASONING_EFFORT: 'setCodexReasoningEffort',
@@ -357,14 +342,12 @@ export const SETTINGS_VIEW_CMD = {
   SET_CLAUDE_AGENT_PERMISSION_MODE: 'setClaudeAgentPermissionMode',
   SET_CLAUDE_AGENT_EFFORT: 'setClaudeAgentEffort',
   // Tool dashboard commands
-  GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
   INSTALL_TOOL_EXTENSION: 'installToolExtension',
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
   TOGGLE_TOOL: 'toggleTool',
   RUN_TOOL_COMMAND: 'runToolCommand',
   // Git settings commands
-  GET_GIT_AUTHOR_SETTINGS: 'getGitAuthorSettings',
   SET_GIT_MARK_COMMITS: 'setGitMarkCommits',
   SET_GIT_AUTHOR_NAME: 'setGitAuthorName',
   SET_GIT_AUTHOR_EMAIL: 'setGitAuthorEmail',
@@ -376,7 +359,6 @@ export const SETTINGS_VIEW_CMD = {
   REMOVE_GITHUB_TOKEN: 'removeGitHubToken',
   OPEN_GITHUB_TOKEN_URL: 'openGitHubTokenUrl',
   // ChatGPT subscription (Codex) sign-in commands
-  GET_CHATGPT_AUTH_STATUS: 'getChatGptAuthStatus',
   UPDATE_CHATGPT_AUTH_STATUS: 'updateChatGptAuthStatus',
   SIGN_IN_CHATGPT: 'signInChatGpt',
   SIGN_OUT_CHATGPT: 'signOutChatGpt',
@@ -391,12 +373,10 @@ export const SETTINGS_VIEW_CMD = {
   UNSUBSCRIBE_PR: 'unsubscribePR',
   OPEN_PR_SUBSCRIPTION_STREAM: 'openPRSubscriptionStream',
   // LaTeX settings commands
-  GET_LATEX_SETTINGS_STATUS: 'getLatexSettingsStatus',
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
   INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
   RUN_INSTALL_COMMAND: 'runInstallCommand',
   // LaTeX/compile/diff config (storage-backed, migrated from VS Code config)
-  GET_LATEX_CONFIG_VALUES: 'getLatexConfigValues',
   SET_LATEX_CONFIG_VALUE: 'setLatexConfigValue',
   // Experimental settings
   GET_INLINE_CRITICISM_ENABLED: 'getInlineCriticismEnabled',
