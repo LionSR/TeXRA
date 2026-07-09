@@ -5,7 +5,10 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports - tool definitions
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextExecutionId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
@@ -14,7 +17,6 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
-import { getRunContextExecutionId } from '@tools/contextHelpers';
 import {
   appendApprovalDiffNote,
   requestApprovedEditContent,

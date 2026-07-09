@@ -56,18 +56,31 @@ describe('AgentLaunchContext', () => {
       },
     } as unknown as AgentLaunchContext;
 
-    await withExecutionRunContext(ctx, async () => {
-      const context = useRunContext();
-      expect(context.model).toBe('deepseekT');
-      expect(context.kind).toBe('launch');
-      if (context.kind !== 'launch') {
-        throw new Error('expected launch context');
-      }
-      expect(context.runScope).toBe(runScope);
+    await withExecutionRunContext(
+      ctx,
+      {
+        delegationDepth: 1,
+        approvalPromptsUnavailable: true,
+        runtimeUnavailableTools: ['inquiry'],
+        stopAfterCycle: true,
+      },
+      async () => {
+        const context = useRunContext();
+        expect(context.model).toBe('deepseekT');
+        expect(context.kind).toBe('launch');
+        if (context.kind !== 'launch') {
+          throw new Error('expected launch context');
+        }
+        expect(context.runScope).toBe(runScope);
+        expect(context.delegationDepth).toBe(1);
+        expect(context.approvalPromptsUnavailable).toBe(true);
+        expect(context.runtimeUnavailableTools).toEqual(['inquiry']);
+        expect(context.stopAfterCycle).toBe(true);
 
-      ctx.config.model = 'sonnet46T';
+        ctx.config.model = 'sonnet46T';
 
-      expect(useRunContext().model).toBe('sonnet46T');
-    });
+        expect(useRunContext().model).toBe('sonnet46T');
+      },
+    );
   });
 });

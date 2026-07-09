@@ -16,15 +16,6 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 import { ToolError } from '@shared/schemas/toolResult';
 
-export {
-  getRunContextAgentName,
-  getRunContextExecutionId,
-  getRunContextRuntimeHost,
-  getRunContextSession,
-  getRunContextStreamId,
-  getRunContextWorkingDirectory,
-} from '@agent/runtime/RunContext';
-
 /**
  * Return the active RunContext's runtime host, throwing a ToolError if no
  * run is active or the launch had no host. Use from tools that need to

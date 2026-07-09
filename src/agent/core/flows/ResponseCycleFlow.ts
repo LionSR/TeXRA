@@ -13,13 +13,13 @@ import {
   saveCycleDebug,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import {
   isTokenLimitStopReason,
   type ProviderStopReason,
 } from '@agent/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import { K_SLICE } from '@agent/core/constants';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
@@ -106,7 +106,6 @@ interface ResponsePrepResult {
  */
 class ResponsePrepNode<C> extends BaseNode<
   ResponseCycleShared,
-  FlowParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
@@ -206,19 +205,17 @@ type ContinuationNodeResult = SkippableNodeResult<{
 }>;
 
 export function responseCycleToolsForModel<C>(
-  services: Pick<
-    ResponseCycleServices<C>,
-    'delegation' | 'modelHandler' | 'runtimeUnavailableTools' | 'setting'
-  >,
+  services: Pick<ResponseCycleServices<C>, 'modelHandler' | 'setting'>,
 ): ToolDefinition[] | undefined {
   if (!services.modelHandler.capabilities.supportsFunctionCalling) {
     return undefined;
   }
-  const runtimeUnavailable = new Set(services.runtimeUnavailableTools ?? []);
+  const runContext = useLaunchRunContext();
+  const runtimeUnavailable = new Set(runContext.runtimeUnavailableTools ?? []);
   return services.setting.tools.filter(
     (tool) =>
       !runtimeUnavailable.has(tool.name) &&
-      (services.delegation?.approvalPromptsUnavailable !== true ||
+      (runContext.approvalPromptsUnavailable !== true ||
         !isApprovalGatedToolName(tool.name)),
   );
 }
@@ -234,7 +231,6 @@ export function responseCycleToolsForModel<C>(
  */
 class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleShared,
-  FlowParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
@@ -437,7 +433,6 @@ class ResponseProcessNode<C> extends BaseNode<
  */
 class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleShared,
-  FlowParams,
   ResponseCycleServices<C>
 > {
   /** Finalize the round by recording stats and invoking callback. */
@@ -471,7 +466,6 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
  */
 class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleShared,
-  FlowParams,
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
@@ -587,13 +581,11 @@ class ResponseContinuationNode<C> extends BaseNode<
  */
 export function createResponseCycleFlow<C>(): Flow<
   ResponseCycleShared,
-  FlowParams,
   ResponseCycleServices<C>
 > {
   const prepNode = new ResponsePrepNode<C>();
   const invokeNode = new ModelInvocationNode<
     ResponseCycleShared,
-    FlowParams,
     ResponseCycleServices<C>
   >({
     operationName: 'Model invocation',
@@ -627,7 +619,5 @@ export function createResponseCycleFlow<C>(): Flow<
 
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ResponseCycleShared, FlowParams, ResponseCycleServices<C>>(
-    prepNode,
-  );
+  return new Flow<ResponseCycleShared, ResponseCycleServices<C>>(prepNode);
 }

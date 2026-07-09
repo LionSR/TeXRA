@@ -53,6 +53,17 @@ function encodeStreamId(id: string): string {
   return encodeURIComponent(id);
 }
 
+const RESERVED_STREAM_DATA_SEGMENTS = new Set(['', '.', '..']);
+
+export function canUseStreamDataDir(streamId: string): boolean {
+  try {
+    return !RESERVED_STREAM_DATA_SEGMENTS.has(encodeStreamId(streamId));
+  } catch {
+    // Malformed UTF-16 cannot be encoded into a stream-owned sidecar segment.
+    return false;
+  }
+}
+
 /** Decode a persisted stream directory name. Invalid legacy names are skipped. */
 export function decodeStreamId(encoded: string): string | undefined {
   try {

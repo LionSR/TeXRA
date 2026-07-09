@@ -155,6 +155,7 @@ describe('ToolUseWaitNode', () => {
         expect(exec.kind).toBe('stop');
         return node.post(shared, prep, exec);
       },
+      { stopAfterCycle: true },
     );
 
     expect(transition).toBe(FlowTransition.COMPLETE);
@@ -392,12 +393,16 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      const exec = await withTestRunContext(runtimeHost, streamId, () =>
-        node.exec({
-          afterError: true,
-          lastResponse: undefined,
-          touchedFiles: [],
-        }),
+      const exec = await withTestRunContext(
+        runtimeHost,
+        streamId,
+        () =>
+          node.exec({
+            afterError: true,
+            lastResponse: undefined,
+            touchedFiles: [],
+          }),
+        { stopAfterCycle: true },
       );
 
       const goal = GoalStore.getForStream(streamId);

@@ -9,7 +9,6 @@ import {
   followUpDisplayText,
   type AppendFollowUpResult,
 } from '@agent/followUp/followUpMessages';
-import type { FlowParams } from '@agent/core/flows/BaseFlowServices';
 import { STREAM_PHASE } from '@shared/schemas';
 import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
 
@@ -29,7 +28,6 @@ interface WaitPrepResult {
 
 export class ToolUseWaitNode<C> extends Node<
   ToolUseRunShared,
-  FlowParams,
   ToolUseServices<C>
 > {
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
@@ -55,7 +53,7 @@ export class ToolUseWaitNode<C> extends Node<
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
     const { checkInterruption, session, streamStatus, isSubagent } =
       this.services;
-    const { runScope } = useLaunchRunContext();
+    const { runScope, stopAfterCycle } = useLaunchRunContext();
     const { streamId, runtimeHost } = runScope;
 
     if (checkInterruption()) {
@@ -99,14 +97,14 @@ export class ToolUseWaitNode<C> extends Node<
     // genuinely wait. This makes duplicate/skipped delivery structurally
     // impossible and keeps every suspension symmetric, so the loop's interrupt
     // handler always has a real boundary to attach against.
-    if (isSubagent === true && !this.services.stopAfterCycle) {
+    if (isSubagent === true && !stopAfterCycle) {
       streamStatus.transitionToWaiting(streamId, 'wait', {
         trace: this.services.logger,
       });
       return { kind: 'waiting' };
     }
 
-    if (this.services.stopAfterCycle) {
+    if (stopAfterCycle) {
       return { kind: 'stop' };
     }
 

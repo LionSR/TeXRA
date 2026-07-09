@@ -398,22 +398,13 @@ export function syncStreamLog(streamId: StreamTabId): void {
       if (!rendered) continue;
       logCandidates.push({ rendered, sortSeq: entry.seqNo, tieBreak: 0 });
     }
-    // The synthetic loop's duplicate check scans `logCandidates`, so synthetics
-    // push into a copy; without synthetics the log list is used as-is.
+    // Synthetic (local/process) rows are positioned by `syntheticAfterSeq`
+    // alongside the ordered log entries; push into a copy so we don't mutate
+    // `logCandidates` itself.
     const candidates: TranscriptCandidate[] =
       syntheticEntries.length === 0 ? logCandidates : [...logCandidates];
 
     for (const [index, entry] of syntheticEntries.entries()) {
-      if (entry.syntheticKind !== 'local') {
-        const entryTextTrimmed = entry.text.trim();
-        const duplicate = logCandidates.some(
-          (candidate) =>
-            candidate.rendered.role === entry.role &&
-            candidate.rendered.text.trim() === entryTextTrimmed,
-        );
-        if (duplicate) continue;
-      }
-
       candidates.push({
         rendered: entry,
         sortSeq: entry.syntheticAfterSeq ?? Number.POSITIVE_INFINITY,

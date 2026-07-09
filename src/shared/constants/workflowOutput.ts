@@ -25,10 +25,15 @@ export function parseWorkflowOutputRoundDir(dirName: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
+/** The runDir-relative `r{round}` directory segment for a workflow round. */
+export function workflowOutputRoundDir(round: number): string {
+  return `r${round}`;
+}
+
 /** Build a runDir-relative workflow output path for a round. */
 export function workflowOutputPath(params: {
   ext: string;
   round: number;
 }): string {
-  return `r${params.round}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
+  return `${workflowOutputRoundDir(params.round)}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
 }

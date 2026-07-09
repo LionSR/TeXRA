@@ -32,15 +32,31 @@ function fillRegistry(
 
 interface DesktopProgressIpcModule {
   createDesktopProgressIpc(options: {
-    progress: {
+    progress?: {
       syncFullView(): void;
+      hydrateProgressViewInquiries(): Promise<void>;
+      replayPendingPrompts(): void;
       progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
     };
+    getProgress?: () =>
+      | {
+          syncFullView(): void;
+          hydrateProgressViewInquiries(): Promise<void>;
+          replayPendingPrompts(): void;
+          progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
+        }
+      | undefined;
     onUnsupportedCommand?: (
       message: { command: string },
       reason?: string,
     ) => void;
     onAsyncError?: (error: unknown) => void;
+    ensureProgress?: () => Promise<{
+      syncFullView(): void;
+      hydrateProgressViewInquiries(): Promise<void>;
+      replayPendingPrompts(): void;
+      progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
+    }>;
   }): {
     handleMessage(
       message: { command: string } & Record<string, unknown>,
@@ -60,6 +76,8 @@ function createProgress(
 ) {
   return {
     syncFullView: vi.fn(),
+    hydrateProgressViewInquiries: vi.fn(async () => undefined),
+    replayPendingPrompts: vi.fn(),
     progressViewInboundHandlers: fillRegistry(progressViewInboundHandlers),
   };
 }
@@ -75,9 +93,50 @@ describe('desktop Progress IPC', () => {
     const ipc = createDesktopProgressIpc({ progress });
 
     expect(
-      ipc.handleMessage({ command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY }),
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'progress',
+      }),
     ).toBe(false);
+    await Promise.resolve();
+
     expect(progress.syncFullView).toHaveBeenCalledTimes(1);
+    expect(progress.hydrateProgressViewInquiries).toHaveBeenCalledTimes(1);
+    expect(progress.replayPendingPrompts).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores main-view readiness broadcasts for Progress prompt replay', async () => {
+    const progress = createProgress();
+    const ipc = createDesktopProgressIpc({ progress });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'main',
+      }),
+    ).toBe(false);
+
+    expect(progress.syncFullView).not.toHaveBeenCalled();
+    expect(progress.replayPendingPrompts).not.toHaveBeenCalled();
+  });
+
+  it('replays pending prompts after lazy Progress readiness load', async () => {
+    const progress = createProgress();
+    const ipc = createDesktopProgressIpc({
+      ensureProgress: async () => progress,
+    });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'progress',
+      }),
+    ).toBe(false);
+    await Promise.resolve();
+
+    expect(progress.syncFullView).toHaveBeenCalledTimes(1);
+    expect(progress.hydrateProgressViewInquiries).toHaveBeenCalledTimes(1);
+    expect(progress.replayPendingPrompts).toHaveBeenCalledTimes(1);
   });
 
   it('dispatches recognized Progress commands through the bridge registry', async () => {
