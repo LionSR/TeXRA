@@ -5,7 +5,10 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 import { designTokens } from '@shared/styles';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
+import {
+  isSpendingQuotaExceeded,
+  type SpendingStatus,
+} from '@shared/schemas/spendingStatus';
 import { clamp } from '@utils/core';
 import { formatPercent } from '@utils/text/stringUtils';
 
@@ -14,7 +17,7 @@ const WARNING_THRESHOLD_PCT = 80;
 type QuotaState = 'ok' | 'warning' | 'exhausted';
 
 function quotaState(status: SpendingStatus): QuotaState {
-  if (status.remaining <= 0) return 'exhausted';
+  if (isSpendingQuotaExceeded(status)) return 'exhausted';
   if (status.percentUsed >= WARNING_THRESHOLD_PCT) return 'warning';
   return 'ok';
 }
