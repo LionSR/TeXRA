@@ -17,7 +17,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { CopyButtonController } from '@shared/litControllers';
 import { compactIconActionButtonStyles } from '@shared/styles';
 import { decodeXmlEntities } from '@shared/subagentFollowup';
-import { DELIVERY_TAGS } from '@shared/deliveryTags';
+import { DELIVERY_TAGS, type DeliveryTagName } from '@shared/deliveryTags';
 import { designTokens } from '@shared/styles/litStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -40,8 +40,14 @@ const STRUCTURED_DELIVERY_PATTERN = new RegExp(
   `^\\s*<(${STRUCTURED_DELIVERY_TAGS.join('|')})(\\s|>)`,
 );
 
-function getStructuredDeliveryTag(text: string): string | null {
-  return STRUCTURED_DELIVERY_PATTERN.exec(text)?.[1] ?? null;
+function getStructuredDeliveryTag(text: string): DeliveryTagName | null {
+  // Safe cast: the pattern's only alternation group is STRUCTURED_DELIVERY_TAGS
+  // (DeliveryTagName[]), so a match can only capture one of those values.
+  return (
+    (STRUCTURED_DELIVERY_PATTERN.exec(text)?.[1] as
+      | DeliveryTagName
+      | undefined) ?? null
+  );
 }
 
 @customElement('user-message')

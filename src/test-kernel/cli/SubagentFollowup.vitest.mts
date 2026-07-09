@@ -240,4 +240,56 @@ describe('summarizeSubagentFollowup', () => {
       ),
     ).toBe('✗ lean failed · 1sec\nrate limit: <tokens> & retries exhausted');
   });
+
+  // Recognizer is derived from @shared/deliveryTags' DELIVERY_TAGS (11
+  // entries), not just `<subagent-*>` — regression coverage for
+  // claude-agent-result/error and codex-result/error leaking as raw XML in
+  // the CLI transcript/queued follow-ups panel (codex review, issue #7679).
+  // One case per newly-recognized tag family.
+
+  it('summarizes a background-result block, falling back to the tag family name', () => {
+    const xml = [
+      '<background-result id="abc" command="npm test">',
+      '<wall-time>3sec</wall-time>',
+      '</background-result>',
+    ].join('\n');
+    expect(summarizeSubagentFollowup(xml)).toBe('✓ background completed · 3sec');
+  });
+
+  it('summarizes a codex-result block without an agent attribute', () => {
+    const xml = [
+      '<codex-result id="abc" thread-id="t1">',
+      '<wall-time>4sec</wall-time>',
+      '<response>Refactor complete.</response>',
+      '</codex-result>',
+    ].join('\n');
+    expect(summarizeSubagentFollowup(xml)).toBe(
+      '✓ codex completed · 4sec\nRefactor complete.',
+    );
+  });
+
+  it('summarizes a claude-agent-error block without an agent attribute', () => {
+    const xml = [
+      '<claude-agent-error id="abc">',
+      '<message>Provider returned 500 &amp; retried</message>',
+      '</claude-agent-error>',
+    ].join('\n');
+    expect(summarizeSubagentFollowup(xml)).toBe(
+      '✗ claude-agent failed\nProvider returned 500 & retried',
+    );
+  });
+
+  it('summarizes a github-webhook-activity block as its first body line', () => {
+    const xml =
+      '<github-webhook-activity>\nPR #42 opened by octocat\n</github-webhook-activity>';
+    expect(summarizeSubagentFollowup(xml)).toBe('PR #42 opened by octocat');
+  });
+
+  it('summarizes an execution-activity block as its first body line', () => {
+    const xml =
+      '<execution-activity>\nexec-1 (research, toolUse) running → completed\n</execution-activity>';
+    expect(summarizeSubagentFollowup(xml)).toBe(
+      'exec-1 (research, toolUse) running → completed',
+    );
+  });
 });
