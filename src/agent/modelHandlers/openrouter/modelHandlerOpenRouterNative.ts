@@ -28,7 +28,7 @@ import type {
   ToolResult,
 } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
-import { extractMimeSubtype, joinNonEmpty } from '@utils/text/stringUtils';
+import { extractMimeSubtype } from '@utils/text/stringUtils';
 import {
   computeOpenRouterPrice,
   normalizeOpenRouterUsage,
@@ -39,6 +39,11 @@ import { tagOpenRouterSdkError } from './openRouterSdkError';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import { toOpenAITools } from '../toolConversion';
 import {
+  appendUserTextToChatMessages,
+  createChatRoundMessages,
+  createChatUserFollowUpMessages,
+  extractChatAssistantText,
+  initializeChatMessages,
   insertMediaIntoChatUserMessage,
   prependTextToChatUserMessage,
 } from '../openai/openAIMessageUtils';
@@ -62,7 +67,6 @@ import type {
   ChatUsage,
   ChatMessages,
   ChatAssistantMessage,
-  ChatUserMessage,
   ChatToolCall,
   ChatContentItems,
   ChatContentText,
@@ -365,64 +369,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<ChatMessages[]> {
-    const messages: ChatMessages[] = [];
-
-    if (systemPrompt) {
-      const role = this.capabilities.supportsSystemPrompt ? 'system' : 'user';
-      messages.push({
-        role,
-        content: [{ type: 'text', text: systemPrompt }],
-      });
-    }
-
-    const userContent: ChatContentItems[] = [];
-    if (userPrefix) {
-      userContent.push({ type: 'text', text: userPrefix });
-    }
-
-    if (
-      mediaFiles?.length &&
-      (this.capabilities.supportsVision ||
-        this.capabilities.supportsNativeAudio)
-    ) {
-      const formattedMedia = await this.createMediaForRound(
-        mediaFiles,
-        'initial',
-      );
-      userContent.push(...formattedMedia);
-    }
-
-    // Append to existing user message or create new
-    const lastMsg = messages.at(-1);
-    if (lastMsg?.role === 'user' && Array.isArray(lastMsg.content)) {
-      (lastMsg.content as ChatContentItems[]).push(...userContent);
-    } else {
-      messages.push({ role: 'user', content: userContent });
-    }
-
-    // Add user request
-    const requestRole = this.capabilities.supportsIntermDevMsgs
-      ? 'system'
-      : 'user';
-    const lastMessage = messages.at(-1);
-
-    if (
-      requestRole === 'user' &&
-      lastMessage?.role === 'user' &&
-      Array.isArray(lastMessage.content)
-    ) {
-      (lastMessage.content as ChatContentItems[]).push({
-        type: 'text',
-        text: userRequest,
-      });
-    } else {
-      messages.push({
-        role: requestRole,
-        content: [{ type: 'text', text: userRequest }],
-      });
-    }
-
-    return messages;
+    return initializeChatMessages(
+      userPrefix,
+      userRequest,
+      mediaFiles,
+      systemPrompt,
+      this.capabilities,
+      (files, context) => this.createMediaForRound(files, context),
+    );
   }
 
   async createRoundMessages(
@@ -430,39 +384,20 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     userMessage: string,
     mediaFiles?: FileLocation[],
   ): Promise<ChatMessages[]> {
-    const roundContent: ChatContentItems[] = [];
-
-    if (
-      mediaFiles?.length &&
-      (this.capabilities.supportsVision ||
-        this.capabilities.supportsNativeAudio)
-    ) {
-      const formattedMedia = await this.createMediaForRound(
-        mediaFiles,
-        'followUp',
-      );
-      roundContent.push(...formattedMedia);
-    }
-
-    if (userMessage) {
-      roundContent.push({ type: 'text', text: userMessage });
-    }
-
-    if (roundContent.length > 0) {
-      messages.push({ role: 'user', content: roundContent });
-    }
-    return messages;
+    return createChatRoundMessages(
+      messages,
+      userMessage,
+      mediaFiles,
+      this.capabilities,
+      (files, context) => this.createMediaForRound(files, context),
+    );
   }
 
   async createUserFollowUpMessages(
     messages: ChatMessages[],
     userMessage: string,
   ): Promise<ChatMessages[]> {
-    messages.push({
-      role: 'user',
-      content: [{ type: 'text', text: userMessage }],
-    });
-    return messages;
+    return createChatUserFollowUpMessages(messages, userMessage);
   }
 
   createAssistantMessage(text: string): ChatMessages {
@@ -470,15 +405,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   extractAssistantText(message: ChatMessages): string | undefined {
-    if (message.role !== 'assistant') return undefined;
-    const msg = message as ChatAssistantMessage;
-    if (typeof msg.content === 'string') return msg.content;
-    if (!Array.isArray(msg.content)) return undefined;
-    return joinNonEmpty(
-      (msg.content as ChatContentItems[])
-        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-        .map((p) => p.text),
-    );
+    return extractChatAssistantText(message);
   }
 
   // ---------------------------------------------------------------------------
@@ -727,31 +654,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     text: string,
     placement: 'last-user' | 'continuation',
   ): void {
-    if (placement === 'continuation') {
-      const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-      messages.push({
-        role,
-        content: [{ type: 'text', text }],
-      } as ChatMessages);
-      return;
-    }
-
-    const lastMessage = messages.at(-1);
-    if (lastMessage && Array.isArray(lastMessage.content)) {
-      (lastMessage.content as ChatContentItems[]).push({ type: 'text', text });
-      return;
-    }
-    if (lastMessage && typeof lastMessage.content === 'string') {
-      (lastMessage as ChatUserMessage).content = [
-        { type: 'text', text: lastMessage.content },
-        { type: 'text', text },
-      ];
-      return;
-    }
-    messages.push({
-      role: 'user',
-      content: [{ type: 'text', text }],
-    } as ChatMessages);
+    appendUserTextToChatMessages(
+      messages,
+      text,
+      placement,
+      this.capabilities.supportsIntermDevMsgs,
+    );
   }
 
   // ---------------------------------------------------------------------------
