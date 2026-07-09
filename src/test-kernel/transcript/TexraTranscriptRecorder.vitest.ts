@@ -120,6 +120,41 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     expect(modelResponseEntries[1]?.id).not.toBe(output.id);
   });
 
+  it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
+    const trace = new TraceEmitter();
+    const store = new StreamLogStore();
+    const streamId = 'stream:inner-round-reset' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, streamId, store);
+
+    const round = trace.openStage('r0', { kind: 'round', index: 0 });
+    round.run(() => {
+      const toolRequest = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      toolRequest.append('I will inspect the file.');
+      toolRequest.finalize();
+
+      trace.toolStart({
+        logId: 'tool:read',
+        toolName: 'read',
+        input: { path: 'paper.tex' },
+      });
+      trace.toolEnd({ logId: 'tool:read', status: 'completed' });
+
+      trace.responseFinalized('The file contains the theorem statement.');
+    });
+    round.end();
+
+    const entries = store.get(streamId)?.getRange(0) ?? [];
+    const modelResponseEntries = entries.filter(
+      (e) => e.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
+    );
+    expect(modelResponseEntries.map((e) => e.text)).toEqual([
+      'I will inspect the file.',
+      'The file contains the theorem statement.',
+    ]);
+    expect(modelResponseEntries[1]?.id).not.toBe(modelResponseEntries[0]?.id);
+  });
+
   it('ignores an empty finalized response', () => {
     const trace = new TraceEmitter();
     const store = new StreamLogStore();
