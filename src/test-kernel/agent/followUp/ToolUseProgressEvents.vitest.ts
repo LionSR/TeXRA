@@ -79,9 +79,11 @@ describe('tool-use progress events', () => {
       );
 
       expect(result).toEqual({ outcome: 'skipped' });
-      expect(runEventsOfType(recorded.events, 'domain')).toMatchObject([
-        { key: 'runFact.updateTodos', data: { streamId, todos: [todo] } },
-        { key: 'runFact.updatePlan', data: { streamId, plan } },
+      expect(runEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
+        { streamId, todos: [todo] },
+      ]);
+      expect(runEventsOfType(recorded.events, 'updatePlan')).toMatchObject([
+        { streamId, plan },
       ]);
     } finally {
       recorded.detach();

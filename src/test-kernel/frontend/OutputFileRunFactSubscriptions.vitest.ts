@@ -114,7 +114,6 @@ vi.mock('vscode', () => {
 });
 
 const { SessionEventHub } = await import('@agent/runtime/SessionEventHub');
-const { toRunFactDomainKey } = await import('@agent/runtime/runFactEvents');
 const { appSignals } = await import('@eventBus/AppSignals');
 const { registerInlineCriticism, setInlineCriticismEnabled } =
   await import('@frontend/latex/inlineCriticism');
@@ -160,9 +159,8 @@ function emitAddOutputFilesRunFact(
     scope: 'run',
     streamId,
     event: {
-      type: 'domain',
-      key: toRunFactDomainKey('addOutputFiles'),
-      data: payload,
+      type: 'addOutputFiles',
+      ...payload,
     },
   });
 }

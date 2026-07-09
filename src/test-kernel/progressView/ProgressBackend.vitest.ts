@@ -8,10 +8,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { streamDataDir, StreamSnapshotStore } from '@transcript';
 
 // Local imports - agent
+import type { AgentEvent } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  toRunFactDomainKey,
   type RunFactEventName,
   type RunFactPayloads,
 } from '@agent/runtime/runFactEvents';
@@ -26,9 +26,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   type ActiveChildInfo,
-  type AddOutputFilesPayload,
   type CompileFailure,
-  type GoalPausedPayload,
   type InquiryThreadUpdatedEvent,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -43,11 +41,7 @@ import {
   type StorageKey,
   type StreamTabId,
   type TodoItem,
-  type UpdateCompileFailuresPayload,
-  type UpdateMissingOutputsPayload,
-  type UpdatePlanPayload,
   type UpdateStreamDescriptionPayload,
-  type UpdateTodosPayload,
 } from '@shared/schemas';
 import {
   ProgressBackend,
@@ -186,7 +180,7 @@ function emitStreamDescription(
   });
 }
 
-function emitRunDomainFact<K extends RunFactEventName>(
+function emitRunFact<K extends RunFactEventName>(
   target: { session: SessionHandle },
   streamId: StreamTabId,
   factName: K,
@@ -195,11 +189,7 @@ function emitRunDomainFact<K extends RunFactEventName>(
   target.session.events.emit({
     scope: 'run',
     streamId,
-    event: {
-      type: 'domain',
-      key: toRunFactDomainKey(factName),
-      data: payload,
-    },
+    event: { type: factName, ...payload } as Extract<AgentEvent, { type: K }>,
   });
 }
 
@@ -533,24 +523,18 @@ describe('ProgressBackend', () => {
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('updateTodos'),
-          data: {
-            streamId,
-            todos: [firstTodo],
-          } satisfies UpdateTodosPayload,
+          type: 'updateTodos',
+          streamId,
+          todos: [firstTodo],
         },
       });
       first.session.events.emit({
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('addOutputFiles'),
-          data: {
-            streamId,
-            filesByRound: { 1: [firstOutput] },
-          } satisfies AddOutputFilesPayload,
+          type: 'addOutputFiles',
+          streamId,
+          filesByRound: { 1: [firstOutput] },
         },
       });
 
@@ -575,12 +559,9 @@ describe('ProgressBackend', () => {
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('updateTodos'),
-          data: {
-            streamId,
-            todos: [secondTodo],
-          } satisfies UpdateTodosPayload,
+          type: 'updateTodos',
+          streamId,
+          todos: [secondTodo],
         },
       });
 
@@ -883,60 +864,45 @@ describe('ProgressBackend', () => {
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('addOutputFiles'),
-          data: {
-            streamId,
-            filesByRound: { 1: [outputFile] },
-          } satisfies AddOutputFilesPayload,
+          type: 'addOutputFiles',
+          streamId,
+          filesByRound: { 1: [outputFile] },
         },
       });
       session.events.emit({
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('updateMissingOutputs'),
-          data: {
-            streamId,
-            filesByRound: { 1: ['paper.pdf'] },
-          } satisfies UpdateMissingOutputsPayload,
+          type: 'updateMissingOutputs',
+          streamId,
+          filesByRound: { 1: ['paper.pdf'] },
         },
       });
       session.events.emit({
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('updateCompileFailures'),
-          data: {
-            streamId,
-            filesByRound: { 1: [compileFailure] },
-          } satisfies UpdateCompileFailuresPayload,
+          type: 'updateCompileFailures',
+          streamId,
+          filesByRound: { 1: [compileFailure] },
         },
       });
       session.events.emit({
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('updateTodos'),
-          data: {
-            streamId,
-            todos,
-          } satisfies UpdateTodosPayload,
+          type: 'updateTodos',
+          streamId,
+          todos,
         },
       });
       session.events.emit({
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('updatePlan'),
-          data: {
-            streamId,
-            plan,
-          } satisfies UpdatePlanPayload,
+          type: 'updatePlan',
+          streamId,
+          plan,
         },
       });
       session.events.emit({
@@ -957,9 +923,8 @@ describe('ProgressBackend', () => {
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('goalPaused'),
-          data: { streamId } satisfies GoalPausedPayload,
+          type: 'goalPaused',
+          streamId,
         },
       });
 
@@ -1053,7 +1018,7 @@ describe('ProgressBackend', () => {
         streamId,
         event: {
           type: 'domain',
-          key: toRunFactDomainKey('updateTodos'),
+          key: 'runFact.updateTodos',
           data: { streamId, todos: 'not-an-array' },
         },
       });
@@ -1062,7 +1027,7 @@ describe('ProgressBackend', () => {
         streamId,
         event: {
           type: 'domain',
-          key: toRunFactDomainKey('updatePlan'),
+          key: 'runFact.updatePlan',
           data: { streamId, plan: { steps: ['legacy shape'] } },
         },
       });
@@ -1119,12 +1084,9 @@ describe('ProgressBackend', () => {
         scope: 'run',
         streamId,
         event: {
-          type: 'domain',
-          key: toRunFactDomainKey('addOutputFiles'),
-          data: {
-            streamId,
-            filesByRound: { 1: [outputFile] },
-          } satisfies AddOutputFilesPayload,
+          type: 'addOutputFiles',
+          streamId,
+          filesByRound: { 1: [outputFile] },
         },
       });
 
@@ -1199,7 +1161,7 @@ describe('ProgressBackend', () => {
         { text: 'continue with the local calculation' },
         { force: true },
       );
-      emitRunDomainFact(target, parentStreamId, 'updateMissingOutputs', {
+      emitRunFact(target, parentStreamId, 'updateMissingOutputs', {
         streamId: parentStreamId,
         filesByRound: { 0: ['missing-output.tex'] },
       });

@@ -1,6 +1,5 @@
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
@@ -11,8 +10,6 @@ import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,
   ConversationProgressSchema,
-  UpdatePlanPayloadSchema,
-  UpdateTodosPayloadSchema,
   type AddOutputFilesPayload,
   type ClearMissingOutputsPayload,
   type ConversationProgress,
@@ -49,7 +46,6 @@ import {
   type StreamExecutionState,
 } from '@shared/progressView/backend/state/ProgressViewState';
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
-import { isObject } from '@utils/core';
 
 import { withEventErrorHandling } from './errorHandling';
 
@@ -75,6 +71,12 @@ export type GetProgressStreamControls = (
 export const PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES: readonly AgentEvent['type'][] =
   [
     'domain',
+    'updateTodos',
+    'updatePlan',
+    'addOutputFiles',
+    'updateMissingOutputs',
+    'updateCompileFailures',
+    'goalPaused',
     'run.config',
     'usage',
     'status',
@@ -233,6 +235,45 @@ export class ProgressFactApplier {
       return;
     }
 
+    if (event.type === 'updateTodos') {
+      this.applyFact('failed to handle updateTodos fact', () =>
+        this.handleUpdateTodos(event),
+      );
+      return;
+    }
+
+    if (event.type === 'updatePlan') {
+      this.applyFact('failed to handle updatePlan fact', () =>
+        this.handleUpdatePlan(event),
+      );
+      return;
+    }
+
+    if (event.type === 'addOutputFiles') {
+      this.applyFact('failed to handle addOutputFiles fact', () =>
+        this.handleAddOutputFiles(event),
+      );
+      return;
+    }
+
+    if (event.type === 'updateMissingOutputs') {
+      this.applyFact('failed to handle updateMissingOutputs fact', () =>
+        this.handleUpdateMissingOutputs(event),
+      );
+      return;
+    }
+
+    if (event.type === 'updateCompileFailures') {
+      this.applyFact('failed to handle updateCompileFailures fact', () =>
+        this.handleUpdateCompileFailures(event),
+      );
+      return;
+    }
+
+    if (event.type === 'goalPaused') {
+      return;
+    }
+
     if (event.type === 'domain') {
       if (event.key === 'conversationProgress') {
         const progress = ConversationProgressSchema.safeParse(event.data);
@@ -245,51 +286,6 @@ export class ProgressFactApplier {
           );
         }
         return;
-      }
-
-      const factName = fromRunFactDomainKey(event.key);
-      if (factName === 'updateTodos') {
-        const payload = UpdateTodosPayloadSchema.safeParse(event.data);
-        if (payload.success) {
-          this.applyFact('failed to handle updateTodos fact', () =>
-            this.handleUpdateTodos(payload.data),
-          );
-        }
-        return;
-      }
-
-      if (factName === 'updatePlan') {
-        const payload = UpdatePlanPayloadSchema.safeParse(event.data);
-        if (payload.success) {
-          this.applyFact('failed to handle updatePlan fact', () =>
-            this.handleUpdatePlan(payload.data),
-          );
-        }
-        return;
-      }
-
-      if (factName === 'addOutputFiles' && isObject(event.data)) {
-        this.applyFact('failed to handle addOutputFiles fact', () =>
-          this.handleAddOutputFiles(event.data as AddOutputFilesPayload),
-        );
-        return;
-      }
-
-      if (factName === 'updateMissingOutputs' && isObject(event.data)) {
-        this.applyFact('failed to handle updateMissingOutputs fact', () =>
-          this.handleUpdateMissingOutputs(
-            event.data as UpdateMissingOutputsPayload,
-          ),
-        );
-        return;
-      }
-
-      if (factName === 'updateCompileFailures' && isObject(event.data)) {
-        this.applyFact('failed to handle updateCompileFailures fact', () =>
-          this.handleUpdateCompileFailures(
-            event.data as UpdateCompileFailuresPayload,
-          ),
-        );
       }
       return;
     }
