@@ -14,7 +14,10 @@
  * sources and reads the flags below from its `platform().globalState`.
  */
 
+import { isCodexSubscriptionActive } from '@auth/codex';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
+import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import type { OnboardingFunnelState } from '@shared/schemas/onboarding';
@@ -173,4 +176,20 @@ export async function hasAnyProviderApiKey(
     if (isNonEmptyString(key)) return true;
   }
   return false;
+}
+
+/**
+ * Single source of truth for "does the user have a usable credential to
+ * proceed with setup": an active ChatGPT (Codex) subscription, relay access
+ * to server-side keys, or a non-blank provider API key. `canUseServerSideKeys`
+ * already gates on sign-in and included-model-access internally, so callers
+ * don't need to re-check those first. Shared by all three hosts (extension,
+ * desktop, CLI) so this credential-gating logic can't drift between them.
+ */
+export async function hasUsableSetupCredential(
+  secrets: PlatformSecrets,
+): Promise<boolean> {
+  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
+  if (await getServerSideKeyService().canUseServerSideKeys()) return true;
+  return hasAnyProviderApiKey(secrets);
 }

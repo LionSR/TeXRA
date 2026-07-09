@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
 import {
   resolveSetupLaunchModel,
   SETUP_INSTRUCTION,
@@ -12,9 +13,7 @@ import { registerExecution } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
-import { isCodexSubscriptionActive } from '@auth/codex';
 import { AUTH_COMMANDS } from '@auth/constants';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { GlobalStateKey, globalSM } from '@common/state';
@@ -22,7 +21,6 @@ import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import * as logger from '@logger/logUtils';
-import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
@@ -81,17 +79,12 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Pre-flight uses adapter-level checks so blank env keys do not count as
- * credentials and then fail later as "No model is available."
+ * Pre-flight uses the shared host-neutral predicate (adapter-level checks, so
+ * blank env keys do not count as credentials and then fail later as "No model
+ * is available") so this host can't drift from desktop/CLI's credential gate.
  */
 export async function hasAnyUsableSetupCredential(): Promise<boolean> {
-  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
-    return true;
-  }
-  for (const provider of SecretManager.API_PROVIDERS) {
-    if (await SecretManager.hasUsableApiKey(provider)) return true;
-  }
-  return getServerSideKeyService().canUseServerSideKeys();
+  return hasUsableSetupCredential(platform().secrets);
 }
 
 async function ensureCredentialOrPrompt(): Promise<boolean> {
