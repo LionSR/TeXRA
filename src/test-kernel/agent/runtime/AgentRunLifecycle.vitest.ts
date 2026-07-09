@@ -24,6 +24,7 @@ import {
   AgentExecutionHandle,
   SharedExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
+import { createRunScope } from '@agent/runtime/RunScope';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
@@ -92,6 +93,14 @@ function createLifecycleContext({
   });
   const prompt = AgentPromptSchema.parse({});
   const storageKey = executionId as StorageKey;
+  const session = defaultSession();
+  const runScope = createRunScope({
+    runtimeHost: explicit.host,
+    streamId,
+    executionId,
+    agentName: config.agent,
+    session,
+  });
   const modelInfo = {
     capabilities: {
       supportsPromptCaching: false,
@@ -113,10 +122,11 @@ function createLifecycleContext({
     config,
     setting,
     prompt,
-    streamId,
-    executionId,
-    runtimeHost: explicit.host,
-    session: defaultSession(),
+    runScope,
+    streamId: runScope.streamId,
+    executionId: runScope.executionId,
+    runtimeHost: runScope.runtimeHost,
+    session: runScope.session,
     streamStatus,
     logger: noopTrace,
     parentStage: noopTrace.openStage('Run: test-agent'),
