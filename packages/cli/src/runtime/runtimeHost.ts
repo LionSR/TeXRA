@@ -14,6 +14,7 @@ import {
   isRuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
+import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 
 // Local imports - CLI runtime
@@ -26,6 +27,7 @@ import {
   type LogSink,
 } from './logSinks';
 import {
+  attachRunProgressRenderer,
   createRunProgressRenderer,
   isRunProgressEvent,
 } from './runProgressRenderer';
@@ -42,6 +44,7 @@ export type CliRuntimeEvent = AgentRuntimeEvent | CliProgressEvent;
 
 export type CliRuntimeHost = AgentRuntimeHost &
   CliProgressSink & {
+    attachRunProgressRenderer(events: SessionEventHub): () => void;
     prepareInteractivePrompt?: () => void;
     close(): Promise<void>;
   };
@@ -62,7 +65,12 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     runProgress?.preserve();
   }
 
+  function attachProgressRenderer(events: SessionEventHub): () => void {
+    return attachRunProgressRenderer(events, runProgress);
+  }
+
   return {
+    attachRunProgressRenderer: attachProgressRenderer,
     prepareInteractivePrompt,
     emit<K extends CliRuntimeEvent>(
       event: K,
@@ -108,7 +116,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         !isRuntimePresentationEvent(event) &&
         !isRuntimeInteractionEvent(event) &&
         isRunProgressEvent(event) &&
-        runProgress?.handle(event, payload)
+        runProgress
       ) {
         return;
       }
