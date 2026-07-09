@@ -2,10 +2,12 @@
 import { z } from 'zod';
 
 // Internal imports
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextWorkingDirectory,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import * as logger from '@logger/logUtils';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { getRunContextWorkingDirectory } from '@tools/contextHelpers';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

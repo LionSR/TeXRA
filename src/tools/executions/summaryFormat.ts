@@ -7,7 +7,10 @@
  */
 
 import type { ChildRecord, ExecutionMeta, TodoEntry } from '@agent/storage';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextStreamId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import {
   AgentExecutionHandle,
   type ExecutionHandle,
@@ -22,7 +25,6 @@ import {
   getAvailablePaths,
   getExecutionStatusInfo,
 } from '../executionFormatters';
-import { getRunContextStreamId } from '../contextHelpers';
 
 /** Options controlling how showSummary renders a result report. */
 export interface ExecutionSummaryOptions {

@@ -20,6 +20,10 @@ import { z } from 'zod';
 // Local imports - tools
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
+import {
+  getRunContextRuntimeHost,
+  getRunContextStreamId,
+} from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   getCurrentToolContexts,
@@ -35,11 +39,7 @@ import {
 } from '@shared/schemas/goal';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { proposalApprovalState } from '@tools/approval';
-import {
-  getRunContextRuntimeHost,
-  getRunContextStreamId,
-  requireStreamId,
-} from '@tools/contextHelpers';
+import { requireStreamId } from '@tools/contextHelpers';
 import {
   GoalStore,
   isGoalEnabled,

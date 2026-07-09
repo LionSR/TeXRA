@@ -17,7 +17,12 @@
 
 import { z } from 'zod';
 
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextExecutionId,
+  getRunContextSession,
+  getRunContextStreamId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import {
   defaultSession,
   type SessionHandle,
@@ -31,12 +36,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import {
-  getRunContextExecutionId,
-  getRunContextSession,
-  getRunContextStreamId,
-  requireRuntimeHost,
-} from '@tools/contextHelpers';
+import { requireRuntimeHost } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { formatResultCount } from '@utils/text/stringUtils';
 

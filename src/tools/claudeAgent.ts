@@ -37,16 +37,16 @@ import {
   type ChildRunPorts,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
-import { MESSAGE_TYPES } from '@shared/schemas';
-import { type ToolResult } from '@shared/schemas/toolResult';
 import {
   getRunContextExecutionId,
   getRunContextStreamId,
   getRunContextWorkingDirectory,
-  requireRunStream,
-} from '@tools/contextHelpers';
+} from '@agent/runtime/RunContext';
+import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
+import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
+import { type ToolResult } from '@shared/schemas/toolResult';
+import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds, isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
