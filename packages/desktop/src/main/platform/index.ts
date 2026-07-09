@@ -184,7 +184,7 @@ export async function initializeElectronPlatform(
   initNodeAgentRuntime(lifecycle);
   initializeNodeGoalPrompts(resourcesPath);
   initializeNodeRuntimeSkills({
-    cwd: workspacePath ?? userDataPath,
+    cwd: workspacePath ?? app.getPath('home'),
     resourcesPath,
   });
 
