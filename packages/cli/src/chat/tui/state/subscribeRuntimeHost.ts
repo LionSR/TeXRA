@@ -21,6 +21,7 @@ import {
   reduceStreamMeta,
   type StreamMetaCommand,
 } from '@shared/streams/streamMetaReducer';
+import { assertNever } from '@utils/core';
 
 import {
   activeStreamId,
@@ -320,12 +321,13 @@ export function attachTuiRunFactSubscription(
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'session') return;
-      switch (sessionEvent.event.type) {
+      const fact = sessionEvent.event;
+      switch (fact.type) {
         case 'setActiveStream':
-          applySetActiveStream(sessionEvent.event.payload);
+          applySetActiveStream(fact.payload);
           return;
         case 'updateStreamDescription': {
-          const payload = sessionEvent.event.payload;
+          const payload = fact.payload;
           patchStream(payload.streamId, (s) => ({
             ...s,
             description: payload.description,
@@ -333,23 +335,27 @@ export function attachTuiRunFactSubscription(
           return;
         }
         case 'setParentStream':
-          applyParentStream(sessionEvent.event.payload);
+          applyParentStream(fact.payload);
           return;
         case 'removeStream':
-          removeStream(sessionEvent.event.payload.streamId);
+          removeStream(fact.payload.streamId);
           return;
         case 'followUpSent':
           // Active-session follow-ups enter the same queue before the wait node
           // consumes them; refresh immediately so the status bar shows the
           // pending message instead of only seeing the later drain event.
-          refreshQueuedFollowUps(sessionEvent.event.payload.streamId);
+          refreshQueuedFollowUps(fact.payload.streamId);
           return;
         case 'updateQueuedFollowUps':
-          refreshQueuedFollowUps(sessionEvent.event.payload.streamId);
+          refreshQueuedFollowUps(fact.payload.streamId);
           return;
-        default:
+        case 'goalStateChanged':
+        case 'inquiryThreadUpdated':
+        case 'clearMissingOutputs':
+        case 'updateStreamStatus':
           return;
       }
+      assertNever(fact, 'Unhandled TUI session fact');
     },
     { scope: 'session' },
   );
