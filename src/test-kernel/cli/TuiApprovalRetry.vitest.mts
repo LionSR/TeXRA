@@ -91,6 +91,7 @@ import {
   clearApprovals,
   currentApproval,
 } from '@cli/chat/tui/state/approvalQueue';
+import { resetCliState, streams } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
@@ -165,6 +166,7 @@ function chatGptSubscriptionRetry(
 
 afterEach(() => {
   clearApprovals();
+  resetCliState();
   mocks.lookupApiKey.mockReset();
   mocks.notify.mockReset();
   mocks.setCliApiMode.mockClear();
@@ -181,6 +183,116 @@ describe('TUI retry approvals', () => {
       expect(runtimeHost.emit).toBe(originalEmit);
     } finally {
       interactions.dispose?.();
+    }
+  });
+
+  it('updates TUI bash bypass state at the approval decision site', async () => {
+    const { runtimeHost, interactions, dispose } = tui();
+    try {
+      const result = interactions.requestBashApproval?.({
+        command: 'echo ok',
+        streamId: 'bash-bypass-stream',
+      });
+
+      await vi.waitFor(() => {
+        expect(currentApproval.get()?.payload).toMatchObject({
+          kind: 'bash',
+          payload: { streamId: 'bash-bypass-stream' },
+        });
+      });
+      currentApproval.get()?.decide({ accepted: true, bypass: 'bash' });
+
+      await expect(result).resolves.toEqual({
+        accepted: true,
+        userMessage: undefined,
+      });
+      expect(streams.get().get('bash-bypass-stream')?.bypass.bash).toBe(true);
+      expect(runtimeHost.emit).toHaveBeenCalledWith(
+        'updateBashApprovalBypassState',
+        {
+          streamId: 'bash-bypass-stream',
+          bypassActive: true,
+        },
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('updates TUI edit bypass state at the approval decision site', async () => {
+    const { runtimeHost, interactions, dispose } = tui();
+    try {
+      const result = interactions.requestToolEditApproval?.({
+        path: '/work/main.tex',
+        originalContent: 'old',
+        proposedContent: 'new',
+        sourceTool: 'edit',
+        streamId: 'edit-bypass-stream',
+      });
+
+      await vi.waitFor(() => {
+        expect(currentApproval.get()?.payload).toMatchObject({
+          kind: 'toolEdit',
+          payload: { streamId: 'edit-bypass-stream' },
+        });
+      });
+      currentApproval.get()?.decide({ accepted: true, bypass: 'toolEdit' });
+
+      await expect(result).resolves.toEqual({
+        accepted: true,
+        appliedContent: 'new',
+      });
+      expect(streams.get().get('edit-bypass-stream')?.bypass.toolEdit).toBe(
+        true,
+      );
+      expect(runtimeHost.emit).toHaveBeenCalledWith(
+        'updateToolEditApprovalBypassState',
+        {
+          streamId: 'edit-bypass-stream',
+          bypassActive: true,
+        },
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('updates TUI super-yolo bypass state at the proposal decision site', async () => {
+    const { runtimeHost, interactions, dispose } = tui();
+    try {
+      const result = interactions.requestAgentProposal?.({
+        proposalId: 'proposal-bypass',
+        streamId: 'proposal-bypass-stream',
+        agent: 'critic',
+        agentSource: null,
+        model: 'kimi26T',
+        instruction: 'Check the local compactness claim.',
+        memories: [],
+        workingDirectory: null,
+        agentCategory: AgentCategory.ToolUse,
+      });
+
+      await vi.waitFor(() => {
+        expect(currentApproval.get()?.payload).toMatchObject({
+          kind: 'proposal',
+          payload: { streamId: 'proposal-bypass-stream' },
+        });
+      });
+      currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
+
+      await expect(result).resolves.toEqual({ action: 'approve' });
+      expect(
+        streams.get().get('proposal-bypass-stream')?.bypass.superYolo,
+      ).toBe(true);
+      expect(runtimeHost.emit).toHaveBeenCalledWith(
+        'updateSuperYoloBypassState',
+        {
+          streamId: 'proposal-bypass-stream',
+          bypassActive: true,
+        },
+      );
+    } finally {
+      dispose();
     }
   });
 
