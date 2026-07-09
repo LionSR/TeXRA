@@ -168,7 +168,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     const statusCode = detectStatusCode(error);
-    // @openrouter/sdk v0.13.21 defaults chatSend retryCodes to ["5XX"]; the
+    // @openrouter/sdk v0.13.31 defaults chatSend retryCodes to ["5XX"]; the
     // SDK's retry window is now bounded to 30s (see getClient() above), but
     // ownership is unchanged — 5XX HTTP responses remain provider-managed here,
     // and 429/408 HTTP responses remain owned by TeXRA's flow retry.
