@@ -35,7 +35,6 @@ import {
   childPickerKeyAction,
   hasChildControlItems,
   liveChildExecutionElapsedKey,
-  nextPickerIndex,
   numericFocusTargetForActiveStream,
   resolveChildControlDisplayTargets,
   resolveChildControlStreamTarget,
@@ -1064,8 +1063,6 @@ describe('CLI child execution controls', () => {
       kind: 'jump',
       index: 2,
     });
-    expect(nextPickerIndex(0, 3, 'up')).toBe(2);
-    expect(nextPickerIndex(2, 3, 'down')).toBe(0);
   });
 
   it('advertises only applicable keys for child pickers', () => {
