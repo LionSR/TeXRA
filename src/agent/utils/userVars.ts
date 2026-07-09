@@ -38,6 +38,76 @@ const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
 export type UserVars = Record<string, unknown>;
 
 /**
+ * Fixed runtime template variables owned by `buildUserVars`.
+ *
+ * Agent-creation templates render once when a YAML file is produced, then the
+ * generated agent renders again at runtime. These tokens must pass through the
+ * creation render literally so the runtime render can substitute them later.
+ * User-defined `requiredFiles` / pattern variables are intentionally not in
+ * this fixed list; they remain caller-supplied names and `throwOnUndefined`
+ * stays disabled until there is a separate validation story for them.
+ */
+export const USER_VAR_RUNTIME_TOKENS = [
+  'MODEL',
+  'INSTRUCTION',
+  'IS_OPENAI_MODEL',
+  'IS_ANTHROPIC_MODEL',
+  'IS_GOOGLE_MODEL',
+  'WORKFLOW_AGENTS',
+  'TOOL_USE_AGENTS',
+  'CWD',
+  'DEFAULT_BIB_PATH',
+  'BUILTIN_WORKFLOW_DIR',
+  'BUILTIN_TOOLUSE_DIR',
+  'CUSTOM_AGENTS_DIR',
+  'AGENT_DOCS_DIR',
+  'INPUT_FILE',
+  'INPUT_CONTENT',
+  'INPUT_FILES',
+  'ALL_INPUTS',
+  'LIST_OF_ALL_INPUTS',
+  'REFERENCE_FILE',
+  'REFERENCE_CONTENT',
+  'REFERENCE_FILES',
+  'ALL_REFERENCES',
+  'LIST_OF_ALL_REFERENCES',
+  'CONTEXT_FILE',
+  'CONTEXT_CONTENT',
+  'ALL_CONTEXTS',
+  'LIST_OF_ALL_CONTEXTS',
+  'ALL_AUXILIARYS',
+  'LIST_OF_ALL_AUXILIARYS',
+  'EDITED_FILE',
+  'EDITED_CONTENT',
+  'EDITED_FILES',
+  'ALL_EDITEDS',
+  'LIST_OF_ALL_EDITEDS',
+  'MEDIA_FILE',
+  'MEDIA_CONTENT',
+  'OUTPUT_FILES',
+  'AUTO_EXTRACT_FIGURE',
+  'AUTO_EXTRACT_TIKZ_FIGURE',
+  'INCLUDE_TEX_COUNT',
+  'PRINT_INPUT_PROMPT',
+  'AUTO_COMPILE_INPUT_PDF',
+  'CODEX_GUIDANCE',
+  'CLAUDE_CODE_GUIDANCE',
+  'ROUNDS',
+  'LATEX_STYLE_RULES',
+  'ATTACHED_MEMORIES',
+  'ATTACHED_MEMORY_MISSES',
+  'AVAILABLE_SKILLS',
+] as const;
+
+export function buildUserVarPassthrough(): Readonly<Record<string, string>> {
+  return Object.freeze(
+    Object.fromEntries(
+      USER_VAR_RUNTIME_TOKENS.map((token) => [token, `{{ ${token} }}`]),
+    ),
+  );
+}
+
+/**
  * Information about a loaded file for prompt variable substitution.
  * Extends FileListEntry with required source and varName fields.
  * Compatible with FileListEntry (can be passed to AgentTrace.fileList).
