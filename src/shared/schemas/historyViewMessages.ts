@@ -2,7 +2,7 @@
  * Schema definitions for HistoryView messages.
  *
  * Outbound: Backend → Frontend (UPDATE_HISTORY, HISTORY_CLEARED)
- * Inbound: Frontend → Backend (GET_HISTORY_DATA, RERUN_AGENT, etc.)
+ * Inbound: Frontend → Backend (RERUN_AGENT, RESTORE_AGENT, etc.)
  */
 import { z } from 'zod';
 
@@ -75,10 +75,6 @@ export const HistoryClearedMessageSchema = z.object({
 export const HistoryIdMessageSchema = z.object({
   historyId: z.string().min(1),
 });
-
-export const GetHistoryDataMessageSchema = commandOnly(
-  HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA,
-);
 
 export const RerunAgentMessageSchema = HistoryIdMessageSchema.extend({
   command: z.literal(HISTORY_VIEW_COMMANDS.RERUN_AGENT),

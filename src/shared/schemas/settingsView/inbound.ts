@@ -19,7 +19,6 @@ import { WebviewReadyMessageSchema } from '../commonViewMessages';
 import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
-  GetMemoryEnabledMessageSchema,
   GetMemoryPreviewMessageSchema,
   OpenMemoryFileMessageSchema,
   OpenMemoryFolderMessageSchema,
@@ -33,13 +32,10 @@ import {
   ExportChatHtmlMessageSchema,
   ExportChatMdMessageSchema,
   ExportChatTexMessageSchema,
-  GetHistoryDataMessageSchema,
   RerunAgentMessageSchema,
   RestoreAgentMessageSchema,
 } from '../historyViewMessages';
 import {
-  GetProfileDataMessageSchema,
-  SelectAgentInboundMessageSchema,
   SetApiAccessModeInboundMessageSchema,
   SignInMessageSchema,
   SignOutMessageSchema,
@@ -111,8 +107,6 @@ const OpenExternalUrlMessageSchema = z.object({
 });
 
 // Model selection inbound messages
-const GetModelSelectionMessageSchema = commandOnly(CMD.GET_MODEL_SELECTION);
-
 const SetModelEnabledMessageSchema = z.object({
   command: z.literal(CMD.SET_MODEL_ENABLED),
   modelName: z.string().min(1),
@@ -136,8 +130,6 @@ const SetPreferShortModelNamesMessageSchema = enabledFlag(
 );
 
 // Agent selection inbound messages
-const GetAgentSelectionMessageSchema = commandOnly(CMD.GET_AGENT_SELECTION);
-
 const OpenAgentYamlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_YAML),
   agentName: z.string().min(1),
@@ -193,19 +185,9 @@ const ViewRemoteAgentPromptMessageSchema = z.object({
 });
 
 // Custom agent directory inbound messages
-const GetCustomAgentDirMessageSchema = commandOnly(CMD.GET_CUSTOM_AGENT_DIR);
 const SetCustomAgentDirMessageSchema = commandOnly(CMD.SET_CUSTOM_AGENT_DIR);
 const ResetCustomAgentDirMessageSchema = commandOnly(
   CMD.RESET_CUSTOM_AGENT_DIR,
-);
-
-// Super YOLO inbound messages
-const GetSuperYoloEnabledMessageSchema = commandOnly(
-  CMD.GET_SUPER_YOLO_ENABLED,
-);
-
-const SetSuperYoloEnabledMessageSchema = enabledFlag(
-  CMD.SET_SUPER_YOLO_ENABLED,
 );
 
 // Allow orchestrator kill inbound message
@@ -218,10 +200,6 @@ const SetDetachSubagentsOnStopMessageSchema = enabledFlag(
 );
 
 // Agent team inbound messages
-const GetAgentModePresetsMessageSchema = commandOnly(
-  CMD.GET_AGENT_MODE_PRESETS,
-);
-
 const ApplyAgentModePresetMessageSchema = z.object({
   command: z.literal(CMD.APPLY_AGENT_MODE_PRESET),
   presetId: z.string().min(1),
@@ -237,10 +215,6 @@ const DeleteAgentModePresetMessageSchema = z.object({
 });
 
 // Tool dashboard inbound messages
-const GetToolDashboardDataMessageSchema = commandOnly(
-  CMD.GET_TOOL_DASHBOARD_DATA,
-);
-
 const OpenToolInstallUrlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_TOOL_INSTALL_URL),
   url: z.url(),
@@ -269,10 +243,6 @@ export type ToolCommandKind = z.infer<
 >['kind'];
 
 // Git author settings inbound messages
-const GetGitAuthorSettingsMessageSchema = commandOnly(
-  CMD.GET_GIT_AUTHOR_SETTINGS,
-);
-
 const SetGitMarkCommitsMessageSchema = enabledFlag(CMD.SET_GIT_MARK_COMMITS);
 
 const SetGitAuthorNameMessageSchema = z.object({
@@ -301,9 +271,6 @@ const RemoveGitHubTokenMessageSchema = commandOnly(CMD.REMOVE_GITHUB_TOKEN);
 const OpenGitHubTokenUrlMessageSchema = commandOnly(CMD.OPEN_GITHUB_TOKEN_URL);
 
 // ChatGPT subscription (Codex) sign-in messages
-const GetChatGptAuthStatusMessageSchema = commandOnly(
-  CMD.GET_CHATGPT_AUTH_STATUS,
-);
 const SignInChatGptMessageSchema = commandOnly(CMD.SIGN_IN_CHATGPT);
 const SignOutChatGptMessageSchema = commandOnly(CMD.SIGN_OUT_CHATGPT);
 const SetChatGptPreferSubscriptionMessageSchema = enabledFlag(
@@ -336,9 +303,6 @@ const OpenPRSubscriptionStreamMessageSchema = z.object({
 });
 
 // LaTeX settings inbound messages
-const GetLatexSettingsStatusMessageSchema = commandOnly(
-  CMD.GET_LATEX_SETTINGS_STATUS,
-);
 const ApplyLatexSettingsMessageSchema = z.object({
   command: z.literal(CMD.APPLY_LATEX_SETTINGS),
   field: z.enum(['outDir', 'autoRevealExclude']).optional(),
@@ -353,9 +317,6 @@ const RunInstallCommandMessageSchema = z.object({
 });
 
 // LaTeX/compile/diff config (storage-backed)
-const GetLatexConfigValuesMessageSchema = commandOnly(
-  CMD.GET_LATEX_CONFIG_VALUES,
-);
 /**
  * Single-property write — frontend sends one value at a time. Surface a flat
  * shape (single outer branch keyed on `command`) so it composes into the
@@ -390,7 +351,6 @@ const SetInlineCriticismEnabledMessageSchema = enabledFlag(
 );
 
 // Approval settings inbound messages
-const GetApprovalSettingsMessageSchema = commandOnly(CMD.GET_APPROVAL_SETTINGS);
 const SetBashApprovalEnabledMessageSchema = enabledFlag(
   CMD.SET_BASH_APPROVAL_ENABLED,
 );
@@ -442,18 +402,15 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Navigation messages
     OpenVscodeSettingsMessageSchema,
     // Tool dashboard messages
-    GetToolDashboardDataMessageSchema,
     OpenToolInstallUrlMessageSchema,
     InstallToolExtensionMessageSchema,
     RecheckToolStatusMessageSchema,
     ToggleToolMessageSchema,
     RunToolCommandMessageSchema,
     // LaTeX settings messages
-    GetLatexSettingsStatusMessageSchema,
     ApplyLatexSettingsMessageSchema,
     InstallLatexWorkshopMessageSchema,
     RunInstallCommandMessageSchema,
-    GetLatexConfigValuesMessageSchema,
     SetLatexConfigValueMessageSchema,
     GetInlineCriticismEnabledMessageSchema,
     SetInlineCriticismEnabledMessageSchema,
@@ -463,12 +420,10 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     OpenMemoryFileMessageSchema,
     OpenMemoryFolderMessageSchema,
     DeleteMemoryMessageSchema,
-    GetMemoryEnabledMessageSchema,
     SetMemoryEnabledMessageSchema,
     PinMemoryMessageSchema,
     UnpinMemoryMessageSchema,
     // History messages
-    GetHistoryDataMessageSchema,
     RerunAgentMessageSchema,
     RestoreAgentMessageSchema,
     DeleteAgentMessageSchema,
@@ -477,8 +432,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     ExportChatTexMessageSchema,
     ExportChatHtmlMessageSchema,
     // Profile messages
-    GetProfileDataMessageSchema,
-    SelectAgentInboundMessageSchema,
     SignInMessageSchema,
     SignOutMessageSchema,
     SetApiAccessModeInboundMessageSchema,
@@ -491,13 +444,11 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetProviderVscodeSettingMessageSchema,
     OpenExternalUrlMessageSchema,
     // Model selection messages
-    GetModelSelectionMessageSchema,
     SetModelEnabledMessageSchema,
     SetHelperModelMessageSchema,
     SetModelReasoningLevelMessageSchema,
     SetPreferShortModelNamesMessageSchema,
     // Agent selection messages
-    GetAgentSelectionMessageSchema,
     OpenAgentYamlMessageSchema,
     SetAgentEnabledMessageSchema,
     SetAllAgentsEnabledMessageSchema,
@@ -508,16 +459,12 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     RevealAgentFileMessageSchema,
     ViewRemoteAgentPromptMessageSchema,
     // Custom agent directory messages
-    GetCustomAgentDirMessageSchema,
     SetCustomAgentDirMessageSchema,
     ResetCustomAgentDirMessageSchema,
-    // Super YOLO messages
-    GetSuperYoloEnabledMessageSchema,
-    SetSuperYoloEnabledMessageSchema,
+    // Multi-Agent orchestration messages
     SetAllowOrchestratorKillMessageSchema,
     SetDetachSubagentsOnStopMessageSchema,
     // Git author settings messages
-    GetGitAuthorSettingsMessageSchema,
     SetGitMarkCommitsMessageSchema,
     SetGitAuthorNameMessageSchema,
     SetGitAuthorEmailMessageSchema,
@@ -528,7 +475,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     RemoveGitHubTokenMessageSchema,
     OpenGitHubTokenUrlMessageSchema,
     // ChatGPT subscription sign-in messages
-    GetChatGptAuthStatusMessageSchema,
     SignInChatGptMessageSchema,
     SignOutChatGptMessageSchema,
     SetChatGptPreferSubscriptionMessageSchema,
@@ -540,7 +486,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     UnsubscribePRMessageSchema,
     OpenPRSubscriptionStreamMessageSchema,
     // Approval settings messages
-    GetApprovalSettingsMessageSchema,
     SetBashApprovalEnabledMessageSchema,
     SetCodexSandboxModeMessageSchema,
     SetCodexReasoningEffortMessageSchema,
@@ -549,7 +494,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetClaudeAgentPermissionModeMessageSchema,
     SetClaudeAgentEffortMessageSchema,
     // Agent team messages
-    GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,
     SaveAgentModePresetMessageSchema,
     DeleteAgentModePresetMessageSchema,
