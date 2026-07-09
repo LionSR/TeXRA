@@ -8,6 +8,7 @@ import {
   shouldRenderRunProgress,
 } from '@cli/runtime/runProgressRenderer';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
+import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 import {
@@ -991,24 +992,29 @@ describe('CLI run progress renderer', () => {
     expect(stdout).toBe('');
   });
 
-  it('writes subagent progress events to stdout in ndjson mode', async () => {
+  it('writes projected subagent progress records to stdout in ndjson mode', async () => {
     const output = await captureStreamWrites(process.stdout, async () => {
-      const host = createCliRuntimeHost(
-        context({ outputFormat: 'ndjson', renderRunProgress: false }),
-      );
-      host.emit('updateActiveSubagents', {
-        parentStreamId: 'parent-stream',
-        children: [
-          {
-            kind: 'subagent',
-            executionId: 'child-execution',
-            childStreamId: 'child-stream',
-            agentName: 'review',
-            status: 'running',
-          },
-        ],
+      const events = new SessionEventHub();
+      const detach = attachCliSessionProgressProjection(events);
+      events.emit({
+        scope: 'run',
+        streamId: 'parent-stream' as StreamTabId,
+        event: {
+          type: 'child.activity',
+          kind: 'subagents',
+          parentStreamId: 'parent-stream',
+          children: [
+            {
+              kind: 'subagent',
+              executionId: 'child-execution',
+              childStreamId: 'child-stream',
+              agentName: 'review',
+              status: 'running',
+            },
+          ],
+        },
       });
-      await host.close();
+      detach();
     });
 
     const records = output
@@ -1036,19 +1042,30 @@ describe('CLI run progress renderer', () => {
     ]);
   });
 
-  it('does not write late ndjson progress after the runtime host closes', async () => {
+  it('does not write late ndjson progress after the projection detaches', async () => {
     const output = await captureStreamWrites(process.stdout, async () => {
-      const host = createCliRuntimeHost(
-        context({ outputFormat: 'ndjson', renderRunProgress: false }),
-      );
-      host.emit('updateStreamStatus', {
-        streamId: 'stream-1',
-        status: STREAM_PHASE.RUNNING,
+      const events = new SessionEventHub();
+      const detach = attachCliSessionProgressProjection(events);
+      events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateStreamStatus',
+          payload: {
+            streamId: 'stream-1' as StreamTabId,
+            status: STREAM_PHASE.RUNNING,
+          },
+        },
       });
-      await host.close();
-      host.emit('updateStreamDescription', {
-        streamId: 'stream-1',
-        description: 'late helper label',
+      detach();
+      events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateStreamDescription',
+          payload: {
+            streamId: 'stream-1' as StreamTabId,
+            description: 'late helper label',
+          },
+        },
       });
     });
 

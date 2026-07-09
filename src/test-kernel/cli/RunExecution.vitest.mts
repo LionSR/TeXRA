@@ -188,6 +188,7 @@ describe('executeCliRequest', () => {
     await executeCliRequest(request, cliContext({ outputFormat: 'ndjson' }));
 
     expect(attachProjection).toHaveBeenCalledTimes(1);
+    expect(attachProjection.mock.calls[0]?.[1]).toBeUndefined();
     expect(mocks.runAgent).toHaveBeenCalledTimes(1);
     expect(attachProjection.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.runAgent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
@@ -316,7 +317,7 @@ describe('executeCliRequest', () => {
     );
   });
 
-  it('persists headless stream sidecars from session events without double-counting legacy host usage', async () => {
+  it('persists headless stream sidecars from session events', async () => {
     await installStoragePlatform();
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
@@ -329,7 +330,7 @@ describe('executeCliRequest', () => {
       activeForm: 'Writing the introduction',
     };
 
-    mocks.runAgent.mockImplementationOnce(async (_request, options) => {
+    mocks.runAgent.mockImplementationOnce(async () => {
       const { getExecutionStore } = await import('@agent/storage');
       const { AgentConfigSchema } =
         await import('@agent/core/definition/AgentConfig');
@@ -388,17 +389,6 @@ describe('executeCliRequest', () => {
             parentStreamId,
           },
         },
-      });
-      // This is the legacy projected event still visible on the public host
-      // channel. It must not be persisted a second time by the CLI bridge.
-      options.runtimeHost.emit('updateStreamUsage', {
-        streamId,
-        storageKey: 'run-1' as StorageKey,
-        usage: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
-      });
-      options.runtimeHost.emit('updateTodos', {
-        streamId,
-        todos: [todo],
       });
       return {
         category: 'toolUse',
