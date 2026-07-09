@@ -74,6 +74,10 @@ export type GetProgressStreamControls = (
   stream: StreamTabId,
 ) => ProgressStreamControls;
 
+export type DeleteProgressStream = (
+  stream: StreamTabId,
+) => void | Promise<void>;
+
 export const PROGRESS_BACKEND_RUN_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] =
   [
     'conversation.progress',
@@ -111,6 +115,7 @@ export class ProgressFactApplier {
     private webviewBridge: WebviewBridge,
     private readonly hasPendingPermissions: (streamId: string) => boolean,
     private readonly getStreamControls: GetProgressStreamControls = getDefaultProgressStreamControls,
+    private readonly deleteStream: DeleteProgressStream = () => undefined,
   ) {
     this.logger = createChannelTrace('ProgressFactApplier');
   }
@@ -203,6 +208,9 @@ export class ProgressFactApplier {
         );
         return;
       case 'removeStream':
+        this.applyFact('failed to handle removeStream fact', () =>
+          this.deleteStream(fact.payload.streamId),
+        );
         return;
     }
     assertNever(fact, 'Unhandled progress-view session fact');

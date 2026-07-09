@@ -353,4 +353,19 @@ describe('progress-view onboarding refresh wiring', () => {
 
     await expect(provider.refreshOnboardingFunnel()).resolves.toBeUndefined();
   });
+
+  it('returns deletion failures from host removeStream handling', async () => {
+    const context = createExtensionContext();
+    const provider = createProgressViewProvider();
+    const handler = createMessageHandler(provider, context);
+    const deletionError = new Error('delete failed');
+    const clearStream = provider.state.clearStream as ReturnType<typeof vi.fn>;
+    clearStream.mockRejectedValue(deletionError);
+
+    const result = handler.removeStreamFromHost('missing' as StreamTabId);
+
+    expect(result).toBeInstanceOf(Promise);
+    await expect(result).rejects.toBe(deletionError);
+    expect(clearStream).toHaveBeenCalledWith('missing');
+  });
 });
