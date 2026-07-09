@@ -1,3 +1,6 @@
+// Local imports - transcript
+import { canUseStreamDataDir } from '@transcript/streamDataPaths';
+
 // Local imports - agent
 import { deleteExecution as deleteStoredExecution } from '@agent/storage/executionListing';
 
@@ -10,7 +13,7 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 // Local imports - utils
 import { unique } from '@utils/core';
 
-// Local imports - transcript
+// Local imports - transcript types
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
 const CHANNEL = 'SessionStores';
@@ -53,6 +56,8 @@ export class SessionStores {
   }
 
   async deleteStream(stream: StreamTabId): Promise<void> {
+    if (!canUseStreamDataDir(stream)) return;
+
     const executionId =
       this.snapshots.getExecutionId(stream) ??
       (await this.snapshots.readPersistedExecutionId(stream));
