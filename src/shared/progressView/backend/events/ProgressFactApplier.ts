@@ -1,9 +1,10 @@
-import { z } from 'zod';
 
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
-import type { RunFactEventName } from '@agent/runtime/runFactEvents';
+import {
+  fromRunFactDomainKey,
+  type RunFactEventName,
+} from '@agent/runtime/runFactEvents';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
@@ -55,6 +56,7 @@ import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 import { isObject } from '@utils/core';
 
 import { withEventErrorHandling } from './errorHandling';
+import type { ZodType } from 'zod';
 
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
@@ -353,7 +355,7 @@ export class ProgressFactApplier {
   /** Build a domain-fact handler that Zod-validates the payload before applying. */
   private domainFact<T>(
     name: RunFactEventName,
-    schema: z.ZodType<T>,
+    schema: ZodType<T>,
     handle: (payload: T) => void,
   ): (data: unknown) => void {
     return (data) => {
