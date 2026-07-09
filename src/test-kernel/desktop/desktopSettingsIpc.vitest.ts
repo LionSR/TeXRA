@@ -49,12 +49,18 @@ function createSecrets(
     async get(key) {
       return values.get(key);
     },
+    async getStored(key) {
+      return values.get(key);
+    },
     async set(key, value) {
       values.set(key, value);
     },
     async delete(key) {
       deleted.push(key);
       values.delete(key);
+    },
+    async listStoredKeys() {
+      return [...values.keys()];
     },
     getEnv() {
       return undefined;

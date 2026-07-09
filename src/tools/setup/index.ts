@@ -17,8 +17,8 @@
  * on top of shell would be a second, weaker approval surface that every
  * reviewer keeps finding bypasses for.
  *
- * Platform coupling is injected via `setSetupPlatform()` at extension
- * activation so the tools stay in the VS Code-free `@tools/*` zone.
+ * Common platform coupling is derived from `platform()` ports. The extension
+ * adds its VS Code-only setup capabilities via `setSetupPlatform()`.
  */
 export { ProbeEnvironmentTool } from './ProbeEnvironmentTool';
 export { VerifySetupTool } from './VerifySetupTool';
@@ -30,4 +30,4 @@ export { InstallVscodeExtensionTool } from './InstallVscodeExtensionTool';
 export { ReadConfigTool, UpdateConfigTool } from './ConfigTools';
 export { SendToTerminalTool } from './SendToTerminalTool';
 export { ApplyTeamTool } from './ApplyTeamTool';
-export { setSetupPlatform } from './platform';
+export { createDefaultSetupPlatform, setSetupPlatform } from './platform';

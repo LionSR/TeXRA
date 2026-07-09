@@ -19,6 +19,10 @@ export class VscodeSecrets implements PlatformSecrets {
   async get(key: string): Promise<string | undefined> {
     const envValue = process.env[key];
     if (envValue !== undefined) return envValue;
+    return this.getStored(key);
+  }
+
+  async getStored(key: string): Promise<string | undefined> {
     return this.storage.get(key);
   }
 
@@ -28,6 +32,10 @@ export class VscodeSecrets implements PlatformSecrets {
 
   async delete(key: string): Promise<void> {
     await this.storage.delete(key);
+  }
+
+  async listStoredKeys(): Promise<readonly string[]> {
+    return this.storage.keys();
   }
 
   getEnv(name: string): string | undefined {

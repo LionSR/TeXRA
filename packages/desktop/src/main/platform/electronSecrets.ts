@@ -71,6 +71,10 @@ export class ElectronSecrets implements PlatformSecrets {
     const envValue = process.env[key];
     if (envValue !== undefined) return envValue;
 
+    return this.getStored(key);
+  }
+
+  async getStored(key: string): Promise<string | undefined> {
     // Test-harness shim: skip safeStorage entirely when the env var is set so
     // headless Playwright runs do not block on the macOS keychain prompt.
     // Env-var API key overrides above already returned; here we just report
@@ -135,6 +139,10 @@ export class ElectronSecrets implements PlatformSecrets {
 
   async delete(key: string): Promise<void> {
     await this.store.set(key, undefined);
+  }
+
+  async listStoredKeys(): Promise<readonly string[]> {
+    return Object.keys(this.store.snapshot());
   }
 
   getEnv(name: string): string | undefined {
