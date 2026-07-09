@@ -5,6 +5,7 @@ import { app } from 'electron';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
+  bootstrapNodeAgentDirectories,
   createNodePlatform,
   initNodeAgentRuntime,
   initializeNodeGoalPrompts,
@@ -20,7 +21,6 @@ import { configKeyVariants } from '@shared/config/configKeys';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
@@ -190,7 +190,7 @@ export async function initializeElectronPlatform(
     }),
   );
 
-  // Capture the prior-install signal BEFORE bootstrapElectronAgentDirectories
+  // Capture the prior-install signal BEFORE bootstrapNodeAgentDirectories
   // (below) writes LAST_KNOWN_VERSION via the bundled-agent directory sync.
   // Reading it afterwards would always be defined, so a fresh install with a
   // credential would be misread as a returning veteran. See ElectronPlatformInitResult.
@@ -215,7 +215,12 @@ export async function initializeElectronPlatform(
   initNodeAgentRuntime(lifecycle);
   initializeNodeGoalPrompts(resourcesPath);
 
-  await bootstrapElectronAgentDirectories(resourcesPath, app.getVersion());
+  await bootstrapNodeAgentDirectories({
+    channel: 'desktop',
+    resourcesPath,
+    currentVersion: app.getVersion(),
+    versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+  });
 
   return {
     workspacePath,
