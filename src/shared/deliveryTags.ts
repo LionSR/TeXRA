@@ -26,8 +26,11 @@ export const DELIVERY_TAG = {
   executionActivity: 'execution-activity',
 } as const;
 
+/** Every canonical tag name — the union `DELIVERY_TAGS` entries must draw from. */
+export type DeliveryTagName = (typeof DELIVERY_TAG)[keyof typeof DELIVERY_TAG];
+
 export interface DeliveryTagEntry {
-  readonly tag: string;
+  readonly tag: DeliveryTagName;
   /**
    * Whether the envelope body is XML-entity-escaped (via `escapeText()` in
    * the producer) and needs `decodeXmlEntities()` before display.
