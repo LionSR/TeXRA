@@ -51,6 +51,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import {
+  presentFollowUpWakeResult,
   sendFollowUp,
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
@@ -1371,21 +1372,18 @@ export class DesktopProgressBridge {
         },
         this.session,
       );
-      if (wake.kind === 'dropped') {
-        this.session.events.emit({
-          scope: 'session',
-          event: {
-            type: 'updateQueuedFollowUps',
-            payload: { streamId },
-          },
-        });
-        await this.options.showInfoMessage?.(
-          'Message dropped because no session was available to receive it. Start a new agent task to continue.',
-        );
-      } else if (wake.kind === 'queued_resume_failed') {
-        await this.options.showInfoMessage?.(
-          'Message queued. Auto-resume failed; start a new agent task to continue.',
-        );
+      const presentation = presentFollowUpWakeResult(wake);
+      if (presentation.severity !== 'none') {
+        if (presentation.refreshQueuedFollowUps) {
+          this.session.events.emit({
+            scope: 'session',
+            event: {
+              type: 'updateQueuedFollowUps',
+              payload: { streamId },
+            },
+          });
+        }
+        await this.options.showInfoMessage?.(presentation.message);
       }
       return;
     }

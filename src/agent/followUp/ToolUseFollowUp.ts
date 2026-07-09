@@ -45,6 +45,14 @@ export type FollowUpWakeResult =
   | { kind: 'queued_resume_failed' }
   | { kind: 'dropped' };
 
+export type FollowUpWakePresentation =
+  | { severity: 'none' }
+  | {
+      severity: 'info' | 'warning';
+      message: string;
+      refreshQueuedFollowUps: boolean;
+    };
+
 export interface FollowUpResumePort {
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
   isResumeInFlight?(streamId: StreamTabId): boolean;
@@ -107,6 +115,38 @@ export async function wakeQueuedFollowUpStream(
   }
   ownerSession.followUps.release(streamId);
   return { kind: 'dropped' };
+}
+
+/**
+ * Shared host-facing presentation for wake outcomes. It intentionally maps
+ * only queue/wake policy to UI text; provider/model follow-up construction
+ * stays with the caller that owns that context.
+ */
+export function presentFollowUpWakeResult(
+  result: FollowUpWakeResult,
+): FollowUpWakePresentation {
+  switch (result.kind) {
+    case 'dropped':
+      return {
+        severity: 'warning',
+        message:
+          'Message dropped because no session was available to receive it. Start a new agent task to continue.',
+        refreshQueuedFollowUps: true,
+      };
+    case 'queued_resume_failed':
+      return {
+        severity: 'info',
+        message:
+          'Message queued. Auto-resume failed; start a new agent task to continue.',
+        refreshQueuedFollowUps: false,
+      };
+    case 'not_required':
+    case 'queued_without_wake':
+    case 'resumed':
+    case 'resume_in_flight':
+    case 'active_or_resuming':
+      return { severity: 'none' };
+  }
 }
 
 /**
