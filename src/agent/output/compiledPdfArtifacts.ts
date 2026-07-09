@@ -8,6 +8,7 @@ import type {
   FileLocation,
   RunStorageFileLocation,
 } from '@shared/schemas';
+import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { createRunStorageLocation, getComparablePath } from '@utils/files';
 import { isFile } from '@utils/files/fsEntryType';
 
@@ -43,9 +44,11 @@ function normalizePdfRelativePath(pdfPath: string): string {
 }
 
 function stripRoundPrefix(relativePath: string, round: number): string {
-  const roundPrefix = `r${round}/`;
-  return relativePath.startsWith(roundPrefix)
-    ? relativePath.slice(roundPrefix.length)
+  const separatorIndex = relativePath.indexOf('/');
+  if (separatorIndex === -1) return relativePath;
+  const firstSegment = relativePath.slice(0, separatorIndex);
+  return parseWorkflowOutputRoundDir(firstSegment) === round
+    ? relativePath.slice(separatorIndex + 1)
     : relativePath;
 }
 
