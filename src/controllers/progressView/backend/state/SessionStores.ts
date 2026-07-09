@@ -19,6 +19,10 @@ export interface SessionStoresOptions {
   streamLogs: StreamLogStore;
   snapshots: StreamSnapshotStore;
   deleteExecution?: (executionId: ExecutionId) => Promise<boolean>;
+  goalEntries?: {
+    forget(stream: StreamTabId): Promise<void>;
+    forgetMany(streams: readonly StreamTabId[]): Promise<void>;
+  };
 }
 
 /**
@@ -34,11 +38,18 @@ export class SessionStores {
   private readonly deleteExecution: (
     executionId: ExecutionId,
   ) => Promise<boolean>;
+  private readonly goalEntries:
+    | {
+        forget(stream: StreamTabId): Promise<void>;
+        forgetMany(streams: readonly StreamTabId[]): Promise<void>;
+      }
+    | undefined;
 
   constructor(options: SessionStoresOptions) {
     this.streamLogs = options.streamLogs;
     this.snapshots = options.snapshots;
     this.deleteExecution = options.deleteExecution ?? deleteStoredExecution;
+    this.goalEntries = options.goalEntries;
   }
 
   async deleteStream(stream: StreamTabId): Promise<void> {
@@ -50,11 +61,13 @@ export class SessionStores {
       this.streamLogs.delete(stream),
       this.snapshots.deleteStream(stream),
       this.deleteExecutionIds(executionId ? [executionId] : []),
+      this.goalEntries?.forget(stream),
     ]);
   }
 
   async deleteAll(): Promise<void> {
     const persistedStreams = await this.snapshots.listPersistedStreams();
+    const streamIds = unique([...persistedStreams, ...this.streamLogs.keys()]);
     const executionIds = new Set<ExecutionId>(
       this.snapshots.getExecutionIdMap().values(),
     );
@@ -67,6 +80,7 @@ export class SessionStores {
       this.streamLogs.clear(),
       this.snapshots.deleteAll(),
       this.deleteExecutionIds(executionIds),
+      this.goalEntries?.forgetMany(streamIds),
     ]);
   }
 
@@ -86,7 +100,10 @@ export class SessionStores {
         try {
           const executionId =
             await this.snapshots.readPersistedExecutionId(stream);
-          await this.snapshots.deleteStream(stream);
+          await Promise.all([
+            this.snapshots.deleteStream(stream),
+            this.goalEntries?.forget(stream),
+          ]);
           sweptStreams.push(stream);
           if (executionId) executionIds.add(executionId);
         } catch (error) {
