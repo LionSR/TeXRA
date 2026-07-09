@@ -113,6 +113,8 @@ export class ProgressViewProvider
       sendMessage: (message) => this.sendToActiveProgressWebview(message),
       hasTarget: () => this.getActiveWebview() !== undefined,
       getStreamControls: getProgressStreamControls,
+      deleteStream: (stream) =>
+        this.messageHandler.removeStreamFromHost(stream),
       getUnsupportedCommands: () =>
         this.messageHandler.getUnsupportedCommands(),
       configureUi: ({ webviewUpdater: u }) => {
@@ -168,6 +170,7 @@ export class ProgressViewProvider
       new VscodePromptHost(),
       defaultSession().interactions,
     );
+    const progressBackendSubscription = this.backend.setupEventListeners();
     this.detachHostInteractions = defaultSession().useHostInteractions(
       createExtensionHostInteractions({
         runtimeHost: extensionAgentRuntimeHost,
@@ -183,23 +186,10 @@ export class ProgressViewProvider
         );
       },
     );
-    const detachRemoveStreamCleanup = defaultSession().events.subscribe(
-      (sessionEvent) => {
-        if (
-          sessionEvent.scope === 'session' &&
-          sessionEvent.event.type === 'removeStream'
-        ) {
-          this.messageHandler.removeStreamFromHost(
-            sessionEvent.event.payload.streamId,
-          );
-        }
-      },
-      { scope: 'session' },
-    );
     this._disposables.push(
+      progressBackendSubscription,
       { dispose: this.detachHostInteractions },
       { dispose: detachExtensionInteractionEvents },
-      { dispose: detachRemoveStreamCleanup },
     );
 
     ProgressViewProvider._instance = this;
@@ -221,7 +211,6 @@ export class ProgressViewProvider
   public async initialize(): Promise<void> {
     await this.backend.load();
     this._disposables.push(
-      this.backend.setupEventListeners(),
       attachProgressBackendAppSignals(this.backend, appSignals),
     );
     this.logger.debug('ProgressViewProvider initialized');
