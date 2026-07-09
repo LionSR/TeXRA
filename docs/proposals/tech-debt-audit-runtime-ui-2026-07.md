@@ -154,7 +154,7 @@ prescribes removing.
 
 ### A3. CLI synthetic-entry machinery: render-time dedup-by-normalized-text for the missing stable-id finalized assistant message (MED; ~−120 LoC; R1 dual-state)
 
-**R1 dual-state — resting; fix = land #7086 (open-state unverifiable offline); no confirmed open PR.**
+**R1 dual-state — resting; fix = land issue #7086, implemented by in-flight PR #7601.**
 
 **Pins.** `packages/cli/src/chat/tui/state/transcript.ts:49-99`
 `appendAssistantTranscriptIfMissing` (51 LoC) dedups the run-result fallback
@@ -431,7 +431,10 @@ sites migrate.
 **Fix (net-delete).** Migrate the 16 sites to `currentSession().executions` /
 `currentSession().status` (behavior-identical; the `currentSession()` seam already
 exists), then delete `SharedExecutionRegistry` + `SharedExecutionSubscriptionBinder`
-exports and construct them inside `defaultSession()`. File a dated #6981 row.
+exports and construct them inside `defaultSession()`. File a dated #6981 row
+(or calendar-date the D1 sweep #6982 that tracks this dual — either satisfies
+R1; the error-ownership census's DUAL-5 row counts it compliant-as-tracked on
+that basis).
 Marginal value (−2/−3 exports for 16 mechanical edits) under anti-churn discipline.
 
 **Rejected trap.** Do not delete `StreamStatusService` itself or wrap it in a new
@@ -1074,7 +1077,7 @@ Per fewer-elements R1, no dual-system may rest without an open delete PR or a da
 | #   | Finding                                         | Kind                        | Open delete PR     | #6981 row        | Note                                                       |
 | --- | ----------------------------------------------- | --------------------------- | ------------------ | ---------------- | ---------------------------------------------------------- |
 | A2  | tool-edit approval fallback                     | triple-wired routes         | none               | none             | target design prescribes deletion; stage 2-then-3          |
-| A3  | CLI synthetic-entry machinery                   | old+new for one message     | #7086 (unverified) | none             | gated on recorder stable-id upsert                         |
+| A3  | CLI synthetic-entry machinery                   | old+new for one message     | issue #7086 → in-flight PR #7601 | none             | gated on recorder stable-id upsert                         |
 | A5  | `AgentRuntimeHost.interactions`                 | dual access path (identity) | none               | none             | cannot diverge in prod                                     |
 | A6  | 6 phantom emit arms                             | types-only zombie           | none               | none             | relocate to CLI-local map                                  |
 | A10 | `Shared*` singletons / `defaultSession()` alias | identity alias              | none               | none             | **one of the ten known duals**                             |
@@ -1218,7 +1221,7 @@ Verified sound in passing; fixes here would be net-negative churn.
 6. **B2 finish the bag↔RunContext per-field collapse** — the maintainer's explicit
    split-brain concern; do the zero-risk subset (`workingDirectory`, then
    `stopAfterCycle`) first; **not** via a new `RunScope` construct.
-7. **A3 synthetic-entry deletion** — lands with #7086 (recorder stable-id); −120
+7. **A3 synthetic-entry deletion** — lands with issue #7086's fix (in-flight PR #7601, recorder stable-id); −120
    LoC of the most fragile CLI state code.
 8. **B4 `ResolvedAgent`, B5 follow-up loop, B6 `FINALIZE`, B7 retry double-read,
    A9 goalStateChanged, A11–A15 constant/vocabulary/dead-arm cleanups** — small,
