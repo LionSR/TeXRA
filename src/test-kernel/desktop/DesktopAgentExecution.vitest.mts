@@ -995,9 +995,8 @@ describe('DesktopProgressBridge', () => {
         agentCategory: AgentCategory.Workflow,
       });
       emitRunEvent(bridge, 'parent' as StreamTabId, {
-        type: 'domain',
-        key: 'conversationProgress',
-        data: { toolCallCount: 5 },
+        type: 'conversation.progress',
+        progress: { toolCallCount: 5 },
       });
       emitRunEvent(bridge, 'parent' as StreamTabId, {
         type: 'stage.start',
