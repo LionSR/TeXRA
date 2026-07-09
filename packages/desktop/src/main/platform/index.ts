@@ -49,6 +49,13 @@ export interface ElectronPlatformInitResult {
    * (`extension.ts` LAST_KNOWN_VERSION comment).
    */
   hasPriorInstall: boolean;
+  /**
+   * Resolved `packages/extension/resources` tree (bundled verbatim as
+   * `extraResources` — see `electron-builder.yml`). Threaded out so callers
+   * that need a specific bundled asset (e.g. the chat-export templates) don't
+   * each re-resolve it.
+   */
+  resourcesPath: string;
 }
 
 const WORKSPACE_CONFIG_MIGRATED_KEY =
@@ -200,5 +207,6 @@ export async function initializeElectronPlatform(
     lifecycle,
     progressSnapshotStore: snapshotStore,
     hasPriorInstall,
+    resourcesPath,
   };
 }
