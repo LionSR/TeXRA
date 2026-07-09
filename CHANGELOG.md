@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **OpenRouter transient server errors no longer stall a request for up to an
+  hour** — the OpenRouter SDK's built-in retry window is now capped at 30
+  seconds, so a persistent 5XX surfaces through TeXRA's visible retry/failure
+  path instead of backing off invisibly inside a single attempt.
 - **Web search/fetch links now block dangerous URL schemes** — a link
   surfaced from a web search result or fetched page can no longer use a
   `javascript:`/`data:`/`vbscript:`/`file:` URL to become a live,

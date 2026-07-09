@@ -192,6 +192,10 @@ describe('ModelHandlerOpenRouterNative getClient retryConfig', () => {
 
     // Constructing the SDK client is synchronous, local option-merging (no
     // network call), so inspecting the stored options is safe here.
+    // Reaches into the SDK client's private `_options` (no public accessor).
+    // A future @openrouter/sdk bump renaming it makes `options` undefined and
+    // the deepEqual below throw — a loud failure, not silent under-assertion.
+    // Re-check this access on SDK bumps.
     const options = (client as unknown as { _options: Record<string, unknown> })
       ._options;
 
