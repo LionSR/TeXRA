@@ -623,6 +623,14 @@ function createWindow(options: {
     revealPath: async (filePath) => {
       shell.showItemInFolder(filePath);
     },
+    revealStream: async (streamId) => {
+      try {
+        const execution = await getAgentExecution();
+        execution.progress.revealStream(streamId);
+      } catch (error) {
+        if (!windowClosed) reportAsyncError(error);
+      }
+    },
     openExternalUrl: (url) => previewHost.openExternal(url),
     presentChatGptSignInUrl: async (url) => {
       // `openExternal` opens the system default browser. Offer the raw link so
