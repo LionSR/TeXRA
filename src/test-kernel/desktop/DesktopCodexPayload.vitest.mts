@@ -204,6 +204,21 @@ describe('desktop Codex package payload', () => {
     expect(desktopHook.default).toBe(rootHook.default);
   });
 
+  it('requires the standalone trace-viewer template in packaged resources', () => {
+    const { packageRoot, resourcesDir } = createFakeDesktopPackage([
+      'darwin-arm64',
+    ]);
+    rmSync(
+      join(resourcesDir, 'resources', 'traceViewerStandalone', 'index.html'),
+    );
+
+    const result = runVerifierResult(packageRoot);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'Missing trace-viewer standalone HTML template: resources/traceViewerStandalone/index.html',
+    );
+  });
+
   it('keeps pnpm platform settings in the workspace manifest', () => {
     const rootPackageJson = JSON.parse(
       readFileSync(repoPath('package.json'), 'utf8'),
@@ -304,6 +319,10 @@ function createFakeDesktopPackage(
   writeText(
     join(appRoot, 'resources/skills/example/SKILL.md'),
     'name: example\n\ndescription: Example bundled skill.\n',
+  );
+  writeText(
+    join(appRoot, 'resources/traceViewerStandalone/index.html'),
+    '<!doctype html>\n',
   );
 
   for (const dependencyName of Object.keys(readDesktopDependencies())) {
