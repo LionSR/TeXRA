@@ -24,20 +24,13 @@ logger.initialize(CHANNEL);
  *
  * Type parameters:
  * - S: Shared state type (mutable, flows through nodes)
- * - P: Params type (per-execution parameters)
  * - Svc: Services type (immutable dependencies, set once)
  *
  * Architecture:
  * - shared: Mutable state passed through prep/post
- * - _params: Per-execution parameters
  * - _services: Immutable dependencies (propagated by Flow)
  */
-class BaseNode<
-  S = unknown,
-  P extends NonIterableObject = NonIterableObject,
-  Svc = unknown,
-> {
-  protected _params: P = {} as P;
+class BaseNode<S = unknown, Svc = unknown> {
   protected _services: Svc = {} as Svc;
   protected _successors: Map<Action, BaseNode> = new Map();
 
@@ -74,10 +67,6 @@ class BaseNode<
       logger.warn(CHANNEL, "Node won't run successors. Use Flow.");
     return await this._run(shared);
   }
-  setParams(params: P): this {
-    this._params = params;
-    return this;
-  }
   setServices(services: Svc): this {
     this._services = services;
     return this;
@@ -110,18 +99,13 @@ class BaseNode<
   clone(): this {
     const clonedNode = Object.create(Object.getPrototypeOf(this));
     Object.assign(clonedNode, this);
-    clonedNode._params = { ...this._params };
     // Services are immutable, shallow copy is safe
     clonedNode._services = this._services;
     clonedNode._successors = new Map(this._successors);
     return clonedNode;
   }
 }
-class Node<
-  S = unknown,
-  P extends NonIterableObject = NonIterableObject,
-  Svc = unknown,
-> extends BaseNode<S, P, Svc> {
+class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
   maxRetries: number;
   wait: number;
   /**
@@ -155,7 +139,7 @@ class Node<
    *
    * @example
    * ```typescript
-   * class MyNode extends Node<S, P> {
+   * class MyNode extends Node<S> {
    *   async retryPrompt(prepRes: unknown, error: Error): Promise<boolean> {
    *     const result = await showRetryDialog(error.message);
    *     return result === 'retry';
@@ -254,32 +238,7 @@ class Node<
     );
   }
 }
-class BatchNode<
-  S = unknown,
-  P extends NonIterableObject = NonIterableObject,
-  Svc = unknown,
-> extends Node<S, P, Svc> {
-  /**
-   * Subclasses may override `_exec` entirely (e.g. ToolUseDispatchNode's
-   * barrier-scheduled concurrent dispatch); any lifecycle behavior added
-   * here must not assume every subclass routes through this loop.
-   */
-  async _exec(items: unknown[]): Promise<unknown[]> {
-    if (!Array.isArray(items)) return [];
-    const results: unknown[] = [];
-    for (const item of items) {
-      // Check abort signal before each batch item for responsive cancellation
-      if (this.signal?.aborted) break;
-      results.push(await super._exec(item));
-    }
-    return results;
-  }
-}
-class Flow<
-  S = unknown,
-  P extends NonIterableObject = NonIterableObject,
-  Svc = unknown,
-> extends BaseNode<S, P, Svc> {
+class Flow<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
   start: BaseNode;
   constructor(start: BaseNode) {
     super();
@@ -288,7 +247,6 @@ class Flow<
   protected async _orchestrate(shared: S): Promise<void> {
     let current: BaseNode | undefined = this.start.clone();
     while (current) {
-      current.setParams(this._params);
       // Propagate services to each node (immutable, same instance)
       current.setServices(this._services);
       const action = await current._run(shared);
@@ -305,4 +263,4 @@ class Flow<
     throw new Error("Flow can't exec.");
   }
 }
-export { BaseNode, Node, BatchNode, Flow };
+export { BaseNode, Node, Flow };
