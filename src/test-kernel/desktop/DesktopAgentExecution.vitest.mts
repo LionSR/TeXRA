@@ -1770,6 +1770,15 @@ describe('DesktopProgressBridge', () => {
         agentCategory: AgentCategory.Workflow,
       });
       await settleProgressEvents();
+      const filterStreams = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.FILTER_STREAMS
+        ],
+      );
+      await filterStreams({
+        command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS,
+        filter: 'toolUse',
+      });
       messages.length = 0;
 
       bridge.revealStream('goal-owning-stream');
@@ -1784,6 +1793,27 @@ describe('DesktopProgressBridge', () => {
         activeStream: 'goal-owning-stream',
         command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       });
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+          -1,
+        ),
+      ).toMatchObject({
+        activeStream: 'goal-owning-stream',
+        agentFilter: 'all',
+      });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('revealStream keeps the current route when the stream is unknown', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.revealStream('missing-goal-stream');
+
+      expect(messages).toEqual([]);
     } finally {
       bridge.dispose();
     }
