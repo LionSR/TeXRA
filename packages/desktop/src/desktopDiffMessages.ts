@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { getBasename } from '@shared/utils/path';
+import { getBasename } from '@utils/core';
 
 // IPC plumbing for the in-app diff overlay (audit item C, trajectory #18).
 //

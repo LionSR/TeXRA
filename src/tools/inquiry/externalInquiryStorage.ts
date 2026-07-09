@@ -18,13 +18,13 @@ import {
   type InquiryDraft,
   type InquiryThreadStatus,
 } from '@shared/schemas';
-import { normalizeFilePath } from '@shared/utils/path';
 import { ToolError } from '@shared/schemas/toolResult';
 import {
   isObject,
   toNewestFirstByTimestamp,
   unique,
   hexId12,
+  normalizeFilePath,
 } from '@utils/core';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';

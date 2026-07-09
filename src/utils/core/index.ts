@@ -1,10 +1,15 @@
 /**
- * Core utilities - consolidated type, async, comparator, math, url, id, and
- * semaphore helpers. Formerly one file per concern in this folder.
+ * Core utilities - consolidated type, async, comparator, math, url, id,
+ * path-basics, and semaphore helpers. Formerly one file per concern in this
+ * folder.
  *
  * NOTE: pathCore stays a separate module because it depends on Node.js
  * 'path' while this file is used by webview frontend code (browser context).
- * Backend code should import directly: import { ... } from '@utils/core/pathCore';
+ * The path helpers here (normalizeFilePath, getBasename, getFileStem) are
+ * plain string manipulation with no Node dependency, so they're safe for
+ * both browser and backend callers. Anything needing real filesystem-path
+ * semantics (segment traversal, `.`/`..` resolution) should import from
+ * '@utils/core/pathCore' instead.
  *
  * String validation/formatting primitives live in @utils/text/stringUtils
  * (the single home for generic string helpers) and are re-exported here for
@@ -60,6 +65,48 @@ export function ensureArray<T>(value: T | T[]): T[] {
 /** Return a new array with duplicate values removed, preserving first-occurrence order. */
 export function unique<T>(iterable: Iterable<T>): T[] {
   return [...new Set(iterable)];
+}
+
+// ---------------------------------------------------------------------------
+// pathBasics (browser-safe; Node-dependent path helpers live in pathCore.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize a file path to forward slashes for consistent comparisons.
+ */
+export function normalizeFilePath(filePath: string): string {
+  return filePath.replaceAll('\\', '/');
+}
+
+/**
+ * Extract the base name (filename) from a file path.
+ * Handles platform-specific separators (\ on Windows, / on Unix).
+ *
+ * @example
+ * getBasename('/home/user/document.pdf') // returns 'document.pdf'
+ * getBasename('C:\\Users\\file.txt')     // returns 'file.txt'
+ * getBasename('/path/to/')               // returns 'to'
+ * getBasename('/')                       // returns ''
+ */
+export function getBasename(filePath: string | undefined | null): string {
+  if (!filePath) return '';
+
+  const normalized = normalizeFilePath(filePath);
+  const cleaned = normalized.replace(/\/+$/, '') || '/';
+
+  if (cleaned === '/') return '';
+
+  return cleaned.split('/').at(-1) ?? '';
+}
+
+/**
+ * Basename without its final extension (`'paper'` for `'dir/paper.tex'`).
+ * Dotfiles keep their name (`'.gitignore'` → `'.gitignore'`).
+ */
+export function getFileStem(filePath: string | undefined | null): string {
+  const fileName = getBasename(filePath);
+  const dotIndex = fileName.lastIndexOf('.');
+  return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
 }
 
 /** Exhaustiveness helper for discriminated unions. Call in the `default` branch of a switch. */

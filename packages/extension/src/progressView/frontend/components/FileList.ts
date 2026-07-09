@@ -22,13 +22,13 @@ import { getEffectiveDiffBase } from '@shared/schemas';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
-import { normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import {
   TEXRA_ICON_LIBRARY,
   type TeXRAIconName,
   waIcon,
 } from '@shared/wa/webAwesomeIcons';
+import { normalizeFilePath } from '@utils/core';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
