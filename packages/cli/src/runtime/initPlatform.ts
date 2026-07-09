@@ -5,6 +5,7 @@ import * as nodePath from 'node:path';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
+  bootstrapNodeAgentDirectories,
   createNodePlatform,
   initNodeAgentRuntime,
   initializeNodeGoalPrompts,
@@ -21,11 +22,7 @@ import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
-import {
-  bootstrapPlatformAgentDirectories,
-  createPlatformAgentDirectories,
-} from '@agent/index/platformAgentDirectories';
-import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
+import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - auth
 import {
@@ -60,7 +57,6 @@ import type { LifecycleHost, ToolEditApprovalPort } from '@platform/interfaces';
 import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 
-let bootstrappedResourcesPath: string | undefined;
 let serverSideKeysInitialized = false;
 let cliWorkspaceCwd = '';
 let quietPlatformLogs = false;
@@ -318,25 +314,12 @@ export async function initCliPlatform(
   await setCliHelperModel(context.helperModel);
   initializeNodeGoalPrompts(context.resourcesPath);
 
-  if (bootstrappedResourcesPath !== context.resourcesPath) {
-    const globalState = tryPlatform()?.globalState;
-    if (!globalState) {
-      throw new Error('CLI platform global state is not initialized.');
-    }
-    const cliBundledAgentsVersionKey =
-      GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION;
-    await bootstrapPlatformAgentDirectories({
-      channel: 'cli',
-      bundleSource: new PathAgentDirectoryBundleSource(context.resourcesPath),
-      currentVersion: context.version,
-      versionStore: {
-        get: () => globalState.get<string>(cliBundledAgentsVersionKey),
-        update: (version) =>
-          globalState.update(cliBundledAgentsVersionKey, version),
-      },
-    });
-    bootstrappedResourcesPath = context.resourcesPath;
-  }
+  await bootstrapNodeAgentDirectories({
+    channel: 'cli',
+    resourcesPath: context.resourcesPath,
+    currentVersion: context.version,
+    versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+  });
 
   setRuntimeSkillSources(
     defaultSkillSources(

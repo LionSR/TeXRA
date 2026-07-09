@@ -19,6 +19,8 @@ import { join } from 'node:path';
 // Local imports - agent + tools (composition wiring)
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal/promptLoader';
+import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
+import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 // Local imports - platform
@@ -26,6 +28,7 @@ import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { createNodeWorkspace } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
+import { platform } from '../platform';
 
 // Type imports
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
@@ -68,6 +71,15 @@ export interface NodePlatformServices {
    */
   readonly toolEditApproval?: ToolEditApprovalPort;
 }
+
+export interface NodeAgentDirectoryBootstrapOptions {
+  readonly channel: string;
+  readonly resourcesPath: string;
+  readonly currentVersion: string | undefined;
+  readonly versionStateKey: string;
+}
+
+const bootstrappedAgentDirectoryResources = new Map<string, string>();
 
 /**
  * Assemble the platform services for a Node host (CLI, desktop).
@@ -139,4 +151,34 @@ export function initNodeAgentRuntime(lifecycle: LifecycleHost): void {
  */
 export function initializeNodeGoalPrompts(resourcesPath: string): void {
   initializeGoalPrompts(join(resourcesPath, 'goal', 'goal.yaml'));
+}
+
+/**
+ * Reconcile packaged agent directories for a Node host after `initPlatform`.
+ *
+ * The CLI and desktop hosts use different version-state keys, but the
+ * resources-path re-entry rule is the same: a process only reconciles a given
+ * host channel again when its active packaged resources path changes.
+ */
+export async function bootstrapNodeAgentDirectories(
+  options: NodeAgentDirectoryBootstrapOptions,
+): Promise<void> {
+  const guardKey = `${options.channel}:${options.versionStateKey}`;
+  if (
+    bootstrappedAgentDirectoryResources.get(guardKey) === options.resourcesPath
+  ) {
+    return;
+  }
+
+  const globalState = platform().globalState;
+  await bootstrapPlatformAgentDirectories({
+    channel: options.channel,
+    bundleSource: new PathAgentDirectoryBundleSource(options.resourcesPath),
+    currentVersion: options.currentVersion,
+    versionStore: {
+      get: () => globalState.get<string>(options.versionStateKey),
+      update: (version) => globalState.update(options.versionStateKey, version),
+    },
+  });
+  bootstrappedAgentDirectoryResources.set(guardKey, options.resourcesPath);
 }
