@@ -214,6 +214,7 @@ const SessionContextSchema = z.object({
   isRecording: z.boolean(),
   isPolishing: z.boolean(),
   debugMode: z.boolean(),
+  isOrchestratorSelected: z.boolean(),
 });
 export type SessionContextValue = z.infer<typeof SessionContextSchema>;
 
