@@ -29,9 +29,11 @@ The API keys are stored as Supabase secrets and the relay forwards requests to t
 ```bash
 cd /path/to/TeXRA
 supabase login
-supabase link --project-ref your-project-id
-supabase functions deploy relay --no-verify-jwt
+node scripts/deploy-relay.mjs
 ```
+
+The script deploys to the production Supabase project by default. Set
+`SUPABASE_PROJECT_REF` to deploy the relay to another project.
 
 ### 2. Set API Key Secrets
 
@@ -132,12 +134,12 @@ curl -X POST \
 To update the relay function after changes:
 
 ```bash
-supabase functions deploy relay --no-verify-jwt
+node scripts/deploy-relay.mjs
 ```
 
 Always pass `--no-verify-jwt` — the relay validates the JWT (and CI tokens)
 itself, so omitting the flag flips the gateway to `verify_jwt=true` and breaks
-every relay call. This applies to all TeXRA edge functions.
+every relay call. The deploy script includes this flag.
 
 Changes take effect immediately. Client caches expire after 5 minutes.
 
