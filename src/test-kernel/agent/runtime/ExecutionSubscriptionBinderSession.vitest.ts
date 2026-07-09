@@ -1,8 +1,15 @@
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type MockSendFollowUpResult =
+  | { status: 'sent' }
+  | { status: 'queued'; reason: 'waiting' }
+  | { status: 'no_session'; streamStatus: string | undefined };
+
 const sendFollowUpMock = vi.hoisted(() =>
-  vi.fn(async () => ({ status: 'sent' as const })),
+  vi.fn<(...args: unknown[]) => Promise<MockSendFollowUpResult>>(async () => ({
+    status: 'sent',
+  })),
 );
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
@@ -10,7 +17,8 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 // Local imports - runtime
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 import {
   AgentExecutionHandle,
@@ -18,7 +26,7 @@ import {
 } from '@agent/runtime/executionRegistry';
 import type { StreamTabId } from '@shared/schemas';
 
-import { createRecordingHost } from '../progressTestUtils';
+import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const streamId = 'stream:subscription-session' as StreamTabId;
 const childStreamId = 'child:subscription-session' as StreamTabId;
@@ -38,6 +46,10 @@ function createLogger() {
   };
 }
 
+async function settleDelivery(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
 describe('ExecutionSubscriptionBinder session routing', () => {
   beforeEach(() => {
     sendFollowUpMock.mockReset();
@@ -46,7 +58,8 @@ describe('ExecutionSubscriptionBinder session routing', () => {
 
   it('passes the owning session to subscription follow-ups', async () => {
     const registry = new ExecutionRegistry();
-    const session = { tag: 'window-session' } as unknown as SessionHandle;
+    const session = new SessionHandle();
+    const recorded = recordSessionEvents(session.events, { scope: 'session' });
     const explicit = createRecordingHost();
     const binder = new ExecutionSubscriptionBinder({
       registry,
@@ -69,7 +82,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       binder.bind(streamId, executionId, explicit.host);
 
       registry.untrack(executionId);
-      await new Promise((resolve) => setImmediate(resolve));
+      await settleDelivery();
 
       expect(sendFollowUpMock).toHaveBeenCalledWith(
         streamId,
@@ -78,9 +91,130 @@ describe('ExecutionSubscriptionBinder session routing', () => {
         undefined,
         session,
       );
+      expect(recorded.events).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'updateQueuedFollowUps',
+            payload: { streamId },
+          },
+        },
+      ]);
     } finally {
+      recorded.detach();
       binder.dispose();
       registry.dispose();
+      session.dispose();
+    }
+  });
+
+  it.each([
+    [{ status: 'sent' as const }, true],
+    [{ status: 'queued' as const, reason: 'waiting' as const }, true],
+    [{ status: 'no_session' as const, streamStatus: undefined }, false],
+  ])(
+    'emits the queued-follow-up fact only for delivered follow-ups: %o',
+    async (sendResult, shouldEmit) => {
+      const registry = new ExecutionRegistry();
+      const session = new SessionHandle();
+      const recorded = recordSessionEvents(session.events, {
+        scope: 'session',
+      });
+      const explicit = createRecordingHost();
+      const binder = new ExecutionSubscriptionBinder({
+        registry,
+        releaseSource: createReleaseSource(),
+        logger: createLogger(),
+        session,
+      });
+      const executionId = `exec-subscription-${sendResult.status}-event-test`;
+      const handle = new AgentExecutionHandle(
+        executionId,
+        streamId,
+        childStreamId,
+        'search',
+        'toolUse',
+        explicit.host,
+      );
+      sendFollowUpMock.mockResolvedValueOnce(sendResult);
+
+      try {
+        registry.track(handle);
+        binder.bind(streamId, executionId, explicit.host);
+
+        registry.untrack(executionId);
+        await settleDelivery();
+
+        expect(recorded.events).toEqual(
+          shouldEmit
+            ? [
+                {
+                  scope: 'session',
+                  event: {
+                    type: 'updateQueuedFollowUps',
+                    payload: { streamId },
+                  },
+                },
+              ]
+            : [],
+        );
+      } finally {
+        recorded.detach();
+        binder.dispose();
+        registry.dispose();
+        session.dispose();
+      }
+    },
+  );
+
+  it('falls back to the current session when the binder has no explicit session', async () => {
+    const registry = new ExecutionRegistry();
+    const session = new SessionHandle();
+    const recorded = recordSessionEvents(session.events, { scope: 'session' });
+    const explicit = createRecordingHost();
+    const binder = new ExecutionSubscriptionBinder({
+      registry,
+      releaseSource: createReleaseSource(),
+      logger: createLogger(),
+    });
+    const executionId = 'exec-subscription-current-session-test';
+    const handle = new AgentExecutionHandle(
+      executionId,
+      streamId,
+      childStreamId,
+      'search',
+      'toolUse',
+      explicit.host,
+    );
+
+    try {
+      registry.track(handle);
+      withRunContext(
+        createRunContext({
+          runtimeHost: explicit.host,
+          session,
+        }),
+        () => {
+          binder.bind(streamId, executionId, explicit.host);
+          registry.untrack(executionId);
+        },
+      );
+      await settleDelivery();
+
+      expect(recorded.events).toEqual([
+        {
+          scope: 'session',
+          event: {
+            type: 'updateQueuedFollowUps',
+            payload: { streamId },
+          },
+        },
+      ]);
+    } finally {
+      recorded.detach();
+      binder.dispose();
+      registry.dispose();
+      session.dispose();
     }
   });
 
@@ -88,10 +222,13 @@ describe('ExecutionSubscriptionBinder session routing', () => {
     const registry = new ExecutionRegistry();
     const explicit = createRecordingHost();
     const logger = createLogger();
+    const session = new SessionHandle();
+    const recorded = recordSessionEvents(session.events, { scope: 'session' });
     const binder = new ExecutionSubscriptionBinder({
       registry,
       releaseSource: createReleaseSource(),
       logger,
+      session,
     });
     const executionId = 'exec-subscription-rejection-test';
     const handle = new AgentExecutionHandle(
@@ -111,9 +248,10 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       binder.bind(streamId, executionId, explicit.host);
 
       registry.untrack(executionId);
-      await new Promise((resolve) => setImmediate(resolve));
+      await settleDelivery();
 
       expect(unhandledRejection).not.toHaveBeenCalled();
+      expect(recorded.events).toEqual([]);
       expect(logger.warn).toHaveBeenCalledWith(
         'Failed to deliver execution subscription follow-up',
         expect.objectContaining({
@@ -122,8 +260,10 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       );
     } finally {
       process.off('unhandledRejection', unhandledRejection);
+      recorded.detach();
       binder.dispose();
       registry.dispose();
+      session.dispose();
     }
   });
 });
