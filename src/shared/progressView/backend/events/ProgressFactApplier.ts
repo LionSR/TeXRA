@@ -9,7 +9,6 @@ import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,
-  ConversationProgressSchema,
   type AddOutputFilesPayload,
   type ClearMissingOutputsPayload,
   type ConversationProgress,
@@ -68,9 +67,9 @@ export type GetProgressStreamControls = (
   stream: StreamTabId,
 ) => ProgressStreamControls;
 
-export const PROGRESS_BACKEND_RUN_FACT_EVENT_TYPES: readonly AgentEvent['type'][] =
+export const PROGRESS_BACKEND_RUN_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] =
   [
-    'domain',
+    'conversation.progress',
     'updateTodos',
     'updatePlan',
     'addOutputFiles',
@@ -274,19 +273,13 @@ export class ProgressFactApplier {
       return;
     }
 
-    if (event.type === 'domain') {
-      if (event.key === 'conversationProgress') {
-        const progress = ConversationProgressSchema.safeParse(event.data);
-        if (progress.success) {
-          this.applyFact('failed to handle conversationProgress fact', () =>
-            this.handleUpdateConversationProgress({
-              streamId,
-              progress: progress.data,
-            }),
-          );
-        }
-        return;
-      }
+    if (event.type === 'conversation.progress') {
+      this.applyFact('failed to handle conversation.progress fact', () =>
+        this.handleUpdateConversationProgress({
+          streamId,
+          progress: event.progress,
+        }),
+      );
       return;
     }
 

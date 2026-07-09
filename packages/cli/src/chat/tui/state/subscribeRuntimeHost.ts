@@ -15,7 +15,6 @@ import type {
   CliRuntimeHost,
 } from '@cli/runtime/runtimeHost';
 import {
-  ConversationProgressSchema,
   type ActiveChildInfo,
   type GoalPausedPayload,
   type RemoveStreamPayload,
@@ -214,22 +213,6 @@ function applyParentStream(payload: {
   setParentStream(payload.childStreamId, payload.parentStreamId);
 }
 
-function applyDirectTuiDomainEvent(
-  event: Extract<AgentEvent, { type: 'domain' }>,
-  fallbackStreamId: StreamTabId,
-): boolean {
-  if (event.key === 'conversationProgress') {
-    const progress = ConversationProgressSchema.safeParse(event.data);
-    if (!progress.success) return false;
-    patchStream(fallbackStreamId, (s) => ({
-      ...s,
-      conversation: progress.data,
-    }));
-    return true;
-  }
-  return false;
-}
-
 function applyDirectTuiRunEvent(
   event: AgentEvent,
   fallbackStreamId: StreamTabId,
@@ -244,8 +227,12 @@ function applyDirectTuiRunEvent(
       applyUsageUpdate(payload);
       return true;
     }
-    case 'domain':
-      return applyDirectTuiDomainEvent(event, fallbackStreamId);
+    case 'conversation.progress':
+      patchStream(fallbackStreamId, (s) => ({
+        ...s,
+        conversation: event.progress,
+      }));
+      return true;
     case 'updateTodos':
       patchStream(event.streamId, (s) => ({
         ...s,
@@ -419,7 +406,7 @@ export function attachTuiRunFactSubscription(
     {
       scope: 'run',
       types: [
-        'domain',
+        'conversation.progress',
         'updateTodos',
         'updatePlan',
         'addOutputFiles',
