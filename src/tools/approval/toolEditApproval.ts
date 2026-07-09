@@ -8,6 +8,10 @@ import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { recordToolFileRead } from '@tools/fileInteractions';
+import {
+  getRunContextRuntimeHost,
+  getRunContextStreamId,
+} from '@tools/contextHelpers';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import {
@@ -221,10 +225,11 @@ export async function requestToolEditApproval(
   );
 
   const context = tryUseRunContext();
+  const contextStreamId = getRunContextStreamId(context);
   const preparedRequest =
-    request.streamId || !context?.streamId
+    request.streamId || !contextStreamId
       ? request
-      : { ...request, streamId: context.streamId };
+      : { ...request, streamId: contextStreamId };
 
   const streamId = preparedRequest.streamId;
   const isStreamBypassed =
@@ -234,7 +239,7 @@ export async function requestToolEditApproval(
   }
 
   const hostInteraction =
-    context?.runtimeHost.interactions?.requestToolEditApproval?.(
+    getRunContextRuntimeHost(context)?.interactions?.requestToolEditApproval?.(
       preparedRequest,
     );
   if (hostInteraction) {

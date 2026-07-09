@@ -32,10 +32,21 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  startChildRunLoop,
+  type ChildRunPorts,
+  type ChildRunStrategy,
+} from '@agent/runtime/childRunLoop';
+import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { type ToolResult } from '@shared/schemas/toolResult';
-import { requireRunStream } from '@tools/contextHelpers';
+import {
+  getRunContextExecutionId,
+  getRunContextStreamId,
+  getRunContextWorkingDirectory,
+  requireRunStream,
+} from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds, isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -59,12 +70,6 @@ import {
   formatChildRunDelivery,
   formatChildRunError,
 } from './deliveryEnvelope';
-import {
-  startChildRunLoop,
-  type ChildRunPorts,
-  type ChildRunStrategy,
-} from '@agent/runtime/childRunLoop';
-import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
   buildClaudeToolUseLog,
   buildClaudeUsageStats,
@@ -531,7 +536,7 @@ export class ClaudeAgentTool extends defineTool({
           return resumeAgentCliSession(ClaudeAgentSessions, {
             id: input.session_id,
             prompt: input.prompt,
-            callerStreamId: runContext?.streamId,
+            callerStreamId: getRunContextStreamId(runContext),
             labels: {
               notActiveLabel: 'Claude Code CLI session',
               idParamName: 'session_id',
@@ -550,8 +555,8 @@ export class ClaudeAgentTool extends defineTool({
           model,
           effort,
           streamId,
-          runContext?.executionId,
-          runContext?.workingDirectory,
+          getRunContextExecutionId(runContext),
+          getRunContextWorkingDirectory(runContext),
           runtimeHost,
         );
       },

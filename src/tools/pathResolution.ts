@@ -6,6 +6,7 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 
 // Local imports - tools
 import { ToolError } from '@shared/schemas/toolResult';
+import { getRunContextWorkingDirectory } from '@tools/contextHelpers';
 
 // Local imports - core utilities
 import { WorkspaceFS } from '@utils/files';
@@ -51,11 +52,13 @@ export function parseWorkingDirectory(
  * or when no override was set on the launch — callers then fall back to the
  * workspace root via `WorkspaceFS.locatePath`.
  *
- * Centralizes the `parseWorkingDirectory(tryUseRunContext()?.workingDirectory)`
+ * Centralizes the active-context working-directory lookup and validation
  * pattern that every workspace-touching tool needs.
  */
 export function currentToolRoot(): string | undefined {
-  return parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
+  return parseWorkingDirectory(
+    getRunContextWorkingDirectory(tryUseRunContext()),
+  );
 }
 
 /** Throw when a raw tool path contains a parent-directory segment. */
