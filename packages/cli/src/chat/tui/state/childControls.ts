@@ -451,18 +451,6 @@ export function numericFocusTargetForActiveStream(init: {
   }).find((entry) => entry.shortcutIndex === shortcutIndex)?.id;
 }
 
-export function nextPickerIndex(
-  index: number,
-  length: number,
-  direction: 'down' | 'up',
-): number {
-  if (length <= 0) return 0;
-  if (direction === 'up') {
-    return index <= 0 ? length - 1 : index - 1;
-  }
-  return (index + 1) % length;
-}
-
 export type SubagentPickerSelection =
   | { readonly kind: 'view'; readonly streamId: StreamTabId }
   | { readonly kind: 'detail'; readonly executionId: string };
