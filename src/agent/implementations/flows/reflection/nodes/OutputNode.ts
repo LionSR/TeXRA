@@ -63,7 +63,8 @@ export class OutputNode<C = unknown> extends Node<
   ReflectionServices<C>
 > {
   private outputDependencies(): OutputDependencies {
-    const { executionId, runtimeHost, streamId } = useLaunchRunContext();
+    const { runScope } = useLaunchRunContext();
+    const { executionId, runtimeHost, streamId } = runScope;
     const { baseFiles, config, fileService, logger, setting } = this.services;
 
     return {
@@ -100,9 +101,10 @@ export class OutputNode<C = unknown> extends Node<
 
     // Resolve to pre-run snapshots once so mapping, latexdiff, and diff
     // stats all see the same base locations (see snapshotResolution).
+    const { runScope } = useLaunchRunContext();
     const diffBaseFiles = await resolveBaseFilesForDiff(
       baseFiles,
-      useLaunchRunContext().executionId,
+      runScope.executionId,
     );
 
     let mapping: RoundFileMapping | undefined;
