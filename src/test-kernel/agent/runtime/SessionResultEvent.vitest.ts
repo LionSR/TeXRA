@@ -147,20 +147,20 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       await runFlowWithLifecycle(ctx, async () => ({
         category: 'toolUse',
         outcome: RUN_OUTCOME.COMPLETED,
-        executionId: ctx.executionId,
-        streamId: ctx.streamId,
+        executionId: ctx.runScope.executionId,
+        streamId: ctx.runScope.streamId,
       }));
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({
         type: 'result',
         outcome: 'completed',
-        executionId: ctx.executionId,
+        executionId: ctx.runScope.executionId,
         category: 'toolUse',
         isSubagent: false,
       });
       expect(results[0].error).toBeUndefined();
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -180,15 +180,15 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         runFlowWithLifecycle(ctx, async () => ({
           category: 'toolUse',
           outcome: RUN_OUTCOME.COMPLETED,
-          executionId: ctx.executionId,
-          streamId: ctx.streamId,
+          executionId: ctx.runScope.executionId,
+          streamId: ctx.runScope.streamId,
         })),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       expect(results).toHaveLength(1);
       expect(results[0].outcome).toBe('completed');
     } finally {
       off();
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -203,18 +203,18 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         runFlowWithLifecycle(ctx, async () => ({
           category: 'toolUse',
           outcome: RUN_OUTCOME.COMPLETED,
-          executionId: ctx.executionId,
-          streamId: ctx.streamId,
+          executionId: ctx.runScope.executionId,
+          streamId: ctx.runScope.streamId,
         })),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
 
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({
         outcome: 'completed',
-        executionId: ctx.executionId,
+        executionId: ctx.runScope.executionId,
       });
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -227,8 +227,8 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         async () => ({
           category: 'toolUse',
           outcome: RUN_OUTCOME.COMPLETED,
-          executionId: ctx.executionId,
-          streamId: ctx.streamId,
+          executionId: ctx.runScope.executionId,
+          streamId: ctx.runScope.streamId,
         }),
         {
           onRun: (h) => {
@@ -243,10 +243,10 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       await expect(handle?.result).resolves.toMatchObject({
         type: 'result',
         outcome: 'completed',
-        executionId: ctx.executionId,
+        executionId: ctx.runScope.executionId,
       });
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -259,8 +259,8 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
           async () => ({
             category: 'toolUse',
             outcome: RUN_OUTCOME.COMPLETED,
-            executionId: ctx.executionId,
-            streamId: ctx.streamId,
+            executionId: ctx.runScope.executionId,
+            streamId: ctx.runScope.streamId,
           }),
           {
             onRun: () => {
@@ -274,10 +274,10 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results[0]).toMatchObject({
         type: 'result',
         outcome: 'completed',
-        executionId: ctx.executionId,
+        executionId: ctx.runScope.executionId,
       });
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -290,8 +290,8 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
           async () => ({
             category: 'toolUse',
             outcome: RUN_OUTCOME.COMPLETED,
-            executionId: ctx.executionId,
-            streamId: ctx.streamId,
+            executionId: ctx.runScope.executionId,
+            streamId: ctx.runScope.streamId,
           }),
           {
             onRun: async () => {
@@ -306,10 +306,10 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results[0]).toMatchObject({
         type: 'result',
         outcome: 'completed',
-        executionId: ctx.executionId,
+        executionId: ctx.runScope.executionId,
       });
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -334,10 +334,10 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({
         outcome: 'failed',
-        executionId: ctx.executionId,
+        executionId: ctx.runScope.executionId,
       });
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -358,11 +358,11 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({
         outcome: 'failed',
-        executionId: ctx.executionId,
+        executionId: ctx.runScope.executionId,
       });
     } finally {
       off();
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -382,10 +382,10 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({
         outcome: 'failed',
-        executionId: ctx.executionId,
+        executionId: ctx.runScope.executionId,
       });
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -411,7 +411,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         outcome: 'failed',
       });
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -421,13 +421,13 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       await runFlowWithLifecycle(ctx, async () => ({
         category: 'toolUse',
         outcome: RUN_OUTCOME.CANCELLED,
-        executionId: ctx.executionId,
-        streamId: ctx.streamId,
+        executionId: ctx.runScope.executionId,
+        streamId: ctx.runScope.streamId,
       }));
       expect(results).toHaveLength(1);
       expect(results[0].outcome).toBe('cancelled');
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -441,7 +441,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results[0].outcome).toBe('cancelled');
       expect(results[0].error?.kind).toBe('abort');
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -460,7 +460,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       expect(results[0].error?.kind).toBeDefined();
       expect(results[0].usage).toBeDefined();
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
 
@@ -469,7 +469,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     const logger = new TraceEmitter();
     const onResult = vi.fn();
     const { ctx, streamStatus } = createCtx({ logger });
-    const detach = session.attachRunTrace(logger, ctx.streamId);
+    const detach = session.attachRunTrace(logger, ctx.runScope.streamId);
     session.onResult(onResult);
     try {
       await runFlowWithLifecycle(
@@ -477,8 +477,8 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         async () => ({
           category: 'toolUse',
           outcome: RUN_OUTCOME.COMPLETED,
-          executionId: ctx.executionId,
-          streamId: ctx.streamId,
+          executionId: ctx.runScope.executionId,
+          streamId: ctx.runScope.streamId,
         }),
         { isSubagent: true },
       );
@@ -489,7 +489,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
       });
     } finally {
       detach();
-      clearStreamStatusForTest(streamStatus, ctx.streamId);
+      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
       session.dispose();
     }
   });
