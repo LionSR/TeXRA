@@ -4,6 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - runtime
 import {
   createRunContext,
+  getRunContextAgentName,
+  getRunContextExecutionId,
+  getRunContextRuntimeHost,
+  getRunContextSession,
+  getRunContextStreamId,
+  getRunContextWorkingDirectory,
   useRunContext,
   withRunContext,
 } from '@agent/runtime/RunContext';
@@ -41,7 +47,9 @@ describe('RunContext', () => {
     const runtimeHost = createRuntimeHost();
     const context = createRunContext({ runtimeHost });
 
-    const resolved = withRunContext(context, () => useRunContext().runtimeHost);
+    const resolved = withRunContext(context, () =>
+      getRunContextRuntimeHost(useRunContext()),
+    );
 
     expect(resolved).toBe(runtimeHost);
   });
@@ -102,12 +110,20 @@ describe('RunContext', () => {
       throw new Error('expected launch context');
     }
     expect(context.runScope).toBe(runScope);
-    expect(context.runtimeHost).toBe(runScope.runtimeHost);
-    expect(context.streamId).toBe(runScope.streamId);
-    expect(context.executionId).toBe(runScope.executionId);
-    expect(context.agentName).toBe(runScope.agentName);
-    expect(context.workingDirectory).toBe(runScope.workingDirectory);
-    expect(context.session).toBe(runScope.session);
+    expect('runtimeHost' in context).toBe(false);
+    expect('streamId' in context).toBe(false);
+    expect('executionId' in context).toBe(false);
+    expect('agentName' in context).toBe(false);
+    expect('workingDirectory' in context).toBe(false);
+    expect('session' in context).toBe(false);
+    expect(getRunContextRuntimeHost(context)).toBe(runScope.runtimeHost);
+    expect(getRunContextStreamId(context)).toBe(runScope.streamId);
+    expect(getRunContextExecutionId(context)).toBe(runScope.executionId);
+    expect(getRunContextAgentName(context)).toBe(runScope.agentName);
+    expect(getRunContextWorkingDirectory(context)).toBe(
+      runScope.workingDirectory,
+    );
+    expect(getRunContextSession(context)).toBe(runScope.session);
   });
 
   it('requires an active context for owned runtime state', () => {
