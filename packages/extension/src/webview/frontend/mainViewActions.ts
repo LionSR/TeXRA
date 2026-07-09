@@ -44,6 +44,7 @@ import {
   instructionPlaceholder$,
   isPolishing$,
   isRecording$,
+  isSelectedAgentOrchestrator$,
   model$,
   multiFiles$,
   outputFilesActive$,
@@ -51,7 +52,6 @@ import {
   sessionType$,
   singleFiles$,
   toolUseAgent$,
-  toolUseAgentOptions$,
   toolUseInstruction$,
   workflowAgent$,
   workflowInstruction$,
@@ -119,16 +119,9 @@ export function swapModeInstruction(from: SessionType, to: SessionType): void {
   );
 }
 
-function isSelectedAgentOrchestrator(): boolean {
-  if (sessionType$.get() !== SESSION_TYPES.TOOL_USE) return false;
-  const agentId = toolUseAgent$.get();
-  const opt = toolUseAgentOptions$.get().find((o) => o.value === agentId);
-  return opt?.isOrchestrator ?? false;
-}
-
 export function refreshInstructionPlaceholder(): void {
   const placeholderKey: keyof typeof ONBOARDING_PLACEHOLDERS =
-    isSelectedAgentOrchestrator() ? 'orchestrator' : sessionType$.get();
+    isSelectedAgentOrchestrator$.get() ? 'orchestrator' : sessionType$.get();
   const placeholders = ONBOARDING_PLACEHOLDERS[placeholderKey];
   if (!placeholders.length) return;
   const current = instructionPlaceholder$.get();
