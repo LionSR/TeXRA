@@ -20,7 +20,6 @@ const OLD_AGENT_RUNTIME_ALIAS = '@agent/runtime/agentRuntimeProgressEvents';
 const CLI_ALIAS = '@cli/runtime/cliProgressEvents';
 
 const ALLOWED_PRODUCTION_IMPORTERS = [
-  'packages/cli/src/runtime/runProgressRenderer.ts',
   'packages/cli/src/runtime/runtimeHost.ts',
   'packages/cli/src/runtime/sessionProgressSubscription.ts',
 ] as const;
