@@ -237,10 +237,14 @@ describe('desktop main-view IPC', () => {
 
     rendererListener?.(
       { sender: webContents },
-      { command: SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME },
+      {
+        command: SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
+        name: 'TeXRA Bot',
+      },
     );
     expect(settings.handleMessage).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
+      name: 'TeXRA Bot',
     });
 
     rendererListener?.(
