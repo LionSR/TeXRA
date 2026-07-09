@@ -20,7 +20,6 @@
 import pMap from 'p-map';
 import { z } from 'zod';
 
-import { mapToRecord } from '@controllers/progressView/backend/persistence/serializationUtils';
 import { getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
@@ -60,6 +59,7 @@ import {
 } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas/agent';
 
+import { mapToRecord } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import {
