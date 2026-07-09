@@ -4,7 +4,6 @@ import { logConversationProgress, TraceEmitter } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { toRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { CliProgressSink } from '@cli/runtime/cliProgressEvents';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
@@ -267,7 +266,7 @@ describe('attachCliSessionProgressProjection', () => {
         streamId,
         event: {
           type: 'domain',
-          key: toRunFactDomainKey('updateTodos'),
+          key: 'runFact.updateTodos',
           data: {
             streamId,
             todos: 'not-an-array',
@@ -326,7 +325,7 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
-  it('validates todo and plan domain payloads before forwarding them', () => {
+  it('projects typed todo and plan run facts', () => {
     const { host, trace, detachAll } = setupTraceProjection();
     const todos = [
       {
@@ -340,24 +339,8 @@ describe('attachCliSessionProgressProjection', () => {
     };
 
     try {
-      trace.domain({
-        key: toRunFactDomainKey('updateTodos'),
-        data: { streamId, todos: 'not an array' },
-      });
-      trace.domain({
-        key: toRunFactDomainKey('updatePlan'),
-        data: { streamId, plan: { objective: '' } },
-      });
-      expect(host.emit).not.toHaveBeenCalled();
-
-      trace.domain({
-        key: toRunFactDomainKey('updateTodos'),
-        data: { streamId, todos },
-      });
-      trace.domain({
-        key: toRunFactDomainKey('updatePlan'),
-        data: { streamId, plan },
-      });
+      trace.emit({ type: 'updateTodos', streamId, todos });
+      trace.emit({ type: 'updatePlan', streamId, plan });
 
       expect(host.emit).toHaveBeenNthCalledWith(1, 'updateTodos', {
         streamId,
