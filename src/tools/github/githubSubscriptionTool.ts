@@ -19,12 +19,12 @@
 
 import { z } from 'zod';
 
-import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
   getRunContextWorkingDirectory,
-  requireRunStream,
-} from '@tools/contextHelpers';
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';

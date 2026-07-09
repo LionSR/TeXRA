@@ -3,11 +3,13 @@ import { toJSONSchema, z } from 'zod';
 
 // Internal imports
 import { platform } from '@platform/platform';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextWorkingDirectory,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
-import { getRunContextWorkingDirectory } from '@tools/contextHelpers';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
