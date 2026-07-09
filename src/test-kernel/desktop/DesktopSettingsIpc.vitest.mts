@@ -112,6 +112,7 @@ interface DesktopSettingsIpcModule {
     runInstallCommand?: (command: string) => Promise<void>;
     onError?: (error: unknown) => void;
     modelListRefresh?: PromiseLike<void>;
+    revealStream?: (streamId: string) => Promise<void>;
   }): {
     refreshAuthDependentData(): Promise<void>;
     handleMessage(
@@ -524,6 +525,64 @@ describe('desktop settings IPC', () => {
         latexFormatter: 'tex-fmt',
       },
     });
+  });
+
+  it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    // Was previously declared unsupported and appeared in the derived
+    // capability broadcast (SET_UNSUPPORTED_COMMANDS); the fix removes it.
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'settings',
+    });
+    const capabilities = posted[0] as { commands?: string[] };
+    expect(capabilities.commands).not.toContain(
+      SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+    );
+    posted.length = 0;
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+      }),
+    ).toBe(true);
+
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+      items: [],
+    });
+  });
+
+  it('routes revealGoalStream to the window-owned progress bridge (issue #7751 FS6)', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const revealed: string[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => undefined,
+      revealStream: async (streamId) => {
+        revealed.push(streamId);
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM,
+        streamId: 'goal-owning-stream',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(revealed).toEqual(['goal-owning-stream']);
   });
 
   it('loads desktop LaTeX tooling status instead of leaving the tab spinning', async () => {
