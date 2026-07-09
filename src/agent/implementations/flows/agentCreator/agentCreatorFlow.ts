@@ -15,6 +15,7 @@ import {
   runHelperModelCompletion,
 } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
+import { buildUserVarPassthrough } from '@agent/utils/userVars';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -189,20 +190,6 @@ export interface AgentCreatorUI {
 /** Total AI generation attempts (1 initial + 1 validation retry) before template fallback. */
 const AI_GENERATION_ATTEMPTS = 2;
 
-const TOOL_USE_VARS = ['INSTRUCTION'];
-
-const WORKFLOW_VARS = [
-  'INPUT_FILE',
-  'INPUT_CONTENT',
-  'INPUT_FILES',
-  'ALL_INPUTS',
-  'ALL_CONTEXTS',
-  'LIST_OF_ALL_CONTEXTS',
-  'ADDITIONAL_INPUTS',
-  'INSTRUCTION',
-  'OUTPUT_FILES',
-];
-
 const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
   toolUse:
     'What should this agent do? Mention capabilities it needs (e.g., search papers, edit files, browse the web)',
@@ -210,14 +197,7 @@ const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
     'What should this agent do? Mention whether it rewrites existing documents or creates new ones',
 };
 
-function buildPassthrough(vars: string[]): Record<string, string> {
-  return Object.fromEntries(vars.map((v) => [v, `{{ ${v} }}`]));
-}
-
-const PASSTHROUGH: Record<AgentCategory, Record<string, string>> = {
-  toolUse: buildPassthrough(TOOL_USE_VARS),
-  workflow: buildPassthrough(WORKFLOW_VARS),
-};
+const PASSTHROUGH = buildUserVarPassthrough();
 
 /* autoescape off: templates contain Nunjucks/YAML syntax, not HTML.
  * Isolated Environment so the setting does not leak into Nunjucks' shared
@@ -387,7 +367,7 @@ class GenerateNode extends Node<AgentCreatorShared> {
     const prompts = config[blueprint.category];
     const schemaRef = getSchemaReference(blueprint.category);
     const renderVars = {
-      ...PASSTHROUGH[blueprint.category],
+      ...PASSTHROUGH,
       ...blueprint.aiVars,
     };
     const systemPrompt =
