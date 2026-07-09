@@ -535,9 +535,7 @@ export function createDesktopSettingsIpc(
   async function readHistoryConfig(
     historyId: string,
   ): Promise<AgentConfig | undefined> {
-    const raw = await getExecutionStore(
-      historyId as ExecutionId,
-    ).readConfig();
+    const raw = await getExecutionStore(historyId as ExecutionId).readConfig();
     return raw ? AgentConfigSchema.parse(raw) : undefined;
   }
 

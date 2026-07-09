@@ -1974,9 +1974,8 @@ describe('desktop settings IPC', () => {
   it('reruns an agent from history through the shared runAgent path', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const { getExecutionStore } = await import('@agent/storage');
-    const { AgentConfigSchema } = await import(
-      '@agent/core/definition/AgentConfig'
-    );
+    const { AgentConfigSchema } =
+      await import('@agent/core/definition/AgentConfig');
     const { AgentCategory } = await import('@shared/schemas/agent');
 
     const historyId = 'aaaa1111';
@@ -2017,9 +2016,8 @@ describe('desktop settings IPC', () => {
   it("restores a history item's setup into the main view", async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const { getExecutionStore } = await import('@agent/storage');
-    const { AgentConfigSchema } = await import(
-      '@agent/core/definition/AgentConfig'
-    );
+    const { AgentConfigSchema } =
+      await import('@agent/core/definition/AgentConfig');
     const { AgentCategory } = await import('@shared/schemas/agent');
 
     const historyId = 'bbbb2222';
