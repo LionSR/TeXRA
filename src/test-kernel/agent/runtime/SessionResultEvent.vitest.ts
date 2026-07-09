@@ -14,6 +14,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import { createRunScope } from '@agent/runtime/RunScope';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -61,6 +62,14 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
   const prompt = AgentPromptSchema.parse({});
   const storageKey = executionId as unknown as StorageKey;
   const logger = overrides?.logger ?? new TraceEmitter();
+  const session = defaultSession();
+  const runScope = createRunScope({
+    runtimeHost: explicit.host,
+    streamId,
+    executionId,
+    agentName: config.agent,
+    session,
+  });
   const modelInfo = {
     capabilities: {
       supportsPromptCaching: false,
@@ -82,10 +91,11 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
     config,
     setting,
     prompt,
-    streamId,
-    executionId,
-    runtimeHost: explicit.host,
-    session: defaultSession(),
+    runScope,
+    streamId: runScope.streamId,
+    executionId: runScope.executionId,
+    runtimeHost: runScope.runtimeHost,
+    session: runScope.session,
     streamStatus,
     logger,
     parentStage: logger.openStage('Run: assistant'),
