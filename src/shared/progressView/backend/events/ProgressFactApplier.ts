@@ -1,9 +1,9 @@
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { TaskState } from '@agent/core/state/TaskState';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
-import type { SetTaskStatePayload } from '@agent/runtime/taskStateProgressPayload';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
@@ -12,6 +12,7 @@ import {
   type AddOutputFilesPayload,
   type ClearMissingOutputsPayload,
   type ConversationProgress,
+  type ExecutionId,
   type GoalStatus,
   type InquiryThreadUpdatedEvent,
   type SetActiveStreamPayload,
@@ -50,6 +51,12 @@ import { withEventErrorHandling } from './errorHandling';
 
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
+
+type SetTaskStateProgressFact = {
+  streamId: StreamTabId;
+  executionId?: ExecutionId;
+  taskState: TaskState;
+};
 
 export type ProgressEventSubscription = {
   dispose(): void;
@@ -582,7 +589,7 @@ export class ProgressFactApplier {
     });
   }
 
-  public handleSetTaskState(data: SetTaskStatePayload): void {
+  public handleSetTaskState(data: SetTaskStateProgressFact): void {
     const { streamId, executionId, taskState } = data;
     const isActiveStream = this.state.activeStream === streamId;
     const category = taskState.agentConfig.agentCategory;
