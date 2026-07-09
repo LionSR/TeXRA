@@ -15,6 +15,7 @@ import type { StreamTransitionCause } from '@common/constants/streamStatus';
 import type {
   ActiveChildInfo,
   AddOutputFilesPayload,
+  ConversationProgress,
   GoalPausedPayload,
   EndGroupStatus,
   ExecutionId,
@@ -184,6 +185,12 @@ export interface ProcessOutputEvent extends StageStamp {
   readonly stderr: string;
 }
 
+/** UI progress counters for a run, projected by hosts but not transcript logs. */
+export interface ConversationProgressEvent extends StageStamp {
+  readonly type: 'conversation.progress';
+  readonly progress: ConversationProgress;
+}
+
 /** Durable TeXRA run facts carried by the run trace with fact-native names. */
 export type RunFactEvent =
   | (StageStamp &
@@ -342,6 +349,7 @@ export type AgentEvent =
   | StatusEvent
   | ChildActivityEvent
   | ProcessOutputEvent
+  | ConversationProgressEvent
   | RunFactEvent
   | ContextStateEvent
   | StreamStartEvent
