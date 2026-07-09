@@ -31,7 +31,12 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { requireRuntimeHost } from '@tools/contextHelpers';
+import {
+  getRunContextExecutionId,
+  getRunContextSession,
+  getRunContextStreamId,
+  requireRuntimeHost,
+} from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -321,8 +326,8 @@ export class ExternalInquiryTool extends defineTool({
 }) {
   protected async execute(input: InquiryInput): Promise<ToolResult> {
     const context = tryUseRunContext();
-    const streamId = context?.streamId;
-    const executionId = context?.executionId;
+    const streamId = getRunContextStreamId(context);
+    const executionId = getRunContextExecutionId(context);
 
     // Only `ask` emits events. `read` and `list` are pure storage reads
     // and stay usable in contexts without a wired runtime host.
@@ -334,7 +339,7 @@ export class ExternalInquiryTool extends defineTool({
           streamId,
           runtimeHost,
           executionId,
-          session: context?.session,
+          session: getRunContextSession(context),
         });
       }
       case 'read':

@@ -42,7 +42,7 @@ import {
   formatSubagentError,
 } from '@tools/subagentResults';
 import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
-import { requireRunStream } from '@tools/contextHelpers';
+import { getRunContextStreamId, requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
@@ -324,7 +324,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
         `Execution '${executionId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session — start a new delegation instead.`,
       );
     }
-    const callerStreamId = parentContext?.streamId;
+    const callerStreamId = getRunContextStreamId(parentContext);
     if (callerStreamId && handle.parentStreamId !== callerStreamId) {
       throw new Error(
         `Execution '${executionId}' belongs to a different orchestrator session. Its results would be delivered there, not here — start a new delegation instead.`,

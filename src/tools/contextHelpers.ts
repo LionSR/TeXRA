@@ -6,10 +6,24 @@
  * with slightly different error wording.
  */
 
-import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
+import {
+  getRunContextRuntimeHost,
+  getRunContextStreamId,
+  tryUseRunContext,
+  type RunContext,
+} from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 import { ToolError } from '@shared/schemas/toolResult';
+
+export {
+  getRunContextAgentName,
+  getRunContextExecutionId,
+  getRunContextRuntimeHost,
+  getRunContextSession,
+  getRunContextStreamId,
+  getRunContextWorkingDirectory,
+} from '@agent/runtime/RunContext';
 
 /**
  * Return the active RunContext's runtime host, throwing a ToolError if no
@@ -20,7 +34,7 @@ export function requireRuntimeHost(
   toolName: string,
   context: RunContext | undefined = tryUseRunContext(),
 ): AgentRuntimeHost {
-  const host = context?.runtimeHost;
+  const host = getRunContextRuntimeHost(context);
   if (!host) {
     throw new ToolError(`${toolName} requires a tool runtime host.`);
   }
@@ -36,7 +50,7 @@ export function requireStreamId(
   toolName: string,
   context: RunContext | undefined = tryUseRunContext(),
 ): StreamTabId {
-  const streamId = context?.streamId;
+  const streamId = getRunContextStreamId(context);
   if (!streamId) {
     throw new ToolError(`${toolName} requires an active stream context.`);
   }
@@ -56,14 +70,16 @@ export function requireRunStream(
   runtimeHost: AgentRuntimeHost;
   context: RunContext;
 } {
-  if (!context?.streamId || !context.runtimeHost) {
+  const streamId = getRunContextStreamId(context);
+  const runtimeHost = getRunContextRuntimeHost(context);
+  if (!context || !streamId || !runtimeHost) {
     throw new ToolError(
       `${toolName} must be called from within an agent stream.`,
     );
   }
   return {
-    streamId: context.streamId,
-    runtimeHost: context.runtimeHost,
+    streamId,
+    runtimeHost,
     context,
   };
 }

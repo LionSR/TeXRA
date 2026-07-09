@@ -10,7 +10,10 @@ import {
   type UserQuestionAnswers,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import { requireRuntimeHost } from '@tools/contextHelpers';
+import {
+  getRunContextStreamId,
+  requireRuntimeHost,
+} from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
 const logger = createChannelTrace('UserQuestionTool');
@@ -57,7 +60,7 @@ The tool returns a JSON object whose keys are the original question texts and wh
   protected async execute(input: AskUserQuestionInput): Promise<ToolResult> {
     const context = tryUseRunContext();
     const runtimeHost = requireRuntimeHost('ask_user_question', context);
-    const streamId = context?.streamId;
+    const streamId = getRunContextStreamId(context);
     const requestId = `user-question-${nanoid()}`;
 
     logger.info('User question requested', {

@@ -5,7 +5,10 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
-import { requireRuntimeHost } from '@tools/contextHelpers';
+import {
+  getRunContextStreamId,
+  requireRuntimeHost,
+} from '@tools/contextHelpers';
 import { getConfig } from '@utils/config/configUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -74,7 +77,7 @@ export async function requestBashApproval(
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
 
   const context = tryUseRunContext();
-  const streamId = request.streamId ?? context?.streamId;
+  const streamId = request.streamId ?? getRunContextStreamId(context);
 
   if (
     !approvalsEnabled ||
