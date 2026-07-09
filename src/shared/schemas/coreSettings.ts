@@ -389,7 +389,7 @@ export const CoreSettingsShape = {
         .strictObject({
           maxAttempts: numberField(
             DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
-            'Number of automatic retry attempts before surfacing a manual retry option for model calls. Set to 0 for no automatic retries (manual retry button only).',
+            'Flow-managed retry attempts (Google, OpenRouter 429/408, background transients). Anthropic/OpenAI/OpenAIResponse retries are provider-managed by their SDKs (default 2); this setting does not affect them.',
             { min: 0 },
           ),
           backoffMs: numberField(

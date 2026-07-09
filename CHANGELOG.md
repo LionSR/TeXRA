@@ -12,6 +12,11 @@ All notable changes to this project will be documented in this file.
   hour** — the OpenRouter SDK's built-in retry window is now capped at 30
   seconds, so a persistent 5XX surfaces through TeXRA's visible retry/failure
   path instead of backing off invisibly inside a single attempt.
+- **Retry-attempt defaults are now consistent across hosts** — with
+  `texra.model.retry.maxAttempts` unset, CLI and desktop runs previously fell
+  back to 1 flow-managed retry while VS Code used the documented default of
+  0; all hosts now use the documented default. Set the option explicitly to
+  restore extra automatic retries.
 - **Web search/fetch links now block dangerous URL schemes** — a link
   surfaced from a web search result or fetched page can no longer use a
   `javascript:`/`data:`/`vbscript:`/`file:` URL to become a live,
