@@ -127,7 +127,6 @@ export type ToolUseFlowSetupCallback = (
 
 type ToolUsePersistedFlow<C> = PersistedFlow<
   ToolUseRunShared,
-  Record<string, unknown>,
   ToolUseServices<C>
 >;
 
