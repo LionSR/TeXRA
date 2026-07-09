@@ -73,7 +73,7 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 const logger = createChannelTrace('AgentLaunchContext');
 
 export interface AgentLaunchContext extends AgentCore {
-  runScope: RunScope;
+  readonly runScope: RunScope;
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: StageHandle;
