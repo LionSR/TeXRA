@@ -17,7 +17,9 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-type MockForm = 'mock' | 'doMock';
+const MOCK_FORMS = ['mock', 'doMock'] as const;
+
+type MockForm = (typeof MOCK_FORMS)[number];
 
 interface MockSite {
   file: string;
@@ -30,7 +32,13 @@ interface MockBaseline {
   sites: MockSite[];
 }
 
-const MOCK_FORMS: MockForm[] = ['mock', 'doMock'];
+function compareSites(a: MockSite, b: MockSite): number {
+  return (
+    a.file.localeCompare(b.file) ||
+    a.form.localeCompare(b.form) ||
+    a.specifier.localeCompare(b.specifier)
+  );
+}
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
@@ -107,17 +115,17 @@ function collectAgentMockSites(file: string): MockSite[] {
 function collectHostAgentMockSites(): MockSite[] {
   return HOST_DIRS.flatMap((dir) =>
     sourceFilesUnder(dir).flatMap(collectAgentMockSites),
-  ).toSorted(
-    (a, b) =>
-      a.file.localeCompare(b.file) ||
-      a.form.localeCompare(b.form) ||
-      a.specifier.localeCompare(b.specifier),
-  );
+  ).toSorted(compareSites);
 }
 
 function countSitesByForm(sites: MockSite[]): Record<MockForm, number> {
   const counts: Record<MockForm, number> = { mock: 0, doMock: 0 };
   for (const { form } of sites) {
+    if (!(form in counts)) {
+      throw new Error(
+        `host-agent-mock-baseline.json entry has unknown form ${JSON.stringify(form)} — expected one of: ${MOCK_FORMS.join(', ')}`,
+      );
+    }
     counts[form] += 1;
   }
   return counts;
@@ -149,12 +157,7 @@ describe('QA-2 host-side @agent mock ratchet', () => {
 
   it('keeps the baseline ordered (an empty baseline is a valid, welcome outcome)', () => {
     const baseline = readBaseline();
-    const sortedSites = baseline.sites.toSorted(
-      (a, b) =>
-        a.file.localeCompare(b.file) ||
-        a.form.localeCompare(b.form) ||
-        a.specifier.localeCompare(b.specifier),
-    );
+    const sortedSites = baseline.sites.toSorted(compareSites);
 
     expect(baseline.sites).toEqual(sortedSites);
   });
