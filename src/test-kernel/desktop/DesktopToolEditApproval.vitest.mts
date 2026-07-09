@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type {
   DiffOptions,
   DiffSession,
@@ -27,6 +29,7 @@ const approvalTest = (name: string, fn: () => Promise<void>): void => {
 interface DesktopToolEditApprovalModule {
   createDesktopToolEditApprovalController(options: {
     runtimeHost: AgentRuntimeHost;
+    session: SessionHandle;
     openPath?: (filePath: string) => Promise<void>;
     openBuildDisplay?: (
       location: { absolutePath: string },
@@ -43,6 +46,7 @@ interface DesktopToolEditApprovalModule {
     }): boolean;
     requestApproval(
       request: ToolEditApprovalRequest,
+      session?: SessionHandle,
     ): Promise<ToolEditApprovalResult>;
     dispose(): void;
   };
@@ -60,6 +64,21 @@ interface RecordingRuntimeHost extends AgentRuntimeHost {
 let activeToolEditApproval:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
+const testSessions: SessionHandle[] = [];
+
+function createTestSession(): SessionHandle {
+  const session = new SessionHandle();
+  testSessions.push(session);
+  return session;
+}
+
+function recordSessionEvents(session: SessionHandle): SessionEvent[] {
+  const events: SessionEvent[] = [];
+  session.events.subscribe((event) => events.push(event), {
+    scope: 'session',
+  });
+  return events;
+}
 
 function useControllerApproval(controller: {
   requestApproval(
@@ -226,6 +245,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
 describe('desktop tool edit approval', () => {
   afterEach(() => {
     activeToolEditApproval = undefined;
+    for (const session of testSessions.splice(0)) session.dispose();
     vi.doUnmock('@utils/config/configUtils');
     vi.doUnmock('@agent/runtime/RunContext');
     vi.doUnmock('@utils/files');
@@ -239,9 +259,12 @@ describe('desktop tool edit approval', () => {
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
       const runtimeHost = createRecordingRuntimeHost();
+      const session = createTestSession();
+      const sessionEvents = recordSessionEvents(session);
       const opened: string[] = [];
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        session,
         tempRoot,
         openPath: async (filePath) => {
           opened.push(filePath);
@@ -259,6 +282,19 @@ describe('desktop tool edit approval', () => {
           streamId: 'stream-2',
         });
         await vi.waitFor(() => expect(shown).toHaveLength(1));
+        expect(sessionEvents).toContainEqual({
+          scope: 'session',
+          event: {
+            type: 'setActiveStream',
+            payload: { streamId: 'stream-2' },
+          },
+        });
+        expect(shown[0]).toMatchObject({
+          path: '/workspace/notes.txt',
+          relativePath: 'notes.txt',
+          sourceTool: 'write_file',
+          streamId: 'stream-2',
+        });
 
         controller.handleAction({
           requestId: shown[0].requestId,
@@ -314,6 +350,7 @@ describe('desktop tool edit approval', () => {
       );
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        session: createTestSession(),
         tempRoot,
         openPath,
         openDiff,
@@ -365,6 +402,7 @@ describe('desktop tool edit approval', () => {
       const opened: string[] = [];
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        session: createTestSession(),
         tempRoot,
         openPath: async (filePath) => {
           opened.push(filePath);
@@ -429,6 +467,7 @@ describe('desktop tool edit approval', () => {
       const messages: string[] = [];
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        session: createTestSession(),
         tempRoot,
         openBuildDisplay: async (location, options) => {
           displayed.push({ absolutePath: location.absolutePath, options });
@@ -493,6 +532,7 @@ describe('desktop tool edit approval', () => {
       const runtimeHost = createRecordingRuntimeHost();
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        session: createTestSession(),
         tempRoot,
       });
       useControllerApproval(controller);
@@ -529,6 +569,7 @@ describe('desktop tool edit approval', () => {
     const runtimeHost = createRecordingRuntimeHost();
     const controller = desktopModule.createDesktopToolEditApprovalController({
       runtimeHost,
+      session: createTestSession(),
       tempRoot,
     });
     useControllerApproval(controller);
