@@ -15,6 +15,7 @@ import {
   type ExportInputStatus,
 } from '@controllers/settingsView/ChatExportController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
 import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
@@ -33,10 +34,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
@@ -95,6 +93,7 @@ import {
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
+import { GoalStore } from '@tools/goal';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { StorageFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -161,6 +160,8 @@ export interface DesktopSettingsIpcOptions {
   selectCustomAgentDirectory?: () => Promise<string | undefined>;
   openPath?: (filePath: string) => Promise<void>;
   revealPath?: (filePath: string) => Promise<void>;
+  /** Route this window to the progress view and select the given stream. */
+  revealStream?: (streamId: string) => Promise<void>;
   openExternalUrl?: (url: string) => Promise<void>;
   /**
    * Resolved `packages/extension/resources` tree (ElectronPlatformInitResult
@@ -255,6 +256,9 @@ export function createDesktopSettingsIpc(
     (() => platform().agentDirectories.custom());
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
+  const goalController = new SettingsGoalController({
+    listGoals: () => GoalStore.list(),
+  });
   const latexToolingController = new LatexToolingController({
     checkToolInstalled: (tool) => checkToolInstalled(tool, false),
     findPath: (tool) => BinaryResolver.findPath(tool),
@@ -532,37 +536,57 @@ export function createDesktopSettingsIpc(
     });
   }
 
+  // readConfig() already validates via readValidated and returns null for
+  // BOTH missing and corrupt/legacy configs (the storage layer's silent-null
+  // read — distinguishing the two needs the loud-reads policy at the store,
+  // not a re-parse here, which can never see invalid data).
+  const HISTORY_CONFIG_UNREADABLE_MESSAGE =
+    'History item not found or unreadable (missing, corrupt, or from an incompatible version)';
+
+  type HistoryConfigResult =
+    { status: 'ok'; config: AgentConfig } | { status: 'unreadable' };
+
   async function readHistoryConfig(
     historyId: string,
-  ): Promise<AgentConfig | undefined> {
-    const raw = await getExecutionStore(historyId as ExecutionId).readConfig();
-    return raw ? AgentConfigSchema.parse(raw) : undefined;
+  ): Promise<HistoryConfigResult> {
+    const config = await getExecutionStore(
+      historyId as ExecutionId,
+    ).readConfig();
+    if (!config) return { status: 'unreadable' };
+    return { status: 'ok', config };
   }
 
   async function rerunHistoryAgent(historyId: string): Promise<void> {
-    const config = await readHistoryConfig(historyId);
-    if (!config) {
-      await options.showInfoMessage?.('History item not found');
+    const result = await readHistoryConfig(historyId);
+    if (result.status === 'unreadable') {
+      await options.showErrorMessage?.(HISTORY_CONFIG_UNREADABLE_MESSAGE);
       return;
     }
-    const validated = validateExecutionRequest({ config });
+    const validated = validateExecutionRequest({ config: result.config });
     if (!validated.valid) {
       await options.showErrorMessage?.(validated.message);
       return;
     }
+    if (!options.runExecution) {
+      await options.showErrorMessage?.(
+        'Rerunning agents from history is not available in this build',
+      );
+      return;
+    }
     await options.showInfoMessage?.('Rerunning agent from history');
-    await options.runExecution?.(validated.request);
+    await options.runExecution(validated.request);
   }
 
   async function restoreHistoryAgent(historyId: string): Promise<void> {
-    const config = await readHistoryConfig(historyId);
-    if (!config) {
-      await options.showInfoMessage?.('History item not found');
+    const result = await readHistoryConfig(historyId);
+    if (result.status === 'unreadable') {
+      await options.showErrorMessage?.(HISTORY_CONFIG_UNREADABLE_MESSAGE);
       return;
     }
     const restored =
-      (await options.restoreTaskState?.(agentConfigToTaskState(config))) ??
-      false;
+      (await options.restoreTaskState?.(
+        agentConfigToTaskState(result.config),
+      )) ?? false;
     if (!restored) {
       await options.showErrorMessage?.('Failed to restore configuration');
     }
@@ -768,9 +792,22 @@ export function createDesktopSettingsIpc(
     );
   }
 
+  /**
+   * Deliberate divergence from the extension: no `subscribeGoalStateChanges`
+   * push hook here. The initial post below, the webview-ready re-post, and
+   * the Goals tab's manual `getList` refresh cover the desktop settings
+   * panel — goal state only changes through agent runs, and returning to
+   * (or refreshing) the panel re-reads the store, so a live push adds a
+   * subscription surface without a user-visible gain.
+   */
+  function postGoalList(): void {
+    options.postToRenderer(goalController.getGoalListMessage());
+  }
+
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     postLatexConfigValues();
+    postGoalList();
     const memoryEnabledPosted = postMemoryEnabled();
     const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
@@ -1434,10 +1471,9 @@ export function createDesktopSettingsIpc(
       ),
     },
     goals: {
-      getList: unsupported('Goals are not available in the desktop app yet.'),
-      revealStream: unsupported(
-        'Goals are not available in the desktop app yet.',
-      ),
+      getList: postGoalList,
+      revealStream: (streamId) =>
+        options.revealStream?.(streamId) ?? Promise.resolve(),
     },
     desktopCrashReporting: {
       get: () => postDesktopCrashReportingStatus(),
@@ -1468,6 +1504,7 @@ export function createDesktopSettingsIpc(
           } else {
             postGitAuthorSettings();
             postLatexConfigValues();
+            postGoalList();
           }
         }
         return false;
