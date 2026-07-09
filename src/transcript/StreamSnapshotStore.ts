@@ -24,7 +24,6 @@ import { getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { fromRunFactDomainKey } from '@agent/runtime/runFactEvents';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
@@ -35,17 +34,13 @@ import {
   emptyUsageStats,
   isEmptyUsage,
   OutputFileInfoListSchema,
-  OutputFileInfoSchema,
   PersistedWorkPlanSchema,
   RUN_DESCRIPTOR_SCHEMA_VERSION,
   planSummaryLine,
   RoundKeySchema,
-  roundIndexedRecord,
   StreamTabIdSchema,
   sumUsageStats,
   TokenUsageStatsParsingSchema,
-  UpdatePlanPayloadSchema,
-  UpdateTodosPayloadSchema,
   buildRunDescriptor,
   type CompileFailure,
   type ExecutionId,
@@ -88,18 +83,6 @@ const CHANNEL = 'StreamSnapshotStore';
  *  managers' `pMap` hydration so startup doesn't open a file handle per tab). */
 const SEED_IO_CONCURRENCY = 8;
 
-const AddOutputFilesRunFactSchema = z.looseObject({
-  streamId: StreamTabIdSchema,
-  filesByRound: roundIndexedRecord(OutputFileInfoSchema),
-});
-const UpdateMissingOutputsRunFactSchema = z.looseObject({
-  streamId: StreamTabIdSchema,
-  filesByRound: roundIndexedRecord(z.string()),
-});
-const UpdateCompileFailuresRunFactSchema = z.looseObject({
-  streamId: StreamTabIdSchema,
-  filesByRound: roundIndexedRecord(CompileFailureSchema),
-});
 const UsageRunEventDataSchema = z.looseObject({
   streamId: StreamTabIdSchema,
   storageKey: z.string().min(1),
@@ -278,64 +261,40 @@ export class StreamSnapshotStore {
           return;
         }
 
-        if (event.type !== 'domain') return;
-        const factName = fromRunFactDomainKey(event.key);
-        if (!factName || factName === 'goalPaused') return;
-
-        switch (factName) {
-          case 'updateTodos': {
-            const payload = UpdateTodosPayloadSchema.safeParse(event.data);
-            if (payload.success) {
-              this.setTodos(payload.data.streamId, payload.data.todos);
-            }
+        switch (event.type) {
+          case 'updateTodos':
+            this.setTodos(event.streamId, event.todos);
             return;
-          }
-          case 'updatePlan': {
-            const payload = UpdatePlanPayloadSchema.safeParse(event.data);
-            if (payload.success) {
-              this.setPlan(payload.data.streamId, payload.data.plan);
-            }
+          case 'updatePlan':
+            this.setPlan(event.streamId, event.plan);
             return;
-          }
-          case 'addOutputFiles': {
-            const payload = AddOutputFilesRunFactSchema.safeParse(event.data);
-            if (payload.success) {
-              this.addOutputFiles(
-                payload.data.streamId,
-                payload.data.filesByRound,
-              );
-            }
+          case 'addOutputFiles':
+            this.addOutputFiles(event.streamId, event.filesByRound);
             return;
-          }
-          case 'updateMissingOutputs': {
-            const payload = UpdateMissingOutputsRunFactSchema.safeParse(
-              event.data,
-            );
-            if (payload.success) {
-              this.updateMissingOutputs(
-                payload.data.streamId,
-                payload.data.filesByRound,
-              );
-            }
+          case 'updateMissingOutputs':
+            this.updateMissingOutputs(event.streamId, event.filesByRound);
             return;
-          }
-          case 'updateCompileFailures': {
-            const payload = UpdateCompileFailuresRunFactSchema.safeParse(
-              event.data,
-            );
-            if (payload.success) {
-              this.updateCompileFailures(
-                payload.data.streamId,
-                payload.data.filesByRound,
-              );
-            }
+          case 'updateCompileFailures':
+            this.updateCompileFailures(event.streamId, event.filesByRound);
             return;
-          }
+          case 'goalPaused':
           default:
             return;
         }
       },
-      { scope: 'run', types: ['domain', 'run.config', 'usage'] },
+      {
+        scope: 'run',
+        types: [
+          'run.config',
+          'usage',
+          'updateTodos',
+          'updatePlan',
+          'addOutputFiles',
+          'updateMissingOutputs',
+          'updateCompileFailures',
+          'goalPaused',
+        ],
+      },
     );
     const detachSessionEvents = events.subscribe(
       (sessionEvent) => {
