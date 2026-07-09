@@ -17,12 +17,16 @@ import {
   wakeQueuedFollowUpStream,
   type FollowUpWakeResult,
 } from '@agent/followUp/ToolUseFollowUp';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { createChannelTrace } from '@logger';
 import type {
   ExternalInquiryThreadId,
   ExternalInquiryThreadSummary,
+  InquiryThreadUpdatedEvent,
   InquiryResumeOutcome,
   StreamTabId,
 } from '@shared/schemas';
@@ -42,6 +46,11 @@ export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
 
 const QUESTION_TRUNCATION = 400;
 const ANSWER_TRUNCATION = 2000;
+
+function inquiryThreadUpdateSession(session?: SessionHandle): SessionHandle {
+  const owner = session ?? tryUseRunContext()?.session;
+  return owner?.events ? owner : defaultSession();
+}
 
 function formatStillOpen(threads: ExternalInquiryThreadSummary[]): string[] {
   if (!threads.length) return [];
@@ -110,7 +119,11 @@ async function emitInquiryThreadUpdate(
 ): Promise<void> {
   const summary = await getThreadSummary(threadId);
   if (!summary) return;
-  emitRuntimeEvent('inquiryThreadUpdated', { ...summary, ...extra }, session);
+  const payload: InquiryThreadUpdatedEvent = { ...summary, ...extra };
+  inquiryThreadUpdateSession(session).events.emit({
+    scope: 'session',
+    event: { type: 'inquiryThreadUpdated', payload },
+  });
 }
 
 function mapWakeResultToInquiryOutcome(
