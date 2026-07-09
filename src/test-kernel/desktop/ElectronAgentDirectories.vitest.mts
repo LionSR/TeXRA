@@ -17,7 +17,6 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
 import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
 import type { StorageProvider } from '@platform/interfaces';
 
@@ -33,11 +32,13 @@ interface JsonStoreModule {
   };
 }
 
-interface ElectronAgentDirectoriesModule {
-  bootstrapElectronAgentDirectories(
-    resourcesPath: string,
-    appVersion: string | undefined,
-  ): Promise<void>;
+interface NodeHostModule {
+  bootstrapNodeAgentDirectories(options: {
+    channel: string;
+    resourcesPath: string;
+    currentVersion: string | undefined;
+    versionStateKey: string;
+  }): Promise<void>;
 }
 
 interface PlatformAgentDirectoriesModule {
@@ -67,7 +68,7 @@ describe('desktop agent directory bootstrap', () => {
   });
 
   async function createHarness(): Promise<{
-    bootstrapElectronAgentDirectories: ElectronAgentDirectoriesModule['bootstrapElectronAgentDirectories'];
+    bootstrapNodeAgentDirectories: NodeHostModule['bootstrapNodeAgentDirectories'];
     agentDirectories: ReturnType<
       PlatformAgentDirectoriesModule['createPlatformAgentDirectories']
     >;
@@ -91,14 +92,12 @@ describe('desktop agent directory bootstrap', () => {
 
     const [
       { JsonStore },
-      { bootstrapElectronAgentDirectories },
+      { bootstrapNodeAgentDirectories },
       { initPlatform, platform },
       { createPlatformAgentDirectories },
     ] = await Promise.all([
       loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
-      loadDesktopPlatformModule<ElectronAgentDirectoriesModule>(
-        'agentDirectories.ts',
-      ),
+      loadPlatformDefaultsModule<NodeHostModule>('nodeHost.ts'),
       import('@platform/platform'),
       import('@agent/index/platformAgentDirectories'),
     ]);
@@ -138,7 +137,7 @@ describe('desktop agent directory bootstrap', () => {
     });
 
     return {
-      bootstrapElectronAgentDirectories,
+      bootstrapNodeAgentDirectories,
       agentDirectories: platform().agentDirectories,
       globalStateStore,
       resourcesPath,
@@ -149,13 +148,18 @@ describe('desktop agent directory bootstrap', () => {
   it('copies bundled agents into fresh userData storage and registers directory access', async () => {
     const {
       agentDirectories,
-      bootstrapElectronAgentDirectories,
+      bootstrapNodeAgentDirectories,
       globalStateStore,
       resourcesPath,
       storage,
     } = await createHarness();
 
-    await bootstrapElectronAgentDirectories(resourcesPath, '1.2.3');
+    await bootstrapNodeAgentDirectories({
+      channel: 'desktop',
+      resourcesPath,
+      currentVersion: '1.2.3',
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    });
 
     const builtInDir = await agentDirectories.builtIn();
     const toolUseDir = await agentDirectories.builtInToolUse();
@@ -175,11 +179,16 @@ describe('desktop agent directory bootstrap', () => {
     );
   });
 
-  it('refreshes copied bundled agents on same-version runs', async () => {
-    const { bootstrapElectronAgentDirectories, resourcesPath, storage } =
+  it('skips same-resource re-entry but refreshes when the resource path changes', async () => {
+    const { bootstrapNodeAgentDirectories, resourcesPath, storage } =
       await createHarness();
 
-    await bootstrapElectronAgentDirectories(resourcesPath, '1.2.3');
+    await bootstrapNodeAgentDirectories({
+      channel: 'desktop',
+      resourcesPath,
+      currentVersion: '1.2.3',
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    });
     const copiedAgent = join(
       storage.getGlobalStoragePath(),
       'agents',
@@ -187,7 +196,53 @@ describe('desktop agent directory bootstrap', () => {
     );
     await writeFile(copiedAgent, 'name: locally-edited\n');
 
-    await bootstrapElectronAgentDirectories(resourcesPath, '1.2.3');
-    await expect(readFile(copiedAgent, 'utf8')).resolves.toBe('name: writer\n');
+    await bootstrapNodeAgentDirectories({
+      channel: 'desktop',
+      resourcesPath,
+      currentVersion: '1.2.3',
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    });
+    await expect(readFile(copiedAgent, 'utf8')).resolves.toBe(
+      'name: locally-edited\n',
+    );
+
+    const nextResourcesPath = join(dirname(resourcesPath), 'resources-next');
+    await writeText(
+      join(nextResourcesPath, 'agents', 'writer.yaml'),
+      'name: next\n',
+    );
+    await writeText(
+      join(nextResourcesPath, 'tool_use_agents', 'researcher.yaml'),
+      'name: researcher\n',
+    );
+
+    await bootstrapNodeAgentDirectories({
+      channel: 'desktop',
+      resourcesPath: nextResourcesPath,
+      currentVersion: '1.2.4',
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    });
+    await expect(readFile(copiedAgent, 'utf8')).resolves.toBe('name: next\n');
+  });
+
+  it('uses the configured version-state key', async () => {
+    const { bootstrapNodeAgentDirectories, globalStateStore, resourcesPath } =
+      await createHarness();
+
+    await bootstrapNodeAgentDirectories({
+      channel: 'cli',
+      resourcesPath,
+      currentVersion: '2.0.0',
+      versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+    });
+
+    expect(
+      globalStateStore.get(
+        GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+      ),
+    ).toBe('2.0.0');
+    expect(
+      globalStateStore.get(GlobalStateKey.LAST_KNOWN_VERSION),
+    ).toBeUndefined();
   });
 });

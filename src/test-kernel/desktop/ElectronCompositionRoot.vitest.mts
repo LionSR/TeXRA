@@ -101,7 +101,7 @@ describe('desktop composition root and launch environment', () => {
       source.indexOf('initPlatform('),
     );
     expect(source.indexOf('initPlatform(')).toBeLessThan(
-      source.indexOf('bootstrapElectronAgentDirectories('),
+      source.indexOf('bootstrapNodeAgentDirectories('),
     );
   });
 
