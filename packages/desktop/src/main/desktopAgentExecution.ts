@@ -1085,6 +1085,14 @@ export class DesktopProgressBridge {
    * run works the same way on both hosts.
    */
   revealStream(streamId: StreamTabId): void {
+    if (!this.streamLogs.has(streamId)) {
+      return;
+    }
+    const filter = this.state.agentCategoryFilter;
+    const category = this.state.getStreamState(streamId)?.kind;
+    if (filter !== 'all' && filter !== category) {
+      this.state.agentCategoryFilter = 'all';
+    }
     this.routeToProgress();
     this.setActiveStream(streamId);
   }
