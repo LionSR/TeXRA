@@ -262,7 +262,8 @@ export async function activate(context: vscode.ExtensionContext) {
         void vscode.window.showInformationMessage(message);
       }
     },
-    toolEditApproval: nativeRequestApproval,
+    toolEditApproval: (request) =>
+      nativeRequestApproval(request, { session: defaultSession() }),
   });
   registerAgentFeatures();
   // `disposeStatusListener` and `statusBarItem` are owned solely by

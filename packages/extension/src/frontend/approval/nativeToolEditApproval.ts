@@ -15,6 +15,7 @@ import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
@@ -102,6 +103,7 @@ async function revealFirstChangedLine(
 }
 
 async function showProgressViewApprovalPrompt(
+  session: SessionHandle,
   requestId: string,
   request: ToolEditApprovalRequest,
   relativePath: string,
@@ -114,7 +116,7 @@ async function showProgressViewApprovalPrompt(
 
   // Activate the stream that needs approval and post the prompt (shared with
   // the desktop host); VS Code computes the relative path via the workspace.
-  emitToolEditApprovalPrompt(getRuntimeHost(), {
+  emitToolEditApprovalPrompt(getRuntimeHost(), session, {
     requestId,
     request,
     relativePath,
@@ -128,6 +130,7 @@ function resolveProgressViewApprovalPrompt(requestId: string): void {
 
 export async function nativeRequestApproval(
   request: ToolEditApprovalRequest,
+  options: { session: SessionHandle },
 ): Promise<ToolEditApprovalResult> {
   getStorageDir(); // Validates initialization
 
@@ -271,6 +274,7 @@ export async function nativeRequestApproval(
 
     if (!approvalSettled) {
       void showProgressViewApprovalPrompt(
+        options.session,
         requestId,
         request,
         description,

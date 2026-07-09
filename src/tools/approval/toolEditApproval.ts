@@ -1,7 +1,7 @@
 import { platform } from '@platform/platform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { emitRuntimeEvent } from '@agent/runtime/emitRuntimeEvent';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
@@ -102,6 +102,7 @@ export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
  */
 export function emitToolEditApprovalPrompt(
   runtimeHost: AgentRuntimeHost,
+  session: SessionHandle,
   params: {
     requestId: string;
     request: ToolEditApprovalRequest;
@@ -112,7 +113,10 @@ export function emitToolEditApprovalPrompt(
   const { requestId, request, relativePath, lineChanges } = params;
   const { streamId } = request;
   if (streamId) {
-    emitRuntimeEvent('setActiveStream', { streamId });
+    session.events.emit({
+      scope: 'session',
+      event: { type: 'setActiveStream', payload: { streamId } },
+    });
   }
   const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
   runtimeHost.emit('showToolEditPermission', {
