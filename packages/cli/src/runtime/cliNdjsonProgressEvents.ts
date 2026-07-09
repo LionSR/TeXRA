@@ -24,16 +24,16 @@ import type {
 } from '@shared/schemas';
 
 /**
- * Progress payloads retained for CLI public-output compatibility.
+ * Progress payloads retained only for CLI NDJSON public-output compatibility.
  *
  * Session- and run-scoped state changes are owned by `SessionEventHub` and
- * `AgentEvent`; this table only types the remaining explicit progress sink
- * used by CLI compatibility adapters. Do not add new fact keys here. New
- * durable state should extend the session/run fact vocabulary first, then
- * choose an explicit host projection only when a retained public surface
- * requires it.
+ * `AgentEvent`; this table only types the remaining `kind: "progress"` record
+ * names in `--output-format ndjson`. It is not a runtime-host event bus. Do
+ * not add new fact keys here. New durable state should extend the session/run
+ * fact vocabulary first, then choose an explicit NDJSON projection only when a
+ * retained public output surface requires it.
  */
-export interface CliProgressEventPayloads {
+export interface CliNdjsonProgressEventPayloads {
   // Run/stream progress.
   setActiveStream: SetActiveStreamPayload;
   updateStreamStatus: UpdateStreamStatusPayload;
@@ -66,11 +66,4 @@ export interface CliProgressEventPayloads {
   goalStateChanged: GoalStateChangedPayload;
 }
 
-export type CliProgressEvent = keyof CliProgressEventPayloads;
-
-export interface CliProgressSink {
-  emit<K extends CliProgressEvent>(
-    event: K,
-    payload: CliProgressEventPayloads[K],
-  ): void;
-}
+export type CliNdjsonProgressEvent = keyof CliNdjsonProgressEventPayloads;
