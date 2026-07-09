@@ -618,10 +618,12 @@ export class DesktopProgressBridge {
       // Mirrors the extension's PROGRESS_VIEW_COMMANDS.RESTORE_STATE handler
       // (`texra.restoreState`): look up the stream's persisted task state and
       // route the renderer to the main view with it.
-      restoreState: (data) => {
+      restoreState: async (data) => {
         const taskState = this.state.snapshots.getTaskState(data.stream);
-        if (taskState) {
-          this.restoreTaskState(taskState);
+        if (taskState && !this.restoreTaskState(taskState)) {
+          await this.options.showErrorMessage?.(
+            'Failed to restore configuration',
+          );
         }
       },
       compactResponse: unsupported(

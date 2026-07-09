@@ -183,6 +183,7 @@ interface DesktopAgentExecutionModule {
 }
 
 type CreateBridgeOptions = {
+  buildMainViewState?: (taskState: unknown) => unknown;
   kvStoreBacking?: Map<string, unknown>;
   kvRead?: (key: string) => Promise<unknown> | unknown;
   /** Forces `state.streamLogs.load()` to reject, to exercise the restart-repair fallback (catch) path. */
@@ -341,6 +342,11 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: vi.fn(),
   }));
+  if (options.buildMainViewState) {
+    vi.doMock('@controllers/mainView/MainViewStateRestoreController', () => ({
+      buildMainViewState: options.buildMainViewState,
+    }));
+  }
   mockLoggerModule();
   vi.doMock('vscode', () => ({
     commands: {
@@ -3140,6 +3146,46 @@ describe('DesktopProgressBridge', () => {
         { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route: 'main' },
         expect.objectContaining({ command: COMMON_COMMANDS.STATE_RESTORE }),
       ]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('reports a failed progress-board restore exactly once', async () => {
+    const messages: unknown[] = [];
+    const errors: string[] = [];
+    const buildMainViewState = vi.fn(() => {
+      throw new Error('invalid persisted task state');
+    });
+    const bridge = await createBridge(messages, {
+      buildMainViewState,
+      showErrorMessage: (message) => {
+        errors.push(message);
+      },
+    });
+
+    try {
+      emitRunConfigFact(bridge, {
+        streamId: 'stream-1',
+        executionId: 'ec1003' as ExecutionId,
+        taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
+      });
+      await settleProgressEvents();
+      messages.length = 0;
+
+      const handleRestoreState = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.RESTORE_STATE
+        ],
+      );
+      await handleRestoreState({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-1',
+      });
+
+      expect(buildMainViewState).toHaveBeenCalledTimes(1);
+      expect(errors).toEqual(['Failed to restore configuration']);
+      expect(messages).toEqual([]);
     } finally {
       bridge.dispose();
     }
