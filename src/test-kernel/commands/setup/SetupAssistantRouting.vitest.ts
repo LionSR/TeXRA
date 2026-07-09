@@ -102,6 +102,19 @@ vi.mock('@auth/serverKeys', () => ({
   }),
 }));
 
+// `hasAnyUsableSetupCredential` now delegates to the shared host-neutral
+// predicate; stand it in with the same provider-key mock this suite already
+// drives, so the credential check keeps tracking `mocks.hasUsableApiKey`
+// instead of hitting the (unstubbed) fake platform secrets store.
+vi.mock('@controllers/onboarding/onboardingFunnel', () => ({
+  hasUsableSetupCredential: async () => {
+    for (const provider of ['openRouter', 'openai', 'anthropic', 'google']) {
+      if (await mocks.hasUsableApiKey(provider)) return true;
+    }
+    return false;
+  },
+}));
+
 vi.mock('@common/state', () => ({
   GlobalStateKey: {
     USE_OPENROUTER: 'useOpenRouter',
@@ -214,6 +227,7 @@ await import('@agent/runtime/executionRegistry');
 await import('@controllers/onboarding/setupLaunch');
 await import('@auth/codex');
 await import('@auth/serverKeys');
+await import('@controllers/onboarding/onboardingFunnel');
 await import('@common/state');
 
 // Module under test — imported after all mock factories are materialized.
