@@ -23,6 +23,7 @@ import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { clipToWidth, textDisplayWidth } from '../render/terminalText';
 import {
+  nextWrappingHighlightIndex,
   selectVisibleInlineOverflowText,
   Select,
   visibleSelectRange,
@@ -356,11 +357,23 @@ function MultiSelectQuestion(
       return;
     }
     if (key.upArrow) {
-      setHighlight((h) => (h <= 0 ? options.length - 1 : h - 1));
+      setHighlight((h) =>
+        nextWrappingHighlightIndex({
+          direction: -1,
+          highlight: h,
+          itemCount: options.length,
+        }),
+      );
       return;
     }
     if (key.downArrow) {
-      setHighlight((h) => (h + 1) % options.length);
+      setHighlight((h) =>
+        nextWrappingHighlightIndex({
+          direction: 1,
+          highlight: h,
+          itemCount: options.length,
+        }),
+      );
       return;
     }
     if (input === ' ') {

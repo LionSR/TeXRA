@@ -17,6 +17,7 @@ import { LRUCache } from 'lru-cache';
 
 import { z } from 'zod';
 import {
+  isSpendingQuotaExceeded,
   SpendingStatusSchema,
   type SpendingStatus,
 } from '@shared/schemas/spendingStatus';
@@ -378,6 +379,9 @@ export class TierService {
    * transient network failure.
    */
   isQuotaExceeded(): boolean {
-    return this.spendingStatus !== null && this.spendingStatus.remaining <= 0;
+    return (
+      this.spendingStatus !== null &&
+      isSpendingQuotaExceeded(this.spendingStatus)
+    );
   }
 }

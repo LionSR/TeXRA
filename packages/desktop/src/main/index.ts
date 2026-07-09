@@ -16,15 +16,13 @@ import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import {
   backfillFirstRunDone,
-  hasAnyProviderApiKey,
+  hasUsableSetupCredential,
 } from '@controllers/onboarding/onboardingFunnel';
 import { getAgent } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
-import { isCodexSubscriptionActive } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/uiHosts';
-import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, agentKeyOf } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -314,25 +312,11 @@ function createWindow(options: {
   const onboardingIpcRef: {
     current?: DesktopOnboardingIpc;
   } = {};
-  // Single source of truth for "does the user have a usable credential" on
-  // desktop: active ChatGPT (Codex) subscription, relay sign-in with Included
-  // Access to server-side keys, or a non-blank provider API key. Shared by the
-  // onboarding-funnel derivation and the first-run backfill (formerly two
-  // near-verbatim copies — Codex review).
-  const probeCredential = async (): Promise<boolean> => {
-    if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
-    const isRelaySignedIn = await SupabaseClient.isAuthenticated();
-    if (isRelaySignedIn) {
-      const serverKeyService = getServerSideKeyService();
-      if (
-        serverKeyService.getUseIncludedModelAccess() &&
-        (await serverKeyService.canUseServerSideKeys())
-      ) {
-        return true;
-      }
-    }
-    return hasAnyProviderApiKey(platform().secrets);
-  };
+  // Single source of truth for "does the user have a usable credential",
+  // shared by every host (extension, desktop, CLI) so this credential-gating
+  // logic can't drift between them.
+  const probeCredential = async (): Promise<boolean> =>
+    hasUsableSetupCredential(platform().secrets);
   const showErrorMessage = async (message: string) => {
     await dialog.showMessageBox(window, { message, type: 'error' });
   };
@@ -622,6 +606,14 @@ function createWindow(options: {
     openPath: previewHost.openPath,
     revealPath: async (filePath) => {
       shell.showItemInFolder(filePath);
+    },
+    revealStream: async (streamId) => {
+      try {
+        const execution = await getAgentExecution();
+        execution.progress.revealStream(streamId);
+      } catch (error) {
+        if (!windowClosed) reportAsyncError(error);
+      }
     },
     openExternalUrl: (url) => previewHost.openExternal(url),
     presentChatGptSignInUrl: async (url) => {
