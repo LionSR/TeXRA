@@ -43,7 +43,7 @@ const desktopVscodeFreeSourceDirSet = new Set(desktopVscodeFreeSourceDirs);
 const desktopSourceBoundaryDirs = [
   ...new Set([...desktopSharedSourceDirs, ...desktopVscodeFreeSourceDirs]),
 ];
-const bundledAgentResourceDirs = ['agents', 'tool_use_agents'];
+const bundledRuntimeResourceDirs = ['agents', 'tool_use_agents', 'skills'];
 const desktopStartupForbiddenInputPackages = [
   {
     label: '@google/genai',
@@ -650,7 +650,7 @@ async function checkRuntimeDependencies(app, appPackageJson, failures) {
 }
 
 async function checkBundledResources(app, failures) {
-  for (const directoryName of bundledAgentResourceDirs) {
+  for (const directoryName of bundledRuntimeResourceDirs) {
     const entries = await app.listDir(`resources/${directoryName}`);
     if (entries.length === 0) {
       failures.push(
@@ -745,7 +745,7 @@ const summary = [
   '- dist/renderer/assets/*.js',
   '- dist/renderer/assets/*.css',
   '- dist/renderer/assets Monaco worker chunks',
-  '- resources/agents and resources/tool_use_agents',
+  '- resources/agents, resources/tool_use_agents, and resources/skills',
   '- package.json runtime dependencies',
   '- node_modules runtime dependency packages',
   '- no VS Code extension host runtime import',
