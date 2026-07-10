@@ -63,6 +63,7 @@ export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
 /** Tool-use agent proposal - agents access files through their own tools */
 export const ToolUseAgentProposalSchema = BaseProposalFieldsSchema.extend({
   agentCategory: z.literal(AgentCategory.ToolUse),
+  rootUserInstruction: z.string().nullish(),
 });
 export type ToolUseAgentProposal = z.infer<typeof ToolUseAgentProposalSchema>;
 
