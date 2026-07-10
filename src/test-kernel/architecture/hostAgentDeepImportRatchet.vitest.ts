@@ -144,12 +144,15 @@ function reportGrowth(
 }
 
 describe('R-b host deep-import width ratchet', () => {
+  // Scanned once for the whole suite — the per-host cases and the baseline
+  // invariants read the same snapshot instead of rescanning three trees per
+  // it.each case.
+  const baseline = readBaseline();
+  const current = collectCurrentHosts();
+
   it.each(HOSTS)(
     'does not increase the count of distinct @agent/* deep-import specifiers in %s',
     (host) => {
-      const baseline = readBaseline();
-      const current = collectCurrentHosts();
-
       expect(
         current[host].length,
         reportGrowth(host, baseline.hosts[host], current[host]),
@@ -157,17 +160,17 @@ describe('R-b host deep-import width ratchet', () => {
     },
   );
 
-  it('keeps the baseline ordered per host (an empty list is a valid, welcome outcome)', () => {
-    const baseline = readBaseline();
-
+  it('keeps the baseline ordered and duplicate-free per host (an empty list is a valid, welcome outcome)', () => {
     for (const host of HOSTS) {
-      const sorted = baseline.hosts[host].toSorted((a, b) =>
+      // Sorted AND distinct: a duplicated entry would inflate the allowed
+      // count and silently weaken the ratchet.
+      const sortedUnique = [...new Set(baseline.hosts[host])].toSorted((a, b) =>
         a.localeCompare(b),
       );
       expect(
         baseline.hosts[host],
         `host-agent-import-baseline.json hosts.${host}`,
-      ).toEqual(sorted);
+      ).toEqual(sortedUnique);
     }
   });
 });
