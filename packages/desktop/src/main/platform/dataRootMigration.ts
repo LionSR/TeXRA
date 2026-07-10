@@ -6,6 +6,9 @@ import { dirname, join } from 'node:path';
 // Local imports - utils
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+// Type imports - node
+import type { Dirent } from 'node:fs';
+
 export interface DesktopDataRootMigrationLogger {
   info(message: string): void;
   warn(message: string): void;
@@ -13,6 +16,15 @@ export interface DesktopDataRootMigrationLogger {
 
 const GLOBAL_STORAGE_DIR = 'global-storage';
 const WORKSPACE_STORAGE_DIR = 'workspace-storage';
+
+function errorCodeOf(error: unknown): string | undefined {
+  return typeof error === 'object' &&
+    error != null &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+    ? (error as { code: string }).code
+    : undefined;
+}
 
 async function moveDirectoryIfAbsent(
   legacyPath: string,
@@ -23,7 +35,7 @@ async function moveDirectoryIfAbsent(
   if (!existsSync(legacyPath)) return;
   if (existsSync(targetPath)) {
     logger.warn(
-      `[desktop] Skipping legacy data migration for "${label}": a directory already exists at ${targetPath}.`,
+      `[desktop] Skipping legacy data migration for "${label}": a directory already exists at ${targetPath}. Legacy data is still at ${legacyPath}; move it manually if needed.`,
     );
     return;
   }
@@ -32,8 +44,13 @@ async function moveDirectoryIfAbsent(
     await rename(legacyPath, targetPath);
     logger.info(`[desktop] Migrated legacy "${label}" to ${targetPath}.`);
   } catch (error) {
+    // Surface the errno code (e.g. EXDEV on some Windows redirected-profile
+    // setups, EACCES on permission-restricted trees, ENOSPC when the target
+    // volume is full) so a failure is diagnosable from the log line alone —
+    // this stays non-throwing/best-effort either way.
+    const code = errorCodeOf(error);
     logger.warn(
-      `[desktop] Failed to migrate legacy "${label}" to ${targetPath}. Cause: ${toErrorMessage(error)}`,
+      `[desktop] Failed to migrate legacy "${label}" to ${targetPath}${code ? ` (${code})` : ''}. Legacy data is still at ${legacyPath}. Cause: ${toErrorMessage(error)}`,
     );
   }
 }
@@ -73,7 +90,19 @@ export async function migrateLegacyDesktopDataRoot(
   const legacyWorkspaceRoot = join(legacyRoot, WORKSPACE_STORAGE_DIR);
   if (!existsSync(legacyWorkspaceRoot)) return;
 
-  const entries = await readdir(legacyWorkspaceRoot, { withFileTypes: true });
+  // Best-effort here too: an unreadable legacy directory (EACCES, or
+  // ENOTDIR if something unexpected occupies that path) must not abort
+  // startup — it only means this run can't migrate workspace-storage.
+  let entries: Dirent[];
+  try {
+    entries = await readdir(legacyWorkspaceRoot, { withFileTypes: true });
+  } catch (error) {
+    const code = errorCodeOf(error);
+    logger.warn(
+      `[desktop] Failed to read legacy workspace-storage directory ${legacyWorkspaceRoot}${code ? ` (${code})` : ''}. Cause: ${toErrorMessage(error)}`,
+    );
+    return;
+  }
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     await moveDirectoryIfAbsent(
