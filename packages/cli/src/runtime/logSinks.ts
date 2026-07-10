@@ -169,6 +169,7 @@ export class NdjsonStdoutSink implements LogSink {
   }
 
   writeRecord(record: CliNdjsonRecord): void {
+    if (this.isClosed()) return;
     this.queue.push(record);
     void this.ensureDrain().catch(() => undefined);
   }
@@ -200,7 +201,11 @@ export class NdjsonStdoutSink implements LogSink {
   }
 
   private async drain(): Promise<void> {
-    while (!this.stdoutClosed && this.queue.length > 0) {
+    if (this.isClosed()) {
+      this.closeQueue();
+      return;
+    }
+    while (!this.isClosed() && this.queue.length > 0) {
       const record = this.queue.shift();
       if (!record) continue;
       const line = `${JSON.stringify(record)}\n`;
@@ -208,16 +213,27 @@ export class NdjsonStdoutSink implements LogSink {
       try {
         canContinue = this.stdout.write(line);
       } catch {
-        this.stdoutClosed = true;
-        this.queue.length = 0;
+        this.closeQueue();
         return;
       }
       if (!canContinue && !(await this.waitForStdoutDrain())) {
-        this.stdoutClosed = true;
-        this.queue.length = 0;
+        this.closeQueue();
         return;
       }
     }
+  }
+
+  private isClosed(): boolean {
+    return (
+      this.stdoutClosed ||
+      this.stdout.destroyed ||
+      (this.stdout === process.stdout && closed.stdout)
+    );
+  }
+
+  private closeQueue(): void {
+    this.stdoutClosed = true;
+    this.queue.length = 0;
   }
 
   private waitForStdoutDrain(): Promise<boolean> {
