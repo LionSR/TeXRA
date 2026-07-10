@@ -3,6 +3,15 @@
  *
  * The shared provider registry owns provider state keys and region metadata.
  * This module only reads/writes those keys through the active platform state.
+ *
+ * Canonical read path: keys registered in the state-setting catalog
+ * (`src/shared/schemas/stateSettings.ts`) are read via `readPlatformSetting()`,
+ * which resolves the default from the entry's schema and snaps an
+ * invalid/stale stored value back to that default. Keys not yet in the
+ * catalog (the per-provider streaming/region toggles below) fall back to the
+ * local `read()` helper, a thin `tryGlobalState()` wrapper — migrate a key to
+ * `readPlatformSetting()` once it gets a catalog entry rather than adding a
+ * fourth read path.
  */
 
 import { tryGlobalState } from '@platform/platform';
@@ -11,7 +20,6 @@ import {
   type ProviderStateEntry,
 } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { getConfig } from '@utils/config';
 import { readPlatformSetting } from './platformSettings';
 
 const PROVIDERS: ReadonlyMap<string, ProviderStateEntry> = new Map(
@@ -25,6 +33,7 @@ function entry(provider: string): ProviderStateEntry | undefined {
   return PROVIDERS.get(provider.toLowerCase());
 }
 
+/** Non-catalog fallback — see the module-level "Canonical read path" note. */
 function read<T>(key: GlobalStateKey, defaultValue: T): T {
   return tryGlobalState()?.get(key, defaultValue) ?? defaultValue;
 }
@@ -66,7 +75,8 @@ export async function setProviderStreaming(
 
 export function getProviderEndpoint(provider: string): string {
   const key = entry(provider)?.endpointKey;
-  return key ? read(key, '') : '';
+  // Catalog-modeled (see PROVIDER_ENDPOINT_SETTINGS in stateSettings.ts).
+  return key ? readPlatformSetting<string>(key) : '';
 }
 
 export async function setProviderEndpoint(
@@ -147,8 +157,7 @@ export function setWebSocketEnabledOverride(value: boolean | undefined): void {
 
 export function getWebSocketEnabled(): boolean {
   // WEBSOCKET_OPENAI is catalog-modeled, so its default comes from the schema
-  // via the shared accessor. The other provider toggles below are not in the
-  // catalog and stay on the local `read`.
+  // via the shared accessor.
   return (
     webSocketEnabledOverride ??
     readPlatformSetting<boolean>(GlobalStateKey.WEBSOCKET_OPENAI)
@@ -156,13 +165,15 @@ export function getWebSocketEnabled(): boolean {
 }
 
 /**
- * Whether to route all API calls through OpenRouter.
- * Falls back to the legacy VS Code config key for users upgrading from
- * before the globalSM migration.
+ * Whether to route all API calls through OpenRouter. Catalog-modeled (see
+ * `stateSettings.ts`); the legacy VS Code config fallback this used to carry
+ * for pre-globalSM-migration users was dead code — `StateStore.get(key,
+ * defaultValue)` always resolves to `defaultValue` once the platform is
+ * initialized, so the config fallback could only ever fire before
+ * initialization, at which point `getConfig` also just returns its own
+ * `defaultValue` (`false`). Removed rather than folded into
+ * `readPlatformSetting()`.
  */
 export function getUseOpenRouter(): boolean {
-  return (
-    tryGlobalState()?.get(GlobalStateKey.USE_OPENROUTER, false) ??
-    getConfig<boolean>('texra.model.useOpenRouter', false)
-  );
+  return readPlatformSetting<boolean>(GlobalStateKey.USE_OPENROUTER);
 }

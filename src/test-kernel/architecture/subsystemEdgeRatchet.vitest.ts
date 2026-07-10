@@ -39,6 +39,13 @@ const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 const SUBSYSTEM_ALIASES = new Map<string, string>([
   ['@agent', 'agent'],
   ['@auth', 'auth'],
+  // tsconfig.json carves these two @common/* aliases out to
+  // packages/extension/src/common/* (VS Code-coupled Memento/webview-base
+  // modules), not src/common/*. Map them to distinct pseudo-subsystems so a
+  // future src/-side import of either produces a genuine new-edge ratchet
+  // failure instead of being silently absorbed into the `common` baseline.
+  ['@common/state', 'common-state-extension'],
+  ['@common/webview', 'common-webview-extension'],
   ['@common', 'common'],
   ['@controllers', 'controllers'],
   ['@eventBus', 'eventBus'],
@@ -86,13 +93,20 @@ function resolveImportedSubsystem(
     );
   }
 
+  // Match the most specific (longest) alias so a carve-out like
+  // `@common/state` wins over the broader `@common` alias regardless of
+  // map insertion order.
+  let bestMatch: { alias: string; subsystem: string } | null = null;
   for (const [alias, subsystem] of SUBSYSTEM_ALIASES) {
-    if (specifier === alias || specifier.startsWith(`${alias}/`)) {
-      return subsystem;
+    if (
+      (specifier === alias || specifier.startsWith(`${alias}/`)) &&
+      (bestMatch == null || alias.length > bestMatch.alias.length)
+    ) {
+      bestMatch = { alias, subsystem };
     }
   }
 
-  return null;
+  return bestMatch?.subsystem ?? null;
 }
 
 function stringLiteralText(node: ts.Node): string | null {
@@ -361,5 +375,41 @@ describe('LAY-1 subsystem edge ratchet', () => {
 
     expect(baseline.edges.length).toBeGreaterThan(90);
     expect(baseline.edges).toEqual(sortedEdges);
+  });
+
+  it('does not bucket @common/state or @common/webview imports into the already-whitelisted common edge', () => {
+    // tsconfig.json carves these two aliases out to
+    // packages/extension/src/common/* (VS Code-coupled), not src/common/*.
+    // A src/-side import of either must not resolve to the generic `common`
+    // subsystem, because `agent -> common` (etc.) is already whitelisted in
+    // the baseline and would silently absorb the violating import.
+    const file = join(SRC_ROOT, 'agent', 'example.ts');
+    const stateSubsystem = resolveImportedSubsystem(file, '@common/state');
+    const webviewSubsystem = resolveImportedSubsystem(file, '@common/webview');
+
+    expect(stateSubsystem).not.toBe('common');
+    expect(webviewSubsystem).not.toBe('common');
+    expect(resolveImportedSubsystem(file, '@common/state/foo')).toBe(
+      stateSubsystem,
+    );
+    expect(resolveImportedSubsystem(file, '@common/webview/foo')).toBe(
+      webviewSubsystem,
+    );
+    // The generic `@common` alias (src/common/*) is unaffected.
+    expect(resolveImportedSubsystem(file, '@common/foo')).toBe('common');
+
+    // A hypothetical future `agent -> @common/state` import must surface as
+    // a genuine new-edge ratchet violation, not be silently absorbed.
+    const violations = findRatchetViolations(
+      [{ from: 'agent', to: stateSubsystem ?? '', kind: 'value' }],
+      readBaseline().edges,
+    );
+    expect(violations).toEqual([
+      {
+        edge: `agent->${stateSubsystem}`,
+        reason: 'new-edge',
+        currentKind: 'value',
+      },
+    ]);
   });
 });

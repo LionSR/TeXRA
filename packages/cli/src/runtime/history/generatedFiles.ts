@@ -5,6 +5,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isFileNotFoundError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { ExecutionId } from '@shared/schemas';
+import { isKVFile as isHistoryKvFile } from '@tools/executions/executionKvFiles';
 import { StorageFS } from '@utils/files';
 import { byStringProp, isObject } from '@utils/core';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
@@ -18,22 +19,6 @@ import type { CliHistoryFile } from '../history';
 
 const HISTORY_FILE_SCAN_DEPTH = 2;
 const WORKSPACE_FILE_TOOL_NAMES = new Set(['write_file', 'edit_file']);
-
-const KV_FILES = new Set([
-  'meta.json',
-  'config.json',
-  'conversation.json',
-  'todos.json',
-  'report.json',
-  'workspace-files.json',
-  'result-meta.json',
-]);
-
-function isHistoryKvFile(name: string): boolean {
-  return (
-    KV_FILES.has(name) || name.startsWith('child-') || name.startsWith('flow_')
-  );
-}
 
 export async function listGeneratedFiles(
   id: ExecutionId,
