@@ -2,7 +2,29 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
+
+// A retired model whose provider is not in RELAY_PROVIDERS (e.g. 'meta') is
+// not currently present in the pinned llm-zoo registry, so this synthetic
+// entry pins down the RETIRED_MODEL_PATTERNS derivation directly: it must
+// keep covering every retired, non-openRouterOnly model regardless of
+// forwarding-provider eligibility (see #7947, #7953).
+vi.mock('llm-zoo', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('llm-zoo')>();
+  return {
+    ...actual,
+    MODEL_CONFIGS: {
+      ...actual.MODEL_CONFIGS,
+      retiredOutsideRelayProviders: {
+        name: 'legacy-meta-model',
+        fullName: 'legacy-meta-model',
+        provider: 'meta',
+        retired: true,
+        openRouterOnly: false,
+      },
+    },
+  };
+});
 
 // Local imports - Supabase relay
 import {
@@ -54,5 +76,15 @@ describe('relay tier model access', () => {
       false,
     );
     assert.equal(isModelAllowedForTier(ULTRA_TIER, 'unknown-model'), true);
+  });
+
+  it('denies retired models from providers outside RELAY_PROVIDERS', () => {
+    // Regression coverage for #7953: RETIRED_MODEL_PATTERNS must not be
+    // filtered by RELAY_PROVIDERS.has(m.provider) — a retired model from a
+    // provider the relay cannot forward to (here 'meta') must still be
+    // rejected as a denial guard, independent of forwarding eligibility.
+    assert.equal(isRetiredModelRequest('legacy-meta-model'), true);
+    assert.equal(isModelAllowedForTier(MAX_TIER, 'legacy-meta-model'), false);
+    assert.equal(isModelAllowedForTier(ULTRA_TIER, 'legacy-meta-model'), false);
   });
 });
