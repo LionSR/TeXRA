@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  buildChildStreamEntries,
+  type ChildStreamEntryRow,
+} from '@test/support/childStreamEntries';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   activeStreamParentOrSelfId,
@@ -14,12 +18,7 @@ import {
   streamTabsDisplayItems,
 } from '@cli/chat/tui/panes/StreamTabsStrip';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
-import {
-  STREAM_PHASE,
-  STREAM_STATUS,
-  type ActiveChildInfo,
-  type StreamTabId,
-} from '@shared/schemas';
+import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 function streamId(value: string): StreamTabId {
   return value as StreamTabId;
@@ -31,14 +30,16 @@ function child(init: {
   readonly agentName?: string;
   readonly toolName?: string;
   readonly status?: string;
-}): ActiveChildInfo {
+  readonly active?: boolean;
+}): ChildStreamEntryRow {
   return {
     kind: 'subagent',
     executionId: init.executionId,
     agentName: init.agentName ?? '',
-    childStreamId: init.childStreamId,
+    childStreamId: streamId(init.childStreamId),
     toolName: init.toolName,
     status: init.status,
+    active: init.active,
   };
 }
 
@@ -59,9 +60,7 @@ function slice(
     entries: [],
     queuedFollowUps: 0,
     queuedFollowUpMessages: [],
-    activeSubagents: [],
     activeProcesses: [],
-    childStreams: [],
     todos: [],
     plan: null,
     processOutput: new Map(),
@@ -69,6 +68,10 @@ function slice(
     ...init,
   };
 }
+
+const EMPTY_CHILD_STREAM_ENTRIES = buildChildStreamEntries({
+  parentStreamId: streamId('root'),
+});
 
 describe('active stream scope', () => {
   it('owns the active stream child/root projection', () => {
@@ -176,6 +179,7 @@ describe('CLI stream tabs strip', () => {
     expect(
       streamTabsDisplayItems({
         activeStreamId: root,
+        childStreamEntries: EMPTY_CHILD_STREAM_ENTRIES,
         streams,
         parentStream: new Map(),
         width: 80,
@@ -188,32 +192,21 @@ describe('CLI stream tabs strip', () => {
     const child1 = streamId('child-1');
     const child2 = streamId('child-2');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        root,
-        slice('root', {
-          status: STREAM_STATUS.RUNNING,
-          activeSubagents: [
-            child({
-              executionId: 'r1',
-              childStreamId: child1,
-              agentName: 'setup',
-            }),
-          ],
-          activeProcesses: [
-            child({
-              executionId: 'p1',
-              childStreamId: child2,
-              toolName: 'bash',
-            }),
-          ],
-        }),
-      ],
+      [root, slice('root', { status: STREAM_STATUS.RUNNING })],
       [child1, slice('child-1', { status: STREAM_STATUS.WAITING })],
       [child2, slice('child-2', { status: STREAM_STATUS.RUNNING })],
     ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root,
+      activeOnly: [
+        child({ executionId: 'r1', childStreamId: child1, agentName: 'setup' }),
+        child({ executionId: 'p1', childStreamId: child2, toolName: 'bash' }),
+      ],
+    });
 
     const items = streamTabsDisplayItems({
       activeStreamId: child2,
+      childStreamEntries,
       streams,
       parentStream: new Map([
         [child1, root],
@@ -234,32 +227,22 @@ describe('CLI stream tabs strip', () => {
     const child1 = streamId('child-1');
     const child2 = streamId('child-2');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        root,
-        slice('root', {
-          activeSubagents: [
-            child({
-              executionId: 'r1',
-              childStreamId: child1,
-              agentName: 'setup',
-            }),
-          ],
-          activeProcesses: [
-            child({
-              executionId: 'p1',
-              childStreamId: child2,
-              toolName: 'bash',
-            }),
-          ],
-        }),
-      ],
+      [root, slice('root')],
       [child1, slice('child-1')],
       [child2, slice('child-2')],
     ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root,
+      activeOnly: [
+        child({ executionId: 'r1', childStreamId: child1, agentName: 'setup' }),
+        child({ executionId: 'p1', childStreamId: child2, toolName: 'bash' }),
+      ],
+    });
 
     expect(
       activeStreamTreeEntries({
         activeStreamId: child2,
+        childStreamEntries,
         parentStream: new Map([
           [child1, root],
           [child2, root],
@@ -281,9 +264,14 @@ describe('CLI stream tabs strip', () => {
       [child1, slice('child-1', { status: STREAM_STATUS.WAITING })],
       [child2, slice('child-2', { status: STREAM_STATUS.WAITING })],
     ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root,
+      edgeOnly: [child1, child2],
+    });
 
     const items = streamTabsDisplayItems({
       activeStreamId: child2,
+      childStreamEntries,
       streams,
       parentStream: new Map([
         [child1, root],
@@ -302,24 +290,24 @@ describe('CLI stream tabs strip', () => {
     const root = streamId('root');
     const child1 = streamId('child-1');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        root,
-        slice('root', {
-          status: STREAM_STATUS.WAITING,
-          childStreams: [
-            child({
-              executionId: 'r1',
-              childStreamId: child1,
-              agentName: 'polish',
-            }),
-          ],
-        }),
-      ],
+      [root, slice('root', { status: STREAM_STATUS.WAITING })],
       [child1, slice('child-1', { status: STREAM_STATUS.WAITING })],
     ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root,
+      retained: [
+        child({
+          executionId: 'r1',
+          childStreamId: child1,
+          agentName: 'polish',
+          active: false,
+        }),
+      ],
+    });
 
     const items = streamTabsDisplayItems({
       activeStreamId: root,
+      childStreamEntries,
       streams,
       parentStream: new Map([[child1, root]]),
       width: 80,
@@ -335,24 +323,24 @@ describe('CLI stream tabs strip', () => {
     const root = streamId('root');
     const child1 = streamId('child-1');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        root,
-        slice('root', {
-          status: STREAM_PHASE.CANCELLED,
-          childStreams: [
-            child({
-              executionId: 'r1',
-              childStreamId: child1,
-              agentName: 'strategy',
-            }),
-          ],
-        }),
-      ],
+      [root, slice('root', { status: STREAM_PHASE.CANCELLED })],
       [child1, slice('child-1', { status: STREAM_PHASE.CANCELLED })],
     ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root,
+      retained: [
+        child({
+          executionId: 'r1',
+          childStreamId: child1,
+          agentName: 'strategy',
+          active: false,
+        }),
+      ],
+    });
 
     const items = streamTabsDisplayItems({
       activeStreamId: child1,
+      childStreamEntries,
       streams,
       parentStream: new Map([[child1, root]]),
       width: 80,
@@ -368,24 +356,24 @@ describe('CLI stream tabs strip', () => {
     const root = streamId('root');
     const child1 = streamId('child-1');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        root,
-        slice('root', {
-          status: STREAM_STATUS.READY,
-          childStreams: [
-            child({
-              executionId: 'r1',
-              childStreamId: child1,
-              agentName: 'strategy',
-            }),
-          ],
-        }),
-      ],
+      [root, slice('root', { status: STREAM_STATUS.READY })],
       [child1, slice('child-1', { status: STREAM_PHASE.FAILED })],
     ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root,
+      retained: [
+        child({
+          executionId: 'r1',
+          childStreamId: child1,
+          agentName: 'strategy',
+          active: false,
+        }),
+      ],
+    });
 
     const items = streamTabsDisplayItems({
       activeStreamId: child1,
+      childStreamEntries,
       streams,
       parentStream: new Map([[child1, root]]),
       width: 80,
@@ -404,36 +392,37 @@ describe('CLI stream tabs strip', () => {
     const child1 = streamId('child-1');
     const grandchild1 = streamId('grandchild-1');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        root,
-        slice('root', {
-          childStreams: [
-            child({
-              executionId: 'r1',
-              childStreamId: child1,
-              agentName: 'review',
-            }),
-          ],
-        }),
-      ],
-      [
-        child1,
-        slice('child-1', {
-          status: STREAM_STATUS.RUNNING,
-          activeSubagents: [
-            child({
-              executionId: 'r2',
-              childStreamId: grandchild1,
-              agentName: 'detail-review',
-            }),
-          ],
-        }),
-      ],
+      [root, slice('root')],
+      [child1, slice('child-1', { status: STREAM_STATUS.RUNNING })],
       [grandchild1, slice('grandchild-1', { status: STREAM_STATUS.RUNNING })],
+    ]);
+    const childStreamEntries = new Map([
+      ...buildChildStreamEntries({
+        parentStreamId: root,
+        retained: [
+          child({
+            executionId: 'r1',
+            childStreamId: child1,
+            agentName: 'review',
+            active: false,
+          }),
+        ],
+      }),
+      ...buildChildStreamEntries({
+        parentStreamId: child1,
+        activeOnly: [
+          child({
+            executionId: 'r2',
+            childStreamId: grandchild1,
+            agentName: 'detail-review',
+          }),
+        ],
+      }),
     ]);
 
     const items = streamTabsDisplayItems({
       activeStreamId: grandchild1,
+      childStreamEntries,
       streams,
       parentStream: new Map([
         [child1, root],
@@ -454,23 +443,23 @@ describe('CLI stream tabs strip', () => {
       streamId(`child-${i + 1}`),
     );
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        root,
-        slice('root', {
-          activeSubagents: childIds.map((id, i) =>
-            child({
-              executionId: `r${i}`,
-              childStreamId: id,
-              agentName: `subagent-${i + 1}`,
-            }),
-          ),
-        }),
-      ],
+      [root, slice('root')],
       ...childIds.map((id) => [id, slice(id)] as const),
     ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root,
+      activeOnly: childIds.map((id, i) =>
+        child({
+          executionId: `r${i}`,
+          childStreamId: id,
+          agentName: `subagent-${i + 1}`,
+        }),
+      ),
+    });
 
     const items = streamTabsDisplayItems({
       activeStreamId: childIds[2],
+      childStreamEntries,
       streams,
       parentStream: new Map(childIds.map((id) => [id, root] as const)),
       width: 20,
@@ -491,39 +480,38 @@ describe('CLI stream tabs strip', () => {
     const leanSolver = streamId('lean-stream');
     const reviewer = streamId('reviewer-stream');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        root,
-        slice('root', {
-          status: STREAM_STATUS.RUNNING,
-          activeSubagents: [
-            child({
-              executionId: 'strategy',
-              childStreamId: strategy,
-              agentName: 'strategy',
-              status: STREAM_STATUS.RUNNING,
-            }),
-            child({
-              executionId: 'lean',
-              childStreamId: leanSolver,
-              agentName: 'leanSolver',
-              status: STREAM_STATUS.WAITING,
-            }),
-            child({
-              executionId: 'review',
-              childStreamId: reviewer,
-              agentName: 'reviewer',
-              status: STREAM_STATUS.RUNNING,
-            }),
-          ],
-        }),
-      ],
+      [root, slice('root', { status: STREAM_STATUS.RUNNING })],
       [strategy, slice('strategy-stream', { status: STREAM_STATUS.RUNNING })],
       [leanSolver, slice('lean-stream', { status: STREAM_STATUS.WAITING })],
       [reviewer, slice('reviewer-stream', { status: STREAM_STATUS.RUNNING })],
     ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root,
+      activeOnly: [
+        child({
+          executionId: 'strategy',
+          childStreamId: strategy,
+          agentName: 'strategy',
+          status: STREAM_STATUS.RUNNING,
+        }),
+        child({
+          executionId: 'lean',
+          childStreamId: leanSolver,
+          agentName: 'leanSolver',
+          status: STREAM_STATUS.WAITING,
+        }),
+        child({
+          executionId: 'review',
+          childStreamId: reviewer,
+          agentName: 'reviewer',
+          status: STREAM_STATUS.RUNNING,
+        }),
+      ],
+    });
 
     const items = streamTabsDisplayItems({
       activeStreamId: root,
+      childStreamEntries,
       streams,
       parentStream: new Map([
         [strategy, root],
@@ -657,32 +645,31 @@ describe('CLI stream tabs strip', () => {
     const middle = streamId('middle-stream');
     const active = streamId('active-stream');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        root,
-        slice('root', {
-          status: STREAM_STATUS.RUNNING,
-          activeSubagents: [
-            child({
-              executionId: 'middle',
-              childStreamId: middle,
-              agentName: 'veryLongMiddleAgent',
-              status: STREAM_STATUS.RUNNING,
-            }),
-            child({
-              executionId: 'active',
-              childStreamId: active,
-              agentName: 'activeTarget',
-              status: STREAM_STATUS.RUNNING,
-            }),
-          ],
-        }),
-      ],
+      [root, slice('root', { status: STREAM_STATUS.RUNNING })],
       [middle, slice('middle-stream', { status: STREAM_STATUS.RUNNING })],
       [active, slice('active-stream', { status: STREAM_STATUS.RUNNING })],
     ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root,
+      activeOnly: [
+        child({
+          executionId: 'middle',
+          childStreamId: middle,
+          agentName: 'veryLongMiddleAgent',
+          status: STREAM_STATUS.RUNNING,
+        }),
+        child({
+          executionId: 'active',
+          childStreamId: active,
+          agentName: 'activeTarget',
+          status: STREAM_STATUS.RUNNING,
+        }),
+      ],
+    });
 
     const items = streamTabsDisplayItems({
       activeStreamId: active,
+      childStreamEntries,
       streams,
       parentStream: new Map([
         [middle, root],

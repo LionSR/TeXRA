@@ -18,11 +18,10 @@ import {
   activeStreamId,
   rootRunStartAvailable,
   rootStreamId,
-  parentStream,
-  setParentStream,
   removeStream,
   resetCliState,
   patchStream,
+  setStreamStatusInCliState,
   streams,
 } from '@cli/chat/tui/state/cliState';
 import {
@@ -49,7 +48,16 @@ import {
 } from '@cli/chat/tui/state/focusCycle';
 import { hasChildControlItems } from '@cli/chat/tui/state/childControls';
 import { focusedChildInputDisabledMessage } from '@cli/chat/tui/state/focusedChildFollowUp';
-import { visibleSubagentRows } from '@cli/chat/tui/state/childExecutions';
+import {
+  activeSubagentsFor,
+  applySubagentRoster,
+  childStreamEntries,
+  isChildStreamRemoved,
+  parentStream,
+  retainedChildStreamsFor,
+  setParentStream,
+  visibleSubagentRows,
+} from '@cli/chat/tui/state/childExecutions';
 import {
   finalizeSettledPrefix,
   syncStreamLog,
@@ -125,7 +133,9 @@ describe('cliState Phase 4 fields', () => {
     patchStream(root, (s) => ({ ...s, status: 'running' }));
     const slice = streams.get().get(root);
     expect(slice).toBeDefined();
-    expect(slice?.activeSubagents).toEqual([]);
+    expect(
+      activeSubagentsFor(root, childStreamEntries.get(), streams.get()),
+    ).toEqual([]);
     expect(slice?.activeProcesses).toEqual([]);
     expect(slice?.todos).toEqual([]);
     expect(slice?.plan).toBeNull();
@@ -157,29 +167,22 @@ describe('cliState Phase 4 fields', () => {
 
   it('removes stale child rows when a stream is removed', () => {
     activeStreamId.set(root);
+    // Roster-first (rule 3): registers both the retained history row and
+    // active membership, then the explicit edge arrives.
+    applySubagentRoster(root, [
+      {
+        kind: 'subagent',
+        executionId: 'agent-1',
+        agentName: 'critic',
+        childStreamId: child1,
+        status: STREAM_STATUS.RUNNING,
+      },
+    ]);
     setParentStream(child1, root);
+    // Processes never own a stream tab, so an unrelated background process
+    // must be untouched by removing child1's stream below.
     patchStream(root, (s) => ({
       ...s,
-      childStreams: [
-        {
-          kind: 'subagent',
-          executionId: 'history-1',
-          agentName: 'critic',
-          childStreamId: child1,
-          status: 'completed',
-        },
-      ],
-      activeSubagents: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'critic',
-          childStreamId: child1,
-          status: STREAM_STATUS.RUNNING,
-        },
-      ],
-      // Processes never own a stream tab, so an unrelated background process
-      // must be untouched by removing child1's stream below.
       activeProcesses: [
         {
           kind: 'process',
@@ -191,10 +194,22 @@ describe('cliState Phase 4 fields', () => {
     }));
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
 
-    expect(hasChildControlItems(streams.get().get(root), 'tasks')).toBe(true);
-    expect(hasChildControlItems(streams.get().get(root), 'subagents')).toBe(
-      true,
-    );
+    expect(
+      hasChildControlItems(
+        root,
+        childStreamEntries.get(),
+        streams.get(),
+        'tasks',
+      ),
+    ).toBe(true);
+    expect(
+      hasChildControlItems(
+        root,
+        childStreamEntries.get(),
+        streams.get(),
+        'subagents',
+      ),
+    ).toBe(true);
     expect(nextFocusForward()).toBe(child1);
 
     removeStream(child1);
@@ -202,44 +217,55 @@ describe('cliState Phase 4 fields', () => {
     const parent = streams.get().get(root);
     expect(parent).toBeDefined();
     if (!parent) throw new Error('missing parent stream');
-    expect(parent.childStreams).toEqual([]);
-    expect(parent.activeSubagents).toEqual([]);
+    expect(
+      retainedChildStreamsFor(root, childStreamEntries.get(), streams.get()),
+    ).toEqual([]);
+    expect(
+      activeSubagentsFor(root, childStreamEntries.get(), streams.get()),
+    ).toEqual([]);
     // Unaffected: process-1 never referenced child1's stream.
     expect(parent.activeProcesses).toMatchObject([
       { executionId: 'process-1' },
     ]);
-    expect(visibleSubagentRows(parent)).toEqual([]);
+    expect(
+      visibleSubagentRows(root, childStreamEntries.get(), streams.get()),
+    ).toEqual([]);
+    expect(isChildStreamRemoved(child1)).toBe(true);
     // Still true: the untouched process-1 counts as a task-mode item.
-    expect(hasChildControlItems(parent, 'tasks')).toBe(true);
-    expect(hasChildControlItems(parent, 'subagents')).toBe(false);
+    expect(
+      hasChildControlItems(
+        root,
+        childStreamEntries.get(),
+        streams.get(),
+        'tasks',
+      ),
+    ).toBe(true);
+    expect(
+      hasChildControlItems(
+        root,
+        childStreamEntries.get(),
+        streams.get(),
+        'subagents',
+      ),
+    ).toBe(false);
     expect(nextFocusForward()).toBeUndefined();
   });
 
   it('updates retained child rows when a failed subagent leaves the active list', () => {
     const dispose = subscribeStreamStatus();
     try {
-      patchStream(root, (s) => ({
-        ...s,
-        activeSubagents: [
-          {
-            kind: 'subagent',
-            executionId: 'agent-1',
-            agentName: 'codex',
-            childStreamId: child1,
-            status: STREAM_STATUS.RUNNING,
-          },
-        ],
-        childStreams: [
-          {
-            kind: 'subagent',
-            executionId: 'agent-1',
-            agentName: 'codex',
-            childStreamId: child1,
-            status: STREAM_STATUS.RUNNING,
-          },
-        ],
-      }));
-      patchStream(root, (s) => ({ ...s, activeSubagents: [] }));
+      applySubagentRoster(root, [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'codex',
+          childStreamId: child1,
+          status: STREAM_STATUS.RUNNING,
+        },
+      ]);
+      // A later, empty roster clears active membership; the retained row
+      // survives and its status is read live from the child's own slice.
+      applySubagentRoster(root, []);
 
       StreamStatusService.transition(
         child1,
@@ -247,10 +273,13 @@ describe('cliState Phase 4 fields', () => {
         'restart-repair',
       );
 
-      const parent = streams.get().get(root);
-      expect(parent?.activeSubagents).toEqual([]);
-      expect(parent?.childStreams[0]?.status).toBe(STREAM_PHASE.FAILED);
-      expect(visibleSubagentRows(parent!)).toMatchObject([
+      expect(
+        activeSubagentsFor(root, childStreamEntries.get(), streams.get()),
+      ).toEqual([]);
+      expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.FAILED);
+      expect(
+        visibleSubagentRows(root, childStreamEntries.get(), streams.get()),
+      ).toMatchObject([
         {
           kind: 'subagent',
           executionId: 'agent-1',
@@ -1452,18 +1481,15 @@ describe('CLI TUI row allocation', () => {
 
   it('ignores stale child row status when routing focused child follow-ups', () => {
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
-    patchStream(root, (s) => ({
-      ...s,
-      childStreams: [
-        {
-          kind: 'subagent',
-          executionId: 'child-exec-1',
-          agentName: 'critic',
-          childStreamId: child1,
-          status: STREAM_PHASE.COMPLETED,
-        },
-      ],
-    }));
+    applySubagentRoster(root, [
+      {
+        kind: 'subagent',
+        executionId: 'child-exec-1',
+        agentName: 'critic',
+        childStreamId: child1,
+        status: STREAM_PHASE.COMPLETED,
+      },
+    ]);
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
     setParentStream(child1, root);
 
@@ -1476,18 +1502,15 @@ describe('CLI TUI row allocation', () => {
 
   it('uses child slice status as a fallback for focused child follow-ups', () => {
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
-    patchStream(root, (s) => ({
-      ...s,
-      childStreams: [
-        {
-          kind: 'subagent',
-          executionId: 'child-exec-1',
-          agentName: 'critic',
-          childStreamId: child1,
-          status: STREAM_STATUS.RUNNING,
-        },
-      ],
-    }));
+    applySubagentRoster(root, [
+      {
+        kind: 'subagent',
+        executionId: 'child-exec-1',
+        agentName: 'critic',
+        childStreamId: child1,
+        status: STREAM_STATUS.RUNNING,
+      },
+    ]);
     patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.CANCELLED }));
     setParentStream(child1, root);
 
@@ -1588,18 +1611,15 @@ describe('CLI TUI row allocation', () => {
   it('mirrors running child status events into focused child routing', () => {
     const dispose = subscribeStreamStatus();
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
-    patchStream(root, (s) => ({
-      ...s,
-      childStreams: [
-        {
-          kind: 'subagent',
-          executionId: 'child-exec-1',
-          agentName: 'critic',
-          childStreamId: child1,
-          status: STREAM_PHASE.COMPLETED,
-        },
-      ],
-    }));
+    applySubagentRoster(root, [
+      {
+        kind: 'subagent',
+        executionId: 'child-exec-1',
+        agentName: 'critic',
+        childStreamId: child1,
+        status: STREAM_PHASE.COMPLETED,
+      },
+    ]);
     patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.CANCELLED }));
     setParentStream(child1, root);
 
@@ -1612,9 +1632,13 @@ describe('CLI TUI row allocation', () => {
 
       activeStreamId.set(child1);
       expect(streams.get().get(child1)?.status).toBe(STREAM_STATUS.RUNNING);
-      expect(streams.get().get(root)?.childStreams[0]?.status).toBe(
-        STREAM_STATUS.RUNNING,
-      );
+      expect(
+        retainedChildStreamsFor(
+          root,
+          childStreamEntries.get(),
+          streams.get(),
+        )[0]?.status,
+      ).toBe(STREAM_STATUS.RUNNING);
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'accept',
         streamId: child1,
@@ -1627,18 +1651,15 @@ describe('CLI TUI row allocation', () => {
   it('mirrors stopped child status events into focused child routing', () => {
     const dispose = subscribeStreamStatus();
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
-    patchStream(root, (s) => ({
-      ...s,
-      childStreams: [
-        {
-          kind: 'subagent',
-          executionId: 'child-exec-1',
-          agentName: 'critic',
-          childStreamId: child1,
-          status: STREAM_STATUS.RUNNING,
-        },
-      ],
-    }));
+    applySubagentRoster(root, [
+      {
+        kind: 'subagent',
+        executionId: 'child-exec-1',
+        agentName: 'critic',
+        childStreamId: child1,
+        status: STREAM_STATUS.RUNNING,
+      },
+    ]);
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
     setParentStream(child1, root);
 
@@ -1651,9 +1672,13 @@ describe('CLI TUI row allocation', () => {
 
       activeStreamId.set(child1);
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.CANCELLED);
-      expect(streams.get().get(root)?.childStreams[0]?.status).toBe(
-        STREAM_PHASE.CANCELLED,
-      );
+      expect(
+        retainedChildStreamsFor(
+          root,
+          childStreamEntries.get(),
+          streams.get(),
+        )[0]?.status,
+      ).toBe(STREAM_PHASE.CANCELLED);
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'reject',
         streamId: child1,
@@ -2621,6 +2646,9 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     };
 
     try {
+      // The child's own status is the single owner the roster selectors read
+      // from (rule 8: the roster's copied status is discarded).
+      patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -2642,8 +2670,12 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         },
       });
 
-      expect(streams.get().get(root)?.activeSubagents).toEqual([child]);
-      expect(streams.get().get(root)?.childStreams).toEqual([child]);
+      expect(
+        activeSubagentsFor(root, childStreamEntries.get(), streams.get()),
+      ).toEqual([child]);
+      expect(
+        retainedChildStreamsFor(root, childStreamEntries.get(), streams.get()),
+      ).toEqual([child]);
       expect(parentStream.get().get(child1)).toBe(root);
       expect(parentStream.get().get(child2)).toBe(root);
     } finally {
@@ -3276,29 +3308,26 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
 describe('focusCycle', () => {
   it('Ctrl-A cycles through siblings then wraps back to the parent', () => {
     activeStreamId.set(root);
+    // Only subagents own a stream tab, so both live siblings are modeled as
+    // subagents here — a background process is never itself a focus target.
+    applySubagentRoster(root, [
+      {
+        kind: 'subagent',
+        executionId: 'e1',
+        agentName: 'a',
+        childStreamId: child1,
+      },
+      {
+        kind: 'subagent',
+        executionId: 'e2',
+        agentName: 'b',
+        childStreamId: child2,
+      },
+    ]);
     setParentStream(child1, root);
     setParentStream(child2, root);
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
     patchStream(child2, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
-    patchStream(root, (s) => ({
-      ...s,
-      // Only subagents own a stream tab, so both live siblings are modeled as
-      // subagents here — a background process is never itself a focus target.
-      activeSubagents: [
-        {
-          kind: 'subagent',
-          executionId: 'e1',
-          agentName: 'a',
-          childStreamId: child1,
-        },
-        {
-          kind: 'subagent',
-          executionId: 'e2',
-          agentName: 'b',
-          childStreamId: child2,
-        },
-      ],
-    }));
     // root → first descendant.
     expect(nextFocusForward()).toBe(child1);
     // child1 → next sibling resolved through the parent's descendant list.
@@ -3324,5 +3353,286 @@ describe('focusCycle', () => {
     expect(nextFocusBack()).toBe(root);
     activeStreamId.set(root);
     expect(nextFocusBack()).toBeUndefined();
+  });
+});
+
+// Ordered event-transition matrix for the child-stream relationship map
+// (docs/proposals/cli-child-stream-state-consolidation.md, "Race-regression
+// plan" / "Ordered unit matrix"). Each scenario drives the real transition
+// functions the production event handlers call
+// (subscribeRuntimeHost.applyActiveSubagents -> applySubagentRoster,
+// subscribeRuntimeHost.applyParentStream -> setParentStream, cliState's
+// removeStream -> applyChildStreamRemoval) in the stated order and asserts
+// the load-bearing checkpoint(s) each sequence exists to prove, per the
+// design's precedence rule:
+//   removeStream tombstone > explicit edge > roster-derived parent > none.
+describe('child-stream ordered transition matrix', () => {
+  const parentP = 'parent-p' as StreamTabId;
+  const parentQ = 'parent-q' as StreamTabId;
+  const kid = 'kid' as StreamTabId;
+
+  function rosterRow(status?: string) {
+    return {
+      kind: 'subagent' as const,
+      executionId: 'kid-exec',
+      agentName: 'kid-agent',
+      childStreamId: kid,
+      status,
+    };
+  }
+
+  function activeRows(parent: StreamTabId) {
+    return activeSubagentsFor(parent, childStreamEntries.get(), streams.get());
+  }
+
+  function retainedRows(parent: StreamTabId) {
+    return retainedChildStreamsFor(
+      parent,
+      childStreamEntries.get(),
+      streams.get(),
+    );
+  }
+
+  it('1. canonical order: A, S(running), R_P+, E_P+', () => {
+    patchStream(kid, (s) => ({ ...s, status: undefined }));
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow()]);
+    setParentStream(kid, parentP);
+
+    expect(parentStream.get().get(kid)).toBe(parentP);
+    expect(activeRows(parentP)).toMatchObject([
+      { status: STREAM_STATUS.RUNNING },
+    ]);
+    expect(retainedRows(parentP)).toMatchObject([
+      { status: STREAM_STATUS.RUNNING },
+    ]);
+  });
+
+  it('2. roster first: R_P+, A, S(running), E_P+', () => {
+    applySubagentRoster(parentP, [rosterRow()]);
+    patchStream(kid, (s) => ({ ...s, status: undefined }));
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    setParentStream(kid, parentP);
+
+    expect(parentStream.get().get(kid)).toBe(parentP);
+    expect(activeRows(parentP)).toHaveLength(1);
+    expect(retainedRows(parentP)).toHaveLength(1);
+  });
+
+  it('3. edge first: E_P+, A, S(running), R_P+', () => {
+    setParentStream(kid, parentP);
+    // The roster hasn't arrived yet, but the edge alone already makes the
+    // child reachable from the focus cycle once its slice exists (invariant
+    // 6: an edge-only child is focusable once its StreamSlice exists).
+    patchStream(kid, (s) => ({ ...s, status: undefined }));
+    expect(parentStream.get().get(kid)).toBe(parentP);
+
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow()]);
+
+    expect(activeRows(parentP)).toHaveLength(1);
+    expect(retainedRows(parentP)).toHaveLength(1);
+  });
+
+  it('4. status first: S(running), A, E_P+, R_P+', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    setParentStream(kid, parentP);
+    applySubagentRoster(parentP, [rosterRow()]);
+
+    expect(parentStream.get().get(kid)).toBe(parentP);
+    expect(activeRows(parentP)).toMatchObject([
+      { status: STREAM_STATUS.RUNNING },
+    ]);
+  });
+
+  it('5. completion: A, S(running), R_P+, E_P+, R_P-, S(terminal)', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow()]);
+    setParentStream(kid, parentP);
+
+    // Untrack (roster omission) arrives before the terminal status.
+    applySubagentRoster(parentP, []);
+    expect(activeRows(parentP)).toEqual([]);
+    expect(retainedRows(parentP)).toHaveLength(1);
+
+    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.COMPLETED }));
+
+    expect(activeRows(parentP)).toEqual([]);
+    expect(retainedRows(parentP)).toMatchObject([
+      { status: STREAM_PHASE.COMPLETED },
+    ]);
+  });
+
+  it('6. promotion with stale roster: A, S(running), R_P+, E_P+, E0, R_P+', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow(STREAM_STATUS.RUNNING)]);
+    setParentStream(kid, parentP);
+
+    setParentStream(kid, null);
+    expect(parentStream.get().has(kid)).toBe(false);
+
+    // A stale roster from the former parent must not resurrect the edge or
+    // active membership.
+    applySubagentRoster(parentP, [rosterRow(STREAM_STATUS.RUNNING)]);
+
+    expect(parentStream.get().has(kid)).toBe(false);
+    expect(activeRows(parentP)).toEqual([]);
+    // The historical row remains reachable from the former parent.
+    expect(retainedRows(parentP)).toMatchObject([{ executionId: 'kid-exec' }]);
+  });
+
+  it('7. explicit reattachment: (6) then E_Q+, R_Q+, R_P+', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow(STREAM_STATUS.RUNNING)]);
+    setParentStream(kid, parentP);
+    setParentStream(kid, null);
+    applySubagentRoster(parentP, [rosterRow(STREAM_STATUS.RUNNING)]);
+
+    setParentStream(kid, parentQ);
+    applySubagentRoster(parentQ, [rosterRow(STREAM_STATUS.RUNNING)]);
+    // Late roster from the old parent must not erase active membership or
+    // metadata under the new parent.
+    applySubagentRoster(parentP, [rosterRow(STREAM_STATUS.RUNNING)]);
+
+    expect(parentStream.get().get(kid)).toBe(parentQ);
+    expect(activeRows(parentQ)).toMatchObject([{ executionId: 'kid-exec' }]);
+    expect(activeRows(parentP)).toEqual([]);
+    // The historical row from the first parent survives (invariant 5/6).
+    expect(retainedRows(parentP)).toMatchObject([{ executionId: 'kid-exec' }]);
+  });
+
+  it('8. child removal with late facts: (5) then X(child), R_P+, E_P+, A, S(terminal)', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow()]);
+    setParentStream(kid, parentP);
+    applySubagentRoster(parentP, []);
+    setStreamStatusInCliState({
+      status: STREAM_PHASE.COMPLETED,
+      streamId: kid,
+    });
+
+    removeStream(kid);
+    expect(isChildStreamRemoved(kid)).toBe(true);
+
+    // Every later fact for the removed id must remain suppressed — status
+    // facts go through `setStreamStatusInCliState` (the actual production
+    // fact-application path), which checks the tombstone directly; a raw
+    // `patchStream` call (used elsewhere in this file as a low-level test
+    // shortcut) intentionally has no such guard.
+    applySubagentRoster(parentP, [rosterRow()]);
+    setParentStream(kid, parentP);
+    setStreamStatusInCliState({ status: STREAM_STATUS.RUNNING, streamId: kid });
+
+    expect(activeRows(parentP)).toEqual([]);
+    expect(retainedRows(parentP)).toEqual([]);
+    expect(parentStream.get().has(kid)).toBe(false);
+    expect(streams.get().has(kid)).toBe(false);
+  });
+
+  it('9. fresh activation after removal uses a distinct id, not the removed one', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow()]);
+    setParentStream(kid, parentP);
+    removeStream(kid);
+
+    const freshKid = 'kid-2' as StreamTabId;
+    patchStream(freshKid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    setParentStream(freshKid, parentP);
+    applySubagentRoster(parentP, [
+      {
+        kind: 'subagent',
+        executionId: 'kid-2-exec',
+        agentName: 'kid-agent',
+        childStreamId: freshKid,
+        status: STREAM_STATUS.RUNNING,
+      },
+    ]);
+
+    expect(isChildStreamRemoved(kid)).toBe(true);
+    expect(activeRows(parentP)).toMatchObject([{ childStreamId: freshKid }]);
+    expect(parentStream.get().get(freshKid)).toBe(parentP);
+  });
+
+  it('10. two-child retention keeps stable order across reordering and shrinking rosters', () => {
+    const kidA = 'kid-a' as StreamTabId;
+    const kidB = 'kid-b' as StreamTabId;
+    const rowA = (status?: string) => ({
+      kind: 'subagent' as const,
+      executionId: 'exec-a',
+      agentName: 'a',
+      childStreamId: kidA,
+      status,
+    });
+    const rowB = (status?: string) => ({
+      kind: 'subagent' as const,
+      executionId: 'exec-b',
+      agentName: 'b',
+      childStreamId: kidB,
+      status,
+    });
+    patchStream(kidA, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    patchStream(kidB, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+
+    // First-seen order: A then B.
+    applySubagentRoster(parentP, [rowA(), rowB()]);
+    expect(retainedRows(parentP).map((r) => r.childStreamId)).toEqual([
+      kidA,
+      kidB,
+    ]);
+
+    // A later roster reorders (B, A) — retained order must not change.
+    applySubagentRoster(parentP, [rowB(), rowA()]);
+    expect(retainedRows(parentP).map((r) => r.childStreamId)).toEqual([
+      kidA,
+      kidB,
+    ]);
+
+    // Shrink to just B; A completes.
+    applySubagentRoster(parentP, [rowB()]);
+    patchStream(kidA, (s) => ({ ...s, status: STREAM_PHASE.COMPLETED }));
+
+    expect(activeRows(parentP).map((r) => r.childStreamId)).toEqual([kidB]);
+    // Retained order is still stable and A's historical row survives.
+    expect(retainedRows(parentP).map((r) => r.childStreamId)).toEqual([
+      kidA,
+      kidB,
+    ]);
+    expect(
+      visibleSubagentRows(parentP, childStreamEntries.get(), streams.get()).map(
+        (r) => r.status,
+      ),
+    ).toEqual([STREAM_PHASE.COMPLETED, STREAM_STATUS.RUNNING]);
+  });
+
+  it('11. parent removal with late facts: P -> child, X(P), R_P+, E_P+', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow()]);
+    setParentStream(kid, parentP);
+    patchStream(parentP, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+
+    removeStream(parentP);
+    expect(isChildStreamRemoved(parentP)).toBe(true);
+
+    // Late facts naming the removed parent must not resurrect it as an
+    // ancestor anywhere.
+    applySubagentRoster(parentP, [rosterRow()]);
+    setParentStream(kid, parentP);
+
+    expect(parentStream.get().get(kid)).toBeUndefined();
+    expect(activeRows(parentP)).toEqual([]);
+    expect(retainedRows(parentP)).toEqual([]);
+  });
+
+  it('12. identical roster snapshot applied twice is a no-op (no store write)', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow(STREAM_STATUS.RUNNING)]);
+    const entriesAfterFirst = childStreamEntries.get();
+
+    // The runtime resends a fresh array/row object on every poll even when
+    // nothing changed; `rosterRow` below is a distinct object with identical
+    // field values, not `===` to the first call's row.
+    applySubagentRoster(parentP, [rosterRow(STREAM_STATUS.RUNNING)]);
+
+    expect(childStreamEntries.get()).toBe(entriesAfterFirst);
   });
 });

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildChildStreamEntries,
+  type ChildStreamEntryRow,
+} from '@test/support/childStreamEntries';
+import {
   collectResumeUsage,
   collectResumeTargets,
   formatResumeCommand,
@@ -9,12 +13,7 @@ import {
   type ResumeUsageStats,
 } from '@cli/chat/tui/state/resumeHint';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
-import {
-  AgentCategory,
-  type ActiveChildInfo,
-  type StreamTabId,
-  type SubagentChildInfo,
-} from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 
 function makeSlice(
   over: Partial<StreamSlice> & { streamId: string },
@@ -31,9 +30,7 @@ function makeSlice(
     entries: [],
     queuedFollowUps: 0,
     queuedFollowUpMessages: [],
-    activeSubagents: [],
     activeProcesses: [],
-    childStreams: [],
     todos: [],
     plan: null,
     processOutput: new Map(),
@@ -44,11 +41,11 @@ function makeSlice(
 }
 
 function child(
-  over: Partial<SubagentChildInfo> & {
+  over: Partial<ChildStreamEntryRow> & {
     executionId: string;
     childStreamId: StreamTabId;
   },
-): ActiveChildInfo {
+): ChildStreamEntryRow {
   return { kind: 'subagent', agentName: 'agent', ...over };
 }
 
@@ -58,18 +55,35 @@ function streamsOf(
   return new Map(slices.map((s) => [s.streamId, s]));
 }
 
+const EMPTY_CHILD_STREAM_ENTRIES = buildChildStreamEntries({
+  parentStreamId: 'main@m#root' as StreamTabId,
+});
+
 describe('collectResumeTargets', () => {
   it('returns just the main session when there are no subagents', () => {
     const streams = streamsOf(makeSlice({ streamId: 'main@m#root' }));
-    expect(collectResumeTargets({ rootExecutionId: 'root', streams })).toEqual([
-      { executionId: 'root', label: 'main', isRoot: true },
-    ]);
+    expect(
+      collectResumeTargets({
+        childStreamEntries: EMPTY_CHILD_STREAM_ENTRIES,
+        rootExecutionId: 'root',
+        streams,
+      }),
+    ).toEqual([{ executionId: 'root', label: 'main', isRoot: true }]);
   });
 
   it('lists tool-use subagents and excludes workflow children', () => {
-    const root = makeSlice({
-      streamId: 'main@m#root',
-      childStreams: [
+    const root = makeSlice({ streamId: 'main@m#root' });
+    const reviewer = makeSlice({
+      streamId: 'reviewer@m#rev',
+      category: AgentCategory.ToolUse,
+    });
+    const builder = makeSlice({
+      streamId: 'builder@m#flow',
+      category: AgentCategory.Workflow,
+    });
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root.streamId,
+      retained: [
         child({
           executionId: 'rev',
           agentName: 'reviewer',
@@ -82,17 +96,10 @@ describe('collectResumeTargets', () => {
         }),
       ],
     });
-    const reviewer = makeSlice({
-      streamId: 'reviewer@m#rev',
-      category: AgentCategory.ToolUse,
-    });
-    const builder = makeSlice({
-      streamId: 'builder@m#flow',
-      category: AgentCategory.Workflow,
-    });
 
     expect(
       collectResumeTargets({
+        childStreamEntries,
         rootExecutionId: 'root',
         streams: streamsOf(root, reviewer, builder),
       }),
@@ -103,9 +110,11 @@ describe('collectResumeTargets', () => {
   });
 
   it('skips children whose stream never reported a category (processes/unknown)', () => {
-    const root = makeSlice({
-      streamId: 'main@m#root',
-      childStreams: [
+    const root = makeSlice({ streamId: 'main@m#root' });
+    const shell = makeSlice({ streamId: 'bash@tool#sh' }); // category undefined
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: root.streamId,
+      retained: [
         child({
           executionId: 'sh',
           agentName: 'bash',
@@ -113,9 +122,10 @@ describe('collectResumeTargets', () => {
         }),
       ],
     });
-    const shell = makeSlice({ streamId: 'bash@tool#sh' }); // category undefined
+
     expect(
       collectResumeTargets({
+        childStreamEntries,
         rootExecutionId: 'root',
         streams: streamsOf(root, shell),
       }),
@@ -124,7 +134,11 @@ describe('collectResumeTargets', () => {
 
   it('returns nothing when there is no root execution yet', () => {
     expect(
-      collectResumeTargets({ rootExecutionId: undefined, streams: new Map() }),
+      collectResumeTargets({
+        childStreamEntries: EMPTY_CHILD_STREAM_ENTRIES,
+        rootExecutionId: undefined,
+        streams: new Map(),
+      }),
     ).toEqual([]);
   });
 });

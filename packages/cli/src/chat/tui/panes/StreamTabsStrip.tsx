@@ -10,10 +10,14 @@ import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { textDisplayWidth, truncateToWidth } from '../render/terminalText';
 import {
   activeStreamId as activeStreamIdSignal,
-  parentStream as parentStreamSignal,
   streams as streamsSignal,
   type StreamSlice,
 } from '../state/cliState';
+import {
+  childStreamEntries as childStreamEntriesSignal,
+  parentStream as parentStreamSignal,
+  type ChildStreamEntries,
+} from '../state/childExecutions';
 import { activeStreamTreeViews } from '../state/streamViews';
 import { useSignal } from '../state/useSignal';
 
@@ -186,6 +190,7 @@ function collapseMiddle(
 
 export function streamTabsDisplayItems(init: {
   readonly activeStreamId: StreamTabId | undefined;
+  readonly childStreamEntries: ChildStreamEntries;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly width: number;
@@ -261,8 +266,10 @@ function StreamTabsStripFromState(props: {
   const activeStreamId = useSignal(activeStreamIdSignal);
   const streams = useSignal(streamsSignal);
   const parentStream = useSignal(parentStreamSignal);
+  const childStreamEntries = useSignal(childStreamEntriesSignal);
   const items = streamTabsDisplayItems({
     activeStreamId,
+    childStreamEntries,
     streams,
     parentStream,
     width: props.width,
