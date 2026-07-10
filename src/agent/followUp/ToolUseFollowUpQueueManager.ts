@@ -1,3 +1,4 @@
+import { LRUCache } from 'lru-cache';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import {
@@ -15,11 +16,13 @@ const logger = createChannelTrace('ToolUseFollowUpQueue');
  * default instance so unmigrated default-session callers stay byte-identical.
  */
 export class ToolUseFollowUpQueue {
+  static readonly RELEASED_CAP = 500;
   private static readonly defaultQueue = new ToolUseFollowUpQueue();
   private readonly queues = new Map<StreamTabId, FollowUpQueue>();
   /** Streams whose queues were explicitly released (orchestrator disposed). */
-  private readonly released = new Set<StreamTabId>();
-  static readonly RELEASED_CAP = 500;
+  private readonly released = new LRUCache<StreamTabId, true>({
+    max: ToolUseFollowUpQueue.RELEASED_CAP,
+  });
   /** Observers notified whenever a stream's queue is released. */
   private readonly releaseObservers = new Set<
     (streamId: StreamTabId) => void
@@ -117,13 +120,7 @@ export class ToolUseFollowUpQueue {
   }
 
   private rememberReleased(streamId: StreamTabId): void {
-    this.released.delete(streamId);
-    this.released.add(streamId);
-    while (this.released.size > ToolUseFollowUpQueue.RELEASED_CAP) {
-      const oldest = this.released.values().next().value;
-      if (oldest === undefined) return;
-      this.released.delete(oldest);
-    }
+    this.released.set(streamId, true);
   }
 
   static onRelease(observer: (streamId: StreamTabId) => void): () => void {

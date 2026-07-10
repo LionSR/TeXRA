@@ -14,18 +14,13 @@ import {
   type RunContext,
 } from '@agent/runtime/RunContext';
 
-/** Fields that belong to one concrete tool call or tool-cycle state snapshot. */
-export interface ToolCallContext {
-  toolCallId?: string;
-  tracker: FileInteractionState;
-  /** Plan and todo progress state. Absent in contexts without work-plan support. */
-  workPlanState?: WorkPlanState;
+/** Optional lifecycle callbacks a tool call may be given, grouped since they
+ *  vary together by call site rather than independently. */
+export interface ToolCallHooks {
   /** Called by tools with approval flows to trigger in-progress log after approval. */
   onExecutionReady?: () => void;
   /** Called by tools to push partial output for live streaming to the UI. */
   onToolOutput?: (chunk: string) => void;
-  /** Aborts when the current tool call is cancelled by the owning agent run. */
-  signal?: AbortSignal;
   /**
    * Roll a completed subagent's model cost (USD) into the parent run's usage
    * totals. Delegation tools call this when a child run finishes so parent
@@ -34,6 +29,17 @@ export interface ToolCallContext {
    * complete later); it mutates the live run accumulator directly.
    */
   recordSubagentCost?: (costUsd: number) => void;
+}
+
+/** Fields that belong to one concrete tool call or tool-cycle state snapshot. */
+export interface ToolCallContext {
+  toolCallId?: string;
+  tracker: FileInteractionState;
+  /** Plan and todo progress state. Absent in contexts without work-plan support. */
+  workPlanState?: WorkPlanState;
+  /** Aborts when the current tool call is cancelled by the owning agent run. */
+  signal?: AbortSignal;
+  hooks?: ToolCallHooks;
 }
 
 export interface CurrentToolContexts {

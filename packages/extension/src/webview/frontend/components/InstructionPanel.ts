@@ -83,11 +83,11 @@ function getSessionTitle(type: SessionType): string {
 }
 
 function resolveSessionHintKey(session: SessionContextValue): SessionHintKey {
-  if (session.sessionType === SESSION_TYPES.TOOL_USE) {
-    const opt = session.toolUseAgentOptions.find(
-      (o) => o.value === session.toolUseAgent,
-    );
-    if (opt?.isOrchestrator) return 'orchestrator';
+  if (
+    session.sessionType === SESSION_TYPES.TOOL_USE &&
+    session.isOrchestratorSelected
+  ) {
+    return 'orchestrator';
   }
   return session.sessionType;
 }

@@ -50,7 +50,6 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
   const n = counter++;
   const executionId = `a${n.toString(16).padStart(5, '0')}` as ExecutionId;
   const streamId = `stream:result-${n}` as StreamTabId;
-  const streamStatus = new StreamStatusMachine();
   const config = AgentConfigSchema.parse({
     agent: 'assistant',
     model: 'test-model',
@@ -63,6 +62,7 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
   const storageKey = executionId as unknown as StorageKey;
   const logger = overrides?.logger ?? new TraceEmitter();
   const session = defaultSession();
+  const streamStatus = session.status;
   const runScope = createRunScope({
     runtimeHost: explicit.host,
     streamId,
@@ -92,7 +92,6 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
     setting,
     prompt,
     runScope,
-    streamStatus,
     logger,
     parentStage: logger.openStage('Run: assistant'),
     storageKey,
