@@ -132,12 +132,14 @@ export async function loadAgentSettingAndPrompts(
 
     // Parent provides defaults, child overrides.
     // parentSettings has resolved ToolDefinition objects while
-    // config.settings may still have raw strings; the merge produces a
-    // hybrid that we treat as input for the resolution step below.
-    settings = mergeInheritedAgentObject(
-      parentSettings as unknown as Record<string, unknown>,
-      config.settings as unknown as Record<string, unknown>,
-    ) as unknown as AgentSettingInput;
+    // config.settings may still have raw strings; AgentSetting's fields are a
+    // structural subset of AgentSettingInput's (required vs. optional), so the
+    // merge can be typed as AgentSettingInput directly without an
+    // unknown-escaping cast.
+    settings = mergeInheritedAgentObject<AgentSettingInput>(
+      parentSettings,
+      config.settings,
+    );
     prompts = mergeInheritedAgentObject(parentPrompts, config.prompts);
   }
 

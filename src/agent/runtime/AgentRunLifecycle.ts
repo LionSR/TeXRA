@@ -196,12 +196,13 @@ export async function finalizeRunTerminal(
 }
 
 function transitionRunStart(ctx: AgentLaunchContext): void {
-  const { streamId } = ctx.runScope;
+  const { streamId, session } = ctx.runScope;
+  const streamStatus = session.status;
   const options = {
     trace: ctx.logger,
   };
   if (
-    ctx.streamStatus.transition(
+    streamStatus.transition(
       streamId,
       STREAM_PHASE.RUNNING,
       'lifecycle',
@@ -210,7 +211,7 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
   ) {
     return;
   }
-  const resumed = ctx.streamStatus.transition(
+  const resumed = streamStatus.transition(
     streamId,
     STREAM_PHASE.RUNNING,
     'resume',
@@ -219,7 +220,7 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
   if (resumed) {
     return;
   }
-  if (ctx.streamStatus.get(streamId) === STREAM_PHASE.RUNNING) {
+  if (streamStatus.get(streamId) === STREAM_PHASE.RUNNING) {
     return;
   }
   logger.warn('Failed to transition run to RUNNING', {
@@ -306,7 +307,7 @@ export async function runFlowWithLifecycle(
     finalizeRunTerminal({
       handle,
       executions: session.executions,
-      streamStatus: ctx.streamStatus,
+      streamStatus: session.status,
       usage: ctx.usageMonitor.lastTotals(),
       isSubagent: options?.isSubagent ?? false,
       stage: ctx.parentStage,

@@ -319,12 +319,7 @@ export function handlePermissionAction(
       // Non-terminal actions like openDiff, previewProposed, showLatexdiff
       // just open editors without settling the approval.
       if (action === 'approve' || action === 'reject' || isYolo) {
-        removePrompt(
-          ctx,
-          permission.kind,
-          'requestId',
-          permission.data.requestId,
-        );
+        removePrompt(ctx, permission.kind, permission.data.requestId);
       }
       break;
     }
@@ -367,12 +362,7 @@ export function handlePermissionAction(
         });
       }
       // Optimistic removal
-      removePrompt(
-        ctx,
-        PERMISSION_KIND.RETRY,
-        'streamId',
-        permission.data.streamId,
-      );
+      removePrompt(ctx, PERMISSION_KIND.RETRY, permission.data.streamId);
       break;
     case PERMISSION_KIND.PROPOSAL: {
       // "Super Yolo (this session)" approves this proposal like a normal approve
@@ -404,7 +394,6 @@ export function handlePermissionAction(
       const removed = removePrompt(
         ctx,
         PERMISSION_KIND.PROPOSAL,
-        'proposalId',
         permission.data.proposalId,
       );
       if (!removed) {
@@ -421,7 +410,6 @@ export function handlePermissionAction(
       removePrompt(
         ctx,
         PERMISSION_KIND.PLAN_APPROVAL,
-        'approvalId',
         permission.data.approvalId,
       );
       break;
@@ -445,12 +433,7 @@ export function handlePermissionAction(
           feedback,
         });
       }
-      removePrompt(
-        ctx,
-        PERMISSION_KIND.EXTERNAL_INQUIRY,
-        'requestId',
-        requestId,
-      );
+      removePrompt(ctx, PERMISSION_KIND.EXTERNAL_INQUIRY, requestId);
       clearInquiryDraft(requestId);
       break;
     }
@@ -462,7 +445,7 @@ export function handlePermissionAction(
         feedback,
         answers,
       });
-      removePrompt(ctx, PERMISSION_KIND.USER_QUESTION, 'requestId', requestId);
+      removePrompt(ctx, PERMISSION_KIND.USER_QUESTION, requestId);
       break;
     }
   }
