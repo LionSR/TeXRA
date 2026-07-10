@@ -77,7 +77,7 @@ R1 = every live dual must carry either an in-flight **deletion PR** or a **dated
 **DUAL-8 — RETRACTED (2026-07-10, #7713).** This row claimed a `'runFact.'`
 string-prefix protocol (`runFactEvents.ts:19,45-57`, a `RUN_FACT_DOMAIN_PREFIX`
 const + `to/fromRunFactDomainKey` helpers) dual to "typed `AgentEvent` arms (do
-not exist yet)." Verified independently at HEAD: `runFactEvents.ts` is 34
+not exist yet)." Verified independently at origin/main `4363b4089` (2026-07-10): `runFactEvents.ts` is 34
 lines and has no such constant, helpers, or `'runFact.'` string — its header
 comment says run facts already "ride the run trace as explicit `AgentEvent`
 arms," i.e. the typed arms this row said didn't exist are the only thing that

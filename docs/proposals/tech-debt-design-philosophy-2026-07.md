@@ -75,7 +75,7 @@ Six design verdicts survived adversarial verification across four APoSD lenses (
 - **Correction (2026-07-10, #7713).** This finding claimed `runFactEvents.ts:19`
   owns `RUN_FACT_DOMAIN_PREFIX='runFact.'` (with `toRunFactDomainKey`/
   `fromRunFactDomainKey` helpers at `:45-57`) and that `TexraTranscriptRecorder.ts:40`
-  re-declares it. Verified independently at HEAD: `runFactEvents.ts` is 34
+  re-declares it. Verified independently at origin/main `4363b4089` (2026-07-10): `runFactEvents.ts` is 34
   lines, exports only `RunFactPayloads`/`RunFactEventName`/`emitRunFact`, and
   has no such constant, helpers, or `'runFact.'` string — its header comment
   says run facts "ride the run trace as explicit `AgentEvent` arms" and
