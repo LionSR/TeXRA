@@ -1445,7 +1445,10 @@ export class DesktopProgressBridge {
     let state: MainViewPersistedState;
     try {
       state = buildMainViewState(taskState);
-    } catch {
+    } catch (error) {
+      this.logger.error('Failed to build main-view state for restore', {
+        data: toLogData(error),
+      });
       return false;
     }
     this.postToRenderer({
