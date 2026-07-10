@@ -99,7 +99,7 @@ The CLI attaches its TUI fact subscription while constructing the run host
 (`packages/cli/src/chat/chatSessionController.ts:235-266`), before `executeAgent` starts
 (`chatSessionController.ts:281-302`). Both the general launch path and direct child-stream path assert this
 ordering (`src/agent/runtime/AgentLaunchContext.ts:349-350`;
-`src/tools/childStream.ts:97-105`).
+`src/tools/childStream.ts:105`).
 
 This is the outer ordering guarantee. The new map must consume the existing hub; it must not add a second queue,
 replay layer, or asynchronous reducer whose subscription can miss the initial roster.
@@ -107,7 +107,7 @@ replay layer, or asynchronous reducer whose subscription can miss the initial ro
 ### 2. Attachment and status can precede both relationship facts
 
 Direct child streams emit `setActiveStream` before creating and tracking the execution handle
-(`src/tools/childStream.ts:107-120`, `:147-159`). Tracking with an initial status publishes that status before
+(`src/tools/childStream.ts:110-120`, `:147-159`). Tracking with an initial status publishes that status before
 the handle is put into the active roster (`src/agent/runtime/executionRegistry.ts:248-260`).
 
 Native launches admit the opposite local order between status and attachment: stream reservation publishes
@@ -236,6 +236,7 @@ export interface ChildStreamEntry {
 
   /** Parent under which the child first acquired a retained row. */
   readonly retainedParentStreamId?: StreamTabId;
+  /** One-based, first-seen order within retainedParentStreamId. */
   readonly retainedOrder?: number;
 
   /**
@@ -259,8 +260,11 @@ hold a minimal tombstone for a removed parent-only stream. This keeps child-remo
 the same collection instead of adding a second mutable `removedStreams` set. No field stores lifecycle status. No
 non-tombstone entry is created merely because a root or child stream is attached.
 
-`retainedOrder` is assigned from the current maximum for that parent when a roster first retains the child. It is
-computed from the map during the uncommon insertion transition, so no second mutable order counter is needed.
+`retainedOrder` is one-based and monotonic within each retained parent. For one roster batch, compute the
+pre-existing maximum (zero when there are no retained children), then assign `max + 1`, `max + 2`, and so on to
+previously unretained accepted children in payload order. Existing children keep their original values. The
+maximum is computed from the map during the uncommon insertion transition, so no second mutable order counter is
+needed.
 
 The owner should live in an existing CLI state module, preferably by deepening
 `packages/cli/src/chat/tui/state/childExecutions.ts`, rather than adding a new state plane or a rename-only module.
@@ -308,7 +312,7 @@ readonly map in one pass; it is not stored or independently mutated.
 The focus-order selector preserves the current union: first emit retained children recorded for the requested
 parent, in retained order, and then current-topology children not already present, in map insertion order. Continue
 to require a child `StreamSlice` before making the child focusable, preserving the present guard in
-`focusCycle.ts:46-48`. This selector is deliberately broader than current topology. A promoted retained row stays
+`focusCycle.ts:50-65`. This selector is deliberately broader than current topology. A promoted retained row stays
 available as a historical focus target from its former parent, but parent/back routing treats the promoted stream
 as top-level once focused.
 
