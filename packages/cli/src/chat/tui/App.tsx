@@ -64,11 +64,11 @@ import {
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   transcriptViewerStreamId as transcriptViewerStreamIdSignal,
-  parentStream as parentStreamSignal,
   streams as streamsSignal,
 } from './state/cliState';
 import {
   childStreamEntries as childStreamEntriesSignal,
+  parentStream as parentStreamSignal,
   visibleSubagentRows,
 } from './state/childExecutions';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';

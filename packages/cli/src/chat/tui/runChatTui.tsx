@@ -99,7 +99,6 @@ import { createTuiViewportController } from './render/tuiViewportController';
 import { clearApprovals } from './state/approvalQueue';
 import {
   activeStreamId as activeStreamIdSignal,
-  parentStream as parentStreamSignal,
   resetCliState,
   patchSessionMeta,
   sessionMeta as sessionMetaSignal,
@@ -107,7 +106,10 @@ import {
   pendingExitHint,
   pendingExitResumeId,
 } from './state/cliState';
-import { childStreamEntries as childStreamEntriesSignal } from './state/childExecutions';
+import {
+  childStreamEntries as childStreamEntriesSignal,
+  parentStream as parentStreamSignal,
+} from './state/childExecutions';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,

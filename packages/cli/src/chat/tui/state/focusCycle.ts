@@ -15,11 +15,11 @@ import { type StreamTabId } from '@shared/schemas';
 import {
   childStreamEntries as childStreamEntriesSignal,
   focusOrderDescendants,
+  parentStream,
   type ChildStreamEntries,
 } from './childExecutions';
 import {
   activeStreamId,
-  parentStream,
   streams as streamsSignal,
   type StreamSlice,
 } from './cliState';

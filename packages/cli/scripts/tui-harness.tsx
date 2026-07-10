@@ -59,8 +59,6 @@ import {
   activeStreamId as activeStreamIdSignal,
   rootRunStartAvailable,
   rootStreamId,
-  parentStream,
-  setParentStream,
   resetCliState,
   sessionMeta,
   setCliSessionModelOverride,
@@ -72,6 +70,8 @@ import {
   activeSubagentsFor,
   applySubagentRoster,
   childStreamEntries,
+  parentStream,
+  setParentStream,
   visibleSubagentRows,
 } from '../src/chat/tui/state/childExecutions';
 import {

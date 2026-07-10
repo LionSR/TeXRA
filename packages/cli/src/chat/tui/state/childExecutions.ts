@@ -146,6 +146,40 @@ export function setParentStream(
   CHILD_STREAMS.set(out);
 }
 
+/** Field-by-field comparison of the persisted roster summary — avoids a
+ *  spurious `changed` on a same-content roster snapshot the runtime resends
+ *  as a fresh array/object on every poll. */
+function summaryUnchanged(
+  a: ChildStreamEntry['summary'],
+  b: ChildStreamEntry['summary'],
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.agentName === b.agentName &&
+    a.executionId === b.executionId &&
+    a.startedAt === b.startedAt &&
+    a.elapsed === b.elapsed &&
+    a.toolName === b.toolName
+  );
+}
+
+/** Whether applying `nextEntry` over `entry` would be a no-op — compares only
+ *  the fields `applySubagentRoster` itself writes (summary, active/retained
+ *  parent, retained order), never `edgeParentStreamId`/`removed`. */
+function subagentEntryUnchanged(
+  entry: ChildStreamEntry | undefined,
+  nextEntry: ChildStreamEntry,
+): boolean {
+  return (
+    entry !== undefined &&
+    entry.activeParentStreamId === nextEntry.activeParentStreamId &&
+    entry.retainedParentStreamId === nextEntry.retainedParentStreamId &&
+    entry.retainedOrder === nextEntry.retainedOrder &&
+    summaryUnchanged(entry.summary, nextEntry.summary)
+  );
+}
+
 /**
  * `child.activity(kind: 'subagents')` roster snapshot for one parent: the
  * accepted children become the complete active-membership snapshot for that
@@ -213,6 +247,7 @@ export function applySubagentRoster(
         ? ++maxRetainedOrder
         : entry?.retainedOrder,
     };
+    if (subagentEntryUnchanged(entry, nextEntry)) continue;
     out.set(childStreamId, nextEntry);
     changed = true;
   }

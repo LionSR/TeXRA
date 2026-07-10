@@ -25,12 +25,15 @@ import { assertNever } from '@utils/core';
 
 import {
   activeStreamId,
-  setParentStream,
   removeStream,
   patchStream,
   type StreamSlice,
 } from './cliState';
-import { applySubagentRoster, isChildStreamRemoved } from './childExecutions';
+import {
+  applySubagentRoster,
+  isChildStreamRemoved,
+  setParentStream,
+} from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';
