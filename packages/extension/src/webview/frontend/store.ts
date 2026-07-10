@@ -16,10 +16,7 @@ import {
   type MultiFiles,
 } from '@shared/schemas';
 
-import {
-  type SessionType,
-  type MultipleDocumentFileType,
-} from './constants';
+import { type SessionType, type MultipleDocumentFileType } from './constants';
 
 // =========================================================================
 // Default State
