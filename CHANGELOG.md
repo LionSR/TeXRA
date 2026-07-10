@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Setup no longer reports expired or revoked relay tokens as signed in** —
+  authentication status now verifies configured CI relay tokens while still
+  preserving valid Supabase sessions and direct API-key-only setup.
 - **OpenRouter transient server errors no longer stall a request for up to an
   hour** — the OpenRouter SDK's built-in retry window is now capped at 30
   seconds, so a persistent 5XX surfaces through TeXRA's visible retry/failure
