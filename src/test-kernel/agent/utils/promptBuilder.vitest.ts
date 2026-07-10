@@ -82,7 +82,10 @@ describe('PromptBuilder', () => {
     // files must be individually viewed at session start — a directory
     // listing alone does not load their content — and this must hold even
     // for self-contained-looking requests.
-    assert.match(prompts.instructionSuffix, /Pinned memories are always loaded/);
+    assert.match(
+      prompts.instructionSuffix,
+      /Pinned memories are always loaded/,
+    );
     assert.match(
       prompts.instructionSuffix,
       /`view` each \[pinned\] file|`view` each pinned file|read each pinned memory file/,
