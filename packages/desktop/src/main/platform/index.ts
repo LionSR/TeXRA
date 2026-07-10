@@ -22,9 +22,14 @@ import { configKeyVariants } from '@shared/config/configKeys';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { migrateLegacyDesktopDataRoot } from './dataRootMigration.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
-import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
+import {
+  resolveDesktopDataRoot,
+  resolveResourcesPath,
+  resolveWorkspacePath,
+} from './paths.js';
 import { showSecretStorageWarningDialog } from './secretStorageWarningDialog.js';
 import {
   isDesktopResumeInFlight,
@@ -76,7 +81,14 @@ export async function initializeElectronPlatform(
       DESKTOP_WORKSPACE_PATH_STATE_KEY,
     ),
   });
-  const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
+  // Desktop's memory/history/executions data root: shared with the CLI's
+  // `~/.texra` scheme in production so a workspace worked on from both hosts
+  // shows one history (#7987). A best-effort, one-time move of any legacy
+  // `userData`-rooted store protects the maintainer's own dev machines; there
+  // is no ongoing read fallback afterward — only `dataRoot` is ever read.
+  const dataRoot = resolveDesktopDataRoot(userDataPath);
+  await migrateLegacyDesktopDataRoot(userDataPath, dataRoot);
+  const storage = new WorkspaceStorageProvider(dataRoot, workspacePath);
   const workspaceStateStore = await JsonStore.open(
     join(storage.getStoragePath(), 'state.json'),
   );
