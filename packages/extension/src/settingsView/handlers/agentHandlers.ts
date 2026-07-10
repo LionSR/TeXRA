@@ -16,7 +16,6 @@ import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClien
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceSM, globalSM } from '@common/state';
 import {
-  isFileNotFoundError,
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';

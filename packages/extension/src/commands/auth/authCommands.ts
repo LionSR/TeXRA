@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
-import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from '@auth/constants';
+import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { showSettingsView } from '@commands/settings';
 import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
