@@ -303,7 +303,7 @@ export async function getTeXCount(
   }
 }
 
-export interface TexCountStat {
+export interface TeXCountStat {
   label: string;
 }
 
@@ -317,7 +317,7 @@ const TEXCOUNT_STAT_PATTERNS: readonly [RegExp, string][] = [
 ];
 
 /** Parse texcount's raw text output into the headline stats it reports. */
-export function parseTexCountStats(output: string): TexCountStat[] {
+export function parseTeXCountStats(output: string): TeXCountStat[] {
   return TEXCOUNT_STAT_PATTERNS.map(([pattern, template]) => {
     const match = output.match(pattern);
     return match ? { label: template.replace('$1', match[1]) } : null;

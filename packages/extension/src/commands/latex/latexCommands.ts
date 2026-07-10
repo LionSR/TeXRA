@@ -15,7 +15,7 @@ import {
 import { runLatexFormatter } from '@latex/texFormatter';
 import {
   getTeXCount,
-  parseTexCountStats,
+  parseTeXCountStats,
   type TexcountMode,
 } from '@latex/texcount';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
@@ -193,7 +193,7 @@ export async function handleGetTeXCount(): Promise<void> {
             return;
           }
 
-          const stats = parseTexCountStats(output);
+          const stats = parseTeXCountStats(output);
 
           await vscode.window.showQuickPick(stats, {
             placeHolder: 'TeXCount Results (press Esc to dismiss)',
