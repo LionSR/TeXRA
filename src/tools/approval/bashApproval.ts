@@ -120,8 +120,8 @@ export function buildBashApprovalRejectedResult(
 ): ToolResult {
   const preview = truncateWithEllipsis(command, 60);
   const message = timedOut
-    ? `Bash command approval timed out: ${preview}`
-    : `User rejected bash command: ${preview}`;
+    ? `Command approval timed out: ${preview}`
+    : `User rejected command: ${preview}`;
   const feedback = userMessage?.trim();
   return {
     status: 'error',
