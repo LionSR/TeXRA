@@ -14,6 +14,7 @@ import {
   type ProgressBackendInteractionPayloads,
 } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
+import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { hydrateProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryHydration';
 import {
   buildApprovalRequestHandlerSet,
@@ -1087,14 +1088,19 @@ export class DesktopProgressBridge {
    * Mirrors the extension's `revealProgressStream` for the desktop Settings
    * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
    * run works the same way on both hosts.
+   *
+   * Resolves category via `buildStreamInfo` (persisted config/hints), not
+   * `getStreamState()`'s ephemeral session-only kind, so a goal-owned stream
+   * restored from `workspaceState` that hasn't emitted a live fact yet this
+   * session still matches the current filter instead of unconditionally
+   * resetting it to 'all' (#7851).
    */
   revealStream(streamId: StreamTabId): void {
     if (!this.streamLogs.has(streamId)) {
       return;
     }
     const filter = this.state.agentCategoryFilter;
-    const category = this.state.getStreamState(streamId)?.kind;
-    if (filter !== 'all' && filter !== category) {
+    if (buildStreamInfo(this.state, streamId, filter) === null) {
       this.state.agentCategoryFilter = 'all';
     }
     this.routeToProgress();
