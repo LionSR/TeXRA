@@ -35,7 +35,7 @@
     "capture:walkthrough-media": "node scripts/capture-walkthrough-media.mjs",
     "smoke:webviews": "corepack pnpm run vite:webviews && corepack pnpm run smoke:webviews:run",
     "smoke:webviews:run": "node scripts/smoke-webviews-electron.mjs",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test-kernel.json && corepack pnpm --filter texra typecheck && corepack pnpm --filter @texra-ai/cli typecheck && corepack pnpm --filter @texra/trace-viewer run typecheck",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test-kernel.json && corepack pnpm --filter texra typecheck && corepack pnpm --filter @texra-ai/cli typecheck && corepack pnpm --filter @texra/trace-viewer run typecheck && corepack pnpm --filter @texra/desktop typecheck",
     "compile:fast": "corepack pnpm --filter texra compile:fast",
     "compile:safe": "npm run typecheck && npm run compile:fast",
     "watch:fast": "corepack pnpm --filter texra watch:fast",
