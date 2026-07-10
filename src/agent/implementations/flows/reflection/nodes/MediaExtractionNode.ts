@@ -26,7 +26,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
     // shared.workspaceSnapshot was produced by this same flow's own
     // toSnapshot() last round (or by the one-time resume hydration in
     // runReflectionFlow) — never raw persisted/legacy data — so re-deriving
-    // it here uses the canonical-only path (see AgentWorkspaceState.fromSnapshot).
+    // it here uses the canonical-only path (see AgentWorkspaceState.fromCanonicalSnapshot).
     const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
       shared.workspaceSnapshot,
     );
