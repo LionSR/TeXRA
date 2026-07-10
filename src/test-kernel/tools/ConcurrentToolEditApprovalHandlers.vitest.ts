@@ -22,11 +22,19 @@ import {
 /**
  * Proves the desktop multi-window invariant: two runs owned by distinct
  * sessions never cross-talk, even when both requests are in flight at once.
- * The approval queue is shared, but each request must resolve through the
- * `SessionHandle.interactions` owner captured by its run context.
+ * Each request must resolve through the `SessionHandle.interactions` owner
+ * captured by its run context.
  */
 describe('Concurrent session tool edit approval handlers', () => {
   setupPlatform({ workspacePath: '/workspace', config: {}, files: {} });
+
+  const testSessions: SessionHandle[] = [];
+
+  function createTestSession(): SessionHandle {
+    const session = new SessionHandle();
+    testSessions.push(session);
+    return session;
+  }
 
   beforeEach(() => {
     cleanupAllApprovals();
@@ -34,6 +42,7 @@ describe('Concurrent session tool edit approval handlers', () => {
 
   afterEach(() => {
     cleanupAllApprovals();
+    for (const session of testSessions.splice(0)) session.dispose();
   });
 
   it('routes each in-flight request through its owning session', async () => {
@@ -53,8 +62,8 @@ describe('Concurrent session tool edit approval handlers', () => {
       return { accepted: true, appliedContent: 'from-b' };
     };
 
-    const sessionA = new SessionHandle();
-    const sessionB = new SessionHandle();
+    const sessionA = createTestSession();
+    const sessionB = createTestSession();
     sessionA.useHostInteractions({
       requestToolEditApproval: handlerA,
       resolve: () => false,
@@ -90,9 +99,9 @@ describe('Concurrent session tool edit approval handlers', () => {
       sourceTool: 'write_file',
     };
 
-    // Fire both without awaiting between them — the shared approval queue
-    // serializes execution, but each call must still resolve through the
-    // handler captured from its own RunContext, not whichever ran last.
+    // Fire both without awaiting between them — each call must still
+    // resolve through the handler captured from its own RunContext, not
+    // whichever ran last.
     const resultAPromise = withRunContext(contextA, () =>
       requestToolEditApproval(requestA),
     );
