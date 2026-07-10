@@ -6,20 +6,18 @@ import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import {
-  isActiveStatus,
-  isLiveElapsedStatus,
-} from '@common/constants/streamStatus';
-import {
-  TODO_STATUS,
-  type ActiveChildInfo,
-  type StreamLifecycleStatus,
-  type StreamTabId,
-  type TodoItem,
-} from '@shared/schemas';
+import { isActiveStatus } from '@common/constants/streamStatus';
+import { type ActiveChildInfo, type StreamTabId } from '@shared/schemas';
 import { assertNever, clamp } from '@utils/core';
-import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
-import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
+import {
+  allocateMiddleRows,
+  allocateSidePanelRows,
+  PINNED_CHROME_ROWS,
+  shouldShowTipRow,
+  shouldShowTodosPlanPanel,
+  staticScrollbackTarget,
+  staticTranscriptRowBudget,
+} from './appLayout';
 import { clampModalWidth } from './ui/theme';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
@@ -92,8 +90,6 @@ interface InputEventEmitterLike {
   off(event: 'input', listener: (data: string) => void): void;
 }
 
-const FOREGROUND_TRANSCRIPT_ROWS = 1;
-const MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT = 6;
 const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
 const EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS = 6;
 const FORM_FOREGROUND_MAX_ROWS = 18;
@@ -104,7 +100,6 @@ const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // conversation or push the input bar off-screen.
 const BOTTOM_PANEL_MAX_ROWS = 10;
 const EMPTY_SUBAGENT_ROWS: readonly ActiveChildInfo[] = [];
-const COMPACT_STATIC_TRANSCRIPT_MAX_ROWS = 14;
 // A bare Esc and the second key of an `Esc s` / `Esc p` chord are two
 // separate keystrokes on terminals without true Meta-key detection (macOS
 // Terminal.app). 125ms was too tight for a deliberate but unhurried chord
@@ -113,242 +108,6 @@ const COMPACT_STATIC_TRANSCRIPT_MAX_ROWS = 14;
 // tmux-style chord window so a human-paced chord still resolves before we
 // commit to interrupting.
 const ESC_META_CHORD_INTERRUPT_DELAY_MS = 500;
-const COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS = 2;
-
-const PINNED_CHROME_ROWS = {
-  tip: 1,
-  input: 3,
-  streamTabsWorstCase: 1,
-  status: 2,
-} as const;
-
-function pinnedChromeRows({
-  inputVisible = true,
-  queuedFollowUpPanelRows = 0,
-  reverseSearchOpen,
-  slashPaletteOpen,
-  streamTabsVisible = true,
-  staticTranscriptRows = 0,
-  tipVisible = true,
-}: {
-  readonly inputVisible?: boolean;
-  readonly queuedFollowUpPanelRows?: number;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
-  readonly streamTabsVisible?: boolean;
-  readonly staticTranscriptRows?: number;
-  readonly tipVisible?: boolean;
-}): number {
-  const baseRows =
-    PINNED_CHROME_ROWS.status +
-    (inputVisible ? PINNED_CHROME_ROWS.input : 0) +
-    (streamTabsVisible ? PINNED_CHROME_ROWS.streamTabsWorstCase : 0) +
-    queuedFollowUpPanelRows +
-    staticTranscriptRows +
-    (tipVisible ? PINNED_CHROME_ROWS.tip : 0);
-  return (
-    baseRows +
-    (slashPaletteOpen ? SLASH_PALETTE_ROWS : 0) +
-    (reverseSearchOpen ? REVERSE_SEARCH_ROWS : 0)
-  );
-}
-
-export function allocateMiddleRows({
-  foregroundMaxRows,
-  foregroundOpen,
-  inputVisible = true,
-  queuedFollowUpPanelRows = 0,
-  reverseSearchOpen,
-  reserveTranscriptRows = true,
-  rows,
-  slashPaletteOpen,
-  streamTabsVisible = true,
-  staticTranscriptRows = 0,
-  tipVisible = true,
-}: {
-  readonly foregroundMaxRows?: number;
-  readonly foregroundOpen: boolean;
-  readonly inputVisible?: boolean;
-  readonly queuedFollowUpPanelRows?: number;
-  readonly reverseSearchOpen: boolean;
-  readonly reserveTranscriptRows?: boolean;
-  readonly rows: number;
-  readonly slashPaletteOpen: boolean;
-  readonly streamTabsVisible?: boolean;
-  readonly staticTranscriptRows?: number;
-  readonly tipVisible?: boolean;
-}): {
-  readonly foregroundRows: number;
-  readonly transcriptRows: number;
-} {
-  const availableRows = Math.max(
-    0,
-    rows -
-      pinnedChromeRows({
-        inputVisible,
-        queuedFollowUpPanelRows,
-        reverseSearchOpen,
-        slashPaletteOpen,
-        streamTabsVisible,
-        staticTranscriptRows,
-        tipVisible,
-      }),
-  );
-  if (!foregroundOpen) {
-    return { foregroundRows: 0, transcriptRows: availableRows };
-  }
-  if (availableRows === 0) {
-    return { foregroundRows: 0, transcriptRows: 0 };
-  }
-  if (availableRows === 1) {
-    return { foregroundRows: 1, transcriptRows: 0 };
-  }
-
-  const transcriptRows =
-    reserveTranscriptRows &&
-    availableRows >= MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT
-      ? Math.min(FOREGROUND_TRANSCRIPT_ROWS, availableRows - 1)
-      : 0;
-  const foregroundRows = availableRows - transcriptRows;
-  return {
-    // The early returns above and transcript reservation keep this at least 1,
-    // so the lower clamp bound cannot inflate an empty foreground.
-    foregroundRows:
-      foregroundMaxRows === undefined
-        ? foregroundRows
-        : clamp(foregroundMaxRows, 1, foregroundRows),
-    transcriptRows,
-  };
-}
-
-export function allocateSidePanelRows({
-  subagentContentRows,
-  todosPlanContentRows,
-  rows,
-}: {
-  readonly subagentContentRows: number;
-  readonly todosPlanContentRows: number;
-  readonly rows: number;
-}): {
-  readonly subagentRows: number;
-  readonly todosPlanRows: number;
-} {
-  const available = Math.max(0, rows);
-  const subagentNeed = Math.max(0, subagentContentRows);
-  const todosNeed = Math.max(0, todosPlanContentRows);
-  if (available === 0 || subagentNeed + todosNeed === 0) {
-    return { subagentRows: 0, todosPlanRows: 0 };
-  }
-  // Everything fits: each panel gets exactly what its content needs.
-  if (subagentNeed + todosNeed <= available) {
-    return { subagentRows: subagentNeed, todosPlanRows: todosNeed };
-  }
-  // Over budget: a panel with no content gets nothing, a lone panel takes all.
-  if (subagentNeed === 0) return { subagentRows: 0, todosPlanRows: available };
-  if (todosNeed === 0) return { subagentRows: available, todosPlanRows: 0 };
-  // Both present and over budget: keep at least one row each, split the rest
-  // proportionally to need. At a single row the todo/plan panel wins.
-  if (available === 1) return { subagentRows: 0, todosPlanRows: 1 };
-  const subagentRows = Math.min(
-    available - 1,
-    Math.max(
-      1,
-      Math.round((subagentNeed / (subagentNeed + todosNeed)) * available),
-    ),
-  );
-  return { subagentRows, todosPlanRows: available - subagentRows };
-}
-
-export function staticTranscriptRowBudget({
-  footerRows,
-  foregroundOpen,
-  queuedFollowUpPanelRows = 0,
-  rows,
-  tipVisible = true,
-}: {
-  readonly footerRows: number;
-  readonly foregroundOpen: boolean;
-  readonly queuedFollowUpPanelRows?: number;
-  readonly rows: number;
-  readonly tipVisible?: boolean;
-}): number | undefined {
-  if (foregroundOpen || rows > COMPACT_STATIC_TRANSCRIPT_MAX_ROWS) {
-    return undefined;
-  }
-  const optionalRows =
-    rows -
-    footerRows -
-    queuedFollowUpPanelRows -
-    (tipVisible ? PINNED_CHROME_ROWS.tip : 0);
-  const liveTranscriptReserveRows = Math.min(
-    COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS,
-    Math.max(0, optionalRows),
-  );
-  return Math.max(0, optionalRows - liveTranscriptReserveRows);
-}
-
-export interface StaticScrollbackTarget {
-  readonly ownerKey: string;
-  readonly streamId: StreamTabId | undefined;
-}
-
-export function staticScrollbackTarget({
-  activeStreamId,
-  rootStreamId,
-  scopedTranscript = false,
-}: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly rootStreamId: StreamTabId | undefined;
-  readonly scopedTranscript?: boolean;
-}): StaticScrollbackTarget {
-  if (scopedTranscript) {
-    return {
-      ownerKey: activeStreamId ? `stream:${activeStreamId}` : 'scoped:none',
-      streamId: activeStreamId,
-    };
-  }
-  // Before a root run resolves, local helper output and harness-built root
-  // streams still need static scrollback. The root owner key is deliberately
-  // stable across the later rootStreamId resolution so Ink's append-only
-  // <Static> cache does not remount and reprint pre-run root entries.
-  return {
-    ownerKey: 'root',
-    streamId: rootStreamId ?? activeStreamId,
-  };
-}
-
-export function shouldShowTipRow({
-  foregroundOpen,
-  hasQueuedFollowUps = false,
-}: {
-  readonly foregroundOpen: boolean;
-  readonly hasQueuedFollowUps?: boolean;
-}): boolean {
-  return !foregroundOpen && !hasQueuedFollowUps;
-}
-
-export function shouldShowTodosPlanPanel({
-  foregroundOpen,
-  hasPlan,
-  status,
-  todos,
-}: {
-  readonly foregroundOpen: boolean;
-  readonly hasPlan: boolean;
-  readonly status: StreamLifecycleStatus | undefined;
-  readonly todos: readonly TodoItem[];
-}): boolean {
-  if (foregroundOpen) return false;
-  const hasTodos = todos.length > 0;
-  if (!hasTodos && !hasPlan) return false;
-  if (
-    hasTodos &&
-    todos.every((todo) => todo.status === TODO_STATUS.COMPLETED)
-  ) {
-    return false;
-  }
-  return isLiveElapsedStatus(status);
-}
 
 export function appFocusShortcutsActive({
   foregroundOpen,
