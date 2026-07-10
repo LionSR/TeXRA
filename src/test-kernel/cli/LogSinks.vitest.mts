@@ -46,7 +46,7 @@ describe('NdjsonStdoutSink', () => {
   });
 
   it('preserves order across logger and public-record writes', async () => {
-    const { lines, stdout } = createStdoutStub();
+    const { emit, lines, stdout } = createStdoutStub([false, true]);
     const sink = new NdjsonStdoutSink(stdout);
 
     sink.write({
@@ -60,6 +60,7 @@ describe('NdjsonStdoutSink', () => {
       event: 'updateStreamStatus',
       payload: { streamId: 'stream-1', status: 'working' },
     });
+    emit('drain');
     await sink.flush();
 
     expect(lines.map((line) => JSON.parse(line).kind)).toEqual([
