@@ -37,17 +37,24 @@ The script deploys to the production Supabase project by default. Set
 
 ### 2. Set API Key Secrets
 
-Store your API keys as Supabase secrets:
+Store your API keys as Supabase secrets. Pass the same `--project-ref` used
+in step 1 — `supabase secrets set` otherwise operates on whatever project is
+_linked_ in this checkout (or fails if none is linked), which on a fresh
+checkout means the keys silently land on the wrong project or nowhere at all:
 
 ```bash
+# Same ref as `node scripts/deploy-relay.mjs` (defaults to the production
+# project; matches $SUPABASE_PROJECT_REF if you overrode it above).
+PROJECT_REF="${SUPABASE_PROJECT_REF:-jntubmcgbhwtcktubelv}"
+
 # Required secrets (set only the ones you want to support)
-supabase secrets set OPENAI_API_KEY="sk-..."
-supabase secrets set ANTHROPIC_API_KEY="sk-ant-..."
-supabase secrets set GOOGLE_API_KEY="AIza..."
-supabase secrets set XAI_API_KEY="xai-..."
-supabase secrets set DEEPSEEK_API_KEY="sk-..."
-supabase secrets set MOONSHOT_API_KEY="sk-..."
-supabase secrets set DASHSCOPE_API_KEY="sk-..."
+supabase secrets set OPENAI_API_KEY="sk-..." --project-ref "$PROJECT_REF"
+supabase secrets set ANTHROPIC_API_KEY="sk-ant-..." --project-ref "$PROJECT_REF"
+supabase secrets set GOOGLE_API_KEY="AIza..." --project-ref "$PROJECT_REF"
+supabase secrets set XAI_API_KEY="xai-..." --project-ref "$PROJECT_REF"
+supabase secrets set DEEPSEEK_API_KEY="sk-..." --project-ref "$PROJECT_REF"
+supabase secrets set MOONSHOT_API_KEY="sk-..." --project-ref "$PROJECT_REF"
+supabase secrets set DASHSCOPE_API_KEY="sk-..." --project-ref "$PROJECT_REF"
 ```
 
 ### 3. Verify Deployment
