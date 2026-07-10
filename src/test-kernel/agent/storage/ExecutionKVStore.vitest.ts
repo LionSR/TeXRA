@@ -5,6 +5,7 @@ import {
   clearStoreCache,
   EXECUTION_META_SCHEMA_VERSION,
   getExecutionStore,
+  isReservedKvKeyName,
 } from '@agent/storage';
 import * as logger from '@logger/logUtils';
 import {
@@ -22,6 +23,35 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+// Regression for the executionKvFiles leak fix: isReservedKvKeyName is now
+// the single owner of the reserved single-value-key + `child-` prefix
+// vocabulary, exported so callers walking a run directory (e.g.
+// `src/tools/executions/executionKvFiles.ts`) recognize it without
+// re-deriving their own copy.
+describe('isReservedKvKeyName', () => {
+  it.each([
+    'meta',
+    'config',
+    'report',
+    'todos',
+    'conversation',
+    'workspace-files',
+    'result-meta',
+  ])('recognizes the reserved single-value key %s', (key) => {
+    expect(isReservedKvKeyName(key)).toBe(true);
+  });
+
+  it('recognizes any child- prefixed key', () => {
+    expect(isReservedKvKeyName('child-abc123')).toBe(true);
+  });
+
+  it('rejects keys outside the reserved vocabulary', () => {
+    expect(isReservedKvKeyName('flow_abc123')).toBe(false);
+    expect(isReservedKvKeyName('childish')).toBe(false);
+    expect(isReservedKvKeyName('report-draft')).toBe(false);
+  });
 });
 
 describe('ExecutionKVStore meta read shims', () => {
