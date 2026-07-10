@@ -31,12 +31,6 @@ import MockCard from './MockCard.vue';
         >
         <span class="yh-note">workflow vs toolUse</span>
       </div>
-      <div class="yh-line indent">
-        <code class="yh-code"
-          ><span class="kw">documentTag</span>: document</code
-        >
-        <span class="yh-note">XML output wrapper</span>
-      </div>
 
       <div class="yh-gap"></div>
 
