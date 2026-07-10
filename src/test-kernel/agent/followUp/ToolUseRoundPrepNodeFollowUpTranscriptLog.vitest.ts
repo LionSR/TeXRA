@@ -64,10 +64,13 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
     );
   });
 
-  it('still logs exactly once per queued follow-up on the success path', async () => {
+  it('logs each follow-up and refreshes the instruction from user input', async () => {
     const services = buildServices();
     const node = new ToolUseRoundPrepNode().setServices(services);
-    const shared = buildShared();
+    const shared = {
+      ...buildShared(),
+      currentUserInstruction: 'initial request',
+    };
     const runtimeHost = { emit: vi.fn() };
 
     const transition = await withTestRunContext(
@@ -76,13 +79,20 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
       () =>
         node.post(shared, {
           interrupted: false,
-          queuedFollowUps: [{ text: 'Do the thing.', origin: 'user' }],
+          queuedFollowUps: [
+            { text: 'Do the thing.', origin: 'user' },
+            {
+              text: '<subagent-result>done</subagent-result>',
+              origin: 'subagent_result',
+            },
+          ],
           synthetic: false,
         }),
     );
 
     expect(transition).toBeDefined();
-    expect(services.logger.info).toHaveBeenCalledTimes(1);
+    expect(services.logger.info).toHaveBeenCalledTimes(2);
+    expect(shared.currentUserInstruction).toBe('Do the thing.');
   });
 
   it('does not log synthetic follow-ups', async () => {
