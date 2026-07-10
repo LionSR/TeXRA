@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type {
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import {
@@ -47,6 +51,67 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
     ...overrides,
   };
 }
+
+type RuntimePresentationNdjsonPolicy =
+  | {
+      readonly kind: 'log';
+      readonly level: 'error' | 'info';
+      readonly message: string;
+      readonly fields: Readonly<Record<string, unknown>>;
+    }
+  | { readonly kind: 'suppressed' };
+
+type RuntimePresentationNdjsonCases = {
+  [K in RuntimePresentationEvent]: {
+    readonly payload: RuntimePresentationEventPayloads[K];
+    readonly policy: RuntimePresentationNdjsonPolicy;
+  };
+};
+
+const RUNTIME_PRESENTATION_NDJSON_CASES = {
+  requestShowError: {
+    payload: { message: 'Provider returned 500.' },
+    policy: {
+      kind: 'log',
+      level: 'error',
+      message: 'Provider returned 500.',
+      fields: {},
+    },
+  },
+  requestShowInstruction: {
+    payload: {
+      key: 'latex-compile-failed',
+      message: 'Inspect the log before retrying.',
+      actions: ['open-configuration-guide'],
+      showSuppress: true,
+    },
+    policy: {
+      kind: 'log',
+      level: 'info',
+      message: 'Inspect the log before retrying.',
+      fields: {
+        key: 'latex-compile-failed',
+        actions: ['open-configuration-guide'],
+        showSuppress: true,
+      },
+    },
+  },
+  requestOpenFile: {
+    payload: {
+      location: { kind: 'external', absolutePath: '/tmp/paper.tex' },
+      preserveFocus: false,
+    },
+    policy: { kind: 'suppressed' },
+  },
+  showAgentConfigBanner: {
+    payload: { agentName: 'polish' },
+    policy: { kind: 'suppressed' },
+  },
+  requestEnsureProgressView: {
+    payload: {},
+    policy: { kind: 'suppressed' },
+  },
+} satisfies RuntimePresentationNdjsonCases;
 
 function workflowTaskState(
   overrides: {
@@ -1222,20 +1287,20 @@ describe('CLI run progress renderer', () => {
     ]);
   });
 
-  it('routes runtime presentation requests to ndjson logs, not progress events', async () => {
+  it('applies an explicit ndjson policy to every runtime presentation request', async () => {
     const output = await captureStreamWrites(process.stdout, async () => {
       const host = createCliRuntimeHost(
         context({ mode: 'headless', outputFormat: 'ndjson' }),
       );
 
-      host.emit('requestShowError', { message: 'Provider returned 500.' });
-      host.emit('requestShowInstruction', {
-        key: 'latex-compile-failed',
-        message: 'Inspect the log before retrying.',
-        actions: ['open-configuration-guide'],
-        showSuppress: true,
-      });
-      host.emit('requestEnsureProgressView', {});
+      for (const [event, testCase] of Object.entries(
+        RUNTIME_PRESENTATION_NDJSON_CASES,
+      ) as [
+        RuntimePresentationEvent,
+        RuntimePresentationNdjsonCases[RuntimePresentationEvent],
+      ][]) {
+        host.emit(event, testCase.payload);
+      }
 
       await host.close();
     });
@@ -1245,35 +1310,14 @@ describe('CLI run progress renderer', () => {
       .split('\n')
       .map((line) => JSON.parse(line) as Record<string, unknown>);
 
-    expect(records).toEqual([
-      expect.objectContaining({
-        kind: 'log',
-        level: 'error',
-        message: 'Provider returned 500.',
-      }),
-      expect.objectContaining({
-        kind: 'log',
-        level: 'info',
-        message: 'Inspect the log before retrying.',
-        fields: {
-          key: 'latex-compile-failed',
-          actions: ['open-configuration-guide'],
-          showSuppress: true,
-        },
-      }),
-    ]);
-    expect(records).not.toContainEqual(
-      expect.objectContaining({
-        kind: 'progress',
-        event: 'requestShowError',
-      }),
+    const expectedRecords = Object.values(
+      RUNTIME_PRESENTATION_NDJSON_CASES,
+    ).flatMap(({ policy }) =>
+      policy.kind === 'log'
+        ? [expect.objectContaining({ ...policy, ts: expect.any(String) })]
+        : [],
     );
-    expect(records).not.toContainEqual(
-      expect.objectContaining({
-        kind: 'progress',
-        event: 'requestShowInstruction',
-      }),
-    );
+    expect(records).toEqual(expectedRecords);
   });
 
   it('maps the global quiet flag into CLI context args', () => {
