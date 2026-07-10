@@ -2,6 +2,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import {
+  RELAY_CI_TOKEN_PREFIX,
+  RELAY_TOKEN_ENV_VAR,
+  resetRelayTokenTierCacheForTests,
+} from '@auth/relayToken';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { platform } from '@platform/platform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -18,6 +24,10 @@ setupPlatform({
 afterEach(() => {
   vi.restoreAllMocks();
   __resetSetupPlatformForTests();
+  SupabaseClient.resetForTests();
+  resetRelayTokenTierCacheForTests();
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 beforeEach(() => {
@@ -62,5 +72,52 @@ describe('default setup platform', () => {
     await expect(
       getSetupPlatform().secrets.storedApiKeyExists('openai'),
     ).resolves.toBe(true);
+  });
+
+  it('does not report a rejected relay token as authenticated', async () => {
+    vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}revoked`);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(null, { status: 401 })),
+    );
+
+    await expect(getSetupPlatform().auth.getStatus()).resolves.toEqual({
+      authenticated: false,
+    });
+  });
+
+  it('falls back to an authenticated session after relay rejection', async () => {
+    vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}expired`);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(null, { status: 403 })),
+    );
+    SupabaseClient.setAuthProvider({
+      whenReady: async () => {},
+      ensureFreshToken: async () => 'session-token',
+      getSessionTokens: async () => ({
+        accessToken: 'session-token',
+        refreshToken: 'refresh-token',
+      }),
+    });
+    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
+      email: 'researcher@example.com',
+    } as Awaited<ReturnType<typeof SupabaseClient.getUser>>);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('Max');
+
+    await expect(getSetupPlatform().auth.getStatus()).resolves.toEqual({
+      authenticated: true,
+      email: 'researcher@example.com',
+      tier: 'Max',
+    });
+  });
+
+  it('keeps API-key-only setup usable without reporting sign-in', async () => {
+    const setup = getSetupPlatform();
+
+    await expect(setup.secrets.anyUsableCredentialExists()).resolves.toBe(true);
+    await expect(setup.auth.getStatus()).resolves.toEqual({
+      authenticated: false,
+    });
   });
 });
