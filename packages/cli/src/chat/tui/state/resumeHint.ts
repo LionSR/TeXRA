@@ -15,7 +15,11 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 
-import { childExecutionLabel } from './childExecutions';
+import {
+  childExecutionLabel,
+  retainedChildStreamsFor,
+  type ChildStreamEntries,
+} from './childExecutions';
 import type { StreamSlice } from './cliState';
 
 export interface ResumeTarget {
@@ -26,6 +30,7 @@ export interface ResumeTarget {
 }
 
 export interface ResumeTargetsInput {
+  readonly childStreamEntries: ChildStreamEntries;
   readonly rootExecutionId: string | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
@@ -123,6 +128,7 @@ export function formatResumeUsage(
  *  executionId. Subagents whose stream isn't a tool-use agent — workflow
  *  children, tool processes — are skipped because they can't be resumed. */
 export function collectResumeTargets({
+  childStreamEntries,
   rootExecutionId,
   streams,
 }: ResumeTargetsInput): readonly ResumeTarget[] {
@@ -134,9 +140,13 @@ export function collectResumeTargets({
     seen.add(rootExecutionId);
   }
 
-  for (const slice of streams.values()) {
-    for (const child of slice.childStreams) {
-      if (child.kind !== 'subagent' || seen.has(child.executionId)) continue;
+  for (const streamId of streams.keys()) {
+    for (const child of retainedChildStreamsFor(
+      streamId,
+      childStreamEntries,
+      streams,
+    )) {
+      if (seen.has(child.executionId)) continue;
       const childSlice = streams.get(child.childStreamId);
       if (childSlice?.category !== AgentCategory.ToolUse) continue;
       seen.add(child.executionId);

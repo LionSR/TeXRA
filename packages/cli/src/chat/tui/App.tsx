@@ -12,6 +12,7 @@ import {
 } from '@common/constants/streamStatus';
 import {
   TODO_STATUS,
+  type ActiveChildInfo,
   type StreamLifecycleStatus,
   type StreamTabId,
   type TodoItem,
@@ -63,9 +64,13 @@ import {
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   transcriptViewerStreamId as transcriptViewerStreamIdSignal,
-  parentStream as parentStreamSignal,
   streams as streamsSignal,
 } from './state/cliState';
+import {
+  childStreamEntries as childStreamEntriesSignal,
+  parentStream as parentStreamSignal,
+  visibleSubagentRows,
+} from './state/childExecutions';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { streamDisplayLabel } from './state/streamViews';
@@ -98,6 +103,7 @@ const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation or push the input bar off-screen.
 const BOTTOM_PANEL_MAX_ROWS = 10;
+const EMPTY_SUBAGENT_ROWS: readonly ActiveChildInfo[] = [];
 const COMPACT_STATIC_TRANSCRIPT_MAX_ROWS = 14;
 // A bare Esc and the second key of an `Esc s` / `Esc p` chord are two
 // separate keystrokes on terminals without true Meta-key detection (macOS
@@ -566,6 +572,7 @@ export function App(props: AppProps): React.JSX.Element {
   const rootStreamId = useSignal(rootStreamIdSignal);
   const streams = useSignal(streamsSignal);
   const parentStream = useSignal(parentStreamSignal);
+  const childStreamEntries = useSignal(childStreamEntriesSignal);
   const activeForm = useSignal(activeFormSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
@@ -588,6 +595,7 @@ export function App(props: AppProps): React.JSX.Element {
   });
   const childControlTargets = resolveChildControlDisplayTargets({
     activeStreamId,
+    childStreamEntries,
     parentStream,
     streams,
   });
@@ -685,6 +693,7 @@ export function App(props: AppProps): React.JSX.Element {
     !foregroundOpen && queuedFollowUpMessages.length > 0;
   const streamTabItems = streamTabsDisplayItems({
     activeStreamId,
+    childStreamEntries,
     parentStream,
     streams,
     width: columns,
@@ -717,6 +726,13 @@ export function App(props: AppProps): React.JSX.Element {
         tipVisible: tipRowVisible,
       });
   const subagentPanelTarget = childControlTargets.tasks;
+  const subagentPanelRows = subagentPanelTarget.streamId
+    ? visibleSubagentRows(
+        subagentPanelTarget.streamId,
+        childStreamEntries,
+        streams,
+      )
+    : EMPTY_SUBAGENT_ROWS;
   const hasSubagentPanel = !foregroundOpen && subagentPanelTarget.hasItems;
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
@@ -766,7 +782,10 @@ export function App(props: AppProps): React.JSX.Element {
   // shorter than the cap.
   const subagentContentRows =
     hasSubagentPanel && subagentPanelTarget.slice
-      ? subagentPanelRowCount(subagentPanelTarget.slice)
+      ? subagentPanelRowCount(
+          subagentPanelRows,
+          subagentPanelTarget.slice.activeProcesses,
+        )
       : 0;
   const todosPlanContentRows =
     hasTodosPlanPanel && activeSlice
@@ -795,6 +814,7 @@ export function App(props: AppProps): React.JSX.Element {
             onClose={() => transcriptViewerStreamIdSignal.set(undefined)}
             slice={streams.get(transcriptViewerStreamId)}
             title={streamDisplayLabel({
+              childStreamEntries,
               parentStream,
               streamId: transcriptViewerStreamId,
               streams,
@@ -823,6 +843,7 @@ export function App(props: AppProps): React.JSX.Element {
               transcriptViewerStreamIdSignal.set(streamId)
             }
             onKillExecution={props.onKillExecution}
+            childStreamEntries={childStreamEntries}
             slice={target.slice}
             streamScopeDetail={target.streamScopeDetail}
             streams={streams}
@@ -879,6 +900,7 @@ export function App(props: AppProps): React.JSX.Element {
     if (digit !== undefined) {
       const target = numericFocusTargetForActiveStream({
         activeStreamId,
+        childStreamEntries,
         parentStream,
         streams,
         zeroBasedIndex: digit - 1,
@@ -1031,7 +1053,9 @@ export function App(props: AppProps): React.JSX.Element {
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
               maxRows={subagentRows}
-              slice={subagentPanelTarget.slice}
+              subagents={subagentPanelRows}
+              activeProcesses={subagentPanelTarget.slice?.activeProcesses}
+              processOutput={subagentPanelTarget.slice?.processOutput}
             />
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>
