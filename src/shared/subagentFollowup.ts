@@ -1,8 +1,12 @@
-// Host-neutral parsing/formatting for the subagent follow-up XML blocks
-// produced by src/tools/subagentResults.ts (`<subagent-progress>`,
-// `<subagent-result>`, `<subagent-error>`). These blocks are FollowUpQueue
-// messages addressed to the orchestrator *model*, injected into the
-// conversation as user turns.
+// Host-neutral parsing/formatting for the child-run delivery-envelope XML
+// blocks produced by src/tools/subagentResults.ts, codex.ts, claudeAgent.ts,
+// github/formatUtils.ts, and ExecutionSubscriptionBinder.ts (the tags owned
+// by @shared/deliveryTags: `<subagent-progress>`, `<subagent-result>`,
+// `<subagent-error>`, `<background-result>`, `<background-error>`,
+// `<codex-result>`, `<codex-error>`, `<claude-agent-result>`,
+// `<claude-agent-error>`, `<github-webhook-activity>`,
+// `<execution-activity>`). These blocks are FollowUpQueue messages addressed
+// to the orchestrator *model*, injected into the conversation as user turns.
 //
 // Both hosts render them: the CLI transcript collapses each block to a terse
 // status line (summarizeSubagentFollowup), and the extension ProgressView
@@ -14,8 +18,16 @@
 
 import escapeRegExp from 'escape-string-regexp';
 import { safeParseJson } from '@common/parsing/safeParseJson';
+import { DELIVERY_TAG, DELIVERY_TAGS } from '@shared/deliveryTags';
 
-const SUBAGENT_TAG_RE = /^<subagent-(?:progress|result|error)\b/;
+// Derived from the single owned DELIVERY_TAGS list (@shared/deliveryTags),
+// same derivation pattern UserMessage.ts uses for its structured-delivery
+// recognizer — so a future child-run kind only needs one entry there. Before
+// this, a bare `subagent-(?:progress|result|error)` recognizer let
+// `claude-agent-result`/`claude-agent-error`/`codex-result`/`codex-error`
+// leak as raw XML into the CLI transcript and queued follow-ups panel.
+const DELIVERY_TAG_NAMES = DELIVERY_TAGS.map((entry) => entry.tag);
+const SUBAGENT_TAG_RE = new RegExp(`^<(${DELIVERY_TAG_NAMES.join('|')})\\b`);
 const EMBEDDED_SUBAGENT_BLOCK_RE =
   /<subagent-(?:progress|result|error)\b[^>]*\/>|<subagent-(progress|result|error)\b[^>]*>[\s\S]*?<\/subagent-\1>/g;
 const EMBEDDED_SUBAGENT_OPEN_RE =
@@ -164,15 +176,21 @@ export function summarizeSubagentFollowup(text: unknown): string {
   if (normalized === undefined) return EMPTY_FOLLOW_UP_SUMMARY;
 
   const trimmed = normalized.trim();
-  if (!SUBAGENT_TAG_RE.test(trimmed)) return normalized;
+  const tag = SUBAGENT_TAG_RE.exec(trimmed)?.[1];
+  if (!tag) return normalized;
 
-  const agent = attr(trimmed, 'agent') ?? 'subagent';
-
-  if (trimmed.startsWith('<subagent-progress')) {
+  if (tag === DELIVERY_TAG.subagentProgress) {
+    const agent = attr(trimmed, 'agent') ?? 'subagent';
     return `⟳ ${agent} · ${progressDetail(trimmed)}`;
   }
 
-  if (trimmed.startsWith('<subagent-result')) {
+  // Result/error envelopes share one shape across families
+  // (formatChildRunDelivery/formatChildRunError): subagent-*, background-*,
+  // codex-*, claude-agent-*. Agent-CLI producers (codex.ts, claudeAgent.ts)
+  // don't set an `agent` attribute, so fall back to the tag's own family name
+  // (e.g. `codex-result` → `codex`) rather than the generic `subagent`.
+  if (tag.endsWith('-result')) {
+    const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-result'.length);
     const status = attr(trimmed, 'status') ?? 'completed';
     const wall = innerTag(trimmed, 'wall-time');
     const response = innerTag(trimmed, 'response');
@@ -181,12 +199,21 @@ export function summarizeSubagentFollowup(text: unknown): string {
     return preview ? `${head}\n${preview}` : head;
   }
 
-  // <subagent-error>
-  const wall = innerTag(trimmed, 'wall-time');
-  const message = innerTag(trimmed, 'message');
-  const retryable = attr(trimmed, 'retryable') === 'true';
-  const head = `✗ ${agent} failed${wall ? ` · ${wall}` : ''}${retryable ? ' (retryable)' : ''}`;
-  return message ? `${head}\n${decodeXmlEntities(message)}` : head;
+  if (tag.endsWith('-error')) {
+    const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-error'.length);
+    const wall = innerTag(trimmed, 'wall-time');
+    const message = innerTag(trimmed, 'message');
+    const retryable = attr(trimmed, 'retryable') === 'true';
+    const head = `✗ ${agent} failed${wall ? ` · ${wall}` : ''}${retryable ? ' (retryable)' : ''}`;
+    return message ? `${head}\n${decodeXmlEntities(message)}` : head;
+  }
+
+  // Activity envelopes (github-webhook-activity, execution-activity) wrap a
+  // plain sanitized text body — no attribute schema, so surface its first
+  // line instead of the raw wrapper tags.
+  const body = elementBody(trimmed, tag);
+  const firstLine = body?.split('\n')[0]?.trim();
+  return firstLine || normalized;
 }
 
 export function summarizeFollowupMessage(text: unknown): string {

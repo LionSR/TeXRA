@@ -21,13 +21,13 @@ export interface AgentCore<C = unknown> {
   setting: AgentSetting;
   prompt: AgentPrompt;
   logger: AgentTrace;
-  streamStatus: StreamStatusMachine;
   userVarChannels: UserVariableChannels;
   /** Initial user row to log after the flow has inserted launch media. */
   initialUserMessageForTranscript?: string;
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
+  streamStatus: StreamStatusMachine;
   checkInterruption: () => boolean;
   setAbortController: (ctrl: AbortController | null) => void;
   onInterrupt?: () => void;

@@ -73,7 +73,7 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 const logger = createChannelTrace('AgentLaunchContext');
 
 export interface AgentLaunchContext extends AgentCore {
-  runScope: RunScope;
+  readonly runScope: RunScope;
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: StageHandle;
@@ -251,7 +251,6 @@ async function beginRunStage(
 async function assembleAgentLaunchContext(
   input: AgentLaunchInput,
   executionId: ExecutionId,
-  streamStatus: StreamStatusMachine,
   runtimeHost: AgentRuntimeHost,
   reservedStreamId: StreamTabId | undefined,
   onActivated: (streamId: StreamTabId) => void,
@@ -462,7 +461,6 @@ async function assembleAgentLaunchContext(
     attachedMemoryMisses,
     usageMonitor,
     runScope,
-    streamStatus,
     initialUserMessageForTranscript: initialMediaMayBeInserted
       ? initialInstruction
       : undefined,
@@ -611,7 +609,6 @@ export async function buildAgentLaunchContext(
     const ctx = await assembleAgentLaunchContext(
       { ...input, session: launchSession },
       executionId,
-      streamStatus,
       runtimeHost,
       reservedStreamId,
       (streamId) => {

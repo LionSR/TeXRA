@@ -1,7 +1,8 @@
 // QA-2 host-side mock ratchet (issue #7684). Host suites (CLI + desktop, in
 // src/test-kernel/cli and src/test-kernel/desktop) reach into `@agent/*`
-// internals via `vi.mock('@agent/...')`, pinning agent's current internal
-// module layout from outside src/agent. Clones the checked-in-baseline +
+// internals via `vi.mock('@agent/...')` or `vi.doMock('@agent/...')`,
+// pinning agent's current internal module layout from outside src/agent.
+// Clones the checked-in-baseline +
 // AST-scanning vitest pattern from LAY-1 (subsystemEdgeRatchet.vitest.ts,
 // PR #7774): baseline the current site count and fail only on an increase;
 // a decrease (or an @agent restructor removing the need for a mock) is
@@ -9,21 +10,34 @@
 
 // Node imports
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
+const MOCK_FORMS = ['mock', 'doMock'] as const;
+
+type MockForm = (typeof MOCK_FORMS)[number];
+
 interface MockSite {
   file: string;
+  form: MockForm;
   specifier: string;
 }
 
 interface MockBaseline {
   semantics: string;
   sites: MockSite[];
+}
+
+function compareSites(a: MockSite, b: MockSite): number {
+  return (
+    a.file.localeCompare(b.file) ||
+    a.form.localeCompare(b.form) ||
+    a.specifier.localeCompare(b.specifier)
+  );
 }
 
 const REPO_ROOT = resolve(
@@ -50,14 +64,25 @@ function sourceFilesUnder(dir: string): string[] {
     .map((entry) => join(dir, entry));
 }
 
-function isViMockCall(node: ts.Node): node is ts.CallExpression {
-  return (
-    ts.isCallExpression(node) &&
-    ts.isPropertyAccessExpression(node.expression) &&
-    ts.isIdentifier(node.expression.expression) &&
-    node.expression.expression.text === 'vi' &&
-    node.expression.name.text === 'mock'
-  );
+function mockFormFromCall(
+  node: ts.Node,
+): { call: ts.CallExpression; form: MockForm } | null {
+  if (
+    !ts.isCallExpression(node) ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    !ts.isIdentifier(node.expression.expression) ||
+    node.expression.expression.text !== 'vi'
+  ) {
+    return null;
+  }
+
+  switch (node.expression.name.text) {
+    case 'mock':
+    case 'doMock':
+      return { call: node, form: node.expression.name.text };
+    default:
+      return null;
+  }
 }
 
 function collectAgentMockSites(file: string): MockSite[] {
@@ -71,12 +96,13 @@ function collectAgentMockSites(file: string): MockSite[] {
 
   const sites: MockSite[] = [];
   const visit = (node: ts.Node): void => {
-    if (isViMockCall(node)) {
-      const [specifierArg] = node.arguments;
+    const mock = mockFormFromCall(node);
+    if (mock != null) {
+      const [specifierArg] = mock.call.arguments;
       if (specifierArg != null && ts.isStringLiteralLike(specifierArg)) {
         const specifier = specifierArg.text;
         if (AGENT_SPECIFIER.test(specifier)) {
-          sites.push({ file: repoRelative(file), specifier });
+          sites.push({ file: repoRelative(file), form: mock.form, specifier });
         }
       }
     }
@@ -89,10 +115,20 @@ function collectAgentMockSites(file: string): MockSite[] {
 function collectHostAgentMockSites(): MockSite[] {
   return HOST_DIRS.flatMap((dir) =>
     sourceFilesUnder(dir).flatMap(collectAgentMockSites),
-  ).toSorted(
-    (a, b) =>
-      a.file.localeCompare(b.file) || a.specifier.localeCompare(b.specifier),
-  );
+  ).toSorted(compareSites);
+}
+
+function countSitesByForm(sites: MockSite[]): Record<MockForm, number> {
+  const counts: Record<MockForm, number> = { mock: 0, doMock: 0 };
+  for (const { form } of sites) {
+    if (!(form in counts)) {
+      throw new Error(
+        `host-agent-mock-baseline.json entry has unknown form ${JSON.stringify(form)} — expected one of: ${MOCK_FORMS.join(', ')}`,
+      );
+    }
+    counts[form] += 1;
+  }
+  return counts;
 }
 
 function readBaseline(): MockBaseline {
@@ -100,26 +136,29 @@ function readBaseline(): MockBaseline {
 }
 
 describe('QA-2 host-side @agent mock ratchet', () => {
-  it("does not increase the count of vi.mock('@agent/...') sites in CLI/desktop suites", () => {
+  it("does not increase the count of either vi.mock or vi.doMock('@agent/...') sites in CLI/desktop suites", () => {
     const baseline = readBaseline();
     const current = collectHostAgentMockSites();
+    const baselineCounts = countSitesByForm(baseline.sites);
+    const currentCounts = countSitesByForm(current);
 
-    expect(
-      current.length,
-      `host-side @agent mock sites grew from ${baseline.sites.length} to ${current.length}:\n` +
-        `${current.map((site) => `${site.file}: ${site.specifier}`).join('\n')}\n\n` +
-        'If this growth is intentional, update host-agent-mock-baseline.json in this PR.',
-    ).toBeLessThanOrEqual(baseline.sites.length);
+    for (const form of MOCK_FORMS) {
+      expect(
+        currentCounts[form],
+        `host-side @agent vi.${form} sites grew from ${baselineCounts[form]} to ${currentCounts[form]}:\n` +
+          `${current
+            .filter((site) => site.form === form)
+            .map((site) => `${site.file}: vi.${site.form}('${site.specifier}')`)
+            .join('\n')}\n\n` +
+          'If this growth is intentional, update host-agent-mock-baseline.json in this PR.',
+      ).toBeLessThanOrEqual(baselineCounts[form]);
+    }
   });
 
-  it('keeps the baseline non-empty and ordered', () => {
+  it('keeps the baseline ordered (an empty baseline is a valid, welcome outcome)', () => {
     const baseline = readBaseline();
-    const sortedSites = baseline.sites.toSorted(
-      (a, b) =>
-        a.file.localeCompare(b.file) || a.specifier.localeCompare(b.specifier),
-    );
+    const sortedSites = baseline.sites.toSorted(compareSites);
 
-    expect(baseline.sites.length).toBeGreaterThan(0);
     expect(baseline.sites).toEqual(sortedSites);
   });
 });
