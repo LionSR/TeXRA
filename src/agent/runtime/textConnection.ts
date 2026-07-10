@@ -106,7 +106,7 @@ export async function bestConnectionMethod(
 }
 
 /**
- * Determines the best way to connect two strings in a LaTeX context using Claude
+ * Determines the best way to connect two strings through the configured helper model.
  */
 export async function bestConnectionMethodAnthropic(
   str1: string,
