@@ -149,6 +149,63 @@ describe('summarizeSubagentFollowup', () => {
     ).toBe(false);
   });
 
+  // Embedded-block recognizer (EMBEDDED_DELIVERY_BLOCK_RE /
+  // EMBEDDED_DELIVERY_OPEN_RE) is derived from the same DELIVERY_TAGS
+  // vocabulary as SUBAGENT_TAG_RE, not just `<subagent-*>` — regression
+  // coverage for a non-`subagent` family (`codex-result`) leaking as raw XML
+  // when embedded mid-stream in assistant text (issue #7846, follow-up to
+  // #7679/#7788).
+
+  it('summarizes an embedded codex-result block inside assistant text', () => {
+    const text = [
+      'before',
+      '<codex-result id="abc" thread-id="t1">',
+      '<wall-time>4sec</wall-time>',
+      '<response>Refactor complete.</response>',
+      '</codex-result>',
+      'after',
+    ].join('\n');
+    expect(summarizeEmbeddedSubagentFollowups(text)).toBe(
+      ['before', '✓ codex completed · 4sec\nRefactor complete.', 'after'].join(
+        '\n',
+      ),
+    );
+  });
+
+  it('summarizes an incomplete embedded codex-result block while streaming', () => {
+    const text = [
+      'before',
+      '<codex-result id="abc" thread-id="t1">',
+      'The response is still streaming.',
+    ].join('\n');
+
+    expect(summarizeEmbeddedSubagentFollowups(text)).toBe(
+      ['before', '✓ codex completed'].join('\n'),
+    );
+  });
+
+  it('detects incomplete embedded codex-result blocks', () => {
+    expect(
+      hasIncompleteEmbeddedSubagentFollowup(
+        [
+          'before',
+          '<codex-result id="abc" thread-id="t1">',
+          'The response is still streaming.',
+        ].join('\n'),
+      ),
+    ).toBe(true);
+    expect(
+      hasIncompleteEmbeddedSubagentFollowup(
+        [
+          'before',
+          '<codex-result id="abc" thread-id="t1">',
+          '<response>Done.</response>',
+          '</codex-result>',
+        ].join('\n'),
+      ),
+    ).toBe(false);
+  });
+
   it('summarizes a completed result with wall time and response', () => {
     const xml = [
       '<subagent-result id="abc" agent="research" category="toolUse" status="completed">',
