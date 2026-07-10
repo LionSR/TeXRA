@@ -1,14 +1,9 @@
 import type { StreamTabId } from '@shared/schemas/identifiers';
 import { formatGoalTime, goalElapsedMs } from '@shared/schemas/goal';
 import { GoalStore, isGoalEnabled } from '@tools/goal';
+import { renderPrompt } from '@utils/prompt';
 
 import { getContinuationTemplate } from './promptLoader';
-
-function render(template: string, vars: Record<string, string>): string {
-  return template.replaceAll(/\{\{(\w+)\}\}/g, (match, key: string) =>
-    Object.hasOwn(vars, key) ? vars[key] : match,
-  );
-}
 
 /**
  * Build the pre-wait Goal continuation for a stream.
@@ -38,7 +33,7 @@ export async function maybeBuildGoalContinuation(
   if (!isGoalEnabled()) return null;
 
   const template = await getContinuationTemplate();
-  return render(template, {
+  return renderPrompt(template, {
     objective: goal.objective,
     timeUsed: formatGoalTime(goalElapsedMs(goal)),
   });

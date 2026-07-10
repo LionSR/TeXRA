@@ -5,8 +5,13 @@ import { access, stat } from 'node:fs/promises';
 // Third-party imports
 import { satisfies as semverSatisfies } from 'semver';
 
-// Local imports - LaTeX
+// Local imports - platform
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+
+// Local imports - CLI schemas
+import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+
+// Local imports - LaTeX
 import {
   probeLatexToolchain,
   type LatexToolchainProbe,
@@ -383,14 +388,14 @@ export function formatDoctorText(
 export function doctorNdjsonRecords(
   report: DoctorReport,
   ts = new Date().toISOString(),
-): readonly object[] {
+): readonly CliNdjsonRecord[] {
   return [
-    ...report.checks.map((check) => ({
+    ...report.checks.map((check): CliNdjsonRecord => ({
       kind: 'doctor-check',
       ts,
       ...check,
     })),
-    { kind: 'doctor-summary', ts, ok: report.ok },
+    { kind: 'doctor-summary', ts, ok: report.ok } satisfies CliNdjsonRecord,
   ];
 }
 
