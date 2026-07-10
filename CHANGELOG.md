@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Workflow LaTeX compilation resolves source directories consistently** —
+  compile checks and latexdiff PDF builds now share one workspace-source
+  resolver, and a real workspace folder named `r1`, `r2`, and so on is no
+  longer mistaken for a run-storage round folder.
 - **OpenRouter transient server errors no longer stall a request for up to an
   hour** — the OpenRouter SDK's built-in retry window is now capped at 30
   seconds, so a persistent 5XX surfaces through TeXRA's visible retry/failure
