@@ -35,6 +35,8 @@ export interface ResumeStreamPorts {
    * both guards permanently false in multi-session hosts.
    */
   readonly streamStatus: Pick<StreamStatusMachine, 'isActiveOrResuming'>;
+  /** Host-owned cancellation requested while asynchronous resume preparation runs. */
+  readonly isCancellationRequested?: () => boolean;
   /**
    * Resolve the persisted run state + execution id for a stream, or `undefined`
    * when there is nothing to resume. The host owns any "no state" messaging it
@@ -86,7 +88,11 @@ export async function resolveAndResumeStream(
   streamId: StreamTabId,
   ports: ResumeStreamPorts,
 ): Promise<boolean> {
+  const isCancellationRequested = (): boolean =>
+    ports.isCancellationRequested?.() === true;
+
   if (
+    isCancellationRequested() ||
     ports.streamStatus.isActiveOrResuming(streamId) ||
     resumeInFlight.has(streamId)
   ) {
@@ -96,6 +102,7 @@ export async function resolveAndResumeStream(
   resumeInFlight.add(streamId);
   try {
     const resolved = await ports.resolveResumeState(streamId);
+    if (isCancellationRequested()) return false;
     // The host's resolveResumeState owns its own "no persisted state" messaging.
     if (!resolved) return false;
 
@@ -112,6 +119,7 @@ export async function resolveAndResumeStream(
             resolved.executionId,
             resolved.runState,
           );
+    if (isCancellationRequested()) return false;
     if (!resume) {
       await ports.reportNoResumableSession?.(streamId);
       return false;
@@ -141,6 +149,7 @@ export async function resolveAndResumeStream(
     );
     return true;
   } catch (error) {
+    if (isCancellationRequested()) return false;
     await ports.reportFailure?.(streamId, error);
     return false;
   } finally {
