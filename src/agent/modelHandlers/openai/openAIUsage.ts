@@ -97,6 +97,8 @@ export function normalizeOpenAIResponseUsage(
         inputTokens: usage.input_tokens ?? 0,
         outputTokens: usage.output_tokens ?? 0,
         cachedTokens: usage.input_tokens_details?.cached_tokens ?? 0,
+        cacheCreationTokens:
+          usage.input_tokens_details?.cache_write_tokens ?? 0,
         reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
       }),
     },
