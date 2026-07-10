@@ -145,6 +145,8 @@ Contact: [contact@texra.ai](mailto:contact@texra.ai).
 
 ## License
 
-© TeXRA Team 2025–2026. All rights reserved.
+TeXRA is open source under the [Apache License 2.0](LICENSE).
+© 2025–2026 TeXRA Team. The TeXRA name and logo are trademarks of the TeXRA Team.
+The hosted texra.ai services are governed separately by the [Terms of Service](https://texra.ai/terms).
 
 [Terms of Service](https://texra.ai/terms) · [Provider list](https://texra.ai/providers)

@@ -1,6 +1,7 @@
 {
   "name": "@texra/trace-viewer",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts",
