@@ -102,16 +102,16 @@ jobs:
           fi
           pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
 
+      - name: Smoke-test macOS packaged desktop app
+        run: >-
+          pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/mac-universal/TeXRA.app/Contents/MacOS/TeXRA
+
       - name: Check macOS packaged desktop app contents
         run: pnpm run check:desktop-package
 
       - name: Check macOS desktop installer artifacts
         run: pnpm run check:desktop-installers
-
-      - name: Smoke-test macOS packaged desktop app
-        run: >-
-          pnpm run desktop:package:smoke -- --app
-          packages/desktop/dist-packaged/mac-universal/TeXRA.app/Contents/MacOS/TeXRA
 
       - name: Upload macOS desktop installers
         uses: actions/upload-artifact@v7
@@ -159,16 +159,16 @@ jobs:
       - name: Package Linux desktop installers
         run: pnpm --filter @texra/desktop package:dist
 
+      - name: Smoke-test Linux packaged desktop app
+        run: >-
+          xvfb-run --auto-servernum pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/linux-unpacked/texra
+
       - name: Check Linux packaged desktop app contents
         run: pnpm run check:desktop-package
 
       - name: Check Linux desktop installer artifacts
         run: pnpm run check:desktop-installers
-
-      - name: Smoke-test Linux packaged desktop app
-        run: >-
-          xvfb-run --auto-servernum pnpm run desktop:package:smoke -- --app
-          packages/desktop/dist-packaged/linux-unpacked/texra
 
       - name: Upload Linux desktop installers
         uses: actions/upload-artifact@v7
@@ -233,16 +233,16 @@ jobs:
       - name: Package Windows desktop installer
         run: pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
 
+      - name: Smoke-test Windows packaged desktop app
+        run: >-
+          pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/win-unpacked/TeXRA.exe
+
       - name: Check Windows packaged desktop app contents
         run: pnpm run check:desktop-package
 
       - name: Check Windows desktop installer artifacts
         run: pnpm run check:desktop-installers
-
-      - name: Smoke-test Windows packaged desktop app
-        run: >-
-          pnpm run desktop:package:smoke -- --app
-          packages/desktop/dist-packaged/win-unpacked/TeXRA.exe
 
       - name: Upload Windows desktop installer
         uses: actions/upload-artifact@v7
