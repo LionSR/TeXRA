@@ -1,7 +1,6 @@
 // Local imports - agent
 import type { TaskState } from '@agent/core/state/TaskState';
 import {
-  buildFileContextFromTaskState,
   polishTextWithAI,
   type FileContext,
 } from '@agent/runtime/textEnhancement';
@@ -71,7 +70,7 @@ export class ProgressFollowUpPolishController {
     }
 
     try {
-      const fileContext = buildFileContextFromTaskState(input.taskState);
+      const fileContext = this.buildFileContext(input.taskState);
       const result = await this.deps.polishText(input.text, fileContext);
       if (result.success) {
         return {
@@ -102,6 +101,29 @@ export class ProgressFollowUpPolishController {
         ...(error instanceof Error && { logData: error }),
       };
     }
+  }
+
+  private buildFileContext(taskState: TaskState): FileContext {
+    const { agentConfig } = taskState;
+    const context: FileContext = {};
+
+    if (agentConfig.agent) {
+      context.agent = agentConfig.agent;
+    }
+
+    const arrayFields = [
+      'inputFiles',
+      'contextFiles',
+      'mediaFiles',
+      'outputFiles',
+    ] as const;
+    for (const field of arrayFields) {
+      if (agentConfig[field].length > 0) {
+        context[field] = agentConfig[field];
+      }
+    }
+
+    return context;
   }
 
   private createUpdate(

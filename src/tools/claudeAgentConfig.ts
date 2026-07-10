@@ -25,7 +25,6 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { safeHomedir } from '@utils/system/platformPaths';
-import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { createEnumStateGetter } from './support/enumConfig';
 import {
   CLAUDE_AGENT_NAME,
@@ -228,38 +227,6 @@ export async function buildClaudeAgentEnv(
   }
 
   return env;
-}
-
-// ============================================================================
-// Workspace options — mirrors codex behavior so subagents can see the project
-// ============================================================================
-
-export interface ClaudeAgentWorkspaceOptions {
-  cwd?: string;
-  additionalDirectories?: string[];
-}
-
-/**
- * Compute the cwd + extra-roots the SDK should see.
- *
- * When the call is made from inside the workspace, the agent runs in that
- * directory but is also granted read access to the workspace root so it can
- * inspect sibling files. Out-of-workspace cwds run isolated (matches codex).
- */
-export function buildClaudeAgentWorkspaceOptions(
-  workingDirectoryInput?: string | null,
-): ClaudeAgentWorkspaceOptions {
-  const workspace = buildAgentWorkspaceOptions(workingDirectoryInput);
-  const options: ClaudeAgentWorkspaceOptions = {};
-
-  if (workspace.workingDirectory) {
-    options.cwd = workspace.workingDirectory;
-  }
-  if (workspace.additionalDirectories) {
-    options.additionalDirectories = workspace.additionalDirectories;
-  }
-
-  return options;
 }
 
 // ============================================================================
