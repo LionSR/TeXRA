@@ -78,7 +78,7 @@ const CODEX_INELIGIBLE_EXCEPTIONS: ReadonlySet<string> = new Set([
  * not its Pro sibling) — misrouting a request that would otherwise have
  * worked fine over the normal API-key path.
  *
- * llm-zoo's `ModelConfig` (checked at v1.12.0, the version this repo pins)
+ * llm-zoo's `ModelConfig` (checked at v1.14.0, the version this repo pins)
  * has no dedicated tier/variant field to key on instead. Every Pro release
  * to date follows the same `<base>-pro` id suffix, though, so this is a
  * systematic naming pattern — covering future Pro releases the moment
@@ -101,23 +101,24 @@ const CODEX_PRO_VARIANT_PATTERN = /-pro$/i;
  * disqualifies by default — only these explicit, known-still-served
  * exceptions bypass it. Keyed on {@link codexBackendModelId}.
  *
- * `gpt-5.4-mini` is included here even though it isn't `deprecated` in the
- * live llm-zoo registry as of this writing (only `gpt-5.4` is) — the old
- * allowlist's test coverage explicitly asserted `gpt-5.4-mini` as eligible,
- * so this exception is added defensively now rather than waiting for it to
- * flip to `deprecated` upstream and silently regress. It's a no-op today
- * (the `deprecated` branch below never triggers for it) and becomes load
- * bearing the moment llm-zoo marks it deprecated.
+ * `gpt-5.5` remains the ChatGPT-subscription setup model after llm-zoo v1.14.0
+ * marks its API generation deprecated in favor of GPT-5.6. Keeping it here
+ * preserves the existing subscription route instead of letting catalog churn
+ * break sign-in verification. `gpt-5.4-mini` is included even though it isn't
+ * `deprecated` in the live registry as of this writing — the old allowlist's
+ * test coverage explicitly asserted it as eligible, so this exception remains
+ * defensive until the registry flips its status.
  *
  * Cross-checked against every entry of the original hardcoded
  * `CODEX_SUBSCRIPTION_MODEL_FULLNAMES` allowlist this heuristic replaced:
  * `gpt-5.5` and `gpt-5.4-mini` (not deprecated) and `gpt-5.3-codex` /
  * `gpt-5.2-codex` (deprecated, but bypassed by the `/codex/i` naming branch
  * regardless of this table) all resolve eligible without needing an entry
- * here. `gpt-5.3-codex-spark` no longer exists in the llm-zoo v1.12.0
+ * here. `gpt-5.3-codex-spark` no longer exists in the llm-zoo v1.14.0
  * registry under any id, so there is nothing to reconcile for it.
  */
 const CODEX_DEPRECATED_EXCEPTIONS: ReadonlySet<string> = new Set([
+  'gpt-5.5',
   'gpt-5.4',
   'gpt-5.4-mini',
 ]);

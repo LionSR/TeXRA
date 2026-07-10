@@ -32,6 +32,7 @@ describe('relay tier model access', () => {
       true,
     );
     assert.equal(isModelAllowedForTier(FREE_TIER, 'gpt-5-2025-08-07'), false);
+    assert.equal(isModelAllowedForTier(FREE_TIER, 'muse-spark-1.1'), false);
     assert.equal(isModelAllowedForTier(FREE_TIER, 'unknown-model'), false);
     assert.equal(isModelAllowedForTier(FREE_TIER, null), false);
   });
