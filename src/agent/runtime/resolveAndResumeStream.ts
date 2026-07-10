@@ -106,19 +106,12 @@ export async function resolveAndResumeStream(
     // The host's resolveResumeState owns its own "no persisted state" messaging.
     if (!resolved) return false;
 
-    const resume =
-      resolved.parentStreamId !== undefined
-        ? await retrieveSessionResumeData(
-            streamId,
-            resolved.executionId,
-            resolved.runState,
-            { parentStreamId: resolved.parentStreamId },
-          )
-        : await retrieveSessionResumeData(
-            streamId,
-            resolved.executionId,
-            resolved.runState,
-          );
+    const resume = await retrieveSessionResumeData(
+      streamId,
+      resolved.executionId,
+      resolved.runState,
+      { parentStreamId: resolved.parentStreamId },
+    );
     if (isCancellationRequested()) return false;
     if (!resume) {
       await ports.reportNoResumableSession?.(streamId);

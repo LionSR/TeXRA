@@ -25,7 +25,7 @@ import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 
-import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
+import { getExecutionStore } from './ExecutionKVStore';
 
 const CHANNEL = 'ExecutionListing';
 const INDEX_PATH = `${RUNS_STORAGE_DIR}/index.json`;

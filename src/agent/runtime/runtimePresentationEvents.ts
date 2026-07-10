@@ -23,7 +23,7 @@ export interface RuntimePresentationEventPayloads {
 
 export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
 
-export const RUNTIME_PRESENTATION_EVENTS = [
+const RUNTIME_PRESENTATION_EVENTS = [
   'requestOpenFile',
   'requestShowInstruction',
   'showAgentConfigBanner',
