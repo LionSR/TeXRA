@@ -67,8 +67,8 @@ export interface ChildRunPorts {
  * `runTurn` with the seeded initial prompt; native: the `executeAgent`
  * call itself). `runTurn` produces every following turn's outcome, given the
  * follow-up items the loop drained since the previous turn (agent-CLI joins
- * their text into one prompt; native replays them as queued follow-ups via
- * `resumeQueuedToolUseSnapshot`'s `extraFollowUps`).
+ * their text into one prompt; native injects the already-consumed batch at
+ * the resumed flow's persisted WAITING boundary without re-enqueueing it).
  *
  * Per-turn call order: `launch`/`runTurn` → `getUsage` (turn summary) →
  * `isTurnError` → `onTurnError` (if true) → `onTurnSuccess` (only when the
@@ -167,7 +167,7 @@ export interface ChildRunStrategy<TTurn> {
 export interface ChildRunLoopParams<TTurn> {
   /**
    * Presentation/lifecycle wrapper for agent-CLI child streams. Native
-   * strategies omit this — `executeAgent`/`resumeQueuedToolUseSnapshot`
+   * strategies omit this — `executeAgent`/`resumeToolUseFromSnapshot`
    * already own handle creation, tracking, and terminal finalization for
    * every turn via `runFlowWithLifecycle`, so there is no separate stream tab
    * for this loop to finalize.

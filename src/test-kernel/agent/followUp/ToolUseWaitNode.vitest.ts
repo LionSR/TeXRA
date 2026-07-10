@@ -127,6 +127,81 @@ describe('ToolUseWaitNode', () => {
     expect(waitForFollowUp).not.toHaveBeenCalled();
   });
 
+  it('advances a drained child-loop batch once without reading the session queue', async () => {
+    const shared: ToolUseRunShared = {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const runtimeHost = { emit: vi.fn() };
+    const waitForFollowUp = vi.fn();
+    const createUserFollowUpMessages = vi.fn(
+      async (_messages: unknown[], text: string) => [
+        { role: 'user', content: text },
+      ],
+    );
+    const onFollowUpConsumed = vi.fn();
+    const batch = [
+      {
+        text: 'state where finiteness is used',
+        displayText: 'clarify finiteness',
+        origin: 'user' as const,
+      },
+    ];
+    const services = {
+      checkInterruption: () => false,
+      isSubagent: true,
+      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
+      modelHandler: {
+        createUserFollowUpMessages,
+        extractAssistantText: () => undefined,
+      },
+      onFollowUpConsumed,
+      runtimeHost,
+      session: {
+        hasQueuedFollowUp: () => false,
+        waitForFollowUp,
+      },
+      streamStatus: new StreamStatusMachine(),
+      streamId: 'test-stream',
+    } as unknown as ToolUseServices;
+    const node = new ToolUseWaitNode(batch).setServices(services);
+    const prep = await node.prep(shared);
+
+    const first = await withTestRunContext(
+      runtimeHost,
+      'test-stream',
+      async () => {
+        const exec = await node.exec(prep);
+        const transition = await node.post(shared, prep, exec);
+        return { exec, transition };
+      },
+    );
+    const second = await withTestRunContext(runtimeHost, 'test-stream', () =>
+      node.exec(prep),
+    );
+
+    expect(first).toEqual({
+      exec: {
+        kind: 'continue',
+        followUps: batch,
+        synthetic: false,
+      },
+      transition: FlowTransition.CONTINUE,
+    });
+    expect(second).toEqual({ kind: 'waiting' });
+    expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
+    expect(createUserFollowUpMessages).toHaveBeenCalledWith(
+      [],
+      'state where finiteness is used',
+    );
+    expect(shared.messages).toEqual([
+      { role: 'user', content: 'state where finiteness is used' },
+    ]);
+    expect(onFollowUpConsumed).toHaveBeenCalledOnce();
+    expect(waitForFollowUp).not.toHaveBeenCalled();
+  });
+
   it('stops instead of suspending when stopAfterCycle is set (headless in-band subagent)', async () => {
     const shared: ToolUseRunShared = {
       messages: [],
