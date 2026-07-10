@@ -132,10 +132,11 @@ const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
   )
   .map(toRelayModel);
 
+// Retired-name detection is a denial guard, not an allowlist. Keep every
+// direct-provider retirement so a future unsupported provider cannot bypass
+// the retired-model rejection before normal provider routing.
 const RETIRED_MODEL_PATTERNS = Object.values(MODEL_CONFIGS)
-  .filter(
-    (m) => RELAY_PROVIDERS.has(m.provider) && !m.openRouterOnly && m.retired,
-  )
+  .filter((m) => !m.openRouterOnly && m.retired)
   .flatMap((m) =>
     [m.name, m.fullName, m.openrouterFullName]
       .filter((name): name is string => name != null)
