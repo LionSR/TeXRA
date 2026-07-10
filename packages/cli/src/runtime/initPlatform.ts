@@ -111,15 +111,18 @@ export function installCliShutdownSignalHandlers(
   };
 
   const install = (signal: CliShutdownSignal) => {
-    const handler = () => {
-      void lifecycle
-        .runShutdown()
-        .catch(() => undefined)
-        .then(() => flushNdjsonStdout())
-        .finally(() => {
-          process.exit(exitCodeForSignal(signal));
-        })
-        .catch(() => undefined);
+    const handler = async () => {
+      try {
+        await lifecycle.runShutdown();
+      } catch {
+        // Signal shutdown is best effort; output still gets one final flush.
+      }
+      try {
+        await flushNdjsonStdout();
+      } catch {
+        // A closed stdout pipe must not prevent signal-based termination.
+      }
+      process.exit(exitCodeForSignal(signal));
     };
     process.once(signal, handler);
   };
