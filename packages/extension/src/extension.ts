@@ -14,6 +14,7 @@ import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { backfillFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
+import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
 import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
@@ -255,6 +256,19 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   });
   registerAgentFeatures();
+  // Mirrors the CLI/desktop Node-host wiring (`nodeHost.ts`'s
+  // `initializeNodeRuntimeSkills`, inlined here rather than imported so the
+  // extension bundle doesn't also pull in that module's Lean direct-adapter
+  // import) so `AVAILABLE_SKILLS` is actually populated for tool-use agents in
+  // VS Code — without this call `loadRuntimeSkillCatalog` always sees zero
+  // sources and `texra.skills.enabled` has no observable effect (issue #7751
+  // FS5).
+  setRuntimeSkillSources(
+    defaultSkillSources({
+      cwd: workspaceRoot,
+      resourcesPath: path.join(context.extensionPath, 'resources'),
+    }),
+  );
   // `disposeStatusListener` and `statusBarItem` are owned solely by
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.

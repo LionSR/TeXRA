@@ -1454,7 +1454,7 @@ export abstract class ModelHandler<
    * @returns The extracted thinking content string or null if no thinking content is available
    */
   abstract processThinkingBlock(
-    responseObject: any,
+    responseObject: Resp,
     workspaceState?: AgentWorkspaceState,
   ): string | null;
 

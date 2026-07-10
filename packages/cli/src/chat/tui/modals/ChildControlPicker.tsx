@@ -17,7 +17,6 @@ import {
   buildChildControlItems,
   childPickerKeyAction,
   liveChildExecutionElapsedKey,
-  nextPickerIndex,
   subagentPickerSelection,
   type ChildControlItem,
   type ChildControlMode,
@@ -40,7 +39,10 @@ import {
 import { textDisplayWidth } from '../render/terminalText';
 import { KEY_HINT_SEPARATOR, KeyHints, type KeyHint } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
-import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
+import {
+  nextWrappingHighlightIndex,
+  SELECT_LABEL_MAX_COLS,
+} from '../ui/Select';
 import type { StreamSlice } from '../state/cliState';
 
 interface ChildControlPickerProps {
@@ -832,12 +834,20 @@ export function ChildControlPicker({
           return;
         case 'up':
           setHighlight((current) =>
-            nextPickerIndex(current, items.length, 'up'),
+            nextWrappingHighlightIndex({
+              direction: -1,
+              highlight: current,
+              itemCount: items.length,
+            }),
           );
           return;
         case 'down':
           setHighlight((current) =>
-            nextPickerIndex(current, items.length, 'down'),
+            nextWrappingHighlightIndex({
+              direction: 1,
+              highlight: current,
+              itemCount: items.length,
+            }),
           );
           return;
         case 'jump':

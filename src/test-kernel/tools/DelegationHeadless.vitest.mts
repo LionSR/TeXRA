@@ -289,7 +289,7 @@ describe('headless delegation', () => {
     mockExecuteAgentErrorOnce(0.42);
 
     const result = await withToolFileInteractionContext(
-      { tracker: {} as never, recordSubagentCost },
+      { tracker: {} as never, hooks: { recordSubagentCost } },
       () =>
         withRunContext(
           createRunContext({
@@ -329,7 +329,7 @@ describe('headless delegation', () => {
     );
 
     const result = await withToolFileInteractionContext(
-      { tracker: {} as never, recordSubagentCost },
+      { tracker: {} as never, hooks: { recordSubagentCost } },
       () =>
         withRunContext(
           createRunContext({
@@ -355,7 +355,7 @@ describe('headless delegation', () => {
     mockExecuteAgentErrorOnce(0.31);
 
     const result = await withToolFileInteractionContext(
-      { tracker: {} as never, recordSubagentCost },
+      { tracker: {} as never, hooks: { recordSubagentCost } },
       () =>
         withRunContext(
           createRunContext({

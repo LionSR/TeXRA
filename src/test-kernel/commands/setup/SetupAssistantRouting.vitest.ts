@@ -10,10 +10,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const agentHandles = vi.fn<() => { agentName: string }[]>();
 
+// Single source of truth for the mocked provider list — both the
+// `SecretManager` mock and the `hasUsableSetupCredential` stand-in below
+// scan this same list, so they can't drift from each other. Declared via
+// `vi.hoisted` (not a plain `const`) because `vi.mock` factories run before
+// ordinary module-scope bindings are initialized.
+const MOCK_API_PROVIDERS = vi.hoisted(() => [
+  'openRouter',
+  'openai',
+  'anthropic',
+  'google',
+]);
+
 const mocks = vi.hoisted(() => ({
   getUseOpenRouter: vi.fn<() => boolean>(),
   hasUsableApiKey: vi.fn<(provider: string) => Promise<boolean>>(),
-  hasAnyUsableSetupCredential: vi.fn<() => Promise<boolean>>(),
   showWarningMessage: vi.fn<() => Promise<string | undefined>>(),
   showQuickPick: vi.fn<() => Promise<unknown>>(),
   createQuickPick: vi.fn<(qp: unknown) => void>(),
@@ -69,7 +80,7 @@ vi.mock('@utils/config/providerConfig', () => ({
 vi.mock('@frontend/secretManager', () => ({
   SecretManager: {
     hasUsableApiKey: mocks.hasUsableApiKey,
-    API_PROVIDERS: ['openRouter', 'openai', 'anthropic', 'google'] as string[],
+    API_PROVIDERS: MOCK_API_PROVIDERS,
     getApiKeySecretName: (provider: string) => `apiKey.${provider}`,
   },
 }));
@@ -103,8 +114,17 @@ vi.mock('@auth/serverKeys', () => ({
   }),
 }));
 
-vi.mock('@tools/setup/platform', () => ({
-  hasAnyUsableSetupCredential: mocks.hasAnyUsableSetupCredential,
+// `hasAnyUsableSetupCredential` now delegates to the shared host-neutral
+// predicate; stand it in with the same provider-key mock this suite already
+// drives, so the credential check keeps tracking `mocks.hasUsableApiKey`
+// instead of hitting the (unstubbed) fake platform secrets store.
+vi.mock('@controllers/onboarding/onboardingFunnel', () => ({
+  hasUsableSetupCredential: async () => {
+    for (const provider of MOCK_API_PROVIDERS) {
+      if (await mocks.hasUsableApiKey(provider)) return true;
+    }
+    return false;
+  },
 }));
 
 vi.mock('@common/state', () => ({
@@ -219,7 +239,7 @@ await import('@agent/runtime/executionRegistry');
 await import('@controllers/onboarding/setupLaunch');
 await import('@auth/codex');
 await import('@auth/serverKeys');
-await import('@tools/setup/platform');
+await import('@controllers/onboarding/onboardingFunnel');
 await import('@common/state');
 
 // Module under test — imported after all mock factories are materialized.
@@ -231,7 +251,6 @@ describe('setup assistant routing check ordering', () => {
     agentHandles.mockReturnValue([]);
     mocks.getUseOpenRouter.mockReset();
     mocks.hasUsableApiKey.mockReset();
-    mocks.hasAnyUsableSetupCredential.mockReset();
     mocks.showWarningMessage.mockReset();
     mocks.showQuickPick.mockReset();
     mocks.createQuickPick.mockReset();
@@ -245,7 +264,6 @@ describe('setup assistant routing check ordering', () => {
     // Default: no OpenRouter, no keys — safe baseline.
     mocks.getUseOpenRouter.mockReturnValue(false);
     mocks.hasUsableApiKey.mockResolvedValue(false);
-    mocks.hasAnyUsableSetupCredential.mockResolvedValue(false);
     mocks.showWarningMessage.mockResolvedValue(undefined);
     mocks.showQuickPick.mockResolvedValue(undefined);
     mocks.showInformationMessage.mockResolvedValue(undefined);
@@ -297,7 +315,6 @@ describe('setup assistant routing check ordering', () => {
     mocks.hasUsableApiKey.mockImplementation(
       async (provider: string) => provider === 'openRouter',
     );
-    mocks.hasAnyUsableSetupCredential.mockResolvedValue(true);
 
     const result = await launchSetupAssistant();
 
@@ -313,7 +330,6 @@ describe('setup assistant routing check ordering', () => {
     mocks.hasUsableApiKey.mockImplementation(
       async (provider: string) => provider === 'openRouter',
     );
-    mocks.hasAnyUsableSetupCredential.mockResolvedValue(true);
     mocks.selectSetupCredentialModelExcludingOpenRouter.mockRejectedValue(
       new Error('credential scan unavailable'),
     );
