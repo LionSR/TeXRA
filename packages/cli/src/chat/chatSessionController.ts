@@ -418,7 +418,7 @@ export function createChatSessionController(
 
   const tryResumeStream = (streamId: StreamTabId): Promise<boolean> => {
     if (!chatTuiCanStartRootRun(session)) {
-      return Promise.resolve(true);
+      return Promise.resolve(false);
     }
 
     let resolveRun: (resumed: boolean) => void = () => {};
