@@ -104,10 +104,6 @@ function writeRaw(key: StreamKey, text: string): void {
   }
 }
 
-export function writeNdjsonStdout(record: unknown): void {
-  writeRaw('stdout', `${JSON.stringify(record)}\n`);
-}
-
 export function writeTextStdout(text: string): void {
   writeRaw('stdout', `${text}\n`);
 }
@@ -154,18 +150,33 @@ class StderrTextSink implements LogSink {
   }
 }
 
-class NdjsonStdoutSink implements LogSink {
-  private readonly queue: LogRecord[] = [];
+interface NdjsonWritable {
+  readonly destroyed: boolean;
+  write(text: string): boolean;
+  once(event: 'drain' | 'error' | 'close', listener: () => void): unknown;
+  off(event: 'drain' | 'error' | 'close', listener: () => void): unknown;
+}
+
+export class NdjsonStdoutSink implements LogSink {
+  private readonly queue: CliNdjsonRecord[] = [];
   private drainPromise: Promise<void> | undefined;
   private stdoutClosed = false;
 
+  constructor(private readonly stdout: NdjsonWritable = process.stdout) {}
+
   write(record: LogRecord): void {
+    this.writeRecord({ kind: 'log', ...record });
+  }
+
+  writeRecord(record: CliNdjsonRecord): void {
     this.queue.push(record);
     void this.ensureDrain().catch(() => undefined);
   }
 
   async flush(): Promise<void> {
-    await this.ensureDrain();
+    while (this.drainPromise || this.queue.length > 0) {
+      await (this.drainPromise ?? this.ensureDrain());
+    }
   }
 
   async close(): Promise<void> {
@@ -192,11 +203,10 @@ class NdjsonStdoutSink implements LogSink {
     while (!this.stdoutClosed && this.queue.length > 0) {
       const record = this.queue.shift();
       if (!record) continue;
-      const lineRecord: CliNdjsonRecord = { kind: 'log', ...record };
-      const line = `${JSON.stringify(lineRecord)}\n`;
+      const line = `${JSON.stringify(record)}\n`;
       let canContinue: boolean;
       try {
-        canContinue = process.stdout.write(line);
+        canContinue = this.stdout.write(line);
       } catch {
         this.stdoutClosed = true;
         this.queue.length = 0;
@@ -211,7 +221,7 @@ class NdjsonStdoutSink implements LogSink {
   }
 
   private waitForStdoutDrain(): Promise<boolean> {
-    if (process.stdout.destroyed) return Promise.resolve(false);
+    if (this.stdout.destroyed) return Promise.resolve(false);
     return new Promise<boolean>((resolve) => {
       let cleanup = (): void => undefined;
       const onDrain = (): void => {
@@ -223,20 +233,32 @@ class NdjsonStdoutSink implements LogSink {
         resolve(false);
       };
       cleanup = (): void => {
-        process.stdout.off('drain', onDrain);
-        process.stdout.off('error', onClosed);
-        process.stdout.off('close', onClosed);
+        this.stdout.off('drain', onDrain);
+        this.stdout.off('error', onClosed);
+        this.stdout.off('close', onClosed);
       };
-      process.stdout.once('drain', onDrain);
-      process.stdout.once('error', onClosed);
-      process.stdout.once('close', onClosed);
+      this.stdout.once('drain', onDrain);
+      this.stdout.once('error', onClosed);
+      this.stdout.once('close', onClosed);
     });
   }
+}
+
+const ndjsonStdoutSink = new NdjsonStdoutSink();
+
+/** Queue one public NDJSON record on the process-wide stdout serializer. */
+export function writeNdjsonStdout(record: CliNdjsonRecord): void {
+  ndjsonStdoutSink.writeRecord(record);
+}
+
+/** Wait until all queued public NDJSON and structured log records are written. */
+export function flushNdjsonStdout(): Promise<void> {
+  return ndjsonStdoutSink.flush();
 }
 
 // CLI logs to stdout/stderr are not redacted — operators are expected to
 // inspect their own terminals. Desktop logs (which can be exported and shared)
 // are redacted in `desktopAppLog.ts` via the shared `redactSecrets` helper.
 export function createCliLogSink(format: string): LogSink {
-  return format === 'ndjson' ? new NdjsonStdoutSink() : new StderrTextSink();
+  return format === 'ndjson' ? ndjsonStdoutSink : new StderrTextSink();
 }
