@@ -1,3 +1,4 @@
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import {
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
@@ -427,7 +428,7 @@ export async function withCliMultiAgentPresetVisibility<T>(
   plan: CliMultiAgentPresetRunPlan,
   operation: () => Promise<T>,
 ): Promise<T> {
-  const workspaceState = platform().workspaceState;
+  const { lifecycle, workspaceState } = platform();
   const previousWorkflowAgents = workspaceState.get<string[] | undefined>(
     WorkspaceStateKey.ENABLED_AGENTS,
   );
@@ -435,24 +436,36 @@ export async function withCliMultiAgentPresetVisibility<T>(
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
   );
 
-  await workspaceState.update(WorkspaceStateKey.ENABLED_AGENTS, [
-    ...plan.workflowAgentKeys,
-  ]);
-  await workspaceState.update(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, [
-    ...plan.toolUseAgentKeys,
-  ]);
+  let restorePromise: Promise<void> | undefined;
+  const restoreVisibility = (): Promise<void> => {
+    restorePromise ??= (async () => {
+      await workspaceState.update(
+        WorkspaceStateKey.ENABLED_AGENTS,
+        previousWorkflowAgents,
+      );
+      await workspaceState.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        previousToolUseAgents,
+      );
+    })();
+    return restorePromise;
+  };
+  const shutdownRestore = lifecycle.onShutdown(
+    SHUTDOWN_PHASE.BEFORE,
+    restoreVisibility,
+  );
 
   try {
+    await workspaceState.update(WorkspaceStateKey.ENABLED_AGENTS, [
+      ...plan.workflowAgentKeys,
+    ]);
+    await workspaceState.update(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, [
+      ...plan.toolUseAgentKeys,
+    ]);
     return await operation();
   } finally {
-    await workspaceState.update(
-      WorkspaceStateKey.ENABLED_AGENTS,
-      previousWorkflowAgents,
-    );
-    await workspaceState.update(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      previousToolUseAgents,
-    );
+    shutdownRestore.dispose();
+    await restoreVisibility();
   }
 }
 
