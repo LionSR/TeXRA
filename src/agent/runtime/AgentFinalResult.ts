@@ -21,9 +21,7 @@ export const ResultDiffSummarySchema = z.strictObject({
 
 export type ResultDiffSummary = z.infer<typeof ResultDiffSummarySchema>;
 
-const CostSchema = WorkflowFlowResultSchema.shape.totalCostUsd
-  .unwrap()
-  .prefault(0);
+const CostSchema = z.number().nonnegative().prefault(0);
 
 export const WorkflowAgentFinalResultSchema = WorkflowFlowResultSchema.pick({
   category: true,
