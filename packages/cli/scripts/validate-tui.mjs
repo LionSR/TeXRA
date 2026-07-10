@@ -107,6 +107,15 @@ const DEFAULT_HARNESS_RELATIVE_PATH = path.join(
 const HARNESS = process.env.TEXRA_TUI_HARNESS
   ? path.resolve(process.env.TEXRA_TUI_HARNESS)
   : path.resolve(CLI_ROOT, DEFAULT_HARNESS_RELATIVE_PATH);
+// The `child-event-order-*` scenarios (issue #7972) must render
+// byte-identical frames across separate process launches, so they share one
+// fixed working directory instead of each getting its own random
+// `mkdtempSync` cwd (tui-harness.tsx's default) — the harness reflects `cwd`
+// in rendered session chrome, and a different path per scenario would fail
+// the comparison for a reason unrelated to child-stream event ordering.
+const CHILD_EVENT_ORDER_CWD = mkdtempSync(
+  path.join(tmpdir(), 'texra-tui-child-event-order-'),
+);
 
 // --- scenarios (verified against the committed harness) ------------------
 const SCENARIOS = [
@@ -1901,6 +1910,62 @@ const SCENARIOS = [
       ']tasks',
     ],
     unexpect: ['[Option-p]tasks', '[Option-s]subagents'],
+  },
+  // Rendered-byte-level counterpart to the vitest "child-stream ordered
+  // transition matrix" (src/test-kernel/cli/TuiStateAndFocus.vitest.mts,
+  // scenarios 1-4): the same roster/edge/status facts arrive in a different
+  // order in each of these four scenarios but must converge on the same
+  // final child-stream state per the design's precedence rule
+  // (docs/proposals/cli-child-stream-state-consolidation.md), so their
+  // rendered PTY frames must be byte-identical. `compareGroup` below drives
+  // that check post-run (issue #7972).
+  {
+    name: 'child-event-order-canonical',
+    compareGroup: 'child-event-order',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILD_EVENT_ORDER: 'canonical',
+      HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
+    },
+    bootExpect: '[Tab]streams',
+    expect: ['orderChecker', '1 sub', '[Tab]streams'],
+  },
+  {
+    name: 'child-event-order-roster-first',
+    compareGroup: 'child-event-order',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILD_EVENT_ORDER: 'roster-first',
+      HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
+    },
+    bootExpect: '[Tab]streams',
+    expect: ['orderChecker', '1 sub', '[Tab]streams'],
+  },
+  {
+    name: 'child-event-order-edge-first',
+    compareGroup: 'child-event-order',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILD_EVENT_ORDER: 'edge-first',
+      HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
+    },
+    bootExpect: '[Tab]streams',
+    expect: ['orderChecker', '1 sub', '[Tab]streams'],
+  },
+  {
+    name: 'child-event-order-status-first',
+    compareGroup: 'child-event-order',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILD_EVENT_ORDER: 'status-first',
+      HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
+    },
+    bootExpect: '[Tab]streams',
+    expect: ['orderChecker', '1 sub', '[Tab]streams'],
   },
   {
     name: 'failed-subagent-status',
@@ -3763,6 +3828,41 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
   };
 }
 
+// Post-run byte-identity check for scenarios flagged with the same
+// `compareGroup` (issue #7972): asserts their rendered frames are exactly
+// equal, not just similar — the rendered-byte-level counterpart to a
+// vitest-level event-ordering equivalence. Only checked when every group
+// member actually ran (not platform-skipped, not excluded by a `scenario`
+// name filter on the command line).
+function compareGroupFailures(selectedScenarios, results) {
+  const resultByName = new Map(results.map((result) => [result.name, result]));
+  const groups = new Map();
+  for (const scenario of selectedScenarios) {
+    if (!scenario.compareGroup) continue;
+    const names = groups.get(scenario.compareGroup) ?? [];
+    names.push(scenario.name);
+    groups.set(scenario.compareGroup, names);
+  }
+  const failures = [];
+  for (const [group, names] of groups) {
+    if (names.length < 2) continue;
+    const members = names.map((name) => ({
+      name,
+      result: resultByName.get(name),
+    }));
+    if (members.some(({ result }) => !result || result.skipped)) continue;
+    const [first, ...rest] = members;
+    for (const other of rest) {
+      if (other.result.frame !== first.result.frame) {
+        failures.push(
+          `compare group ${JSON.stringify(group)}: ${JSON.stringify(first.name)} and ${JSON.stringify(other.name)} rendered different PTY frames (byte-identical check failed)`,
+        );
+      }
+    }
+  }
+  return failures;
+}
+
 if (snapshotDir) resetSnapshotDir(snapshotDir);
 
 let failed = 0;
@@ -3792,6 +3892,11 @@ for (const [index, scenario] of scenarios.entries()) {
   }
 }
 writeSnapshotReport(results);
+
+for (const failure of compareGroupFailures(scenarios, results)) {
+  failed += 1;
+  console.log(`✗ ${failure}`);
+}
 
 console.log('');
 console.log(
