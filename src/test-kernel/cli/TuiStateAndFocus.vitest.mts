@@ -27,6 +27,11 @@ import {
 import {
   allocateMiddleRows,
   allocateSidePanelRows,
+  shouldShowTipRow,
+  shouldShowTodosPlanPanel,
+  staticTranscriptRowBudget,
+} from '@cli/chat/tui/appLayout';
+import {
   appEscapeInterruptActive,
   appFocusShortcutsActive,
   approvalForegroundMaxRows,
@@ -36,9 +41,6 @@ import {
   foregroundEscapeAction,
   foregroundSurfaceKind,
   shouldDeferEscapeInterruptForMetaChord,
-  shouldShowTipRow,
-  shouldShowTodosPlanPanel,
-  staticTranscriptRowBudget,
   triggerEscapeInterrupt,
 } from '@cli/chat/tui/App';
 import type { PendingApproval } from '@cli/chat/tui/state/approvalQueue';
