@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest';
+// Node.js imports
+import { setTimeout as sleep } from 'node:timers/promises';
 
+// Third-party imports
+import { describe, expect, it, vi } from 'vitest';
+
+// Local imports
 import { platform } from '@platform/platform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -788,45 +794,126 @@ describe('CLI multi-agent presets', () => {
     expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
   });
 
-  it('restores temporary team visibility during platform shutdown', async () => {
-    const { lifecycle, workspaceState } = platform();
-    const previousWorkflowAgents = ['builtInWorkflow:generic'];
-    const previousToolUseAgents = ['builtInToolUse:agent'];
-    await workspaceState.update(
-      WorkspaceStateKey.ENABLED_AGENTS,
-      previousWorkflowAgents,
-    );
-    await workspaceState.update(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      previousToolUseAgents,
-    );
-    const preset = findPreset('physicist');
-    const plan = planCliMultiAgentPresetRun(preset, {
-      workflowAgents: [agent('correct', AgentCategory.Workflow)],
-      toolUseAgents: [
-        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
-      ],
+  describe('temporary team visibility lifecycle', () => {
+    setupPlatform();
+
+    it('restores temporary team visibility during platform shutdown', async () => {
+      const { lifecycle, workspaceState } = platform();
+      const previousWorkflowAgents = ['builtInWorkflow:generic'];
+      const previousToolUseAgents = ['builtInToolUse:agent'];
+      await workspaceState.update(
+        WorkspaceStateKey.ENABLED_AGENTS,
+        previousWorkflowAgents,
+      );
+      await workspaceState.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        previousToolUseAgents,
+      );
+      const preset = findPreset('physicist');
+      const plan = planCliMultiAgentPresetRun(preset, {
+        workflowAgents: [agent('correct', AgentCategory.Workflow)],
+        toolUseAgents: [
+          agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+        ],
+      });
+
+      let markOperationStarted!: () => void;
+      const operationStarted = new Promise<void>((resolve) => {
+        markOperationStarted = resolve;
+      });
+      const pending = withCliMultiAgentPresetVisibility(plan, async () => {
+        markOperationStarted();
+        await new Promise<never>(() => undefined);
+      });
+      void pending.catch(() => undefined);
+
+      await operationStarted;
+      await lifecycle.runShutdown();
+
+      expect({
+        workflow: workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS),
+        toolUse: workspaceState.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
+      }).toEqual({
+        workflow: previousWorkflowAgents,
+        toolUse: previousToolUseAgents,
+      });
     });
 
-    let markOperationStarted!: () => void;
-    const operationStarted = new Promise<void>((resolve) => {
-      markOperationStarted = resolve;
-    });
-    const pending = withCliMultiAgentPresetVisibility(plan, async () => {
-      markOperationStarted();
-      await new Promise<never>(() => undefined);
-    });
-    void pending.catch(() => undefined);
+    it('keeps shutdown waiting until normal restoration finishes', async () => {
+      const { lifecycle, workspaceState } = platform();
+      const previousWorkflowAgents = ['builtInWorkflow:generic'];
+      const previousToolUseAgents = ['builtInToolUse:agent'];
+      await workspaceState.update(
+        WorkspaceStateKey.ENABLED_AGENTS,
+        previousWorkflowAgents,
+      );
+      await workspaceState.update(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        previousToolUseAgents,
+      );
+      const plan = planCliMultiAgentPresetRun(findPreset('physicist'), {
+        workflowAgents: [agent('correct', AgentCategory.Workflow)],
+        toolUseAgents: [
+          agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+        ],
+      });
 
-    await operationStarted;
-    await lifecycle.runShutdown();
+      let pauseRestoration = false;
+      let markRestorationStarted!: () => void;
+      const restorationStarted = new Promise<void>((resolve) => {
+        markRestorationStarted = resolve;
+      });
+      let releaseRestoration!: () => void;
+      const restorationReleased = new Promise<void>((resolve) => {
+        releaseRestoration = resolve;
+      });
+      const updateState = workspaceState.update.bind(workspaceState);
+      const updateSpy = vi
+        .spyOn(workspaceState, 'update')
+        .mockImplementation(async (key, value) => {
+          if (pauseRestoration && key === WorkspaceStateKey.ENABLED_AGENTS) {
+            markRestorationStarted();
+            await restorationReleased;
+          }
+          await updateState(key, value);
+        });
 
-    expect({
-      workflow: workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS),
-      toolUse: workspaceState.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-    }).toEqual({
-      workflow: previousWorkflowAgents,
-      toolUse: previousToolUseAgents,
+      const operation = withCliMultiAgentPresetVisibility(plan, async () => {
+        expect({
+          workflow: workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS),
+          toolUse: workspaceState.get(
+            WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+          ),
+        }).toEqual({
+          workflow: plan.workflowAgentKeys,
+          toolUse: plan.toolUseAgentKeys,
+        });
+        pauseRestoration = true;
+      });
+
+      await restorationStarted;
+      let shutdownSettled = false;
+      const shutdown = lifecycle.runShutdown().then(() => {
+        shutdownSettled = true;
+      });
+
+      try {
+        await sleep(0);
+        expect(shutdownSettled).toBe(false);
+      } finally {
+        releaseRestoration();
+      }
+
+      await Promise.all([operation, shutdown]);
+      updateSpy.mockRestore();
+
+      expect({
+        workflow: workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS),
+        toolUse: workspaceState.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
+      }).toEqual({
+        workflow: previousWorkflowAgents,
+        toolUse: previousToolUseAgents,
+      });
     });
   });
 });
