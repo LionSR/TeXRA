@@ -104,8 +104,8 @@ function hintsFit(
 
 function compactHintAction(action: string): string {
   switch (action) {
-    case 'approve bash for session':
-      return 'bash session';
+    case 'commands for session':
+      return 'cmd session';
     case 'approve edits for session':
       return 'edit session';
     case 'feedback':

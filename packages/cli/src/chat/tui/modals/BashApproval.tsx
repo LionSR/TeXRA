@@ -30,7 +30,7 @@ export interface BashApprovalProps {
 
 export type BashCommandDisplayLine = ScrollableDisplayLine<'command'>;
 
-const BASH_APPROVAL_TITLE = 'Run bash command?';
+const COMMAND_APPROVAL_TITLE = 'Run command?';
 const DEFAULT_BASH_COMMAND_ROWS = 12;
 const COMPACT_BASH_COMMAND_ROWS = 3;
 const BASH_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 7;
@@ -40,7 +40,7 @@ export function bashApprovalCommandRowsBudget({
   availableRows,
   columns,
   extraFixedRows = 0,
-  title = BASH_APPROVAL_TITLE,
+  title = COMMAND_APPROVAL_TITLE,
 }: {
   readonly availableRows?: number;
   readonly columns: number;
@@ -169,8 +169,8 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
     <ConfirmCard
       borderStyle="double"
       color="yellow"
-      title={BASH_APPROVAL_TITLE}
-      alwaysAllow={{ kind: 'bash', label: 'approve bash for session' }}
+      title={COMMAND_APPROVAL_TITLE}
+      alwaysAllow={{ kind: 'bash', label: 'commands for session' }}
       onDecide={props.onDecide}
     >
       {cwdLine ? <Text dimColor>{cwdLine}</Text> : null}
