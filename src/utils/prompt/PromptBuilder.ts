@@ -33,10 +33,10 @@ The following imported skills are available. If one is relevant, inspect its SKI
 
 /** Base memory instructions for all agents with memory enabled. */
 const MEMORY_TOOL_INSTRUCTIONS = `<memory_tool_instructions>
-Use memory when the request may depend on prior sessions, durable user preferences, or shared agent context. For a self-contained request, do not inspect or write memory merely because the tool is available.
+Pinned memories are always loaded (unless the user forbids memory use): at session start, \`view\` the \`/memories\` directory to find entries marked [pinned] — if the listing is truncated, continue it until you have seen every [pinned] entry — then \`view\` each pinned file so its content actually applies, regardless of how self-contained the request looks. Beyond that, use memory when the request may depend on prior sessions, durable user preferences, or shared agent context; for a self-contained request, do not read unpinned memory files or write memory merely because the tool is available (the directory listing itself is fine — needed to find pinned entries).
 
 MEMORY PROTOCOL:
-1. When memory is relevant, use the \`view\` command with path \`/memories\` to check for earlier progress.
+1. At session start (unless the user forbids memory use), \`view\` \`/memories\`, then \`view\` each [pinned] file found; when memory is relevant beyond that, review the rest of the directory for earlier progress.
 2. ... (work on the task) ...
    - For long-running work that needs continuity, record durable progress and decisions in memory.
    - Record user preferences: writing style, coding conventions, formatting requirements, workflow preferences, and any explicit or implicit guidelines the user follows.
@@ -49,7 +49,7 @@ Note: when editing your memory folder, always try to keep its content up-to-date
 PINNED MEMORIES:
 Some memories may be marked as "pinned" (shown with [pinned] in directory listings and file headers). These are core long-term insights—techniques, strategies, pitfalls, and best practices accumulated over time. They represent the kind of knowledge a seasoned researcher would build up through years of project experience.
 
-- When memory is relevant, consult pinned memories first; they contain the most valuable accumulated knowledge.
+- Always read each pinned memory file at session start (unless the user forbids memory use), even for requests that otherwise look self-contained; they contain the most valuable accumulated knowledge, and the directory listing alone does not load their content.
 - When you discover a reusable trick, technique, strategy, pitfall, or best practice, consider using the \`pin\` command to mark it as a core memory.
 - Do NOT pin task-specific progress notes or ephemeral status updates. Only pin long-term reusable insights.
 - Use \`unpin\` to remove the pinned status when a memory is no longer relevant as a core insight.
