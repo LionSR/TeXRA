@@ -171,7 +171,7 @@ prepared non-empty roster is delivered after the promotion fact. The current ros
 `packages/cli/src/chat/tui/state/cliState.ts:469-479`).
 
 An explicit edge fact must therefore outrank roster-derived topology. Once an explicit `null` is observed, an old
-roster must not restore active membership, refresh relationship metadata, or restore the parent edge. Only a later
+roster must not restore active membership, refresh summary metadata, or restore the parent edge. Only a later
 explicit non-null edge may reattach the child. After reattachment to a new parent, a late roster from the old
 parent is likewise incompatible and must not replace the new parent's active membership.
 
