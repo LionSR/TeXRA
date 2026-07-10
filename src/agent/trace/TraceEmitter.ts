@@ -239,7 +239,7 @@ export class TraceEmitter implements AgentTrace {
     if (!progressEnabled) {
       // Local-only buffering — chunks never emit. `finalize` returns the
       // text but nothing reaches subscribers.
-      return new BufferOnlyStreamHandle(this, id);
+      return new BufferOnlyStreamHandle(id);
     }
 
     const phaseOnly = options.phaseOnly === true;
@@ -406,10 +406,7 @@ class BufferOnlyStreamHandle implements StreamHandle {
   private readonly chunks: string[] = [];
   private finalText: string | undefined;
 
-  constructor(
-    private readonly trace: TraceEmitter,
-    readonly id: string,
-  ) {}
+  constructor(readonly id: string) {}
 
   append(text: string): void {
     if (this.finalText !== undefined || !text) return;
