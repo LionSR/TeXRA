@@ -7,6 +7,7 @@ import type {
   UpdateProfileMessage,
 } from '@shared/schemas/profileViewMessages';
 import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { buildProfileMessage } from './ProfileMessageBuilder';
 import type { StateStore } from '@platform/interfaces';
 
@@ -31,7 +32,7 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
     description:
       'Flow-managed retry attempts (Google, OpenRouter rate limits, background transients). Anthropic/OpenAI retries are managed by their SDKs and unaffected.',
     min: 0,
-    defaultValue: 0,
+    defaultValue: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
   },
   {
     key: 'texra.model.retry.backoffMs',
@@ -39,7 +40,7 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
     description: 'Base delay between retry attempts.',
     min: 0,
     unit: 'ms',
-    defaultValue: 1000,
+    defaultValue: DEFAULT_CORE_SETTINGS.model.retry.backoffMs,
   },
 ];
 
