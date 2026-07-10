@@ -145,7 +145,7 @@ export function buildApprovalRequestHandlerSet(
 export function replayApprovalRequestHandlers(
   handlers: ReplayableApprovalRequestHandlerSet,
 ): void {
-  const replayOrder = {
+  const replayOrder: Record<keyof ApprovalRequestHandlerSet, true> = {
     toolEdit: true,
     bash: true,
     externalInquiry: true,
@@ -153,7 +153,7 @@ export function replayApprovalRequestHandlers(
     agentProposal: true,
     planApproval: true,
     userQuestion: true,
-  } satisfies Record<keyof ApprovalRequestHandlerSet, true>;
+  };
 
   for (const key of Object.keys(replayOrder) as Array<
     keyof ApprovalRequestHandlerSet
