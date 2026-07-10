@@ -111,14 +111,11 @@ async function fetchLocalhost(
   url: string,
   timeoutMs = ZOTERO_PROBE_TIMEOUT_MS,
 ): Promise<Pick<Response, 'ok' | 'status'>> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response | undefined;
   try {
-    response = await fetch(url, { signal: controller.signal });
+    response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
     return { ok: response.ok, status: response.status };
   } finally {
-    clearTimeout(timeout);
     await response?.body?.cancel().catch(() => undefined);
   }
 }

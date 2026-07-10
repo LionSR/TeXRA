@@ -14,13 +14,13 @@ import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
-import { resolveLatexFileOrThrow } from './figureExtractionShared';
+import {
+  resolveLatexFileOrThrow,
+  texPathField,
+} from './figureExtractionShared';
 
 const ExtractBibliographyInputSchema = z.strictObject({
-  texPath: z
-    .string()
-    .min(1, 'texPath is required.')
-    .describe('Path to the LaTeX file to scan for citations.'),
+  texPath: texPathField('Path to the LaTeX file to scan for citations.'),
   bibPath: z
     .string()
     .min(1, 'bibPath cannot be empty if provided.')

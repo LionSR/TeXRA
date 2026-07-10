@@ -4,6 +4,8 @@ import * as path from 'node:path';
 // Third-party imports
 import mime from 'mime-types';
 
+import { normalizeFilePath } from '@utils/core';
+
 const AUDIO_MIME_TYPE_OVERRIDES: Readonly<Record<string, string>> = {
   // mime-types does not expose every audio subtype accepted by current model SDKs.
   '.alaw': 'audio/alaw',
@@ -18,7 +20,7 @@ const AUDIO_MIME_TYPE_OVERRIDES: Readonly<Record<string, string>> = {
  * extensionless paths that have a directory separator.
  */
 function getExtension(pathOrExtension: string): string {
-  const normalized = pathOrExtension.replaceAll('\\', '/');
+  const normalized = normalizeFilePath(pathOrExtension);
   const hasPathSeparator = normalized.includes('/');
   const fileName = normalized.split('/').at(-1) ?? normalized;
 
