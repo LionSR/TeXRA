@@ -211,8 +211,8 @@ describe('CLI platform init', () => {
 
     type NodePlatformOptions = {
       readonly agentResume: {
-        tryResumeStream(streamId: string): Promise<boolean>;
-        isResumeInFlight(streamId: string): boolean;
+        tryResumeStream(streamId: StreamTabId): Promise<boolean>;
+        isResumeInFlight(streamId: StreamTabId): boolean;
       };
     };
     const createNodePlatformCalls = mocks.createNodePlatform.mock
