@@ -40,8 +40,8 @@ return concat(sections, { separator: '\n\n' });
 
 - **Host-agnostic**: the engine never spawns agents itself; hosts inject a
   `runAgent` callback. Production wiring should use the in-band subagent
-  execution path so the engine consumes the typed `AgentFlowResult` — never
-  the XML follow-up delivery string.
+  execution path so the engine consumes the post-flow `AgentFinalResult`
+  envelope — never the XML follow-up delivery string.
 - **Sandbox**: `node:vm` with code generation disabled and no
   `require`/`process`. The boundary is **data-only in both directions**
   (`sandbox.ts`): only JSON text crosses it, so neither side ever holds the
@@ -91,13 +91,14 @@ return concat(sections, { separator: '\n\n' });
 
 ## Not yet built (production integration)
 
-- `outputSchema` on `executeAgent` so `agent(..., {schema})` returns
-  validated structured data instead of prose.
+- Production `runAgent` wiring that returns the fixed `AgentFinalResult`
+  envelope after workflow diffs have been generated.
 - Depth semantics: script-internal `agent()` calls should spawn children at
   the workflow's own delegation depth (scripted orchestration is not LLM
   delegation and must not burn the depth budget).
 - File hand-off: binding a stage's `outputs` (`OutputFileSummary[]`) as the
   next stage's `inputFiles` directly from run storage, without an
-  `accept_run_files` round-trip.
+  `accept_run_files` round-trip. Domain-specific structures travel as JSON
+  output files rather than per-call result schemas.
 - A `delegate_workflow_script` tool + journal persistence in the execution
   KV store, and progress-event bridging onto the existing stream tree.

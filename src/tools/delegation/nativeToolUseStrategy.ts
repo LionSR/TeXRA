@@ -265,6 +265,7 @@ export function createNativeToolUseStrategy(
           : undefined;
         return buildSubagentFailureResultMeta(
           params.agentName,
+          'toolUse',
           result,
           Date.now() - params.startedAt,
         );

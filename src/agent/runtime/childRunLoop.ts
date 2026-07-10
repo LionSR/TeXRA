@@ -8,7 +8,7 @@
 //
 // Host-agnostic, VS Code-free.
 
-import type { ResultMeta } from '@agent/storage';
+import { synchronizeAgentResultOutcome, type ResultMeta } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import {
   currentSession,
@@ -23,14 +23,12 @@ import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { classifyAgentError, isAbortError } from '@common/errors';
 import { deriveRunOutcome } from '@common/constants/streamStatus';
+import { createChannelTrace } from '@logger';
 import type {
   ExecutionId,
   StreamTabId,
   SubagentProgressUpdate,
 } from '@shared/schemas';
-import { createChannelTrace } from '@logger';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { formatDuration } from '@utils/core';
 
 import {
   deliverChildRunFollowUp,
@@ -39,6 +37,8 @@ import {
 } from '@tools/childRunDelivery';
 import { formatSubagentProgress } from '@tools/subagentResults';
 import type { ChildStream } from '@tools/childStream';
+import { formatDuration } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Minimal token usage shape consumed by the loop's turn summary. */
 type TurnUsage = { input_tokens?: number; output_tokens?: number };
@@ -633,7 +633,7 @@ export function startChildRunLoop<TTurn>(
             failed: sawTurnFailure && !loop.isInterrupted(),
             cancelled: loop.isInterrupted(),
           });
-          await finalizeRunTerminal({
+          const finalized = await finalizeRunTerminal({
             handle,
             executions: runSession.executions,
             streamStatus: runSession.status,
@@ -648,6 +648,12 @@ export function startChildRunLoop<TTurn>(
             isSubagent: true,
             persistTerminalStatus: true,
           });
+          // No turn result follows an interruption between turns. Only this
+          // path may relabel the latest interim envelope; ordinary terminal
+          // turns persist their own result after runFlowWithLifecycle returns.
+          if (finalized && loop.isInterrupted()) {
+            await synchronizeAgentResultOutcome(executionId, outcome);
+          }
         }
       }
     }

@@ -413,9 +413,11 @@ function normalizeAgentOptions(
     }
     options[field] = value;
   }
-  if (source.schema !== undefined) {
-    // Already plain data via the normalization above; journal-key stable.
-    options.schema = source.schema;
+  for (const field of ['schema', 'outputSchema'] as const) {
+    if (!Object.hasOwn(source, field)) continue;
+    throw new Error(
+      `agent() option "${field}" is unsupported. Pass structured data between stages through a JSON output file.`,
+    );
   }
   if (source.inputFiles !== undefined) {
     if (

@@ -326,6 +326,20 @@ return null`,
     ).rejects.toThrow(/must be a plain object/);
   });
 
+  it.each(['schema', 'outputSchema'] as const)(
+    'rejects the obsolete %s option instead of silently ignoring it',
+    async (field) => {
+      const runner = vi.fn(echoRunner);
+      await expect(
+        runWorkflowScript({
+          script: `${META}return await agent('x', { ${field}: { type: 'object' } })`,
+          runAgent: runner,
+        }),
+      ).rejects.toThrow(/structured data.*JSON output file/);
+      expect(runner).not.toHaveBeenCalled();
+    },
+  );
+
   it('blocks Function-constructor escapes through injected primitives', async () => {
     // agent is a realm-local wrapper, so its .constructor is the sandbox's
     // codeGeneration-gated (Async)Function — compiling from strings throws.

@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   readTodos: vi.fn(),
   todosModifiedAt: vi.fn(),
   readReport: vi.fn(),
+  readResultMeta: vi.fn(),
   readWorkspaceFiles: vi.fn(),
   listExecutions: vi.fn(),
 }));
@@ -48,6 +49,7 @@ vi.mock('@agent/storage', async () => {
       readTodos: mocks.readTodos,
       todosModifiedAt: mocks.todosModifiedAt,
       readReport: mocks.readReport,
+      readResultMeta: mocks.readResultMeta,
       readWorkspaceFiles: mocks.readWorkspaceFiles,
     })),
     listExecutions: mocks.listExecutions,
@@ -126,6 +128,7 @@ describe('ExecutionsTool', () => {
     mocks.readTodos.mockResolvedValue([]);
     mocks.todosModifiedAt.mockResolvedValue(undefined);
     mocks.readReport.mockResolvedValue(null);
+    mocks.readResultMeta.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
   });
 
@@ -268,6 +271,71 @@ describe('ExecutionsTool', () => {
     expect(reportResult.output).toBe(
       '<subagent-result>full report</subagent-result>',
     );
+  });
+
+  it.each([
+    {
+      label: 'subagent',
+      record: {
+        producer: 'subagent' as const,
+        agentName: 'reviewer',
+        wallTimeMs: 20,
+        result: {
+          category: 'toolUse' as const,
+          outcome: 'completed' as const,
+          response: 'Checked the proof.',
+          files: ['notes.md'],
+          cost: 0.2,
+        },
+      },
+    },
+    {
+      label: 'CLI workflow',
+      record: {
+        producer: 'cliWorkflow' as const,
+        copiedOutput: '/workspace/polished.tex',
+        result: {
+          category: 'workflow' as const,
+          outcome: 'completed' as const,
+          outputs: [],
+          compileFailures: [],
+          diffs: [],
+          cost: 0.4,
+        },
+      },
+    },
+  ])(
+    'exposes only the final envelope for a $label result',
+    async ({ record }) => {
+      mocks.readResultMeta.mockResolvedValue(record);
+
+      const result = await new ExecutionsTool().call({
+        path: '/executions/abc123/result',
+      });
+
+      expect(JSON.parse(result.output ?? '')).toEqual(record.result);
+      expect(result.output).not.toContain('producer');
+      expect(result.output).not.toContain('agentName');
+      expect(result.output).not.toContain('wallTimeMs');
+      expect(result.output).not.toContain('copiedOutput');
+    },
+  );
+
+  it('keeps the background process result shape at /result', async () => {
+    const record = {
+      producer: 'backgroundBash' as const,
+      command: 'echo hi',
+      exitCode: 0,
+      wallTimeMs: 10,
+      success: true,
+    };
+    mocks.readResultMeta.mockResolvedValue(record);
+
+    const result = await new ExecutionsTool().call({
+      path: '/executions/abc123/result',
+    });
+
+    expect(JSON.parse(result.output ?? '')).toEqual(record);
   });
 
   it('reads completed summary todos from stream sidecars before legacy KV todos', async () => {

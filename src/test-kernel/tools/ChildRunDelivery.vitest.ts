@@ -1,6 +1,9 @@
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports - agent
+import type { ResultMeta } from '@agent/storage';
+
 // Local imports - shared
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
@@ -58,10 +61,15 @@ describe('child run delivery', () => {
     const resultMeta = {
       producer: 'subagent',
       agentName: 'review',
-      outcome: 'completed',
-      success: true,
       wallTimeMs: 1,
-    } as const;
+      result: {
+        category: 'toolUse',
+        outcome: 'completed',
+        response: 'done',
+        files: [],
+        cost: 0,
+      },
+    } satisfies ResultMeta;
     mocks.writeResultMeta.mockResolvedValue(undefined);
 
     await expect(
