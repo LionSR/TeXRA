@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   hasCliCredentialForApiMode: vi.fn(),
   runCliOnboarding: vi.fn(),
   runChat: vi.fn(),
-  initCliPlatform: vi.fn(),
+  initInteractiveCliPlatform: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/credentialStatus', () => ({
@@ -25,8 +25,11 @@ vi.mock('@cli/chat/tui/runChatTui', () => ({
   runChat: mocks.runChat,
 }));
 
+// `texra setup` always ends in the chat TUI (below), so it must route through
+// initInteractiveCliPlatform — not plain initCliPlatform — to leave the TUI
+// as the sole SIGINT/SIGTERM owner once it mounts (see initPlatform.ts).
 vi.mock('@cli/runtime/initPlatform', () => ({
-  initCliPlatform: mocks.initCliPlatform,
+  initInteractiveCliPlatform: mocks.initInteractiveCliPlatform,
 }));
 
 import { runSetup } from '@cli/commands/setup';
@@ -49,7 +52,7 @@ describe('texra setup combined flow', () => {
       .mockReset()
       .mockResolvedValue({ configured: false, declined: true });
     mocks.runChat.mockReset().mockResolvedValue({ exitCode: 0 });
-    mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
+    mocks.initInteractiveCliPlatform.mockReset().mockResolvedValue(undefined);
   });
 
   it('rejects non-interactive terminals before doing anything', async () => {
@@ -62,12 +65,29 @@ describe('texra setup combined flow', () => {
         mode: 'headless',
       } as CliContext);
       expect(exit).toBe(CliExitCode.Usage);
-      expect(mocks.initCliPlatform).not.toHaveBeenCalled();
+      expect(mocks.initInteractiveCliPlatform).not.toHaveBeenCalled();
       expect(mocks.runCliOnboarding).not.toHaveBeenCalled();
       expect(mocks.runChat).not.toHaveBeenCalled();
     } finally {
       stderrSpy.mockRestore();
     }
+  });
+
+  it('routes platform init through the TUI-owning signal path, not headless init', async () => {
+    mocks.runCliOnboarding.mockResolvedValue({
+      configured: true,
+      declined: false,
+    });
+    mocks.runChat.mockResolvedValue({ exitCode: CliExitCode.Success });
+
+    await runSetup(INTERACTIVE_CONTEXT);
+
+    // `texra setup` always ends in the chat TUI, so the TUI must own
+    // SIGINT/SIGTERM exclusively once it mounts — initInteractiveCliPlatform
+    // is what suppresses the platform's own handler (see initPlatform.ts).
+    expect(mocks.initInteractiveCliPlatform).toHaveBeenCalledWith(
+      expect.objectContaining({ ...INTERACTIVE_CONTEXT, quietLogs: true }),
+    );
   });
 
   it('runs the picker, then enters the setup-agent chat once configured', async () => {

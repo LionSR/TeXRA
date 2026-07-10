@@ -5,14 +5,18 @@ import type { ExecutionId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   explainNonResumable: vi.fn(),
-  initCliPlatform: vi.fn(),
+  initInteractiveCliPlatform: vi.fn(),
   resolveCliResumeSnapshot: vi.fn(),
   runChat: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
+// `texra resume` always reopens the chat TUI (below), so it must route
+// through initInteractiveCliPlatform — not plain initCliPlatform — to leave
+// the TUI as the sole SIGINT/SIGTERM owner once it mounts (see
+// initPlatform.ts).
 vi.mock('@cli/runtime/initPlatform', () => ({
-  initCliPlatform: mocks.initCliPlatform,
+  initInteractiveCliPlatform: mocks.initInteractiveCliPlatform,
 }));
 
 vi.mock('@cli/runtime/logSinks', () => ({
@@ -62,7 +66,7 @@ function resumableResolution() {
 describe('runResumeExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.initCliPlatform.mockResolvedValue(undefined);
+    mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
     mocks.resolveCliResumeSnapshot.mockResolvedValue(resumableResolution());
     mocks.runChat.mockResolvedValue({ exitCode: 0 });
   });
@@ -88,6 +92,21 @@ describe('runResumeExecution', () => {
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();
   });
 
+  it('routes platform init through the TUI-owning signal path, not headless init', async () => {
+    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
+    const context = cliContext({ stdoutIsTty: true });
+
+    await runResumeExecution(context, EXECUTION_ID);
+
+    // `texra resume` always reopens the chat TUI, so the TUI must own
+    // SIGINT/SIGTERM exclusively once it mounts —
+    // initInteractiveCliPlatform is what suppresses the platform's own
+    // handler (see initPlatform.ts).
+    expect(mocks.initInteractiveCliPlatform).toHaveBeenCalledWith(
+      expect.objectContaining({ ...context, quietLogs: true }),
+    );
+  });
+
   it('rejects resume when the context says stdout is not a TTY', async () => {
     const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
 
@@ -95,7 +114,7 @@ describe('runResumeExecution', () => {
       runResumeExecution(cliContext({ stdoutIsTty: false }), EXECUTION_ID),
     ).resolves.toBe(2);
 
-    expect(mocks.initCliPlatform).not.toHaveBeenCalled();
+    expect(mocks.initInteractiveCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliResumeSnapshot).not.toHaveBeenCalled();
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
@@ -131,7 +150,7 @@ describe('runResumeExecution', () => {
       runResumeExecution(cliContext({ termIsDumb: true }), EXECUTION_ID),
     ).resolves.toBe(2);
 
-    expect(mocks.initCliPlatform).not.toHaveBeenCalled();
+    expect(mocks.initInteractiveCliPlatform).not.toHaveBeenCalled();
     expect(mocks.resolveCliResumeSnapshot).not.toHaveBeenCalled();
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(

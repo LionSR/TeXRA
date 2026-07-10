@@ -67,4 +67,44 @@ describe('CLI platform signal handlers', () => {
     expect(events).toEqual(['shutdown', 'flush', 'exit:143']);
     expect(killSpy).not.toHaveBeenCalled();
   }, 30_000);
+
+  it('runCliPlatformShutdownSequence runs lifecycle shutdown then the NDJSON flush, best-effort', async () => {
+    vi.resetModules();
+    const order: string[] = [];
+    mocks.flushNdjsonStdout.mockImplementation(async () => {
+      order.push('flush');
+    });
+    const { runCliPlatformShutdownSequence } =
+      await import('@cli/runtime/initPlatform');
+
+    const runShutdown = vi.fn(async () => {
+      order.push('shutdown');
+    });
+    await runCliPlatformShutdownSequence({
+      onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
+      runShutdown,
+    });
+    expect(order).toEqual(['shutdown', 'flush']);
+
+    // Best-effort: a lifecycle shutdown failure must not skip the flush, and
+    // an undefined lifecycle (tryPlatform() returning nothing) must not throw.
+    order.length = 0;
+    const failingRunShutdown = vi.fn(async () => {
+      order.push('shutdown');
+      throw new Error('shutdown failed');
+    });
+    await expect(
+      runCliPlatformShutdownSequence({
+        onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
+        runShutdown: failingRunShutdown,
+      }),
+    ).resolves.toBeUndefined();
+    expect(order).toEqual(['shutdown', 'flush']);
+
+    order.length = 0;
+    await expect(
+      runCliPlatformShutdownSequence(undefined),
+    ).resolves.toBeUndefined();
+    expect(order).toEqual(['flush']);
+  });
 });

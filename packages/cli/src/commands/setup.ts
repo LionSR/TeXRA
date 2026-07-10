@@ -4,7 +4,7 @@ import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { initInteractiveCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatInteractiveTerminalFailure,
@@ -37,7 +37,10 @@ export async function runSetup(context: CliContext): Promise<number> {
     return CliExitCode.Usage;
   }
 
-  await initCliPlatform({ ...context, quietLogs: true });
+  // Always ends in the chat TUI (setup agent), so this is a real interactive
+  // entry point — signal ownership must stay with the TUI once it mounts
+  // (see initInteractiveCliPlatform).
+  await initInteractiveCliPlatform({ ...context, quietLogs: true });
   // State 0 first (docs/prds/2026-06-11-agent-native-onboarding.md): a credential is the
   // one step no agent can do for the user. With a credential already in place
   // the picker is skipped — credentials-only (re)configuration is
