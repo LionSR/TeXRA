@@ -431,9 +431,13 @@ export class AgentWorkspaceState {
    * snapshot (union with the `todos`/`plan` fallback arm — see
    * `AgentWorkspaceStateSnapshotSchema`). Call this exactly once, where a
    * persisted snapshot first hydrates into a session (session-init resume in
-   * `ToolUsePrepareNode`, or a reflection flow's resume read in
-   * `runReflectionFlow`). Everywhere else — per-round node prep re-deriving
-   * state from `toSnapshot()` output already produced this run — use
+   * `ToolUsePrepareNode`, a reflection flow's resume read in
+   * `runReflectionFlow`, or `runToolUseFlow`'s tool-use resume boundary
+   * normalizing the nested `stateSlices.workspaceSnapshot` it self-heals into
+   * the resumed flow record — needed because a resume whose persisted cursor
+   * is already past `ToolUsePrepareNode` never runs that node's own
+   * hydration). Everywhere else — per-round node prep re-deriving state from
+   * `toSnapshot()` output already produced this run — use
    * `fromCanonicalSnapshot` instead so the legacy arm is never re-evaluated.
    */
   static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
