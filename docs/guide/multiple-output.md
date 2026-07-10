@@ -57,7 +57,7 @@ This is the crucial part for generating multiple distinct files:
 2. **Agent Generates Structured XML:** The selected agent must be designed (through its `prompts`) to produce a _single XML response_ containing separate blocks for each intended output file, using a structure like this:
 
    ```xml
-   <documents>  <!-- the agent's configured documentTag; "documents" by default -->
+   <documents>  <!-- fixed protocol container, not agent-configurable -->
      <document name="chapter2.tex">
        % ... content for the first output file ...
      </document>
