@@ -9,6 +9,10 @@
  */
 
 import { SupabaseClient } from '@auth/SupabaseClient';
+import {
+  fetchRelayTokenStatus,
+  getConfiguredRelayToken,
+} from '@auth/relayToken';
 import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
 import {
   API_PROVIDERS,
@@ -136,6 +140,11 @@ async function defaultAuthStatus(): Promise<{
   email?: string;
   tier?: string;
 }> {
+  const relayToken = getConfiguredRelayToken();
+  if (relayToken) {
+    await fetchRelayTokenStatus(relayToken);
+  }
+
   const authenticated = await SupabaseClient.isAuthenticated();
   if (!authenticated) return { authenticated: false };
 
