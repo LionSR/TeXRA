@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   LIVE_TAIL_ROWS,
@@ -895,15 +896,6 @@ describe('CLI conversation transcript splitting', () => {
         ROOT,
         sliceWithEntries(ROOT, [entry('u1', 'user', 'send scouts', true)], {
           model: 'deepseekT',
-          activeSubagents: [
-            {
-              kind: 'subagent',
-              executionId: 'ei_search',
-              agentName: 'search',
-              childStreamId: CHILD,
-              status: STREAM_STATUS.RUNNING,
-            },
-          ],
         }),
       ],
       [
@@ -913,9 +905,22 @@ describe('CLI conversation transcript splitting', () => {
         }),
       ],
     ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: ROOT,
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'ei_search',
+          agentName: 'search',
+          childStreamId: CHILD,
+          status: STREAM_STATUS.RUNNING,
+        },
+      ],
+    });
 
     expect(
       sessionHeaderIdentityLine(SESSION_META, {
+        childStreamEntries,
         parentStream: new Map([[CHILD, ROOT]]),
         streamId: CHILD,
         streams,
@@ -927,6 +932,7 @@ describe('CLI conversation transcript splitting', () => {
         scrollbackStreamId: CHILD,
         currentItems: [],
         streams,
+        childStreamEntries,
         meta: SESSION_META,
         parentStream: new Map([[CHILD, ROOT]]),
       })[0],
@@ -1267,9 +1273,7 @@ function sliceWithEntries(
     entries,
     queuedFollowUps: 0,
     queuedFollowUpMessages: [],
-    activeSubagents: [],
     activeProcesses: [],
-    childStreams: [],
     todos: [],
     plan: null,
     processOutput: new Map(),

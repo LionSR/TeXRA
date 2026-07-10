@@ -11,6 +11,7 @@ import {
   childExecutionKey,
   childExecutionLabel,
   visibleSubagentRows,
+  type ChildStreamEntries,
 } from './childExecutions';
 import { orderedDescendantsFromTree } from './focusCycle';
 import type { StreamSlice } from './cliState';
@@ -78,7 +79,7 @@ export function nearestActiveStreamAncestor<T>(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly values: ReadonlyMap<StreamTabId, T>;
-  readonly canUseValue: (value: T) => boolean;
+  readonly canUseValue: (value: T, streamId: StreamTabId) => boolean;
 }): ActiveStreamAncestor<T> | undefined {
   const activeStreamId = init.activeStreamId;
   if (activeStreamId === undefined) return undefined;
@@ -88,7 +89,7 @@ export function nearestActiveStreamAncestor<T>(init: {
   while (parentStreamId && !visited.has(parentStreamId)) {
     visited.add(parentStreamId);
     const value = init.values.get(parentStreamId);
-    if (value !== undefined && init.canUseValue(value)) {
+    if (value !== undefined && init.canUseValue(value, parentStreamId)) {
       return { streamId: parentStreamId, value };
     }
     parentStreamId = init.parentStream.get(parentStreamId);
@@ -96,25 +97,22 @@ export function nearestActiveStreamAncestor<T>(init: {
   return undefined;
 }
 
-const emptyChildReferenceSlice = {
-  activeSubagents: [],
-  childStreams: [],
-} satisfies Pick<StreamSlice, 'activeSubagents' | 'childStreams'>;
-
 function childStreamReferenceLabel(
-  parent:
-    | Pick<StreamSlice, 'activeSubagents' | 'activeProcesses' | 'childStreams'>
-    | undefined,
+  parentStreamId: StreamTabId,
+  childStreamEntries: ChildStreamEntries,
+  streams: ReadonlyMap<StreamTabId, StreamSlice>,
   streamId: StreamTabId,
 ): string {
+  const parentSlice = streams.get(parentStreamId);
   const child = [
-    ...visibleSubagentRows(parent ?? emptyChildReferenceSlice),
-    ...(parent?.activeProcesses ?? []),
+    ...visibleSubagentRows(parentStreamId, childStreamEntries, streams),
+    ...(parentSlice?.activeProcesses ?? []),
   ].find((entry) => childExecutionKey(entry) === streamId);
   return child ? childExecutionLabel(child) : streamId;
 }
 
 export function streamDisplayLabel(init: {
+  readonly childStreamEntries: ChildStreamEntries;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -122,13 +120,16 @@ export function streamDisplayLabel(init: {
   const parentStreamId = init.parentStream.get(init.streamId);
   if (!parentStreamId) return 'main';
   return childStreamReferenceLabel(
-    init.streams.get(parentStreamId),
+    parentStreamId,
+    init.childStreamEntries,
+    init.streams,
     init.streamId,
   );
 }
 
 export function streamViewForId(init: {
   readonly activeStreamId: StreamTabId | undefined;
+  readonly childStreamEntries: ChildStreamEntries;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly shortcutIndex?: number;
   readonly streamId: StreamTabId;
@@ -141,6 +142,7 @@ export function streamViewForId(init: {
     parentId,
     parentLabel: parentId
       ? streamDisplayLabel({
+          childStreamEntries: init.childStreamEntries,
           parentStream: init.parentStream,
           streamId: parentId,
           streams: init.streams,
@@ -154,6 +156,7 @@ export function streamViewForId(init: {
 
 interface OrderedStreamViewInput {
   readonly activeStreamId: StreamTabId | undefined;
+  readonly childStreamEntries: ChildStreamEntries;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
@@ -169,8 +172,7 @@ export function activeStreamTreeEntries(
   if (!root) return [];
   const ordered = orderedDescendantsFromTree({
     parent: root,
-    parentSlice: init.streams.get(root),
-    parentStream: init.parentStream,
+    childStreamEntries: init.childStreamEntries,
     streams: init.streams,
   });
   const out: ActiveStreamTreeEntry[] = [];
@@ -192,6 +194,7 @@ export function activeStreamTreeViews(
   return ordered.map((entry) =>
     streamViewForId({
       activeStreamId: init.activeStreamId,
+      childStreamEntries: init.childStreamEntries,
       parentStream: init.parentStream,
       shortcutIndex: entry.shortcutIndex,
       streamId: entry.id,

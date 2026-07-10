@@ -59,6 +59,10 @@ import {
   type StreamSlice,
 } from '../state/cliState';
 import {
+  activeSubagentsFor,
+  childStreamEntries as childStreamEntriesSignal,
+} from '../state/childExecutions';
+import {
   activeStreamScope,
   nearestActiveStreamAncestor,
 } from '../state/streamViews';
@@ -619,6 +623,10 @@ interface StatusBarVisibleStream {
 interface StatusBarStreamTarget {
   readonly ctrlCAction: CtrlCAction;
   readonly displaySlice: StreamSlice | undefined;
+  /** The stream id `displaySlice` was resolved for — the live-ancestor
+   *  fallback can surface an ancestor other than the nominally "active" id,
+   *  so this is not always `activeStreamId`. */
+  readonly displayStreamId: StreamTabId | undefined;
   /** True when `displaySlice` belongs to a child/subagent stream rather than
    *  the root session (the live-ancestor fallback can surface an ancestor
    *  other than the nominally "active" id, so this is derived from whichever
@@ -640,12 +648,11 @@ export function statusBarStreamTarget({
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StatusBarStreamTarget {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const liveAncestor = nearestActiveStreamAncestor({
+  const liveAncestor = nearestActiveStreamAncestor<StreamSlice>({
     activeStreamId,
     parentStream,
     values: streams,
-    canUseValue: (stream: StatusBarVisibleStream) =>
-      isLiveElapsedStatus(stream.status),
+    canUseValue: (stream) => isLiveElapsedStatus(stream.status),
   });
   const canStopVisibleRun =
     canStopActiveRun &&
@@ -658,6 +665,7 @@ export function statusBarStreamTarget({
       parentStream,
     }),
     displaySlice: activeSlice ?? liveAncestor?.value,
+    displayStreamId,
     isChildStream:
       displayStreamId !== undefined &&
       parentStream.get(displayStreamId) !== undefined,
@@ -840,6 +848,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const activeStreamId = useSignal(activeStreamIdSignal);
   const streams = useSignal(streamsSignal);
   const parentStream = useSignal(parentStreamSignal);
+  const childStreamEntries = useSignal(childStreamEntriesSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const pendingExitHint = useSignal(pendingExitHintSignal);
   const pendingExitResumeId = useSignal(pendingExitResumeIdSignal);
@@ -909,7 +918,14 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     queuedFollowUpPreview: props.queuedFollowUpPreview,
     usage: statusSlice?.usage,
     roundStage: statusSlice?.roundStage,
-    activeSubagents: statusSlice?.activeSubagents.length ?? 0,
+    activeSubagents:
+      target.displayStreamId !== undefined
+        ? activeSubagentsFor(
+            target.displayStreamId,
+            childStreamEntries,
+            streams,
+          ).length
+        : 0,
     activeProcesses: statusSlice?.activeProcesses.length ?? 0,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
