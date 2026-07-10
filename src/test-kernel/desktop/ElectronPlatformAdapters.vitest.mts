@@ -1,5 +1,12 @@
 // Node imports
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -211,9 +218,9 @@ describe('desktop platform adapters', () => {
 
       await migrateLegacyDesktopDataRoot(legacyRoot, targetRoot, logger);
 
-      await expect(pathExists(join(targetRoot, 'global-storage'))).resolves.toBe(
-        false,
-      );
+      await expect(
+        pathExists(join(targetRoot, 'global-storage')),
+      ).resolves.toBe(false);
       await expect(
         pathExists(join(targetRoot, 'workspace-storage')),
       ).resolves.toBe(false);
@@ -242,9 +249,9 @@ describe('desktop platform adapters', () => {
 
       await migrateLegacyDesktopDataRoot(legacyRoot, targetRoot, logger);
 
-      await expect(pathExists(join(legacyRoot, 'global-storage'))).resolves.toBe(
-        false,
-      );
+      await expect(
+        pathExists(join(legacyRoot, 'global-storage')),
+      ).resolves.toBe(false);
       await expect(
         pathExists(join(legacyRoot, 'workspace-storage', 'proj-aaaa')),
       ).resolves.toBe(false);
@@ -308,14 +315,10 @@ describe('desktop platform adapters', () => {
 
       // The non-colliding workspace key still migrates.
       await expect(
-        pathExists(
-          join(legacyRoot, 'workspace-storage', 'proj-only-legacy'),
-        ),
+        pathExists(join(legacyRoot, 'workspace-storage', 'proj-only-legacy')),
       ).resolves.toBe(false);
       await expect(
-        pathExists(
-          join(targetRoot, 'workspace-storage', 'proj-only-legacy'),
-        ),
+        pathExists(join(targetRoot, 'workspace-storage', 'proj-only-legacy')),
       ).resolves.toBe(true);
 
       expect(logger.warnMessages).toHaveLength(2);
