@@ -4,6 +4,10 @@
 README.md
 CHANGELOG.md
 
+# Generated from the repo-root skills tree by scripts/copy-extension-skills.mjs
+# during extension compile/package builds. The source of truth lives at the repo root.
+resources/skills/
+
 # Built by packages/trace-viewer's vite configs during `pnpm run package:fast`
 # (prepare:trace-viewer-assets) — the multi-file bundle (shared-assets export
 # mode, served over http/https) and the single-file, fully self-contained
