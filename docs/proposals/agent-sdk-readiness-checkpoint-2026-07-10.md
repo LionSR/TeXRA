@@ -93,14 +93,15 @@ already extends — so a newly-picked option forwards with no edit here.
 
 Why this one was unattended-safe once verified (unlike the reviewed-train items):
 it is contained to `runAgent.ts` internals; the public `RunAgentOptions`
-interface is unchanged (all seven callers unaffected); it is behavior-preserving
+interface is unchanged (all five callers unaffected); it is behavior-preserving
 (`executeAgent` reads its options by property access, does no `key in options`
 presence checks — grep-confirmed — so spread-vs-literal is identical; the subset
 omits `allowWaitingResult`, resolving to the same `Promise<AgentFlowResult>`
 overload as before); and it is type-guaranteed by the existing `Pick`.
 **Verified:** root `tsc --noEmit` clean, `eslint` clean on the file, and the
 three `runAgent`-path suites green (`RunExecution`, `WorkflowScriptEngine`,
-`DesktopAgentExecution` — 134 tests). Net −7 LOC.
+`DesktopAgentExecution` — 134 tests). Net +1 LOC (+14/−13 — the destructure
+adds a line; the win is deleting the eight-field hand-forwarding, not LOC).
 
 No other cleanup was applied — every remaining candidate is reviewed-train
 (signature/structure change) or a verified false positive, and forcing one of
@@ -274,7 +275,7 @@ Platform port are gone), **single-sourced launch stream status** (#7838, the
 north-star D4 / status dual-rail item), and **hardened `RunScope`/`RunContext`**
 (#7835/#7836, F4). **One cleanup was applied this pass — on explicit request:**
 the `runAgent`→`executeAgent` eight-field hand-forwarding (new candidate #4),
-verified type-safe + lint-clean + 134 tests green, net −7 LOC, contained to
+verified type-safe + lint-clean + 134 tests green, net +1 LOC, contained to
 `runAgent.ts` internals. The verification pass otherwise found no _unattended-safe_
 cleanup — both pure-deletion candidates (`SessionHandle.hostChannel`,
 `followUpResumeDetection.ts`) are verified false positives that cross
@@ -327,6 +328,6 @@ createFlow().run` intact (`ResponseCycleNode.ts:97,111`;
   `RunExecution` / `WorkflowScriptEngine` / `DesktopAgentExecution` suites green
   (134 tests). `executeAgent` does no `key in options` presence check on the
   forwarded keys (grep-confirmed); public `RunAgentOptions` interface unchanged,
-  all seven `runAgent` callers unaffected.
+  all five `runAgent` callers unaffected.
 - The checkpoint doc itself is added under `docs/proposals/`, an internal
   directory excluded from the texra.ai publish allowlist — not a root-level doc.
