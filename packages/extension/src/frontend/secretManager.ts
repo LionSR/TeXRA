@@ -13,8 +13,7 @@ import {
 } from '@model/apiProviders';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
-  getGitHubEnvToken,
-  normalizeGitHubToken,
+  resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
 
 export type { ApiProvider };
@@ -58,10 +57,7 @@ export class SecretManager {
   }
 
   public static async gitHubTokenExists(): Promise<'secret' | 'env' | 'none'> {
-    const stored = normalizeGitHubToken(await this.get(this.GITHUB_TOKEN_KEY));
-    if (stored) return 'secret';
-    if (getGitHubEnvToken()) return 'env';
-    return 'none';
+    return resolveGitHubTokenSource(platform().secrets);
   }
 
   public static async anyApiKeyExists(): Promise<boolean> {
