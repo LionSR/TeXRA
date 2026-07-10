@@ -75,6 +75,7 @@ export type IModelHandler<
   | 'getClient'
   | 'createResponse'
   | 'initializeMessages'
+  | 'refreshSystemMessage'
   | 'createRoundMessages'
   | 'extractResponse'
   | 'addContinueMessage'
