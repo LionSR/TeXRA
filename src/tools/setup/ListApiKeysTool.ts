@@ -13,21 +13,20 @@ import { getSetupPlatform } from './platform';
 const ListApiKeysInputSchema = z
   .strictObject({})
   .describe(
-    'No inputs — audits secret key names stored in TeXRA SecretStorage.',
+    "No inputs — audits secret key names in TeXRA's persisted credential store.",
   );
 
 type ListApiKeysInput = z.infer<typeof ListApiKeysInputSchema>;
 
 /**
- * Audit secret key *names* in SecretStorage (values are never read).
+ * Audit persisted secret key *names* without reading their values.
  *
- * Uses `SecretStorage.keys()` (stable since VS Code 1.105). The result
- * is categorised: known provider keys, GitHub token, unrecognised apiKey.*
- * entries, and a redacted count for other stored secrets.
+ * The result is categorised as known provider keys, the GitHub token,
+ * unrecognised apiKey.* entries, and a redacted count for other secrets.
  */
 export class ListApiKeysTool extends defineTool({
   name: 'list_api_keys',
-  description: `Audit TeXRA's SecretStorage without reading secret values. Known provider keys are shown by provider name (e.g. \`anthropic\`); unrecognised \`apiKey.*\` entries are shown by raw key name to help identify stale secrets; other secret key names are counted but redacted because they may contain user-derived identifiers. Use this to check which providers have a key configured and to detect stale API-key entries. Recognised providers can be managed with set_api_key / unset_api_key; unrecognised apiKey.* entries (e.g. from renamed providers) cannot be deleted via those tools — the user must clear them with VS Code's "Delete Secret" command. Prefer probe_environment for a fuller overview that also covers tool installations and auth status.`,
+  description: `Audit TeXRA's persisted credential store without reading secret values. Known provider keys are shown by provider name (e.g. \`anthropic\`); unrecognised \`apiKey.*\` entries are shown by raw key name to help identify stale secrets; other secret key names are counted but redacted because they may contain user-derived identifiers. Use this to check which providers have a key configured and to detect stale API-key entries. Recognised providers can be managed with set_api_key / unset_api_key; unrecognised apiKey.* entries (e.g. from renamed providers) must be removed through the current host's credential-management surface. Prefer probe_environment for a fuller overview that also covers tool installations and auth status.`,
   schema: ListApiKeysInputSchema,
 }) {
   protected async execute(_input: ListApiKeysInput): Promise<ToolResult> {
@@ -38,7 +37,8 @@ export class ListApiKeysTool extends defineTool({
       return {
         status: 'executed',
         summary: 'No secrets stored',
-        output: 'SecretStorage is empty — no API keys or tokens are stored.',
+        output:
+          'The credential store is empty — no API keys or tokens are persisted.',
       };
     }
 
