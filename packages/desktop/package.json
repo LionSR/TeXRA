@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@types/semver": "^7.7.1",
     "electron": "^43.1.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
@@ -36,6 +37,7 @@
     "@fortawesome/free-solid-svg-icons": "^7.3.0",
     "@openai/codex-sdk": "^0.144.1",
     "@sentry/electron": "^7.15.0",
-    "fix-path": "^5.0.0"
+    "fix-path": "^5.0.0",
+    "semver": "^7.8.5"
   }
 }
