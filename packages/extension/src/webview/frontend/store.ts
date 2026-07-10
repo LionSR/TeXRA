@@ -17,7 +17,6 @@ import {
 } from '@shared/schemas';
 
 import {
-  SESSION_TYPES,
   type SessionType,
   type MultipleDocumentFileType,
 } from './constants';

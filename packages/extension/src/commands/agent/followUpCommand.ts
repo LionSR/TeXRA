@@ -13,7 +13,6 @@ import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResu
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { STREAM_PHASE } from '@shared/schemas';

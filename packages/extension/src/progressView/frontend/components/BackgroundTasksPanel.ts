@@ -399,7 +399,7 @@ export class BackgroundTasksPanel extends LitElement {
               ? repeat(
                   active,
                   (c) => c.executionId,
-                  (c) => this.renderTaskItem(c, kind),
+                  (c) => this.renderTaskItem(c),
                 )
               : nothing
           }
@@ -415,10 +415,7 @@ export class BackgroundTasksPanel extends LitElement {
     `;
   }
 
-  private renderTaskItem(
-    child: ActiveChildInfo,
-    kind: 'process' | 'subagent',
-  ): TemplateResult {
+  private renderTaskItem(child: ActiveChildInfo): TemplateResult {
     const icon = getTaskIcon(child);
     const entry = this.processOutputs.get(child.executionId);
     const childStreamId =
