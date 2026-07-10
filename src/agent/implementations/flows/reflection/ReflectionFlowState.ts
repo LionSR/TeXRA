@@ -80,6 +80,7 @@ export type ReflectionFlowShared = ReflectionFlowState;
  * and to fail loudly, rather than silently migrate, if a mid-flow record
  * were ever corrupted into looking like the legacy shape.
  */
-export const ReflectionFlowStateCanonicalSchema = ReflectionFlowStateSchema.extend(
-  { workspaceSnapshot: AgentWorkspaceCurrentSnapshotSchema },
-);
+export const ReflectionFlowStateCanonicalSchema =
+  ReflectionFlowStateSchema.extend({
+    workspaceSnapshot: AgentWorkspaceCurrentSnapshotSchema,
+  });
