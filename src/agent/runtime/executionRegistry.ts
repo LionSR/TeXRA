@@ -870,20 +870,14 @@ export class ExecutionRegistry {
       handle.executionId,
       projectRunOutcome(RUN_OUTCOME.CANCELLED).executionStatus,
     );
-    // A genuinely suspended WAITING run has no later turn-owned result write,
-    // so its latest interim envelope can be relabeled after status persists.
-    // During RESUMING, a new turn may still reach its own result write; leave
-    // that path alone to avoid modifying the previous turn just before it.
-    if (resuming) {
-      void statusWrite;
-    } else {
-      void statusWrite.then(() =>
-        synchronizeAgentResultOutcome(
-          handle.executionId,
-          RUN_OUTCOME.CANCELLED,
-        ),
-      );
-    }
+    // No later result write is guaranteed here, including during RESUMING:
+    // the resume can fail before installing its own handle, while this method
+    // untracks the suspended one below. Align the interim envelope only after
+    // durable terminal metadata exists. A turn that does continue will replace
+    // it with its own result.
+    void statusWrite.then(() =>
+      synchronizeAgentResultOutcome(handle.executionId, RUN_OUTCOME.CANCELLED),
+    );
     this.untrackHandle(handle);
     this.cancelStreamStatus(handle.childStreamId, handle);
     return true;
