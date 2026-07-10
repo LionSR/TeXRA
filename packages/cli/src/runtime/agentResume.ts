@@ -1,9 +1,11 @@
+// Local imports - agent
+import { isResumeInFlight } from '@agent/runtime/resolveAndResumeStream';
+
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
 
 export interface CliAgentResumeHandler {
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
-  isResumeInFlight(streamId: StreamTabId): boolean;
 }
 
 let activeHandler: CliAgentResumeHandler | undefined;
@@ -26,5 +28,5 @@ export async function tryResumeCliStream(
 }
 
 export function isCliResumeInFlight(streamId: StreamTabId): boolean {
-  return activeHandler?.isResumeInFlight(streamId) ?? false;
+  return activeHandler != null && isResumeInFlight(streamId);
 }

@@ -496,7 +496,6 @@ export async function runChat(
   disposers.push(
     setCliAgentResumeHandler({
       tryResumeStream: (streamId) => chatController.tryResumeStream(streamId),
-      isResumeInFlight: (streamId) => chatController.isResumeInFlight(streamId),
     }),
   );
 
