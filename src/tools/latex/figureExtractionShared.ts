@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { ToolError, type ToolFileAttachment } from '@shared/schemas/toolResult';
 import { buildFileAttachment } from '@tools/attachments';
 import {
@@ -5,6 +7,11 @@ import {
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { WorkspaceFS } from '@utils/files';
+
+/** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
+export function texPathField(description: string): z.ZodString {
+  return z.string().min(1, 'texPath is required.').describe(description);
+}
 
 interface LatexFileResolution {
   path: WorkspacePathResolution;

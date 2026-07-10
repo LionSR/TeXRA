@@ -14,7 +14,6 @@ import { highlight, supportsLanguage } from 'cli-highlight';
 import { LRUCache } from 'lru-cache';
 import Token from 'markdown-it/lib/token.mjs';
 import pico from 'picocolors';
-import stringWidth from 'string-width';
 
 import {
   createMarkdownProcessor,
@@ -25,6 +24,7 @@ import {
 } from '@shared/markdown';
 import { wrapAnsiToWidth } from './ansiWrap';
 import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
+import { textDisplayWidth } from './terminalText';
 
 import type { RenderRule } from 'markdown-it/lib/renderer.mjs';
 
@@ -116,12 +116,12 @@ function tableColWidths(
   if (usable < numCols * TABLE_MIN_COL_WIDTH) return undefined;
 
   // Natural width per column = widest cell content + padding (clamped to the
-  // minimum). `stringWidth` strips ANSI and counts wide glyphs as 2 cells.
+  // minimum). `textDisplayWidth` strips ANSI and counts wide glyphs as 2 cells.
   const natural = Array.from({ length: numCols }, (_, col) => {
-    let widest = head[col] === undefined ? 0 : stringWidth(head[col]);
+    let widest = head[col] === undefined ? 0 : textDisplayWidth(head[col]);
     for (const row of rows) {
       const cell = row[col];
-      if (cell !== undefined) widest = Math.max(widest, stringWidth(cell));
+      if (cell !== undefined) widest = Math.max(widest, textDisplayWidth(cell));
     }
     return Math.max(TABLE_MIN_COL_WIDTH, widest + TABLE_CELL_PADDING);
   });

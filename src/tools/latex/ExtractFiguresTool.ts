@@ -13,13 +13,11 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,
   resolveLatexFileOrThrow,
+  texPathField,
 } from './figureExtractionShared';
 
 const ExtractFiguresInputSchema = z.strictObject({
-  texPath: z
-    .string()
-    .min(1, 'texPath is required.')
-    .describe('Path to the primary LaTeX file to inspect.'),
+  texPath: texPathField('Path to the primary LaTeX file to inspect.'),
 });
 
 export type ExtractFiguresInput = z.infer<typeof ExtractFiguresInputSchema>;
