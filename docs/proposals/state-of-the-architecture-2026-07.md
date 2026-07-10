@@ -78,7 +78,7 @@ per-run plumbing; desktop `platform/index.ts` 226; shared node defaults 928.
 
 **Plane element census.** SessionFact 10 arms; RunFactPayloads 6 keys (+
 `'runFact.'` prefix protocol, dated v0.41); RuntimeInteraction 11;
-RuntimePresentation 5; AppSignals 10 keys; AgentEvent 17 arms;
+RuntimePresentation 5; AppSignals 10 keys; AgentEvent 20 arms;
 CliProgressEventPayloads 22 keys (frozen, no deprecation clock started);
 legacy `STREAM_STATUS` cluster 94 references / 24 prod files. Element census:
 peak ~43 → now ~38 → honest floor **~31-33**, not the promised ~26 (§6).
@@ -449,7 +449,7 @@ not hypothetical: the agent-dir bootstrap duplicated across CLI+desktop has
 **already diverged** (different `GlobalStateKey`, CLI-only re-entrancy guard),
 and desktop silently lacks runtime skill sources entirely — the exact class
 `nodeHost.ts`'s own doc comment ("so the hosts cannot drift") was written to
-prevent. Contrast fences verified: `runAgent` = 92 LoC, AgentEvent = 17 arms,
+prevent. Contrast fences verified: `runAgent` = 92 LoC, AgentEvent = 20 arms,
 AgentConfigPayload requires only {agent, model} — the run surface is genuinely
 SDK-shaped.
 
