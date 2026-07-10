@@ -8,6 +8,7 @@
  * Keep this interface narrow — add methods only when a setup tool needs them.
  */
 
+// Local imports
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   fetchRelayTokenStatus,
@@ -142,6 +143,7 @@ async function defaultAuthStatus(): Promise<{
 }> {
   const relayToken = getConfiguredRelayToken();
   if (relayToken) {
+    // Prime the relay-status cache that isAuthenticated() consults below.
     await fetchRelayTokenStatus(relayToken);
   }
 
