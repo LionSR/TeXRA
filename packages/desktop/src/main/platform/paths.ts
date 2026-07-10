@@ -4,12 +4,17 @@ import { join, resolve } from 'node:path';
 import { app } from 'electron';
 
 import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/BundledAgentDirectories';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { getWorkspacePathInput } from '@desktop/workspacePath.js';
 
 interface WorkspacePathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>>;
   argv?: readonly string[];
   storedWorkspacePath?: string;
+}
+
+interface DataRootOptions {
+  env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_DESKTOP_E2E_USER_DATA_PATH'>>;
 }
 
 interface ResourcesPathOptions {
@@ -24,6 +29,27 @@ export function resolveWorkspacePath(
 ): string | undefined {
   const workspacePath = getWorkspacePathInput(options);
   return workspacePath == null ? undefined : resolve(workspacePath);
+}
+
+/**
+ * Root directory for desktop-persisted memory/history/executions data.
+ *
+ * Production desktop shares the CLI's `~/.texra` root ({@link
+ * DEFAULT_NODE_STORAGE_ROOT}) so a workspace worked on from both hosts shows
+ * one memory/history view (#7987). The e2e/dev harness isolates Electron's
+ * own `userData` profile via `TEXRA_DESKTOP_E2E_USER_DATA_PATH` (see
+ * `packages/desktop/src/main/index.ts`) so relaunches share one throwaway
+ * profile without ever touching a developer's real `~/.texra`; when that var
+ * is set, the data root stays colocated with that same isolated profile
+ * (`userDataPath` is already the isolated path by the time this runs).
+ */
+export function resolveDesktopDataRoot(
+  userDataPath: string,
+  options: DataRootOptions = {},
+): string {
+  const env = options.env ?? process.env;
+  if (env.TEXRA_DESKTOP_E2E_USER_DATA_PATH?.trim()) return userDataPath;
+  return DEFAULT_NODE_STORAGE_ROOT;
 }
 
 export function resolveResourcesPath(
