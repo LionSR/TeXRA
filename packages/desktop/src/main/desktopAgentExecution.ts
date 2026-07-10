@@ -1066,6 +1066,26 @@ export class DesktopProgressBridge {
     replayApprovalRequestHandlers(this.approvalHandlers);
   }
 
+  /**
+   * Owns the Progress webview's readiness sequence. Restored streams are
+   * only folded into `streamLogs`/`session.status` once `restartRepair`
+   * settles (`repairOrphanedStreamsAfterRestart` awaits `streamLogs.load()`
+   * first), so painting the rail before that leaves restored streams
+   * missing from the first paint with nothing guaranteed to correct it —
+   * the same race class `revealStream` was fixed for (#7850). Gating the
+   * whole sequence here, instead of each `webviewReady` call site awaiting
+   * `restartRepair` inline, makes the ordering impossible to get wrong from
+   * a caller.
+   */
+  async completeWebviewReady(
+    onInquiryHydrationError?: (error: unknown) => void,
+  ): Promise<void> {
+    await this.restartRepair;
+    this.syncFullView();
+    void this.hydrateProgressViewInquiries().catch(onInquiryHydrationError);
+    this.replayPendingPrompts();
+  }
+
   setActiveStream(streamId: StreamTabId): void {
     if (!this.streamLogs.has(streamId)) {
       return;
