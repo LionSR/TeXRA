@@ -1,12 +1,12 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-import { buildToolDashboardTerminalAction } from '@controllers/settingsView/ToolDashboardData';
+import { planToolTerminalAction } from '@settingsView/SettingsViewMessageHandler';
 
-describe('ToolDashboardData', () => {
+describe('planToolTerminalAction', () => {
   it('plans install terminal actions from tool definitions', () => {
     assert.deepEqual(
-      buildToolDashboardTerminalAction({
+      planToolTerminalAction({
         toolId: 'codex',
         commandKind: 'install',
       }),
@@ -20,7 +20,7 @@ describe('ToolDashboardData', () => {
 
   it('plans auth terminal actions from tool definitions', () => {
     assert.deepEqual(
-      buildToolDashboardTerminalAction({
+      planToolTerminalAction({
         toolId: 'claude-agent',
         commandKind: 'auth',
       }),
@@ -34,7 +34,7 @@ describe('ToolDashboardData', () => {
 
   it('does not ask the handler to open a terminal without a command', () => {
     assert.deepEqual(
-      buildToolDashboardTerminalAction({
+      planToolTerminalAction({
         toolId: 'texra-cli',
         commandKind: 'auth',
       }),
@@ -42,7 +42,7 @@ describe('ToolDashboardData', () => {
     );
 
     assert.deepEqual(
-      buildToolDashboardTerminalAction({
+      planToolTerminalAction({
         toolId: 'missing-tool',
         commandKind: 'install',
       }),

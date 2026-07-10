@@ -1,4 +1,3 @@
-import type { TaskState } from '@agent/core/state/TaskState';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';
@@ -20,31 +19,6 @@ export interface FileContext {
 }
 
 // ── File context ─────────────────────────────────────────────
-
-export function buildFileContextFromTaskState(
-  taskState: TaskState,
-): FileContext {
-  const { agentConfig } = taskState;
-  const context: FileContext = {};
-
-  if (agentConfig.agent) {
-    context.agent = agentConfig.agent;
-  }
-
-  const arrayFields = [
-    'inputFiles',
-    'contextFiles',
-    'mediaFiles',
-    'outputFiles',
-  ] as const;
-  for (const field of arrayFields) {
-    if (agentConfig[field].length > 0) {
-      context[field] = agentConfig[field];
-    }
-  }
-
-  return context;
-}
 
 function formatFileContext(ctx: FileContext): string {
   const lines: string[] = ['Current context:'];
