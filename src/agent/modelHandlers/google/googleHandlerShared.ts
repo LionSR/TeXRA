@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 
 import { GoogleGenAI, type File } from '@google/genai';
-import { ReasoningEffort } from 'llm-zoo';
+import { ReasoningEffort, type ModelCapabilities } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -26,6 +26,16 @@ import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 /** Whether the model is a Gemini 3 variant (different thinking/media rules). */
 export function isGemini3Model(fullName: string): boolean {
   return /^gemini-3[\.\-]/.test(fullName);
+}
+
+/** Whether the model can accept file attachments (image/video or native audio). */
+export function supportsGoogleFileUploads(
+  capabilities: Pick<
+    ModelCapabilities,
+    'supportsVision' | 'supportsNativeAudio'
+  >,
+): boolean {
+  return capabilities.supportsVision || capabilities.supportsNativeAudio;
 }
 
 interface ResolveGoogleClientParams {
