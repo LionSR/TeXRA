@@ -1884,55 +1884,55 @@
     "chatSkills": [
       {
         "name": "inline-paper-critic",
-        "path": "../../skills/inline-paper-critic"
+        "path": "resources/skills/inline-paper-critic"
       },
       {
         "name": "lean-blueprint",
-        "path": "../../skills/lean-blueprint"
+        "path": "resources/skills/lean-blueprint"
       },
       {
         "name": "lean-proof-assistant",
-        "path": "../../skills/lean-proof-assistant"
+        "path": "resources/skills/lean-proof-assistant"
       },
       {
         "name": "lean-search",
-        "path": "../../skills/lean-search"
+        "path": "resources/skills/lean-search"
       },
       {
         "name": "lean-simplifier",
-        "path": "../../skills/lean-simplifier"
+        "path": "resources/skills/lean-simplifier"
       },
       {
         "name": "literature-search",
-        "path": "../../skills/literature-search"
+        "path": "resources/skills/literature-search"
       },
       {
         "name": "manuscript-review",
-        "path": "../../skills/manuscript-review"
+        "path": "resources/skills/manuscript-review"
       },
       {
         "name": "math-ocr",
-        "path": "../../skills/math-ocr"
+        "path": "resources/skills/math-ocr"
       },
       {
         "name": "mathematical-enhancer",
-        "path": "../../skills/mathematical-enhancer"
+        "path": "resources/skills/mathematical-enhancer"
       },
       {
         "name": "scientific-presenter",
-        "path": "../../skills/scientific-presenter"
+        "path": "resources/skills/scientific-presenter"
       },
       {
         "name": "scientific-simplifier",
-        "path": "../../skills/scientific-simplifier"
+        "path": "resources/skills/scientific-simplifier"
       },
       {
         "name": "tikz-figure-builder",
-        "path": "../../skills/tikz-figure-builder"
+        "path": "resources/skills/tikz-figure-builder"
       },
       {
         "name": "writing-commenter",
-        "path": "../../skills/writing-commenter"
+        "path": "resources/skills/writing-commenter"
       }
     ]
   },

@@ -47,6 +47,7 @@ const REQUIRED_PACKAGED_PATHS = [
   'resources/logo-128x128.svg',
   'resources/logo-512x512.png',
   'resources/shared/latex_style_rules.txt',
+  'resources/skills',
   'resources/templates',
   'resources/tool_use_agents',
   'resources/walkthroughs',
@@ -67,6 +68,7 @@ const BUILD_TIME_PACKAGED_PATHS = new Set(['readme.md', 'changelog.md']);
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
   `resources/${EXCLUDED_TRACE_VIEWER_DIR}/**`,
+  '!resources/skills/**',
   '!src/common/styles/*.css',
   '!src/progressView/*.html',
   '!src/settingsView/*.html',
@@ -143,6 +145,20 @@ function hasFiles(relativeDir) {
   return false;
 }
 
+function collectFiles(directory, prefix = '') {
+  const files = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const relativePath = path.join(prefix, entry.name);
+    const absolutePath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectFiles(absolutePath, relativePath));
+    } else if (entry.isFile()) {
+      files.push(relativePath);
+    }
+  }
+  return files.sort();
+}
+
 function buildSnapshot() {
   const packageJson = readJson(packagePath);
   return {
@@ -208,6 +224,31 @@ function verifyAssets(snapshot, failures) {
   }
 }
 
+function verifyBundledSkills(failures) {
+  const sourceDir = path.join(rootDir, 'skills');
+  const packagedDir = path.join(packageDir, 'resources', 'skills');
+  if (!fs.existsSync(sourceDir) || !fs.existsSync(packagedDir)) return;
+
+  const sourceFiles = collectFiles(sourceDir);
+  const packagedFiles = collectFiles(packagedDir);
+  assert(
+    JSON.stringify(packagedFiles) === JSON.stringify(sourceFiles),
+    'Packaged extension skills do not match the canonical skills tree.',
+    failures,
+  );
+
+  for (const relativePath of sourceFiles) {
+    if (!packagedFiles.includes(relativePath)) continue;
+    assert(
+      fs
+        .readFileSync(path.join(packagedDir, relativePath))
+        .equals(fs.readFileSync(path.join(sourceDir, relativePath))),
+      `Packaged extension skill differs from canonical source: ${relativePath}`,
+      failures,
+    );
+  }
+}
+
 function verifyVscodeIgnore(snapshot, failures) {
   if (!fs.existsSync(vscodeIgnorePath)) {
     failures.push(
@@ -251,6 +292,7 @@ if (update) {
 const failures = [];
 verifySnapshot(snapshot, failures);
 verifyAssets(snapshot, failures);
+verifyBundledSkills(failures);
 verifyVscodeIgnore(snapshot, failures);
 
 if (failures.length > 0) {

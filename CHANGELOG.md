@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Bundled skills are available in installed extensions** — VSIX packages now
+  include the built-in skill definitions, so enabling runtime skills exposes
+  the same bundled catalog in installed extensions as in development.
+
 ### Shared (all surfaces)
 
 #### Bug Fixes

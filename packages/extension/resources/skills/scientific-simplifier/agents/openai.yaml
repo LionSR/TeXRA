@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Scientific Simplifier'
+  short_description: 'Simplify code and technical prose safely'
+  default_prompt: 'Use $scientific-simplifier to make this scientific code or LaTeX clearer without changing its behavior or meaning.'

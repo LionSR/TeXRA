@@ -35,55 +35,55 @@
       "chatSkills": [
         {
           "name": "inline-paper-critic",
-          "path": "../../skills/inline-paper-critic"
+          "path": "resources/skills/inline-paper-critic"
         },
         {
           "name": "lean-blueprint",
-          "path": "../../skills/lean-blueprint"
+          "path": "resources/skills/lean-blueprint"
         },
         {
           "name": "lean-proof-assistant",
-          "path": "../../skills/lean-proof-assistant"
+          "path": "resources/skills/lean-proof-assistant"
         },
         {
           "name": "lean-search",
-          "path": "../../skills/lean-search"
+          "path": "resources/skills/lean-search"
         },
         {
           "name": "lean-simplifier",
-          "path": "../../skills/lean-simplifier"
+          "path": "resources/skills/lean-simplifier"
         },
         {
           "name": "literature-search",
-          "path": "../../skills/literature-search"
+          "path": "resources/skills/literature-search"
         },
         {
           "name": "manuscript-review",
-          "path": "../../skills/manuscript-review"
+          "path": "resources/skills/manuscript-review"
         },
         {
           "name": "math-ocr",
-          "path": "../../skills/math-ocr"
+          "path": "resources/skills/math-ocr"
         },
         {
           "name": "mathematical-enhancer",
-          "path": "../../skills/mathematical-enhancer"
+          "path": "resources/skills/mathematical-enhancer"
         },
         {
           "name": "scientific-presenter",
-          "path": "../../skills/scientific-presenter"
+          "path": "resources/skills/scientific-presenter"
         },
         {
           "name": "scientific-simplifier",
-          "path": "../../skills/scientific-simplifier"
+          "path": "resources/skills/scientific-simplifier"
         },
         {
           "name": "tikz-figure-builder",
-          "path": "../../skills/tikz-figure-builder"
+          "path": "resources/skills/tikz-figure-builder"
         },
         {
           "name": "writing-commenter",
-          "path": "../../skills/writing-commenter"
+          "path": "resources/skills/writing-commenter"
         }
       ],
       "languageModelTools": [
@@ -760,6 +760,19 @@
   "manifestAssetReferences": [
     "resources/logo-128x128.svg",
     "resources/logo-512x512.png",
+    "resources/skills/inline-paper-critic",
+    "resources/skills/lean-blueprint",
+    "resources/skills/lean-proof-assistant",
+    "resources/skills/lean-search",
+    "resources/skills/lean-simplifier",
+    "resources/skills/literature-search",
+    "resources/skills/manuscript-review",
+    "resources/skills/math-ocr",
+    "resources/skills/mathematical-enhancer",
+    "resources/skills/scientific-presenter",
+    "resources/skills/scientific-simplifier",
+    "resources/skills/tikz-figure-builder",
+    "resources/skills/writing-commenter",
     "resources/walkthroughs/getting-started.md",
     "resources/walkthroughs/media/agent-model-selection.png",
     "resources/walkthroughs/media/api-key-setup.png",
@@ -778,6 +791,7 @@
     "resources/logo-128x128.svg",
     "resources/logo-512x512.png",
     "resources/shared/latex_style_rules.txt",
+    "resources/skills",
     "resources/templates",
     "resources/tool_use_agents",
     "resources/walkthroughs",
@@ -789,6 +803,7 @@
   "requiredVscodeIgnoreLines": [
     "src/**",
     "resources/traceViewer/**",
+    "!resources/skills/**",
     "!src/common/styles/*.css",
     "!src/progressView/*.html",
     "!src/settingsView/*.html",
