@@ -2,7 +2,7 @@ import type { ExecutionId } from '@shared/schemas';
 
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import { CliExitCode } from './exitCodes';
-import { initCliPlatform } from './initPlatform';
+import { initInteractiveCliPlatform } from './initPlatform';
 import { writeTextStderr } from './logSinks';
 import { explainNonResumable, resolveCliResumeSnapshot } from './sessionResume';
 import {
@@ -42,7 +42,10 @@ export async function runResumeExecution(
     return CliExitCode.Usage;
   }
 
-  await initCliPlatform({ ...context, quietLogs: true });
+  // Always reopens the chat TUI, so this is a real interactive entry point —
+  // signal ownership must stay with the TUI once it mounts (see
+  // initInteractiveCliPlatform).
+  await initInteractiveCliPlatform({ ...context, quietLogs: true });
 
   const resolution = await resolveCliResumeSnapshot(id);
   if (resolution.kind !== 'toolUse') {
