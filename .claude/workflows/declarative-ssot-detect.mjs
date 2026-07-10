@@ -36,14 +36,10 @@ const BATCHES = [
     'src/agent/storage/executionLifecycle.ts', 'src/agent/index/agentRegistry.ts',
   ] },
   { name: 'progressView', files: [
-    'src/controllers/progressView/backend/persistence/StreamTabStore.ts', 'packages/extension/src/progressView/ProgressViewProvider.ts',
-    'packages/extension/src/progressView/ProgressViewMessageHandler.ts', 'src/controllers/progressView/backend/ProgressBackend.ts',
-    'src/controllers/progressView/backend/WebviewBridge.ts', 'src/controllers/progressView/ProgressViewApprovalCommandHandlers.ts',
-    'src/controllers/progressView/backend/events/ProgressEventHandler.ts', 'src/controllers/progressView/ProgressViewFollowUpCommandHandlers.ts',
-    'src/controllers/progressView/ProgressViewBypassCommandHandlers.ts', 'src/controllers/progressView/ProgressViewCommandHandlers.ts',
-    'src/controllers/progressView/backend/state/ProgressViewState.ts', 'src/controllers/progressView/ProgressViewFileCommandHandlers.ts',
-    'src/controllers/progressView/ProgressViewLifecycleCommandHandlers.ts', 'src/controllers/progressView/backend/WebviewUpdater.ts',
-    'src/controllers/progressView/ProgressViewRunCommandHandlers.ts',
+    'packages/extension/src/progressView/ProgressViewProvider.ts', 'packages/extension/src/progressView/ProgressViewMessageHandler.ts',
+    'src/controllers/progressView/backend/ProgressBackend.ts', 'src/controllers/progressView/backend/WebviewBridge.ts',
+    'src/controllers/progressView/ProgressViewCommandHandlers.ts', 'src/controllers/progressView/backend/state/ProgressViewState.ts',
+    'src/controllers/progressView/backend/WebviewUpdater.ts',
   ] },
   { name: 'cli-runtime-commands', files: [
     'packages/cli/src/runtime/multiAgentPresets.ts', 'packages/cli/src/runtime/modelAccess.ts',
