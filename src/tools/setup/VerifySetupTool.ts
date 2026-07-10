@@ -71,15 +71,17 @@ export class VerifySetupTool extends defineTool({
       };
     }
 
-    const [coreResults, hasMagick, hasGm, hasUsableCredential, auth] =
+    // Authentication verifies a configured relay token and primes the shared
+    // status cache. Credential readiness must read that settled state.
+    const auth = await platform.auth.getStatus().catch(() => ({
+      authenticated: false as const,
+    }));
+    const [coreResults, hasMagick, hasGm, hasUsableCredential] =
       await Promise.all([
         Promise.all(CORE_LATEX_TOOLS.map(isToolPresent)),
         isToolPresent('magick'),
         isToolPresent('gm'),
         platform.secrets.anyUsableCredentialExists(),
-        platform.auth.getStatus().catch(() => ({
-          authenticated: false as const,
-        })),
       ]);
 
     const missingCore: string[] = CORE_LATEX_TOOLS.filter(
