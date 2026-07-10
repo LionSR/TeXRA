@@ -11,7 +11,7 @@ import MockCard from './MockCard.vue';
 // Standalone (no MockupFrame). The root carries `.mockup` so the shared `--mk-*`
 // colour + dimensional tokens (theme/mockup.css) resolve here and the card flips
 // cleanly between the docs light / dark themes. Keys mirror the YAML on the page
-// verbatim (inherits: polish, agentCategory: workflow, rounds: 2, documentTag,
+// verbatim (inherits: polish, agentCategory: workflow, rounds: 2,
 // systemPrompt / userPrefix / userRequest).
 
 // The three top-level YAML sections, each captioned by its role.
@@ -23,7 +23,7 @@ const bands = [
   {
     key: 'settings:',
     role: 'how it behaves',
-    fields: ['agentCategory: workflow', 'rounds: 2', 'documentTag: documents'],
+    fields: ['agentCategory: workflow', 'rounds: 2'],
   },
   {
     key: 'prompts:',
