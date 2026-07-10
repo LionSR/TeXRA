@@ -122,6 +122,42 @@ function sameOutputFiles(left: string[], right: string[]): boolean {
   return left.every((file, index) => file === right[index]);
 }
 
+/**
+ * Merge a round-keyed patch (per round: a value list, or `null` to delete
+ * that round) into an existing overlay patch, later entries winning. Shared
+ * by every round-keyed accumulator overlay (output files, missing outputs,
+ * compile failures) — they're all the same shape, so one merge function
+ * services all three via {@link StreamSnapshotStore.mutateWithOverlay}.
+ */
+function mergeRoundPatch<T>(
+  existing: Map<number, T[] | null> | undefined,
+  patch: Map<number, T[] | null>,
+): Map<number, T[] | null> {
+  const merged = existing ?? new Map<number, T[] | null>();
+  for (const [round, value] of patch) merged.set(round, value);
+  return merged;
+}
+
+/**
+ * Merge a per-run usage delta patch into an existing overlay patch,
+ * accumulating (not replacing) each run's totals — mirrors the in-memory
+ * sum `applyUsageDeltaMemory` performs, so the overlay replayed after
+ * seeding matches what was already applied eagerly.
+ */
+function mergeUsagePatch(
+  existing: Map<StorageKey, TokenUsageStats> | undefined,
+  patch: Map<StorageKey, TokenUsageStats>,
+): Map<StorageKey, TokenUsageStats> {
+  const merged = existing ?? new Map<StorageKey, TokenUsageStats>();
+  for (const [storageKey, delta] of patch) {
+    merged.set(
+      storageKey,
+      sumUsageStats([merged.get(storageKey) ?? emptyUsageStats(), delta]),
+    );
+  }
+  return merged;
+}
+
 function descriptorFromConfig(
   stream: StreamTabId,
   executionId: ExecutionId,
@@ -191,6 +227,14 @@ export class StreamSnapshotStore {
   private readonly outputFileOverlays = new Map<
     StreamTabId,
     OutputFilesPatch
+  >();
+  private readonly missingOutputsOverlays = new Map<
+    StreamTabId,
+    Map<number, string[] | null>
+  >();
+  private readonly compileFailuresOverlays = new Map<
+    StreamTabId,
+    Map<number, CompileFailure[] | null>
   >();
   private readonly usageOverlays = new Map<
     StreamTabId,
@@ -413,65 +457,36 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Shared round→value patch application for the round-keyed accumulators
-   * (missing outputs, compile failures). `normalize` returns `null` to delete
-   * a round's entry (e.g. once its failure list empties out) or the value to
-   * store otherwise.
+   * Shared round→value patch parsing for the round-keyed accumulators
+   * (output files, missing outputs, compile failures). `normalize` returns
+   * `null` to delete a round's entry (e.g. once its failure list empties
+   * out) or the value list to store otherwise.
    */
-  private applyRoundKeyedPatch<T>(
-    map: Map<StreamTabId, RoundIndexed<T>>,
-    stream: StreamTabId,
+  private parseRoundPatch<T>(
     filesByRound: Record<string, unknown>,
     normalize: (raw: unknown) => T[] | null,
-  ): RoundIndexed<T> {
-    const rounds = this.getOrCreate(map, stream);
+  ): Map<number, T[] | null> {
+    const patch = new Map<number, T[] | null>();
     for (const [round, raw] of Object.entries(filesByRound)) {
       const key = RoundKeySchema.safeParse(round);
       if (!key.success) continue;
-      const value = normalize(raw);
-      if (value === null) delete rounds[key.data];
-      else rounds[key.data] = value;
-    }
-    return rounds;
-  }
-
-  private parseOutputFilesPatch(
-    filesByRound: RoundIndexed<OutputFileInfo>,
-  ): OutputFilesPatch {
-    const patch: OutputFilesPatch = new Map();
-    for (const [round, files] of Object.entries(filesByRound)) {
-      const key = RoundKeySchema.safeParse(round);
-      if (!key.success) continue;
-      const normalized = OutputFileInfoListSchema.parse(
-        Array.isArray(files) ? files : [],
-      );
-      patch.set(key.data, normalized.length === 0 ? null : normalized);
+      patch.set(key.data, normalize(raw));
     }
     return patch;
   }
 
-  private applyOutputFilesPatch(
+  /** Apply a parsed round-keyed patch to `map`'s per-stream record. */
+  private applyRoundPatch<T>(
+    map: Map<StreamTabId, RoundIndexed<T>>,
     stream: StreamTabId,
-    patch: OutputFilesPatch,
-  ): RoundIndexed<OutputFileInfo> {
-    const rounds = this.getOrCreate(this.outputFiles, stream);
-    for (const [round, files] of patch) {
-      if (files === null) delete rounds[round];
-      else rounds[round] = files;
+    patch: Map<number, T[] | null>,
+  ): RoundIndexed<T> {
+    const rounds = this.getOrCreate(map, stream);
+    for (const [round, value] of patch) {
+      if (value === null) delete rounds[round];
+      else rounds[round] = value;
     }
     return rounds;
-  }
-
-  private addOutputFilesOverlay(
-    stream: StreamTabId,
-    patch: OutputFilesPatch,
-  ): void {
-    if (patch.size === 0) return;
-    const overlay =
-      this.outputFileOverlays.get(stream) ??
-      new Map<number, OutputFileInfo[] | null>();
-    for (const [round, files] of patch) overlay.set(round, files);
-    this.outputFileOverlays.set(stream, overlay);
   }
 
   private writeOutputFiles(stream: StreamTabId): void {
@@ -497,21 +512,6 @@ export class StreamSnapshotStore {
     return accumulated;
   }
 
-  private addUsageOverlay(
-    stream: StreamTabId,
-    storageKey: StorageKey,
-    delta: TokenUsageStats,
-  ): void {
-    if (isEmptyUsage(delta)) return;
-    const overlay =
-      this.usageOverlays.get(stream) ?? new Map<StorageKey, TokenUsageStats>();
-    overlay.set(
-      storageKey,
-      sumUsageStats([overlay.get(storageKey) ?? emptyUsageStats(), delta]),
-    );
-    this.usageOverlays.set(stream, overlay);
-  }
-
   private writeUsage(stream: StreamTabId): void {
     const parsed = mapToRecord(this.usage.get(stream) ?? new Map());
     const unparsed = this.usageUnparsed.get(stream);
@@ -525,58 +525,116 @@ export class StreamSnapshotStore {
     this.write(stream, STREAM_DATA_KEYS.USAGE_STATS, record);
   }
 
+  /**
+   * Shared eager-apply + overlay-reconcile shape for every accumulator that
+   * patches per-stream state from a live progress event. `applyToMemory`
+   * always runs immediately, so a caller can read its own write back
+   * synchronously whether or not the stream is seeded yet. A seeded stream
+   * also persists immediately (`persist`). An unseeded stream instead
+   * records `overlayPatch` in `overlay` (merged with anything still pending
+   * from an earlier unseeded mutation on the same stream via `mergePatch`),
+   * leaving `overlayPatch` `undefined` to skip recording (used for
+   * effectively-empty patches). `applyStreamData`'s post-seed reconciliation
+   * then replays the overlay on top of the freshly-read disk state and
+   * persists it there, so an eager write racing ahead of its own seed is
+   * never clobbered by that seed's raw disk read. This is the guarantee
+   * `addOutputFiles`/`addUsage` used to hand-roll individually; every
+   * round/usage mutator now shares it here, so a future one inherits it by
+   * construction instead of needing its own bespoke overlay block.
+   */
+  private mutateWithOverlay<T, P>(
+    stream: StreamTabId,
+    overlayPatch: P | undefined,
+    overlay: Map<StreamTabId, P>,
+    mergePatch: (existing: P | undefined, patch: P) => P,
+    applyToMemory: () => T,
+    persist: () => void,
+  ): { result: T; pending: Promise<void> | undefined } {
+    const result = applyToMemory();
+
+    if (this.canMutateSynchronously(stream)) {
+      persist();
+      return { result, pending: undefined };
+    }
+
+    const version = this.streamVersion(stream);
+    if (overlayPatch !== undefined) {
+      overlay.set(stream, mergePatch(overlay.get(stream), overlayPatch));
+    }
+    return {
+      result,
+      pending: this.queueAfterSeed(stream, version, () => undefined),
+    };
+  }
+
   addOutputFiles(
     stream: StreamTabId,
     filesByRound: RoundIndexed<OutputFileInfo>,
   ): void {
-    const patch = this.parseOutputFilesPatch(filesByRound);
+    const patch = this.parseRoundPatch<OutputFileInfo>(filesByRound, (raw) => {
+      const normalized = OutputFileInfoListSchema.parse(
+        Array.isArray(raw) ? raw : [],
+      );
+      return normalized.length === 0 ? null : normalized;
+    });
     if (patch.size === 0) return;
 
-    if (this.canMutateSynchronously(stream)) {
-      this.applyOutputFilesPatch(stream, patch);
-      this.writeOutputFiles(stream);
-      return;
-    }
-
-    const version = this.streamVersion(stream);
-    this.applyOutputFilesPatch(stream, patch);
-    this.addOutputFilesOverlay(stream, patch);
-    this.queueAfterSeed(stream, version, () => undefined);
+    this.mutateWithOverlay(
+      stream,
+      patch,
+      this.outputFileOverlays,
+      mergeRoundPatch,
+      () => this.applyRoundPatch(this.outputFiles, stream, patch),
+      () => this.writeOutputFiles(stream),
+    );
   }
 
   updateMissingOutputs(
     stream: StreamTabId,
     filesByRound: RoundIndexed<string>,
   ): void {
-    this.mutate(stream, () => {
-      const rounds = this.applyRoundKeyedPatch<string>(
-        this.missingOutputs,
-        stream,
-        filesByRound,
-        (raw) => raw as string[],
-      );
-      this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, { ...rounds });
-    });
+    const patch = this.parseRoundPatch<string>(
+      filesByRound,
+      (raw) => raw as string[],
+    );
+    if (patch.size === 0) return;
+
+    this.mutateWithOverlay(
+      stream,
+      patch,
+      this.missingOutputsOverlays,
+      mergeRoundPatch,
+      () => this.applyRoundPatch(this.missingOutputs, stream, patch),
+      () =>
+        this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {
+          ...this.missingOutputs.get(stream),
+        }),
+    );
   }
 
   updateCompileFailures(
     stream: StreamTabId,
     filesByRound: RoundIndexed<CompileFailure>,
   ): void {
-    this.mutate(stream, () => {
-      const rounds = this.applyRoundKeyedPatch<CompileFailure>(
-        this.compileFailures,
-        stream,
-        filesByRound,
-        (raw) => {
-          const normalized = CompileFailureSchema.array().parse(
-            Array.isArray(raw) ? raw : [],
-          );
-          return normalized.length === 0 ? null : normalized;
-        },
+    const patch = this.parseRoundPatch<CompileFailure>(filesByRound, (raw) => {
+      const normalized = CompileFailureSchema.array().parse(
+        Array.isArray(raw) ? raw : [],
       );
-      this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, { ...rounds });
+      return normalized.length === 0 ? null : normalized;
     });
+    if (patch.size === 0) return;
+
+    this.mutateWithOverlay(
+      stream,
+      patch,
+      this.compileFailuresOverlays,
+      mergeRoundPatch,
+      () => this.applyRoundPatch(this.compileFailures, stream, patch),
+      () =>
+        this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, {
+          ...this.compileFailures.get(stream),
+        }),
+    );
   }
 
   /**
@@ -589,16 +647,24 @@ export class StreamSnapshotStore {
     usage: TokenUsageStats,
   ): UsageUpdateResult {
     const delta = TokenUsageStatsParsingSchema.parse(usage);
-    if (this.canMutateSynchronously(stream)) {
-      const accumulated = this.applyUsageDeltaMemory(stream, storageKey, delta);
-      if (!isEmptyUsage(delta)) this.writeUsage(stream);
-      return accumulated;
-    }
-
     const version = this.streamVersion(stream);
-    this.applyUsageDeltaMemory(stream, storageKey, delta);
-    this.addUsageOverlay(stream, storageKey, delta);
-    return this.queueAfterSeed(stream, version, () => undefined).then(() => {
+    const overlayPatch = isEmptyUsage(delta)
+      ? undefined
+      : new Map<StorageKey, TokenUsageStats>([[storageKey, delta]]);
+
+    const { result: accumulated, pending } = this.mutateWithOverlay(
+      stream,
+      overlayPatch,
+      this.usageOverlays,
+      mergeUsagePatch,
+      () => this.applyUsageDeltaMemory(stream, storageKey, delta),
+      () => {
+        if (!isEmptyUsage(delta)) this.writeUsage(stream);
+      },
+    );
+
+    if (!pending) return accumulated;
+    return pending.then(() => {
       if (this.streamVersion(stream) !== version || !this.seeded.has(stream)) {
         return undefined;
       }
@@ -689,6 +755,8 @@ export class StreamSnapshotStore {
       this.seedChains,
       this.metaOverlays,
       this.outputFileOverlays,
+      this.missingOutputsOverlays,
+      this.compileFailuresOverlays,
       this.usageOverlays,
       this.kvCache,
     ];
@@ -1229,6 +1297,8 @@ export class StreamSnapshotStore {
     const runDescriptorOverlay =
       metaOverlay !== undefined ? this.runDescriptors.get(stream) : undefined;
     const outputFileOverlay = this.outputFileOverlays.get(stream);
+    const missingOutputsOverlay = this.missingOutputsOverlays.get(stream);
+    const compileFailuresOverlay = this.compileFailuresOverlays.get(stream);
     const usageOverlay = this.usageOverlays.get(stream);
     const sidecarsToWrite = new Set(data.legacyKeys);
     this.outputFiles.set(stream, data.outputFiles);
@@ -1281,9 +1351,23 @@ export class StreamSnapshotStore {
     }
     this.metaOverlays.delete(stream);
     if (outputFileOverlay) {
-      this.applyOutputFilesPatch(stream, outputFileOverlay);
+      this.applyRoundPatch(this.outputFiles, stream, outputFileOverlay);
       sidecarsToWrite.add(STREAM_DATA_KEYS.OUTPUT_FILES);
       this.outputFileOverlays.delete(stream);
+    }
+    if (missingOutputsOverlay) {
+      this.applyRoundPatch(this.missingOutputs, stream, missingOutputsOverlay);
+      sidecarsToWrite.add(STREAM_DATA_KEYS.MISSING_OUTPUTS);
+      this.missingOutputsOverlays.delete(stream);
+    }
+    if (compileFailuresOverlay) {
+      this.applyRoundPatch(
+        this.compileFailures,
+        stream,
+        compileFailuresOverlay,
+      );
+      sidecarsToWrite.add(STREAM_DATA_KEYS.COMPILE_FAILURES);
+      this.compileFailuresOverlays.delete(stream);
     }
     if (usageOverlay) {
       for (const [storageKey, delta] of usageOverlay) {

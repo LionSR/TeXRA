@@ -552,6 +552,65 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('returns missing outputs immediately for streams outside a partial preload without erasing disk markers', async () => {
+    // Same race as the output-files case above, replayed for
+    // updateMissingOutputs: a stream outside the preloaded set is still
+    // unseeded when the mutation lands, so the seed's disk read is racing
+    // the caller's read of its own write. Regression for the "half-fixed"
+    // eager-apply overlay gap (missingOutputs/compileFailures lacked the
+    // guarantee addOutputFiles/addUsage already had).
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'missingOutputs.json'),
+      JSON.stringify({ '0': ['prior.tex'] }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.updateMissingOutputs(OTHER_STREAM, { 1: ['next.tex'] });
+    // Fails pre-fix: the plain mutate() path defers the whole apply behind
+    // the in-flight seed, so this synchronous read-back still sees nothing.
+    expect(store.getMissingOutputs(OTHER_STREAM)[1]).toEqual(['next.tex']);
+    await store.flush();
+
+    const raw = await StorageFS.readJson(
+      path.join(dir, 'missingOutputs.json'),
+    );
+    expect(raw).toMatchObject({
+      '0': ['prior.tex'],
+      '1': ['next.tex'],
+    });
+  });
+
+  it('returns compile failures immediately for streams outside a partial preload without erasing disk markers', async () => {
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    const prior = compileFailure('prior.tex', 0);
+    const next = compileFailure('next.tex', 1);
+    await StorageFS.write(
+      path.join(dir, 'compileFailures.json'),
+      JSON.stringify({ '0': [prior] }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.updateCompileFailures(OTHER_STREAM, { 1: [next] });
+    // Fails pre-fix for the same reason as the missing-outputs case above.
+    expect(store.getCompileFailures(OTHER_STREAM)[1]).toEqual([next]);
+    await store.flush();
+
+    const raw = await StorageFS.readJson(
+      path.join(dir, 'compileFailures.json'),
+    );
+    expect(raw).toMatchObject({
+      '0': [prior],
+      '1': [next],
+    });
+  });
+
   it('makes task state readable immediately while preserving later seeded sidecars', async () => {
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
