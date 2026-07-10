@@ -108,6 +108,11 @@ jobs:
       - name: Check macOS desktop installer artifacts
         run: pnpm run check:desktop-installers
 
+      - name: Smoke-test macOS packaged desktop app
+        run: >-
+          pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/mac-universal/TeXRA.app/Contents/MacOS/TeXRA
+
       - name: Upload macOS desktop installers
         uses: actions/upload-artifact@v7
         with:
@@ -145,6 +150,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Linux desktop smoke dependencies
+        run: pnpm --filter @texra/desktop exec playwright install-deps chromium
+
       - name: Build desktop app
         run: pnpm run desktop:build
 
@@ -156,6 +164,11 @@ jobs:
 
       - name: Check Linux desktop installer artifacts
         run: pnpm run check:desktop-installers
+
+      - name: Smoke-test Linux packaged desktop app
+        run: >-
+          xvfb-run --auto-servernum pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/linux-unpacked/@texradesktop
 
       - name: Upload Linux desktop installers
         uses: actions/upload-artifact@v7
@@ -225,6 +238,11 @@ jobs:
 
       - name: Check Windows desktop installer artifacts
         run: pnpm run check:desktop-installers
+
+      - name: Smoke-test Windows packaged desktop app
+        run: >-
+          pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/win-unpacked/TeXRA.exe
 
       - name: Upload Windows desktop installer
         uses: actions/upload-artifact@v7
