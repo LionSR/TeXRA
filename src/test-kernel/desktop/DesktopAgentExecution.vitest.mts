@@ -2965,6 +2965,7 @@ describe('DesktopProgressBridge', () => {
         'stream-1',
         executionId,
         expect.objectContaining(taskState.agentConfig),
+        { parentStreamId: undefined },
       );
       expectWorkflowResume(runAgent, taskState, executionId);
     } finally {
@@ -3043,6 +3044,7 @@ describe('DesktopProgressBridge', () => {
         'stream-1',
         executionId,
         expect.objectContaining(taskState.agentConfig),
+        { parentStreamId: undefined },
       );
       expectWorkflowResume(runAgent, taskState, executionId);
     } finally {
