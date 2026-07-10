@@ -1,13 +1,23 @@
 import { test, expect } from '@playwright/test';
 
-import { SETTINGS_VIEW_CMD } from '../../../../src/common/webview/settingsViewCommands.js';
-import { SETTINGS_TAB } from '../../../../src/shared/schemas/settingsViewMessages.js';
 import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
+
+// Inlined rather than imported from src/shared: Playwright's ESM loader can't
+// resolve a relative .js import of a TS file under src/shared (see
+// packages/desktop/tests/e2e/README.md § Cross-package imports;
+// settingsPersistence.spec.ts does the same). Source of truth:
+// SETTINGS_VIEW_CMD.SET_TAB in src/shared/ipc.ts; SETTINGS_TAB_INDEX.TOOLS
+// (index of 'TOOLS' in SETTINGS_TAB_ORDER) in
+// src/shared/schemas/settingsView/data.ts.
+const SET_TAB_COMMAND = 'setTab';
+const SETTINGS_TAB_INDEX = {
+  TOOLS: 5,
+} as const;
 
 let launched: LaunchedApp;
 
@@ -100,8 +110,8 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
       window.postMessage({ command, tabIndex }, '*');
     },
     {
-      command: SETTINGS_VIEW_CMD.SET_TAB,
-      tabIndex: SETTINGS_TAB.TOOLS,
+      command: SET_TAB_COMMAND,
+      tabIndex: SETTINGS_TAB_INDEX.TOOLS,
     },
   );
   await launched.page.waitForFunction(
