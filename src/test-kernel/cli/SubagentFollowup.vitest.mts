@@ -352,24 +352,19 @@ describe('summarizeSubagentFollowup', () => {
     );
   });
 
-  // `\b` after the tag alternation is not a safe terminator: `-` is a
-  // non-word character, so a future hyphen-extended tag (e.g. a hypothetical
-  // `codex-result-partial`) would prefix-match the existing `codex-result`
-  // entry. No current DELIVERY_TAGS entry is a prefix of another, but the
-  // vocabulary is a shared, growing const, so the recognizers anchor on an
-  // explicit delimiter (whitespace, `/`, or `>`) instead of `\b`. This fake
-  // tag is constructed locally and must never be added to DELIVERY_TAGS.
-  it('does not prefix-match a hyphen-extended fake tag onto a real one', () => {
-    const standalone =
-      '<codex-result-partial id="abc"><response>fake</response></codex-result-partial>';
-    expect(summarizeSubagentFollowup(standalone)).toBe(standalone);
+  it('does not prefix-match invalid tag-name continuations', () => {
+    for (const continuation of ['-partial', '/foo']) {
+      const fakeTag = `codex-result${continuation}`;
+      const standalone = `<${fakeTag} id="abc"><response>fake</response></${fakeTag}>`;
+      expect(summarizeSubagentFollowup(standalone)).toBe(standalone);
 
-    const embedded = [
-      'before',
-      '<codex-result-partial id="abc">',
-      'still streaming, not a real delivery tag',
-    ].join('\n');
-    expect(hasIncompleteEmbeddedSubagentFollowup(embedded)).toBe(false);
-    expect(summarizeEmbeddedSubagentFollowups(embedded)).toBe(embedded);
+      const embedded = [
+        'before',
+        `<${fakeTag} id="abc">`,
+        'still streaming, not a real delivery tag',
+      ].join('\n');
+      expect(hasIncompleteEmbeddedSubagentFollowup(embedded)).toBe(false);
+      expect(summarizeEmbeddedSubagentFollowups(embedded)).toBe(embedded);
+    }
   });
 });
