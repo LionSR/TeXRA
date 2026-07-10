@@ -1,4 +1,4 @@
-// Scroll/tail state machine for ChildControlPicker's task-detail view.
+// Scroll/tail state machine for TaskDetailView.
 //
 // This parallels `useScrollableOffset.ts` (bounded modal scrolling) and
 // `transcriptScroll.ts` (follow-tail line scrolling) but can't reuse either
