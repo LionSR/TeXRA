@@ -5,6 +5,7 @@ import { runCli } from '../commands/root';
 import { formatCrashReportLine, readCliBugsUrl } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
+  flushNdjsonStdout,
   installCliPipeErrorHandlers,
   writeTextStderr,
 } from '../runtime/logSinks';
@@ -25,5 +26,9 @@ try {
   if (reportLine) writeTextStderr(reportLine);
   process.exitCode = CliExitCode.AgentError;
 } finally {
-  await tryPlatform()?.lifecycle.runShutdown();
+  try {
+    await tryPlatform()?.lifecycle.runShutdown();
+  } finally {
+    await flushNdjsonStdout();
+  }
 }
