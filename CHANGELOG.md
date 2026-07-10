@@ -4,18 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Extension (VS Code)
-
-#### Bug Fixes
-
-- **Bundled skills are available in installed extensions** — VSIX packages now
-  include the built-in skill definitions, so enabling runtime skills exposes
-  the same bundled catalog in installed extensions as in development.
+## [0.39.3] - 2026-07-10
 
 ### Shared (all surfaces)
 
 #### Bug Fixes
 
+- **TikZ extraction handles wide and unlabeled figures correctly** — `figure*`
+  environments are now detected, and an unlabeled figure can no longer borrow a
+  later figure's label.
+- **Background result delivery handles generated ids safely** — subagent
+  background-command results are now escaped before being sent back to the
+  orchestrator, so ids containing XML-sensitive characters no longer corrupt
+  the delivered result.
+- **More provider API keys are redacted from logs** — desktop and other
+  redacting log sinks now cover the key formats used by all configurable model
+  providers, including Google auth keys.
 - **Setup no longer reports expired or revoked relay tokens as signed in** —
   authentication status now verifies configured CI relay tokens while still
   preserving valid Supabase sessions and direct API-key-only setup.
@@ -52,7 +56,9 @@ All notable changes to this project will be documented in this file.
 #### Improvements
 
 - **Updated model catalog** — `llm-zoo` 1.14 adds the GPT-5.6 model family,
-  while existing ChatGPT-subscription access to GPT-5.5 remains available.
+  which now fills the default OpenAI picks in the model list in place of the
+  deprecated GPT-5.4; ChatGPT-subscription sign-in and long-conversation
+  compaction continue using GPT-5.5, the generation Codex still serves.
 - **Read-only tool calls in one model response now run in parallel** —
   contiguous batches of side-effect-free tools (file reads, grep/glob, web
   fetch/search, arXiv/Crossref/Zotero/Loogle lookups, texcount) execute
@@ -77,6 +83,21 @@ All notable changes to this project will be documented in this file.
   (`/executions/{id}/result`), so follow-on agents can chain on data instead
   of parsing prose.
 
+### Extension (VS Code) and Desktop
+
+#### Bug Fixes
+
+- **Provider API keys are saved without surrounding spaces** — keys entered or
+  pasted with accidental whitespace are normalized before storage.
+
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Bundled skills are available in installed extensions** — VSIX packages now
+  include the built-in skill definitions, so enabling runtime skills exposes
+  the same bundled catalog in installed extensions as in development.
+
 ### CLI
 
 #### Bug Fixes
@@ -87,7 +108,6 @@ All notable changes to this project will be documented in this file.
 - **NDJSON records preserve their emission order under stdout backpressure** —
   progress, command results, doctor output, and structured error/instruction
   records now share one queued stdout writer.
-
 - **Shell-backed tool approvals use command-neutral wording** — Wolfram and
   other command-backed tools no longer appear as Bash actions in the prompt,
   session shortcut, status details, headless summary, or rejection message.
@@ -96,6 +116,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Desktop asks before deleting provider API keys** — removing a stored model
+  provider key now uses the same confirmation step as the VS Code extension.
 - **HTML chat export works in packaged desktop builds** — desktop packaging now
   includes the standalone trace-viewer template used to create self-contained
   HTML exports.
@@ -105,37 +127,6 @@ All notable changes to this project will be documented in this file.
 - **Runtime skills are available in desktop agent runs** — desktop now loads
   project, user, and bundled skills through the same shared Node-host defaults
   as the CLI.
-
-## [0.39.3] - 2026-07-03
-
-### Shared (all surfaces)
-
-#### Bug Fixes
-
-- **TikZ extraction handles wide and unlabeled figures correctly** — `figure*`
-  environments are now detected, and an unlabeled figure can no longer borrow a
-  later figure's label.
-- **Background result delivery handles generated ids safely** — subagent
-  background-command results are now escaped before being sent back to the
-  orchestrator, so ids containing XML-sensitive characters no longer corrupt
-  the delivered result.
-- **More provider API keys are redacted from logs** — desktop and other
-  redacting log sinks now cover the key formats used by all configurable model
-  providers, including Google auth keys.
-
-### Extension (VS Code) and Desktop
-
-#### Bug Fixes
-
-- **Provider API keys are saved without surrounding spaces** — keys entered or
-  pasted with accidental whitespace are normalized before storage.
-
-### Desktop
-
-#### Bug Fixes
-
-- **Desktop asks before deleting provider API keys** — removing a stored model
-  provider key now uses the same confirmation step as the VS Code extension.
 
 ## [0.39.2] - 2026-07-03
 
