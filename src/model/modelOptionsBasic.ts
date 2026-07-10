@@ -49,7 +49,8 @@ export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'opus48T',
   'fable5',
   'gpt56',
-  'gpt54',
+  'gpt56-',
+  'gpt56--',
   'deepseekproT',
   'kimi26T',
 ];
