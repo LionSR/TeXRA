@@ -11,68 +11,45 @@
 // shift over a letter to the unshifted Ctrl combo (see 10-architecture.md).
 
 import { type StreamTabId } from '@shared/schemas';
-import { unique } from '@utils/core';
 
-import { visibleSubagentRows } from './childExecutions';
+import {
+  childStreamEntries as childStreamEntriesSignal,
+  focusOrderDescendants,
+  parentStream,
+  type ChildStreamEntries,
+} from './childExecutions';
 import {
   activeStreamId,
-  parentStream,
   streams as streamsSignal,
   type StreamSlice,
 } from './cliState';
 
-function orderedDescendantsFromSlice(
-  slice:
-    | Pick<StreamSlice, 'activeSubagents' | 'activeProcesses' | 'childStreams'>
-    | undefined,
-): StreamTabId[] {
-  if (!slice) return [];
-  const out: StreamTabId[] = [];
-  for (const child of [
-    ...visibleSubagentRows(slice),
-    ...slice.activeProcesses,
-  ]) {
-    if (child.kind === 'subagent') out.push(child.childStreamId);
-  }
-  return unique(out);
-}
-
+/**
+ * Ordered descendant stream ids for a parent's focus cycle: retained
+ * children first (in retained order), then current-topology children not
+ * already present. See `childExecutions.ts#focusOrderDescendants` for the
+ * full ordering contract — this stays a thin wrapper so callers keep a
+ * stable `{ parent, childStreamEntries, streams }` shape.
+ */
 export function orderedDescendantsFromTree(init: {
   readonly parent: StreamTabId;
-  readonly parentSlice: StreamSlice | undefined;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly childStreamEntries: ChildStreamEntries;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StreamTabId[] {
-  const out = orderedDescendantsFromSlice(init.parentSlice).filter((id) =>
-    init.streams.has(id),
-  );
-  const seen = new Set(out);
-  // `parentStream` is populated by its own `setParentStream` event, decoupled
-  // from the `activeSubagents`/`childStreams` updates the slice-derived list
-  // above reads. This walk is not redundant with it: it catches an edge
-  // registered before its parent's slice reflects the child (event-ordering),
-  // so a child stream is never unreachable from the focus cycle.
-  for (const [child, recordedParent] of init.parentStream) {
-    if (
-      recordedParent !== init.parent ||
-      !init.streams.has(child) ||
-      seen.has(child)
-    ) {
-      continue;
-    }
-    seen.add(child);
-    out.push(child);
-  }
-  return out;
+  return [
+    ...focusOrderDescendants(
+      init.parent,
+      init.childStreamEntries,
+      init.streams,
+    ),
+  ];
 }
 
 function orderedDescendants(parent: StreamTabId): StreamTabId[] {
-  const streams = streamsSignal.get();
   return orderedDescendantsFromTree({
     parent,
-    parentSlice: streams.get(parent),
-    parentStream: parentStream.get(),
-    streams,
+    childStreamEntries: childStreamEntriesSignal.get(),
+    streams: streamsSignal.get(),
   });
 }
 

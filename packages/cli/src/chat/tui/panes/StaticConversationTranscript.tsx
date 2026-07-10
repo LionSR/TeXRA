@@ -14,13 +14,17 @@ import type { StreamTabId } from '@shared/schemas';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
-  parentStream as parentStreamSignal,
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
   type ConversationEntry,
   type SessionMeta,
   type StreamSlice,
 } from '../state/cliState';
+import {
+  childStreamEntries as childStreamEntriesSignal,
+  parentStream as parentStreamSignal,
+  type ChildStreamEntries,
+} from '../state/childExecutions';
 import { streamViewForId } from '../state/streamViews';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
@@ -73,6 +77,7 @@ function shortenCwd(cwd: string): string {
 export function sessionHeaderIdentityLine(
   meta: SessionMeta,
   context: {
+    readonly childStreamEntries?: ChildStreamEntries;
     readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
     readonly streamId?: StreamTabId;
     readonly streams?: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -86,6 +91,7 @@ export function sessionHeaderIdentityLine(
     const model = slice?.model || meta.model || '—';
     const view = streamViewForId({
       activeStreamId: context.streamId,
+      childStreamEntries: context.childStreamEntries ?? new Map(),
       parentStream,
       streamId: context.streamId,
       streams: context.streams,
@@ -234,6 +240,7 @@ function staticUserBottomMarginRows({
 export function appendStaticTranscriptItems({
   currentItems,
   streams,
+  childStreamEntries = new Map(),
   meta,
   maxRows,
   parentStream = new Map(),
@@ -242,6 +249,7 @@ export function appendStaticTranscriptItems({
 }: {
   readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  readonly childStreamEntries?: ChildStreamEntries;
   readonly meta: SessionMeta;
   readonly maxRows?: number;
   readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
@@ -263,6 +271,7 @@ export function appendStaticTranscriptItems({
       kind: 'header',
       compact: maxRows !== undefined && maxRows < FULL_SESSION_HEADER_ROWS,
       identityLine: sessionHeaderIdentityLine(meta, {
+        childStreamEntries,
         parentStream,
         streamId: scrollbackStreamId,
         streams,
@@ -339,11 +348,13 @@ export function StaticConversationTranscript({
   const streams = useSignal(streamsSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const parentStream = useSignal(parentStreamSignal);
+  const childStreamEntries = useSignal(childStreamEntriesSignal);
   const [state, setState] = useState<StaticTranscriptState>(() => ({
     ownerKey,
     items: appendStaticTranscriptItems({
       currentItems: [],
       streams,
+      childStreamEntries,
       meta: sessionMeta,
       maxRows,
       parentStream,
@@ -358,6 +369,7 @@ export function StaticConversationTranscript({
       : appendStaticTranscriptItems({
           currentItems: [],
           streams,
+          childStreamEntries,
           meta: sessionMeta,
           maxRows,
           parentStream,
@@ -377,6 +389,7 @@ export function StaticConversationTranscript({
       const nextItems = appendStaticTranscriptItems({
         currentItems: isHardReset || ownerChanged ? [] : current.items,
         streams,
+        childStreamEntries,
         meta: sessionMeta,
         maxRows,
         parentStream,
@@ -389,6 +402,7 @@ export function StaticConversationTranscript({
       return { ownerKey, items: nextItems };
     });
   }, [
+    childStreamEntries,
     maxRows,
     ownerKey,
     parentStream,

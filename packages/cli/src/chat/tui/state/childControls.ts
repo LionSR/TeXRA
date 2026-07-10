@@ -15,9 +15,11 @@ import { formatCompactDuration } from '@utils/core';
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import {
+  activeSubagentsFor,
   childExecutionKey,
   childExecutionLabel,
   visibleSubagentRows,
+  type ChildStreamEntries,
 } from './childExecutions';
 import {
   activeStreamTreeEntries,
@@ -30,6 +32,8 @@ import type {
   ProcessOutputTail,
   StreamSlice,
 } from './cliState';
+
+const EMPTY_PROCESS_OUTPUT: ReadonlyMap<string, ProcessOutputTail> = new Map();
 
 export type ChildControlMode = 'subagents' | 'tasks';
 
@@ -250,22 +254,34 @@ export function processTailLines(
 }
 
 export function buildChildControlItems(
-  slice: Pick<
-    StreamSlice,
-    'activeProcesses' | 'activeSubagents' | 'childStreams' | 'processOutput'
+  parentStreamId: StreamTabId,
+  childStreamEntries: ChildStreamEntries,
+  streams: ReadonlyMap<
+    StreamTabId,
+    Pick<
+      StreamSlice,
+      'activeProcesses' | 'description' | 'entries' | 'processOutput' | 'status'
+    >
   >,
   mode: ChildControlMode,
-  streamsById: ReadonlyMap<
-    StreamTabId,
-    Pick<StreamSlice, 'description' | 'entries'>
-  > = new Map(),
   nowMs?: number,
 ): readonly ChildControlItem[] {
-  const activeKeys = new Set(slice.activeSubagents.map(childExecutionKey));
-  const subagentItems = visibleSubagentRows(slice).map((child) =>
+  const parentSlice = streams.get(parentStreamId);
+  const activeProcesses = parentSlice?.activeProcesses ?? [];
+  const processOutput = parentSlice?.processOutput ?? EMPTY_PROCESS_OUTPUT;
+  const activeKeys = new Set(
+    activeSubagentsFor(parentStreamId, childStreamEntries, streams).map(
+      childExecutionKey,
+    ),
+  );
+  const subagentItems = visibleSubagentRows(
+    parentStreamId,
+    childStreamEntries,
+    streams,
+  ).map((child) =>
     buildChildControlItem(child, {
-      streamsById,
-      processOutput: slice.processOutput,
+      streamsById: streams,
+      processOutput,
       nowMs,
       killable: activeKeys.has(childExecutionKey(child)),
     }),
@@ -276,10 +292,10 @@ export function buildChildControlItems(
 
   return [
     ...subagentItems,
-    ...slice.activeProcesses.map((child) =>
+    ...activeProcesses.map((child) =>
       buildChildControlItem(child, {
-        streamsById,
-        processOutput: slice.processOutput,
+        streamsById: streams,
+        processOutput,
         nowMs,
         killable: true,
       }),
@@ -287,37 +303,48 @@ export function buildChildControlItems(
   ];
 }
 
-function hasVisibleSubagents(
-  slice: Pick<StreamSlice, 'activeSubagents' | 'childStreams'> | undefined,
-): boolean {
-  return slice !== undefined && visibleSubagentRows(slice).length > 0;
-}
-
 export function hasChildControlItems(
-  slice:
-    | Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'childStreams'>
-    | undefined,
+  parentStreamId: StreamTabId | undefined,
+  childStreamEntries: ChildStreamEntries,
+  streams: ReadonlyMap<
+    StreamTabId,
+    Pick<StreamSlice, 'activeProcesses' | 'status'>
+  >,
   mode: ChildControlMode,
 ): boolean {
-  if (slice === undefined) return false;
-  return mode === 'subagents'
-    ? hasVisibleSubagents(slice)
-    : visibleSubagentRows(slice).length > 0 || slice.activeProcesses.length > 0;
+  if (parentStreamId === undefined) return false;
+  if (mode === 'subagents') {
+    return (
+      visibleSubagentRows(parentStreamId, childStreamEntries, streams).length >
+      0
+    );
+  }
+  return (
+    visibleSubagentRows(parentStreamId, childStreamEntries, streams).length >
+      0 || (streams.get(parentStreamId)?.activeProcesses.length ?? 0) > 0
+  );
 }
 
 export function resolveChildControlStreamTarget({
   activeStreamId,
+  childStreamEntries,
   mode,
   parentStream,
   streams,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
+  readonly childStreamEntries: ChildStreamEntries;
   readonly mode: ChildControlMode;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): ChildControlStreamTarget {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const activeHasRows = hasChildControlItems(activeSlice, mode);
+  const activeHasRows = hasChildControlItems(
+    activeStreamId,
+    childStreamEntries,
+    streams,
+    mode,
+  );
   if (!activeStreamId || activeHasRows) {
     return {
       hasItems: activeHasRows,
@@ -330,7 +357,8 @@ export function resolveChildControlStreamTarget({
     activeStreamId,
     parentStream,
     values: streams,
-    canUseValue: (slice) => hasChildControlItems(slice, mode),
+    canUseValue: (_slice, streamId) =>
+      hasChildControlItems(streamId, childStreamEntries, streams, mode),
   });
   if (ancestor) {
     return {
@@ -359,23 +387,27 @@ function childControlFallbackDetail(
 
 function resolveChildControlDisplayTarget({
   activeStreamId,
+  childStreamEntries,
   mode,
   parentStream,
   streams,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
+  readonly childStreamEntries: ChildStreamEntries;
   readonly mode: ChildControlMode;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): ChildControlDisplayTarget {
   const target = resolveChildControlStreamTarget({
     activeStreamId,
+    childStreamEntries,
     mode,
     parentStream,
     streams,
   });
   const streamLabel = target.streamId
     ? streamDisplayLabel({
+        childStreamEntries,
         parentStream,
         streamId: target.streamId,
         streams,
@@ -383,6 +415,7 @@ function resolveChildControlDisplayTarget({
     : undefined;
   const fallbackFromStreamLabel = target.fallbackFromStreamId
     ? streamDisplayLabel({
+        childStreamEntries,
         parentStream,
         streamId: target.fallbackFromStreamId,
         streams,
@@ -401,22 +434,26 @@ function resolveChildControlDisplayTarget({
 
 export function resolveChildControlDisplayTargets({
   activeStreamId,
+  childStreamEntries,
   parentStream,
   streams,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
+  readonly childStreamEntries: ChildStreamEntries;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): ChildControlDisplayTargets {
   return {
     subagents: resolveChildControlDisplayTarget({
       activeStreamId,
+      childStreamEntries,
       mode: 'subagents',
       parentStream,
       streams,
     }),
     tasks: resolveChildControlDisplayTarget({
       activeStreamId,
+      childStreamEntries,
       mode: 'tasks',
       parentStream,
       streams,
@@ -425,11 +462,10 @@ export function resolveChildControlDisplayTargets({
 }
 
 export function liveChildExecutionElapsedKey(
-  slice: Pick<StreamSlice, 'activeProcesses' | 'activeSubagents'> | undefined,
+  activeSubagents: readonly ActiveChildInfo[],
+  activeProcesses: readonly ActiveChildInfo[],
 ): string | undefined {
-  if (slice === undefined) return undefined;
-
-  const liveKeys = [...slice.activeSubagents, ...slice.activeProcesses]
+  const liveKeys = [...activeSubagents, ...activeProcesses]
     .filter(hasLiveChildElapsed)
     .map((child) => `${child.executionId}:${child.startedAt}`)
     .sort();
@@ -438,6 +474,7 @@ export function liveChildExecutionElapsedKey(
 
 export function numericFocusTargetForActiveStream(init: {
   readonly activeStreamId: StreamTabId | undefined;
+  readonly childStreamEntries: ChildStreamEntries;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly zeroBasedIndex: number;
@@ -446,6 +483,7 @@ export function numericFocusTargetForActiveStream(init: {
   const shortcutIndex = init.zeroBasedIndex + 1;
   return activeStreamTreeEntries({
     activeStreamId: init.activeStreamId,
+    childStreamEntries: init.childStreamEntries,
     parentStream: init.parentStream,
     streams: init.streams,
   }).find((entry) => entry.shortcutIndex === shortcutIndex)?.id;
