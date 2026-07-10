@@ -13,7 +13,7 @@ export function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
       const data =
         payload as RuntimeInteractionEventPayloads['showBashPermission'];
       const cwd = data.cwd ? `Directory: ${data.cwd}\n` : '';
-      return `Bash command requested:\n${cwd}${data.command}`;
+      return `Command requested:\n${cwd}${data.command}`;
     }
     case 'showPlanApproval': {
       const data =
