@@ -40,7 +40,7 @@ MEMORY PROTOCOL:
 2. ... (work on the task) ...
    - For long-running work that needs continuity, record durable progress and decisions in memory.
    - Record user preferences: writing style, coding conventions, formatting requirements, workflow preferences, and any explicit or implicit guidelines the user follows.
-   - When git is available, look into git history (commit messages, PR descriptions, recent changes) to understand project context, coding patterns, and conventions.
+   - When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history (commit messages, PR descriptions, recent changes) to understand them.
 
 Your memory persists across conversations, allowing you to continue tasks and remember user preferences over time.
 

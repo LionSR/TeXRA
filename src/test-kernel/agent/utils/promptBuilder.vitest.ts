@@ -69,5 +69,13 @@ describe('PromptBuilder', () => {
       prompts.instructionSuffix,
       /Always consult pinned memories at session start/,
     );
+    assert.match(
+      prompts.instructionSuffix,
+      /When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history/,
+    );
+    assert.doesNotMatch(
+      prompts.instructionSuffix,
+      /^ +- When git is available, look into git history/m,
+    );
   });
 });
