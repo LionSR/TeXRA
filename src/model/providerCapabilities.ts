@@ -111,11 +111,11 @@ const CODEX_PRO_VARIANT_PATTERN = /-pro$/i;
  *
  * Cross-checked against every entry of the original hardcoded
  * `CODEX_SUBSCRIPTION_MODEL_FULLNAMES` allowlist this heuristic replaced:
- * `gpt-5.5` and `gpt-5.4-mini` (not deprecated) and `gpt-5.3-codex` /
- * `gpt-5.2-codex` (deprecated, but bypassed by the `/codex/i` naming branch
- * regardless of this table) all resolve eligible without needing an entry
- * here. `gpt-5.3-codex-spark` no longer exists in the llm-zoo v1.14.0
- * registry under any id, so there is nothing to reconcile for it.
+ * `gpt-5.5` now needs the explicit exception above; `gpt-5.4-mini` remains a
+ * defensive exception while not deprecated; and `gpt-5.3-codex` /
+ * `gpt-5.2-codex` are deprecated but bypassed by the `/codex/i` naming branch.
+ * `gpt-5.3-codex-spark` no longer exists in the llm-zoo v1.14.0 registry under
+ * any id, so there is nothing to reconcile for it.
  */
 const CODEX_DEPRECATED_EXCEPTIONS: ReadonlySet<string> = new Set([
   'gpt-5.5',
