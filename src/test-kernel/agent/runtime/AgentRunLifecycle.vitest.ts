@@ -51,11 +51,13 @@ import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   writeTerminalStatus: vi.fn().mockResolvedValue(undefined),
+  synchronizeAgentResultOutcome: vi.fn().mockResolvedValue(undefined),
   deleteFlowRecord: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@agent/storage', () => ({
   writeTerminalStatus: storageMocks.writeTerminalStatus,
+  synchronizeAgentResultOutcome: storageMocks.synchronizeAgentResultOutcome,
   getExecutionStore: () => ({ delete: storageMocks.deleteFlowRecord }),
 }));
 
