@@ -49,9 +49,7 @@ export async function getGitHubToken(): Promise<string | undefined> {
 export async function resolveGitHubTokenSource(
   secrets: PlatformSecrets,
 ): Promise<'secret' | 'env' | 'none'> {
-  if (
-    normalizeGitHubToken(await secrets.getStored(GITHUB_TOKEN_STORAGE_KEY))
-  ) {
+  if (normalizeGitHubToken(await secrets.getStored(GITHUB_TOKEN_STORAGE_KEY))) {
     return 'secret';
   }
   return GITHUB_TOKEN_ENV_VARS.some((name) =>
