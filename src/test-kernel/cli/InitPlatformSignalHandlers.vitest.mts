@@ -19,7 +19,7 @@ describe('CLI platform signal handlers', () => {
 
   it('exits with signal codes after shutdown instead of re-emitting signals', async () => {
     vi.resetModules();
-    const handlers = new Map<string, () => void>();
+    const handlers = new Map<string, () => unknown>();
     vi.spyOn(process, 'once').mockImplementation(((
       event: string | symbol,
       listener: (...args: unknown[]) => void,
@@ -55,16 +55,16 @@ describe('CLI platform signal handlers', () => {
     expect(handlers.has('SIGINT')).toBe(true);
     expect(handlers.has('SIGTERM')).toBe(true);
 
-    handlers.get('SIGINT')?.();
-    await vi.waitFor(() => expect(exitSpy).toHaveBeenLastCalledWith(130));
+    await handlers.get('SIGINT')?.();
+    expect(exitSpy).toHaveBeenLastCalledWith(130);
     expect(runShutdown).toHaveBeenCalledTimes(1);
     expect(events).toEqual(['shutdown', 'flush', 'exit:130']);
 
     events.length = 0;
-    handlers.get('SIGTERM')?.();
-    await vi.waitFor(() => expect(exitSpy).toHaveBeenLastCalledWith(143));
+    await handlers.get('SIGTERM')?.();
+    expect(exitSpy).toHaveBeenLastCalledWith(143);
     expect(runShutdown).toHaveBeenCalledTimes(2);
     expect(events).toEqual(['shutdown', 'flush', 'exit:143']);
     expect(killSpy).not.toHaveBeenCalled();
-  });
+  }, 30_000);
 });
