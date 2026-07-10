@@ -5,6 +5,7 @@ import {
   extractLastRoundMatch,
   extractLastRoundModelMatch,
 } from '@agent/utils/mergeFileUtils';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 
 type GeneratedLatexdiffArtifactKind =
   'workspaceDiff' | 'versionControlDiff' | 'betweenRoundDiff';
@@ -116,4 +117,38 @@ export function detectGeneratedLatexdiffArtifact(
   }
 
   return null;
+}
+
+/**
+ * Augment a fix-agent instruction with latexdiff-artifact awareness.
+ *
+ * Generated latexdiff artifacts are valid fixer targets — latexdiff itself
+ * often emits non-compiling markup that regenerating the diff would only
+ * reproduce — but the fixer should know the file is a diff so it repairs the
+ * markup in place, and should propagate source-rooted fixes to the source so
+ * they survive regeneration.
+ */
+export async function buildLatexdiffAwareFixInstruction(
+  base: string,
+  activeFilePath: string,
+): Promise<string> {
+  const artifact = detectGeneratedLatexdiffArtifact(activeFilePath);
+  if (!artifact) return base;
+
+  const sourceExists = await AbsoluteFS.exists(artifact.sourcePath);
+  // A user may legitimately keep a source file named chapter_diff.tex. Treat
+  // a plain `_diff` suffix as generated only when the inferred source exists.
+  if (artifact.kind === 'workspaceDiff' && !sourceExists) {
+    return base;
+  }
+
+  const sourceHint = sourceExists
+    ? ` generated from ${WorkspaceFS.relativePath(artifact.sourcePath)}`
+    : '';
+  return [
+    base,
+    `This file is a latexdiff artifact${sourceHint}.`,
+    'If an error comes from broken latexdiff markup (\\DIFadd/\\DIFdel or the DIF preamble blocks), repair the markup in place and keep the diff annotations intact.',
+    'If an error originates in the original source document, fix the source too so a regenerated diff stays fixed.',
+  ].join(' ');
 }

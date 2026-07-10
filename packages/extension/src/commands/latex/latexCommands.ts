@@ -13,14 +13,17 @@ import {
   type LaTeXGuardOptions,
 } from '@frontend/editor/activeFileGuards';
 import { runLatexFormatter } from '@latex/texFormatter';
-import { getTeXCount, type TexcountMode } from '@latex/texcount';
+import {
+  getTeXCount,
+  parseTeXCountStats,
+  type TexcountMode,
+} from '@latex/texcount';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
-import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
+import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { AgentCategory } from '@shared/schemas';
-import { delay, filterNotNull } from '@utils/core';
-import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { delay } from '@utils/core';
 
 import { getIndentTeXNotification } from './latexHousekeepingNotifications';
 
@@ -81,9 +84,9 @@ export async function handleFixCompilation(): Promise<void> {
           // latexFixer is a tool-use agent; without this the config category
           // prefaults to workflow and resolveAgentForLaunch can't find it.
           agentCategory: AgentCategory.ToolUse,
-          instruction: await buildFixCompilationInstruction(
+          instruction: await buildLatexdiffAwareFixInstruction(
+            `Fix the LaTeX compilation errors in ${relativePath}.`,
             editor.document.fileName,
-            relativePath,
           ),
         },
         // This is a "run latexFixer" command, so prefer the helper model.
@@ -91,39 +94,6 @@ export async function handleFixCompilation(): Promise<void> {
       });
     },
   );
-}
-
-/**
- * Generated latexdiff artifacts are valid fixer targets — latexdiff itself
- * often emits non-compiling markup that regenerating the diff would only
- * reproduce — but the fixer should know the file is a diff so it repairs the
- * markup in place, and should propagate source-rooted fixes to the source so
- * they survive regeneration.
- */
-async function buildFixCompilationInstruction(
-  activeFilePath: string,
-  relativePath: string,
-): Promise<string> {
-  const base = `Fix the LaTeX compilation errors in ${relativePath}.`;
-  const artifact = detectGeneratedLatexdiffArtifact(activeFilePath);
-  if (!artifact) return base;
-
-  const sourceExists = await AbsoluteFS.exists(artifact.sourcePath);
-  // A user may legitimately keep a source file named chapter_diff.tex. Treat
-  // a plain `_diff` suffix as generated only when the inferred source exists.
-  if (artifact.kind === 'workspaceDiff' && !sourceExists) {
-    return base;
-  }
-
-  const sourceHint = sourceExists
-    ? ` generated from ${WorkspaceFS.relativePath(artifact.sourcePath)}`
-    : '';
-  return [
-    base,
-    `This file is a latexdiff artifact${sourceHint}.`,
-    'If an error comes from broken latexdiff markup (\\DIFadd/\\DIFdel or the DIF preamble blocks), repair the markup in place and keep the diff annotations intact.',
-    'If an error originates in the original source document, fix the source too so a regenerated diff stays fixed.',
-  ].join(' ');
 }
 
 export async function handleApplyReplacements(): Promise<void> {
@@ -223,20 +193,7 @@ export async function handleGetTeXCount(): Promise<void> {
             return;
           }
 
-          const patterns: [RegExp, string][] = [
-            [/Words in text:\s*(\d+)/, 'Text: $1 words'],
-            [/Words in headers:\s*(\d+)/, 'Headers: $1'],
-            [/Words in float captions:\s*(\d+)/, 'Captions: $1'],
-            [/Number of inline math:\s*(\d+)/, 'Inline math: $1'],
-            [/Number of displayed math:\s*(\d+)/, 'Display math: $1'],
-          ];
-
-          const stats = patterns
-            .map(([pattern, template]) => {
-              const match = output.match(pattern);
-              return match ? { label: template.replace('$1', match[1]) } : null;
-            })
-            .filter(filterNotNull);
+          const stats = parseTeXCountStats(output);
 
           await vscode.window.showQuickPick(stats, {
             placeHolder: 'TeXCount Results (press Esc to dismiss)',
