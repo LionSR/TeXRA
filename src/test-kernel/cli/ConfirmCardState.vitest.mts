@@ -30,12 +30,12 @@ describe('CLI confirm-card key handling', () => {
   it('shows scoped session-wide approval hints for approval modals', () => {
     expect(
       confirmCardKeyHints({
-        alwaysAllowLabel: 'approve bash for session',
+        alwaysAllowLabel: 'commands for session',
       }),
     ).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
-      { key: 'a', action: 'approve bash for session' },
+      { key: 'a', action: 'commands for session' },
       { key: 'e', action: 'feedback' },
       { key: 'Esc', action: 'cancel' },
     ]);
@@ -47,12 +47,12 @@ describe('CLI confirm-card key handling', () => {
     ).toContainEqual({ key: 'a', action: 'approve edits for session' });
 
     const compactRendered = confirmCardKeyHintsForWidth({
-      alwaysAllowLabel: 'approve bash for session',
+      alwaysAllowLabel: 'commands for session',
       maxColumns: 72,
     })
       .map((hint) => `${hint.key} ${hint.action}`)
       .join(' · ');
-    expect(compactRendered).toContain('a bash session');
+    expect(compactRendered).toContain('a commands for session');
     expect(compactRendered.length).toBeLessThanOrEqual(72);
   });
 
@@ -66,22 +66,22 @@ describe('CLI confirm-card key handling', () => {
   it('compacts long optional approval hints before hiding cancel', () => {
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve bash for session',
+        alwaysAllowLabel: 'commands for session',
         maxColumns: 80,
       }),
     ).toEqual(
-      confirmCardKeyHints({ alwaysAllowLabel: 'approve bash for session' }),
+      confirmCardKeyHints({ alwaysAllowLabel: 'commands for session' }),
     );
 
     const compact = confirmCardKeyHintsForWidth({
-      alwaysAllowLabel: 'approve bash for session',
+      alwaysAllowLabel: 'commands for session',
       maxColumns: 60,
     });
 
     expect(compact).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
-      { key: 'a', action: 'bash session' },
+      { key: 'a', action: 'cmd session' },
       { key: 'e', action: 'note' },
       { key: 'Esc', action: 'cancel' },
     ]);
@@ -99,14 +99,14 @@ describe('CLI confirm-card key handling', () => {
 
   it('keeps session-scope hints before feedback on mid-width terminals', () => {
     const compact = confirmCardKeyHintsForWidth({
-      alwaysAllowLabel: 'approve bash for session',
+      alwaysAllowLabel: 'commands for session',
       maxColumns: 50,
     });
 
     expect(compact).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
-      { key: 'a', action: 'bash session' },
+      { key: 'a', action: 'cmd session' },
       { key: 'Esc', action: 'cancel' },
     ]);
     expect(
@@ -117,7 +117,7 @@ describe('CLI confirm-card key handling', () => {
   it('drops optional approval hints before hiding cancel on narrow terminals', () => {
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve bash for session',
+        alwaysAllowLabel: 'commands for session',
         maxColumns: 42,
       }),
     ).toEqual([
@@ -129,7 +129,7 @@ describe('CLI confirm-card key handling', () => {
 
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve bash for session',
+        alwaysAllowLabel: 'commands for session',
         maxColumns: 36,
       }),
     ).toEqual([
@@ -140,7 +140,7 @@ describe('CLI confirm-card key handling', () => {
 
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve bash for session',
+        alwaysAllowLabel: 'commands for session',
         maxColumns: 10,
       }),
     ).toEqual([{ key: 'Esc', action: 'cancel' }]);

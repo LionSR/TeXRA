@@ -72,7 +72,7 @@ function activeApprovalBypassLabels(
   if (!bypasses) return [];
   const labels: string[] = [];
   if (bypasses.superYolo) labels.push('delegated tasks');
-  if (bypasses.bash) labels.push('bash commands');
+  if (bypasses.bash) labels.push('commands');
   if (bypasses.toolEdit) labels.push('file edits');
   return labels;
 }

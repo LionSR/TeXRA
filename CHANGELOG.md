@@ -88,6 +88,10 @@ All notable changes to this project will be documented in this file.
   progress, command results, doctor output, and structured error/instruction
   records now share one queued stdout writer.
 
+- **Shell-backed tool approvals use command-neutral wording** — Wolfram and
+  other command-backed tools no longer appear as Bash actions in the prompt,
+  session shortcut, status details, headless summary, or rejection message.
+
 ### Desktop
 
 #### Bug Fixes
