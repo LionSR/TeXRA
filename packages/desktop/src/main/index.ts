@@ -58,7 +58,10 @@ import {
   setupCommandNeedsInteractiveTerminal,
 } from './desktopSetupTerminal.js';
 import { createDesktopTerminalRunner } from './desktopTerminalRunner.js';
-import { checkForDesktopUpdate } from './desktopUpdateChecker.js';
+import {
+  checkForDesktopUpdate,
+  DESKTOP_RELEASES_PAGE_URL,
+} from './desktopUpdateChecker.js';
 import {
   createDesktopAuthCallbackState,
   createDesktopAuthCoordinator,
@@ -327,24 +330,32 @@ function createWindow(options: {
   // Lightweight update check (issue #7682, arm b): at most once/day, notifies
   // at most once per release via a native dialog linking to the GitHub
   // release page. Not a full updater — no download, no install, no feed
-  // files. Disable with TEXRA_NO_UPDATE_CHECK=1.
-  checkForDesktopUpdate({
-    currentVersion: app.getVersion(),
-    globalState: platform().globalState,
-    isPackaged: app.isPackaged,
-    notify: async (release) => {
-      const { response } = await dialog.showMessageBox(window, {
-        type: 'info',
-        message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
-        buttons: ['Download', 'Later'],
-        defaultId: 0,
-        cancelId: 1,
-      });
-      if (response === 0) {
-        await shell.openExternal(release.url);
-      }
-    },
-  }).catch(reportAsyncError);
+  // files. Disable with TEXRA_NO_UPDATE_CHECK=1. Gated on owning the
+  // single-instance lock so an "open folder in new window" launch (which
+  // deliberately runs as its own process) never duplicates the check or
+  // dialog alongside the primary process.
+  if (protocolLifecycle.ownsSingleInstanceLock) {
+    checkForDesktopUpdate({
+      currentVersion: app.getVersion(),
+      globalState: platform().globalState,
+      isPackaged: app.isPackaged,
+      notify: async (release) => {
+        const { response } = await dialog.showMessageBox(window, {
+          type: 'info',
+          message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
+          buttons: ['Download', 'Later'],
+          defaultId: 0,
+          cancelId: 1,
+        });
+        if (response === 0) {
+          // Open the known-constant releases page rather than any
+          // network-provided URL, so an unauthenticated API response can
+          // never influence what shell.openExternal opens.
+          await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
+        }
+      },
+    }).catch(reportAsyncError);
+  }
   const setupCommandCwd = options.workspacePath ?? app.getPath('home');
   const setupTerminalRunner = createDesktopTerminalRunner({
     cwd: setupCommandCwd,

@@ -22,10 +22,10 @@ class MemoryStateStore {
 
 interface DesktopLatestRelease {
   version: string;
-  url: string;
 }
 
 interface DesktopUpdateCheckerModule {
+  DESKTOP_RELEASES_PAGE_URL: string;
   isNewerDesktopVersion(latest: string, current: string): boolean;
   checkForDesktopUpdate(options: {
     currentVersion: string;
@@ -62,10 +62,17 @@ describe('desktop update checker', () => {
     });
   });
 
+  it('exposes a known-constant releases page URL (never opens API-provided URLs)', async () => {
+    const { DESKTOP_RELEASES_PAGE_URL } = await loadDesktopUpdateChecker();
+
+    expect(DESKTOP_RELEASES_PAGE_URL).toBe(
+      'https://github.com/texra-ai/texra-desktop-releases/releases',
+    );
+  });
+
   describe('checkForDesktopUpdate', () => {
     const release: DesktopLatestRelease = {
       version: '0.40.0',
-      url: 'https://github.com/texra-ai/texra-desktop-releases/releases/tag/v0.40.0',
     };
 
     it('skips entirely for unpackaged (dev) runs', async () => {
@@ -218,6 +225,55 @@ describe('desktop update checker', () => {
       nowMs += 24 * 60 * 60 * 1000;
       await run();
       expect(notifyCalls).toBe(1);
+    });
+
+    it('does not persist the throttle stamp on a failed fetch, so the next launch retries', async () => {
+      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
+      const globalState = new MemoryStateStore();
+      let fetchCalls = 0;
+      const nowMs = Date.UTC(2026, 0, 1);
+
+      await checkForDesktopUpdate({
+        currentVersion: '0.39.3',
+        globalState,
+        isPackaged: true,
+        env: {},
+        notify: () => {},
+        now: () => nowMs,
+        fetchRelease: async () => {
+          fetchCalls += 1;
+          return undefined; // simulates a network/API failure
+        },
+      });
+
+      expect(fetchCalls).toBe(1);
+      expect(
+        globalState.values.get(
+          GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
+        ),
+      ).toBeUndefined();
+
+      // Immediately "relaunching" (same day) must retry rather than being
+      // throttled for a full 24h off the back of the earlier failure.
+      await checkForDesktopUpdate({
+        currentVersion: '0.39.3',
+        globalState,
+        isPackaged: true,
+        env: {},
+        notify: () => {},
+        now: () => nowMs + 1000,
+        fetchRelease: async () => {
+          fetchCalls += 1;
+          return release;
+        },
+      });
+
+      expect(fetchCalls).toBe(2);
+      expect(
+        globalState.values.get(
+          GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
+        ),
+      ).toBe(nowMs + 1000);
     });
   });
 });
