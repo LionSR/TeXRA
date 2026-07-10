@@ -33,11 +33,8 @@ import type { PromptHost } from '@hosts/uiHosts';
 import { isApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  GETTING_STARTED_COMMANDS,
-  type GettingStartedAction,
-  type StreamTabId,
-} from '@shared/schemas';
+import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
+import { GETTING_STARTED_COMMANDS } from '@shared/schemas/mainView';
 import { isGoalInFlight } from '@shared/schemas/goal';
 import {
   dispatchProgressViewInbound,

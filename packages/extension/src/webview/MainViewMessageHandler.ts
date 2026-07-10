@@ -321,11 +321,19 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         await this.refreshAfterCredentialChange();
       },
       [MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP]: async () => {
-        await safeExecuteCommand('texra.runSetupAssistant', [], this.viewName);
+        await safeExecuteCommand(
+          GETTING_STARTED_COMMANDS.runSetup,
+          [],
+          this.viewName,
+        );
         await this.onboarding?.refreshOnboardingFunnel();
       },
       [MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED]: () =>
-        safeExecuteCommand('texra.openGettingStarted', [], this.viewName),
+        safeExecuteCommand(
+          GETTING_STARTED_COMMANDS.openWalkthrough,
+          [],
+          this.viewName,
+        ),
       [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP]: async () => {
         await setFirstRunDone(this.context.globalState, true);
         await this.onboarding?.refreshOnboardingFunnel();
