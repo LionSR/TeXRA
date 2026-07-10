@@ -58,6 +58,7 @@ import {
   setupCommandNeedsInteractiveTerminal,
 } from './desktopSetupTerminal.js';
 import { createDesktopTerminalRunner } from './desktopTerminalRunner.js';
+import { checkForDesktopUpdate } from './desktopUpdateChecker.js';
 import {
   createDesktopAuthCallbackState,
   createDesktopAuthCoordinator,
@@ -323,6 +324,27 @@ function createWindow(options: {
   const showInfoMessage = async (message: string) => {
     await dialog.showMessageBox(window, { type: 'info', message });
   };
+  // Lightweight update check (issue #7682, arm b): at most once/day, notifies
+  // at most once per release via a native dialog linking to the GitHub
+  // release page. Not a full updater — no download, no install, no feed
+  // files. Disable with TEXRA_NO_UPDATE_CHECK=1.
+  checkForDesktopUpdate({
+    currentVersion: app.getVersion(),
+    globalState: platform().globalState,
+    isPackaged: app.isPackaged,
+    notify: async (release) => {
+      const { response } = await dialog.showMessageBox(window, {
+        type: 'info',
+        message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
+        buttons: ['Download', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      if (response === 0) {
+        await shell.openExternal(release.url);
+      }
+    },
+  }).catch(reportAsyncError);
   const setupCommandCwd = options.workspacePath ?? app.getPath('home');
   const setupTerminalRunner = createDesktopTerminalRunner({
     cwd: setupCommandCwd,
