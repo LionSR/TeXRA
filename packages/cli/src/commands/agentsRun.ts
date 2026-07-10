@@ -6,7 +6,6 @@ import {
   readCliStdinText,
   type CliContext,
 } from '../runtime/cliContext';
-import { CliExitCode } from '../runtime/exitCodes';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
