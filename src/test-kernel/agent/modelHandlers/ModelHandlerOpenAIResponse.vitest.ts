@@ -32,7 +32,10 @@ import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller'
 
 // Type imports
 import { pathToLocation } from '@utils/files';
-import type { ResponseInputItem } from 'openai/resources/responses/responses';
+import type {
+  ResponseInputItem,
+  ResponseUsage,
+} from 'openai/resources/responses/responses';
 
 // pathToLocation and FlexibleFS resolve through platform services, so this
 // suite needs the real node fs rather than the in-memory default.
@@ -1054,5 +1057,38 @@ describe('ModelHandlerOpenAIResponse.initializeOutputAndPrefill', () => {
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('ModelHandlerOpenAIResponse.normalizeUsage', () => {
+  it('maps input_tokens_details.cache_write_tokens to cacheCreationTokens', () => {
+    const handler = createHandler();
+    const usage: ResponseUsage = {
+      input_tokens: 100,
+      output_tokens: 20,
+      total_tokens: 120,
+      input_tokens_details: { cached_tokens: 10, cache_write_tokens: 15 },
+      output_tokens_details: { reasoning_tokens: 0 },
+    } as ResponseUsage;
+
+    const normalized = handler.normalizeUsage(usage, 0);
+
+    assert.equal(normalized.cacheCreationTokens, 15);
+    assert.equal(normalized.cachedInputTokens, 10);
+  });
+
+  it('defaults cacheCreationTokens to undefined when cache_write_tokens is absent', () => {
+    const handler = createHandler();
+    const usage: ResponseUsage = {
+      input_tokens: 100,
+      output_tokens: 20,
+      total_tokens: 120,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens_details: { reasoning_tokens: 0 },
+    } as ResponseUsage;
+
+    const normalized = handler.normalizeUsage(usage, 0);
+
+    assert.equal(normalized.cacheCreationTokens, undefined);
   });
 });
