@@ -41,7 +41,7 @@ describe('PromptBuilder', () => {
     assert.equal(reflectPrompt, 'initial only');
   });
 
-  it('keeps memory checks relevant and schema-valid', async () => {
+  it('keeps memory checks relevant and points view at the memory root', async () => {
     const prompts = await buildInitialToolUsePrompts(
       {
         systemPrompt: 'system',
@@ -57,10 +57,7 @@ describe('PromptBuilder', () => {
       prompts.instructionSuffix,
       /do not read unpinned memory files or write memory/,
     );
-    assert.match(
-      prompts.instructionSuffix,
-      /use the `view` command with path `\/memories`/,
-    );
+    assert.match(prompts.instructionSuffix, /`view`[^`\n]*`\/memories`/);
   });
 
   it('keeps pinned-memory consultation unconditional even for self-contained requests', async () => {
