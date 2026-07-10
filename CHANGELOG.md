@@ -60,6 +60,14 @@ All notable changes to this project will be documented in this file.
   (`/executions/{id}/result`), so follow-on agents can chain on data instead
   of parsing prose.
 
+### CLI
+
+#### Bug Fixes
+
+- **Ctrl-C reliably cancels queued-follow-up auto-resume** — stopping while an
+  automatic resume is still loading configuration or session data no longer
+  allows that stale preparation to restart the cancelled stream.
+
 ### Desktop
 
 #### Bug Fixes
