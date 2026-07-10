@@ -575,9 +575,7 @@ describe('StreamSnapshotStore', () => {
     expect(store.getMissingOutputs(OTHER_STREAM)[1]).toEqual(['next.tex']);
     await store.flush();
 
-    const raw = await StorageFS.readJson(
-      path.join(dir, 'missingOutputs.json'),
-    );
+    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
     expect(raw).toMatchObject({
       '0': ['prior.tex'],
       '1': ['next.tex'],
