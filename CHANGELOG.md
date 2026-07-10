@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Bundled skills are available in installed extensions** — VSIX packages now
+  include the built-in skill definitions, so enabling runtime skills exposes
+  the same bundled catalog in installed extensions as in development.
+
 ### Shared (all surfaces)
 
 #### Bug Fixes
@@ -71,6 +79,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Ctrl-C reliably cancels queued-follow-up auto-resume** — stopping while an
+  automatic resume is still loading configuration or session data no longer
+  allows that stale preparation to restart the cancelled stream.
 - **NDJSON records preserve their emission order under stdout backpressure** —
   progress, command results, doctor output, and structured error/instruction
   records now share one queued stdout writer.

@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Writing Commenter'
+  short_description: 'Leave inline comments on research writing'
+  default_prompt: 'Use $writing-commenter to annotate this draft with high-signal inline comments about logic, notation, and editorial impact.'

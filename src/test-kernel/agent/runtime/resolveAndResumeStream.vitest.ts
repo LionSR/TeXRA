@@ -143,6 +143,51 @@ describe('resolveAndResumeStream', () => {
     expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
   });
 
+  it('skips resume when cancellation was already requested', async () => {
+    const ports = basePorts({ isCancellationRequested: () => true });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.resolveResumeState).not.toHaveBeenCalled();
+    expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
+    expect(isResumeInFlight(STREAM)).toBe(false);
+  });
+
+  it('stops after persisted state resolution when cancellation arrives', async () => {
+    let cancelled = false;
+    const ports = basePorts({
+      isCancellationRequested: () => cancelled,
+      resolveResumeState: vi.fn(async () => {
+        cancelled = true;
+        return {
+          runState: { agent: 'a', model: 'm' } as never,
+          executionId: 'exec-1' as never,
+        };
+      }),
+    });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
+    expect(ports.resumeToolUseSnapshot).not.toHaveBeenCalled();
+    expect(ports.executeWorkflow).not.toHaveBeenCalled();
+    expect(isResumeInFlight(STREAM)).toBe(false);
+  });
+
+  it('stops after resume-data retrieval when cancellation arrives', async () => {
+    let cancelled = false;
+    retrieveSessionResumeDataMock.mockImplementation(async () => {
+      cancelled = true;
+      return { type: 'toolUse', snapshot: { streamId: STREAM } };
+    });
+    const ports = basePorts({
+      isCancellationRequested: () => cancelled,
+    });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.resumeToolUseSnapshot).not.toHaveBeenCalled();
+    expect(ports.executeWorkflow).not.toHaveBeenCalled();
+    expect(isResumeInFlight(STREAM)).toBe(false);
+  });
+
   it('guards against the injected session machine, not the process default (#7640)', async () => {
     // Desktop scenario: the window's own session machine has the stream
     // active while the process-global default is empty. The guard must read
