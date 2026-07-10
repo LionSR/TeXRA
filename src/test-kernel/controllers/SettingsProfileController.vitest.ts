@@ -6,6 +6,7 @@ import {
 } from '@controllers/settingsView/SettingsProfileController';
 import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type { StateStore } from '@platform/interfaces';
 
 const providerVscodeSettings = {
@@ -203,5 +204,22 @@ describe('SettingsProfileController', () => {
         value: 3,
       }),
     );
+  });
+
+  it('defaults reliability settings to DEFAULT_CORE_SETTINGS.model.retry (no drift from the catalog)', async () => {
+    const { controller } = createController();
+
+    const reliabilitySettings = controller.getReliabilitySettings();
+
+    expect(
+      reliabilitySettings.find(
+        (setting) => setting.key === 'texra.model.retry.maxAttempts',
+      )?.value,
+    ).toBe(DEFAULT_CORE_SETTINGS.model.retry.maxAttempts);
+    expect(
+      reliabilitySettings.find(
+        (setting) => setting.key === 'texra.model.retry.backoffMs',
+      )?.value,
+    ).toBe(DEFAULT_CORE_SETTINGS.model.retry.backoffMs);
   });
 });
