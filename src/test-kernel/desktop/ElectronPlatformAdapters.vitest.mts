@@ -323,10 +323,44 @@ describe('desktop platform adapters', () => {
 
       expect(logger.warnMessages).toHaveLength(2);
       expect(logger.warnMessages[0]).toContain('global-storage');
+      expect(logger.warnMessages[0]).toContain(
+        join(legacyRoot, 'global-storage'),
+      );
       expect(logger.warnMessages[1]).toContain('proj-collide');
+      expect(logger.warnMessages[1]).toContain(
+        join(legacyRoot, 'workspace-storage', 'proj-collide'),
+      );
       expect(logger.infoMessages).toEqual([
         expect.stringContaining('proj-only-legacy'),
       ]);
+    });
+
+    it('does not abort startup when the legacy workspace-storage directory cannot be read', async () => {
+      const migrateLegacyDesktopDataRoot = await loadMigration();
+      const legacyRoot = await makeTempDir(
+        'texra-migration-legacy-unreadable-',
+      );
+      const targetRoot = await makeTempDir(
+        'texra-migration-target-unreadable-',
+      );
+      const logger = fakeMigrationLogger();
+
+      const legacyWorkspaceRoot = join(legacyRoot, 'workspace-storage');
+      // A file (not a directory) at the expected workspace-storage path
+      // makes readdir() reject with ENOTDIR, exercising the same
+      // best-effort catch path as a permission-denied (EACCES) directory
+      // without requiring platform-specific chmod tricks.
+      await writeFile(legacyWorkspaceRoot, 'not a directory');
+
+      await expect(
+        migrateLegacyDesktopDataRoot(legacyRoot, targetRoot, logger),
+      ).resolves.toBeUndefined();
+
+      expect(logger.warnMessages).toHaveLength(1);
+      expect(logger.warnMessages[0]).toContain(legacyWorkspaceRoot);
+      await expect(
+        pathExists(join(targetRoot, 'workspace-storage')),
+      ).resolves.toBe(false);
     });
 
     it('is idempotent once a legacy directory has already been moved', async () => {
