@@ -16,6 +16,15 @@ import type { StateStore } from '@platform/interfaces';
 
 const RELEASES_API_URL =
   'https://api.github.com/repos/texra-ai/texra-desktop-releases/releases/latest';
+/**
+ * Known-constant releases page, always opened verbatim instead of the
+ * unauthenticated API response's `html_url` — see `notify` wiring in
+ * `index.ts`. Never build a URL to open from network-provided data.
+ */
+export const DESKTOP_RELEASES_PAGE_URL =
+  'https://github.com/texra-ai/texra-desktop-releases/releases';
+/** Stable identifier for GitHub API request logging/diagnostics. */
+const GITHUB_USER_AGENT = 'TeXRA-Desktop';
 const FETCH_TIMEOUT_MS = 5000;
 /** Poll at most once per day so a normal multi-launch day makes one request. */
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -24,8 +33,6 @@ const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 export interface DesktopLatestRelease {
   /** Release version with any leading `v` stripped, e.g. `0.40.0`. */
   version: string;
-  /** GitHub release page URL — installers are attached there. */
-  url: string;
 }
 
 /**
@@ -43,7 +50,7 @@ export function isNewerDesktopVersion(
   return semverGt(a, b);
 }
 
-/** Fetch the latest release's version + page URL, or undefined on any failure. */
+/** Fetch the latest release's version, or undefined on any failure. */
 export async function fetchLatestDesktopRelease(options?: {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
@@ -52,17 +59,16 @@ export async function fetchLatestDesktopRelease(options?: {
   try {
     const response = await fetchImpl(RELEASES_API_URL, {
       signal: AbortSignal.timeout(options?.timeoutMs ?? FETCH_TIMEOUT_MS),
-      headers: { accept: 'application/vnd.github+json' },
+      headers: {
+        accept: 'application/vnd.github+json',
+        'user-agent': GITHUB_USER_AGENT,
+      },
     });
     if (!response.ok) return undefined;
-    const body = (await response.json()) as {
-      tag_name?: unknown;
-      html_url?: unknown;
-    };
+    const body = (await response.json()) as { tag_name?: unknown };
     const tag = typeof body.tag_name === 'string' ? body.tag_name : undefined;
-    const url = typeof body.html_url === 'string' ? body.html_url : undefined;
-    if (!tag || !url) return undefined;
-    return { version: tag.replace(/^v/, ''), url };
+    if (!tag) return undefined;
+    return { version: tag.replace(/^v/, '') };
   } catch {
     return undefined;
   }
@@ -80,9 +86,12 @@ export interface CheckForDesktopUpdateOptions {
 }
 
 /**
- * Once per day (persisted in global state) and once per process, check for a
- * newer desktop release and notify at most once per release version. Failures
- * are silent so a flaky network never interrupts startup.
+ * At most once per day (persisted in global state), check for a newer
+ * desktop release and notify at most once per release version. The daily
+ * throttle stamp is only persisted after a successful fetch, so a failed
+ * check (network hiccup, GitHub API hiccup, timeout) simply retries on the
+ * next launch instead of being suppressed for a full day; failures never
+ * interrupt startup.
  */
 export async function checkForDesktopUpdate({
   currentVersion,
@@ -102,13 +111,15 @@ export async function checkForDesktopUpdate({
   );
   const nowMs = now();
   if (nowMs - lastCheckedAt < CHECK_INTERVAL_MS) return;
+
+  const release = await fetchRelease();
+  if (!release) return;
+  // Only persist the throttle stamp once the fetch actually succeeded.
   await globalState.update(
     GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
     nowMs,
   );
-
-  const release = await fetchRelease();
-  if (!release || !isNewerDesktopVersion(release.version, currentVersion)) {
+  if (!isNewerDesktopVersion(release.version, currentVersion)) {
     return;
   }
 
