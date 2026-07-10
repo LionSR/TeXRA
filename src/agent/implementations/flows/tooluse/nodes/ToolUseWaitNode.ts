@@ -10,6 +10,7 @@ import {
   userFollowUpInstruction,
   type AppendFollowUpResult,
 } from '@agent/followUp/followUpMessages';
+import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { STREAM_PHASE } from '@shared/schemas';
 import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
 
@@ -31,6 +32,10 @@ export class ToolUseWaitNode<C> extends Node<
   ToolUseRunShared,
   ToolUseServices<C>
 > {
+  constructor(private drainedFollowUps?: readonly FollowUpQueueBatchItem[]) {
+    super();
+  }
+
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
     const { modelHandler, isSubagent, onIdle } = this.services;
 
@@ -90,23 +95,35 @@ export class ToolUseWaitNode<C> extends Node<
       this.services.onIdle?.(prepRes.lastResponse);
     }
 
-    // Subagent mode always exits WAITING here, carrying this cycle's turn
-    // facts (lastResponse/touchedFiles/totalCostUsd) — no in-flow delivery,
-    // no "already queued" fast path. The child-run loop (the one delivery
-    // site) formats and delivers after suspension, then decides whether to
-    // resume immediately (a follow-up already raced into the queue) or
-    // genuinely wait. This makes duplicate/skipped delivery structurally
-    // impossible and keeps every suspension symmetric, so the loop's interrupt
-    // handler always has a real boundary to attach against.
-    if (isSubagent === true && !stopAfterCycle) {
+    if (stopAfterCycle) {
+      return { kind: 'stop' };
+    }
+
+    // A native child-run loop has already drained this batch from the stream
+    // queue before it resumes the persisted flow. Consume that handoff once
+    // and advance directly to the cycle node. Re-appending it through
+    // ToolUseSessionLifecycle would return it to the same queue owner and make
+    // every later WAITING suspension resume with the identical batch.
+    const drainedFollowUps = this.drainedFollowUps;
+    this.drainedFollowUps = undefined;
+    if (drainedFollowUps && drainedFollowUps.length > 0) {
+      return {
+        kind: 'continue',
+        followUps: drainedFollowUps,
+        synthetic: false,
+      };
+    }
+
+    // With no externally consumed batch, subagent mode always exits WAITING
+    // here, carrying this cycle's turn facts
+    // (lastResponse/touchedFiles/totalCostUsd). The child-run loop formats and
+    // delivers after suspension, then owns the next queue wait. This keeps
+    // every ordinary suspension symmetric and leaves one delivery site.
+    if (isSubagent === true) {
       streamStatus.transitionToWaiting(streamId, 'wait', {
         trace: this.services.logger,
       });
       return { kind: 'waiting' };
-    }
-
-    if (stopAfterCycle) {
-      return { kind: 'stop' };
     }
 
     // The Goal continuation runs BEFORE `waitForFollowUp` blocks; once
@@ -168,10 +185,10 @@ export class ToolUseWaitNode<C> extends Node<
       return FlowTransition.COMPLETE;
     }
 
-    // User sent a follow-up — clear any prior error/cancellation state
-    // so the next cycle starts fresh and runToolUseFlow won't treat
-    // a previously-recovered error as a terminal failure. Only reachable in
-    // root (non-subagent) mode: subagent mode always exits above.
+    // A user follow-up is ready for the next cycle. Clear any prior
+    // error/cancellation state so runToolUseFlow does not treat a recovered
+    // error as terminal. Root flows arrive here from their session queue;
+    // resumed subagents arrive here through the one-shot handoff above.
     shared.lastError = undefined;
     shared.userCancelledRetry = undefined;
 
