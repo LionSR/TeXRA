@@ -864,8 +864,9 @@ const SCENARIOS = [
     env: {
       ANTHROPIC_API_KEY: 'harness-anthropic-key',
       HARNESS_CAN_SELECT_MODEL: '1',
-      HARNESS_DISABLED_MODEL_SWITCHES: 'sonnet46T||opus48T',
+      HARNESS_DISABLED_MODEL_SWITCHES: 'sonnet46T',
       HARNESS_ENTRIES: '4',
+      HARNESS_VISIBLE_MODELS: 'sonnet46T||gpt56',
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
@@ -876,7 +877,7 @@ const SCENARIOS = [
       'Choose the model for future turns.',
       'Sonnet 4.6',
       'different conversation format',
-      'GPT-5.5',
+      'GPT-5.6 Sol',
     ],
     unexpect: [
       'Harness model selected.',
