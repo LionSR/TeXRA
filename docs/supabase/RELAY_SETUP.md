@@ -29,11 +29,13 @@ The API keys are stored as Supabase secrets and the relay forwards requests to t
 ```bash
 cd /path/to/TeXRA
 supabase login
+export SUPABASE_PROJECT_REF="your-project-ref"
 node scripts/deploy-relay.mjs
 ```
 
-The script deploys to the production Supabase project by default. Set
-`SUPABASE_PROJECT_REF` to deploy the relay to another project.
+Set `SUPABASE_PROJECT_REF` to the target project's reference. The deploy script
+and the secret commands below use this exported value so that they always
+target the same project.
 
 ### 2. Set API Key Secrets
 
@@ -41,13 +43,13 @@ Store your API keys as Supabase secrets:
 
 ```bash
 # Required secrets (set only the ones you want to support)
-supabase secrets set OPENAI_API_KEY="sk-..."
-supabase secrets set ANTHROPIC_API_KEY="sk-ant-..."
-supabase secrets set GOOGLE_API_KEY="AIza..."
-supabase secrets set XAI_API_KEY="xai-..."
-supabase secrets set DEEPSEEK_API_KEY="sk-..."
-supabase secrets set MOONSHOT_API_KEY="sk-..."
-supabase secrets set DASHSCOPE_API_KEY="sk-..."
+supabase secrets set OPENAI_API_KEY="sk-..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set ANTHROPIC_API_KEY="sk-ant-..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set GOOGLE_API_KEY="AIza..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set XAI_API_KEY="xai-..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set DEEPSEEK_API_KEY="sk-..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set MOONSHOT_API_KEY="sk-..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set DASHSCOPE_API_KEY="sk-..." --project-ref "$SUPABASE_PROJECT_REF"
 ```
 
 ### 3. Verify Deployment
