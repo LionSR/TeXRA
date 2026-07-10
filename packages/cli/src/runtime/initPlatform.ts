@@ -48,7 +48,7 @@ import { applyCliGitAuthorConfig } from './gitAuthor';
 import { isCliResumeInFlight, tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
-import { writeTextStderr } from './logSinks';
+import { flushNdjsonStdout, writeTextStderr } from './logSinks';
 import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
@@ -112,9 +112,14 @@ export function installCliShutdownSignalHandlers(
 
   const install = (signal: CliShutdownSignal) => {
     const handler = () => {
-      void lifecycle.runShutdown().finally(() => {
-        process.exit(exitCodeForSignal(signal));
-      });
+      void lifecycle
+        .runShutdown()
+        .catch(() => undefined)
+        .then(() => flushNdjsonStdout())
+        .finally(() => {
+          process.exit(exitCodeForSignal(signal));
+        })
+        .catch(() => undefined);
     };
     process.once(signal, handler);
   };
