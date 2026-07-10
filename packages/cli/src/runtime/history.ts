@@ -8,9 +8,9 @@ import {
   deriveResumability,
   getExecutionStore,
   listExecutions,
+  unwrapResultMeta,
   type ExecutionListingEntry,
   type ExecutionMeta,
-  type ResultMeta,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
@@ -52,7 +52,7 @@ export interface CliHistoryDetails {
   readonly status: string;
   readonly meta: ExecutionMeta | null;
   readonly config: AgentConfig | null;
-  readonly resultMeta: ResultMeta | null;
+  readonly result: ReturnType<typeof unwrapResultMeta> | null;
   readonly report: string | null;
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
@@ -187,7 +187,7 @@ export async function readCliHistoryDetails(
     }),
     meta,
     config,
-    resultMeta,
+    result: resultMeta ? unwrapResultMeta(resultMeta) : null,
     report,
     conversationPreview,
     ...(options.includeFullConversation
@@ -442,8 +442,8 @@ export function formatCliHistoryDetailsText(
     lines.push(`Delegation depth: ${meta.delegationDepth}`);
   }
   if (meta?.description) lines.push(`Description: ${meta.description}`);
-  if (details.resultMeta) {
-    lines.push(`Result: ${JSON.stringify(details.resultMeta)}`);
+  if (details.result) {
+    lines.push(`Result: ${JSON.stringify(details.result)}`);
   }
   if (details.report) {
     lines.push('', 'Report:', details.report);

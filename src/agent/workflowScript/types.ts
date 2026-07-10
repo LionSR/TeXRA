@@ -25,12 +25,6 @@ export interface WorkflowAgentCallOptions {
   label?: string;
   /** Progress group; defaults to the `phase()` active at call time. */
   phase?: string;
-  /**
-   * JSON schema the child's final answer must satisfy. Requires the
-   * structured-output plumbing on executeAgent (outputSchema); until that
-   * lands the runner may ignore it and return free text.
-   */
-  schema?: unknown;
   /** Named TeXRA agent to run; defaults to the host runner's choice. */
   agentName?: string;
   /** Workspace or run-storage files bound as the child's input files. */
@@ -53,8 +47,8 @@ export interface WorkflowAgentInvocation {
 /**
  * Host-provided executor for one `agent()` call. Tests use a fake; a
  * production host wires this to the in-band subagent execution path so the
- * engine receives the typed AgentFlowResult (and `structured` payload once
- * outputSchema exists) — never the XML follow-up delivery string.
+ * engine receives the typed AgentFinalResult envelope, never the XML
+ * follow-up delivery string.
  */
 export type WorkflowAgentRunner = (
   invocation: WorkflowAgentInvocation,

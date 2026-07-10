@@ -1,11 +1,15 @@
 import {
+  buildCliWorkflowResultMeta,
   getExecutionStore,
   writeTerminalStatus,
-  type ResultMeta,
 } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { EXECUTION_STATUS } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  RUN_OUTCOME,
+  executionStatusToRunOutcome,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -121,6 +125,8 @@ export async function runWorkflowAgent(
       if (!execution.ok) return execution.exitCode;
 
       const { executionId, result, terminalStatus } = execution;
+      const outcome =
+        executionStatusToRunOutcome(terminalStatus) ?? result.outcome;
       let workflowResult: CliWorkflowRunResult;
       try {
         workflowResult = await resolveWorkflowOutput(
@@ -135,8 +141,24 @@ export async function runWorkflowAgent(
             terminalStatus,
           },
         );
-        await persistWorkflowResultMeta(executionId, workflowResult);
+        await persistWorkflowResultMeta(
+          executionId,
+          buildCliWorkflowResultMeta(result, {
+            outcome,
+            copiedOutput: workflowResult.copiedOutput,
+            copiedOutputs: workflowResult.copiedOutputs,
+          }),
+        );
       } catch (error) {
+        await persistWorkflowResultMeta(
+          executionId,
+          buildCliWorkflowResultMeta(result, {
+            outcome:
+              terminalStatus === EXECUTION_STATUS.INTERRUPTED
+                ? outcome
+                : RUN_OUTCOME.FAILED,
+          }),
+        );
         if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
           writeErrorStderr(error);
           return CliExitCode.Interrupted;
@@ -160,22 +182,9 @@ export async function runWorkflowAgent(
 
 async function persistWorkflowResultMeta(
   executionId: string,
-  result: CliWorkflowRunResult,
+  resultMeta: ReturnType<typeof buildCliWorkflowResultMeta>,
 ): Promise<void> {
   try {
-    const resultMeta: ResultMeta = {
-      producer: 'cliWorkflow',
-      result: {
-        outputs: [...result.outputs],
-        compileFailures: [...result.compileFailures],
-        ...(result.copiedOutput && {
-          copiedOutput: result.copiedOutput,
-        }),
-        ...(result.copiedOutputs?.length && {
-          copiedOutputs: [...result.copiedOutputs],
-        }),
-      },
-    };
     await getExecutionStore(executionId).writeResultMeta(resultMeta);
   } catch (error) {
     writeTextStderr(

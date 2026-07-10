@@ -195,6 +195,7 @@ describe('repairRestartedStreams', () => {
         status === END_GROUP_STATUS.ERROR ? [...streamIds] : [],
     );
     const writeTerminalStatus = vi.fn(async () => undefined);
+    const synchronizeResultOutcome = vi.fn(async () => undefined);
 
     const result = await repairRestartedStreams({
       streamStatus,
@@ -202,6 +203,7 @@ describe('repairRestartedStreams', () => {
       executionIds: new Map([[streamId, executionId]]),
       closeRunningGroups,
       writeTerminalStatus,
+      synchronizeResultOutcome,
       now: 456,
     });
 
@@ -221,6 +223,10 @@ describe('repairRestartedStreams', () => {
     expect(writeTerminalStatus).toHaveBeenCalledWith(
       executionId,
       EXECUTION_STATUS.ERROR,
+    );
+    expect(synchronizeResultOutcome).toHaveBeenCalledWith(
+      executionId,
+      RUN_OUTCOME.FAILED,
     );
   });
 
@@ -360,6 +366,18 @@ describe('repairRestartedStreams', () => {
       timestamp: '2026-07-05T00:00:00.000Z',
       description: 'keep this field',
     });
+    await store.writeResultMeta({
+      producer: 'subagent',
+      agentName: 'restart-repair-agent',
+      wallTimeMs: 1,
+      result: {
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.COMPLETED,
+        response: 'interim response',
+        files: [],
+        cost: 0,
+      },
+    });
     const streamStatus = new StreamStatusMachine();
     seedRunning(streamStatus, streamId);
 
@@ -374,6 +392,12 @@ describe('repairRestartedStreams', () => {
       description: 'keep this field',
       terminalStatus: EXECUTION_STATUS.ERROR,
       outcome: RUN_OUTCOME.FAILED,
+    });
+    await expect(store.readResultMeta()).resolves.toMatchObject({
+      result: {
+        outcome: RUN_OUTCOME.FAILED,
+        response: 'interim response',
+      },
     });
     expect(result.terminalStatusUpdated).toEqual([executionId]);
   });
