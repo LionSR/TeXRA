@@ -803,7 +803,6 @@
   "requiredVscodeIgnoreLines": [
     "src/**",
     "resources/traceViewer/**",
-    "!resources/skills/**",
     "!src/common/styles/*.css",
     "!src/progressView/*.html",
     "!src/settingsView/*.html",

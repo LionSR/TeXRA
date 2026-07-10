@@ -49,7 +49,6 @@ CLAUDE.md
 # other resources/* entry (agents, docs, examples, templates, ...) is already
 # included by default with no unignore needed at all.
 resources/traceViewer/**
-!resources/skills/**
 
 # Webview HTML entry points (loaded by BaseViewContentProvider)
 !src/webview/*.html
