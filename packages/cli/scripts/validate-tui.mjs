@@ -3251,15 +3251,30 @@ if (unknownScenarios.length > 0) {
 }
 function selectedScenariosWithFrameOracles(names) {
   const selected = [];
-  const seen = new Set();
-  const add = (name) => {
-    if (seen.has(name)) return;
+  const availableOracles = new Set();
+  const addOracle = (name, ancestors = []) => {
+    if (availableOracles.has(name)) return;
+    if (ancestors.includes(name)) {
+      console.error(
+        `[validate-tui] cyclic frame oracle: ${[...ancestors, name].join(' -> ')}`,
+      );
+      process.exit(1);
+    }
     const scenario = scenarioByName.get(name);
-    if (scenario.equivalentFrameTo) add(scenario.equivalentFrameTo);
-    seen.add(name);
+    if (scenario.equivalentFrameTo) {
+      addOracle(scenario.equivalentFrameTo, [...ancestors, name]);
+    }
+    availableOracles.add(name);
     selected.push(scenario);
   };
-  for (const name of names) add(name);
+  for (const name of names) {
+    const scenario = scenarioByName.get(name);
+    if (scenario.equivalentFrameTo) addOracle(scenario.equivalentFrameTo);
+    // Explicit selections preserve their order and multiplicity. A selected
+    // oracle can still satisfy a later scenario's prerequisite.
+    selected.push(scenario);
+    availableOracles.add(name);
+  }
   return selected;
 }
 
