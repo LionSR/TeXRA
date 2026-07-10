@@ -540,7 +540,7 @@ async function requestRetryInteraction(
         return;
       }
       try {
-        await applyRetrySideEffects(request, decision, { isCurrent });
+        await applyRetrySideEffects(decision, { isCurrent });
         if (!isCurrent()) return;
         resolve({ action: 'retry', feedback: decision.userMessage });
       } catch {
@@ -632,10 +632,6 @@ function setTuiApprovalBypassState({
 }
 
 async function applyRetrySideEffects(
-  payload: Pick<
-    RuntimeInteractionEventPayloads['showRetryRequest'],
-    'streamId'
-  >,
   decision: ApprovalDecision,
   options: { isCurrent?: () => boolean } = {},
 ): Promise<void> {

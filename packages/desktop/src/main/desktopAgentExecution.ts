@@ -71,7 +71,6 @@ import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   STREAM_PHASE,
   type EndGroupStatus,
-  type AgentProposalPermission,
   type AgentCategoryFilter,
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
@@ -207,7 +206,6 @@ export class DesktopProgressBridge {
   readonly streamLogs: ProgressBackend['state']['streamLogs'];
   private readonly progressHost: ProgressViewHost;
   private readonly agentProposalController: ProgressViewHost['agentProposalController'];
-  private readonly workflowActions: ProgressViewHost['workflowActionsController'];
   private readonly workflowFileActions: ProgressViewHost['workflowFileActionsController'];
   /**
    * Shown-but-unresolved approval prompts, one {@link ApprovalRequestHandler}
@@ -388,7 +386,6 @@ export class DesktopProgressBridge {
       },
     );
     this.progressHost = this.createProgressViewHost();
-    this.workflowActions = this.progressHost.workflowActionsController;
     this.workflowFileActions = this.progressHost.workflowFileActionsController;
     this.agentProposalController = this.progressHost.agentProposalController;
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
