@@ -2,7 +2,6 @@ import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { useEffect, useState } from 'react';
-import stringWidth from 'string-width';
 
 import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import { isCodexSubscriptionActive } from '@auth/codex';
@@ -29,7 +28,11 @@ import {
   formatCompactTokenCount,
 } from '@utils/core';
 
-import { truncateSummaryToWidth } from '../render/terminalText';
+import { numberedFollowUpPreview } from '../render/followUpPreview';
+import {
+  textDisplayWidth,
+  truncateSummaryToWidth,
+} from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
 import { STATUS_DIAMOND } from '../ui/glyphs';
 import {
@@ -212,19 +215,6 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   thinking: 75,
 } as const;
 
-function numberedQueuedFollowUpPreview(
-  message: string,
-  index: number,
-  maxColumns: number,
-): string {
-  const prefix = `${index + 1}. `;
-  const bodyColumns = Math.max(0, maxColumns - stringWidth(prefix));
-  return `${prefix}${truncateSummaryToWidth(
-    summarizeFollowupMessage(message),
-    bodyColumns,
-  )}`;
-}
-
 function queuedFollowUpsListSummary(
   messages: readonly string[],
   maxColumns: number,
@@ -235,15 +225,15 @@ function queuedFollowUpsListSummary(
     overflowCount > 0 ? `+${overflowCount} more` : undefined;
   const separatorColumns =
     Math.max(0, previewItems.length - 1 + (overflowMarker ? 1 : 0)) *
-    stringWidth(QUEUED_FOLLOW_UP_SEPARATOR);
-  const overflowColumns = overflowMarker ? stringWidth(overflowMarker) : 0;
+    textDisplayWidth(QUEUED_FOLLOW_UP_SEPARATOR);
+  const overflowColumns = overflowMarker ? textDisplayWidth(overflowMarker) : 0;
   const itemColumns = Math.floor(
     (maxColumns - separatorColumns - overflowColumns) / previewItems.length,
   );
   if (itemColumns < QUEUED_FOLLOW_UP_MIN_ITEM_PREVIEW) return undefined;
 
   const previewParts = previewItems.map((message, index) =>
-    numberedQueuedFollowUpPreview(message, index, itemColumns),
+    numberedFollowUpPreview(message, index, itemColumns),
   );
   if (overflowMarker) previewParts.push(overflowMarker);
   return previewParts.join(QUEUED_FOLLOW_UP_SEPARATOR);
@@ -296,7 +286,7 @@ function pendingInteractionSegment({
 }
 
 function statusBarSegmentWidth(segment: StatusBarSegment): number {
-  return stringWidth(segment.text) + (segment.badge ? 2 : 0);
+  return textDisplayWidth(segment.text) + (segment.badge ? 2 : 0);
 }
 
 export function statusBarSegmentText(segment: StatusBarSegment): string {
@@ -541,7 +531,7 @@ function joinStatusBindings(bindings: readonly string[]): string {
 }
 
 function fitsStatusBindings(text: string, maxColumns: number | undefined) {
-  return maxColumns === undefined || stringWidth(text) <= maxColumns;
+  return maxColumns === undefined || textDisplayWidth(text) <= maxColumns;
 }
 
 function foregroundBindingsText(

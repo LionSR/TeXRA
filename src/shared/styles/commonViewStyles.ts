@@ -95,6 +95,17 @@ const busyIconButtonStyles: CSSResult = css`
   }
 `;
 
+/**
+ * Single-line text truncation declarations (no selector). Interpolate this
+ * into a rule when the truncated target is a shadow part (e.g.
+ * `::part(label)`) that can't take the `.truncate` class directly.
+ */
+export const truncateTextRule: CSSResult = css`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
 export const commonViewStyles: CSSResult = css`
   .view-header {
     display: flex;
@@ -477,8 +488,6 @@ export const commonViewStyles: CSSResult = css`
 
   /* Utility: single-line text truncation with ellipsis */
   .truncate {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateTextRule}
   }
 `;

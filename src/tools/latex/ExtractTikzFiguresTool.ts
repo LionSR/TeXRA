@@ -14,13 +14,11 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,
   resolveLatexFileOrThrow,
+  texPathField,
 } from './figureExtractionShared';
 
 const ExtractTikzInputSchema = z.strictObject({
-  texPath: z
-    .string()
-    .min(1, 'texPath is required.')
-    .describe('Path to the LaTeX file containing TikZ figures.'),
+  texPath: texPathField('Path to the LaTeX file containing TikZ figures.'),
   compile: z
     .boolean()
     .describe('Compile extracted TikZ pictures into standalone PDFs.')

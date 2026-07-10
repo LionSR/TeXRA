@@ -22,6 +22,8 @@
 
 import { css, unsafeCSS, type CSSResult } from 'lit';
 
+import { truncateTextRule } from './commonViewStyles';
+
 /**
  * Shared selector groups for :is() consolidation.
  * To add a new request panel type, add an entry to the PANEL_TYPES table below
@@ -248,9 +250,7 @@ export const requestPanelSharedStyles: CSSResult = css`
   .approval-request__actions wa-button[data-action]::part(label),
   .approval-request__actions .diff-dropdown .diff-main-button::part(label) {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    ${truncateTextRule}
   }
 
   /* Shared action button colors */
