@@ -1,10 +1,14 @@
-// Suites for src/utils/config (configUtils + platformSettings).
+// Suites for src/utils/config (configUtils + platformSettings + providerConfig).
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { installPlatform } from '@test/support/setupPlatform';
 import * as logger from '@logger/logUtils';
 import { getValidatedConfig } from '@utils/config/configUtils';
+import {
+  getProviderEndpoint,
+  getUseOpenRouter,
+} from '@utils/config/providerConfig';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
@@ -104,5 +108,78 @@ describe('readPlatformSetting', () => {
     expect(() => readPlatformSetting('texra.not.a.catalog.key')).toThrow(
       /no state-setting catalog entry/i,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ProviderConfig (#7873 — converge on readPlatformSetting for catalog keys)
+// ---------------------------------------------------------------------------
+
+describe('getUseOpenRouter', () => {
+  it('resolves the catalog default (false) when unset', async () => {
+    await installPlatform({});
+    expect(getUseOpenRouter()).toBe(false);
+  });
+
+  it('returns the stored globalState value', async () => {
+    await installPlatform({
+      globalState: { [GlobalStateKey.USE_OPENROUTER]: true },
+    });
+    expect(getUseOpenRouter()).toBe(true);
+  });
+
+  it('snaps an invalid stored value back to the catalog default instead of leaking it through', async () => {
+    // Regression for #7873: the pre-fix `tryGlobalState()?.get(key, false)`
+    // read cast the raw stored value to `boolean` without validating it, so a
+    // corrupted/non-boolean value flowed straight through. The catalog-driven
+    // `readPlatformSetting()` runs the entry's schema (`.catch(default)`)
+    // first, so a value that fails validation resolves to the default.
+    await installPlatform({
+      globalState: { [GlobalStateKey.USE_OPENROUTER]: 'not-a-boolean' },
+    });
+    expect(getUseOpenRouter()).toBe(false);
+  });
+
+  it('never falls back to the legacy VS Code config key', async () => {
+    // The `?? getConfig('texra.model.useOpenRouter', false)` fallback this
+    // function used to carry was dead code: `StateStore.get(key, false)`
+    // always resolves to `false` once the platform is initialized, so the
+    // config fallback could never fire in practice. Prove a legacy config
+    // value is ignored now that the fallback is gone.
+    await installPlatform({
+      config: { 'texra.model.useOpenRouter': true },
+    });
+    expect(getUseOpenRouter()).toBe(false);
+  });
+});
+
+describe('getProviderEndpoint', () => {
+  it('resolves the catalog default (empty string) when unset', async () => {
+    await installPlatform({});
+    expect(getProviderEndpoint('openai')).toBe('');
+  });
+
+  it('returns the stored globalState value', async () => {
+    await installPlatform({
+      globalState: {
+        [GlobalStateKey.ENDPOINT_OPENAI]: 'https://example.test/v1',
+      },
+    });
+    expect(getProviderEndpoint('openai')).toBe('https://example.test/v1');
+  });
+
+  it('snaps an invalid stored value back to the catalog default instead of leaking it through', async () => {
+    // Regression for #7873: the pre-fix local `read()` helper cast the raw
+    // stored value to `string` without validating it, so a corrupted
+    // non-string value flowed straight through. `readPlatformSetting()`
+    // validates against the entry's schema first.
+    await installPlatform({
+      globalState: { [GlobalStateKey.ENDPOINT_OPENAI]: 42 },
+    });
+    expect(getProviderEndpoint('openai')).toBe('');
+  });
+
+  it('returns empty string for a provider with no endpoint key', () => {
+    expect(getProviderEndpoint('not-a-real-provider')).toBe('');
   });
 });
