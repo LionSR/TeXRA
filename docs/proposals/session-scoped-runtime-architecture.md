@@ -5,7 +5,11 @@
 > `tech-debt-audit-2026-07.md` (Part B1/B5 + appendix); this document is the
 > target design. It covers the event/logger chain, the
 > approval/interaction RPC machinery, stream status, and the execution registries
-> — and how all of them couple to the UI backends.
+> — and how all of them couple to the UI backends. **§8 (2026-07-11)** is a
+> design-gated addendum for #7993: the concrete, near-term StreamPhase-native
+> cutover of group-end/live-status _production_, extracted from D1 (#6982)
+> because those producers turned out to be live, not dormant. It corrects the
+> Tier-0 `StageEndEvent.status` sketch in §4.
 
 ## 1. Diagnosis: one root cause, many symptoms
 
@@ -652,14 +656,21 @@ posture:
 
 **Tier 0 — canonical schemas (one source).** `RunOutcomeSchema` (which
 **already ships** — `src/shared/schemas/stream.ts:145`; do not redefine it)
-and a new `StreamPhaseSchema` in `@shared/schemas` are the only definitions.
-`ResultEvent.outcome` is today a **hand-inlined literal** that must track
-`RunOutcome` by hand (`events.ts:173`) — it becomes schema-derived.
-`StageEndEvent.status` drops `EndGroupStatus` for `'ok' | 'error'` (the only
-distinction any group renderer consumes). The mapping is explicit:
+and `StreamPhaseSchema` (which **also already ships** —
+`src/shared/schemas/stream.ts:148-157`) are the only definitions; no new
+schema is introduced. `ResultEvent.outcome` is today a **hand-inlined
+literal** that must track `RunOutcome` by hand (`events.ts:173`) — it becomes
+schema-derived.
+`StageEndEvent.status` drops `EndGroupStatus`. **Superseded, 2026-07-11: see
+§8** — the `'ok' | 'error'` collapse sketched below was itself a new
+2-value vocabulary and fails R4 (reuse, don't invent). §8 works out the
+production cutover in full and lands on reusing `RunOutcome` directly
+instead, since every real producer already holds the outcome value at the
+call site.
+<!-- Original sketch, kept for the sequencing rationale in §5 item 1, corrected by §8:
 `completed → 'ok'`, `cancelled → 'ok'`, `failed → 'error'` — the same
 collapse the legacy 2-value helper applies (`{completed,cancelled}→stopped`,
-`failed→error`), renamed so "ok" stops being spelled "stopped".
+`failed→error`), renamed so "ok" stops being spelled "stopped". -->
 
 **Tier 1 — future SDK package / `AgentEvent`.** `StreamStatus` should not
 leak into a future SDK package: the SDK surface should speak `RunOutcome`,
@@ -880,3 +891,440 @@ desktop becomes actually correct; 5 is the payoff deletion.
 - **New process-wide `setX` ports for the missing trace access**: rejected —
   the DI cleanup direction is fewer ambient globals, not more; `RunScope`
   carries the trace instead.
+
+## 8. Addendum (2026-07-11): StreamPhase-native group-end/live-status production (#7993 step 1)
+
+Design-gated per #7993: no production-cutover PR may land until this section
+is reviewed. Re-scoped out of D1 (#6982) on 2026-07-11 because the legacy
+producers this targets are **not** dormant residue awaiting an age window —
+they run on every stream today. This section is deliberately narrower than
+§§1-7: it does not require the `StreamStatusMachine`/`SessionEventHub` build.
+It only retypes what `stage.end()` and the live-status writers already emit,
+reusing the `StreamPhase`/`RunOutcome` vocabulary that already ships (§4
+Tier 0). §§1-7's bigger machine can still land later; this addendum does not
+block on it, and nothing here is incompatible with it landing afterward.
+
+### 8.1 Current state (verified at HEAD `035741c0d`, 2026-07-11)
+
+**Three live producers write the legacy 2-value `EndGroupStatus`
+(`{error, stopped}` — `END_GROUP_STATUS`, `src/shared/schemas/log.ts:16-19`,
+asserted at compile time to be a subset of the 4-value `TaskGroupStatus`,
+itself a subset of the 7-value `StreamStatus`) into every `GROUP_END`
+transcript row:**
+
+1. **`AgentRunLifecycle.ts:138`** — `params.stage.end(legacyEndGroupStatusForOutcome(outcome))`,
+   called at every `stage.end()` on run termination. `outcome` here is
+   already a `RunOutcome` (`completed | cancelled | failed`); the helper
+   throws that information away, folding `completed`/`cancelled` into one
+   string (`'stopped'`).
+2. **`AgentRunLifecycle.ts:369`** — a direct `session.transcripts.update(...)`
+   write (bypassing `TraceEmitter`, because the trace's subscriber has
+   already been torn down at this point in the suspend path — see the
+   comment at `:355-364`) with
+   `status: legacyEndGroupStatusForOutcome(RUN_OUTCOME.CANCELLED)`. Same
+   helper, same fold, hand-called a second time.
+3. **`TraceEmitter.ts:212` and `:300`** — `openStage()`'s
+   `defaultStatus = options.defaultStatus ?? END_GROUP_STATUS.STOPPED` and
+   `StageHandleImpl.run()`'s catch branch `this.end(END_GROUP_STATUS.ERROR)`.
+   These cover every **non-run** stage (tool groupings, sub-phases) that
+   never carries a `RunOutcome` — success/failure only, no cancellation
+   concept.
+
+**A fourth, previously uncatalogued producer** (found in this recount, not in
+the #6982 pins — the two-pin list in the issue body undercounts the surface):
+`StreamLogStore.endRunningEntriesInLoadedLogs` (`src/transcript/StreamLogStore.ts:446-485`),
+reached through the public `endRunningGroups(status = END_GROUP_STATUS.ERROR)`
+/ `endRunningGroupsForStreams(...)` API. This is the restart-repair /
+orphan-sweep path that finalizes rows still `running` after a crash or
+reload. Callers: `ProgressViewState.endRunningTaskGroups`
+(`src/controllers/progressView/backend/state/ProgressViewState.ts:316-326`)
+and desktop's `closeRunningTaskGroupsForStreams`
+(`packages/desktop/src/main/desktopAgentExecution.ts:812-826`), both of which
+already pass an explicit `EndGroupStatus` decided by restart-repair
+classification — i.e. they too are folding a richer decision (crash → failed,
+graceful-interrupt → cancelled) into the same 2-value string.
+
+**Two independent legacy-tolerant read sites** parse a `GROUP_END` row's
+opaque `data.status` back out today (no single boundary — this is the gap
+§8.3 closes):
+
+- `packages/extension/src/progressView/frontend/slices/logSlice.ts:82,109` —
+  `isTaskGroupStatus(payload.status) ? payload.status : STREAM_STATUS.STOPPED`
+  (live progress-view group rendering).
+- `packages/trace-viewer/src/replayTrace.ts:116` —
+  `StreamStatusSchema.safeParse(entry.data.status)` inside
+  `toStreamLifecycleStatus` (historical trace replay/export).
+
+**`GROUP_START` rows** write `data.status: 'running'` as a bare string
+literal (`TexraTranscriptRecorder.ts:235`), not through any helper — this is
+already the `StreamPhase.RUNNING`/`StreamStatus.RUNNING` string today
+(the two vocabularies share the literal `'running'`), so it needs a type
+change, not a value change.
+
+**The frozen Tier-4 external contract** (`endGroupStatus` in the CLI's
+headless JSON, `packages/cli/src/runtime/terminalStatus.ts:78`, called out in
+§4 Tier 4) is a _fifth_ call site of `legacyEndGroupStatusForOutcome` and is
+explicitly **out of scope** — it is a documented-deprecated frozen projection
+for external scripts and stays byte-identical, deriving from `RunOutcome` the
+same way after the cutover as before.
+
+**Live-status `STREAM_STATUS`/`STREAM_STATUS_TRAITS` reader census — recounted
+at HEAD, not trusted from the issue body.** The re-scope comment on #6982
+claimed "~61 files"; an earlier scout comment on the same issue claimed 44.
+Recount methodology: `grep -rlE` for `STREAM_STATUS\b|StreamStatusSchema\b|
+\bStreamStatus\b` (the enum, its schema, and the type) unioned with call
+sites of the four trait predicates (`isActiveStatus`, `isInFlightStatus`,
+`isTerminalStatus`, `isLiveElapsedStatus`) that read `STREAM_STATUS_TRAITS`
+indirectly, across `src/` and every `packages/*/src/`:
+
+| Scope                                                                             | Count  |
+| --------------------------------------------------------------------------------- | ------ |
+| Direct `STREAM_STATUS`/`StreamStatusSchema`/`StreamStatus`, production files only | 29     |
+| + trait-predicate call sites, production files only                               | **39** |
+| Same query including `*.vitest.*`/`__tests__`/`test-kernel`                       | **70** |
+
+None of the three numbers (44, "~61", or this recount's 39/70) agree, which
+is itself evidence the number should never be hand-carried between issues
+again — task 3 (§8.4 step 2) must re-run this grep at execution time, not
+copy this table.
+
+### 8.2 Native group-end/live-status row design (total mapping table, R4: no new vocabulary)
+
+Two legacy vocabularies feed the rows this addendum retypes: the 7-value
+`StreamStatus` (live status; also the `GROUP_START` row) and the 2-value
+`EndGroupStatus` (the `GROUP_END` row only, itself asserted to be a subset of
+`StreamStatus`'s 4-value `TaskGroupStatus` slice). Every legacy value below —
+all 7 `StreamStatus` members plus the 2 (already-covered) `EndGroupStatus`
+members — maps onto an existing `StreamPhase` (5 values: `running`,
+`waiting`, `completed`, `cancelled`, `failed`) or `StreamSubstate` (2 values:
+`starting`, `resuming`) member. No new type, value, or plane is introduced;
+this is exactly the trim already worked out in §2's status-model table
+(lines 376-409) and `streamStatusToPhase`/`streamStatusToSubstate`
+(`src/shared/schemas/stream.ts:189-216`), which **already ship** — this
+addendum's job is only to point _production_ at them, not to design them.
+
+| #   | Legacy value   | Vocabulary                        | Live producer today                                                                                                | Native replacement                                                                         | Wire-value change?                                                                                                                                    |
+| --- | -------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `RUNNING`      | `StreamStatus`                    | `GROUP_START` literal; live status writers                                                                         | `StreamPhase.RUNNING` (`'running'`)                                                        | No — identical string                                                                                                                                 |
+| 2   | `WAITING`      | `StreamStatus`                    | live status only (no group-end producer)                                                                           | `StreamPhase.WAITING` (`'waiting'`)                                                        | No                                                                                                                                                    |
+| 3   | `RESUMING`     | `StreamStatus`                    | live status only                                                                                                   | `StreamPhase.RUNNING` + `StreamSubstate.RESUMING`                                          | No — already the §2 design                                                                                                                            |
+| 4   | `INITIALIZING` | `StreamStatus`                    | live status only (`tryAcquire` reservation)                                                                        | `StreamPhase.RUNNING` + `StreamSubstate.STARTING`                                          | No — already the §2 design                                                                                                                            |
+| 5   | `STOPPED`      | `StreamStatus` / `EndGroupStatus` | `GROUP_END` default via `legacyEndGroupStatusForOutcome`'s non-error branch; `StreamLogStore` orphan-sweep default | `RunOutcome.COMPLETED` **or** `RunOutcome.CANCELLED` (was one string folding two outcomes) | **Yes — the fold splits.** Every real producer already holds the actual outcome; writing it directly is strictly more information, not new vocabulary |
+| 6   | `ERROR`        | `StreamStatus` / `EndGroupStatus` | `GROUP_END` failed branch; `StageHandleImpl.run()` catch; `StreamLogStore` orphan-sweep `ERROR` default            | `RunOutcome.FAILED`                                                                        | No — 1:1                                                                                                                                              |
+| 7   | `READY`        | `StreamStatus`                    | live status only; equals "no entry" (map-delete)                                                                   | absence (`undefined`)                                                                      | No — already the §2 design                                                                                                                            |
+
+Concretely, for the `GROUP_END` row specifically: **`EndGroupStatusSchema`/
+`END_GROUP_STATUS` is retired as a _production_ type.** `StageEndEvent.status`,
+`StageHandle.end()`/`StageOptions.defaultStatus`, and
+`StreamLogStore.endRunningGroups(status)`/`endRunningGroupsForStreams(status)`
+all retype from `EndGroupStatus | undefined` to `RunOutcome | undefined`.
+Every real call site already has (or can trivially be given) the actual
+`RunOutcome`:
+
+- `AgentRunLifecycle.ts:138` passes `outcome` directly — deletes the
+  `legacyEndGroupStatusForOutcome` call entirely, no behavior decision needed.
+- `AgentRunLifecycle.ts:369` passes `RUN_OUTCOME.CANCELLED` directly — same
+  deletion.
+- `TraceEmitter.ts`'s generic (non-run) stage default becomes
+  `RunOutcome.COMPLETED` on success, `RunOutcome.FAILED` on the `run()` catch
+  branch. Generic stages have no cancellation concept, so they only ever use
+  2 of the 3 `RunOutcome` members — that is a narrowing, not a new value.
+- `StreamLogStore`'s orphan-sweep default flips from unconditional `ERROR` to
+  a caller-supplied `RunOutcome`; `ProgressViewState.endRunningTaskGroups`
+  and desktop's `closeRunningTaskGroupsForStreams` already classify
+  crash-vs-graceful-interrupt for `restart-repair` transitions elsewhere
+  (§2's `StreamStatusMachine` `RESTART_REPAIR` cause table,
+  `src/common/constants/streamStatus.ts:182-190`) — this cutover lets that
+  same classification finally reach the transcript row instead of being
+  discarded at the 2-value boundary.
+
+This is the deliberate behavior change §5 already flagged ("the extension
+webview starts distinguishing completed/cancelled") — this addendum shows it
+lands at **stage 0** for the group-end row specifically (§2's migration list
+had scoped it to stage 2, gated on the full `StreamStatusMachine`; the
+transcript row does not need the machine to carry the extra bit).
+
+`GROUP_START` rows: no value change (row 1 above), only the type at the
+write site (`TexraTranscriptRecorder.ts:235`) moves from a bare string
+literal to `StreamPhase.RUNNING`.
+
+### 8.3 Boundary plan: two true boundaries — `StreamLogStore`'s persisted read, and the standalone trace-viewer's file import
+
+Binding directive (maintainer, desktop-never-released + no-scattered-shims):
+during the released-data window (CLI + VS Code extension both ship
+historical transcripts with `data.status: 'error' | 'stopped'` group-end
+rows), **the only legacy parse in the in-app path lives at `StreamLogStore`'s
+read side** — everywhere else that loads through `StreamLogStore`, live or
+persisted, gets canonical `RunOutcome`/`StreamPhase` values. The standalone
+trace-viewer's file import is a separate concern outside this directive's
+scope; it keeps its own boundary, registered at the end of this section.
+
+**Today**, per §8.1, there are _two_ scattered legacy-tolerant parses instead
+of one in the in-app path: `logSlice.ts:82,109` and `replayTrace.ts:116`.
+Neither is the read boundary — `StreamLogStore.parsePersistedEntries`
+(`src/transcript/StreamLogStore.ts:798-848`) is: it is the one function every
+persisted row passes through — the `.safeParse(raw)` call itself sits at
+`StreamLogStore.ts:823`, against the `PersistedStreamLogEntrySchema` union
+_defined_ (not called) at `src/shared/schemas/log.ts:149-152` — before
+entering the in-memory `StreamLog`, for both the extension's live progress
+view (which rehydrates released streams via `ensureLoaded`/`load`,
+`StreamLogStore.ts:228,631`) and the CLI's own transcript readers
+(`packages/cli/src/chat/…`, `runtime/runExecution.ts`), which also load
+through `StreamLogStore`. The standalone trace-viewer does **not** load
+through `StreamLogStore` and is a separate boundary — see below.
+`data` stays `z.unknown()` in that schema (correctly — Tier 3 in §4 already
+documents `StreamLog` group-end rows as "opaque… display code pattern-matches
+`status:'error'`"), so today's union does not — and after this cutover still
+does not — validate `data.status`; the normalization is a _value_ transform
+on top of the existing parse, not a schema change, and needs no persisted
+format-version bump.
+
+**Target:** extend `parsePersistedEntries` (or a transform run immediately
+after it, before entries reach callers) so that any `GROUP_START`/`GROUP_END`
+entry's `data.status` is normalized in place at load time:
+
+- On-disk `'running'` → `StreamPhase.RUNNING` (row 1; string-identical,
+  retype only).
+- On-disk `'stopped'` → `RunOutcome.COMPLETED`. This is a **documented lossy
+  default** for rows written before the cutover: pre-cutover `'stopped'`
+  already could not distinguish `completed` from `cancelled` (row 5), so the
+  boundary cannot recover information the old writer discarded. Choosing
+  `COMPLETED` (not `CANCELLED`) matches today's rendering behavior — the
+  extension already displays these rows as neutral "Stopped", closer in
+  connotation to a normal finish than an interruption — so no historical
+  transcript's _displayed_ label changes, only its typed value.
+- On-disk `'error'` → `RunOutcome.FAILED` (row 6; 1:1, lossless).
+
+**The live-emission path needs no parse at all — it is canonical by
+construction, not by normalization, so §8.3's boundary story is not just the
+persisted-read side.** `StreamLogStore.append()` (`StreamLogStore.ts:287-297`)
+is the one entry point every live producer writes through
+(`TexraTranscriptRecorder.ts:137,189,226,263`, which back the four §8.1
+producers — `AgentRunLifecycle.ts:138,369`, `TraceEmitter.ts:212,300`, and
+`StreamLogStore.endRunningEntriesInLoadedLogs`) — and `append()` never calls
+`parsePersistedEntries`; only the disk-load paths do
+(`ensureLoaded`/`load`/`loadStreamSummary`, `StreamLogStore.ts:228,631`).
+`WebviewBridge` (`src/controllers/progressView/backend/WebviewBridge.ts:151`)
+then streams these entries straight from the in-memory `StreamLog` to the
+webview's `logSlice.ts` `LOG_DELTA` handler — no disk read, no parse,
+anywhere on that path. Once step 1 retypes all four producers to emit
+`RunOutcome`/`StreamPhase` directly (§8.2), every entry `append()` ever sees
+is canonical the instant it is created; `parsePersistedEntries`'s
+normalization exists solely to backfill rows that predate the cutover and
+were already sitting on disk, not to process anything a live run produces
+today or after.
+
+That also answers the in-memory mixed-vocabulary question directly: because
+step 1 retypes all four live producers in the **same PR** as the boundary
+(§8.4 step 1), there is no rollout window in which some in-memory
+`GROUP_END`/`GROUP_START` rows are canonical and others are still
+legacy-typed. Every producer capable of writing a fresh row cuts over
+atomically in that one PR; the only legacy-shaped rows any consumer can ever
+observe afterward are ones that were already persisted to disk before the PR
+merged, and those get normalized once, at load time, by
+`parsePersistedEntries`. No consumer — live or persisted-read — sees a mix
+of old and new vocabulary once step 1 ships.
+
+Post-boundary, `StreamLog`/`StreamLogStore` and everything downstream that
+loads through it — `logSlice.ts`, the CLI's own transcript readers — only
+ever observe canonical `StreamPhase`/`RunOutcome` values, whether an entry
+arrived live via `append()` or was rehydrated from disk via
+`parsePersistedEntries`. `logSlice.ts`'s
+`isTaskGroupStatus(...) ? ... : STREAM_STATUS.STOPPED` fallback becomes dead
+code on that path (its `else` branch can no longer be hit by anything
+`StreamLogStore` hands it) and is deleted as a mechanical follow-up once the
+boundary lands and `logSlice.ts` is retyped to expect
+`StreamPhase`/`RunOutcome` — not before, per the "consumers get canonical"
+half of the directive (deleting the fallback before the boundary normalizes
+would just move the crash site). That deletion is conditioned on **both**
+of `logSlice.ts`'s callers going canonical, not just `StreamLogStore`'s —
+see the standalone trace-viewer boundary immediately below, which also feeds
+`logSlice.ts` and is not downstream of `parsePersistedEntries` at all.
+
+**A second, independent true boundary: the standalone trace-viewer's file
+import.** `packages/trace-viewer/` is not a `StreamLogStore` client at all —
+its `main.ts`'s `loadTrace()` reads either an inlined
+`window.__TEXRA_TRACE__` (the CLI's single-file export) or a fetched
+`trace.json`, validates it through `parseTraceData`
+(`packages/trace-viewer/src/traceDataSchema.ts`), and feeds the result
+straight to `replayTrace()` (`packages/trace-viewer/src/replayTrace.ts:131`);
+`StreamLogStore.parsePersistedEntries` never runs in that call chain —
+`replayTrace.ts` only imports `TraceDocument` as a type. These exported
+trace files are, by `main.ts`'s own doc comment, "externally-authored…
+exported by whatever TeXRA version produced them" — a file exported before
+this cutover ships stays on-disk in the legacy vocabulary forever; nothing
+re-normalizes it retroactively, since a static exported JSON file never
+passes through a live `StreamLogStore` instance again. That makes the
+trace-viewer's import path a second, genuinely independent boundary, not a
+downstream consumer of the first, and §8.3's opening directive ("the only
+legacy parse lives at `StreamLogStore`'s read side") is scoped to the in-app
+path only — it does not extend here. Concretely: `replayTrace.ts`'s
+`toStreamLifecycleStatus` keeps its own `StreamStatusSchema.safeParse`
+legacy-arm (`:116`) permanently, as this boundary's one owner of the
+overall-run status. It does **not**, however, currently normalize the
+individual `GROUP_START`/`GROUP_END` `data.status` values on the entries it
+forwards — `replayTrace()` dispatches `trace.entries` verbatim into the same
+`LOG_DELTA`/`logSlice.ts` pipeline the in-app live path uses (`replayTrace.ts:182`),
+so those raw per-entry values land on `logSlice.ts`'s `isTaskGroupStatus`
+fallback exactly as a pre-cutover on-disk row would. That means the
+`logSlice.ts` fallback (previous paragraph) is not purely in-app dead weight
+once `StreamLogStore` goes canonical — it is the shared landing point both
+boundaries currently feed, and it can only be deleted once the trace-viewer
+import path also normalizes per-entry `data.status` the same way
+`parsePersistedEntries` does (a follow-up for whichever PR does the
+trace-viewer's own cutover, out of scope for step 1 itself but recorded here
+so the eventual `logSlice.ts` fallback deletion isn't done prematurely).
+§8.4 step 3's acceptance-gate grep (R8) must count `replayTrace.ts`'s
+`StreamStatusSchema.safeParse` as a second permitted survivor alongside
+`StreamLogStore`'s boundary, not something to delete: deleting it would
+break historical export files opened outside a running extension/CLI, which
+is exactly the case this boundary exists to serve.
+
+The Tier-4 frozen CLI JSON projection (`terminalStatus.ts:78`) is
+unaffected: it derives `endGroupStatus` from `RunOutcome` via
+`legacyEndGroupStatusForOutcome`, which stays alive as a **read-side/derive
+helper** for that one frozen external contract — it is deleted as a
+_production_ call at the three §8.1 sites, not deleted outright.
+
+### 8.4 Cutover sequence: 3 PR-sized steps
+
+Mirrors the parent issue's goal items 2-4. Each step is independently
+shippable and each keeps CLI headless JSON byte-identical throughout (Tier 4,
+§4/§8.3); the extension/CLI live displays are unaffected until step 1 lands
+(new information, additive) and step 2 (mechanical retyping, no behavior
+change per step).
+
+**Step 1 — Production cutover (this document's design; §8.2).**
+Retype `StageEndEvent.status`, `StageHandle.end()`,
+`TraceEmitter.openStage({defaultStatus})`, and
+`StreamLogStore.endRunningGroups*(status)` from `EndGroupStatus` to
+`RunOutcome`; delete the three/four production call sites' use of
+`legacyEndGroupStatusForOutcome` (§8.1 items 1-4); retype the
+`GROUP_START` write site to `StreamPhase.RUNNING`. Land the
+`StreamLogStore.parsePersistedEntries` boundary normalization (§8.3) in the
+**same PR** — the boundary and the producer cutover must ship together, or
+there is a window where in-memory rows use both vocabularies depending on
+write date, which is exactly the "two vocabularies for one fact" class this
+whole program exists to close. `EndGroupStatusSchema`/`END_GROUP_STATUS`
+themselves are **not** deleted yet (`legacyEndGroupStatusForOutcome` still
+backs the Tier-4 CLI projection, §8.3) — only their production role ends.
+R6: net-negative at the three/four call sites (each drops a
+helper-call-plus-import for a direct field reference); net-positive at the
+boundary (~15-25 new lines for the load-time normalization + its round-trip
+test). Net for the PR: roughly flat to slightly positive, not a reduction —
+correctly so, since this step is a correctness/behavior improvement
+(completed-vs-cancelled distinction), not a dead-code deletion.
+
+**Step 2 — Migrate the live-status readers (goal item 3; mechanical after
+step 1).** Re-run the §8.1 census grep at execution time (do not reuse the
+39/70 table — it is a snapshot). For each of the ~39 production files,
+replace direct `STREAM_STATUS`/`STREAM_STATUS_TRAITS` reads with the
+`StreamPhase`-keyed equivalents (`isActivePhase`/`isInFlightPhase`/trait
+helpers already exported from `src/common/constants/streamStatus.ts:130-146`
+— these already exist and are already used by the transition-cause logic;
+step 2 is pointing the remaining 39 files at them, not building them).
+Per-host PRs as the parent issue specifies (CLI TUI, extension progressView,
+desktop bridge — split because the files cluster by host and a single PR
+touching all three risks the "collision with the active PR train" mitigation
+already logged in §5). R6: each per-host PR is a like-for-like swap
+(`STREAM_STATUS.X` → `STREAM_PHASE.X` at call sites already trait-gated), so
+expect small negative-to-flat diffs per file, no structural growth.
+
+The census also sweeps the **task-group status consumers**, which read the
+group-end/group-start-derived status this addendum's step 1 retypes at the
+source, not the generic per-stream status §2 already covers — call them out
+explicitly so step 2's per-host PR authors don't miss them as "just more of
+the 39": `TaskGroupSchema.status` (`src/shared/schemas/taskGroup.ts:10`,
+typed `TaskGroupStatusSchema`) is the wire/state type `logSlice.ts`'s
+`updateTaskGroups` populates from `GROUP_START`/`GROUP_END` rows (§8.3), and
+`packages/extension/src/progressView/frontend/components/TaskGroupList.ts`
+is its primary renderer — `getStatusIcon` (`:60-68`) switches on
+`STREAM_STATUS.RUNNING`/`ERROR`/`STOPPED`, and the completion-sound check
+(`:301-304`) compares `group.status` against `STREAM_STATUS.READY`/`STOPPED`.
+Both retype to `StreamPhase`/`RunOutcome` in lockstep with `logSlice.ts`
+itself, and `TaskGroupListIndex.vitest.ts` (already named in §8.5) is the
+existing suite that pins `TaskGroupList`'s fixtures for this migration.
+
+**Step 3 — Delete the legacy enums (goal item 4; original D1 task-3 list,
+finally unblocked).** Once step 2 empties the reader census, delete
+`STREAM_STATUS`/`STREAM_STATUS_TRAITS`,
+`EndGroupStatusSchema`/`END_GROUP_STATUS`, and the
+`legacyEndGroupStatusForOutcome`/`groupEndStatusForOutcome`/
+`terminalStreamStatusForOutcome` helpers — except the read-shim forms the
+D1 ledger (#6981) already dates for the tier-3 persisted-format shims
+(`meta.json.taskState`, desktop `terminalStatus`, the boundary normalization
+this step 1 added in §8.3, which **stays** as the permanent legacy-transcript
+reader, not a temporary shim — released transcripts never get rewritten, so
+this parse never ages out). `StreamStatusSchema` itself is in that same
+surviving set, not fully deleted: `replayTrace.ts`'s `toStreamLifecycleStatus`
+(§8.3's second boundary) keeps calling `StreamStatusSchema.safeParse`
+permanently, so the schema stays exported for that one caller even after
+every other production reader of it is gone. R8: consumer count is exactly
+the step-2 output (should be 0 production readers of the deleted symbols
+outside the two permitted boundary survivors — `StreamLogStore`'s
+`parsePersistedEntries` normalization and `replayTrace.ts`'s
+`StreamStatusSchema.safeParse` — both named in the D1 acceptance-gate grep).
+R6: this step is the actual deletion payoff — net-negative, size M per the
+parent issue's own estimate.
+
+### 8.5 Test plan
+
+Existing suites already pin group-end/transcript-boundary behavior and are
+the ones step 1 extends (R7 — no new suites):
+
+- `src/test-kernel/agent/runtime/AgentRunLifecycle.vitest.ts` — pins the two
+  `stage.end`/direct-transcript-write call sites (§8.1 items 1-2); extend
+  with cases asserting the `GROUP_END` row's `data.status` is the literal
+  `RunOutcome` value (`completed`/`cancelled`/`failed`), not the folded
+  2-value string.
+- `src/test-kernel/common/RunOutcomeAlgebra.vitest.ts` — the outcome-algebra
+  suite (`deriveRunOutcome`/`projectRunOutcome`/the legacy helpers); extend
+  with the retyped `legacyEndGroupStatusForOutcome` (now a Tier-4-only
+  derive helper) staying correct, and delete assertions that depended on it
+  being called from production sites once step 1 removes those calls.
+- `src/test-kernel/transcript/TexraTranscriptRecorder.vitest.ts` — pins
+  `stage.start`/`stage.end` → `GROUP_START`/`GROUP_END` row shape
+  (`:244-256` today); extend for the `RunOutcome`-typed `data.status` and the
+  `StreamPhase.RUNNING`-typed `GROUP_START` row.
+- `src/test-kernel/transcript/StreamLog.vitest.ts` and
+  `StreamLogStoreLoad.vitest.ts` — pin `StreamLogStore` load/round-trip
+  behavior; extend `StreamLogStoreLoad` with the §8.3 boundary-normalization
+  round-trip (`'stopped'`/`'error'` on disk → `RunOutcome.COMPLETED`/`FAILED`
+  in memory) — this is the one new assertion class step 1 needs, added to an
+  existing suite per R7, not a new file.
+- `src/test-kernel/progressView/RestartRepair.vitest.ts` — pins the
+  orphan-sweep/`endRunningGroups*` restart-repair path (§8.1 item 4); extend
+  for the caller-supplied `RunOutcome` replacing the unconditional `ERROR`
+  default.
+- `src/test-kernel/desktop/DesktopAgentExecution.vitest.mts` — pins desktop's
+  `closeRunningTaskGroupsForStreams` caller; extend alongside
+  `RestartRepair.vitest.ts` for the desktop-specific classification path.
+- `src/test-kernel/traceViewer/replayTrace.vitest.ts` — pins
+  `toStreamLifecycleStatus`'s `GROUP_END`-row read (§8.1). Unlike
+  `logSlice.ts`'s in-app fallback, `replayTrace.ts`'s legacy-string fixtures
+  do **not** move to `StreamLogStore` fixtures or get deleted once the
+  `StreamLogStore` boundary lands — the trace-viewer is §8.3's second,
+  independent boundary and keeps tolerating both vocabularies permanently
+  (exported trace files never pass through `StreamLogStore`). Step 1 only
+  needs this suite unchanged; add cases here (or in a trace-viewer follow-up)
+  once the trace-viewer's own per-entry `GROUP_START`/`GROUP_END`
+  normalization (§8.3, flagged as future work) lands, not before.
+- `src/test-kernel/progressView/LogDeltaTextDeltas.vitest.ts` — the one
+  existing suite that drives `logSlice.ts`'s exported `logHandlers` directly
+  (`:9`), today only over `STREAM_LOG_ENTRY_TYPES.LOG` fixtures; it does not
+  yet exercise the `GROUP_END` handler (§8.1's other read site) — step 1 adds
+  a `GROUP_END` case here (still R7: an existing suite gains a case, not a
+  new file) asserting `isTaskGroupStatus`'s fallback is unreachable for
+  entries sourced from `StreamLogStore` once the boundary normalizes — it
+  stays reachable (and still needs coverage) for entries the standalone
+  trace-viewer forwards unnormalized, per §8.3's second boundary.
+- `src/test-kernel/progressView/TaskGroupListIndex.vitest.ts` — covers
+  `TaskGroupList`'s rendering of hand-built `TaskGroup[]` fixtures (not
+  `logSlice.ts`'s projection itself); listed for step 2 below since it
+  constructs fixtures with `STREAM_STATUS` literals directly.
+
+Per-host live-status suites for step 2 (named here so step 2's PR authors do
+not have to rediscover them): CLI TUI's `src/test-kernel/cli/
+TuiStateAndFocus.vitest.mts` (references `STREAM_STATUS` per §8.1's census);
+the extension's `TaskGroupListIndex.vitest.ts`, which builds `TaskGroup`
+fixtures directly from `STREAM_STATUS` literals.
