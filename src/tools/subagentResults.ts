@@ -18,6 +18,7 @@ import type {
   TodoItem,
   WorkPlanSnapshot,
 } from '@shared/schemas';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
@@ -195,7 +196,7 @@ export function formatSubagentDelivery(
 
   return formatChildRunDelivery(
     {
-      tag: 'subagent-result',
+      tag: DELIVERY_TAG.subagentResult,
       executionId: result.executionId,
       attributes: [
         { name: 'agent', value: agentName },
@@ -229,7 +230,7 @@ export function formatSubagentError(
   const formatted = normalizeProviderError(err);
   return formatChildRunError(
     {
-      tag: 'subagent-error',
+      tag: DELIVERY_TAG.subagentError,
       executionId,
       attributes: [
         { name: 'agent', value: agentName },
@@ -260,6 +261,7 @@ export function formatSubagentProgress(
   agentName: string,
   update: SubagentProgressUpdate,
 ): string {
+  const tag = DELIVERY_TAG.subagentProgress;
   const idAttr = `id="${escapeAttr(executionId)}"`;
   const agentAttr = `agent="${escapeAttr(agentName)}"`;
 
@@ -273,9 +275,9 @@ export function formatSubagentProgress(
         })
         .join('\n');
       return [
-        `<subagent-progress ${idAttr} ${agentAttr} type="todos" completed="${completed}" active="${inProgress}" pending="${pending}">`,
+        `<${tag} ${idAttr} ${agentAttr} type="todos" completed="${completed}" active="${inProgress}" pending="${pending}">`,
         items,
-        '</subagent-progress>',
+        `</${tag}>`,
       ].join('\n');
     }
 
@@ -292,18 +294,18 @@ export function formatSubagentProgress(
       if (update.cost !== undefined) {
         attrs.push(`cost="${update.cost.toFixed(4)}"`);
       }
-      return `<subagent-progress ${idAttr} ${agentAttr} ${attrs.join(' ')} />`;
+      return `<${tag} ${idAttr} ${agentAttr} ${attrs.join(' ')} />`;
     }
 
     case 'plan': {
       if (!update.plan) {
-        return `<subagent-progress ${idAttr} ${agentAttr} type="plan" status="cleared" />`;
+        return `<${tag} ${idAttr} ${agentAttr} type="plan" status="cleared" />`;
       }
-      return `<subagent-progress ${idAttr} ${agentAttr} type="plan" status="updated" summary="${escapeAttr(planSummaryLine(update.plan.objective))}" />`;
+      return `<${tag} ${idAttr} ${agentAttr} type="plan" status="updated" summary="${escapeAttr(planSummaryLine(update.plan.objective))}" />`;
     }
 
     case 'started':
-      return `<subagent-progress ${idAttr} ${agentAttr} type="started" />`;
+      return `<${tag} ${idAttr} ${agentAttr} type="started" />`;
   }
 }
 
@@ -366,8 +368,9 @@ export function formatBashDelivery(
 ): string {
   const stdoutPreview = lastNLines(outputTail, OUTPUT_PREVIEW_LINES);
   const stderrPreview = lastNLines(stderrTail, OUTPUT_PREVIEW_LINES);
+  const tag = DELIVERY_TAG.backgroundResult;
   const lines = [
-    `<background-result id="${escapeAttr(executionId)}" command="${escapeAttr(command)}">`,
+    `<${tag} id="${escapeAttr(executionId)}" command="${escapeAttr(command)}">`,
     `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
@@ -393,7 +396,7 @@ export function formatBashDelivery(
   if (stderrPreview) {
     lines.push(`<stderr-preview>${escapeText(stderrPreview)}</stderr-preview>`);
   }
-  lines.push('</background-result>');
+  lines.push(`</${tag}>`);
   return lines.join('\n');
 }
 
@@ -406,10 +409,11 @@ export function formatBashError(
   err: unknown,
 ): string {
   const message = toErrorMessage(err);
+  const tag = DELIVERY_TAG.backgroundError;
   return [
-    `<background-error id="${escapeAttr(executionId)}" command="${escapeAttr(command)}">`,
+    `<${tag} id="${escapeAttr(executionId)}" command="${escapeAttr(command)}">`,
     `<message>${escapeText(message)}</message>`,
-    '</background-error>',
+    `</${tag}>`,
   ].join('\n');
 }
 

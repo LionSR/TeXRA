@@ -496,6 +496,23 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
+  it('marks a non-AgentError rejection terminal before rethrowing it', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = baseRequest();
+    const error = new Error('disk full');
+    mocks.runAgent.mockRejectedValueOnce(error);
+
+    await expect(
+      executeCliRequest(request, cliContext(), { markErrorOnThrow: true }),
+    ).rejects.toBe(error);
+
+    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
+      'exec-1',
+      EXECUTION_STATUS.ERROR,
+    );
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
   it('resolves a classified run failure to a non-zero exit code without rethrowing', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();

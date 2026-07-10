@@ -278,8 +278,7 @@ export function normalizeConversationForExport(
     }
 
     // OpenAI Response API: top-level function_call items (not wrapped in a message)
-    const responseToolCall = item as unknown as
-      ResponseFunctionToolCallItem | undefined;
+    const responseToolCall = asCandidate<ResponseFunctionToolCallItem>(item);
     if (isResponseFunctionToolCallItem(responseToolCall)) {
       const args =
         typeof responseToolCall.arguments === 'string'
@@ -293,7 +292,7 @@ export function normalizeConversationForExport(
 
     // OpenAI Response API: top-level function_call_output items.
     // output can be a string OR an array of input_text/input_file/input_image parts.
-    const responseInputItem = item as unknown as ResponseInputItem | undefined;
+    const responseInputItem = asCandidate<ResponseInputItem>(item);
     if (isFunctionCallOutputItem(responseInputItem)) {
       const output = responseInputItem.output;
       if (Array.isArray(output)) {
@@ -361,7 +360,7 @@ export function normalizeConversationForExport(
     }
 
     // OpenAI Chat Completions tool role
-    const openaiMsg = item as unknown as ChatCompletionMessageParam;
+    const openaiMsg = asCandidate<ChatCompletionMessageParam>(item);
     if (role === 'tool' || isToolMessage(openaiMsg)) {
       const text =
         typeof openaiMsg.content === 'string'
@@ -379,6 +378,17 @@ function asObject(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+/**
+ * Bridge a raw, provider-shape-unknown item into one of the candidate SDK
+ * item types so a real type-guard function (e.g. `isResponseFunctionToolCallItem`)
+ * can check its `type` discriminant. `item` may legitimately be any of
+ * Anthropic's, OpenAI's, or Google's shapes — the guard, not this cast, is
+ * what verifies it before the caller trusts the narrowed fields.
+ */
+function asCandidate<T>(item: Record<string, unknown>): T {
+  return item as unknown as T;
 }
 
 function getAssistantToolCalls(

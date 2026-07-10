@@ -27,6 +27,7 @@ import {
 
 import { BaseNode } from './index';
 import { PersistedFlow } from './persistedFlow';
+import type { z } from 'zod';
 
 // ============================================================================
 // Round-Aware State Interface
@@ -112,10 +113,11 @@ export class RoundPersistedFlow<
     options?: {
       callbacks?: RoundCallbacks<S>;
       parentStage?: StageHandle | null;
+      sharedSchema?: z.ZodType<S>;
     },
     runId?: string,
   ) {
-    super(start, kv, runId);
+    super(start, kv, runId, options?.sharedSchema);
     this.callbacks = options?.callbacks ?? {};
     this.parentStage = options?.parentStage ?? null;
   }

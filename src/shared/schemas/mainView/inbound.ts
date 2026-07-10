@@ -25,7 +25,10 @@ import {
   MultipleDocumentFileTypeSchema,
 } from '../fileTypes';
 import { GettingStartedActionSchema, SessionTypeSchema } from './state';
-import { MainViewExecuteInboundMessageSchema } from './executeMessage';
+import {
+  MainViewExecuteFilesSchema,
+  MainViewExecuteInboundMessageSchema,
+} from './executeMessage';
 
 const CommonMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.WEBVIEW_READY),
@@ -184,14 +187,16 @@ const InstructionMessages = [
     text: z.string(),
     agent: z.string().optional(),
     model: z.string().optional(),
-    inputFiles: z.array(z.string()).optional(),
-    contextFiles: z.array(z.string()).optional(),
-    mediaFiles: z.array(z.string()).optional(),
-    outputFiles: z.array(z.string()).optional(),
-    inputFilesActive: z.boolean().optional(),
-    contextFilesActive: z.boolean().optional(),
-    mediaFilesActive: z.boolean().optional(),
-    outputFilesActive: z.boolean().optional(),
+    ...MainViewExecuteFilesSchema.pick({
+      inputFiles: true,
+      contextFiles: true,
+      mediaFiles: true,
+      outputFiles: true,
+      inputFilesActive: true,
+      contextFilesActive: true,
+      mediaFilesActive: true,
+      outputFilesActive: true,
+    }).shape,
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE),
