@@ -620,7 +620,7 @@ function seedLiveToolOnlyTranscript(): void {
 
 function makeRejectedBashToolEntries(): ConversationEntry[] {
   const command = "printf 'approval-reject-live\\n'";
-  const message = `User rejected bash command: ${command}`;
+  const message = `User rejected command: ${command}`;
   return [
     {
       id: 'rejected-bash-user',

@@ -298,11 +298,11 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '0', HARNESS_REJECTED_BASH_TOOL: '1' },
     expect: [
       "● bash (printf 'approval-reject-live\\n')",
-      "⎿ User rejected bash command: printf 'approval-reject-live\\n'",
+      "⎿ User rejected command: printf 'approval-reject-live\\n'",
     ],
     maxOccurrences: [
       {
-        text: "User rejected bash command: printf 'approval-reject-live\\n'",
+        text: "User rejected command: printf 'approval-reject-live\\n'",
         max: 1,
       },
     ],
@@ -1264,11 +1264,11 @@ const SCENARIOS = [
     resizes: [{ cols: 120 }],
     expect: [
       'agent: chat · model: harness-model',
-      'Run bash command?',
+      'Run command?',
       '$ npm run compile:safe',
       'Directory:',
       'y approve',
-      'a approve bash for session',
+      'a commands for session',
       'Use foreground panel shortcuts',
     ],
     unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
@@ -1280,11 +1280,11 @@ const SCENARIOS = [
       },
       {
         before: 'agent: chat · model: harness-model',
-        after: 'Run bash command?',
+        after: 'Run command?',
       },
     ],
     maxBlankLinesBetween: [
-      { from: 'entry-4 chat history line', to: 'Run bash command?', max: 3 },
+      { from: 'entry-4 chat history line', to: 'Run command?', max: 3 },
     ],
   },
   {
@@ -1295,14 +1295,14 @@ const SCENARIOS = [
     bootExpect: '[Ctrl-C]',
     frame: 'viewport',
     expect: [
-      'Run bash command?',
+      'Run command?',
       '$ npm run compile:safe',
       'Directory:',
       'y approve',
       'n reject',
       'Esc cancel',
     ],
-    unexpect: [' · …', 'a bash session'],
+    unexpect: [' · …', 'a cmd session'],
   },
   {
     name: 'bash-approval-feedback',
@@ -1313,7 +1313,7 @@ const SCENARIOS = [
     keys: ['e', 'use portable python3 instead'],
     frame: 'viewport',
     expect: [
-      'Run bash command?',
+      'Run command?',
       '> use portable python3 instead',
       'Enter send note',
       'Esc back',
@@ -1332,7 +1332,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Ctrl-C]',
     expect: [
-      'Run bash command?',
+      'Run command?',
       'Directory:',
       "$ python3 << 'EOF'",
       'more rows',
@@ -1353,7 +1353,7 @@ const SCENARIOS = [
     bootExpect: '[Ctrl-C]',
     frame: 'viewport',
     expect: [
-      'Run bash command?',
+      'Run command?',
       'Directory:',
       "$ python3 << 'EOF'",
       'more rows',
@@ -1375,7 +1375,7 @@ const SCENARIOS = [
     keys: [DOWN, DOWN, DOWN],
     frame: 'viewport',
     expect: [
-      'Run bash command?',
+      'Run command?',
       'Directory:',
       'x2 = 1 + 2 * y * y',
       'previous',
@@ -1397,7 +1397,7 @@ const SCENARIOS = [
     keys: [PAGE_DOWN],
     frame: 'viewport',
     expect: [
-      'Run bash command?',
+      'Run command?',
       'Directory:',
       'for y in range(1, 100):',
       'previous',
@@ -1416,7 +1416,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Ctrl-C]',
     frame: 'viewport',
-    expect: ['Run bash command?', 'Directory:', 'rows hidden', 'y approve'],
+    expect: ['Run command?', 'Directory:', 'rows hidden', 'y approve'],
     unexpect: ['[Option-p]tasks'],
   },
   {
@@ -1426,7 +1426,7 @@ const SCENARIOS = [
     keys: ['a'],
     frame: 'viewport',
     expect: ['AUTO-BASH', '[/status]details', '[/model]models'],
-    unexpect: ['AUTO-APPROVE', 'Run bash command?', '1 approval'],
+    unexpect: ['AUTO-APPROVE', 'Run command?', '1 approval'],
   },
   {
     name: 'bash-approval-approve-twice',
@@ -1440,7 +1440,7 @@ const SCENARIOS = [
     settleMs: 6000,
     frame: 'viewport',
     expect: ['SECOND-BASH-APPROVED', '[/status]details', '[/model]models'],
-    unexpect: ['Run bash command?', '1 approval'],
+    unexpect: ['Run command?', '1 approval'],
   },
   {
     name: 'bash-approval-session-status',
@@ -1450,10 +1450,10 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'approval: ask before privileged actions',
-      'auto-approvals: bash commands',
+      'auto-approvals: commands',
       'AUTO-BASH',
     ],
-    unexpect: ['Run bash command?', '1 approval'],
+    unexpect: ['Run command?', '1 approval'],
   },
   {
     name: 'team-status-empty-subagents-hidden',
@@ -1466,8 +1466,8 @@ const SCENARIOS = [
     bootExpect: '[Ctrl-C]',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
-    expect: ['team: Physicist', 'auto-approvals: bash commands', 'AUTO-BASH'],
-    unexpect: ['Run bash command?', '1 approval', ']subagents'],
+    expect: ['team: Physicist', 'auto-approvals: commands', 'AUTO-BASH'],
+    unexpect: ['Run command?', '1 approval', ']subagents'],
   },
   {
     name: 'agent-proposal-long',
@@ -1823,7 +1823,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'PLAN-GOAL',
-      'auto-approvals: bash commands',
+      'auto-approvals: commands',
       'status: running',
       'goal: active',
       'goal objective: Coordinate a short math proof through CLI chat.',
@@ -2049,7 +2049,7 @@ const SCENARIOS = [
     keys: ['\t', '\t', '\t', '\t'],
     expect: [
       'agent: chat · model: harness-model',
-      'Run bash command?',
+      'Run command?',
       '$ npm run compile:safe',
       'y approve',
       '[main]*',
