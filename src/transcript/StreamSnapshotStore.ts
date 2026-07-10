@@ -661,44 +661,52 @@ export class StreamSnapshotStore {
   // Lifecycle (replace manager evict/evictAll)
   // ==========================================================================
 
+  /**
+   * Single source of truth for every per-stream accumulator/overlay/tracking
+   * collection keyed by `StreamTabId` (excluding `streamVersions`, which
+   * intentionally survives eviction to keep guarding in-flight races, and
+   * `pendingWrites`, which is keyed by `${stream}::${key}` and handled
+   * separately). `allKnownStreams()`, `evict()`, and `evictAll()` all derive
+   * from this one list instead of three independently hand-maintained ones,
+   * so a new per-stream field can't be wired into eviction inconsistently.
+   */
+  private perStreamStores(): {
+    delete(stream: StreamTabId): boolean;
+    clear(): void;
+    keys(): IterableIterator<StreamTabId>;
+  }[] {
+    return [
+      this.outputFiles,
+      this.missingOutputs,
+      this.compileFailures,
+      this.usage,
+      this.usageUnparsed,
+      this.workPlan,
+      this.meta,
+      this.runDescriptors,
+      this.runConfigs,
+      this.seeded,
+      this.seedChains,
+      this.metaOverlays,
+      this.outputFileOverlays,
+      this.usageOverlays,
+      this.kvCache,
+    ];
+  }
+
   /** Every stream id with any in-memory accumulator/overlay state. */
   private allKnownStreams(): Set<StreamTabId> {
-    return new Set<StreamTabId>([
-      ...this.outputFiles.keys(),
-      ...this.missingOutputs.keys(),
-      ...this.compileFailures.keys(),
-      ...this.usage.keys(),
-      ...this.usageUnparsed.keys(),
-      ...this.workPlan.keys(),
-      ...this.meta.keys(),
-      ...this.runDescriptors.keys(),
-      ...this.runConfigs.keys(),
-      ...this.seeded,
-      ...this.seedChains.keys(),
-      ...this.outputFileOverlays.keys(),
-      ...this.usageOverlays.keys(),
-      ...this.kvCache.keys(),
-    ]);
+    const streams = new Set<StreamTabId>();
+    for (const store of this.perStreamStores()) {
+      for (const stream of store.keys()) streams.add(stream);
+    }
+    return streams;
   }
 
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   evict(stream: StreamTabId): void {
     this.bumpStreamVersion(stream);
-    this.outputFiles.delete(stream);
-    this.missingOutputs.delete(stream);
-    this.compileFailures.delete(stream);
-    this.usage.delete(stream);
-    this.usageUnparsed.delete(stream);
-    this.workPlan.delete(stream);
-    this.meta.delete(stream);
-    this.runDescriptors.delete(stream);
-    this.runConfigs.delete(stream);
-    this.seeded.delete(stream);
-    this.seedChains.delete(stream);
-    this.metaOverlays.delete(stream);
-    this.outputFileOverlays.delete(stream);
-    this.usageOverlays.delete(stream);
-    this.kvCache.delete(stream);
+    for (const store of this.perStreamStores()) store.delete(stream);
     for (const key of [...this.pendingWrites.keys()]) {
       if (key.startsWith(`${stream}::`)) this.pendingWrites.delete(key);
     }
@@ -706,21 +714,7 @@ export class StreamSnapshotStore {
 
   evictAll(): void {
     for (const stream of this.allKnownStreams()) this.bumpStreamVersion(stream);
-    this.outputFiles.clear();
-    this.missingOutputs.clear();
-    this.compileFailures.clear();
-    this.usage.clear();
-    this.usageUnparsed.clear();
-    this.workPlan.clear();
-    this.meta.clear();
-    this.runDescriptors.clear();
-    this.runConfigs.clear();
-    this.seeded.clear();
-    this.seedChains.clear();
-    this.metaOverlays.clear();
-    this.outputFileOverlays.clear();
-    this.usageOverlays.clear();
-    this.kvCache.clear();
+    for (const store of this.perStreamStores()) store.clear();
     this.pendingWrites.clear();
   }
 
