@@ -25,13 +25,12 @@ import { assertNever } from '@utils/core';
 
 import {
   activeStreamId,
-  registerChildStreams,
   setParentStream,
   removeStream,
   patchStream,
   type StreamSlice,
 } from './cliState';
-import { mergeChildStreams } from './childExecutions';
+import { applySubagentRoster, isChildStreamRemoved } from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';
@@ -64,6 +63,9 @@ function applySetActiveStream(payload: SetActiveStreamPayload): void {
     activeStreamId.set(undefined);
     return;
   }
+  // A stream identity tombstoned by removeStream is never resurrected; a
+  // fresh activation after removal uses a distinct StreamTabId.
+  if (isChildStreamRemoved(next)) return;
   // Register background child streams without stealing focus from the
   // parent page. This mirrors the extension progress view contract.
   // Capture the agent category so the exit hint can list only resumable
@@ -118,34 +120,11 @@ function applyRoundStage(payload: UpdateRoundStagePayload): void {
   });
 }
 
-function sameActiveChildren(
-  left: readonly ActiveChildInfo[],
-  right: readonly ActiveChildInfo[],
-): boolean {
-  return (
-    left.length === right.length && left.every((item, i) => item === right[i])
-  );
-}
-
 function applyActiveSubagents(payload: {
   parentStreamId: StreamTabId;
   children: readonly ActiveChildInfo[];
 }): void {
-  registerChildStreams(payload.parentStreamId, payload.children);
-  patchStream(payload.parentStreamId, (s) => {
-    const childStreams = mergeChildStreams(s.childStreams, payload.children);
-    if (
-      sameActiveChildren(s.activeSubagents, payload.children) &&
-      sameActiveChildren(s.childStreams, childStreams)
-    ) {
-      return s;
-    }
-    return {
-      ...s,
-      activeSubagents: payload.children,
-      childStreams,
-    };
-  });
+  applySubagentRoster(payload.parentStreamId, payload.children);
 }
 
 function applyActiveProcesses(payload: UpdateActiveProcessesPayload): void {

@@ -14,6 +14,18 @@ type ReadableSignal<T> = Signal.State<T> | Signal.Computed<T>;
  * in the notify callback — the wrapper does that here so consumers see every
  * update.
  *
+ * The notify callback runs synchronously inside the producer's own `.set()`
+ * call, while the signal graph is still in its "notification phase" —
+ * `Signal.subtle.Watcher`'s documented constraint is that no signal read may
+ * recompute a `Computed` during that phase. `useSyncExternalStore` can call
+ * our `getSnapshot` (`signal.get()`) synchronously from within `notify()`
+ * (React's `checkIfSnapshotChanged`), so a watched `Signal.Computed` whose
+ * dependency just changed would recompute — and read further signals — still
+ * inside that phase, tripping the polyfill's assertion. `@lit-labs/signals`'s
+ * own `SignalWatcher` mixin avoids this by deferring every notify to a
+ * microtask (see its `effectWatcher`); we do the same here so `getSnapshot`
+ * only ever runs once the triggering `.set()` call has fully unwound.
+ *
  * The subscribe callback is memoized per signal: `useSyncExternalStore`
  * unsubscribes and resubscribes whenever the subscribe reference changes, so
  * an inline closure would tear down and rebuild the Watcher on every render
@@ -22,9 +34,15 @@ type ReadableSignal<T> = Signal.State<T> | Signal.Computed<T>;
 export function useSignal<T>(signal: ReadableSignal<T>): T {
   const subscribe = useCallback(
     (notify: () => void) => {
+      let notifyPending = false;
       const watcher = new Signal.subtle.Watcher(() => {
-        notify();
-        watcher.watch();
+        if (notifyPending) return;
+        notifyPending = true;
+        queueMicrotask(() => {
+          notifyPending = false;
+          notify();
+          watcher.watch();
+        });
       });
       watcher.watch(signal);
       return () => watcher.unwatch(signal);

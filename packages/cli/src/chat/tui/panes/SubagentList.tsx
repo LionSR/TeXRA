@@ -14,13 +14,10 @@ import {
   liveChildExecutionElapsedKey,
   processTailLines,
 } from '../state/childControls';
-import {
-  childExecutionLabel,
-  visibleSubagentRows,
-} from '../state/childExecutions';
+import { childExecutionLabel } from '../state/childExecutions';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
-import type { ProcessOutputTail, StreamSlice } from '../state/cliState';
+import type { ProcessOutputTail } from '../state/cliState';
 
 interface RowProps {
   readonly child: ActiveChildInfo;
@@ -147,37 +144,40 @@ export function compactRows(params: {
 }
 
 /**
- * Natural (uncapped) compact-row count for a slice's children: one row per
- * visible subagent and active process. Drives the bottom-panel reservation in
- * App so the panel takes only the height it needs.
+ * Natural (uncapped) compact-row count: one row per visible subagent and
+ * active process. Drives the bottom-panel reservation in App so the panel
+ * takes only the height it needs.
  */
-export function subagentPanelRowCount(slice: {
-  readonly activeSubagents: readonly ActiveChildInfo[];
-  readonly childStreams: readonly ActiveChildInfo[];
-  readonly activeProcesses: readonly ActiveChildInfo[];
-}): number {
-  return visibleSubagentRows(slice).length + slice.activeProcesses.length;
+export function subagentPanelRowCount(
+  subagents: readonly ActiveChildInfo[],
+  activeProcesses: readonly ActiveChildInfo[],
+): number {
+  return subagents.length + activeProcesses.length;
 }
 
 export interface SubagentListProps {
   readonly maxRows?: number;
-  readonly slice?: Pick<
-    StreamSlice,
-    'activeProcesses' | 'activeSubagents' | 'childStreams' | 'processOutput'
-  >;
+  /** Already-derived visible subagent rows (retained order, active overlay)
+   *  for the target parent stream — computed once by the caller from
+   *  `childExecutions.ts#visibleSubagentRows` so this stays a stateless
+   *  props-in renderer. */
+  readonly subagents?: readonly ActiveChildInfo[];
+  readonly activeProcesses?: readonly ActiveChildInfo[];
+  readonly processOutput?: ReadonlyMap<string, ProcessOutputTail>;
 }
 
 export function SubagentList(
   props: SubagentListProps = {},
 ): React.JSX.Element | null {
-  const slice = props.slice;
-  const activeProcesses = slice?.activeProcesses ?? [];
-  const processOutput = slice?.processOutput;
-  const subagents = slice ? visibleSubagentRows(slice) : [];
-  const liveElapsedKey = liveChildExecutionElapsedKey(slice);
+  const subagents = props.subagents ?? [];
+  const activeProcesses = props.activeProcesses ?? [];
+  const processOutput = props.processOutput;
+  const liveElapsedKey = liveChildExecutionElapsedKey(
+    subagents,
+    activeProcesses,
+  );
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
 
-  if (!slice) return null;
   if (subagents.length === 0 && activeProcesses.length === 0) return null;
   if (props.maxRows !== undefined && props.maxRows <= 0) return null;
 

@@ -69,6 +69,12 @@ import {
   type ConversationEntry,
 } from '../src/chat/tui/state/cliState';
 import {
+  activeSubagentsFor,
+  applySubagentRoster,
+  childStreamEntries,
+  visibleSubagentRows,
+} from '../src/chat/tui/state/childExecutions';
+import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage,
 } from '../src/chat/tui/state/focusedChildFollowUp';
@@ -704,14 +710,6 @@ function makeChildEntries(agent: string, action: string): ConversationEntry[] {
   ];
 }
 
-function stoppedChild(child: ActiveChildInfo): ActiveChildInfo {
-  return {
-    ...child,
-    status: STREAM_STATUS.STOPPED,
-    startedAt: undefined,
-  };
-}
-
 function isDifferentExecution(
   child: ActiveChildInfo,
   executionId: string,
@@ -1043,12 +1041,18 @@ if (SHOW_CHILDREN) {
   const activeSubagents = childStreams.filter(
     (child) => child.status !== STREAM_STATUS.ERROR,
   );
+  // Seed through the real transition functions rather than poking StreamSlice
+  // fields directly: register the complete roster first (so the errored
+  // child gets a retained row), then re-apply the roster with it omitted —
+  // mirroring the production sequence where a roster stops including a child
+  // once it leaves the runtime's active registry, while its retained history
+  // survives.
+  applySubagentRoster(STREAM_ID, childStreams);
+  applySubagentRoster(STREAM_ID, activeSubagents);
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
     status: STREAM_STATUS.RUNNING,
     runStartedAt: startedAt,
-    activeSubagents,
-    childStreams,
     activeProcesses: [
       {
         kind: 'process' as const,
@@ -1078,16 +1082,11 @@ if (SHOW_CHILDREN) {
     const addNestedChildren =
       SHOW_NESTED_CHILDREN && child.agentName === 'strategy';
     setParentStream(streamId, STREAM_ID);
+    if (addNestedChildren) applySubagentRoster(streamId, [nestedStrategyChild]);
     patchStream(streamId, (slice) => ({
       ...slice,
       status: child.status,
       description: `${child.agentName} sub-workflow`,
-      activeSubagents: addNestedChildren
-        ? [nestedStrategyChild]
-        : slice.activeSubagents,
-      childStreams: addNestedChildren
-        ? [nestedStrategyChild]
-        : slice.childStreams,
       activeProcesses: addNestedChildren
         ? [nestedStrategyProcess]
         : slice.activeProcesses,
@@ -1283,22 +1282,20 @@ if (SHOW_AGENT_PROPOSAL) {
 
 function markHarnessInterrupted(): void {
   canInterrupt = false;
-  const parentSlice = streams.get().get(STREAM_ID);
   const childStreamIds = new Set(
-    [
-      ...(parentSlice?.activeSubagents ?? []),
-      ...(parentSlice?.childStreams ?? []),
-    ]
+    visibleSubagentRows(STREAM_ID, childStreamEntries.get(), streams.get())
       .map((child) => child.childStreamId)
       .filter((streamId): streamId is string => streamId !== undefined),
   );
+  // Clear active roster membership through the real transition function;
+  // each retained row's status comes from its own StreamSlice, set by the
+  // per-child patchStream loop below.
+  applySubagentRoster(STREAM_ID, []);
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
     status: STREAM_STATUS.STOPPED,
     runStartedAt: undefined,
-    activeSubagents: [],
     activeProcesses: [],
-    childStreams: slice.childStreams.map(stoppedChild),
     entries: [
       ...slice.entries,
       {
@@ -1420,10 +1417,15 @@ function markHarnessExecutionStopped(executionId: string): void {
   const parentSlice = streams.get().get(STREAM_ID);
   if (!parentSlice) return;
 
+  const activeSubagentRows = activeSubagentsFor(
+    STREAM_ID,
+    childStreamEntries.get(),
+    streams.get(),
+  );
   const executionRows = [
-    ...parentSlice.activeSubagents,
+    ...activeSubagentRows,
     ...parentSlice.activeProcesses,
-    ...parentSlice.childStreams,
+    ...visibleSubagentRows(STREAM_ID, childStreamEntries.get(), streams.get()),
   ];
   const executionRow = executionRows.find(
     (child) => child.executionId === executionId,
@@ -1431,16 +1433,16 @@ function markHarnessExecutionStopped(executionId: string): void {
   if (!executionRow) return;
 
   const messageId = `harness-killed-${executionId}-${Date.now()}`;
+  applySubagentRoster(
+    STREAM_ID,
+    activeSubagentRows.filter((child) =>
+      isDifferentExecution(child, executionId),
+    ),
+  );
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
-    activeSubagents: slice.activeSubagents.filter((child) =>
-      isDifferentExecution(child, executionId),
-    ),
     activeProcesses: slice.activeProcesses.filter((child) =>
       isDifferentExecution(child, executionId),
-    ),
-    childStreams: slice.childStreams.map((child) =>
-      child.executionId === executionId ? stoppedChild(child) : child,
     ),
     entries: [
       ...slice.entries,
@@ -1476,6 +1478,7 @@ function handleHarnessSubmit(line: string): void {
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
       stoppedFocusedChildFollowUpMessage({
+        childStreamEntries: childStreamEntries.get(),
         parentStream: parentStream.get(),
         streamId: focusedChildRoute.streamId,
         streams: streams.get(),

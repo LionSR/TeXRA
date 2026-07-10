@@ -43,6 +43,10 @@ import {
   nextWrappingHighlightIndex,
   SELECT_LABEL_MAX_COLS,
 } from '../ui/Select';
+import {
+  activeSubagentsFor,
+  type ChildStreamEntries,
+} from '../state/childExecutions';
 import type { StreamSlice } from '../state/cliState';
 
 interface ChildControlPickerProps {
@@ -50,6 +54,7 @@ interface ChildControlPickerProps {
   readonly streamLabel: string | undefined;
   readonly activeStreamId: StreamTabId | undefined;
   readonly availableRows?: number;
+  readonly childStreamEntries: ChildStreamEntries;
   readonly mode: ChildControlMode;
   readonly onClose: () => void;
   readonly onEscapeActionChange?: (action: string) => void;
@@ -739,6 +744,7 @@ export function ChildControlPicker({
   streamLabel,
   activeStreamId,
   availableRows,
+  childStreamEntries,
   mode,
   onClose,
   onEscapeActionChange,
@@ -749,11 +755,25 @@ export function ChildControlPicker({
   streamScopeDetail,
   streams,
 }: ChildControlPickerProps): React.JSX.Element {
-  const liveElapsedKey = liveChildExecutionElapsedKey(slice);
+  const liveElapsedKey = activeStreamId
+    ? liveChildExecutionElapsedKey(
+        activeSubagentsFor(activeStreamId, childStreamEntries, streams),
+        slice?.activeProcesses ?? [],
+      )
+    : undefined;
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
   const items = useMemo(
-    () => (slice ? buildChildControlItems(slice, mode, streams, nowMs) : []),
-    [mode, nowMs, slice, streams],
+    () =>
+      slice && activeStreamId
+        ? buildChildControlItems(
+            activeStreamId,
+            childStreamEntries,
+            streams,
+            mode,
+            nowMs,
+          )
+        : [],
+    [activeStreamId, childStreamEntries, mode, nowMs, slice, streams],
   );
   const [highlight, setHighlight] = useState(0);
   const [tailExecutionId, setTailExecutionId] = useState<string | undefined>(

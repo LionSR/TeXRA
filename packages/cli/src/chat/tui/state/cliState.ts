@@ -3,6 +3,7 @@
  * focus, overlays, exit hints) lives here as signals; formerly one file per
  * slice under `cliState/`.
  */
+import { signal, type Signal } from '@lit-labs/signals';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
@@ -20,8 +21,21 @@ import {
   type TodoItem,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { signal, type Signal } from '@lit-labs/signals';
+import {
+  applyChildStreamRemoval,
+  isChildStreamRemoved,
+  parentStream,
+  resetChildStreamEntries,
+  setParentStream,
+} from './childExecutions';
 import type { ChildControlMode } from './childControls';
+
+// Child-stream relationship topology (roster, retained history, current
+// parent) is owned by `childExecutions.ts`; re-exported here so every
+// existing `import { parentStream, setParentStream } from './cliState'`
+// consumer is unchanged. See that module for the map, transitions, and
+// selectors.
+export { parentStream, setParentStream };
 
 // ---------------------------------------------------------------------------
 // types
@@ -130,11 +144,7 @@ export interface StreamSlice {
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUps: number;
   readonly queuedFollowUpMessages: readonly string[];
-  readonly activeSubagents: readonly ActiveChildInfo[];
   readonly activeProcesses: readonly ActiveChildInfo[];
-  /** Child streams seen for this parent. This keeps completed/waiting
-   * subagent pages addressable after they leave the active list. */
-  readonly childStreams: readonly ActiveChildInfo[];
   readonly todos: readonly TodoItem[];
   readonly plan: Plan | null;
   /** Tailed stdout/stderr per execution id; latest only — capped at
@@ -185,9 +195,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     entries: [],
     queuedFollowUps: 0,
     queuedFollowUpMessages: [],
-    activeSubagents: [],
     activeProcesses: [],
-    childStreams: [],
     todos: [],
     plan: null,
     processOutput: new Map(),
@@ -242,43 +250,15 @@ function streamSliceWithStatus(
   return { ...slice, status, substate, runStartedAt };
 }
 
-function updateChildStatusReferences(
-  children: readonly ActiveChildInfo[],
-  childStreamId: StreamTabId,
-  status: StreamLifecycleStatus,
-): readonly ActiveChildInfo[] {
-  let out: ActiveChildInfo[] | undefined;
-  children.forEach((child, index) => {
-    if (
-      child.kind !== 'subagent' ||
-      child.childStreamId !== childStreamId ||
-      child.status === status
-    ) {
-      return;
-    }
-    out ??= [...children];
-    out[index] = { ...child, status };
-  });
-  return out ?? children;
-}
-
-function withMirroredChildStreamStatus(
-  slice: StreamSlice,
-  childStreamId: StreamTabId,
-  status: StreamLifecycleStatus,
-): StreamSlice {
-  return mapChildStreamReferenceLists(slice, (children) =>
-    updateChildStatusReferences(children, childStreamId, status),
-  );
-}
-
 /**
  * Apply a stream-status event once to the CLI state mirror.
  *
  * Runtime status still originates in StreamStatusService, but TUI renderers
- * should read only StreamSlice data. Updating retained parent child rows here
- * keeps side panels, tab labels, focus routing, and follow-up targeting on the
- * same state snapshot instead of re-querying the runtime service at render time.
+ * should read only StreamSlice data. The child `StreamSlice` is the single
+ * status owner for retained/active child rows too: `childExecutions.ts`'s
+ * selectors read status from here directly, so no copy into another
+ * collection is needed. A status for a stream tombstoned by `removeStream`
+ * is ignored — removal is final for that stream identity.
  */
 export function setStreamStatusInCliState({
   nowMs = Date.now(),
@@ -291,9 +271,8 @@ export function setStreamStatusInCliState({
   readonly substate?: StreamSubstate;
   readonly streamId: StreamTabId;
 }): void {
+  if (isChildStreamRemoved(streamId)) return;
   const current = STREAMS.get();
-  let out: Map<StreamTabId, StreamSlice> | undefined;
-
   const existingSlice = current.get(streamId);
   const targetSlice = streamSliceWithStatus(
     existingSlice ?? emptySlice(streamId),
@@ -301,58 +280,10 @@ export function setStreamStatusInCliState({
     substate,
     nowMs,
   );
-  if (targetSlice !== existingSlice) {
-    out = new Map(current);
-    out.set(streamId, targetSlice);
-  }
-
-  const readable = out ?? current;
-  for (const [id, slice] of readable) {
-    const next = withMirroredChildStreamStatus(slice, streamId, status);
-    if (next === slice) continue;
-    out ??= new Map(current);
-    out.set(id, next);
-  }
-
-  if (out) STREAMS.set(out);
-}
-
-function mapChildStreamReferenceLists(
-  slice: StreamSlice,
-  mapChildren: (
-    children: readonly ActiveChildInfo[],
-  ) => readonly ActiveChildInfo[],
-): StreamSlice {
-  const activeSubagents = mapChildren(slice.activeSubagents);
-  const activeProcesses = mapChildren(slice.activeProcesses);
-  const childStreams = mapChildren(slice.childStreams);
-  if (
-    activeSubagents === slice.activeSubagents &&
-    activeProcesses === slice.activeProcesses &&
-    childStreams === slice.childStreams
-  ) {
-    return slice;
-  }
-  return { ...slice, activeSubagents, activeProcesses, childStreams };
-}
-
-function removeChildStreamReference(
-  children: readonly ActiveChildInfo[],
-  streamId: StreamTabId,
-): readonly ActiveChildInfo[] {
-  const next = children.filter(
-    (child) => child.kind !== 'subagent' || child.childStreamId !== streamId,
-  );
-  return next.length === children.length ? children : next;
-}
-
-function scrubChildStreamReferences(
-  slice: StreamSlice,
-  streamId: StreamTabId,
-): StreamSlice {
-  return mapChildStreamReferenceLists(slice, (children) =>
-    removeChildStreamReference(children, streamId),
-  );
+  if (targetSlice === existingSlice) return;
+  const out = new Map(current);
+  out.set(streamId, targetSlice);
+  STREAMS.set(out);
 }
 
 // ---------------------------------------------------------------------------
@@ -410,74 +341,6 @@ export const activeStreamId = ACTIVE_STREAM_ID;
 export const rootStreamId = ROOT_STREAM_ID;
 /** Whether starting a new root run is currently available. */
 export const rootRunStartAvailable = ROOT_RUN_START_AVAILABLE;
-
-// ---------------------------------------------------------------------------
-// parentStreamSlice
-// ---------------------------------------------------------------------------
-
-// child -> parent map populated from child stream ownership events. The focus
-// cycle (Ctrl-A / Ctrl-B) walks this when stepping back to the parent, and
-// transcript rendering uses it to keep child streams scoped to their own
-// history.
-
-const PARENT_STREAM = signal<ReadonlyMap<StreamTabId, StreamTabId>>(new Map());
-
-/** child -> parent stream-id map. */
-export const parentStream = PARENT_STREAM;
-
-interface ParentStreamEdgeUpdate {
-  readonly childStreamId?: StreamTabId;
-  readonly parentStreamId: StreamTabId | null | undefined;
-}
-
-function parentStreamMapUpdate(
-  current: ReadonlyMap<StreamTabId, StreamTabId>,
-  updates: readonly ParentStreamEdgeUpdate[],
-): Map<StreamTabId, StreamTabId> | undefined {
-  let out: Map<StreamTabId, StreamTabId> | undefined;
-  for (const { childStreamId, parentStreamId } of updates) {
-    if (!childStreamId) continue;
-    const readable = out ?? current;
-    if (parentStreamId == null) {
-      if (!readable.has(childStreamId)) continue;
-      out ??= new Map(current);
-      out.delete(childStreamId);
-      continue;
-    }
-    if (readable.get(childStreamId) === parentStreamId) continue;
-    out ??= new Map(current);
-    out.set(childStreamId, parentStreamId);
-  }
-  return out;
-}
-
-function commitParentStreamEdges(
-  updates: readonly ParentStreamEdgeUpdate[],
-): void {
-  const next = parentStreamMapUpdate(PARENT_STREAM.get(), updates);
-  if (next) PARENT_STREAM.set(next);
-}
-
-export function setParentStream(
-  childStreamId: StreamTabId,
-  parentStreamId: StreamTabId | null | undefined,
-): void {
-  // A null parent means the runtime promoted this child to a top-level stream.
-  commitParentStreamEdges([{ childStreamId, parentStreamId }]);
-}
-
-export function registerChildStreams(
-  parentStreamId: StreamTabId,
-  children: readonly ActiveChildInfo[],
-): void {
-  commitParentStreamEdges(
-    children.map((child) => ({
-      childStreamId:
-        child.kind === 'subagent' ? child.childStreamId : undefined,
-      parentStreamId,
-    })),
-  );
-}
 
 // ---------------------------------------------------------------------------
 // foregroundOverlaySlice
@@ -576,33 +439,22 @@ export function bumpCodexPreferenceVersion(): void {
 // ---------------------------------------------------------------------------
 
 // Cross-slice cleanup when a stream goes away: drops it from the streams map,
-// scrubs any child-reference lists that pointed at it, clears focus if it was
-// active, and drops parent-map edges that touched it.
+// clears focus if it was active, and tombstones the stream identity in the
+// child-stream relationship map (childExecutions.ts) so no later roster,
+// edge, attachment, or status fact for it — or, if it was itself a parent,
+// for its former children — can resurrect it.
 
 export function removeStream(streamId: StreamTabId): void {
   const current = streams.get();
-  const out = new Map(current);
-  let changed = out.delete(streamId);
-  for (const [id, slice] of out) {
-    const next = scrubChildStreamReferences(slice, streamId);
-    if (next === slice) continue;
-    out.set(id, next);
-    changed = true;
+  if (current.has(streamId)) {
+    const out = new Map(current);
+    out.delete(streamId);
+    streams.set(out);
   }
-  if (changed) streams.set(out);
   if (activeStreamId.get() === streamId) {
     activeStreamId.set(undefined);
   }
-  // Drop any parent-map edges that touched this stream so the focus cycle
-  // never lands on a stale id.
-  const parents = parentStream.get();
-  let nextParents: Map<StreamTabId, StreamTabId> | undefined;
-  for (const [child, parent] of parents) {
-    if (child !== streamId && parent !== streamId) continue;
-    if (!nextParents) nextParents = new Map(parents);
-    nextParents.delete(child);
-  }
-  if (nextParents) parentStream.set(nextParents);
+  applyChildStreamRemoval(streamId);
 }
 
 // ---------------------------------------------------------------------------
@@ -626,7 +478,7 @@ export function resetCliState(
   rootStreamId.set(undefined);
   streams.set(new Map());
   rootRunStartAvailable.set(true);
-  parentStream.set(new Map());
+  resetChildStreamEntries();
   activeForm.set(undefined);
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
