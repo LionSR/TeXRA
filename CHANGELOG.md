@@ -60,6 +60,14 @@ All notable changes to this project will be documented in this file.
   (`/executions/{id}/result`), so follow-on agents can chain on data instead
   of parsing prose.
 
+### CLI
+
+#### Bug Fixes
+
+- **NDJSON records preserve their emission order under stdout backpressure** —
+  progress, command results, doctor output, and structured error/instruction
+  records now share one queued stdout writer.
+
 ### Desktop
 
 #### Bug Fixes
