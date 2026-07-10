@@ -55,7 +55,7 @@ describe('PromptBuilder', () => {
 
     assert.match(
       prompts.instructionSuffix,
-      /do not inspect or write unpinned memory/,
+      /do not read unpinned memory files or write memory/,
     );
     assert.match(
       prompts.instructionSuffix,
@@ -78,13 +78,18 @@ describe('PromptBuilder', () => {
       { resolvedToolNames: ['memory'] },
     );
 
+    // Behavioral contract, not exact prose (review note on #7959): pinned
+    // files must be individually viewed at session start — a directory
+    // listing alone does not load their content — and this must hold even
+    // for self-contained-looking requests.
+    assert.match(prompts.instructionSuffix, /Pinned memories are always loaded/);
     assert.match(
       prompts.instructionSuffix,
-      /Always consult pinned memories at session start, even for requests that otherwise look self-contained/,
+      /`view` each \[pinned\] file|`view` each pinned file|read each pinned memory file/,
     );
     assert.match(
       prompts.instructionSuffix,
-      /Pinned memories are always loaded: use the `view` command with path `\/memories` at session start regardless of how self-contained the request looks/,
+      /regardless of how self-contained|even for requests that otherwise look self-contained/,
     );
     assert.doesNotMatch(
       prompts.instructionSuffix,
