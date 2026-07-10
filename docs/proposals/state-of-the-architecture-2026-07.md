@@ -78,7 +78,8 @@ per-run plumbing; desktop `platform/index.ts` 226; shared node defaults 928.
 
 **Plane element census.** SessionFact 10 arms; RunFactPayloads 6 keys (+
 `'runFact.'` prefix protocol, dated v0.41); RuntimeInteraction 11;
-RuntimePresentation 5; AppSignals 10 keys; AgentEvent 20 arms;
+RuntimePresentation 5; AppSignals 10 keys; AgentEvent 20 arms (recounted at
+HEAD `4363b4089`, post-pin: 3 arms landed after the `4b402d75a` review pin);
 CliProgressEventPayloads 22 keys (frozen, no deprecation clock started);
 legacy `STREAM_STATUS` cluster 94 references / 24 prod files. Element census:
 peak ~43 → now ~38 → honest floor **~31-33**, not the promised ~26 (§6).
@@ -449,9 +450,10 @@ not hypothetical: the agent-dir bootstrap duplicated across CLI+desktop has
 **already diverged** (different `GlobalStateKey`, CLI-only re-entrancy guard),
 and desktop silently lacks runtime skill sources entirely — the exact class
 `nodeHost.ts`'s own doc comment ("so the hosts cannot drift") was written to
-prevent. Contrast fences verified: `runAgent` = 92 LoC, AgentEvent = 20 arms,
-AgentConfigPayload requires only {agent, model} — the run surface is genuinely
-SDK-shaped.
+prevent. Contrast fences verified: `runAgent` = 92 LoC, AgentEvent = 20 arms
+(recounted at HEAD `4363b4089`, post-pin: 3 arms landed after the
+`4b402d75a` review pin), AgentConfigPayload requires only {agent, model} —
+the run surface is genuinely SDK-shaped.
 
 **Verdict.** Boundary-completion inside an existing element (`nodeHost.ts`,
 142 LoC, already half-owns the sequence). **Direction:** fold the agent-dir
@@ -914,8 +916,9 @@ reference examples. Everything in this section is sequenced against that.
 
 1. **The bootstrap incantation** (NS-1, strategic): ~20 deep imports + 9-10
    ordered untyped registrations, 3 welded to resourcesPath; already drifted
-   between hosts. The run API itself is fine (runAgent 92 LoC, AgentEvent 17
-   arms, 2-required-field config).
+   between hosts. The run API itself is fine (runAgent 92 LoC, AgentEvent 20
+   arms — recounted at HEAD `4363b4089`, post-pin: 3 arms landed after the
+   `4b402d75a` review pin — 2-required-field config).
 2. **The per-run ceremony** (NS-3): 265-LoC skeleton, 6 paired detaches,
    documented ordering traps; the runtime's persistence bookkeeping leaks into
    every host.
