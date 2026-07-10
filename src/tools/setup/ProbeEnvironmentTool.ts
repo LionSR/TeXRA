@@ -65,13 +65,17 @@ export class ProbeEnvironmentTool extends defineTool({
     const homedir = safeHomedir() ?? '<unresolved>';
     const extendedPath = extendEnvPath();
     const pm = detectPackageManager();
+    // Authentication verifies a configured relay token and primes the shared
+    // status cache. Credential readiness must read that settled state.
+    const auth = await platform.auth.getStatus().catch(() => ({
+      authenticated: false as const,
+    }));
 
     const [
       coreTools,
       optionalTools,
       apiKeys,
       hasUsableCredential,
-      auth,
       githubToken,
     ] = await Promise.all([
       Promise.all(PROBED_CORE_TOOLS.map(checkTool)),
@@ -94,9 +98,6 @@ export class ProbeEnvironmentTool extends defineTool({
           { cause: err },
         );
       }),
-      platform.auth.getStatus().catch(() => ({
-        authenticated: false as const,
-      })),
       platform.secrets.gitHubTokenExists().catch(() => 'none' as const),
     ]);
 
