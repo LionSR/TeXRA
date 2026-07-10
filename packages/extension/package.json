@@ -1884,55 +1884,55 @@
     "chatSkills": [
       {
         "name": "inline-paper-critic",
-        "path": "resources/skills/inline-paper-critic"
+        "path": "resources/skills/inline-paper-critic/SKILL.md"
       },
       {
         "name": "lean-blueprint",
-        "path": "resources/skills/lean-blueprint"
+        "path": "resources/skills/lean-blueprint/SKILL.md"
       },
       {
         "name": "lean-proof-assistant",
-        "path": "resources/skills/lean-proof-assistant"
+        "path": "resources/skills/lean-proof-assistant/SKILL.md"
       },
       {
         "name": "lean-search",
-        "path": "resources/skills/lean-search"
+        "path": "resources/skills/lean-search/SKILL.md"
       },
       {
         "name": "lean-simplifier",
-        "path": "resources/skills/lean-simplifier"
+        "path": "resources/skills/lean-simplifier/SKILL.md"
       },
       {
         "name": "literature-search",
-        "path": "resources/skills/literature-search"
+        "path": "resources/skills/literature-search/SKILL.md"
       },
       {
         "name": "manuscript-review",
-        "path": "resources/skills/manuscript-review"
+        "path": "resources/skills/manuscript-review/SKILL.md"
       },
       {
         "name": "math-ocr",
-        "path": "resources/skills/math-ocr"
+        "path": "resources/skills/math-ocr/SKILL.md"
       },
       {
         "name": "mathematical-enhancer",
-        "path": "resources/skills/mathematical-enhancer"
+        "path": "resources/skills/mathematical-enhancer/SKILL.md"
       },
       {
         "name": "scientific-presenter",
-        "path": "resources/skills/scientific-presenter"
+        "path": "resources/skills/scientific-presenter/SKILL.md"
       },
       {
         "name": "scientific-simplifier",
-        "path": "resources/skills/scientific-simplifier"
+        "path": "resources/skills/scientific-simplifier/SKILL.md"
       },
       {
         "name": "tikz-figure-builder",
-        "path": "resources/skills/tikz-figure-builder"
+        "path": "resources/skills/tikz-figure-builder/SKILL.md"
       },
       {
         "name": "writing-commenter",
-        "path": "resources/skills/writing-commenter"
+        "path": "resources/skills/writing-commenter/SKILL.md"
       }
     ]
   },

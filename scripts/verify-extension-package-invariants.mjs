@@ -4,6 +4,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
+  collectRelativeFiles,
   EXCLUDED_TRACE_VIEWER_DIR,
   extensionManifestSnapshot,
   readJson,
@@ -144,20 +145,6 @@ function hasFiles(relativeDir) {
   return false;
 }
 
-function collectFiles(directory, prefix = '') {
-  const files = [];
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    const relativePath = path.join(prefix, entry.name);
-    const absolutePath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...collectFiles(absolutePath, relativePath));
-    } else if (entry.isFile()) {
-      files.push(relativePath);
-    }
-  }
-  return files.sort();
-}
-
 function buildSnapshot() {
   const packageJson = readJson(packagePath);
   return {
@@ -226,10 +213,14 @@ function verifyAssets(snapshot, failures) {
 function verifyBundledSkills(failures) {
   const sourceDir = path.join(rootDir, 'skills');
   const packagedDir = path.join(packageDir, 'resources', 'skills');
-  if (!fs.existsSync(sourceDir) || !fs.existsSync(packagedDir)) return;
+  const sourceExists = fs.existsSync(sourceDir);
+  const packagedExists = fs.existsSync(packagedDir);
+  assert(sourceExists, 'Canonical skills directory is missing.', failures);
+  assert(packagedExists, 'Packaged extension skills are missing.', failures);
+  if (!sourceExists || !packagedExists) return;
 
-  const sourceFiles = collectFiles(sourceDir);
-  const packagedFiles = collectFiles(packagedDir);
+  const sourceFiles = collectRelativeFiles(sourceDir);
+  const packagedFiles = collectRelativeFiles(packagedDir);
   assert(
     JSON.stringify(packagedFiles) === JSON.stringify(sourceFiles),
     'Packaged extension skills do not match the canonical skills tree.',
@@ -243,6 +234,27 @@ function verifyBundledSkills(failures) {
         .readFileSync(path.join(packagedDir, relativePath))
         .equals(fs.readFileSync(path.join(sourceDir, relativePath))),
       `Packaged extension skill differs from canonical source: ${relativePath}`,
+      failures,
+    );
+  }
+
+  const packageJson = readJson(packagePath);
+  const chatSkills = packageJson.contributes?.chatSkills ?? [];
+  const expectedNames = sourceFiles
+    .filter((relativePath) => /^[^/]+\/SKILL\.md$/.test(relativePath))
+    .map((relativePath) => relativePath.split('/')[0]);
+  assert(
+    JSON.stringify(chatSkills.map((skill) => skill.name).toSorted()) ===
+      JSON.stringify(expectedNames.toSorted()),
+    'Extension chatSkills must register every canonical bundled skill.',
+    failures,
+  );
+
+  for (const skill of chatSkills) {
+    const expectedPath = `resources/skills/${skill.name}/SKILL.md`;
+    assert(
+      skill.path === expectedPath,
+      `Chat skill ${skill.name} must point to ${expectedPath}.`,
       failures,
     );
   }

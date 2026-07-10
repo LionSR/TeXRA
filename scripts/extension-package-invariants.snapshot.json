@@ -35,55 +35,55 @@
       "chatSkills": [
         {
           "name": "inline-paper-critic",
-          "path": "resources/skills/inline-paper-critic"
+          "path": "resources/skills/inline-paper-critic/SKILL.md"
         },
         {
           "name": "lean-blueprint",
-          "path": "resources/skills/lean-blueprint"
+          "path": "resources/skills/lean-blueprint/SKILL.md"
         },
         {
           "name": "lean-proof-assistant",
-          "path": "resources/skills/lean-proof-assistant"
+          "path": "resources/skills/lean-proof-assistant/SKILL.md"
         },
         {
           "name": "lean-search",
-          "path": "resources/skills/lean-search"
+          "path": "resources/skills/lean-search/SKILL.md"
         },
         {
           "name": "lean-simplifier",
-          "path": "resources/skills/lean-simplifier"
+          "path": "resources/skills/lean-simplifier/SKILL.md"
         },
         {
           "name": "literature-search",
-          "path": "resources/skills/literature-search"
+          "path": "resources/skills/literature-search/SKILL.md"
         },
         {
           "name": "manuscript-review",
-          "path": "resources/skills/manuscript-review"
+          "path": "resources/skills/manuscript-review/SKILL.md"
         },
         {
           "name": "math-ocr",
-          "path": "resources/skills/math-ocr"
+          "path": "resources/skills/math-ocr/SKILL.md"
         },
         {
           "name": "mathematical-enhancer",
-          "path": "resources/skills/mathematical-enhancer"
+          "path": "resources/skills/mathematical-enhancer/SKILL.md"
         },
         {
           "name": "scientific-presenter",
-          "path": "resources/skills/scientific-presenter"
+          "path": "resources/skills/scientific-presenter/SKILL.md"
         },
         {
           "name": "scientific-simplifier",
-          "path": "resources/skills/scientific-simplifier"
+          "path": "resources/skills/scientific-simplifier/SKILL.md"
         },
         {
           "name": "tikz-figure-builder",
-          "path": "resources/skills/tikz-figure-builder"
+          "path": "resources/skills/tikz-figure-builder/SKILL.md"
         },
         {
           "name": "writing-commenter",
-          "path": "resources/skills/writing-commenter"
+          "path": "resources/skills/writing-commenter/SKILL.md"
         }
       ],
       "languageModelTools": [
@@ -760,19 +760,19 @@
   "manifestAssetReferences": [
     "resources/logo-128x128.svg",
     "resources/logo-512x512.png",
-    "resources/skills/inline-paper-critic",
-    "resources/skills/lean-blueprint",
-    "resources/skills/lean-proof-assistant",
-    "resources/skills/lean-search",
-    "resources/skills/lean-simplifier",
-    "resources/skills/literature-search",
-    "resources/skills/manuscript-review",
-    "resources/skills/math-ocr",
-    "resources/skills/mathematical-enhancer",
-    "resources/skills/scientific-presenter",
-    "resources/skills/scientific-simplifier",
-    "resources/skills/tikz-figure-builder",
-    "resources/skills/writing-commenter",
+    "resources/skills/inline-paper-critic/SKILL.md",
+    "resources/skills/lean-blueprint/SKILL.md",
+    "resources/skills/lean-proof-assistant/SKILL.md",
+    "resources/skills/lean-search/SKILL.md",
+    "resources/skills/lean-simplifier/SKILL.md",
+    "resources/skills/literature-search/SKILL.md",
+    "resources/skills/manuscript-review/SKILL.md",
+    "resources/skills/math-ocr/SKILL.md",
+    "resources/skills/mathematical-enhancer/SKILL.md",
+    "resources/skills/scientific-presenter/SKILL.md",
+    "resources/skills/scientific-simplifier/SKILL.md",
+    "resources/skills/tikz-figure-builder/SKILL.md",
+    "resources/skills/writing-commenter/SKILL.md",
     "resources/walkthroughs/getting-started.md",
     "resources/walkthroughs/media/agent-model-selection.png",
     "resources/walkthroughs/media/api-key-setup.png",
