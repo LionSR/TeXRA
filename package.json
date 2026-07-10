@@ -7,7 +7,6 @@
     "packages/*"
   ],
   "scripts": {
-    "vscode:prepublish": "[ \"$SKIP_VSCE_PREPUBLISH\" = \"1\" ] || npm run package",
     "compile": "corepack pnpm --filter texra compile",
     "watch": "corepack pnpm --filter texra watch",
     "package": "corepack pnpm --filter texra package",
@@ -17,8 +16,6 @@
     "test:watch": "vitest --config vitest.config.mjs",
     "test:kernel": "vitest run --config vitest.config.mjs",
     "validate:tui": "corepack pnpm --filter @texra-ai/cli validate:tui",
-    "workspace:typecheck": "corepack pnpm --recursive --if-present typecheck",
-    "workspace:build": "corepack pnpm --recursive --if-present build",
     "desktop:build": "corepack pnpm --filter @texra/trace-viewer run build && corepack pnpm --filter @texra/desktop build",
     "desktop:package:local": "node scripts/run-desktop-package-local.mjs",
     "desktop:package:dist": "corepack pnpm run desktop:build && corepack pnpm --filter @texra/desktop package:dist",
