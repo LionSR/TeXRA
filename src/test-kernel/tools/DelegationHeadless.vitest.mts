@@ -260,6 +260,38 @@ describe('headless delegation', () => {
     );
   });
 
+  it('carries the current parent instruction into the subagent constraint context', async () => {
+    const parentInstruction =
+      'Do not use plans, todos, files, bash, Wolfram, or other child tools. Delegate exactly once.';
+    await withToolFileInteractionContext(
+      {
+        tracker: {} as never,
+        userInstruction: parentInstruction,
+      },
+      () =>
+        withRunContext(
+          createRunContext({
+            runtimeHost: runtimeHost(),
+            streamId: 'parent-stream',
+            executionId: 'parent-exec',
+            model: 'deepseekT',
+          }),
+          () => callDelegateReview(),
+        ),
+    );
+
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rootUserInstruction: parentInstruction,
+        instruction: expect.stringContaining(
+          `Parent user request (constraint context only):\n${parentInstruction}`,
+        ),
+      }),
+      expect.any(String),
+      expect.anything(),
+    );
+  });
+
   it('tells orchestrators that delegated instructions must carry parent constraints', () => {
     const parameters = new DelegateAgentTool().definition.parameters as {
       properties?: Record<string, { description?: string }>;

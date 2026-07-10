@@ -35,6 +35,8 @@ export interface ToolCallHooks {
 export interface ToolCallContext {
   toolCallId?: string;
   tracker: FileInteractionState;
+  /** User instruction that led to this tool call, when available. */
+  userInstruction?: string;
   /** Plan and todo progress state. Absent in contexts without work-plan support. */
   workPlanState?: WorkPlanState;
   /** Aborts when the current tool call is cancelled by the owning agent run. */

@@ -214,9 +214,23 @@ describe('desktop main-view IPC', () => {
 
     rendererListener?.(
       { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
+      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY, view: 'progress' },
     );
-    expect(sends).toEqual([
+    expect(sends).toEqual([]);
+
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY, view: 'main' },
+    );
+    // Filter to the theme/debug-mode pushes: WEBVIEW_READY(view:'main') is a
+    // broadcast, so sibling handlers (e.g. main-view startup) also react.
+    expect(
+      sends.filter(({ message }) =>
+        [COMMON_COMMANDS.THEME_SET, COMMON_COMMANDS.DEBUG_MODE_SET].includes(
+          (message as { command?: string }).command as never,
+        ),
+      ),
+    ).toEqual([
       {
         channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
         message: { command: COMMON_COMMANDS.THEME_SET, theme: 'dark' },

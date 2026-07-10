@@ -4,10 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Bundled skills are available in installed extensions** — VSIX packages now
+  include the built-in skill definitions, so enabling runtime skills exposes
+  the same bundled catalog in installed extensions as in development.
+
 ### Shared (all surfaces)
 
 #### Bug Fixes
 
+- **Workflow LaTeX compilation resolves source directories consistently** —
+  compile checks and latexdiff PDF builds now share one workspace-source
+  resolver, and a real workspace folder named `r1`, `r2`, and so on is no
+  longer mistaken for a run-storage round folder.
 - **OpenRouter transient server errors no longer stall a request for up to an
   hour** — the OpenRouter SDK's built-in retry window is now capped at 30
   seconds, so a persistent 5XX surfaces through TeXRA's visible retry/failure
@@ -59,6 +71,17 @@ All notable changes to this project will be documented in this file.
   references, outcome, and cost are readable as JSON via the executions tool
   (`/executions/{id}/result`), so follow-on agents can chain on data instead
   of parsing prose.
+
+### CLI
+
+#### Bug Fixes
+
+- **Ctrl-C reliably cancels queued-follow-up auto-resume** — stopping while an
+  automatic resume is still loading configuration or session data no longer
+  allows that stale preparation to restart the cancelled stream.
+- **NDJSON records preserve their emission order under stdout backpressure** —
+  progress, command results, doctor output, and structured error/instruction
+  records now share one queued stdout writer.
 
 ### Desktop
 
