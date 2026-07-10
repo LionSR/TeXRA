@@ -97,7 +97,9 @@ interface DesktopViewStateIpcModule {
       getTheme?: () => 'dark' | 'light' | 'high-contrast';
     },
   ): {
-    handleMessage(message: { command: string }): boolean;
+    handleMessage(
+      message: { command: string } & Record<string, unknown>,
+    ): boolean;
     dispose(): void;
   };
 }
@@ -206,9 +208,22 @@ describe('desktop IPC adapters', () => {
       { debugMode: true },
     );
 
+    // WEBVIEW_READY is a broadcast every webview posts on mount; only the
+    // main webview's readiness should sync theme/debug-mode here.
     expect(
-      stateIpc.handleMessage({ command: MAIN_VIEW_COMMANDS.WEBVIEW_READY }),
-    ).toBe(true);
+      stateIpc.handleMessage({
+        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'progress',
+      }),
+    ).toBe(false);
+    expect(postToRenderer).not.toHaveBeenCalled();
+
+    expect(
+      stateIpc.handleMessage({
+        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'main',
+      }),
+    ).toBe(false);
     expect(postToRenderer).toHaveBeenCalledWith({
       command: COMMON_COMMANDS.THEME_SET,
       theme: 'dark',
