@@ -327,7 +327,17 @@ const AgentWorkspaceSnapshotFieldsSchema = z.object({
   workPlan: WorkPlanSnapshotSchema,
 });
 
-const AgentWorkspaceCurrentSnapshotSchema = z
+/**
+ * Strict canonical shape of an `AgentWorkspaceState` snapshot — the "current
+ * format" arm of `AgentWorkspaceStateSnapshotSchema`, with no legacy fallback.
+ * Exported for downstream code (e.g. per-round node prep, or a
+ * `PersistedFlow`'s repeated defense-in-depth revalidation) that only ever
+ * handles a snapshot already produced by `toSnapshot()`/`fromSnapshot()` and
+ * must never re-run the legacy-migration arms in `AgentWorkspaceStateSnapshotSchema`.
+ * The one-time migration from a persisted/legacy shape belongs solely at the
+ * hydration boundary (see `AgentWorkspaceState.fromSnapshot`).
+ */
+export const AgentWorkspaceCurrentSnapshotSchema = z
   .looseObject({ workPlan: z.unknown() })
   .refine(
     (record) => Object.hasOwn(record, 'workPlan') && record.workPlan != null,
@@ -416,8 +426,39 @@ export class AgentWorkspaceState {
     return AgentWorkspaceStateSnapshotSchema.parse({});
   }
 
+  /**
+   * Boundary hydration: accepts an untrusted/possibly-legacy persisted
+   * snapshot (union with the `todos`/`plan` fallback arm — see
+   * `AgentWorkspaceStateSnapshotSchema`). Call this exactly once, where a
+   * persisted snapshot first hydrates into a session (session-init resume in
+   * `ToolUsePrepareNode`, or a reflection flow's resume read in
+   * `runReflectionFlow`). Everywhere else — per-round node prep re-deriving
+   * state from `toSnapshot()` output already produced this run — use
+   * `fromCanonicalSnapshot` instead so the legacy arm is never re-evaluated.
+   */
   static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
     const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
+    return AgentWorkspaceState.fromParsedFields(parsed);
+  }
+
+  /**
+   * Rebuild from a snapshot already known to be canonical (e.g. round-tripped
+   * through this class's own `toSnapshot()`). Validates only the strict
+   * canonical shape — never the legacy `todos`/`plan` fallback arm — so
+   * repeated per-round calls (tool-use `ToolUseCycleNode`, reflection
+   * `ResponseCycleNode`/`MediaExtractionNode`) don't pay for, or silently
+   * accept, a migration that can only ever apply at first hydration.
+   */
+  static fromCanonicalSnapshot(
+    snapshot: AgentWorkspaceSnapshot,
+  ): AgentWorkspaceState {
+    const parsed = AgentWorkspaceCurrentSnapshotSchema.parse(snapshot);
+    return AgentWorkspaceState.fromParsedFields(parsed);
+  }
+
+  private static fromParsedFields(
+    parsed: AgentWorkspaceSnapshot,
+  ): AgentWorkspaceState {
     return new AgentWorkspaceState(
       parsed.assembly,
       MediaAttachmentState.fromSnapshot(parsed.media),
