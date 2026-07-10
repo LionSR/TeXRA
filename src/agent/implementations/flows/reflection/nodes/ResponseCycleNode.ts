@@ -53,7 +53,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     // shared.workspaceSnapshot was produced by this same node's own
     // toSnapshot() last round (or by the flow's one-time resume hydration in
     // runReflectionFlow) — never raw persisted/legacy data — so re-deriving
-    // it here uses the canonical-only path (see AgentWorkspaceState.fromSnapshot).
+    // it here uses the canonical-only path (see AgentWorkspaceState.fromCanonicalSnapshot).
     const workspace = AgentWorkspaceState.fromCanonicalSnapshot(
       shared.workspaceSnapshot,
     );
