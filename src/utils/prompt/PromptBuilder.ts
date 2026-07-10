@@ -33,12 +33,12 @@ The following imported skills are available. If one is relevant, inspect its SKI
 
 /** Base memory instructions for all agents with memory enabled. */
 const MEMORY_TOOL_INSTRUCTIONS = `<memory_tool_instructions>
-IMPORTANT: ALWAYS VIEW YOUR MEMORY DIRECTORY BEFORE DOING ANYTHING ELSE.
+Use memory when the request may depend on prior sessions, durable user preferences, or shared agent context. For a self-contained request, do not inspect or write memory merely because the tool is available.
 
 MEMORY PROTOCOL:
-1. Use the \`view\` command of your \`memory\` tool to check for earlier progress.
+1. When memory is relevant, use the \`view\` command with path \`/memories\` to check for earlier progress.
 2. ... (work on the task) ...
-   - As you make progress, record status, progress, and thoughts in your memory.
+   - For long-running work that needs continuity, record durable progress and decisions in memory.
    - Record user preferences: writing style, coding conventions, formatting requirements, workflow preferences, and any explicit or implicit guidelines the user follows.
    - When git is available, look into git history (commit messages, PR descriptions, recent changes) to understand project context, coding patterns, and conventions.
 
@@ -49,7 +49,7 @@ Note: when editing your memory folder, always try to keep its content up-to-date
 PINNED MEMORIES:
 Some memories may be marked as "pinned" (shown with [pinned] in directory listings and file headers). These are core long-term insights—techniques, strategies, pitfalls, and best practices accumulated over time. They represent the kind of knowledge a seasoned researcher would build up through years of project experience.
 
-- Always consult pinned memories at session start; they contain the most valuable accumulated knowledge.
+- When memory is relevant, consult pinned memories first; they contain the most valuable accumulated knowledge.
 - When you discover a reusable trick, technique, strategy, pitfall, or best practice, consider using the \`pin\` command to mark it as a core memory.
 - Do NOT pin task-specific progress notes or ephemeral status updates. Only pin long-term reusable insights.
 - Use \`unpin\` to remove the pinned status when a memory is no longer relevant as a core insight.
@@ -59,12 +59,12 @@ Some memories may be marked as "pinned" (shown with [pinned] in directory listin
 const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
 The /memories directory is shared with all subagents you launch. Subagents can read and write the same files. Use this for persistent context that should survive across conversations—not as a substitute for subagent result delivery (subagents report back automatically via follow-up messages). Good uses: project conventions, user preferences, research bibliographies that build up over time.
 
-Beyond basic progress tracking, record reusable intelligence: what approaches worked or failed and why, project structure and conventions you discovered, user preferences revealed through corrections or rejections, and effective problem-solving strategies. Consult these at session start instead of rediscovering from scratch.
+For continuation or delegation-heavy work, consult relevant memories instead of rediscovering context. Record reusable intelligence: what approaches worked or failed and why, project structure and conventions you discovered, user preferences revealed through corrections or rejections, and effective problem-solving strategies.
 </orchestrator_memory_protocol>`;
 
 /** Memory instructions for subagents launched by an orchestrator. */
 const SUBAGENT_MEMORY_INSTRUCTIONS = `<subagent_memory_protocol>
-The /memories directory is shared with the orchestrator and other subagents. Check /memories first—it may contain context from prior sessions or other agents. Write to memory for information that should persist beyond this session (e.g., discovered conventions, useful references). Your primary results should go in your response, not in memory.
+The /memories directory is shared with the orchestrator and other subagents. Check it when your delegated task may depend on context from prior sessions or sibling agents. Write to memory for information that should persist beyond this session (e.g., discovered conventions, useful references). Your primary results should go in your response, not in memory.
 </subagent_memory_protocol>`;
 
 /**
