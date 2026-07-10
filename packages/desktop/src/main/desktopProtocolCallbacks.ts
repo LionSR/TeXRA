@@ -57,6 +57,15 @@ export interface DesktopProtocolApp {
 export interface DesktopProtocolLifecycle {
   router: DesktopProtocolCallbackRouter;
   shouldContinue: boolean;
+  /**
+   * True only for the single process holding Electron's single-instance
+   * lock. A second "open folder in new window" launch runs as its own
+   * process with `shouldContinue: true` but does NOT hold the lock — use
+   * this to gate process-singleton behavior (e.g. the desktop update
+   * check) that would otherwise duplicate across those processes, since
+   * each has an independent in-memory view of persisted global state.
+   */
+  ownsSingleInstanceLock: boolean;
 }
 
 export interface InstallDesktopProtocolOptions {
@@ -157,7 +166,7 @@ export function installDesktopProtocolCallbackLifecycle(
 
   if (!ownsSingleInstanceLock && !isExplicitNewWindow) {
     app.quit();
-    return { router, shouldContinue: false };
+    return { router, shouldContinue: false, ownsSingleInstanceLock };
   }
 
   if (ownsSingleInstanceLock) {
@@ -181,7 +190,7 @@ export function installDesktopProtocolCallbackLifecycle(
 
   router.routeArgv(options.argv ?? []);
 
-  return { router, shouldContinue: true };
+  return { router, shouldContinue: true, ownsSingleInstanceLock };
 }
 
 function normalizeProtocolPath(url: URL): string {
