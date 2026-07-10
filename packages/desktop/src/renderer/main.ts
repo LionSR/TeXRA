@@ -114,13 +114,12 @@ const appRoot = root;
 //   - Center: <main-app> when no active stream, else <stream-conversation>
 //   - Right: reserved for future diff/approve UX (collapsed today)
 //
-// `currentRoute` survives only as a backwards-compat hook so existing IPC
+// `setRouteState` survives only as a backwards-compat hook so existing IPC
 // (`desktop:setRoute` from menu/command-palette) still reaches the right
 // surface. `'main' | 'progress'` map to the center pane (progress = focus
 // the active stream); `'settings'` opens the overlay; `'logs'` opens the
 // drawer. The four-route tab bar is gone.
 
-let currentRoute: DesktopRoute = 'main';
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 const rendererPlatform = getRendererPlatform(document.defaultView);
 const desktopCommandEntriesById = new Map(
@@ -143,7 +142,6 @@ function commandTitle(commandId: DesktopCommandId, label: string): string {
 }
 
 function setRouteState(route: DesktopRoute): void {
-  currentRoute = route;
   document.body.dataset.desktopRoute = route;
 }
 
