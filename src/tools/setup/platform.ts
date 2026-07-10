@@ -24,9 +24,7 @@ import {
   hasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
-import { platform as currentPlatform } from '@platform/platform';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
-import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
 
 /** Per-provider API key surface. */
 export interface SetupSecretsAdapter {
