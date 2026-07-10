@@ -190,7 +190,12 @@ export async function executeSubagent(
       await persistSubagentDeliveryBestEffort(
         executionId,
         msg,
-        buildSubagentFailureResultMeta(agentName, result, wallTimeMs),
+        buildSubagentFailureResultMeta(
+          agentName,
+          syntheticConfig.agentCategory,
+          result,
+          wallTimeMs,
+        ),
       );
       return {
         status: 'error',

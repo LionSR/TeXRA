@@ -19,6 +19,7 @@ import {
   deriveResumability,
   getExecutionStore,
   listExecutionWorkspaceFiles,
+  unwrapResultMeta,
   type ChildRecord,
   type TodoEntry,
   listExecutions,
@@ -185,7 +186,7 @@ Paths:
 - /executions/{id}/conversation - Full message history (subagents)
 - /executions/{id}/todos - Task list (tool-use subagents)
 - /executions/{id}/report - Result report (persists after context compaction)
-- /executions/{id}/result - Structured result manifest (JSON: outputs, diffs, outcome) for chaining
+- /executions/{id}/result - Final result envelope (JSON) for chaining; process result for background commands
 - /executions/{id}/children - Child executions
 - /executions/{id}/output - stdout/stderr (background processes only)
 - /executions/{id}/files - Generated files (workflows only)
@@ -293,7 +294,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
         `- /executions/{id}              - Summary (status, agent, model)\n` +
         `- /executions/{id}/config       - Agent configuration\n` +
         `- /executions/{id}/report       - Result report (prose)\n` +
-        `- /executions/{id}/result       - Structured result manifest (JSON: outputs, diffs, outcome)\n` +
+        `- /executions/{id}/result       - Final result envelope (JSON) for chaining\n` +
         `- /executions/{id}/conversation - Message history (subagents)\n` +
         `- /executions/{id}/todos        - Task list (tool-use subagents)\n` +
         `- /executions/{id}/children     - Child executions\n` +
@@ -708,9 +709,8 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
   }
 
   /**
-   * Structured result manifest — machine-readable outputs/diffs/outcome for
-   * chaining a completed execution into a later stage without parsing the
-   * prose report.
+   * Machine-readable final result for chaining a completed execution into a
+   * later stage without parsing the prose report.
    */
   private async showResultMeta(executionId: ExecutionId): Promise<ToolResult> {
     const resultMeta = await getExecutionStore(executionId).readResultMeta();
@@ -720,7 +720,10 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
         output: `No structured result recorded for ${executionId} yet. It is written when the execution completes.`,
       };
     }
-    return { status: 'executed', output: JSON.stringify(resultMeta, null, 2) };
+    return {
+      status: 'executed',
+      output: JSON.stringify(unwrapResultMeta(resultMeta), null, 2),
+    };
   }
 
   private async showChildren(executionId: ExecutionId): Promise<ToolResult> {

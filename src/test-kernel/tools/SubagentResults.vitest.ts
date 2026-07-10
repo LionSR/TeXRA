@@ -2,10 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type {
-  ToolUseFlowResult,
-  WorkflowFlowResult,
-} from '@agent/runtime/AgentFlowResult';
+import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { RUN_OUTCOME } from '@shared/schemas';
 import {
   formatChildRunDelivery,
@@ -20,14 +17,15 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 function toolUseResult(
-  outcome: ToolUseFlowResult['outcome'] = RUN_OUTCOME.COMPLETED,
-  overrides: Partial<ToolUseFlowResult> = {},
-): ToolUseFlowResult {
+  outcome: AgentFinalResult['outcome'] = RUN_OUTCOME.COMPLETED,
+  overrides: Partial<Extract<AgentFinalResult, { category: 'toolUse' }>> = {},
+): Extract<AgentFinalResult, { category: 'toolUse' }> {
   return {
     category: 'toolUse',
-    executionId: 'abc123',
-    streamId: 'child-stream',
     outcome,
+    response: '',
+    files: [],
+    cost: 0,
     ...overrides,
   };
 }
@@ -181,13 +179,17 @@ describe('formatSubagentDelivery', () => {
     const xml = formatSubagentDelivery(
       'reviewer',
       toolUseResult(RUN_OUTCOME.COMPLETED, {
-        lastResponse: 'Checked the proof & wrote <notes>.',
-        touchedFiles: ['/ws/paper.tex'],
+        response: 'Checked the proof & wrote <notes>.',
+        files: ['/ws/paper.tex'],
+      }),
+      {
+        executionId: 'abc123',
         memoryMisses: [
           { path: '/memories/missing.md', reason: 'Path is missing' },
         ],
-      }),
-      { wallTimeMs: 65000, workingDirectory: '/ws/project' },
+        wallTimeMs: 65000,
+        workingDirectory: '/ws/project',
+      },
     );
     expect(xml).toBe(
       [
@@ -210,11 +212,12 @@ describe('formatSubagentDelivery', () => {
 
   it('escapes tool-use response bodies at the XML boundary', () => {
     const result = toolUseResult(RUN_OUTCOME.COMPLETED, {
-      lastResponse:
-        'Keep </response> literal & preserve <subagent-result> text.',
+      response: 'Keep </response> literal & preserve <subagent-result> text.',
     });
 
-    const delivery = formatSubagentDelivery('reviewer', result);
+    const delivery = formatSubagentDelivery('reviewer', result, {
+      executionId: 'abc123',
+    });
 
     expect(delivery).toContain(
       'Keep &lt;/response> literal &amp; preserve &lt;subagent-result> text.',
@@ -224,7 +227,11 @@ describe('formatSubagentDelivery', () => {
 
   it('includes attached memory misses in subagent delivery XML', () => {
     const result = toolUseResult(RUN_OUTCOME.COMPLETED, {
-      lastResponse: 'Checked the proof.',
+      response: 'Checked the proof.',
+    });
+
+    const delivery = formatSubagentDelivery('reviewer', result, {
+      executionId: 'abc123',
       memoryMisses: [
         {
           path: '/memories/missing.md',
@@ -232,8 +239,6 @@ describe('formatSubagentDelivery', () => {
         },
       ],
     });
-
-    const delivery = formatSubagentDelivery('reviewer', result);
 
     expect(delivery).toContain('<memory-misses>');
     expect(delivery).toContain(
@@ -244,8 +249,6 @@ describe('formatSubagentDelivery', () => {
   it('flags failed diff computation so orchestrators read outputs directly', () => {
     const result = {
       category: 'workflow',
-      executionId: 'abc123',
-      streamId: 'child-stream',
       outcome: RUN_OUTCOME.COMPLETED,
       outputs: [
         {
@@ -259,10 +262,13 @@ describe('formatSubagentDelivery', () => {
         },
       ],
       compileFailures: [],
-    } satisfies WorkflowFlowResult;
+      diffs: [],
+      cost: 0,
+      diffsUnavailable: 'ENOSPC: no space left & disk full',
+    } satisfies AgentFinalResult;
 
     const delivery = formatSubagentDelivery('polish', result, {
-      diffsUnavailable: 'ENOSPC: no space left & disk full',
+      executionId: 'abc123',
     });
 
     expect(delivery).toContain(
@@ -275,24 +281,28 @@ describe('formatSubagentDelivery', () => {
   it('omits the diffs-unavailable element on clean deliveries', () => {
     const result = {
       category: 'workflow',
-      executionId: 'abc123',
-      streamId: 'child-stream',
       outcome: RUN_OUTCOME.COMPLETED,
       outputs: [],
       compileFailures: [],
-    } satisfies WorkflowFlowResult;
+      diffs: [],
+      cost: 0,
+    } satisfies AgentFinalResult;
 
-    expect(formatSubagentDelivery('polish', result)).not.toContain(
-      'diffs-unavailable',
-    );
+    expect(
+      formatSubagentDelivery('polish', result, { executionId: 'abc123' }),
+    ).not.toContain('diffs-unavailable');
   });
 
   it('emits canonical failed and cancelled statuses for orchestrators', () => {
     expect(
-      formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.FAILED)),
+      formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.FAILED), {
+        executionId: 'abc123',
+      }),
     ).toContain('status="failed"');
     expect(
-      formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.CANCELLED)),
+      formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.CANCELLED), {
+        executionId: 'abc123',
+      }),
     ).toContain('status="cancelled"');
   });
 

@@ -28,12 +28,14 @@ import {
   type ExecutionId,
   type RunOutcome,
 } from '@shared/schemas';
-import {
-  CompileFailureSummarySchema,
-  OutputFileSummarySchema,
-} from '@shared/schemas/output';
 import { byString, filterNotNull, normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+import {
+  parsePersistedResultMeta,
+  ResultMetaSchema,
+  type ResultMeta,
+} from './resultMeta';
 
 // ============================================================================
 // Key constants (implementation detail — not exported)
@@ -120,220 +122,6 @@ type ChildRecordData = z.infer<typeof ChildRecordDataSchema>;
 export interface ChildRecord extends ChildRecordData {
   id: ExecutionId;
 }
-
-/** Line-diff reference for one output file, relative to the run directory. */
-const ResultDiffSummarySchema = z.object({
-  /** Absolute path of the output file the diff belongs to. */
-  path: z.string(),
-  /** Diff file path relative to the execution run directory. */
-  diffRelPath: z.string(),
-  /** True when the change ratio exceeded the large-change threshold. */
-  largeChange: z.boolean(),
-});
-
-const WorkflowResultMetaPayloadSchema = z.object({
-  outputs: z.array(OutputFileSummarySchema),
-  compileFailures: z.array(CompileFailureSummarySchema),
-  copiedOutput: z.string().optional(),
-  copiedOutputs: z.array(z.string()).optional(),
-});
-
-const SubagentWorkflowResultMetaPayloadSchema = z.object({
-  category: z.literal('workflow'),
-  outputs: z.array(OutputFileSummarySchema),
-  compileFailures: z.array(CompileFailureSummarySchema).optional(),
-  /** Line-diff files written for workflow outputs. */
-  diffs: z.array(ResultDiffSummarySchema).optional(),
-  /**
-   * Present when diff generation failed for a workflow result: carries the
-   * error so a chaining consumer distinguishes "diffs failed, read the
-   * output files directly" from a genuine no-diff/clean result.
-   */
-  diffsUnavailable: z.string().optional(),
-});
-
-const SubagentToolUseResultMetaPayloadSchema = z.object({
-  category: z.literal('toolUse'),
-  /** Final assistant text (tool-use agents). */
-  lastResponse: z.string().optional(),
-  /** Workspace-relative paths touched by a tool-use run. */
-  touchedFiles: z.array(z.string()).optional(),
-});
-
-const SubagentResultMetaPayloadSchema = z.discriminatedUnion('category', [
-  SubagentWorkflowResultMetaPayloadSchema,
-  SubagentToolUseResultMetaPayloadSchema,
-]);
-
-const BackgroundBashResultMetaSchema = z.object({
-  producer: z.literal('backgroundBash'),
-  exitCode: z.int().optional(),
-  wallTimeMs: z.number().nonnegative(),
-  success: z.boolean(),
-  timedOut: z.boolean().optional(),
-  command: z.string(),
-});
-
-const CliWorkflowResultMetaSchema = z.object({
-  producer: z.literal('cliWorkflow'),
-  result: WorkflowResultMetaPayloadSchema,
-});
-
-const SubagentResultMetaSchema = z.object({
-  producer: z.literal('subagent'),
-  /** Agent that produced this result (subagent completions). */
-  agentName: z.string(),
-  outcome: RunOutcomeSchema,
-  success: z.boolean(),
-  wallTimeMs: z.number().nonnegative(),
-  /** Total model cost (USD) including the run's own subagents. */
-  totalCostUsd: z.number().nonnegative().optional(),
-  result: SubagentResultMetaPayloadSchema.optional(),
-});
-
-const CanonicalResultMetaSchema = z.discriminatedUnion('producer', [
-  BackgroundBashResultMetaSchema,
-  CliWorkflowResultMetaSchema,
-  SubagentResultMetaSchema,
-]);
-
-const LegacyBackgroundBashResultMetaSchema = z
-  .object({
-    producer: z.undefined().optional(),
-    exitCode: z.int().optional(),
-    command: z.string(),
-    wallTimeMs: z.number().nonnegative(),
-    success: z.boolean(),
-    timedOut: z.boolean().optional(),
-  })
-  .transform((meta) => ({
-    producer: 'backgroundBash' as const,
-    command: meta.command,
-    wallTimeMs: meta.wallTimeMs,
-    success: meta.success,
-    ...(meta.exitCode !== undefined && { exitCode: meta.exitCode }),
-    ...(meta.timedOut !== undefined && { timedOut: meta.timedOut }),
-  }));
-
-const LegacyCliWorkflowResultMetaSchema = z
-  .object({
-    producer: z.undefined().optional(),
-    copiedOutput: z.string().optional(),
-    copiedOutputs: z.array(z.string()).optional(),
-    outputs: z.array(OutputFileSummarySchema).optional(),
-    compileFailures: z.array(CompileFailureSummarySchema).optional(),
-  })
-  .refine(
-    (meta) =>
-      meta.outputs !== undefined ||
-      meta.compileFailures !== undefined ||
-      meta.copiedOutput !== undefined ||
-      meta.copiedOutputs !== undefined,
-    { message: 'legacy CLI workflow result metadata has no workflow fields' },
-  )
-  .transform((meta) => ({
-    producer: 'cliWorkflow' as const,
-    result: {
-      outputs: meta.outputs ?? [],
-      compileFailures: meta.compileFailures ?? [],
-      ...(meta.copiedOutput !== undefined && {
-        copiedOutput: meta.copiedOutput,
-      }),
-      ...(meta.copiedOutputs !== undefined && {
-        copiedOutputs: meta.copiedOutputs,
-      }),
-    },
-  }));
-
-const LegacySubagentResultMetaSchema = z
-  .object({
-    producer: z.undefined().optional(),
-    agentName: z.string(),
-    category: z.enum(['workflow', 'toolUse']).optional(),
-    outcome: RunOutcomeSchema,
-    success: z.boolean(),
-    wallTimeMs: z.number().nonnegative(),
-    lastResponse: z.string().optional(),
-    touchedFiles: z.array(z.string()).optional(),
-    totalCostUsd: z.number().nonnegative().optional(),
-    outputs: z.array(OutputFileSummarySchema).optional(),
-    compileFailures: z.array(CompileFailureSummarySchema).optional(),
-    diffs: z.array(ResultDiffSummarySchema).optional(),
-    diffsUnavailable: z.string().optional(),
-  })
-  .transform((meta) => {
-    // Legacy records from before `category` existed carry workflow/toolUse
-    // fields with no category tag at all — infer it from which fields are
-    // present rather than requiring it, or the payload silently disappears.
-    const category =
-      meta.category ??
-      (meta.outputs !== undefined ||
-      meta.compileFailures !== undefined ||
-      meta.diffs !== undefined ||
-      meta.diffsUnavailable !== undefined
-        ? 'workflow'
-        : meta.lastResponse !== undefined || meta.touchedFiles !== undefined
-          ? 'toolUse'
-          : undefined);
-
-    const result =
-      category === 'workflow'
-        ? {
-            category: 'workflow' as const,
-            outputs: meta.outputs ?? [],
-            ...(meta.compileFailures !== undefined && {
-              compileFailures: meta.compileFailures,
-            }),
-            ...(meta.diffs !== undefined && { diffs: meta.diffs }),
-            ...(meta.diffsUnavailable !== undefined && {
-              diffsUnavailable: meta.diffsUnavailable,
-            }),
-          }
-        : category === 'toolUse'
-          ? {
-              category: 'toolUse' as const,
-              ...(meta.lastResponse !== undefined && {
-                lastResponse: meta.lastResponse,
-              }),
-              ...(meta.touchedFiles !== undefined && {
-                touchedFiles: meta.touchedFiles,
-              }),
-            }
-          : undefined;
-
-    return {
-      producer: 'subagent' as const,
-      agentName: meta.agentName,
-      outcome: meta.outcome,
-      success: meta.success,
-      wallTimeMs: meta.wallTimeMs,
-      ...(meta.totalCostUsd !== undefined && {
-        totalCostUsd: meta.totalCostUsd,
-      }),
-      ...(result !== undefined && { result }),
-    };
-  });
-
-const LegacyFlatResultMetaSchema = z.union([
-  LegacyBackgroundBashResultMetaSchema,
-  LegacySubagentResultMetaSchema,
-  LegacyCliWorkflowResultMetaSchema,
-]);
-
-/**
- * Structured result of a finished execution — the machine-readable
- * counterpart of the prose report. This is the chaining contract: a later
- * stage (orchestrator or workflow script) reads outputs/diffs/outcome as
- * data instead of parsing the XML delivery.
- *
- * Canonical records are keyed by producer; legacy flat records are accepted
- * and normalized on read so existing execution metadata remains readable.
- */
-export const ResultMetaSchema = z.union([
-  CanonicalResultMetaSchema,
-  LegacyFlatResultMetaSchema,
-]);
-export type ResultMeta = z.infer<typeof ResultMetaSchema>;
 
 // ============================================================================
 // Interface
@@ -502,7 +290,29 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 
   async readResultMeta(): Promise<ResultMeta | null> {
-    return this.readValidated(KEYS.RESULT_META, ResultMetaSchema);
+    const raw = await this.read(KEYS.RESULT_META);
+    if (raw == null) return null;
+
+    const canonical = ResultMetaSchema.safeParse(raw);
+    if (canonical.success) return canonical.data;
+
+    const [meta, config] = await Promise.all([
+      this.readMeta(),
+      this.readConfig(),
+    ]);
+    try {
+      return parsePersistedResultMeta(raw, {
+        category: config?.agentCategory,
+        outcome: meta?.outcome,
+      });
+    } catch (error) {
+      logger.warn(
+        CHANNEL,
+        `Failed to parse execution ${this.executionId} ${KEYS.RESULT_META}.json: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+      return null;
+    }
   }
 
   // -- Typed writers --------------------------------------------------------
@@ -539,7 +349,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 
   async writeResultMeta(data: ResultMeta): Promise<void> {
-    await this.write(KEYS.RESULT_META, CanonicalResultMetaSchema.parse(data));
+    await this.write(KEYS.RESULT_META, ResultMetaSchema.parse(data));
   }
 }
 

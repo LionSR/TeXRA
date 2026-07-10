@@ -10,17 +10,22 @@ export {
   type ExecutionMeta,
   type TodoEntry,
   type ChildRecord,
-  type ResultMeta,
-  ResultMetaSchema,
   getExecutionStore,
   clearStoreCache,
 } from './ExecutionKVStore';
+export {
+  buildCliWorkflowResultMeta,
+  unwrapResultMeta,
+  type ResultMeta,
+  ResultMetaSchema,
+} from './resultMeta';
 export {
   listExecutionWorkspaceFiles,
   resolveExecutionWorkspaceFilePath,
 } from './executionWorkspaceFiles';
 export {
   registerExecution,
+  synchronizeAgentResultOutcome,
   writeTerminalStatus,
   writeSessionDescription,
 } from './executionLifecycle';

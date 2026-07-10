@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { getExecutionStore } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import {
   AgentExecutionHandle,
@@ -21,6 +23,7 @@ import {
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_STATUS,
+  type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -30,6 +33,8 @@ import {
   runEventsOfType,
   sessionFactPayloads,
 } from '../progressTestUtils';
+
+setupPlatform({ workspacePath: '/workspace' });
 
 describe('executionRegistry', () => {
   it('owns process-output poller teardown', () => {
@@ -277,7 +282,7 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('still tears down a genuinely-suspended handle when a kill lands during the RESUMING transition (review: stop ignored during resume)', () => {
+  it('tears down and aligns a suspended handle killed during RESUMING', async () => {
     // Regression: `resumeQueuedToolUseSnapshot` flips `streamStatus` to
     // RUNNING with a RESUMING substate *before* the resumed run installs its
     // own interrupt context. A kill landing in that window would otherwise
@@ -287,12 +292,29 @@ describe('executionRegistry', () => {
     // above — silently ignoring a stop the user actually issued.
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
-    const executionId = 'exec-resuming-window-kill-test';
+    const executionId = 'exec-resuming-window-kill-test' as ExecutionId;
     const parentStreamId = 'parent-resuming-window-kill-test' as StreamTabId;
     const childStreamId = 'child-resuming-window-kill-test' as StreamTabId;
     const cleanup = vi.fn();
+    const store = getExecutionStore(executionId);
 
     try {
+      await store.writeMeta({
+        timestamp: '2026-07-10T00:00:00.000Z',
+        outcome: RUN_OUTCOME.COMPLETED,
+      });
+      await store.writeResultMeta({
+        producer: 'subagent',
+        agentName: 'test-subagent',
+        wallTimeMs: 1,
+        result: {
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          response: 'interim response',
+          files: [],
+          cost: 0,
+        },
+      });
       const handle = new AgentExecutionHandle(
         executionId,
         parentStreamId,
@@ -315,6 +337,17 @@ describe('executionRegistry', () => {
 
       expect(cleanup).toHaveBeenCalledOnce();
       expect(registry.getHandle(executionId)).toBeUndefined();
+      await vi.waitFor(async () => {
+        await expect(store.readMeta()).resolves.toMatchObject({
+          outcome: RUN_OUTCOME.CANCELLED,
+        });
+        await expect(store.readResultMeta()).resolves.toMatchObject({
+          result: {
+            outcome: RUN_OUTCOME.CANCELLED,
+            response: 'interim response',
+          },
+        });
+      });
     } finally {
       registry.dispose();
     }

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/exitCodes';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => {
@@ -18,14 +19,16 @@ const mocks = vi.hoisted(() => {
     resolveCliLaunchAgent: vi.fn(),
     selectCliRunModel: vi.fn(),
     writeResultMeta: vi.fn(),
+    writeTerminalStatus: vi.fn(),
   };
 });
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage')>()),
   getExecutionStore: vi.fn(() => ({
     writeResultMeta: mocks.writeResultMeta,
   })),
-  writeTerminalStatus: vi.fn(),
+  writeTerminalStatus: mocks.writeTerminalStatus,
 }));
 
 vi.mock('@agent/index', () => ({
@@ -378,10 +381,14 @@ describe('CLI workflow run command', () => {
       ).resolves.toBe('polished');
       expect(mocks.writeResultMeta).toHaveBeenCalledWith({
         producer: 'cliWorkflow',
+        copiedOutput: path.join(root, 'polished.tex'),
         result: {
-          copiedOutput: path.join(root, 'polished.tex'),
+          category: 'workflow',
+          outcome: RUN_OUTCOME.COMPLETED,
           outputs: [outputSummary],
           compileFailures: [compileFailure],
+          diffs: [],
+          cost: 0,
         },
       });
     } finally {
@@ -434,10 +441,14 @@ describe('CLI workflow run command', () => {
       ).resolves.toBe('polished');
       expect(mocks.writeResultMeta).toHaveBeenCalledWith({
         producer: 'cliWorkflow',
+        copiedOutputs: [path.join(root, 'out', 'paper.tex')],
         result: {
-          copiedOutputs: [path.join(root, 'out', 'paper.tex')],
+          category: 'workflow',
+          outcome: RUN_OUTCOME.COMPLETED,
           outputs: [outputSummary],
           compileFailures: [],
+          diffs: [],
+          cost: 0,
         },
       });
     } finally {
@@ -503,6 +514,94 @@ describe('CLI workflow run command', () => {
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('persists a failed runtime envelope when copying the requested output fails', async () => {
+    const outputSummary = {
+      round: 1,
+      relativePath: 'r1/paper.tex',
+      absolutePath: '/missing/run/r1/paper.tex',
+      location: 'runStorage',
+      originalPath: '/workspace/paper.tex',
+      added: null,
+      removed: null,
+    } as const;
+    mocks.executeCliConfig.mockResolvedValueOnce({
+      ok: true,
+      executionId: 'exec-copy-fail',
+      result: {
+        category: AgentCategory.Workflow,
+        executionId: 'exec-copy-fail',
+        streamId: 'stream-copy-fail',
+        outcome: RUN_OUTCOME.COMPLETED,
+        outputs: [outputSummary],
+        compileFailures: [],
+      },
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    });
+
+    const { runWorkflowAgent } = await import('@cli/commands/workflow');
+    const exitCode = await runWorkflowAgent(cliContext(), {
+      agent: 'polish',
+      inputFiles: ['paper.tex'],
+      contextFiles: [],
+      output: 'polished.tex',
+      instruction: '',
+    });
+
+    expect(exitCode).toBe(CliExitCode.AgentError);
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith({
+      producer: 'cliWorkflow',
+      result: {
+        category: 'workflow',
+        outcome: RUN_OUTCOME.FAILED,
+        outputs: [outputSummary],
+        compileFailures: [],
+        diffs: [],
+        cost: 0,
+      },
+    });
+    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
+      'exec-copy-fail',
+      EXECUTION_STATUS.ERROR,
+    );
+  });
+
+  it('uses the resolved terminal outcome in the persisted envelope', async () => {
+    mocks.executeCliConfig.mockResolvedValueOnce({
+      ok: true,
+      executionId: 'exec-interrupted',
+      result: {
+        category: AgentCategory.Workflow,
+        executionId: 'exec-interrupted',
+        streamId: 'stream-interrupted',
+        outcome: RUN_OUTCOME.COMPLETED,
+        outputs: [],
+        compileFailures: [],
+      },
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+    });
+
+    const { runWorkflowAgent } = await import('@cli/commands/workflow');
+    const exitCode = await runWorkflowAgent(cliContext(), {
+      agent: 'polish',
+      inputFiles: ['paper.tex'],
+      contextFiles: [],
+      instruction: '',
+    });
+
+    expect(exitCode).toBe(CliExitCode.Interrupted);
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith({
+      producer: 'cliWorkflow',
+      result: {
+        category: 'workflow',
+        outcome: RUN_OUTCOME.CANCELLED,
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+        cost: 0,
+      },
+    });
   });
 
   it('reports missing instruction files before starting platform or input work', async () => {
