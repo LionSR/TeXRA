@@ -19,6 +19,10 @@ export class VscodeSecrets implements PlatformSecrets {
   async get(key: string): Promise<string | undefined> {
     const envValue = process.env[key];
     if (envValue !== undefined) return envValue;
+    return this.getStored(key);
+  }
+
+  async getStored(key: string): Promise<string | undefined> {
     return this.storage.get(key);
   }
 
@@ -28,6 +32,17 @@ export class VscodeSecrets implements PlatformSecrets {
 
   async delete(key: string): Promise<void> {
     await this.storage.delete(key);
+  }
+
+  async listStoredKeys(): Promise<readonly string[]> {
+    try {
+      return await this.storage.keys();
+    } catch (error) {
+      throw new Error(
+        'SecretStorage key enumeration is not supported by this host. Stored secrets may still exist, but TeXRA cannot audit their names here.',
+        { cause: error },
+      );
+    }
   }
 
   getEnv(name: string): string | undefined {

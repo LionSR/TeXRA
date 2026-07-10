@@ -52,16 +52,16 @@ function maskKey(key: string): string {
 }
 
 /**
- * Store a user-supplied API key in SecretStorage.
+ * Store a user-supplied API key in the host's credential store.
  *
  * Narrow by design: one provider, one key, one write. Refuses empty /
  * placeholder values so the agent cannot accidentally commit a template
- * string. The approval surface is the SecretStorage write itself —
+ * string. The approval surface is the credential-store write itself —
  * reflected back to the user via the masked summary.
  */
 export class SetApiKeyTool extends defineTool({
   name: 'set_api_key',
-  description: `Store a provider API key in TeXRA's secure SecretStorage. The key must be supplied by the user — this tool never generates keys. Placeholders like "sk-xxx" or "your-key" are rejected. On success, the provider appears in the "key set" list and the model options cache is refreshed. Use this only after the user has explicitly pasted a real key in the conversation.`,
+  description: `Store a provider API key in TeXRA's persisted credential store. The key must be supplied by the user — this tool never generates keys. Placeholders like "sk-xxx" or "your-key" are rejected. On success, the provider appears in the "key set" list and the model options cache is refreshed. Use this only after the user has explicitly pasted a real key in the conversation.`,
   schema: SetApiKeyInputSchema,
 }) {
   protected async execute(input: SetApiKeyInput): Promise<ToolResult> {
@@ -85,7 +85,7 @@ export class SetApiKeyTool extends defineTool({
     return {
       status: 'executed',
       summary: `Stored ${provider} API key (${masked})`,
-      output: `Stored API key for provider "${provider}" in SecretStorage as ${masked}. You can now run agents that use ${provider} models.`,
+      output: `Stored API key for provider "${provider}" as ${masked}. You can now run agents that use ${provider} models.`,
     };
   }
 }

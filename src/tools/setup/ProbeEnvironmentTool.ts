@@ -108,7 +108,7 @@ export class ProbeEnvironmentTool extends defineTool({
     );
     if (!hasImageTool) missingCore.push('gm/magick');
 
-    const latexWorkshopInstalled = platform.extensions.isInstalled(
+    const latexWorkshopInstalled = platform.extensions?.isInstalled(
       LATEX_WORKSHOP_EXT_ID,
     );
 
@@ -127,7 +127,8 @@ export class ProbeEnvironmentTool extends defineTool({
       missingCore,
       latexWorkshop: {
         extensionId: LATEX_WORKSHOP_EXT_ID,
-        installed: latexWorkshopInstalled,
+        supported: latexWorkshopInstalled !== undefined,
+        installed: latexWorkshopInstalled ?? false,
       },
       credentials: {
         // `anyApiKeySet` is literal — only true if at least one
@@ -170,7 +171,7 @@ function buildHeadline(summary: {
   os: { platform: string };
   packageManager: string | null;
   missingCore: string[];
-  latexWorkshop: { installed: boolean };
+  latexWorkshop: { supported: boolean; installed: boolean };
   credentials: {
     anyApiKeySet: boolean;
     hasAnyUsableCredential: boolean;
@@ -183,7 +184,9 @@ function buildHeadline(summary: {
     summary.missingCore.length === 0
       ? 'all core LaTeX tools installed'
       : `missing: ${summary.missingCore.join(', ')}`,
-    `LaTeX Workshop: ${summary.latexWorkshop.installed ? 'installed' : 'not installed'}`,
+    summary.latexWorkshop.supported
+      ? `LaTeX Workshop: ${summary.latexWorkshop.installed ? 'installed' : 'not installed'}`
+      : 'LaTeX Workshop: not applicable',
   ];
   const creds: string[] = [];
   if (summary.credentials.anyApiKeySet) creds.push('API key set');

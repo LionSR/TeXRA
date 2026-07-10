@@ -1,12 +1,12 @@
 /**
- * Read and update TeXRA's `texra.*` VS Code settings during onboarding.
+ * Read and update TeXRA's `texra.*` configuration during onboarding.
  *
  * Two narrow tools: `read_config` (read-only) and `update_config` (writes,
  * gated by a strict per-key allowlist). Together they let the setup
  * assistant teach the user about a setting, show its current value, and
  * change it transparently — without giving an LLM unfettered write access
- * to arbitrary VS Code configuration. Anything outside the allowlist must
- * still be edited through the regular settings UI.
+ * to arbitrary configuration. Anything outside the allowlist must still be
+ * edited through the regular host settings surface.
  */
 
 import { z } from 'zod';
@@ -102,7 +102,7 @@ export class ReadConfigTool extends defineTool({
   name: 'read_config',
   description: `Read the effective value of a TeXRA configuration key.
 
-Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls — read first, explain, then propose a change with \`update_config\`. For settings outside this tool's reach (which is most of them), open the settings UI via \`invoke_command\` with \`texra.openSettings\` or \`texra.showDashboard\`.`,
+Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls — read first, explain, then propose a change with \`update_config\`.`,
   schema: ReadConfigInputSchema,
 }) {
   protected async execute(input: ReadConfigInput): Promise<ToolResult> {
@@ -131,7 +131,7 @@ const UpdateConfigInputSchema = z.strictObject({
     .enum(['user', 'workspace'])
     .prefault('user')
     .describe(
-      '"user" updates the global VS Code setting (sticks across workspaces); "workspace" scopes the change to the current workspace only.',
+      '"user" updates the global setting shared across workspaces; "workspace" scopes the change to the current workspace only.',
     ),
 });
 
@@ -141,12 +141,12 @@ export class UpdateConfigTool extends defineTool({
   name: 'update_config',
   description: `Update a TeXRA configuration value (allowlisted keys only).
 
-Use this AFTER calling \`read_config\` and explaining to the user what the setting does and what the new value will mean — every change should be educative. Pass \`target: "workspace"\` only when the change is genuinely workspace-specific (e.g. a project-local bib path); default to \`"user"\` for general preferences.
+Use this AFTER calling \`read_config\` and explaining to the user what the setting does and what the new value will mean — every change should be educative. Pass \`target: "workspace"\` only when the change is genuinely workspace-specific (e.g. a project-local bib path); default to \`"user"\` for general preferences shared across workspaces.
 
 Allowlisted keys:
 ${describeAllowlist()}
 
-Anything outside this list must be changed through the settings UI — invoke \`texra.openSettings\` (native VS Code Settings, filtered to texra.*) or \`texra.showDashboard\` (TeXRA dashboard).`,
+Anything outside this list must be changed through the host's regular configuration surface.`,
   schema: UpdateConfigInputSchema,
 }) {
   protected async execute(input: UpdateConfigInput): Promise<ToolResult> {

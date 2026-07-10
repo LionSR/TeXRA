@@ -12,8 +12,10 @@ import type { PlatformSecrets } from '@platform/secrets';
 
 export const emptySecrets: PlatformSecrets = {
   get: () => Promise.resolve(undefined),
+  getStored: () => Promise.resolve(undefined),
   set: () => Promise.resolve(),
   delete: () => Promise.resolve(),
+  listStoredKeys: () => Promise.resolve([]),
   getEnv: () => undefined,
 };
 

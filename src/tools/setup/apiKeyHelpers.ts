@@ -2,7 +2,7 @@
  * Shared helpers for the `set_api_key` / `unset_api_key` tools.
  *
  * Both tools validate the provider name the same way and, after mutating
- * SecretStorage, refresh the same caches and status surfaces. Centralising
+ * credential store, refresh the same caches and status surfaces. Centralising
  * keeps the validation message and the refresh ordering identical across both.
  */
 
@@ -41,10 +41,10 @@ export async function refreshApiKeyCaches(
 ): Promise<void> {
   invalidateModelOptionsCache();
   invalidateApiKeyCache();
+  const commands = platform.commands;
+  if (!commands) return;
   await Promise.all([
-    platform.commands
-      .invoke('texra.refreshApiKeyStatus')
-      .catch(() => undefined),
-    platform.commands.invoke('texra.refreshAllOptions').catch(() => undefined),
+    commands.invoke('texra.refreshApiKeyStatus').catch(() => undefined),
+    commands.invoke('texra.refreshAllOptions').catch(() => undefined),
   ]);
 }

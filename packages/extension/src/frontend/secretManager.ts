@@ -57,17 +57,6 @@ export class SecretManager {
     return apiKeySecretName(provider);
   }
 
-  public static async listKeys(): Promise<readonly string[]> {
-    try {
-      return await this.storage.keys();
-    } catch (err) {
-      throw new Error(
-        'SecretStorage key enumeration is not supported by this host. Stored secrets may still exist, but TeXRA cannot audit their names here.',
-        { cause: err },
-      );
-    }
-  }
-
   public static async gitHubTokenExists(): Promise<'secret' | 'env' | 'none'> {
     const stored = normalizeGitHubToken(await this.get(this.GITHUB_TOKEN_KEY));
     if (stored) return 'secret';
