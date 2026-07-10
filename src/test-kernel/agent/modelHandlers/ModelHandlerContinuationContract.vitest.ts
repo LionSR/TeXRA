@@ -376,7 +376,10 @@ describe('model handler system message refresh contract (tool-use resume)', () =
     assert.equal(messages[0]?.role, 'system');
     assert.equal(messages[2]?.role, 'system');
 
-    const refreshed = handler.refreshSystemMessage(messages, 'fresh system text');
+    const refreshed = handler.refreshSystemMessage(
+      messages,
+      'fresh system text',
+    );
 
     assert.equal(
       textFromOpenAiContent(refreshed[0]?.content),
@@ -404,12 +407,12 @@ describe('model handler system message refresh contract (tool-use resume)', () =
       'stale system text',
     );
 
-    const refreshed = handler.refreshSystemMessage(messages, 'fresh system text');
-
-    assert.equal(
-      textFromResponseContent(refreshed[0]!),
+    const refreshed = handler.refreshSystemMessage(
+      messages,
       'fresh system text',
     );
+
+    assert.equal(textFromResponseContent(refreshed[0]!), 'fresh system text');
     const firstContent = (refreshed[0] as { content: { type?: string }[] })
       .content;
     assert.equal(firstContent[0]?.type, 'input_text');
@@ -432,11 +435,12 @@ describe('model handler system message refresh contract (tool-use resume)', () =
     assert.equal(messages.length, 1);
     assert.equal(messages[0]?.role, 'user');
 
-    const refreshed = handler.refreshSystemMessage(messages, 'fresh system text');
+    const refreshed = handler.refreshSystemMessage(
+      messages,
+      'fresh system text',
+    );
 
-    const content = (
-      refreshed[0] as { content: { text?: string }[] }
-    ).content;
+    const content = (refreshed[0] as { content: { text?: string }[] }).content;
     assert.equal(content[0]?.text, 'fresh system text');
     assert.equal(content[1]?.text, 'prefix text');
   });
@@ -455,7 +459,10 @@ describe('model handler system message refresh contract (tool-use resume)', () =
       'stale system text',
     );
 
-    const refreshed = handler.refreshSystemMessage(messages, 'fresh system text');
+    const refreshed = handler.refreshSystemMessage(
+      messages,
+      'fresh system text',
+    );
 
     assert.equal(
       textFromOpenAiContent(
