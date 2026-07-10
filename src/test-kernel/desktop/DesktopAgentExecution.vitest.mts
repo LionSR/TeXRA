@@ -75,7 +75,7 @@ type TestableBridge = Bridge & {
   syncFullView(): void;
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
   setActiveStream(streamId: StreamTabId): void;
-  revealStream(streamId: StreamTabId): void;
+  revealStream(streamId: StreamTabId): Promise<void>;
   deleteStream(streamId: StreamTabId): Promise<void>;
   deleteAllStreams(): Promise<void>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
@@ -189,6 +189,8 @@ type CreateBridgeOptions = {
   kvRead?: (key: string) => Promise<unknown> | unknown;
   /** Forces `state.streamLogs.load()` to reject, to exercise the restart-repair fallback (catch) path. */
   streamLogsLoadError?: Error;
+  /** Delays `state.streamLogs.load()`'s directory scan until this resolves, to exercise the narrow startup window before restart repair has populated `streamLogs` (issue #7850). */
+  streamLogsLoadGate?: Promise<void>;
   retrieveSessionResumeData?: ReturnType<typeof vi.fn>;
   resumeToolUseFromSnapshot?: ReturnType<typeof vi.fn>;
   runAgent?: RunExecutionRequest;
@@ -330,6 +332,9 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
       async listKeys(): Promise<string[]> {
         if (options.streamLogsLoadError && this.dir === STREAM_LOGS_DIR) {
           throw options.streamLogsLoadError;
+        }
+        if (options.streamLogsLoadGate && this.dir === STREAM_LOGS_DIR) {
+          await options.streamLogsLoadGate;
         }
         if (!options.kvStoreBacking) return [];
         const prefix = `${this.dir}/`;
@@ -1783,7 +1788,7 @@ describe('DesktopProgressBridge', () => {
       });
       messages.length = 0;
 
-      bridge.revealStream('goal-owning-stream');
+      await bridge.revealStream('goal-owning-stream');
 
       expect(messages).toContainEqual({
         command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
@@ -1813,10 +1818,109 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     try {
-      bridge.revealStream('missing-goal-stream');
+      await bridge.revealStream('missing-goal-stream');
 
       expect(messages).toEqual([]);
     } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('revealStream keeps a matching filter for a restored stream with no live session facts yet (issue #7851)', async () => {
+    const messages: unknown[] = [];
+    // A goal-owned stream restored from persisted workspaceState at launch,
+    // via stream-snapshot hydration -- its category lives in persisted
+    // hints, not in any live session fact (none has been emitted yet this
+    // session, so `getStreamState(streamId)?.kind` is undefined).
+    const bridge = await createBridge(messages, {
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'ghost-tool-use-stream',
+          agentCategory: AgentCategory.ToolUse,
+        }),
+      ]),
+    });
+
+    try {
+      const filterStreams = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.FILTER_STREAMS
+        ],
+      );
+      await filterStreams({
+        command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS,
+        filter: 'toolUse',
+      });
+      messages.length = 0;
+
+      await bridge.revealStream('ghost-tool-use-stream');
+
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+          -1,
+        ),
+      ).toMatchObject({
+        activeStream: 'ghost-tool-use-stream',
+        agentFilter: 'toolUse',
+      });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('waits for desktop startup repair before revealing a goal-owned stream (issue #7850)', async () => {
+    // Regression test: revealStream() used to check streamLogs.has()
+    // synchronously, before streamLogs.load() (which only resolves inside
+    // restartRepair) had populated it. A goal-owned stream restored from a
+    // prior session would look "unknown" during that narrow startup window
+    // and reveal would silently no-op. Gate the on-disk stream-log scan and
+    // assert reveal does not route until restartRepair (and thus the load)
+    // has actually completed.
+    let finishStreamLogsLoad!: () => void;
+    const streamLogsLoadGate = new Promise<void>((resolve) => {
+      finishStreamLogsLoad = resolve;
+    });
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages, {
+      streamLogsLoadGate,
+      kvStoreBacking: new Map<string, unknown>([
+        [
+          `${STREAM_LOGS_DIR}/goal-owning-stream`,
+          [
+            {
+              id: 'entry-1',
+              text: 'restored from a prior session',
+              level: LOG_LEVELS.INFO,
+              timestamp: Date.now(),
+            },
+          ],
+        ],
+      ]),
+    });
+
+    try {
+      const revealPromise = bridge.revealStream('goal-owning-stream');
+
+      // streamLogs.load() is still gated, so the stream has not been
+      // repaired into this window's streamLogs yet.
+      await settleProgressEvents();
+      expect(messages).toEqual([]);
+
+      finishStreamLogsLoad();
+      await revealPromise;
+
+      expect(messages).toContainEqual({
+        command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+        route: 'progress',
+      });
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
+      ).toContainEqual({
+        activeStream: 'goal-owning-stream',
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      });
+    } finally {
+      finishStreamLogsLoad();
       bridge.dispose();
     }
   });

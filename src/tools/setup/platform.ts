@@ -24,11 +24,9 @@ import {
   hasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
-import {
-  GITHUB_TOKEN_ENV_VARS,
-  GITHUB_TOKEN_STORAGE_KEY,
-  normalizeGitHubToken,
-} from '@tools/github/githubAuth';
+import { platform as currentPlatform } from '@platform/platform';
+import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
+import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
 
 /** Per-provider API key surface. */
 export interface SetupSecretsAdapter {
@@ -177,20 +175,7 @@ export function createDefaultSetupPlatform(): SetupPlatform {
       storedApiKeyExists: async (provider) =>
         (await secrets.listStoredKeys()).includes(apiKeySecretName(provider)),
       anyUsableCredentialExists: () => hasUsableSetupCredential(secrets),
-      gitHubTokenExists: async () => {
-        if (
-          normalizeGitHubToken(
-            await secrets.getStored(GITHUB_TOKEN_STORAGE_KEY),
-          )
-        ) {
-          return 'secret';
-        }
-        return GITHUB_TOKEN_ENV_VARS.some((name) =>
-          normalizeGitHubToken(secrets.getEnv(name)),
-        )
-          ? 'env'
-          : 'none';
-      },
+      gitHubTokenExists: () => resolveGitHubTokenSource(secrets),
       listStoredKeys: () => secrets.listStoredKeys(),
     },
     auth: { getStatus: defaultAuthStatus },

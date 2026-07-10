@@ -9,6 +9,7 @@
  * tools work in the CLI and desktop too, not just the extension.
  */
 import { tryPlatform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
 export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';
@@ -34,4 +35,26 @@ export function getGitHubEnvToken(): string | undefined {
 export async function getGitHubToken(): Promise<string | undefined> {
   const stored = await tryPlatform()?.secrets.get(GITHUB_TOKEN_STORAGE_KEY);
   return normalizeGitHubToken(stored) ?? getGitHubEnvToken();
+}
+
+/**
+ * Precedence-ordered GitHub-token *source* check: a persisted secret wins
+ * over environment-variable fallbacks. Unlike `getGitHubToken`, this reports
+ * which source backs the token (rather than the token value itself), which
+ * is what credential-status surfaces need. Single owner for the setup tool's
+ * environment probe (`src/tools/setup/platform.ts`) and the extension's
+ * `SecretManager.gitHubTokenExists()`, which previously duplicated this
+ * precedence chain.
+ */
+export async function resolveGitHubTokenSource(
+  secrets: PlatformSecrets,
+): Promise<'secret' | 'env' | 'none'> {
+  if (normalizeGitHubToken(await secrets.getStored(GITHUB_TOKEN_STORAGE_KEY))) {
+    return 'secret';
+  }
+  return GITHUB_TOKEN_ENV_VARS.some((name) =>
+    normalizeGitHubToken(secrets.getEnv(name)),
+  )
+    ? 'env'
+    : 'none';
 }

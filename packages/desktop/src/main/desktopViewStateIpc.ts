@@ -56,9 +56,15 @@ export function createDesktopViewStateIpc(
   nativeTheme.on('updated', postTheme);
 
   const handler = createCommandHandler({
-    [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: () => {
-      postTheme();
-      postDebugMode();
+    // WEBVIEW_READY is a broadcast: sync theme/debug-mode only for the main
+    // webview, but return `false` so sibling handlers still receive it.
+    [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: {
+      when: (message) => message.view === 'main',
+      run: () => {
+        postTheme();
+        postDebugMode();
+      },
+      claim: false,
     },
     [MAIN_VIEW_COMMANDS.GET_THEME]: () => postTheme(),
     [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: () => postDebugMode(),
