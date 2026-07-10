@@ -27,6 +27,17 @@ export function followUpDisplayText(followUp: FollowUpQueueBatchItem): string {
     : followUp.text;
 }
 
+export function userFollowUpInstruction(
+  followUps: readonly FollowUpQueueBatchItem[],
+): string | undefined {
+  const instruction = followUps
+    .filter((followUp) => followUp.origin === 'user')
+    .map((followUp) => followUp.text)
+    .join('\n\n')
+    .trim();
+  return instruction || undefined;
+}
+
 export interface AppendFollowUpResult {
   readonly messages: ProviderMessage[];
   readonly attachmentKinds: MediaAttachmentKind[];
