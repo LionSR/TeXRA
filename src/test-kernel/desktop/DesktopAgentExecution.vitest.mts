@@ -198,6 +198,8 @@ type CreateBridgeOptions = {
   activeExecutionIds?: readonly string[] | (() => readonly string[]);
   showErrorMessage?: (message: string) => Promise<void> | void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
+  /** Captures `this.logger.error(...)` calls made by the bridge under test. */
+  loggerErrorSpy?: ReturnType<typeof vi.fn>;
 };
 
 type TestDesktopStreamSnapshotStore = {
@@ -234,14 +236,14 @@ const SEARCH_TOOL_USE_AGENT_CONFIG = {
   agentCategory: AgentCategory.ToolUse,
 } as const;
 
-function mockLoggerModule(): void {
+function mockLoggerModule(loggerErrorSpy?: ReturnType<typeof vi.fn>): void {
   vi.doMock('@logger', () => ({
     createChannelTrace: () => ({
       emit: vi.fn(),
       debug: () => {},
       info: () => {},
       warn: () => {},
-      error: () => {},
+      error: loggerErrorSpy ?? (() => {}),
     }),
     setDefaultStreamLogStore: () => {},
   }));
@@ -344,7 +346,7 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: vi.fn(),
   }));
-  mockLoggerModule();
+  mockLoggerModule(options.loggerErrorSpy);
   vi.doMock('vscode', () => ({
     commands: {
       executeCommand: vi.fn(),
@@ -3255,10 +3257,12 @@ describe('DesktopProgressBridge', () => {
   it('surfaces an error when restoreState fails to build main-view state (cursor[bot] #7827)', async () => {
     const messages: unknown[] = [];
     const errors: string[] = [];
+    const loggerErrorSpy = vi.fn();
     const bridge = await createBridge(messages, {
       showErrorMessage: async (message) => {
         errors.push(message);
       },
+      loggerErrorSpy,
     });
 
     try {
@@ -3292,6 +3296,12 @@ describe('DesktopProgressBridge', () => {
 
       expect(messages).toEqual([]);
       expect(errors).toEqual(['Failed to restore state']);
+      // #7860: the caught buildMainViewState() error must be logged, not
+      // silently discarded, even though the user-facing message is unchanged.
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        'Failed to build main-view state for restore',
+        { data: expect.anything() },
+      );
     } finally {
       bridge.dispose();
     }
