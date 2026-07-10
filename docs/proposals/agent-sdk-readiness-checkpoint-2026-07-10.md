@@ -76,17 +76,35 @@ provider contracts (`IModelHandler`, `ModelHandlerContracts`, `ProviderMessage`,
 `agent/modelHandlers/types/` up to `agent/types/` — a structural tidy; the port
 now lives at `src/agent/types/IModelHandler.ts` and is still a `Pick<ModelHandler>`.
 
-## Applied this pass — none (and why that is correct)
+## Applied this pass — the `runAgent`→`executeAgent` forwarding (on explicit request)
 
-**No code cleanup was applied this pass.** The discipline (per every prior
-checkpoint) is: apply a cleanup only when a clean dead-code deletion or a
-type-only, zero-external-effect change is genuinely available — and only after
-grepping `packages/**`, not `src/**` alone. This pass the fan-out produced
-**two** pure-deletion / pure-inline candidates and **both turned out to cross
-`packages/**`** — a verbatim repeat of the recurring §7 methodology error the
-07-09 checkpoint caught with `textConnection.ts` (and earlier with
-`redactSecrets`). Forcing a cleanup where none is unattended-safe would violate
-the discipline, so nothing was changed.
+The **verification** pass found no _unattended-safe_ cleanup: the two
+pure-deletion / pure-inline candidates the fan-out produced both cross
+`packages/**` (see false positives below) — a verbatim repeat of the recurring
+§7 methodology error the 07-09 checkpoint caught with `textConnection.ts`.
+
+On an explicit maintainer instruction to refactor, the single cleanest,
+lowest-risk candidate (new candidate #4 below) **was applied and verified**:
+`runAgent` (`runAgent.ts:49`) no longer hand-forwards eight named options into
+`executeAgent` one-by-one. It now destructures the three `runAgent`-only options
+(`openWorkflowOutput`, `registerExecution`, `preferHelperModel`) and spreads the
+rest — which is exactly the `Pick<ExecuteAgentOptions, …>` that `RunAgentOptions`
+already extends — so a newly-picked option forwards with no edit here.
+
+Why this one was unattended-safe once verified (unlike the reviewed-train items):
+it is contained to `runAgent.ts` internals; the public `RunAgentOptions`
+interface is unchanged (all seven callers unaffected); it is behavior-preserving
+(`executeAgent` reads its options by property access, does no `key in options`
+presence checks — grep-confirmed — so spread-vs-literal is identical; the subset
+omits `allowWaitingResult`, resolving to the same `Promise<AgentFlowResult>`
+overload as before); and it is type-guaranteed by the existing `Pick`.
+**Verified:** root `tsc --noEmit` clean, `eslint` clean on the file, and the
+three `runAgent`-path suites green (`RunExecution`, `WorkflowScriptEngine`,
+`DesktopAgentExecution` — 134 tests). Net −7 LOC.
+
+No other cleanup was applied — every remaining candidate is reviewed-train
+(signature/structure change) or a verified false positive, and forcing one of
+those unattended would violate the discipline.
 
 ### False positives caught this pass — record, do not re-flag
 
@@ -172,10 +190,12 @@ WorkingDirectory,Session}` (`RunContext.ts:181-233`) are each an identical
    (`ITool`, by contrast, is a real multi-impl contract — keep.)
 
 4. **`runAgent` hand-forwards eight options into `executeAgent`** _(LOW;
-   drift-risk)_. `runAgent.ts:76-85` re-lists eight named options one-by-one even
-   though `RunAgentOptions extends Pick<ExecuteAgentOptions, …>` already
-   guarantees shape compatibility — pure boilerplate that must be edited on every
-   new option. Spread the picked subset. (`runAgent` is otherwise a justified thin
+   drift-risk)_ — **APPLIED THIS PASS** (see "Applied this pass" above).
+   `runAgent.ts` re-listed eight named options one-by-one even though
+   `RunAgentOptions extends Pick<ExecuteAgentOptions, …>` already guarantees shape
+   compatibility — pure boilerplate that had to be edited on every new option. Now
+   destructures the three `runAgent`-only options and spreads the picked subset;
+   verified type-safe + 134 tests green. (`runAgent` is otherwise a justified thin
    convenience layer — executionId gen + registration + helper-model swap +
    `openWorkflowOutput` — not a redundant wrapper; the dual-entry ruling holds.)
 
@@ -252,15 +272,18 @@ than at 07-09: the maintainers' PR train **resolved coupling-audit finding #4**
 via `f325ea4`; the last ambient-approval module global and the `toolEditApproval`
 Platform port are gone), **single-sourced launch stream status** (#7838, the
 north-star D4 / status dual-rail item), and **hardened `RunScope`/`RunContext`**
-(#7835/#7836, F4). **No cleanup was applied this pass** — both pure-deletion
-candidates (`SessionHandle.hostChannel`, `followUpResumeDetection.ts`) are
-verified false positives that cross `packages/**` (the recurring `src/`-only-grep
-error), and one fan-out finding (`setToolEditApprovalHandler` "still open") was
-already resolved by the PR train. Five genuinely-new low/medium items are
-recorded as reviewed-train (the inner-cycle-flow-earns-neither-retry-nor-resume
-structural observation — the sharpest, strategic; the `RunContext` `launch|bare`
-six-accessor union — ride the F4 train; the `IToolRegistry` single-impl
-interface; the `runAgent`→`executeAgent` eight-field hand-forwarding; the
+(#7835/#7836, F4). **One cleanup was applied this pass — on explicit request:**
+the `runAgent`→`executeAgent` eight-field hand-forwarding (new candidate #4),
+verified type-safe + lint-clean + 134 tests green, net −7 LOC, contained to
+`runAgent.ts` internals. The verification pass otherwise found no _unattended-safe_
+cleanup — both pure-deletion candidates (`SessionHandle.hostChannel`,
+`followUpResumeDetection.ts`) are verified false positives that cross
+`packages/**` (the recurring `src/`-only-grep error), and one fan-out finding
+(`setToolEditApprovalHandler` "still open") was already resolved by the PR train.
+Four remaining genuinely-new low/medium items are recorded as reviewed-train (the
+inner-cycle-flow-earns-neither-retry-nor-resume structural observation — the
+sharpest, strategic; the `RunContext` `launch|bare` six-accessor union — ride the
+F4 train; the `IToolRegistry` single-impl interface; the
 `BaseReasoningStreamAggregator` doc nuance). Everything else maps to
 already-tracked reviewed-train / strategic items or adjudicated traps (held). Do
 not re-open the traps; do not re-flag `hostChannel`, `followUpResumeDetection`,
@@ -299,7 +322,11 @@ createFlow().run` intact (`ResponseCycleNode.ts:97,111`;
   no-subclass.
 - Delegation depth verified still tracked-but-ungated (`delegationPolicy.ts`;
   no `maxDelegationDepth`, 0 grep hits).
-- No source files changed this pass; no build/typecheck run required
-(documentation only, added under `docs/proposals/`, an internal directory
-excluded from the texra.ai publish allowlist — not a root-level doc).
-</content>
+- Applied cleanup verified: `runAgent.ts` forwarding spread — root `tsc
+--noEmit` clean, `eslint src/agent/runtime/runAgent.ts` clean, and
+  `RunExecution` / `WorkflowScriptEngine` / `DesktopAgentExecution` suites green
+  (134 tests). `executeAgent` does no `key in options` presence check on the
+  forwarded keys (grep-confirmed); public `RunAgentOptions` interface unchanged,
+  all seven `runAgent` callers unaffected.
+- The checkpoint doc itself is added under `docs/proposals/`, an internal
+  directory excluded from the texra.ai publish allowlist — not a root-level doc.
