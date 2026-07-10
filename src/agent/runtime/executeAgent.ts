@@ -8,6 +8,7 @@ import {
   type RunToolUseFlowResult,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
+import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
   runReflectionFlow,
   type RunReflectionFlowResult,
@@ -471,6 +472,12 @@ export async function executeAgent(
 
 export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
   readonly setupSession?: (session: IToolUseSession) => void;
+  /**
+   * Follow-ups already drained by an external turn owner. The resumed flow
+   * consumes this batch once at its persisted WAITING cursor; it must never
+   * pass through the stream queue again.
+   */
+  readonly drainedFollowUps?: readonly FollowUpQueueBatchItem[];
 }
 
 export async function resumeToolUseFromSnapshot(
@@ -532,6 +539,7 @@ export async function resumeToolUseFromSnapshot(
             onRoundFinalized: createUsageRecordingCallback(ctx),
             setting,
             resumeSnapshot: snapshot,
+            drainedFollowUps: options.drainedFollowUps,
             // Derive from the recovered parent chain: any execution with a
             // parent is a subagent. Without this, the rebuilt system prompt
             // would drop subagent-specific instructions (e.g. the shared

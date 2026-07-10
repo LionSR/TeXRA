@@ -1,7 +1,16 @@
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setTimeout as sleep } from 'node:timers/promises';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent
+import { ToolUseSessionLifecycle } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
+import {
+  isChildRunLoopActive,
+  startChildRunLoop,
+} from '@agent/runtime/childRunLoop';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   STREAM_PHASE,
   type ExecutionId,
@@ -9,35 +18,46 @@ import {
 } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
+  deliverChildRunFollowUp: vi.fn(),
   executeAgent: vi.fn(),
+  persistChildRunReport: vi.fn(),
+  persistChildRunResultMeta: vi.fn(),
   readConfig: vi.fn(),
-  resumeQueuedToolUseSnapshot: vi.fn(),
+  resumeToolUseFromSnapshot: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
+  writeTerminalStatus: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
   executeAgent: mocks.executeAgent,
+  resumeToolUseFromSnapshot: mocks.resumeToolUseFromSnapshot,
 }));
 
 vi.mock('@agent/storage', () => ({
   getExecutionStore: vi.fn(() => ({ readConfig: mocks.readConfig })),
+  writeTerminalStatus: mocks.writeTerminalStatus,
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
 
-vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
-  resumeQueuedToolUseSnapshot: mocks.resumeQueuedToolUseSnapshot,
+vi.mock('@tools/childRunDelivery', () => ({
+  deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
+  persistChildRunReport: mocks.persistChildRunReport,
+  persistChildRunResultMeta: mocks.persistChildRunResultMeta,
 }));
 
 import { createNativeToolUseStrategy } from '@tools/delegation/nativeToolUseStrategy';
+
+const ownedSessions = new Set<SessionHandle>();
 
 function fakePorts() {
   return { notify: vi.fn(), recordCost: vi.fn() };
 }
 
-function baseParams() {
+function baseParams(parentSession = new SessionHandle()) {
+  if (parentSession !== defaultSession()) ownedSessions.add(parentSession);
   return {
     configPayload: {
       agent: 'review',
@@ -47,7 +67,7 @@ function baseParams() {
     executionId: 'exec-1' as ExecutionId,
     agentName: 'review',
     orchestratorStreamId: 'orchestrator-stream' as StreamTabId,
-    parentSession: { tag: 'parent-session' } as never,
+    parentSession,
     runtimeHost: { emit: vi.fn() } as never,
     startedAt: Date.now(),
     delegationDepth: 1,
@@ -57,7 +77,16 @@ function baseParams() {
 
 describe('NativeToolUseStrategy', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
+    mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
+    mocks.writeTerminalStatus.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    for (const session of ownedSessions) session.dispose();
+    ownedSessions.clear();
   });
 
   it('resolveDeliveryTarget follows the live run handle, including after detach', async () => {
@@ -155,8 +184,12 @@ describe('NativeToolUseStrategy', () => {
     expect(errMsg).toContain('model overloaded');
   });
 
-  it('runTurn drives the persisted flow-record cursor via retrieveSessionResumeData + resumeQueuedToolUseSnapshot', async () => {
-    const params = baseParams();
+  it('runTurn hands its consumed batch directly to the persisted flow cursor', async () => {
+    const params = {
+      ...baseParams(),
+      approvalPromptsUnavailable: true,
+      runtimeUnavailableTools: ['ask_user'],
+    };
     const strategy = createNativeToolUseStrategy(params);
     const childStreamId = 'child-stream' as StreamTabId;
 
@@ -185,18 +218,13 @@ describe('NativeToolUseStrategy', () => {
       type: 'toolUse',
       snapshot,
     });
-    mocks.resumeQueuedToolUseSnapshot.mockImplementationOnce(
-      async (_streamId, _snapshot, _host, options) => {
-        options.onResult({
-          category: 'toolUse',
-          outcome: 'completed',
-          lastResponse: 'done',
-          executionId: params.executionId,
-          streamId: childStreamId,
-        });
-        return true;
-      },
-    );
+    mocks.resumeToolUseFromSnapshot.mockResolvedValueOnce({
+      category: 'toolUse',
+      outcome: 'completed',
+      lastResponse: 'done',
+      executionId: params.executionId,
+      streamId: childStreamId,
+    });
 
     const turn = await strategy.runTurn!(
       [{ text: 'keep going', origin: 'user' }],
@@ -209,13 +237,14 @@ describe('NativeToolUseStrategy', () => {
       params.executionId,
       config,
     );
-    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
-      childStreamId,
+    expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledWith(
       snapshot,
       params.runtimeHost,
       expect.objectContaining({
         allowWaitingResult: true,
-        extraFollowUps: [
+        approvalPromptsUnavailable: true,
+        parentStreamId: params.orchestratorStreamId,
+        drainedFollowUps: [
           {
             text: 'keep going',
             displayText: undefined,
@@ -223,12 +252,14 @@ describe('NativeToolUseStrategy', () => {
             origin: 'user',
           },
         ],
+        runtimeUnavailableTools: ['ask_user'],
+        session: params.parentSession,
       }),
     );
     expect(strategy.isTerminal(turn)).toBe(true);
   });
 
-  it('preserves #7491: a failed resume (resumeQueuedToolUseSnapshot returns false) throws, delivering formatError to the parent', async () => {
+  it('preserves #7491: a failed direct resume throws for child-loop error delivery', async () => {
     const params = baseParams();
     const strategy = createNativeToolUseStrategy(params);
     const childStreamId = 'child-stream' as StreamTabId;
@@ -255,16 +286,148 @@ describe('NativeToolUseStrategy', () => {
       },
     });
     const resumeError = new Error('resume storage unreadable');
-    mocks.resumeQueuedToolUseSnapshot.mockImplementationOnce(
-      async (_streamId, _snapshot, _host, options) => {
-        await options.onError(resumeError);
-        return false;
-      },
-    );
+    mocks.resumeToolUseFromSnapshot.mockRejectedValueOnce(resumeError);
 
     await expect(
       strategy.runTurn!([], fakePorts(), new AbortController()),
     ).rejects.toBe(resumeError);
+  });
+
+  it('consumes one child-loop follow-up in one resumed WAITING turn without requeueing it', async () => {
+    const session = defaultSession();
+    const childStreamId = 'native-follow-up-loop-child' as StreamTabId;
+    const parentStreamId = 'native-follow-up-loop-parent' as StreamTabId;
+    const executionId = 'native-follow-up-loop-exec' as ExecutionId;
+    const runtimeHost = { emit: vi.fn() } as never;
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'review',
+      'toolUse',
+      runtimeHost,
+    );
+    const params = {
+      ...baseParams(session),
+      executionId,
+      orchestratorStreamId: parentStreamId,
+      runtimeHost,
+    };
+    const waitingTurn = (lastResponse: string) => ({
+      category: 'toolUse' as const,
+      outcome: STREAM_PHASE.WAITING,
+      lastResponse,
+      executionId,
+      streamId: childStreamId,
+    });
+
+    mocks.executeAgent.mockImplementationOnce(
+      async (_config, _executionId, options) => {
+        session.status.transition(
+          childStreamId,
+          STREAM_PHASE.RUNNING,
+          'lifecycle',
+        );
+        session.executions.trackAgentExecution(handle, {
+          status: STREAM_PHASE.RUNNING,
+        });
+        options.onStreamResolved?.(childStreamId);
+        options.onRun?.(handle);
+        session.status.transitionToWaiting(childStreamId, 'wait');
+        return waitingTurn('initial response');
+      },
+    );
+    const config = { agentCategory: 'toolUse' };
+    const snapshot = {
+      agentConfig: config,
+      executionId,
+      messages: [],
+    };
+    mocks.readConfig.mockResolvedValue(config);
+    mocks.retrieveSessionResumeData.mockResolvedValue({
+      type: 'toolUse',
+      snapshot,
+    });
+    mocks.resumeToolUseFromSnapshot.mockImplementation(
+      async (_snapshot, _host, options) => {
+        if (mocks.resumeToolUseFromSnapshot.mock.calls.length > 1) {
+          throw new Error('the same follow-up batch resumed more than once');
+        }
+        // This branch models the former queue-owning wrapper. Before the fix,
+        // NativeToolUseStrategy called that wrapper, which supplied
+        // setupSession and thereby put the child-loop batch back into this
+        // exact queue. Keeping the branch in the integration fixture makes a
+        // regression fail after two turns instead of spinning indefinitely.
+        if (options.setupSession) {
+          options.setupSession(
+            new ToolUseSessionLifecycle(childStreamId, session.followUps),
+          );
+        }
+        options.onRun?.(handle);
+        session.status.transitionToWaiting(childStreamId, 'wait');
+        return waitingTurn('follow-up response');
+      },
+    );
+
+    const strategy = createNativeToolUseStrategy(params);
+    try {
+      startChildRunLoop({
+        childStreamId,
+        parentStreamId,
+        executionId,
+        agentName: params.agentName,
+        strategy,
+      });
+      await vi.waitFor(() =>
+        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
+      );
+
+      session.followUps.acquire(childStreamId).enqueue({
+        text: 'Also state exactly where finiteness is used.',
+        origin: 'user',
+      });
+
+      await vi.waitFor(() =>
+        expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledTimes(1),
+      );
+      await vi.waitFor(() =>
+        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(2),
+      );
+      // Give an accidentally re-enqueued batch enough time to start a second
+      // immediate resume. The guarded mock above prevents an actual busy loop.
+      await sleep(50);
+
+      expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledTimes(1);
+      expect(
+        mocks.resumeToolUseFromSnapshot.mock.calls[0]?.[2].drainedFollowUps,
+      ).toEqual([
+        {
+          text: 'Also state exactly where finiteness is used.',
+          displayText: undefined,
+          mediaFiles: undefined,
+          origin: 'user',
+        },
+      ]);
+      expect(session.followUps.getAll(childStreamId)).toEqual([]);
+      expect(session.status.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
+      const resumedDeliveries = mocks.deliverChildRunFollowUp.mock.calls.filter(
+        ([delivery]) => delivery.followUp.text.includes('follow-up response'),
+      );
+      expect(resumedDeliveries).toHaveLength(1);
+    } finally {
+      const handleWasTracked =
+        session.executions.getHandle(executionId) !== undefined;
+      if (isChildRunLoopActive(childStreamId)) handle.interrupt();
+      await vi.waitFor(() =>
+        expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      );
+      if (handleWasTracked) await handle.result;
+      if (session.executions.getHandle(executionId)) {
+        session.executions.untrack(executionId);
+      }
+      session.followUps.release(childStreamId);
+      session.status.clearStream(childStreamId);
+    }
   });
 
   it('records the run cumulative cost via ports.recordCost on every turn', async () => {
