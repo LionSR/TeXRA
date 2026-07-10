@@ -13,6 +13,7 @@ import type {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
+import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import {
   createRunStorageLocation,
   FlexibleFS,
@@ -64,22 +65,27 @@ function getCompileDisplayName(file: OutputFileInfo): string {
   return srcBase && !GENERIC_OUTPUT_STEMS.has(srcBase) ? srcBase : rawBase;
 }
 
-function resolveWorkspaceSourceDir(
-  outputFile: OutputFileInfo,
-  fallbackRelativePath: string,
-): string[] {
+/**
+ * Resolve a workspace/run-storage location back to its live source folder.
+ * A run-storage location's leading `r<digits>/` round segment is removed;
+ * workspace locations retain the same segment as a real directory name.
+ */
+export function resolveWorkspaceSourceDir(
+  location: FileLocation,
+): string | undefined {
   const workspaceRoot = WorkspaceFS.getPath();
-  if (!workspaceRoot) return [];
+  if (!workspaceRoot || location.kind === 'external') return undefined;
 
-  const source = outputFile.source.trim();
-  const located =
-    source.length > 0 ? WorkspaceFS.locatePath(source) : undefined;
-  const sourceRelativePath =
-    located?.kind === 'workspace' ? located.relativePath : fallbackRelativePath;
+  const separatorMatch =
+    location.kind === 'runStorage'
+      ? /^([^/\\]+)[/\\]/.exec(location.relativePath)
+      : null;
+  const workspaceRelative =
+    separatorMatch && parseWorkflowOutputRoundDir(separatorMatch[1]) !== null
+      ? location.relativePath.slice(separatorMatch[0].length)
+      : location.relativePath;
 
-  return path.isAbsolute(sourceRelativePath)
-    ? []
-    : [path.join(workspaceRoot, path.dirname(sourceRelativePath))];
+  return path.join(workspaceRoot, path.dirname(workspaceRelative));
 }
 
 /**
@@ -298,10 +304,13 @@ async function compileOne(
     // The output compiles from `buildDir`, not its original workspace folder.
     // For extracted outputs, the run-storage basename can be generic while
     // outputFile.source carries the real workspace path.
-    const extraInputDirs = resolveWorkspaceSourceDir(
-      outputFile,
-      pathForSafeName,
-    );
+    const source = outputFile.source.trim();
+    const locatedSource =
+      source.length > 0 ? WorkspaceFS.locatePath(source) : undefined;
+    const sourceLocation =
+      locatedSource?.kind === 'workspace' ? locatedSource : outputFile.location;
+    const sourceDir = resolveWorkspaceSourceDir(sourceLocation);
+    const extraInputDirs = sourceDir ? [sourceDir] : [];
 
     // execa's timeout option kills the child process on expiry, so we don't
     // orphan hanging latexmk/pdflatex runs.

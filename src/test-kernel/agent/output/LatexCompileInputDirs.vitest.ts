@@ -12,7 +12,10 @@ import {
   AgentWorkflowSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import { runCompileCheck } from '@agent/output/compileCheck';
+import {
+  resolveWorkspaceSourceDir,
+  runCompileCheck,
+} from '@agent/output/compileCheck';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 
 // Local imports - shared
@@ -26,6 +29,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 // Local imports - file utilities
 import {
   TaskRunFileService,
+  createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
@@ -97,6 +101,23 @@ function initLatexPlatform(files: Record<string, string>): Promise<void> {
   });
 }
 
+function diffCompiler(manager: LatexDiffManager) {
+  return manager as unknown as {
+    compileDiffIfSuccessful(
+      result: { success: boolean; diffFileName?: string },
+      referenceLocation: FileLocation,
+      diffDirectory: {
+        absolutePath: string;
+        relativePath: string;
+        executionId: ExecutionId;
+      },
+      round: number,
+      sourceLocation: FileLocation,
+      pdfStemSuffix: string,
+    ): Promise<unknown>;
+  };
+}
+
 describe('workflow LaTeX compile input directories', () => {
   beforeEach(() => {
     mocks.compileLatex2Pdf.mockClear();
@@ -133,6 +154,94 @@ describe('workflow LaTeX compile input directories', () => {
     );
   });
 
+  it.each(['', '/external/source/main.tex'])(
+    'falls back to the output location for source %j',
+    async (source) => {
+      const executionId = `compile-output-dir-${source ? 'external' : 'empty'}`;
+      const texPath = path.join(runDir(executionId), 'r2', 'Draft', 'main.tex');
+      await initLatexPlatform({
+        [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
+      });
+
+      const outputState = createOutputState();
+      ensureRoundData(outputState, 2).outputs = [
+        outputFile(
+          executionId,
+          path.join('r2', 'Draft', 'main.tex'),
+          source,
+          2,
+        ),
+      ];
+
+      await runCompileCheck(
+        {
+          fileService: new TaskRunFileService(executionId),
+          outputState,
+          logger: logger(),
+          streamId: 'compile-stream',
+        },
+        2,
+      );
+
+      expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
+        expect.objectContaining({ absolutePath: texPath }),
+        expect.objectContaining({
+          extraInputDirs: [path.join(workspacePath, 'Draft')],
+        }),
+      );
+    },
+  );
+
+  it('resolves workspace and round-storage paths through one owner', async () => {
+    const executionId = 'shared-source-resolver';
+    await initLatexPlatform({});
+
+    expect(
+      resolveWorkspaceSourceDir(
+        createWorkspaceLocation(
+          path.join(workspacePath, 'Draft', 'main.tex'),
+          path.join('Draft', 'main.tex'),
+        ),
+      ),
+    ).toBe(path.join(workspacePath, 'Draft'));
+    expect(
+      resolveWorkspaceSourceDir(
+        runStorageFile(executionId, path.join('r3', 'Draft', 'main.tex')),
+      ),
+    ).toBe(path.join(workspacePath, 'Draft'));
+    expect(
+      resolveWorkspaceSourceDir(
+        createWorkspaceLocation(
+          path.join(workspacePath, 'r3', 'Draft', 'main.tex'),
+          path.join('r3', 'Draft', 'main.tex'),
+        ),
+      ),
+    ).toBe(path.join(workspacePath, 'r3', 'Draft'));
+  });
+
+  it('does not map external locations into the workspace', async () => {
+    await initLatexPlatform({});
+
+    expect(
+      resolveWorkspaceSourceDir(
+        createExternalLocation('/external/project/main.tex'),
+      ),
+    ).toBeUndefined();
+  });
+
+  it('returns no workspace source directory when no workspace is open', async () => {
+    await installPlatform({ storagePath, workspacePath: undefined });
+
+    expect(
+      resolveWorkspaceSourceDir(
+        createWorkspaceLocation(
+          path.join(workspacePath, 'Draft', 'main.tex'),
+          path.join('Draft', 'main.tex'),
+        ),
+      ),
+    ).toBeUndefined();
+  });
+
   it('compiles diffs with revised round inputs before workspace fallbacks', async () => {
     const executionId = 'latexdiff-input-dir';
     await initLatexPlatform({});
@@ -148,28 +257,15 @@ describe('workflow LaTeX compile input directories', () => {
       new TaskRunFileService(executionId),
     );
 
-    const referenceLocation = createWorkspaceLocation(
-      path.join(workspacePath, 'Draft', 'main.tex'),
-      'Draft/main.tex',
+    const referenceLocation = runStorageFile(
+      executionId,
+      path.join('r1', 'Draft', 'main.tex'),
     );
     const sourceLocation = runStorageFile(
       executionId,
       path.join('r2', 'Draft', 'main.tex'),
     );
-    const compileDiff = manager as unknown as {
-      compileDiffIfSuccessful(
-        result: { success: boolean; diffFileName?: string },
-        referenceLocation: FileLocation,
-        diffDirectory: {
-          absolutePath: string;
-          relativePath: string;
-          executionId: ExecutionId;
-        },
-        round: number,
-        sourceLocation: FileLocation,
-        pdfStemSuffix: string,
-      ): Promise<unknown>;
-    };
+    const compileDiff = diffCompiler(manager);
 
     await compileDiff.compileDiffIfSuccessful(
       { success: true, diffFileName: 'main-diff.tex' },
@@ -198,6 +294,47 @@ describe('workflow LaTeX compile input directories', () => {
           path.join(runDir(executionId), 'r2', 'Draft'),
           path.join(workspacePath, 'Draft'),
         ],
+      }),
+    );
+  });
+
+  it('keeps an external latexdiff reference in its own directory', async () => {
+    const executionId = 'latexdiff-external-input-dir';
+    await initLatexPlatform({});
+    const manager = new LatexDiffManager(
+      AgentWorkflowSettingSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+      }),
+      () => ({}),
+      [],
+      logger(),
+      'diff-stream',
+      new TaskRunFileService(executionId),
+    );
+    const referenceLocation = createExternalLocation(
+      '/external/project/main.tex',
+    );
+
+    await diffCompiler(manager).compileDiffIfSuccessful(
+      { success: true, diffFileName: 'main-diff.tex' },
+      referenceLocation,
+      {
+        absolutePath: path.join(runDir(executionId), 'diff', 'r1'),
+        relativePath: path.join('diff', 'r1'),
+        executionId,
+      },
+      1,
+      createWorkspaceLocation(
+        path.join(workspacePath, 'Draft', 'main.tex'),
+        path.join('Draft', 'main.tex'),
+      ),
+      '-diff',
+    );
+
+    expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        extraInputDirs: ['/external/project'],
       }),
     );
   });
