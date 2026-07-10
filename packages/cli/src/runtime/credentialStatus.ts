@@ -10,13 +10,12 @@ import { hasAnyProviderApiKey } from '@controllers/onboarding/onboardingFunnel';
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 
-import { getCliAuthProvider } from './supabaseAuth';
+import { getCliAuthProfile } from './supabaseAuth';
 import type { CliApiMode } from './apiAccessMode';
 
 async function hasIncludedRelaySignIn(): Promise<boolean> {
-  return await getCliAuthProvider()
-    .isAuthenticated()
-    .catch(() => false);
+  const profile = await getCliAuthProfile().catch(() => undefined);
+  return profile?.authenticated ?? false;
 }
 
 export async function hasCliCredentialForApiMode(
