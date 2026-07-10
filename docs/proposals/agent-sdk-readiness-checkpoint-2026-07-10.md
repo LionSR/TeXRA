@@ -92,7 +92,7 @@ the discipline, so nothing was changed.
 
 1. **`SessionHandle.hostChannel` is NOT unused dead code.** The runtime reader's
    top "remove the member" item claimed no production code reads
-   `session.hostChannel`. It is true that no code *reads* the member today — but
+   `session.hostChannel`. It is true that no code _reads_ the member today — but
    it is **documented, deliberately-placed in-flight F-1 scaffolding** (the
    `SessionHandle` docstring: "SDK Step 7d follow-on F-1 … Unset ⇒ those stay on
    the bus" — the reader path is the not-yet-built F-1 consumer), and desktop
@@ -115,7 +115,7 @@ the discipline, so nothing was changed.
 3. **The surface reader's `setToolEditApprovalHandler` "still open (Leak 3)" is
    STALE.** It was reasoning from the pre-`f325ea4` coupling-audit text; the
    setter is **gone** at HEAD (item 1 above). Its cited "live site"
-   (`packages/cli/.../approvalQueue.ts`) references the *new* session-scoped
+   (`packages/cli/.../approvalQueue.ts`) references the _new_ session-scoped
    `ToolEditApprovalRequest` data type, not the retired global. Do not re-flag.
 
 ## Genuinely-new candidates — surfaced by this fan-out, absent from all prior docs
@@ -134,7 +134,7 @@ a doc-accuracy nuance. Record, don't sweep.
    `RetryableInvocationNode`) needs the retrying `Node`. (b) These inner flows
    run to completion inside a single non-persisted outer-node `exec()`
    (`ResponseCycleNode.ts:97-111`, `ToolUseCycleNode.ts:78-124`) — only the
-   *outer* flow is a `PersistedFlow`/`RoundPersistedFlow`. So the 5-node /
+   _outer_ flow is a `PersistedFlow`/`RoundPersistedFlow`. So the 5-node /
    4-node graph decomposition buys **neither** retry (one node needs it) **nor**
    resume (the outer flow owns that); the `.on(COMPLETE, finalizeNode)` wiring
    and `SkippableNodeResult` plumbing are pure structure. Collapsing the inner
@@ -143,15 +143,15 @@ a doc-accuracy nuance. Record, don't sweep.
    node, `ResponseCycleFlow.ts:434`) and the documented double-`recordRound`
    hazard it creates. **This refines, does not overturn**, the standing
    "PocketFlow flow layer — do NOT refactor" ruling: the prior rebuttal
-   (audit `:2059`) addressed the *outer* wrapper node's orchestration; this is a
-   distinct, sharper claim about the *inner* graph. It is the largest single
+   (audit `:2059`) addressed the _outer_ wrapper node's orchestration; this is a
+   distinct, sharper claim about the _inner_ graph. It is the largest single
    structure change proposed anywhere in the readiness program and collides with
    the deliberate "pure-exec / consistency-with-persisted-outer-flows"
    discipline — strategic, not a sweep.
 
 2. **`RunContext`'s `launch | bare` union forces six branch accessors** _(LOW;
    downstream of F4)_. `getRunContext{RuntimeHost,StreamId,ExecutionId,AgentName,
-   WorkingDirectory,Session}` (`RunContext.ts:181-233`) are each an identical
+WorkingDirectory,Session}` (`RunContext.ts:181-233`) are each an identical
    `context?.kind === 'launch' ? context.runScope.X : context.X` branch, existing
    only because `launch` nests a `RunScope` while `bare` inlines the same flat
    fields — and `bare` is documented as "exclusively for manually constructed
@@ -183,7 +183,7 @@ a doc-accuracy nuance. Record, don't sweep.
    not remove)_. The detailed audit (`:497`) lists it among "genuinely shared"
    utilities. Precisely: it has **exactly one importer**
    (`openai/modelHandlerOpenAI.ts`) and **no subclasses** (`grep "extends
-   BaseReasoning"` → 0). It is cohesive single-caller stream state, not a shared
+BaseReasoning"` → 0). It is cohesive single-caller stream state, not a shared
    base — the `Base` prefix and "shared" framing are both mildly overstated.
    Mirrors the 07-09 `IModelHandler` "cannot drift" doc-nuance: refine the
    characterization (single-caller cohesive helper), do not remove it.
@@ -193,30 +193,30 @@ a doc-accuracy nuance. Record, don't sweep.
 The fan-out independently re-derived the following; each is already recorded and
 adjudicated. Rulings held, no new action.
 
-| Re-derived this pass | Already tracked at | Standing disposition |
-| --- | --- | --- |
-| Retire the `Shared*` execution/subscription/status singletons → session-only ownership (`executionRegistry.ts:927`,`:301`; `StreamStatusService`; ~33 direct call sites) | 07-09 subagent split point #4 ("relocate the remaining module-global registries onto the per-session handle") | **Strategic** — the Stage-5 session-ownership train is paying this down; dual-ownership is documented transitional debt. |
-| Relocate the helper-model / content-helper cluster (8 files: `helperModel*`, `polishModel`, `textEnhancement`, `sessionDescription`, `mediaVisionWarning`) out of `runtime/` | runtime `README.md:33-34` ("if a future refactor touches a whole group's call sites anyway, revisit turning that group into a real subdirectory") | **Reviewed-train** — a grouping decision the README explicitly anticipates; ~180 call-site churn if done alone. |
-| Replace `ProgressViewBridge` port+registry+default with an injected `() => boolean` | audit `:1290`,`:1313` | **Reviewed-train** — recently-reworked for "clearer ownership"; a deliberate port. |
-| Four single-core-caller, VS-Code-only `Platform` diagnostic ports (`linter`, `addCriticismSink`, `toolMissingHandler`, `toolNotificationHandler`) | 07-09 #4 | **Reviewed-train** — still present at HEAD (`platform.ts:54-72`); host-wiring signature change across three hosts. |
-| `SdkToolCall` 6-variant clone union → one generic `NormalizedToolCall<P,Raw,Input>` | 07-09 #2 | **Reviewed-train** — exported shared-contract surface (now at `agent/types/ModelHandlerContracts.ts`). |
-| `IToolUseSession` single-impl port; `TaskState` `.refine(...) as` double-cast instead of a discriminated `AgentConfig` union | audit (`IToolUseSession`); `TaskState.ts:40-62` | **Reviewed-train** — the port keeps `core/flows` off the concrete follow-up queue (dependency-direction rule); `AgentConfig`-as-discriminated-union touches the persisted execution record. |
-| No packaged entry / hosts deep-import ~30–45 `@agent/*` modules each (incl. `modelHandlers/*` and `implementations/flows/*` internals); no `@agent/runtime` barrel | north-star §3 (MONO-1), Step 0 (R-a/R-b ratchets), Step 3 (packaging) | **Strategic/gated** — packaging waits on a real external consumer + the import-boundary gate; barrels are banned before Stage-5 vocabulary freezes. |
-| No minimal / in-memory default `Platform` for an embedder (11 required ports) | north-star §2 NS-1 (the bootstrap incantation) | **Strategic** — the CLI-as-canonical-example Step 2 folds the bootstrap into `nodeHost`. |
-| `getApiKey` credential/tier policy → `CredentialResolver`; a `runTurn`/`streamTurn` façade over the ~40-member `IModelHandler`; `createChannelTrace` → 4-method `ChannelLogger`; provider-identity getters → capability table; per-host `runSession()` choreography | 07-09 table (audit `:2546`, `-07-05`/`-07-06`/`-07-08`, `logger-surface-cleanup` PRD) | **Reviewed-train / strategic** — unchanged; the F6 / Stage-5 / #7560 train advances the choreography incrementally. |
+| Re-derived this pass                                                                                                                                                                                                                                                | Already tracked at                                                                                                                                | Standing disposition                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Retire the `Shared*` execution/subscription/status singletons → session-only ownership (`executionRegistry.ts:927`,`:301`; `StreamStatusService`; ~33 direct call sites)                                                                                            | 07-09 subagent split point #4 ("relocate the remaining module-global registries onto the per-session handle")                                     | **Strategic** — the Stage-5 session-ownership train is paying this down; dual-ownership is documented transitional debt.                                                                    |
+| Relocate the helper-model / content-helper cluster (8 files: `helperModel*`, `polishModel`, `textEnhancement`, `sessionDescription`, `mediaVisionWarning`) out of `runtime/`                                                                                        | runtime `README.md:33-34` ("if a future refactor touches a whole group's call sites anyway, revisit turning that group into a real subdirectory") | **Reviewed-train** — a grouping decision the README explicitly anticipates; ~180 call-site churn if done alone.                                                                             |
+| Replace `ProgressViewBridge` port+registry+default with an injected `() => boolean`                                                                                                                                                                                 | audit `:1290`,`:1313`                                                                                                                             | **Reviewed-train** — recently-reworked for "clearer ownership"; a deliberate port.                                                                                                          |
+| Four single-core-caller, VS-Code-only `Platform` diagnostic ports (`linter`, `addCriticismSink`, `toolMissingHandler`, `toolNotificationHandler`)                                                                                                                   | 07-09 #4                                                                                                                                          | **Reviewed-train** — still present at HEAD (`platform.ts:54-72`); host-wiring signature change across three hosts.                                                                          |
+| `SdkToolCall` 6-variant clone union → one generic `NormalizedToolCall<P,Raw,Input>`                                                                                                                                                                                 | 07-09 #2                                                                                                                                          | **Reviewed-train** — exported shared-contract surface (now at `agent/types/ModelHandlerContracts.ts`).                                                                                      |
+| `IToolUseSession` single-impl port; `TaskState` `.refine(...) as` double-cast instead of a discriminated `AgentConfig` union                                                                                                                                        | audit (`IToolUseSession`); `TaskState.ts:40-62`                                                                                                   | **Reviewed-train** — the port keeps `core/flows` off the concrete follow-up queue (dependency-direction rule); `AgentConfig`-as-discriminated-union touches the persisted execution record. |
+| No packaged entry / hosts deep-import ~30–45 `@agent/*` modules each (incl. `modelHandlers/*` and `implementations/flows/*` internals); no `@agent/runtime` barrel                                                                                                  | north-star §3 (MONO-1), Step 0 (R-a/R-b ratchets), Step 3 (packaging)                                                                             | **Strategic/gated** — packaging waits on a real external consumer + the import-boundary gate; barrels are banned before Stage-5 vocabulary freezes.                                         |
+| No minimal / in-memory default `Platform` for an embedder (11 required ports)                                                                                                                                                                                       | north-star §2 NS-1 (the bootstrap incantation)                                                                                                    | **Strategic** — the CLI-as-canonical-example Step 2 folds the bootstrap into `nodeHost`.                                                                                                    |
+| `getApiKey` credential/tier policy → `CredentialResolver`; a `runTurn`/`streamTurn` façade over the ~40-member `IModelHandler`; `createChannelTrace` → 4-method `ChannelLogger`; provider-identity getters → capability table; per-host `runSession()` choreography | 07-09 table (audit `:2546`, `-07-05`/`-07-06`/`-07-08`, `logger-surface-cleanup` PRD)                                                             | **Reviewed-train / strategic** — unchanged; the F6 / Stage-5 / #7560 train advances the choreography incrementally.                                                                         |
 
 ## Adjudicated traps the fan-out re-surfaced — rulings held
 
 No change.
 
-| Re-surfaced candidate | Ruling |
-| --- | --- |
-| The `ResponseCycleNode`/`ToolUseCycleNode` "`exec()` marshals state → runs inner flow → interprets outcome" wrapper is removable indirection | **Keep** (audit `:2059`) — the outer node owns real per-round orchestration (`getClient`/`refreshClient` closure pair, `workPlan.setOnUpdate` todo wiring, outcome→`shared` mapping). Distinct from new candidate #1, which is about the *inner* graph. |
-| Remove `IModelHandler` as a "duplicate" of `ModelHandler` | **Trap** — `Pick<ModelHandler>` + optional `createBatchedToolUseFollowUpMessages`; removal breaks a real import cycle. |
-| Fold the single-caller flow factories `createResponseCycleFlow` / `createToolUseRoundFlow` into their Nodes | **Keep** — this **is** the prescribed `Node.exec() → createFlow() → run()` shape (CLAUDE.md). |
-| `runAgent` / `executeAgent` dual entry is redundant | **Keep** — two documented responsibilities (executionId+register+workflow-output vs the run). |
-| Collapse OpenAI-compatible subclasses to a config table | **Trap** — each carries real per-provider overrides; DashScope alone is thin and is enum-mandated by the exhaustive route table. |
-| Delete `bestConnectionMethodAnthropic` / the `openaiApiKey` branch in `textConnection.ts` as dead code | **False positive (07-09)** — live in `packages/extension/.../connectionTests.ts`. Do not delete. |
+| Re-surfaced candidate                                                                                                                        | Ruling                                                                                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The `ResponseCycleNode`/`ToolUseCycleNode` "`exec()` marshals state → runs inner flow → interprets outcome" wrapper is removable indirection | **Keep** (audit `:2059`) — the outer node owns real per-round orchestration (`getClient`/`refreshClient` closure pair, `workPlan.setOnUpdate` todo wiring, outcome→`shared` mapping). Distinct from new candidate #1, which is about the _inner_ graph. |
+| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                                                                                    | **Trap** — `Pick<ModelHandler>` + optional `createBatchedToolUseFollowUpMessages`; removal breaks a real import cycle.                                                                                                                                  |
+| Fold the single-caller flow factories `createResponseCycleFlow` / `createToolUseRoundFlow` into their Nodes                                  | **Keep** — this **is** the prescribed `Node.exec() → createFlow() → run()` shape (CLAUDE.md).                                                                                                                                                           |
+| `runAgent` / `executeAgent` dual entry is redundant                                                                                          | **Keep** — two documented responsibilities (executionId+register+workflow-output vs the run).                                                                                                                                                           |
+| Collapse OpenAI-compatible subclasses to a config table                                                                                      | **Trap** — each carries real per-provider overrides; DashScope alone is thin and is enum-mandated by the exhaustive route table.                                                                                                                        |
+| Delete `bestConnectionMethodAnthropic` / the `openaiApiKey` branch in `textConnection.ts` as dead code                                       | **False positive (07-09)** — live in `packages/extension/.../connectionTests.ts`. Do not delete.                                                                                                                                                        |
 
 ## Subagent split points — re-confirmed, gating observation unchanged
 
@@ -276,7 +276,7 @@ reviewed-train items unattended.
   (no barrel regression), `emitRuntimeEvent` **retired** (sole grep hit is
   `sessionFactAmbientHelperRetirement.vitest.ts`), `RunScope.ts:15-18` carries
   `streamId`/`executionId`/`agentName` (now `readonly`), `Node.exec →
-  createFlow().run` intact (`ResponseCycleNode.ts:97,111`;
+createFlow().run` intact (`ResponseCycleNode.ts:97,111`;
   `ToolUseCycleNode.ts:78,124`), F4 flat identity fields **gone** from
   `AgentLaunchContext` (0 flat-field decls).
 - PR-train advances verified in-tree: `f325ea4` deletes `setToolEditApprovalHandler`
@@ -300,6 +300,6 @@ reviewed-train items unattended.
 - Delegation depth verified still tracked-but-ungated (`delegationPolicy.ts`;
   no `maxDelegationDepth`, 0 grep hits).
 - No source files changed this pass; no build/typecheck run required
-  (documentation only, added under `docs/proposals/`, an internal directory
-  excluded from the texra.ai publish allowlist — not a root-level doc).
+(documentation only, added under `docs/proposals/`, an internal directory
+excluded from the texra.ai publish allowlist — not a root-level doc).
 </content>
