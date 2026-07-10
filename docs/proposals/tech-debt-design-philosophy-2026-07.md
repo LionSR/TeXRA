@@ -6,7 +6,7 @@
 
 ## Part E — Design-philosophy evaluation (APoSD — A Philosophy of Software Design)
 
-Eight design verdicts survived adversarial verification across four APoSD lenses. The headline: this codebase is **not shallow-module-sick**. The deep abstractions are genuinely deep (discriminated-union fact types, an ALS run-context bridge, a lifecycle-owning interaction slot), and the four largest info-leak smells from prior audits (L4–L7) have already been closed with real deepening, not band-aids. What survives is a thin residue of **transitional vestiges** (Stage-5 migration in flight) and **single-field/single-literal duplications** — every actionable fix is a net-deletion measured in single-digit LoC, and every one _narrows_ an interface toward what the code actually does. The two medium-weight structural costs (fat services bag, dual run-identity carrier) are correctly non-actionable: their cure is deletion that hasn't landed yet, not a new abstraction.
+Six design verdicts survived adversarial verification across four APoSD lenses (two further findings, L1 and L2, were retracted 2026-07-10 as fabricated — see below, #7713). The headline: this codebase is **not shallow-module-sick**. The deep abstractions are genuinely deep (discriminated-union fact types, an ALS run-context bridge, a lifecycle-owning interaction slot), and the four largest info-leak smells from prior audits (L4–L7) have already been closed with real deepening, not band-aids. What survives is a thin residue of **transitional vestiges** (Stage-5 migration in flight) and **single-field/single-literal duplications** — every actionable fix is a net-deletion measured in single-digit LoC, and every one _narrows_ an interface toward what the code actually does. The one remaining medium-weight structural cost (fat services bag) is correctly non-actionable: its cure is deletion that hasn't landed yet, not a new abstraction.
 
 ### Module-depth scorecard
 
@@ -14,8 +14,8 @@ Eight design verdicts survived adversarial verification across four APoSD lenses
 | --------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Runtime** (`AgentRuntimeHost` emit contract, `SessionHandle`, `RunContext` ALS) | ok              | Deep ALS bridge + lifecycle core, but the host `emit<K>` port still advertises **6 approval events nothing emits** (`runtimeInteractionEvents.ts:19-40`) — dead interface surface, a Stage-5 vestige narrowing toward removal.                                 |
 | **Interactions plane** (`SessionHostInteractions`, `ProgressInteractionHandler`)  | ok              | Thin forwarders that each do _real_ work — optional→total normalization + swap/restore/dispose lifecycle (`HostInteractions.ts:199-270`), a `#7363` disposed-guard (`ProgressBackend.ts:156`). Not pure indirection; one dead field + one inert field to trim. |
-| **Facts plane** (`SessionFact`, `ToolResult`, `StreamPhase`, `runFact`)           | **deep**        | Fact-native discriminated unions replaced the old bus-vocabulary leaks (L4/L5/L6/L7 resolved). Sole residue: one `'runFact.'` literal hand-copied into the transcript recorder (`TexraTranscriptRecorder.ts:40`).                                              |
-| **FS/storage stack** (path resolution via ALS `RunContext`)                       | **deep**        | Every tool reads `workingDirectory` through **one** ALS reader; the dual carrier is a single dead bag field (`BaseFlowServices.ts:45`). No surviving structural defect.                                                                                        |
+| **Facts plane** (`SessionFact`, `ToolResult`, `StreamPhase`, `runFact`)           | **deep**        | Fact-native discriminated unions replaced the old bus-vocabulary leaks (L4/L5/L6/L7 resolved). No surviving residue: `runFactEvents.ts` already routes facts as typed `AgentEvent` arms, no `'runFact.'` literal exists anywhere (L2 retracted, #7713).        |
+| **FS/storage stack** (path resolution via ALS `RunContext`)                       | **deep**        | Every tool reads `workingDirectory` through **one** ALS reader; there is no dual bag field to begin with (L1 retracted, #7713). No surviving structural defect.                                                                                                |
 | **PocketFlow flows** (ToolUse Prepare/Cycle/Wait, `ToolUseServices`)              | SHALLOW-leaning | Fat ~27-field services bag, ~74% unread per node (`ToolUseServices.ts:14-42`) — a genuine shallow/leaky parameter object. But the Prepare/Cycle/Wait temporal split + shared-store round-trip is **framework-idiomatic**; only a dead field is actionable.     |
 | **Agents layer** (`AgentLaunchContext` assemble/bridge, YAML agents)              | **deep**        | Single-owner construction boundary: `agentContextToRunContext` resolves run-identity facts once into the ALS (`AgentLaunchContext.ts:138-163`). Protect.                                                                                                       |
 
@@ -56,18 +56,33 @@ Eight design verdicts survived adversarial verification across four APoSD lenses
 
 ### Information leakage (Ch5)
 
-**L1 — Run-identity facts live on BOTH the flow-services bag and the ALS `RunContext`, bridged by a manual copy.** _(CONFIRMED, low. Overlaps the dual-state pass — see below.)_
+**L1 — RETRACTED — fabricated `workingDirectory` dual-carrier claim (#7713).**
 
-- **Verdict / measurement.** `workingDirectory` is a genuine 3-hop pass-through (`AgentConfig.workingDirectory` → `AgentCore.workingDirectory` → `RunContext.workingDirectory`) whose middle hop has **exactly one reader**. The bag field (`BaseFlowServices.ts:45`) is **written once** (`AgentLaunchContext.ts:474`) and **read once** (`:163`, the ALS bridge); every tool reads it from the ALS instead (`pathResolution.ts:58`, `bash.ts:145`, `codex.ts:534`, `claudeAgent.ts:554`, `DiagnosticsTool.ts:120`, `InlineCommentTool.ts:169/227`, `githubSubscriptionTool.ts:446`) — **0** `services.workingDirectory` readers repo-wide.
-- **Fix (net-delete, deepens).** At the ALS bridge (`:163`) read `ctx.config.workingDirectory?.trim() || undefined`; delete `AgentCore.workingDirectory` (`:45`) and its write (`:474`). ~2 LoC, 0 new callers — collapses the dual carrier for that one field without merging scopes. `AgentRunIdentity` is **already off the node-facing surface** (`ToolUseServices` extends `AgentCore`, not `AgentRunIdentity`; nodes read via `useLaunchRunContext`, `ToolUseCycleNode.ts:57`), so its portion is already satisfied.
-- **REJECTED TRAP.** Do **not** merge the bag and the ALS into one carrier or thread a fat parameter object (deeper DI — rejected). The bag (explicit lifecycle object) and the ALS (ambient tool context) serve distinct scopes; lifecycle code outside the ALS boundary legitimately reads `ctx.*`. Do **not** strip `AgentRunIdentity` from `AgentLaunchContext` — it has multiple genuine readers there (`:157-159,466,471-472`).
-- **Overlap.** `dual_state: true` — this is the same finding the dual-state/coupling pass sees as a duplicated carrier; dedup there, but keep the DESIGN framing (single-field pass-through collapse).
+- **Correction (2026-07-10, #7713).** This finding claimed `workingDirectory`
+  was declared on both `AgentCore` (`BaseFlowServices.ts:45`) and `RunContext`,
+  bridged by a manual copy at `AgentLaunchContext.ts:163/474`. Verified
+  independently at HEAD: `BaseFlowServices.ts` is 35 lines total and its
+  `AgentCore`/`BaseFlowContextInit` interfaces have no `workingDirectory` field
+  — the field exists only on `AgentConfig` (`AgentConfig.ts:38`) and on
+  `RunContext`/`RunScope` (`RunContext.ts:30,62`, `RunScope.ts:19`), not on the
+  flow-services bag. There is no bag↔RunContext dual for this field and nothing
+  to delete. Retracted in full — see `B2` in the companion runtime/UI audit
+  for the (corrected) list of fields that genuinely are dual-declared on the
+  bag.
 
-**L2 — the `'runFact.'` domain-key protocol string is re-declared in the transcript recorder, bypassing its own encoder module.** _(CONFIRMED, low.)_
+**L2 — RETRACTED — fabricated `'runFact.'` domain-key protocol claim (#7713).**
 
-- **Verdict / measurement.** `runFactEvents.ts:19` owns `RUN_FACT_DOMAIN_PREFIX='runFact.'` and exports `toRunFactDomainKey`/`fromRunFactDomainKey` (`:45-57`). `TexraTranscriptRecorder.ts:40` **re-declares** `const RUN_FACT_DOMAIN_PREFIX = 'runFact.'` and `:380` hand-copies the prefix check (`event.key.startsWith(...)`). One string protocol reflected byte-identical in two modules.
-- **Fix (net-delete, deepens).** Add a one-line `isRunFactDomainKey(key)` predicate to `runFactEvents` and consume it in the recorder; drop the local const. Net −1 duplicated literal. (Prefer a predicate over reusing `fromRunFactDomainKey` — the latter narrows to `RUN_FACT_EVENT_SET` membership and would silently change the drop-set for unknown `runFact.*` suffixes.)
-- **REJECTED TRAP.** Do **not** add a new shared-constants module for the prefix — the encoder module already owns and exports it. Consume, don't relocate.
+- **Correction (2026-07-10, #7713).** This finding claimed `runFactEvents.ts:19`
+  owns `RUN_FACT_DOMAIN_PREFIX='runFact.'` (with `toRunFactDomainKey`/
+  `fromRunFactDomainKey` helpers at `:45-57`) and that `TexraTranscriptRecorder.ts:40`
+  re-declares it. Verified independently at origin/main `4363b4089` (2026-07-10): `runFactEvents.ts` is 34
+  lines, exports only `RunFactPayloads`/`RunFactEventName`/`emitRunFact`, and
+  has no such constant, helpers, or `'runFact.'` string — its header comment
+  says run facts "ride the run trace as explicit `AgentEvent` arms" and
+  "producers no longer encode them through the `domain` escape hatch."
+  `TexraTranscriptRecorder.ts:40` is `function asMessageType(...)`, unrelated.
+  Retracted in full — see A13 in the companion runtime/UI audit for the same
+  correction.
 
 **L3 — temporal decomposition in the ToolUse node family (Prepare/Cycle/Wait share a nullable bag with a runtime `prepared` assertion; snapshot (de)serialization duplicated across siblings).** _(PLAUSIBLE, low — observation real, no clean fix.)_
 
@@ -92,14 +107,14 @@ Eight design verdicts survived adversarial verification across four APoSD lenses
 
 These carried the load in verification and must survive the fixes above:
 
-- **`agentContextToRunContext` / `AgentLaunchContext` assemble-and-bridge** (`AgentLaunchContext.ts:138-163`) — the single-owner construction boundary that resolves run-identity facts **once** into the ALS. L1's own fix sources from it; do not merge scopes into it.
+- **`agentContextToRunContext` / `AgentLaunchContext` assemble-and-bridge** (`AgentLaunchContext.ts:138-163`) — the single-owner construction boundary that resolves run-identity facts **once** into the ALS; do not merge scopes into it.
 - **`RunContext` ALS** (`RunContext.ts:221-227` `useLaunchRunContext`) — ambient tool context, a _distinct_ scope from the services bag. Tools reading `ctx.*` directly is correct, not a leak.
 - **`SessionHostInteractions.use` / lifecycle** (`HostInteractions.ts:199-209,267-270`) — real save/restore/dispose-stack semantics; the total-method normalization is why 3 call sites drop optional chaining. Keep even while trimming the forwarders around it.
 - **`hostInteractionResultMappers.ts`** (107 LoC) — the shared per-host result mapping, correctly deduped after the `*Coordinator` siblings were deleted (#7316; SHALLOW-3 resolved). Do **not** re-abstract the 3 genuinely-divergent per-host impls into a shared coordinator base.
 - **`SessionFact` discriminated union** (`SessionEventHub`) — fact-native named payloads (`GoalStateChangedPayload`, `ClearMissingOutputsPayload`, …); zero `ProgressEventPayloads` leak remains (L4 resolved). Host projections derive from these names, never the reverse.
 - **`ToolResultSchema` discriminated union** (`toolResult.ts:141-180`) — `status:'executed'` (error `z.undefined()`) vs `status:'error'` (error `z.string().min(1)`); the explicit discriminator is the deep fix for the old all-optional loose object (L5 resolved).
 - **`StreamPhase` IPC projection** (`outbound.ts:117-122`) — the 5-value projection at the webview boundary replaced the 7-value `StreamStatus` leak (L6 lens-resolved; residual raw-enum frontend imports are a correctness-pass handoff, not a leakage-lens defect).
-- **`runFactEvents.ts` encoder module** (`:19-57`) — owns the `'runFact.'` protocol; L2's fix _consumes_ it, never relocates it.
+- **`runFactEvents.ts` encoder module** (34 lines) — run facts already ride the run trace as typed `AgentEvent` arms via `emitRunFact`; no `'runFact.'` string protocol exists to relocate (L2 retracted, #7713).
 - **PocketFlow per-node prep/exec/post + shared-store serialize-for-resume model** (`runToolUseFlow.ts:378-403`; structural `kind:'round'` carried from `ToolUseCycleNode.ts:116-122`, L7 resolved) — the ToolUse temporal split is framework-idiomatic; the `PreparedShared` narrowing is the intended single-store idiom. Do not restructure into sub-flows.
 
 ---

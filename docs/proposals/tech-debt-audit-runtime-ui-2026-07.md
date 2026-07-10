@@ -344,39 +344,22 @@ bash cancellation lives in the controller.
 for bash and a full controller for tool-edit adds a type/factory for a 3-line
 win (net-add). Just delete the dead calls.
 
-### A8. Run-fact decode cascade is hand-reimplemented in 4 consumers with a divergent validation predicate (MED, PLAUSIBLE; documented-better-solution; net-add caveat)
+### A8. RETRACTED — decode-cascade claim rests on the retired `'runFact.'` protocol (#7713 follow-through)
 
-**Pins.** Run facts ride the untyped `domain` `AgentEvent` as
-`key:'runFact.'+name`, `data:unknown`, so every consumer independently recovers
-the name via `fromRunFactDomainKey` and parses the payload. Exactly 4 production
-importers (`runFactEvents.ts:11-18` R8 census, dated 2026-07-07):
-`ProgressFactApplier.ts:202-348` casts the 3 output-file facts with `isObject`+`as`
-(`:271-293`, unvalidated); `StreamSnapshotStore.ts:91-102,300-333` Zod-validates
-the same facts; `sessionProgressSubscription.ts:130-134` casts (headless
-passthrough); `subscribeRuntimeHost.ts:269-272` returns false for the 3
-output-file facts (skips them). Just-merged #7627 touched
-`sessionProgressSubscription` but did not consolidate the decode.
-
-**Mechanism.** The decode is duplicated 4× and the validation predicate diverges
-(Zod vs unsafe cast vs skip) for the same 3 facts. Emitters are trusted core code
-so the cast never corrupts today; the live cost is drift risk — a new run fact must
-be wired into 4 hand-written cascades, and missing one silently drops it on that
-host.
-
-**Fix (share the decode, not the sink).** Extract one pure Zod-validated
-`decodeRunFact(streamId, event): RunFactDecoded | undefined` (a discriminated
-union of the 6 run facts + conversationProgress/usage/setTaskState/roundStage/
-child-activity/process-output) in `runFactEvents.ts` (already imported by all 4);
-relocate the 3 local `*RunFactSchema` there (net 0 schemas). Each consumer becomes
-a `switch` on `decoded.kind` → its own sink. **Honest caveat (R6):** this repo's
-refactor-LoC lesson shows extractions across divergent sites net-_add_; the payoff
-is single-validation + one wire-up point at the cost of +1 function/+1 type, not a
-LoC win. Stepping-stone to the v0.41 typed-arm end state.
-
-**Rejected trap (R4).** Sharing the _sink_ (one reducer across CLI+webview+persistence)
-is confirmed-divergent — CLI keeps `status.cause` (`:96`) the webview drops; CLI
-TUI skips the 3 output-file facts. Share only the decode; each consumer keeps its
-own apply.
+**Correction (2026-07-10, follow-through on #7713).** This finding's pins rest
+on the same fabricated/stale protocol as A13: run facts riding the `domain`
+`AgentEvent` as `key:'runFact.'+name` with consumers recovering the name via
+`fromRunFactDomainKey`. Verified independently at origin/main `4363b4089` (2026-07-10): `fromRunFactDomainKey`,
+`toRunFactDomainKey`, and `RUN_FACT_DOMAIN_PREFIX` have zero hits repo-wide
+(`git grep` across `src/` and `packages/`), and `runFactEvents.ts` is a 34-line
+module exporting only `RunFactPayloads`/`RunFactEventName`/`emitRunFact` — the
+string-prefix protocol was retired during the Stage-5 close-out (#6968), so the
+described 4× hand-decode cascade cannot exist as cited. The four file:line pins
+above date from before that retirement and no longer describe the code. If a
+divergent-validation concern survives in the post-Stage-5 typed-arm shape, it
+needs a fresh audit with true pins to re-file; nothing here should be cited as
+evidence. (Issue #7713 flagged five sibling fabrications, retracted in the same
+PR; this one was found by the same grep and retracted for consistency.)
 
 ### A9. `goalStateChanged → updateGoalActive` derivation duplicated in extension + desktop; the shared applier receives the fact but no-ops it (LOW; net ≈ −20 LoC, −2 subscription surfaces)
 
@@ -498,27 +481,20 @@ touch `cliProgressEvents.ts:64` or `sessionProgressSubscription.ts:65-66` —
 `setActiveStream` (`subscribeApprovals.ts:580`) and the 3 bypass states
 (`streamApprovalQueue.ts:64`) are live host-emit-driven.
 
-### A13. `'runFact.'` domain-key prefix constant duplicated verbatim instead of imported (LOW; net −1 declaration)
+### A13. RETRACTED — fabricated `'runFact.'` domain-key prefix claim (#7713)
 
-**Pins.** `runFactEvents.ts:19` `const RUN_FACT_DOMAIN_PREFIX = 'runFact.'`
-(non-exported; module owns `to/fromRunFactDomainKey`). `TexraTranscriptRecorder.ts:40`
-re-declares the identical const, consumed at `:380`
-`if (event.key.startsWith(RUN_FACT_DOMAIN_PREFIX)) return;` (skips run-fact domain
-events from the transcript).
-
-**Mechanism.** A string-protocol constant with two owners on the fact rail. The
-v0.41 sunset plans to retire the prefix; if it changes, the recorder's skip guard
-silently desyncs and run-fact payloads leak into the persisted transcript.
-
-**Fix (net-delete).** Export `RUN_FACT_DOMAIN_PREFIX` from `runFactEvents.ts` and
-import it in `TexraTranscriptRecorder.ts` (no cycle: `StreamSnapshotStore`, also
-`@transcript`, already imports from `runFactEvents`).
-
-**Rejected trap.** Replacing `startsWith` with
-`fromRunFactDomainKey(...)!==undefined` is wrong — `startsWith` deliberately skips
-_all_ `runFact.*` keys including future/unknown ones; the decode rejects unknown
-keys, so an unrecognized run fact would then leak into the transcript. Share only
-the prefix.
+**Correction (2026-07-10, #7713).** This finding claimed a
+`RUN_FACT_DOMAIN_PREFIX = 'runFact.'` constant declared in `runFactEvents.ts:19`
+and re-declared in `TexraTranscriptRecorder.ts:40`. Verified independently at
+HEAD: `runFactEvents.ts` is 34 lines, exports only `RunFactPayloads`/
+`RunFactEventName`/`emitRunFact`, and contains no such constant, no
+`to/fromRunFactDomainKey` helpers, and no `'runFact.'` string anywhere — its own
+header comment says run facts "ride the run trace as explicit `AgentEvent` arms"
+and "producers no longer encode them through the `domain` escape hatch."
+`TexraTranscriptRecorder.ts:40` is `function asMessageType(...)`, unrelated to
+run facts. Neither side of the claimed duplication exists; there is nothing to
+fix. Retracted in full. (This also retracts the `DUAL-8` row it fed in
+`tech-debt-error-ownership-2026-07.md` Part D — see the correction there.)
 
 ### A14. `TaskGroup.index/total` are projected core→UI on every round group but read by nobody — a dead duplicate of the live `roundStage.index/total` fact (LOW; net −6 LoC; R1 dual-state)
 
@@ -681,16 +657,31 @@ abstraction (net-add). Do **not** delete the legacy READ arm — pre-sidecar
 on-disk runs need it (legitimate R1 external-data exception; keep as a dated
 age-based #6981 row). Stop the WRITE, not the store.
 
-### B2. Bag↔RunContext split-brain half-collapsed: 5 per-run fields still dual-declared + dual-read (MED; net-delete via per-field collapse; R1 dual-state)
+### B2. Bag↔RunContext split-brain half-collapsed: 4 per-run fields still dual-declared + dual-read (MED; net-delete via per-field collapse; R1 dual-state)
 
 **R1 dual-state — internal core dual (not host coupling); single write owner
 (`agentContextToRunContext`) so no value divergence — maintenance tax only; no
 in-flight deletion PR. This is the corpus B6 residual after streamId/executionId/
 runtimeHost were collapsed (see C).**
 
-**Pins.** Five fields declared on BOTH the flow-service bag and `RunContextCommon`:
+**Correction (2026-07-10, #7713).** This finding originally also listed
+`workingDirectory` (claimed at `BaseFlowServices.ts:45`) as a fifth dual-declared
+field. Verified independently at origin/main `4363b4089` (2026-07-10): `BaseFlowServices.ts` is 35 lines and its
+`AgentCore`/`BaseFlowContextInit` interfaces have no `workingDirectory` field at
+all — the claim doesn't match the code. Removed from the list below; the other
+four fields did check out at the audit pin `54c3bed25`.
+
+**Resolved (2026-07-10, codex review on #7922).** Since the audit pin, the
+RunScope single-carrier train finished the collapse: at origin/main `9694f42aa`
+(post-#7838/#7841), `BaseFlowServices.ts` declares none of the four fields and
+`ResponseCycleFlow.ts` reads them from `runContext` directly. The remaining
+multi-declaration (executeAgent options -> RunContext carrier) is the sanctioned
+resolve-once-at-boundary shape, not a bag dual. This finding is now historical;
+the R1 dual-state row for it should be counted as closed.
+
+**Pins.** Four fields declared on BOTH the flow-service bag and `RunContextCommon`:
 `BaseFlowServices.ts:31,33` (`delegationDepth`/`approvalPromptsUnavailable`, inside
-`DelegationPolicy`), `:45` `workingDirectory`, `:48` `runtimeUnavailableTools`;
+`DelegationPolicy`), `:48` `runtimeUnavailableTools`;
 `ToolUseServices.ts:27` `stopAfterCycle`; re-declared at `RunContext.ts:13-17`;
 single copy site `AgentLaunchContext.ts:156-170`. Flows read the bag
 (`ResponseCycleFlow.ts:216,220`; `runToolUseFlow.ts:164/169/170/185`;
@@ -711,10 +702,8 @@ the ~7 flow read sites at `useLaunchRunContext()` (`ToolUseWaitNode` already hol
 it at `:58`; `core/flows` already imports the helper) and delete the fields from
 `AgentCore`/`DelegationPolicy`/`ToolUseServices`, re-homing the projection-source
 ones on `AgentLaunchContext` (`stopAfterCycle` already lives there at `:85` = a
-clean −1). **Zero-risk subset first:** `workingDirectory` has NO flow reader
-(confirmed grep) — delete `BaseFlowServices.ts:45` outright; then `stopAfterCycle`.
-`delegationDepth`'s `?? 0` normalization is idempotent at every reader, so
-switching to the raw RunContext value is behavior-preserving.
+clean −1). `delegationDepth`'s `?? 0` normalization is idempotent at every reader,
+so switching to the raw RunContext value is behavior-preserving.
 
 **Rejected trap.** Do **not** build the target `RunScope` frozen object
 (session-scoped-runtime-architecture.md:416-424) as a new shared construct to
@@ -1086,7 +1075,7 @@ Per fewer-elements R1, no dual-system may rest without an open delete PR or a da
 | A15 | `TaskGroupList` `/^r\d+$/`                      | string-vs-typed encoding    | none                             | none             | inert on HEAD runs                                         |
 | A16 | `ApprovalRequestHandler` replay                 | complementary registries    | none                             | none             | **won't-do closure** (justified split)                     |
 | B1  | KV dual-write todos+conversation                | code-to-code dual-write     | none                             | pending #7246 D1 | **two of the ten known duals**                             |
-| B2  | bag↔RunContext 5 fields                         | internal core dual          | none                             | none             | corpus B6 residual; single write owner                     |
+| B2  | bag↔RunContext 4 fields                         | internal core dual          | none                             | none             | corpus B6 residual; single write owner                     |
 | B3  | `TaskState` parallel shape                      | derived-only shape          | none                             | none             | **one of the ten known duals**; delete gated on CLI freeze |
 | B10 | `executions/` + `taskRuns/`                     | dual dir names              | none                             | none             | external-data-adjacent; needs dated row                    |
 
@@ -1219,8 +1208,8 @@ Verified sound in passing; fixes here would be net-negative churn.
    dual owner, 6 phantom emit arms, dead `bashApprovalController` sweeps; each
    net-delete or net-neutral, all shrinking the core→host contract.
 6. **B2 finish the bag↔RunContext per-field collapse** — the maintainer's explicit
-   split-brain concern; do the zero-risk subset (`workingDirectory`, then
-   `stopAfterCycle`) first; **not** via a new `RunScope` construct.
+   split-brain concern; do the zero-risk subset (`stopAfterCycle`, already homed on
+   `AgentLaunchContext`) first; **not** via a new `RunScope` construct.
 7. **A3 synthetic-entry deletion** — lands with issue #7086's fix (in-flight PR #7601, recorder stable-id); −120
    LoC of the most fragile CLI state code.
 8. **B4 `ResolvedAgent`, B5 follow-up loop, B6 `FINALIZE`, B7 retry double-read,
@@ -1244,7 +1233,7 @@ Verified sound in passing; fixes here would be net-negative churn.
 13. **EP-1 `maxAttempts` inert for Anthropic/OpenAI/OpenAIResponse** (Part C) — `texra.model.retry.maxAttempts:0` is silently ignored (the SDK default of 2 owns it); correct the setting description + align the `RetryState` fallback default. Net-neutral, removes a false promise.
 14. **UICPL-02 headless failure-as-crash + UICPL-03/01 duplicate error rows** (Part C) — a routine provider failure prints as a "please report this bug" CLI crash and renders 2–3 transcript rows per failure; consume the classified terminal error at the CLI boundary and demote one emitter. Net-delete.
 15. **Firm dual-state R1 violations** (Part D): DUAL-2 (`setTaskState` projection), DUAL-4 (`conversation.json` write-only dual), DUAL-6 (on-disk status shims — needs the R2(2) dated window), DUAL-9 (`ApprovalRequestHandler` residual), DUAL-10 (`RESTART_REPAIR_PHASES` dup, −4 LoC do-now). DUAL-10 is a trivial do-now; the rest each need a dated #6981 row or an open delete PR to stop resting.
-16. **APoSD net-deletes** (Part E): PT-2 (delete `SessionHandle.useHostInteractions` pass-through, retarget 13 callers), L2 (`runFact.` predicate — consume, don't re-copy), DI-1/L1 single dead bag fields — overlaps B2; all single-digit-LoC deepenings that narrow an interface toward what the code does.
+16. **APoSD net-deletes** (Part E): PT-2 (delete `SessionHandle.useHostInteractions` pass-through, retarget 13 callers), DI-1 dead `attachedMemoryMisses` bag field — overlaps B2; single-digit-LoC deepenings that narrow an interface toward what the code does. (L1/L2 retracted, #7713 — their premises didn't match the code.)
 17. **EP-3 `requestShowInstruction` single-consumer leak** (Part C) — CLI/desktop silently drop actionable instructions (missing-API-key, missing-outputs) and `@shared` hardcodes "extension settings"; add the missing per-host consumer on the existing `runtimeHost.emit` path, de-hardcode the string.
 18. **TC-2 CLI bundle `keepNames`** (Part C) — +1 build-config line; the published CLI mis-classifies untagged errors after minification. Trivial.
 
