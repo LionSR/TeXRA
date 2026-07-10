@@ -114,6 +114,13 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
       tabIndex: SETTINGS_TAB_INDEX.TOOLS,
     },
   );
+  // Wait for both the tab panel to be marked active AND its tools-tab
+  // content to have finished loading. ToolsTab renders a `.loading-state`
+  // placeholder while `loaded` is false and swaps in `<tool-card>` elements
+  // once the tool dashboard data has arrived (see ToolsTab.ts render()); the
+  // panel's scrollHeight only reflects real content after that swap, so
+  // gating on `[active]` alone races the content population and can catch
+  // the panel mid-load (scrollHeight === clientHeight).
   await launched.page.waitForFunction(
     () => {
       const dialog = document.querySelector(
@@ -122,7 +129,12 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
       const settingsApp = dialog?.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
       if (!root) return false;
-      return root.querySelector('wa-tab-panel[name="tools"][active]') != null;
+      const panel = root.querySelector('wa-tab-panel[name="tools"][active]');
+      if (!panel) return false;
+      const toolsTab = panel.querySelector('tools-tab');
+      const toolsRoot = toolsTab?.shadowRoot;
+      if (!toolsRoot) return false;
+      return toolsRoot.querySelector('tool-card') != null;
     },
     undefined,
     { timeout: 10_000 },
