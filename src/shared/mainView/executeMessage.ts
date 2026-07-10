@@ -1,5 +1,7 @@
-import { MULTIPLE_DOCUMENT_FILE_TYPES } from '../schemas/fileTypes';
-import type { MainViewExecuteMessage } from '../schemas/mainView/executeMessage';
+import type {
+  MainViewExecuteFiles,
+  MainViewExecuteMessage,
+} from '../schemas/mainView/executeMessage';
 import type {
   CheckboxValues,
   MultiFiles,
@@ -20,7 +22,17 @@ export interface MainViewExecutionFormState {
   readonly checkboxValues: CheckboxValues;
 }
 
-type MainViewMultipleFileSelections = Record<string, string[] | boolean>;
+type MainViewMultipleFileSelections = Pick<
+  MainViewExecuteFiles,
+  | 'inputFiles'
+  | 'inputFilesActive'
+  | 'contextFiles'
+  | 'contextFilesActive'
+  | 'mediaFiles'
+  | 'mediaFilesActive'
+  | 'outputFiles'
+  | 'outputFilesActive'
+>;
 
 export function buildMainViewExecuteMessage(
   state: MainViewExecutionFormState,
@@ -40,15 +52,18 @@ export function buildMainViewExecuteMessage(
   };
 }
 
+/** Output files aren't user-selectable at execute time, so that list is always empty. */
 function buildMainViewMultipleFileSelections(
   multiFiles: MultiFiles,
 ): MainViewMultipleFileSelections {
-  const selections: MainViewMultipleFileSelections = {};
-  for (const type of MULTIPLE_DOCUMENT_FILE_TYPES) {
-    const listId = `${type}Files` as keyof MultiFiles;
-    const files = type === 'output' ? [] : (multiFiles[listId] ?? []);
-    selections[listId] = files;
-    selections[`${listId}Active`] = files.length > 0;
-  }
-  return selections;
+  return {
+    inputFiles: multiFiles.inputFiles,
+    inputFilesActive: multiFiles.inputFiles.length > 0,
+    contextFiles: multiFiles.contextFiles,
+    contextFilesActive: multiFiles.contextFiles.length > 0,
+    mediaFiles: multiFiles.mediaFiles,
+    mediaFilesActive: multiFiles.mediaFiles.length > 0,
+    outputFiles: [],
+    outputFilesActive: false,
+  };
 }

@@ -191,6 +191,6 @@ export async function withAgentCliApproval(
   }
 
   const contexts = getCurrentToolContexts();
-  contexts?.callContext?.onExecutionReady?.();
+  contexts?.callContext?.hooks?.onExecutionReady?.();
   return run(contexts?.runContext);
 }
