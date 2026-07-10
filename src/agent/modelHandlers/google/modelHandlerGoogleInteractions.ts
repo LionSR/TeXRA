@@ -56,6 +56,7 @@ import {
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
+  supportsGoogleFileUploads,
   uploadGoogleMediaEntries,
 } from './googleHandlerShared';
 
@@ -500,9 +501,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // ===========================================================================
 
   private supportsFileUploads(): boolean {
-    return (
-      this.capabilities.supportsVision || this.capabilities.supportsNativeAudio
-    );
+    return supportsGoogleFileUploads(this.capabilities);
   }
 
   private isGemini3Model(): boolean {

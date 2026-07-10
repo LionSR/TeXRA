@@ -20,6 +20,7 @@ import {
 } from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
+import { previousRowsText } from '../render/overflowText';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { clipToWidth, textDisplayWidth } from '../render/terminalText';
 import {
@@ -243,7 +244,7 @@ export function boundedUserQuestionPromptLines({
       ? [
           {
             kind: 'overflow' as const,
-            text: `... ${hiddenBefore} previous rows`,
+            text: previousRowsText(hiddenBefore),
           },
         ]
       : []),
