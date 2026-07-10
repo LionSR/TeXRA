@@ -1,9 +1,8 @@
 // Unit tests for the chat-session controller's state transitions.
 // Does not require actual agent execution — the controller's orchestration
 // methods (startRootRun, resume) touch real agent runtime infrastructure,
-// so these tests focus on the pure predicate delegation, the factory
-// contract, and the stop/idle state mutations that are safe to verify
-// without a full agent harness.
+// so these tests focus on the factory contract and the stop/idle state
+// mutations that are safe to verify without a full agent harness.
 
 import PQueue from 'p-queue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,7 +21,6 @@ const mocks = vi.hoisted(() => ({
   attachTuiRunFactSubscription: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resolveAndResumeStream: vi.fn(),
-  isResumeInFlight: vi.fn(),
   resumeQueuedToolUseSnapshot: vi.fn(),
   projectStreamTranscript: vi.fn(),
   notify: vi.fn(),
@@ -47,7 +45,6 @@ vi.mock('@agent/runtime/executionRegistry', () => ({
 
 vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
   resolveAndResumeStream: mocks.resolveAndResumeStream,
-  isResumeInFlight: mocks.isResumeInFlight,
 }));
 
 vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
@@ -271,8 +268,6 @@ describe('createChatSessionController', () => {
     });
     mocks.resolveAndResumeStream.mockReset();
     mocks.resolveAndResumeStream.mockResolvedValue(true);
-    mocks.isResumeInFlight.mockReset();
-    mocks.isResumeInFlight.mockReturnValue(false);
     mocks.resumeQueuedToolUseSnapshot.mockReset();
     mocks.resumeQueuedToolUseSnapshot.mockResolvedValue(true);
     mocks.projectStreamTranscript.mockReset();
