@@ -95,6 +95,30 @@ const cliPlatformLog: LogBackend = {
   error: (channel, message) => logAt('error', channel, message),
 };
 
+/**
+ * The canonical "shut down the CLI platform" sequence — lifecycle shutdown
+ * hooks (notably `UsageLogService.dispose()`) then the NDJSON stdout flush —
+ * shared by every process.exit()-ing teardown path: the headless signal
+ * handlers below AND the interactive chat TUI's own signal handlers (see
+ * `initInteractiveCliPlatform`), which own SIGINT/SIGTERM exclusively while
+ * mounted and must perform the same sequence the suppressed platform
+ * handlers would have. One definition means the two paths can't drift.
+ */
+export async function runCliPlatformShutdownSequence(
+  lifecycle: LifecycleHost | undefined,
+): Promise<void> {
+  try {
+    await lifecycle?.runShutdown();
+  } catch {
+    // Signal shutdown is best effort; output still gets one final flush.
+  }
+  try {
+    await flushNdjsonStdout();
+  } catch {
+    // A closed stdout pipe must not prevent signal-based termination.
+  }
+}
+
 export function installCliShutdownSignalHandlers(
   lifecycle: LifecycleHost,
 ): void {
@@ -112,16 +136,7 @@ export function installCliShutdownSignalHandlers(
 
   const install = (signal: CliShutdownSignal) => {
     const handler = async () => {
-      try {
-        await lifecycle.runShutdown();
-      } catch {
-        // Signal shutdown is best effort; output still gets one final flush.
-      }
-      try {
-        await flushNdjsonStdout();
-      } catch {
-        // A closed stdout pipe must not prevent signal-based termination.
-      }
+      await runCliPlatformShutdownSequence(lifecycle);
       process.exit(exitCodeForSignal(signal));
     };
     process.once(signal, handler);
@@ -155,6 +170,30 @@ export async function initLocalCliPlatform(
     quietLogs: true,
     skipIncludedModelAccess: true,
   });
+}
+
+/**
+ * Init for the REAL interactive entry points that hand control to the chat
+ * TUI once the terminal-capability gate has already confirmed a usable TTY:
+ * `texra chat`, the default-command launcher (`texra`/`texra orchestrate`),
+ * `texra setup`, and `texra resume`. All four eventually call
+ * `runChatTui.tsx`'s `runChat()`, which installs its own SIGINT/SIGTERM/
+ * SIGHUP handlers once Ink mounts and owns teardown (terminal-mode restore,
+ * persistence drain, `runCliPlatformShutdownSequence`) from there.
+ *
+ * Forcing `installSignalHandlers: false` here — rather than leaving each
+ * call site to remember the flag — is what makes the TUI's signal ownership
+ * exclusive: two independently-installed handler sets (the platform's
+ * `process.once` pair plus the TUI's `process.on` pair) would otherwise both
+ * react to the same SIGINT/SIGTERM, racing on which one's async shutdown
+ * chain calls `process.exit()` first and leaving teardown order (terminal
+ * mode writes, NDJSON flush) unspecified.
+ */
+export async function initInteractiveCliPlatform(
+  context: CliPlatformInitOptions &
+    Pick<CliContext, 'quietLogs'> & { skipIncludedModelAccess?: boolean },
+): Promise<void> {
+  await initCliPlatform({ ...context, installSignalHandlers: false });
 }
 
 export async function initCliPlatform(
