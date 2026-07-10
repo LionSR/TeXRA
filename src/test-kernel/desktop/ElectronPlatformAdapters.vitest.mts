@@ -1,5 +1,5 @@
 // Node imports
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -38,6 +38,19 @@ interface ElectronSecrets {
   delete(key: string): Promise<void>;
   get(key: string): Promise<string | undefined>;
   set(key: string, value: string): Promise<void>;
+}
+
+interface DataRootMigrationLogger {
+  info(message: string): void;
+  warn(message: string): void;
+}
+
+interface DataRootMigrationModule {
+  migrateLegacyDesktopDataRoot(
+    legacyRoot: string,
+    targetRoot: string,
+    logger?: DataRootMigrationLogger,
+  ): Promise<void>;
 }
 
 interface ElectronSecretsModule {
@@ -163,6 +176,186 @@ describe('desktop platform adapters', () => {
     await expect(pathExists(first.getGlobalStoragePath())).resolves.toBe(true);
     await expect(pathExists(first.getStoragePath())).resolves.toBe(true);
     await expect(pathExists(noWorkspace.getStoragePath())).resolves.toBe(true);
+  });
+
+  function fakeMigrationLogger(): DataRootMigrationLogger & {
+    infoMessages: string[];
+    warnMessages: string[];
+  } {
+    const infoMessages: string[] = [];
+    const warnMessages: string[] = [];
+    return {
+      infoMessages,
+      warnMessages,
+      info: (message) => infoMessages.push(message),
+      warn: (message) => warnMessages.push(message),
+    };
+  }
+
+  describe('legacy userData data-root migration (#7987)', () => {
+    async function loadMigration(): Promise<
+      DataRootMigrationModule['migrateLegacyDesktopDataRoot']
+    > {
+      const { migrateLegacyDesktopDataRoot } =
+        await loadDesktopPlatformModule<DataRootMigrationModule>(
+          'dataRootMigration.ts',
+        );
+      return migrateLegacyDesktopDataRoot;
+    }
+
+    it('is a no-op on a fresh install with no legacy userData store', async () => {
+      const migrateLegacyDesktopDataRoot = await loadMigration();
+      const legacyRoot = await makeTempDir('texra-migration-legacy-fresh-');
+      const targetRoot = await makeTempDir('texra-migration-target-fresh-');
+      const logger = fakeMigrationLogger();
+
+      await migrateLegacyDesktopDataRoot(legacyRoot, targetRoot, logger);
+
+      await expect(pathExists(join(targetRoot, 'global-storage'))).resolves.toBe(
+        false,
+      );
+      await expect(
+        pathExists(join(targetRoot, 'workspace-storage')),
+      ).resolves.toBe(false);
+      expect(logger.infoMessages).toEqual([]);
+      expect(logger.warnMessages).toEqual([]);
+    });
+
+    it('moves every legacy directory when the target root is empty', async () => {
+      const migrateLegacyDesktopDataRoot = await loadMigration();
+      const legacyRoot = await makeTempDir('texra-migration-legacy-present-');
+      const targetRoot = await makeTempDir('texra-migration-target-present-');
+      const logger = fakeMigrationLogger();
+
+      await mkdir(join(legacyRoot, 'global-storage'), { recursive: true });
+      await writeFile(
+        join(legacyRoot, 'global-storage', 'state.json'),
+        '{"legacy":true}',
+      );
+      await mkdir(join(legacyRoot, 'workspace-storage', 'proj-aaaa'), {
+        recursive: true,
+      });
+      await writeFile(
+        join(legacyRoot, 'workspace-storage', 'proj-aaaa', 'state.json'),
+        '{"workspace":"proj-aaaa"}',
+      );
+
+      await migrateLegacyDesktopDataRoot(legacyRoot, targetRoot, logger);
+
+      await expect(pathExists(join(legacyRoot, 'global-storage'))).resolves.toBe(
+        false,
+      );
+      await expect(
+        pathExists(join(legacyRoot, 'workspace-storage', 'proj-aaaa')),
+      ).resolves.toBe(false);
+      await expect(
+        pathExists(join(targetRoot, 'global-storage', 'state.json')),
+      ).resolves.toBe(true);
+      await expect(
+        pathExists(
+          join(targetRoot, 'workspace-storage', 'proj-aaaa', 'state.json'),
+        ),
+      ).resolves.toBe(true);
+      expect(logger.warnMessages).toEqual([]);
+      expect(logger.infoMessages).toHaveLength(2);
+    });
+
+    it('skips-and-warns per directory instead of overwriting an existing target', async () => {
+      const migrateLegacyDesktopDataRoot = await loadMigration();
+      const legacyRoot = await makeTempDir('texra-migration-legacy-both-');
+      const targetRoot = await makeTempDir('texra-migration-target-both-');
+      const logger = fakeMigrationLogger();
+
+      // global-storage collides at the target: must be skipped, never
+      // overwritten.
+      await mkdir(join(legacyRoot, 'global-storage'), { recursive: true });
+      await writeFile(
+        join(legacyRoot, 'global-storage', 'state.json'),
+        '{"legacy":true}',
+      );
+      await mkdir(join(targetRoot, 'global-storage'), { recursive: true });
+      await writeFile(
+        join(targetRoot, 'global-storage', 'state.json'),
+        '{"target":true}',
+      );
+
+      // Two workspace keys: one collides (must be skipped independently),
+      // the other is only in the legacy tree (must still migrate).
+      await mkdir(join(legacyRoot, 'workspace-storage', 'proj-collide'), {
+        recursive: true,
+      });
+      await mkdir(join(targetRoot, 'workspace-storage', 'proj-collide'), {
+        recursive: true,
+      });
+      await mkdir(join(legacyRoot, 'workspace-storage', 'proj-only-legacy'), {
+        recursive: true,
+      });
+
+      await migrateLegacyDesktopDataRoot(legacyRoot, targetRoot, logger);
+
+      // Collisions are left untouched on both sides, never clobbered.
+      await expect(
+        pathExists(join(legacyRoot, 'global-storage', 'state.json')),
+      ).resolves.toBe(true);
+      const targetGlobalState = await readFile(
+        join(targetRoot, 'global-storage', 'state.json'),
+        'utf8',
+      );
+      expect(JSON.parse(targetGlobalState)).toEqual({ target: true });
+      await expect(
+        pathExists(join(legacyRoot, 'workspace-storage', 'proj-collide')),
+      ).resolves.toBe(true);
+
+      // The non-colliding workspace key still migrates.
+      await expect(
+        pathExists(
+          join(legacyRoot, 'workspace-storage', 'proj-only-legacy'),
+        ),
+      ).resolves.toBe(false);
+      await expect(
+        pathExists(
+          join(targetRoot, 'workspace-storage', 'proj-only-legacy'),
+        ),
+      ).resolves.toBe(true);
+
+      expect(logger.warnMessages).toHaveLength(2);
+      expect(logger.warnMessages[0]).toContain('global-storage');
+      expect(logger.warnMessages[1]).toContain('proj-collide');
+      expect(logger.infoMessages).toEqual([
+        expect.stringContaining('proj-only-legacy'),
+      ]);
+    });
+
+    it('is idempotent once a legacy directory has already been moved', async () => {
+      const migrateLegacyDesktopDataRoot = await loadMigration();
+      const legacyRoot = await makeTempDir('texra-migration-legacy-idem-');
+      const targetRoot = await makeTempDir('texra-migration-target-idem-');
+      const logger = fakeMigrationLogger();
+
+      await mkdir(join(legacyRoot, 'global-storage'), { recursive: true });
+
+      await migrateLegacyDesktopDataRoot(legacyRoot, targetRoot, logger);
+      await migrateLegacyDesktopDataRoot(legacyRoot, targetRoot, logger);
+
+      expect(logger.infoMessages).toHaveLength(1);
+      expect(logger.warnMessages).toEqual([]);
+    });
+
+    it('is a no-op when the legacy root and target root are the same path', async () => {
+      const migrateLegacyDesktopDataRoot = await loadMigration();
+      const root = await makeTempDir('texra-migration-same-root-');
+      const logger = fakeMigrationLogger();
+
+      await mkdir(join(root, 'global-storage'), { recursive: true });
+
+      await migrateLegacyDesktopDataRoot(root, root, logger);
+
+      expect(logger.infoMessages).toEqual([]);
+      expect(logger.warnMessages).toEqual([]);
+      await expect(pathExists(join(root, 'global-storage'))).resolves.toBe(
+        true,
+      );
+    });
   });
 
   it('stores encrypted secrets, supports env overrides, and deletes persisted values', async () => {
