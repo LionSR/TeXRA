@@ -425,23 +425,13 @@ async function deliverTurn<TTurn>(params: {
 }
 
 /**
- * Stream ids with a live loop currently blocked in `queue.waitAndDrainAll`,
- * in this process. `delegate_agent`'s resume path (`sendFollowUp` +
- * `wakeQueuedFollowUpStream`) uses this to skip the generic host-level wake
- * for a stream the loop is already listening on: enqueueing into that same
- * `FollowUpQueue` instance resolves the loop's pending wait directly (see
- * `FollowUpQueue.enqueueItem`), so an additional wake would race a second,
- * competing resume through `resolveAndResumeStream`'s host-level
- * restart-recovery path against this loop's own in-flight continuation. A
- * stream with no live loop here (a genuine restart, or a root/non-loop run)
- * still needs that generic wake — this set only ever suppresses a redundant
- * one.
+ * True when this session owns a live child-run loop for `streamId`. Enqueueing
+ * into that loop's `FollowUpQueue` wakes its pending wait directly, so callers
+ * use this to avoid racing a second host-level resume. A genuine restart has
+ * no registered loop and still needs the generic wake path.
  */
-const activeChildRunLoops = new Set<StreamTabId>();
-
-/** True when a child-run loop is currently alive (blocked between turns or mid-turn) for `streamId` in this process. */
 export function isChildRunLoopActive(streamId: StreamTabId): boolean {
-  return activeChildRunLoops.has(streamId);
+  return currentSession().executions.isChildRunLoopActive(streamId);
 }
 
 /**
@@ -482,7 +472,8 @@ export function startChildRunLoop<TTurn>(
     detachLoopInterrupt = handle.attachInterruptHandler(loop);
   };
   attachLoopInterrupt();
-  activeChildRunLoops.add(childStreamId);
+  const unregisterChildRunLoop =
+    runSession.executions.registerChildRunLoop(childStreamId);
 
   const sessionStage = childStream
     ? logger.openStage(strategy.stageLabel)
@@ -601,7 +592,7 @@ export function startChildRunLoop<TTurn>(
       }
     } finally {
       detachLoopInterrupt?.();
-      activeChildRunLoops.delete(childStreamId);
+      unregisterChildRunLoop();
       runSession.followUps.release(childStreamId);
       strategy.onSessionCleanup?.();
       params.recordCost?.(latestCostUsd);

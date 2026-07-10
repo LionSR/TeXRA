@@ -717,6 +717,12 @@ export async function runChat(
           delivered = true;
         } else if (result.status === 'queued') {
           emitQueuedFollowUpsChanged(followUpTarget);
+          if (
+            defaultSession().executions.isChildRunLoopActive(followUpTarget)
+          ) {
+            delivered = true;
+            return;
+          }
           const wake = await wakeQueuedFollowUpStream(followUpTarget, result);
           const presentation = presentFollowUpWakeResult(wake);
           if (presentation.severity !== 'none') {
