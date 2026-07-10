@@ -27,11 +27,23 @@ import { DELIVERY_TAG, DELIVERY_TAGS } from '@shared/deliveryTags';
 // `claude-agent-result`/`claude-agent-error`/`codex-result`/`codex-error`
 // leak as raw XML into the CLI transcript and queued follow-ups panel.
 const DELIVERY_TAG_NAMES = DELIVERY_TAGS.map((entry) => entry.tag);
-const SUBAGENT_TAG_RE = new RegExp(`^<(${DELIVERY_TAG_NAMES.join('|')})\\b`);
-const EMBEDDED_SUBAGENT_BLOCK_RE =
-  /<subagent-(?:progress|result|error)\b[^>]*\/>|<subagent-(progress|result|error)\b[^>]*>[\s\S]*?<\/subagent-\1>/g;
-const EMBEDDED_SUBAGENT_OPEN_RE =
-  /<subagent-(progress|result|error)\b[^>]*(?:\/>|>)/g;
+const DELIVERY_TAG_ALTERNATION = DELIVERY_TAG_NAMES.join('|');
+const SUBAGENT_TAG_RE = new RegExp(`^<(${DELIVERY_TAG_ALTERNATION})\\b`);
+// Embedded-block variants of the same recognizer, for delivery-envelope
+// blocks that appear mid-stream inside assistant-role text rather than as a
+// standalone follow-up message (see findIncompleteEmbeddedSubagentFollowup /
+// summarizeEmbeddedSubagentFollowups below). Previously hard-coded to
+// `subagent-(?:progress|result|error)`, which let `codex-result`,
+// `claude-agent-error`, and the rest of the non-`subagent-*` families leak as
+// raw XML when embedded (issue #7846, follow-up to #7679/#7788).
+const EMBEDDED_DELIVERY_BLOCK_RE = new RegExp(
+  `<(?:${DELIVERY_TAG_ALTERNATION})\\b[^>]*/>|<(${DELIVERY_TAG_ALTERNATION})\\b[^>]*>[\\s\\S]*?</\\1>`,
+  'g',
+);
+const EMBEDDED_DELIVERY_OPEN_RE = new RegExp(
+  `<(${DELIVERY_TAG_ALTERNATION})\\b[^>]*(?:/>|>)`,
+  'g',
+);
 const EMPTY_FOLLOW_UP_SUMMARY = '(empty follow-up)';
 const RESULT_RESPONSE_PREVIEW_LINES = 12;
 const RESULT_RESPONSE_PREVIEW_CHARS = 1400;
@@ -225,10 +237,14 @@ type IncompleteEmbeddedSubagentFollowup = {
   readonly block: string;
 };
 
+function containsEmbeddedDeliveryTag(text: string): boolean {
+  return DELIVERY_TAG_NAMES.some((tag) => text.includes(`<${tag}`));
+}
+
 function findIncompleteEmbeddedSubagentFollowup(
   text: string,
 ): IncompleteEmbeddedSubagentFollowup | undefined {
-  for (const match of text.matchAll(EMBEDDED_SUBAGENT_OPEN_RE)) {
+  for (const match of text.matchAll(EMBEDDED_DELIVERY_OPEN_RE)) {
     const index = match.index;
     const tag = match[1];
     const opening = match[0];
@@ -236,7 +252,7 @@ function findIncompleteEmbeddedSubagentFollowup(
       continue;
     }
 
-    const closing = new RegExp(`</subagent-${tag}>`, 'g');
+    const closing = new RegExp(`</${tag}>`, 'g');
     closing.lastIndex = index + opening.length;
     if (!closing.exec(text)) {
       return { index, block: text.slice(index) };
@@ -247,15 +263,15 @@ function findIncompleteEmbeddedSubagentFollowup(
 
 export function hasIncompleteEmbeddedSubagentFollowup(text: string): boolean {
   return (
-    text.includes('<subagent-') &&
+    containsEmbeddedDeliveryTag(text) &&
     findIncompleteEmbeddedSubagentFollowup(text) !== undefined
   );
 }
 
 export function summarizeEmbeddedSubagentFollowups(text: string): string {
-  if (!text.includes('<subagent-')) return text;
+  if (!containsEmbeddedDeliveryTag(text)) return text;
   const completeSummarized = text.replaceAll(
-    EMBEDDED_SUBAGENT_BLOCK_RE,
+    EMBEDDED_DELIVERY_BLOCK_RE,
     (block) => summarizeSubagentFollowup(block),
   );
   const incomplete = findIncompleteEmbeddedSubagentFollowup(completeSummarized);
