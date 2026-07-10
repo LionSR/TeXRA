@@ -107,6 +107,7 @@ import {
   pendingExitHint,
   pendingExitResumeId,
 } from './state/cliState';
+import { childStreamEntries as childStreamEntriesSignal } from './state/childExecutions';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
@@ -228,6 +229,7 @@ function stoppedFocusedChildFollowUpMessage(streamId: StreamTabId): string {
   const parentStream = parentStreamSignal.get();
   const streams = streamsSignal.get();
   return focusedChildStoppedMessage({
+    childStreamEntries: childStreamEntriesSignal.get(),
     parentStream,
     streamId,
     streams,
@@ -834,6 +836,7 @@ export async function runChat(
     const streams = streamsSignal.get();
     const hint = formatResumeHint(
       collectResumeTargets({
+        childStreamEntries: childStreamEntriesSignal.get(),
         rootExecutionId: session.executionId,
         streams,
       }),
