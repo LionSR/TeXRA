@@ -115,14 +115,30 @@ const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
   '- Include the substantive result requested: answer, findings, evidence/checks, and unresolved caveats.',
   '- Do not finish with only status/process notes such as "done", "complete", or "no files were edited"; if no files were edited, state that after the task result.',
 ].join('\n');
-
 export function withToolUseSubagentHandoffInstruction(
   instruction: string,
+  parentInstruction?: string,
 ): string {
-  const trimmed = instruction.trimEnd();
-  return trimmed
-    ? `${trimmed}\n\n${TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION}`
-    : TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION;
+  const trimmed = instruction.trim();
+  const trimmedParent = parentInstruction?.trim();
+  const parts = trimmed ? [trimmed] : [];
+  if (trimmedParent) {
+    parts.push(
+      [
+        ...(trimmedParent === trimmed
+          ? [
+              'The delegated task above is copied verbatim from the parent user request.',
+            ]
+          : ['Parent user request (constraint context only):', trimmedParent]),
+        '',
+        'Constraints in the parent user request are mandatory and override conflicting delegated-task wording or agent workflow defaults.',
+        'Apply every relevant tool, network, file, approval, output-format, and scope constraint to the delegated task.',
+        'Do not repeat orchestration actions assigned to the parent.',
+      ].join('\n'),
+    );
+  }
+  parts.push(TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION);
+  return parts.join('\n\n');
 }
 
 function ensureWorkingDirectoryExists(dir: string): void {
