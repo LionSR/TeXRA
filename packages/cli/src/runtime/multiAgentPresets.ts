@@ -469,8 +469,11 @@ export async function withCliMultiAgentPresetVisibility<T>(
     await visibilityApplied;
     return await operation();
   } finally {
-    shutdownRestore.dispose();
-    await restoreVisibility();
+    try {
+      await restoreVisibility();
+    } finally {
+      shutdownRestore.dispose();
+    }
   }
 }
 
