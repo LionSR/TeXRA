@@ -28,7 +28,19 @@ import { DELIVERY_TAG, DELIVERY_TAGS } from '@shared/deliveryTags';
 // leak as raw XML into the CLI transcript and queued follow-ups panel.
 const DELIVERY_TAG_NAMES = DELIVERY_TAGS.map((entry) => entry.tag);
 const DELIVERY_TAG_ALTERNATION = DELIVERY_TAG_NAMES.join('|');
-const SUBAGENT_TAG_RE = new RegExp(`^<(${DELIVERY_TAG_ALTERNATION})\\b`);
+// `\b` after the alternation is NOT a safe tag-name terminator here: `-` is a
+// non-word character, so `\b` also matches between `t` and `-` inside e.g.
+// `codex-result-partial`, letting a future hyphen-extended tag prefix-match
+// an existing one (no current DELIVERY_TAGS entry is a prefix of another, but
+// the vocabulary is a shared, growing const). Every producer
+// (deliveryEnvelope.ts / subagentResults.ts / sanitizeTag.ts) only ever
+// follows a tag name with whitespace (attributes), `>` (bare open, e.g.
+// `<execution-activity>`), or `/` (self-closing `... />`), so anchor on that
+// explicit delimiter set instead.
+const TAG_NAME_END = '(?=[\\s/>])';
+const SUBAGENT_TAG_RE = new RegExp(
+  `^<(${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}`,
+);
 // Embedded-block variants of the same recognizer, for delivery-envelope
 // blocks that appear mid-stream inside assistant-role text rather than as a
 // standalone follow-up message (see findIncompleteEmbeddedSubagentFollowup /
@@ -37,11 +49,11 @@ const SUBAGENT_TAG_RE = new RegExp(`^<(${DELIVERY_TAG_ALTERNATION})\\b`);
 // `claude-agent-error`, and the rest of the non-`subagent-*` families leak as
 // raw XML when embedded (issue #7846, follow-up to #7679/#7788).
 const EMBEDDED_DELIVERY_BLOCK_RE = new RegExp(
-  `<(?:${DELIVERY_TAG_ALTERNATION})\\b[^>]*/>|<(${DELIVERY_TAG_ALTERNATION})\\b[^>]*>[\\s\\S]*?</\\1>`,
+  `<(?:${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}[^>]*/>|<(${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}[^>]*>[\\s\\S]*?</\\1>`,
   'g',
 );
 const EMBEDDED_DELIVERY_OPEN_RE = new RegExp(
-  `<(${DELIVERY_TAG_ALTERNATION})\\b[^>]*(?:/>|>)`,
+  `<(${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}[^>]*(?:/>|>)`,
   'g',
 );
 const EMPTY_FOLLOW_UP_SUMMARY = '(empty follow-up)';
