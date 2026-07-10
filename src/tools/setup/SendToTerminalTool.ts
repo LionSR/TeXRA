@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { type ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -54,6 +54,12 @@ export class SendToTerminalTool extends defineTool({
   schema: SendToTerminalInputSchema,
 }) {
   protected async execute(input: SendToTerminalInput): Promise<ToolResult> {
+    const terminal = getSetupPlatform().terminal;
+    if (!terminal) {
+      throw new ToolError(
+        'VS Code integrated terminal execution is unavailable in this host.',
+      );
+    }
     const command = input.command.trim();
 
     const approval = await requestBashApproval({ command });
@@ -68,12 +74,11 @@ export class SendToTerminalTool extends defineTool({
     const name = TERMINAL_NAME_PREFIX + input.label.trim();
     const timeoutMs = input.timeout ?? DEFAULT_TIMEOUT_MS;
 
-    const { exitCode, output, timedOut } =
-      await getSetupPlatform().terminal.runCommand({
-        name,
-        command,
-        timeoutMs,
-      });
+    const { exitCode, output, timedOut } = await terminal.runCommand({
+      name,
+      command,
+      timeoutMs,
+    });
 
     const exitLabel = exitCode === undefined ? 'unknown' : String(exitCode);
     const summary = timedOut

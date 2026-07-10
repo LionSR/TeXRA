@@ -29,11 +29,17 @@ function createSecrets(
       async get(key) {
         return store.get(key);
       },
+      async getStored(key) {
+        return store.get(key);
+      },
       async set(key, value) {
         store.set(key, value);
       },
       async delete(key) {
         store.delete(key);
+      },
+      async listStoredKeys() {
+        return [...store.keys()];
       },
       getEnv(name) {
         return env[name];
@@ -185,11 +191,17 @@ describe('API provider key caches', () => {
         if (reads === 1) return firstLookup.promise;
         return store.get(key);
       },
+      async getStored(key) {
+        return store.get(key);
+      },
       async set(key, value) {
         store.set(key, value);
       },
       async delete(key) {
         store.delete(key);
+      },
+      async listStoredKeys() {
+        return [...store.keys()];
       },
       getEnv() {
         return undefined;

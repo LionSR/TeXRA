@@ -50,6 +50,11 @@ export class InstallVscodeExtensionTool extends defineTool({
       );
     }
 
+    if (!platform.extensions) {
+      throw new ToolError(
+        'VS Code extension installation is unavailable in this host.',
+      );
+    }
     if (platform.extensions.isInstalled(id)) {
       return {
         status: 'executed',
