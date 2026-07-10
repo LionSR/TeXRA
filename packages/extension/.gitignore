@@ -11,3 +11,10 @@ CHANGELOG.md
 # `--export html` CLI export and the Settings view's "Export as HTML" button.
 resources/traceViewer/
 resources/traceViewerStandalone/
+
+# Copied from the repo root skills/ tree by scripts/copy-extension-skills.mjs
+# during `pnpm run package`/`build:fast` so vsce includes the bundled skill
+# catalog in the VSIX. The source of truth lives at the repo root; dev/debug
+# builds don't need this present since src/skills/skillSources.ts falls back
+# to the repo-root skills/ tree when this directory is missing.
+resources/skills/

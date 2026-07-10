@@ -59,10 +59,15 @@ const REQUIRED_PACKAGED_PATHS = [
 ];
 
 // Paths in REQUIRED_PACKAGED_PATHS produced by the build (copied from the
-// repo root by scripts/copy-extension-docs.mjs). They do not need to exist
-// in the source tree, but verify-vsix-contents.mjs still checks the built
-// VSIX includes them.
-const BUILD_TIME_PACKAGED_PATHS = new Set(['readme.md', 'changelog.md']);
+// repo root by scripts/copy-extension-docs.mjs and
+// scripts/copy-extension-skills.mjs). They do not need to exist in the
+// source tree, but verify-vsix-contents.mjs still checks the built VSIX
+// includes them.
+const BUILD_TIME_PACKAGED_PATHS = new Set([
+  'readme.md',
+  'changelog.md',
+  'resources/skills',
+]);
 
 // See packages/extension/.vscodeignore for why resources/traceViewer is
 // excluded (and why there is deliberately no blanket `!resources/**` line).
@@ -182,8 +187,20 @@ function verifySnapshot(actualSnapshot, failures) {
   );
 }
 
+function isBuildTimePackagedAsset(assetPath) {
+  for (const buildTimePath of BUILD_TIME_PACKAGED_PATHS) {
+    if (
+      assetPath === buildTimePath ||
+      assetPath.startsWith(`${buildTimePath}/`)
+    )
+      return true;
+  }
+  return false;
+}
+
 function verifyAssets(snapshot, failures) {
   for (const assetPath of snapshot.manifestAssetReferences) {
+    if (isBuildTimePackagedAsset(assetPath)) continue;
     assert(
       relativeExists(assetPath),
       `Manifest asset is missing: ${assetPath}`,
@@ -210,34 +227,19 @@ function verifyAssets(snapshot, failures) {
   }
 }
 
+// scripts/copy-extension-skills.mjs mirrors the canonical skills/ tree into
+// packages/extension/resources/skills/ at build time (see
+// BUILD_TIME_PACKAGED_PATHS above), so packaged/source divergence is
+// structurally impossible rather than merely detected after the fact. This
+// only needs to check that every canonical skill is registered as a
+// chatSkills contribution pointing at its generated SKILL.md path.
 function verifyBundledSkills(failures) {
   const sourceDir = path.join(rootDir, 'skills');
-  const packagedDir = path.join(packageDir, 'resources', 'skills');
   const sourceExists = fs.existsSync(sourceDir);
-  const packagedExists = fs.existsSync(packagedDir);
   assert(sourceExists, 'Canonical skills directory is missing.', failures);
-  assert(packagedExists, 'Packaged extension skills are missing.', failures);
-  if (!sourceExists || !packagedExists) return;
+  if (!sourceExists) return;
 
   const sourceFiles = collectRelativeFiles(sourceDir);
-  const packagedFiles = collectRelativeFiles(packagedDir);
-  assert(
-    JSON.stringify(packagedFiles) === JSON.stringify(sourceFiles),
-    'Packaged extension skills do not match the canonical skills tree.',
-    failures,
-  );
-
-  for (const relativePath of sourceFiles) {
-    if (!packagedFiles.includes(relativePath)) continue;
-    assert(
-      fs
-        .readFileSync(path.join(packagedDir, relativePath))
-        .equals(fs.readFileSync(path.join(sourceDir, relativePath))),
-      `Packaged extension skill differs from canonical source: ${relativePath}`,
-      failures,
-    );
-  }
-
   const packageJson = readJson(packagePath);
   const chatSkills = packageJson.contributes?.chatSkills ?? [];
   const expectedNames = sourceFiles
