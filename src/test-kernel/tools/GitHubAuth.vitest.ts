@@ -90,3 +90,66 @@ describe('getGitHubToken', () => {
     await expect(githubAuth.getGitHubToken()).resolves.toBe('gh-env-token');
   });
 });
+
+describe('resolveGitHubTokenSource', () => {
+  it('reports "secret" when a persisted token exists, even with env vars set', async () => {
+    const githubAuth = await import('@tools/github/githubAuth');
+
+    await installPlatform({
+      secrets: {
+        [githubAuth.GITHUB_TOKEN_STORAGE_KEY]: 'gh-secret-token',
+      },
+      secretsEnv: {
+        GH_TOKEN: 'gh-env-token',
+        GITHUB_TOKEN: 'github-env-token',
+      },
+    });
+
+    const { platform } = await import('@platform/platform');
+
+    await expect(
+      githubAuth.resolveGitHubTokenSource(platform().secrets),
+    ).resolves.toBe('secret');
+  });
+
+  it('reports "env" when no persisted token exists but an env var does', async () => {
+    const githubAuth = await import('@tools/github/githubAuth');
+
+    await installPlatform({
+      secretsEnv: { GH_TOKEN: 'gh-env-token' },
+    });
+
+    const { platform } = await import('@platform/platform');
+
+    await expect(
+      githubAuth.resolveGitHubTokenSource(platform().secrets),
+    ).resolves.toBe('env');
+  });
+
+  it('reports "none" when neither a persisted token nor an env var exists', async () => {
+    const githubAuth = await import('@tools/github/githubAuth');
+
+    await installPlatform({});
+
+    const { platform } = await import('@platform/platform');
+
+    await expect(
+      githubAuth.resolveGitHubTokenSource(platform().secrets),
+    ).resolves.toBe('none');
+  });
+
+  it('ignores a blank persisted token and falls back to an env var', async () => {
+    const githubAuth = await import('@tools/github/githubAuth');
+
+    await installPlatform({
+      secrets: { [githubAuth.GITHUB_TOKEN_STORAGE_KEY]: '   ' },
+      secretsEnv: { GH_TOKEN: 'gh-env-token' },
+    });
+
+    const { platform } = await import('@platform/platform');
+
+    await expect(
+      githubAuth.resolveGitHubTokenSource(platform().secrets),
+    ).resolves.toBe('env');
+  });
+});

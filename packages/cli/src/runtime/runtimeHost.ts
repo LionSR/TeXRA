@@ -17,6 +17,7 @@ import {
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
+import { assertNever } from '@utils/core';
 
 // Local imports - CLI runtime
 import { handleCliApprovalEvent } from './approvalAdapter';
@@ -79,6 +80,8 @@ function writeRuntimePresentationNdjson(
     case 'showAgentConfigBanner':
     case 'requestEnsureProgressView':
       return;
+    default:
+      assertNever(event, 'Unhandled CLI NDJSON presentation event');
   }
 }
 

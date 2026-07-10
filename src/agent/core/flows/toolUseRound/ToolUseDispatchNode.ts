@@ -104,6 +104,9 @@ export class ToolUseDispatchNode<C> extends Node<
   ToolUseRoundShared,
   ToolUseRoundServices<C>
 > {
+  /** Instruction snapshot associated with the tool calls being dispatched. */
+  private _currentUserInstruction: string | undefined;
+
   /**
    * Duplicate parallel calls detected during prep(), mapped to the index of
    * their first occurrence. Duplicates are not executed; after the batch
@@ -125,6 +128,7 @@ export class ToolUseDispatchNode<C> extends Node<
   async prep(shared: ToolUseRoundShared): Promise<SdkToolCall[]> {
     this._duplicateToPrimary.clear();
     this._unsafeDuplicateCallIds.clear();
+    this._currentUserInstruction = shared.currentUserInstruction;
     const toolCalls = shared.toolCalls ?? [];
 
     if (shared.shouldStop || toolCalls.length === 0) {
@@ -341,6 +345,7 @@ export class ToolUseDispatchNode<C> extends Node<
     const cloned = super.clone();
     cloned._duplicateToPrimary = new Map();
     cloned._unsafeDuplicateCallIds = new Map();
+    cloned._currentUserInstruction = undefined;
     return cloned;
   }
 
@@ -368,6 +373,8 @@ export class ToolUseDispatchNode<C> extends Node<
         {
           tracker,
           workPlanState,
+          userInstruction:
+            options.config.rootUserInstruction ?? this._currentUserInstruction,
           toolCallId: call.callId,
           signal,
           hooks: {

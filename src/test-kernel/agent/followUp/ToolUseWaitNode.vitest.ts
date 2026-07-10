@@ -9,6 +9,8 @@ import {
 } from '@test/helpers/streamStatusTestUtils';
 import { TraceEmitter } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
 import {
   extractTouchedFiles,
@@ -810,7 +812,14 @@ describe('ToolUseWaitNode', () => {
     const shared: ToolUseRunShared = {
       messages: [],
       shouldSkipCycle: false,
-      stateSlices: null,
+      stateSlices: {
+        runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+        workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+        userChannels: {
+          input: Object.freeze({ INSTRUCTION: 'initial request' }),
+          transient: { INSTRUCTION: 'initial request' },
+        },
+      },
     };
     const createUserFollowUpMessages = vi.fn(
       async (messages: unknown[], userMessage: string) => [
@@ -904,6 +913,9 @@ describe('ToolUseWaitNode', () => {
     expect(info).toHaveBeenCalledWith('please revise the theorem', {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
+    expect(shared.stateSlices?.userChannels.transient.INSTRUCTION).toBe(
+      'please revise the theorem',
+    );
   });
 });
 
