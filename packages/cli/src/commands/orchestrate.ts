@@ -8,7 +8,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';
 import { listCliHistoryEntries } from '../runtime/history';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { initInteractiveCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatInteractiveTerminalFailure,
@@ -90,7 +90,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
 
   await notifyCliUpdate(context);
 
-  await initCliPlatform({
+  // Every branch below either mounts the chat TUI directly (chat/preset/
+  // setupAgentOverride) or hands off to runResumeExecution (which also
+  // mounts it) — this is one of the real interactive entry points, so signal
+  // ownership must stay with the TUI once it mounts (see
+  // initInteractiveCliPlatform).
+  await initInteractiveCliPlatform({
     ...context,
     quietLogs: true,
     bestEffortIncludedModelAccess: true,
