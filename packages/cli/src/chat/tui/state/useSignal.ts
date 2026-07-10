@@ -30,22 +30,37 @@ type ReadableSignal<T> = Signal.State<T> | Signal.Computed<T>;
  * unsubscribes and resubscribes whenever the subscribe reference changes, so
  * an inline closure would tear down and rebuild the Watcher on every render
  * — per signal, per component, at streaming cadence.
+ *
+ * A change notification is already queued in the microtask above when the
+ * component unmounts (or, under React StrictMode's dev-mode mount/cleanup/
+ * remount, when this particular subscription is torn down): the cleanup
+ * below only calls `watcher.unwatch(signal)`, so without a disposed guard
+ * the pending microtask would still fire `notify()` on an unmounted
+ * subscriber and re-arm the watcher via `watcher.watch()`, leaking it.
+ * `disposed` is scoped to this one `subscribe()` invocation, so StrictMode's
+ * remount creates a fresh watcher/flag pair rather than sharing state with
+ * the torn-down one.
  */
 export function useSignal<T>(signal: ReadableSignal<T>): T {
   const subscribe = useCallback(
     (notify: () => void) => {
       let notifyPending = false;
+      let disposed = false;
       const watcher = new Signal.subtle.Watcher(() => {
         if (notifyPending) return;
         notifyPending = true;
         queueMicrotask(() => {
           notifyPending = false;
+          if (disposed) return;
           notify();
           watcher.watch();
         });
       });
       watcher.watch(signal);
-      return () => watcher.unwatch(signal);
+      return () => {
+        disposed = true;
+        watcher.unwatch(signal);
+      };
     },
     [signal],
   );

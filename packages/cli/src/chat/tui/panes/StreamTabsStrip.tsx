@@ -10,12 +10,12 @@ import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { textDisplayWidth, truncateToWidth } from '../render/terminalText';
 import {
   activeStreamId as activeStreamIdSignal,
-  parentStream as parentStreamSignal,
   streams as streamsSignal,
   type StreamSlice,
 } from '../state/cliState';
 import {
   childStreamEntries as childStreamEntriesSignal,
+  parentStream as parentStreamSignal,
   type ChildStreamEntries,
 } from '../state/childExecutions';
 import { activeStreamTreeViews } from '../state/streamViews';
