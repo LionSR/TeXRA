@@ -12,7 +12,12 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
 
 import * as logger from '@logger/logUtils';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  executionStatusToRunOutcome,
+  type ExecutionId,
+  type RunOutcome,
+  type StreamTabId,
+} from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -21,6 +26,7 @@ import {
   getExecutionStore,
 } from './ExecutionKVStore';
 import { invalidateListingCache } from './executionListing';
+import { ResultMetaSchema } from './resultMeta';
 
 /**
  * Tool-driven executions (e.g. the `bash` background tool) persist a synthetic
@@ -161,14 +167,54 @@ async function persistMetaField(
   }
 }
 
-/** Persist a terminal status on an existing execution's metadata. */
+/**
+ * Align an existing agent result after a suspended run terminates between
+ * turns. Call this only when no later turn-owned result write can replace the
+ * record. The durable execution outcome is checked first, so a failed status
+ * write cannot relabel the result on its own.
+ */
+export async function synchronizeAgentResultOutcome(
+  executionId: ExecutionId,
+  outcome: RunOutcome,
+): Promise<void> {
+  try {
+    const store = getExecutionStore(executionId);
+    const meta = await store.readMeta();
+    if (meta?.outcome !== outcome) return;
+
+    const resultMeta = await store.readResultMeta();
+    if (
+      !resultMeta ||
+      resultMeta.producer === 'backgroundBash' ||
+      resultMeta.result.outcome === outcome
+    ) {
+      return;
+    }
+    const updatedResultMeta = ResultMetaSchema.parse({
+      ...resultMeta,
+      result: { ...resultMeta.result, outcome },
+    });
+    await store.writeResultMeta(updatedResultMeta);
+  } catch (err) {
+    // Terminal cleanup stays non-throwing, but this leaves the public result
+    // stale and must remain visible to operators.
+    logger.warn(
+      'ExecutionLifecycle',
+      `Failed to synchronize result outcome for ${executionId}: ${toErrorMessage(err)}`,
+      { data: err },
+    );
+  }
+}
+
+/** Persist a terminal status and its canonical outcome projection. */
 export async function writeTerminalStatus(
   executionId: ExecutionId,
   status: string,
 ): Promise<void> {
+  const outcome = executionStatusToRunOutcome(status);
   await persistMetaField(
     executionId,
-    { terminalStatus: status },
+    { terminalStatus: status, ...(outcome && { outcome }) },
     'terminal status',
   );
 }

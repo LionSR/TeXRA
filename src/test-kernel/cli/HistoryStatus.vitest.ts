@@ -132,7 +132,7 @@ describe('CLI history status formatting', () => {
         delegationDepth: 0,
       },
       config: null,
-      resultMeta: null,
+      result: null,
       report: null,
       conversationPreview: null,
       files: [],

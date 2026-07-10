@@ -46,7 +46,6 @@ const drafts = await parallel(
       agent(`Draft the "${s.title}" section.`, {
         label: `draft:${s.title}`,
         inputFiles: s.notes,
-        schema: DRAFT_SUMMARY_SCHEMA,
       }),
   ),
 );
@@ -54,15 +53,16 @@ phase('Merge');
 const valid = drafts.filter(Boolean);
 return await agent('Merge these drafts, unify notation.', {
   agentName: 'merge',
-  inputFiles: valid.flatMap((d) => d.outputs.map((o) => o.path)),
+  inputFiles: valid.flatMap((d) =>
+    d.category === 'workflow' ? d.outputs.map((o) => o.absolutePath) : d.files,
+  ),
 });
 ```
 
 ### Primitives
 
 - `agent(prompt, opts?)` → one subagent run; returns the typed result
-  (`null` on failure). Options: `label`, `phase`, `schema`, `agentName`,
-  `inputFiles`.
+  (`null` on failure). Options: `label`, `phase`, `agentName`, `inputFiles`.
 - `parallel(thunks)` → concurrent barrier; failed thunks resolve to `null`.
 - `pipeline(items, ...stages)` → per-item stage chains with **no barrier**
   between stages (wall-clock = slowest single-item chain, not
@@ -107,9 +107,10 @@ stages that today costs two orchestrator round-trips per edge.
 
 **Where TeXRA aims to be better, not bigger:**
 
-1. **Document-native results** — a stage's return value is TeXRA's currency:
-   `OutputFileSummary[]` plus lineage and line diffs, so reviewing a
-   ten-agent pipeline means reading diffs, not scrollback.
+1. **Document-native results** — a stage returns one fixed `AgentFinalResult`
+   envelope. Workflow results carry `OutputFileSummary[]`, compile failures,
+   and line-diff references; tool-use results carry response text and edited
+   file paths.
 2. **Durable resume** — script + journal persist in the execution KV store,
    so a workflow resumes across host restarts, not just within a session.
 3. **Reproducibility as a feature** — deterministic scripts + named agents +
@@ -125,50 +126,38 @@ stages that today costs two orchestrator round-trips per edge.
 ### 1. Results are consumed typed, never as XML
 
 The engine's `agent()` wraps the in-band subagent execution path
-(`src/tools/delegation/subagentExecution.ts`, `stopAfterCycle` branch) and
-consumes `executeAgent`'s `onCompleted(result)` / `onError` callbacks —
-receiving `AgentFlowResult` _before_ it is flattened to the XML follow-up
-string. The FollowUpQueue channel remains untouched for LLM-driven
-delegation; scripted runs bypass it entirely.
+(`src/tools/delegation/subagentExecution.ts`, `stopAfterCycle` branch). The
+runtime first completes post-flow work such as diff generation, then returns
+the same `AgentFinalResult` object used for persistence and XML delivery. The
+FollowUpQueue channel remains untouched for LLM-driven delegation; scripted
+runs bypass it entirely.
 
-Each `agent()` return is two-tier:
+Each `agent()` return has one of two fixed forms:
 
+```ts
+type AgentFinalResult =
+  | { category: 'workflow'; outcome; outputs; diffs; compileFailures; cost }
+  | { category: 'toolUse'; outcome; response; files; cost };
 ```
-{ structured?, lastResponse?, outputs: OutputFileSummary[], executionId, costUsd }
-```
 
-Small data travels inline in the script; large artifacts (documents) travel
-by file reference. A 40-page LaTeX rewrite never round-trips through the
-script as a string.
+Identity, stream state, wall time, memory misses, and CLI copy destinations
+stay outside this envelope. Documents and domain-specific JSON travel as file
+artifacts, so a 40-page rewrite or a large data structure never round-trips
+through the script as an inline value. The execution store persists the
+envelope and `/executions/{id}/result` returns it directly for agent runs.
 
-_Landed (2026-07-05)_: every subagent completion now persists a structured
-result manifest (`ResultMeta`: agent, category, outcome, outputs, line-diff
-references, `lastResponse`, touched files, cost) to the execution KV store,
-readable as JSON via `/executions/{id}/result`. This is the chaining
-contract — the orchestrator (today) and the engine's `runAgent` wiring
-(next) consume outputs/diffs/outcome as data instead of parsing the XML
-delivery. Workflow agents thereby become chainable without any change to
-their YAML: stage N's manifest `outputs` feed stage N+1's `inputFiles`.
+### 2. Fixed envelopes, not model-constrained JSON
 
-### 2. `outputSchema`: the structured-output prerequisite
+TeXRA does not expose `schema` or `outputSchema` on workflow-script calls and
+does not add a synthetic structured-output tool or provider-native
+`response_format`/`output_config.format` plumbing. The model continues to
+produce its ordinary response and files; the runtime supplies structure by
+wrapping those existing facts after the run.
 
-There is currently **no** schema-constrained final answer anywhere in the
-agent stack — a child returns free-text `lastResponse` or file paths. Add an
-optional `outputSchema` to the delegation/agent config: when set, the
-child's final turn is forced through a synthetic `StructuredOutput` tool
-(works on every provider, since all model handlers already do tool calling),
-validated with Zod, retried on mismatch, and stored as a new
-`structured?: unknown` field on `AgentFlowResult`.
-
-This is what turns orchestration glue into code: parallel reviewers return
-`{findings: [...]}` → plain-JS dedupe by file+line → parallel verifiers per
-finding → filtered synthesis, with no LLM needed to parse prose between
-arrows. It also benefits the existing LLM orchestrator independently of the
-engine, and aligns with the "terminal outcome as data" direction already
-ruled in `docs/proposals/error-pipeline-and-ownership.md` (`ResultEvent`).
-Naming: the script-facing option on `agent()` is `schema` (brevity inside
-scripts); `outputSchema` is the `executeAgent`-level config field it maps
-to.
+An agent that must pass a domain-specific object to another stage writes a
+JSON output file and lists that artifact in `files` or `outputs`. This keeps
+the cross-stage contract fixed while allowing arbitrary application data
+without provider-specific behavior or per-agent result schemas.
 
 ### 3. Deep layers: scripted orchestration costs zero delegation depth
 
@@ -244,11 +233,12 @@ in all three hosts) behind the same `runScriptInSandbox` signature.
 ## Validation
 
 A live run of Claude Code's Workflow tool over this repo (4 agents:
-3 parallel schema-constrained analyzers + 1 synthesizer, ~2.2 minutes
+3 parallel analyzers + 1 synthesizer, ~2.2 minutes
 wall-clock) independently confirmed the audit's findings on TeXRA's own
 orchestration files — sequential dispatch, delivery-blocking latexdiff,
 typed-result flattening, unbounded fan-out — and demonstrated the target UX:
-structured JSON at every edge, plain-code joins, one consolidated result.
+a typed result at every edge, file-backed artifacts, plain-code joins, and one
+consolidated result.
 
 ## Build order
 
@@ -263,9 +253,9 @@ structured JSON at every edge, plain-code joins, one consolidated result.
    of burning a model turn on a synthetic error; subagent report persistence
    runs concurrently with parent delivery; and `FollowUpQueue` coalesces
    contiguous synthetic follow-ups into one turn.
-2. **`outputSchema` / `structured` on `executeAgent` + `AgentFlowResult`.**
-   Independently useful; the load-bearing prerequisite for scripted
-   map-reduce.
+2. **Canonical `AgentFinalResult` envelope after post-flow artifact work.**
+   This is the fixed chaining contract for both workflow and tool-use agents;
+   it requires no model-constrained JSON mechanism.
 3. **The engine as a `delegate_workflow_script` tool**: prototype engine
    (`src/agent/workflowScript/`) wired to the in-band execution path,
    zero-depth child spawning, run-storage file binding, journal persistence,

@@ -5,7 +5,10 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import { writeTerminalStatus } from '@agent/storage';
+import {
+  synchronizeAgentResultOutcome,
+  writeTerminalStatus,
+} from '@agent/storage';
 import type { ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -863,10 +866,24 @@ export class ExecutionRegistry {
     handle.trace?.emit(cancelledResult);
     this.publishResult?.(cancelledResult, handle.childStreamId);
     handle.settleResult(cancelledResult);
-    void writeTerminalStatus(
+    const statusWrite = writeTerminalStatus(
       handle.executionId,
       projectRunOutcome(RUN_OUTCOME.CANCELLED).executionStatus,
-    ).catch(() => {});
+    );
+    // A genuinely suspended WAITING run has no later turn-owned result write,
+    // so its latest interim envelope can be relabeled after status persists.
+    // During RESUMING, a new turn may still reach its own result write; leave
+    // that path alone to avoid modifying the previous turn just before it.
+    if (resuming) {
+      void statusWrite;
+    } else {
+      void statusWrite.then(() =>
+        synchronizeAgentResultOutcome(
+          handle.executionId,
+          RUN_OUTCOME.CANCELLED,
+        ),
+      );
+    }
     this.untrackHandle(handle);
     this.cancelStreamStatus(handle.childStreamId, handle);
     return true;

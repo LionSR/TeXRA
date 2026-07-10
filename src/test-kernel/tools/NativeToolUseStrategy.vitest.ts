@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
   resumeToolUseFromSnapshot: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
+  synchronizeAgentResultOutcome: vi.fn(),
   writeTerminalStatus: vi.fn(),
 }));
 
@@ -35,6 +36,7 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 
 vi.mock('@agent/storage', () => ({
   getExecutionStore: vi.fn(() => ({ readConfig: mocks.readConfig })),
+  synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
   writeTerminalStatus: mocks.writeTerminalStatus,
 }));
 
@@ -81,6 +83,7 @@ describe('NativeToolUseStrategy', () => {
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
+    mocks.synchronizeAgentResultOutcome.mockResolvedValue(undefined);
     mocks.writeTerminalStatus.mockResolvedValue(undefined);
   });
 
@@ -182,6 +185,24 @@ describe('NativeToolUseStrategy', () => {
 
     const errMsg = await strategy.formatError(turn, null);
     expect(errMsg).toContain('model overloaded');
+  });
+
+  it('persists a typed tool-use failure when no flow result exists', async () => {
+    const strategy = createNativeToolUseStrategy(baseParams());
+
+    await expect(
+      strategy.buildResultMeta?.(null, true, 10),
+    ).resolves.toMatchObject({
+      producer: 'subagent',
+      agentName: 'review',
+      result: {
+        category: 'toolUse',
+        outcome: 'failed',
+        response: '',
+        files: [],
+        cost: 0,
+      },
+    });
   });
 
   it('runTurn hands its consumed batch directly to the persisted flow cursor', async () => {
