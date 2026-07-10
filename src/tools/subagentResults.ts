@@ -1,7 +1,7 @@
 /**
  * Formatting utilities for subagent results and progress updates.
  *
- * Format helpers convert AgentFlowResult and progress updates into
+ * Format helpers convert AgentFinalResult and progress updates into
  * structured XML strings for FollowUpQueue delivery to the orchestrator.
  *
  * Design: Typed objects internally, XML formatting only at the boundary
@@ -9,11 +9,20 @@
  */
 
 import type { ResultMeta } from '@agent/storage';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import {
+  buildAgentFinalResult,
+  type AgentFinalResult,
+  type ResultDiffSummary,
+} from '@agent/runtime/AgentFinalResult';
+import type {
+  AgentFlowCategory,
+  AgentFlowResult,
+} from '@agent/runtime/AgentFlowResult';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { normalizeProviderError } from '@common/errors';
 import type {
   ActiveChildInfo,
+  ExecutionId,
   SubagentProgressUpdate,
   TodoItem,
   WorkPlanSnapshot,
@@ -31,7 +40,6 @@ import {
   formatChildRunDelivery,
   formatChildRunError,
 } from './deliveryEnvelope';
-import type { DiffFileInfo } from './subagentDiffs';
 
 type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
 
@@ -47,7 +55,7 @@ type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
  */
 function formatOutputFile(
   o: OutputFileSummary,
-  diffInfo?: DiffFileInfo,
+  diffInfo?: ResultDiffSummary,
 ): string {
   const attrs = [
     `path="${escapeAttr(o.relativePath)}"`,
@@ -74,7 +82,7 @@ function formatOutputFile(
  */
 function formatWorkflowOutputs(
   outputs: OutputFileSummary[],
-  diffInfos?: Map<string, DiffFileInfo>,
+  diffInfos?: ReadonlyMap<string, ResultDiffSummary>,
 ): string[] {
   const rounds = new Set(outputs.map((o) => o.round));
   if (rounds.size <= 1) {
@@ -139,38 +147,38 @@ function formatDeliveryPreamble(options: {
 }
 
 /**
- * Format an AgentFlowResult as a delivery message.
+ * Format an AgentFinalResult as a delivery message.
  * Injected into the orchestrator's FollowUpQueue as a user-role message.
  *
- * For workflow results, an optional `diffInfos` map (output absolutePath →
- * DiffFileInfo) can be provided. Diff files are accessible via
- * /executions/{id}/files/{diffRelPath} — the delivery only includes
- * the path reference, not the diff content itself.
+ * Diff files are accessible via /executions/{id}/files/{diffRelPath}; the
+ * delivery includes only the path reference, not the diff content itself.
  */
 export function formatSubagentDelivery(
   agentName: string,
-  result: AgentFlowResult,
-  options?: {
-    diffInfos?: Map<string, DiffFileInfo>;
-    /** Reason diff computation failed — emitted so the orchestrator can read the output files directly instead of assuming a no-op revision. */
-    diffsUnavailable?: string;
+  result: AgentFinalResult,
+  options: {
+    executionId: ExecutionId;
+    memoryMisses?: readonly AttachedMemoryMiss[];
     wallTimeMs?: number;
     workingDirectory?: string;
   },
 ): string {
   const lines = formatDeliveryPreamble({
-    workingDirectory: options?.workingDirectory,
-    memoryMisses: result.memoryMisses,
+    workingDirectory: options.workingDirectory,
+    memoryMisses: options.memoryMisses,
   });
 
   if (result.category === 'workflow') {
-    if (options?.diffsUnavailable) {
+    if (result.diffsUnavailable) {
       lines.push(
-        `<diffs-unavailable reason="${escapeAttr(options.diffsUnavailable)}">Diff computation failed — read the output files directly to review the changes.</diffs-unavailable>`,
+        `<diffs-unavailable reason="${escapeAttr(result.diffsUnavailable)}">Diff computation failed — read the output files directly to review the changes.</diffs-unavailable>`,
       );
     }
     if (result.outputs.length > 0) {
-      lines.push(...formatWorkflowOutputs(result.outputs, options?.diffInfos));
+      const diffsByPath = new Map(
+        result.diffs.map((diff) => [diff.path, diff] as const),
+      );
+      lines.push(...formatWorkflowOutputs(result.outputs, diffsByPath));
     }
     if (result.compileFailures.length > 0) {
       lines.push('<compile-failures>');
@@ -182,13 +190,13 @@ export function formatSubagentDelivery(
       lines.push('</compile-failures>');
     }
   } else if (result.category === 'toolUse') {
-    if (result.lastResponse) {
-      lines.push('<response>', escapeText(result.lastResponse), '</response>');
+    if (result.response) {
+      lines.push('<response>', escapeText(result.response), '</response>');
     }
-    if (result.touchedFiles && result.touchedFiles.length > 0) {
+    if (result.files.length > 0) {
       lines.push(
         '<touched-files>',
-        ...result.touchedFiles.map((f) => `<file path="${escapeAttr(f)}" />`),
+        ...result.files.map((f) => `<file path="${escapeAttr(f)}" />`),
         '</touched-files>',
       );
     }
@@ -197,7 +205,7 @@ export function formatSubagentDelivery(
   return formatChildRunDelivery(
     {
       tag: DELIVERY_TAG.subagentResult,
-      executionId: result.executionId,
+      executionId: options.executionId,
       attributes: [
         { name: 'agent', value: agentName },
         { name: 'category', value: result.category },
@@ -206,7 +214,7 @@ export function formatSubagentDelivery(
     },
     {
       wallTime:
-        options?.wallTimeMs !== undefined
+        options.wallTimeMs !== undefined
           ? formatDuration(options.wallTimeMs)
           : undefined,
       lines,
@@ -530,61 +538,14 @@ function lastNLines(text: string, n: number): string {
  */
 export function buildSubagentResultMeta(
   agentName: string,
-  result: AgentFlowResult,
-  options: {
-    diffInfos?: Map<string, DiffFileInfo>;
-    diffsUnavailable?: string;
-    wallTimeMs: number;
-  },
+  result: AgentFinalResult,
+  wallTimeMs: number,
 ): SubagentResultMeta {
-  const base: SubagentResultMeta = {
+  return {
     producer: 'subagent',
     agentName,
-    outcome: result.outcome,
-    success: result.outcome === 'completed',
-    wallTimeMs: options.wallTimeMs,
-    ...(result.totalCostUsd !== undefined && {
-      totalCostUsd: result.totalCostUsd,
-    }),
-  };
-  if (result.category === 'workflow') {
-    return {
-      ...base,
-      result: {
-        category: 'workflow',
-        outputs: result.outputs,
-        ...(result.compileFailures.length > 0 && {
-          compileFailures: result.compileFailures,
-        }),
-        ...(options.diffInfos &&
-          options.diffInfos.size > 0 && {
-            diffs: [...options.diffInfos.entries()].map(([path, info]) => ({
-              path,
-              diffRelPath: info.diffRelPath,
-              largeChange: info.largeChange,
-            })),
-          }),
-        // Mirror the XML delivery's diffsUnavailable: a chaining consumer must
-        // distinguish "diff generation failed, read the outputs directly" from
-        // a clean no-diff result.
-        ...(options.diffsUnavailable !== undefined && {
-          diffsUnavailable: options.diffsUnavailable,
-        }),
-      },
-    };
-  }
-  return {
-    ...base,
-    result: {
-      category: 'toolUse',
-      ...(result.lastResponse !== undefined && {
-        lastResponse: result.lastResponse,
-      }),
-      ...(result.touchedFiles !== undefined &&
-        result.touchedFiles.length > 0 && {
-          touchedFiles: [...result.touchedFiles],
-        }),
-    },
+    wallTimeMs,
+    result,
   };
 }
 
@@ -596,25 +557,20 @@ export function buildSubagentResultMeta(
  */
 export function buildSubagentFailureResultMeta(
   agentName: string,
+  fallbackCategory: AgentFlowCategory,
   result: AgentFlowResult | undefined,
   wallTimeMs: number,
 ): SubagentResultMeta {
-  if (!result) {
-    return {
-      producer: 'subagent',
-      agentName,
-      outcome: 'failed',
-      success: false,
-      wallTimeMs,
-    };
-  }
-  const meta = buildSubagentResultMeta(agentName, result, { wallTimeMs });
-  return {
-    ...meta,
-    success: false,
-    // A nominally completed flow that still reached the error path (e.g. a
-    // delivery crash) is a failure from the parent's perspective; genuine
-    // cancelled/failed outcomes pass through unchanged.
-    outcome: result.outcome === 'completed' ? 'failed' : result.outcome,
-  };
+  const finalResult = result
+    ? buildAgentFinalResult({
+        flowResult: result,
+        // A nominally completed flow that reached the error path is a failure;
+        // genuine cancelled/failed outcomes pass through unchanged.
+        outcome: result.outcome === 'completed' ? 'failed' : result.outcome,
+      })
+    : buildAgentFinalResult({
+        category: fallbackCategory,
+        outcome: 'failed',
+      });
+  return buildSubagentResultMeta(agentName, finalResult, wallTimeMs);
 }

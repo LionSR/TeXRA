@@ -117,6 +117,7 @@ export function createNativeWorkflowStrategy(
       if (isError || turn === null) {
         return buildSubagentFailureResultMeta(
           params.agentName,
+          'workflow',
           turn ?? undefined,
           Date.now() - params.startedAt,
         );

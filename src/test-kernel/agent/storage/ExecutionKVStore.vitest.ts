@@ -94,10 +94,14 @@ describe('ExecutionKVStore meta read shims', () => {
 
     await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
       producer: 'cliWorkflow',
+      copiedOutput: '/workspace/output.tex',
       result: {
-        copiedOutput: '/workspace/output.tex',
+        category: 'workflow',
+        outcome: RUN_OUTCOME.COMPLETED,
         outputs: [output],
         compileFailures: [],
+        diffs: [],
+        cost: 0,
       },
     });
   });
@@ -117,13 +121,117 @@ describe('ExecutionKVStore meta read shims', () => {
     await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
       producer: 'subagent',
       agentName: 'reviewer',
-      outcome: RUN_OUTCOME.COMPLETED,
-      success: true,
       wallTimeMs: 25,
       result: {
         category: 'toolUse',
-        lastResponse: 'done',
+        outcome: RUN_OUTCOME.COMPLETED,
+        response: 'done',
+        files: ['notes.md'],
+        cost: 0,
+      },
+    });
+  });
+
+  it('normalizes the currently tagged subagent shape without rewriting it', async () => {
+    const id = 'tagged-result-subagent' as ExecutionId;
+    const persisted = {
+      producer: 'subagent',
+      agentName: 'reviewer',
+      outcome: RUN_OUTCOME.CANCELLED,
+      success: false,
+      wallTimeMs: 25,
+      totalCostUsd: 0.3,
+      result: {
+        category: 'toolUse',
+        lastResponse: 'Stopped at the requested boundary.',
         touchedFiles: ['notes.md'],
+      },
+    };
+    await getExecutionStore(id).write('meta', {
+      timestamp: '2026-07-04T00:00:00.000Z',
+      outcome: RUN_OUTCOME.FAILED,
+    });
+    await getExecutionStore(id).write('config', {
+      agent: 'writer',
+      model: 'gpt5',
+      agentCategory: 'workflow',
+    });
+    await getExecutionStore(id).write('result-meta', persisted);
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
+      producer: 'subagent',
+      agentName: 'reviewer',
+      wallTimeMs: 25,
+      result: {
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.CANCELLED,
+        response: 'Stopped at the requested boundary.',
+        files: ['notes.md'],
+        cost: 0.3,
+      },
+    });
+    await expect(getExecutionStore(id).read('result-meta')).resolves.toEqual(
+      persisted,
+    );
+  });
+
+  it('normalizes the currently tagged subagent workflow shape', async () => {
+    const id = 'tagged-result-subagent-workflow' as ExecutionId;
+    await getExecutionStore(id).write('result-meta', {
+      producer: 'subagent',
+      agentName: 'polish',
+      outcome: RUN_OUTCOME.FAILED,
+      success: false,
+      wallTimeMs: 40,
+      totalCostUsd: 0.6,
+      result: {
+        category: 'workflow',
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+      },
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
+      producer: 'subagent',
+      agentName: 'polish',
+      wallTimeMs: 40,
+      result: {
+        category: 'workflow',
+        outcome: RUN_OUTCOME.FAILED,
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+        cost: 0.6,
+      },
+    });
+  });
+
+  it('normalizes the currently tagged CLI workflow shape', async () => {
+    const id = 'tagged-result-cli-workflow' as ExecutionId;
+    await getExecutionStore(id).write('meta', {
+      timestamp: '2026-07-04T00:00:00.000Z',
+      outcome: RUN_OUTCOME.FAILED,
+    });
+    await getExecutionStore(id).write('result-meta', {
+      producer: 'cliWorkflow',
+      result: {
+        copiedOutputs: ['/workspace/out/paper.tex'],
+        outputs: [],
+        compileFailures: [],
+      },
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
+      producer: 'cliWorkflow',
+      copiedOutputs: ['/workspace/out/paper.tex'],
+      result: {
+        category: 'workflow',
+        outcome: RUN_OUTCOME.FAILED,
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+        cost: 0,
       },
     });
   });
@@ -150,12 +258,14 @@ describe('ExecutionKVStore meta read shims', () => {
     await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
       producer: 'subagent',
       agentName: 'writer',
-      outcome: RUN_OUTCOME.COMPLETED,
-      success: true,
       wallTimeMs: 40,
       result: {
         category: 'workflow',
+        outcome: RUN_OUTCOME.COMPLETED,
         outputs: [output],
+        compileFailures: [],
+        diffs: [],
+        cost: 0,
       },
     });
   });
@@ -173,14 +283,65 @@ describe('ExecutionKVStore meta read shims', () => {
     await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
       producer: 'subagent',
       agentName: 'reviewer',
-      outcome: RUN_OUTCOME.COMPLETED,
-      success: true,
       wallTimeMs: 25,
       result: {
         category: 'toolUse',
-        lastResponse: 'done',
+        outcome: RUN_OUTCOME.COMPLETED,
+        response: 'done',
+        files: [],
+        cost: 0,
       },
     });
+  });
+
+  it('uses execution metadata and config only after stored fields cannot decide', async () => {
+    const id = 'legacy-result-context-fallback' as ExecutionId;
+    await getExecutionStore(id).write('meta', {
+      timestamp: '2026-07-04T00:00:00.000Z',
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await getExecutionStore(id).write('config', {
+      agent: 'reviewer',
+      model: 'gpt5',
+      agentCategory: 'toolUse',
+    });
+    await getExecutionStore(id).write('result-meta', {
+      producer: 'subagent',
+      agentName: 'reviewer',
+      wallTimeMs: 12,
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
+      producer: 'subagent',
+      agentName: 'reviewer',
+      wallTimeMs: 12,
+      result: {
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.CANCELLED,
+        response: '',
+        files: [],
+        cost: 0,
+      },
+    });
+  });
+
+  it('rejects a minimal legacy subagent result without category or outcome context', async () => {
+    const id = 'legacy-result-insufficient-context' as ExecutionId;
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    await getExecutionStore(id).write('result-meta', {
+      producer: 'subagent',
+      agentName: 'reviewer',
+      wallTimeMs: 12,
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(
+        `Failed to parse execution ${id} result-meta.json`,
+      ),
+      { data: expect.any(Error) },
+    );
   });
 
   it('normalizes legacy flat background bash result metadata', async () => {
@@ -227,6 +388,54 @@ describe('ExecutionKVStore meta read shims', () => {
       producer: 'unknown',
       outputs: [],
       compileFailures: [],
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(
+        `Failed to parse execution ${id} result-meta.json`,
+      ),
+      { data: expect.any(Error) },
+    );
+  });
+
+  it('does not erase unknown fields by reclassifying a canonical record as legacy', async () => {
+    const id = 'bad-result-canonical-field' as ExecutionId;
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await getExecutionStore(id).write('result-meta', {
+      producer: 'subagent',
+      agentName: 'reviewer',
+      wallTimeMs: 12,
+      result: {
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.COMPLETED,
+        response: 'done',
+        files: [],
+        cost: 0,
+      },
+      unexpected: true,
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(
+        `Failed to parse execution ${id} result-meta.json`,
+      ),
+      { data: expect.any(Error) },
+    );
+  });
+
+  it('rejects a CLI workflow record with an explicit tool-use category', async () => {
+    const id = 'bad-result-cli-category' as ExecutionId;
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    await getExecutionStore(id).write('result-meta', {
+      producer: 'cliWorkflow',
+      category: 'toolUse',
+      outcome: RUN_OUTCOME.COMPLETED,
+      result: { response: 'not a workflow result' },
     });
 
     await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();

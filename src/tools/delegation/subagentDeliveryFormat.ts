@@ -6,19 +6,20 @@
  */
 
 import type { ResultMeta } from '@agent/storage';
+import { buildAgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
-import type { ExecutionId } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import * as logger from '@logger/logUtils';
+import type { ExecutionId } from '@shared/schemas';
 
-import {
-  buildSubagentResultMeta,
-  formatSubagentDelivery,
-} from '@tools/subagentResults';
 import {
   computeAndWriteWorkflowDiffs,
   type DiffFileInfo,
 } from '@tools/subagentDiffs';
+import {
+  buildSubagentResultMeta,
+  formatSubagentDelivery,
+} from '@tools/subagentResults';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const LOG_CHANNEL = 'subagentDelivery';
 
@@ -57,17 +58,25 @@ export async function subagentDeliveryMessage(
   }
 
   const wallTimeMs = Date.now() - options.startedAt;
+  const diffs =
+    result.category === 'workflow' && diffInfos
+      ? result.outputs.flatMap((output) => {
+          const diff = diffInfos.get(output.absolutePath);
+          return diff ? [{ path: output.absolutePath, ...diff }] : [];
+        })
+      : undefined;
+  const finalResult = buildAgentFinalResult({
+    flowResult: result,
+    diffs,
+    diffsUnavailable,
+  });
   return {
-    msg: formatSubagentDelivery(agentName, result, {
-      diffInfos,
-      diffsUnavailable,
+    msg: formatSubagentDelivery(agentName, finalResult, {
+      executionId,
+      memoryMisses: result.memoryMisses,
       wallTimeMs,
       workingDirectory: options.workingDirectory,
     }),
-    resultMeta: buildSubagentResultMeta(agentName, result, {
-      diffInfos,
-      diffsUnavailable,
-      wallTimeMs,
-    }),
+    resultMeta: buildSubagentResultMeta(agentName, finalResult, wallTimeMs),
   };
 }

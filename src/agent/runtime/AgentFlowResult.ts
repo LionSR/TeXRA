@@ -27,7 +27,7 @@ const AgentFlowMetaSchema = z.object({
   totalCostUsd: z.number().nonnegative().optional(),
 });
 
-const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
+export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('workflow'),
   outcome: RunOutcomeSchema,
   outputs: z.array(OutputFileSummarySchema),
@@ -36,7 +36,7 @@ const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
 
 export type WorkflowFlowResult = z.infer<typeof WorkflowFlowResultSchema>;
 
-const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
+export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('toolUse'),
   outcome: RunOutcomeSchema,
   lastResponse: z.string().optional(),

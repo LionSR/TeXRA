@@ -394,25 +394,32 @@ describe('CLI history runtime', () => {
     };
     mocks.readResultMeta.mockResolvedValue({
       producer: 'cliWorkflow',
+      copiedOutput: '/tmp/annotated.tex',
       result: {
-        copiedOutput: '/tmp/annotated.tex',
+        category: 'workflow',
+        outcome: 'completed',
         outputs: [outputSummary],
         compileFailures: [compileFailure],
+        diffs: [],
+        cost: 0.7,
       },
     });
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
     const text = formatCliHistoryDetailsText(details!);
 
-    expect(details?.resultMeta).toEqual({
-      producer: 'cliWorkflow',
-      result: {
-        copiedOutput: '/tmp/annotated.tex',
-        outputs: [outputSummary],
-        compileFailures: [compileFailure],
-      },
+    expect(details?.result).toEqual({
+      category: 'workflow',
+      outcome: 'completed',
+      outputs: [outputSummary],
+      compileFailures: [compileFailure],
+      diffs: [],
+      cost: 0.7,
     });
-    expect(text).toContain('"copiedOutput":"/tmp/annotated.tex"');
+    expect(text).not.toContain('"producer"');
+    expect(text).not.toContain('"copiedOutput"');
+    expect(text).toContain('"category":"workflow"');
+    expect(text).toContain('"outcome":"completed"');
     expect(text).toContain('"compileFailures"');
     expect(text).toContain('compile/r1_paper.tex.log');
   });
