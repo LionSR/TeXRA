@@ -34,6 +34,7 @@ import { isApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
+import { GETTING_STARTED_COMMANDS } from '@shared/schemas/mainView';
 import { isGoalInFlight } from '@shared/schemas/goal';
 import {
   dispatchProgressViewInbound,
@@ -297,15 +298,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async runGettingStartedAction(
     action: GettingStartedAction,
   ): Promise<void> {
-    const commands = {
-      runSetup: 'texra.runSetupAssistant',
-      createSampleProject: 'texra.createSampleProject',
-      cloneOverleaf: 'texra.cloneOverleafProject',
-      downloadArxiv: 'texra.downloadArXivSource',
-      openWalkthrough: 'texra.openGettingStarted',
-    } satisfies Record<GettingStartedAction, string>;
-
-    await safeExecuteCommand(commands[action], [], this.viewName);
+    await safeExecuteCommand(
+      GETTING_STARTED_COMMANDS[action],
+      [],
+      this.viewName,
+    );
     if (action === 'runSetup') {
       await this.provider.refreshOnboardingFunnel();
     }
