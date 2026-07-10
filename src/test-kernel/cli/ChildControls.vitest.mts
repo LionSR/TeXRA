@@ -9,17 +9,19 @@ import {
 import {
   compactPickerOverflowText,
   computePickerListLayout,
-  computeTaskDetailLayout,
   emptyPickerText,
   isUltraCompactPickerRows,
-  isUltraCompactTaskDetailRows,
   pickerKeyHints,
   pickerKeyHintsForColumns,
   pickerTitle,
+} from '@cli/chat/tui/modals/ChildControlPicker';
+import {
+  computeTaskDetailLayout,
+  isUltraCompactTaskDetailRows,
   TASK_DETAIL_LABEL_WIDTH,
   taskDetailCommandLabel,
   taskDetailKeyHintsForColumns,
-} from '@cli/chat/tui/modals/ChildControlPicker';
+} from '@cli/chat/tui/modals/TaskDetailView';
 import {
   jumpTaskDetailScrollState,
   moveTaskDetailScrollState,
