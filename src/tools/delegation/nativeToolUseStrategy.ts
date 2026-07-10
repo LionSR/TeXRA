@@ -5,7 +5,8 @@
  * capturing the live run handle via `onRun`. `runTurn` is every following
  * turn: resolve the persisted flow-record cursor for this execution
  * (`retrieveSessionResumeData`) and drive it to the next WAITING/terminal
- * boundary via `resumeQueuedToolUseSnapshot`. Delivery choreography
+ * boundary via `resumeToolUseFromSnapshot`, handing it the batch already
+ * consumed by `childRunLoop`. Delivery choreography
  * (format/persist/manifest/deliver), duplicate-delivery prevention (there is
  * exactly one delivery site — the loop), and WAITING-cleanup registration all
  * live in the loop; this strategy owns only what is specific to a native
@@ -19,9 +20,11 @@ import {
   type AgentFlowResult,
   type AgentRuntimeFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import { executeAgent } from '@agent/runtime/executeAgent';
+import {
+  executeAgent,
+  resumeToolUseFromSnapshot,
+} from '@agent/runtime/executeAgent';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
@@ -30,8 +33,11 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 import {
   RUN_OUTCOME,
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -84,7 +90,7 @@ export function createNativeToolUseStrategy(
 ): ChildRunStrategy<AgentRuntimeFlowResult> {
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
-  // `executeAgent`/`resumeQueuedToolUseSnapshot` never reject for a
+  // `executeAgent`/`resumeToolUseFromSnapshot` never reject for a
   // subagent's own application-level failure (runFlowWithLifecycle returns a
   // terminal failed result instead) — the real underlying error is only
   // observable through this callback.
@@ -180,10 +186,23 @@ export function createNativeToolUseStrategy(
           );
         }
 
-        let result: AgentRuntimeFlowResult | undefined;
-        let resumeError: unknown;
-        const resumed = await resumeQueuedToolUseSnapshot(
+        // childRunLoop already consumed this batch from the stream queue. A
+        // queued-resume wrapper would append it to ToolUseSessionLifecycle,
+        // which is backed by that same queue; the next WAITING result would
+        // therefore feed the identical batch back into this method forever.
+        // Hand it directly to the persisted WAITING cursor instead. Any item
+        // that races into the queue after this drain remains there for the
+        // loop's next turn.
+        params.parentSession.status.transition(
           streamId,
+          STREAM_PHASE.RUNNING,
+          STREAM_TRANSITION_CAUSE.RESUME,
+          {
+            events: params.parentSession.events,
+            substate: STREAM_SUBSTATE.RESUMING,
+          },
+        );
+        return await resumeToolUseFromSnapshot(
           resume.snapshot,
           params.runtimeHost,
           {
@@ -192,48 +211,25 @@ export function createNativeToolUseStrategy(
             runtimeUnavailableTools: params.runtimeUnavailableTools,
             parentStreamId: params.orchestratorStreamId,
             allowWaitingResult: true,
-            // The loop's queue never admits synthetic (goal-continuation)
-            // items for a subagent — that path is root-only — but the type
-            // is shared with root's batch shape, so downgrade defensively
-            // rather than silently dropping content on a future change.
-            extraFollowUps: followUps.map((item) => ({
+            // The loop's queue never admits synthetic goal continuations for
+            // a subagent, but its batch type is shared with root flows. Keep
+            // the existing defensive downgrade rather than silently dropping
+            // a future synthetic item.
+            drainedFollowUps: followUps.map((item) => ({
               text: item.text,
               displayText: item.displayText,
               mediaFiles: item.mediaFiles,
               origin: item.origin === 'synthetic' ? 'user' : item.origin,
             })),
             onProgress: (update) => ports.notify(update),
-            onResult: (r) => {
-              result = r;
-            },
-            onRunError: (err, r) => {
+            onRunError: (err) => {
               lastErr = err;
-              result = r;
             },
             onRun: (handle) => {
               runHandle = handle;
             },
-            onError: (err) => {
-              resumeError = err;
-            },
           },
         );
-        if (!resumed) {
-          // Preserves #7491: a failed resume (e.g. unreadable resume
-          // storage) throws here, so the loop's own catch classifies it as a
-          // failed turn and delivers `formatError` to the parent — the same
-          // terminal error-delivery path a resumed turn's own failure takes.
-          throw (
-            resumeError ??
-            new Error(`Failed to resume native subagent ${params.executionId}.`)
-          );
-        }
-        if (result === undefined) {
-          throw new Error(
-            `Native subagent ${params.executionId} resumed without producing a result.`,
-          );
-        }
-        return result;
       }),
 
     isTerminal: (turn) => !isWaitingFlowResult(turn),
