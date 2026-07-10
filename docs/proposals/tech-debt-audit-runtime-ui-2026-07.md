@@ -349,7 +349,7 @@ win (net-add). Just delete the dead calls.
 **Correction (2026-07-10, follow-through on #7713).** This finding's pins rest
 on the same fabricated/stale protocol as A13: run facts riding the `domain`
 `AgentEvent` as `key:'runFact.'+name` with consumers recovering the name via
-`fromRunFactDomainKey`. Verified independently at HEAD: `fromRunFactDomainKey`,
+`fromRunFactDomainKey`. Verified independently at origin/main `4363b4089` (2026-07-10): `fromRunFactDomainKey`,
 `toRunFactDomainKey`, and `RUN_FACT_DOMAIN_PREFIX` have zero hits repo-wide
 (`git grep` across `src/` and `packages/`), and `runFactEvents.ts` is a 34-line
 module exporting only `RunFactPayloads`/`RunFactEventName`/`emitRunFact` — the
@@ -666,10 +666,18 @@ runtimeHost were collapsed (see C).**
 
 **Correction (2026-07-10, #7713).** This finding originally also listed
 `workingDirectory` (claimed at `BaseFlowServices.ts:45`) as a fifth dual-declared
-field. Verified independently at HEAD: `BaseFlowServices.ts` is 35 lines and its
+field. Verified independently at origin/main `4363b4089` (2026-07-10): `BaseFlowServices.ts` is 35 lines and its
 `AgentCore`/`BaseFlowContextInit` interfaces have no `workingDirectory` field at
 all — the claim doesn't match the code. Removed from the list below; the other
-four fields do check out.
+four fields did check out at the audit pin `54c3bed25`.
+
+**Resolved (2026-07-10, codex review on #7922).** Since the audit pin, the
+RunScope single-carrier train finished the collapse: at origin/main `9694f42aa`
+(post-#7838/#7841), `BaseFlowServices.ts` declares none of the four fields and
+`ResponseCycleFlow.ts` reads them from `runContext` directly. The remaining
+multi-declaration (executeAgent options -> RunContext carrier) is the sanctioned
+resolve-once-at-boundary shape, not a bag dual. This finding is now historical;
+the R1 dual-state row for it should be counted as closed.
 
 **Pins.** Four fields declared on BOTH the flow-service bag and `RunContextCommon`:
 `BaseFlowServices.ts:31,33` (`delegationDepth`/`approvalPromptsUnavailable`, inside
