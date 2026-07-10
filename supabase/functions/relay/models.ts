@@ -111,13 +111,31 @@ function toRelayModel(config: ModelConfig): RelayModel {
 // Model Definitions (derived from llm-zoo)
 // =============================================================================
 
+// All providers the relay can actually forward to.
+const ALL_PROVIDERS = [
+  'openai',
+  'anthropic',
+  'google',
+  'deepseek',
+  'xai',
+  'moonshot',
+  'dashscope',
+  'minimax',
+  'glm',
+] as const;
+const RELAY_PROVIDERS = new Set<string>(ALL_PROVIDERS);
+
 /** All relay-compatible models from llm-zoo, converted to relay format. */
 const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
-  .filter((m) => !m.openRouterOnly && !m.retired)
+  .filter(
+    (m) => RELAY_PROVIDERS.has(m.provider) && !m.openRouterOnly && !m.retired,
+  )
   .map(toRelayModel);
 
 const RETIRED_MODEL_PATTERNS = Object.values(MODEL_CONFIGS)
-  .filter((m) => !m.openRouterOnly && m.retired)
+  .filter(
+    (m) => RELAY_PROVIDERS.has(m.provider) && !m.openRouterOnly && m.retired,
+  )
   .flatMap((m) =>
     [m.name, m.fullName, m.openrouterFullName]
       .filter((name): name is string => name != null)
@@ -131,19 +149,6 @@ const RETIRED_MODEL_PATTERNS = Object.values(MODEL_CONFIGS)
 const FREE_TIER_SHORT_NAMES = RELAY_MODELS.filter(
   (m) => m.minTier === FREE_TIER,
 ).map((m) => m.shortName);
-
-// All supported providers
-const ALL_PROVIDERS = [
-  'openai',
-  'anthropic',
-  'google',
-  'deepseek',
-  'xai',
-  'moonshot',
-  'dashscope',
-  'minimax',
-  'glm',
-] as const;
 
 // =============================================================================
 // Tier Configuration (exported for /tier-config endpoint)

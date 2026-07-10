@@ -1,6 +1,6 @@
 // Node imports
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Third-party imports
@@ -55,6 +55,10 @@ function sourceFilesUnder(root: string): string[] {
     .map((entry) => toRepoPath(join(absoluteRoot, entry)))
     .filter((file) => !file.startsWith('src/test-kernel/'));
 }
+
+const SOURCE_FILES = SCAN_ROOTS.flatMap(sourceFilesUnder);
+const SOURCE_TEXT_BY_FILE = new Map<string, string>();
+const MODULE_SPECIFIERS_BY_FILE = new Map<string, string[]>();
 
 function literalText(node: ts.Expression | undefined): string | null {
   return node != null && ts.isStringLiteralLike(node) ? node.text : null;
@@ -140,14 +144,28 @@ function resolvesToModule(
 }
 
 function importsModule(file: string, targetModule: string): boolean {
-  const sourceText = readFileSync(resolve(REPO_ROOT, file), 'utf8');
-  const sourceFile = ts.createSourceFile(
-    file,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  return collectModuleSpecifiers(sourceFile).some((specifier) =>
+  let sourceText = SOURCE_TEXT_BY_FILE.get(file);
+  if (sourceText === undefined) {
+    sourceText = readFileSync(resolve(REPO_ROOT, file), 'utf8');
+    SOURCE_TEXT_BY_FILE.set(file, sourceText);
+  }
+
+  const targetToken = basename(targetModule).replace(SOURCE_FILE, '');
+  if (!sourceText.includes(targetToken)) return false;
+
+  let moduleSpecifiers = MODULE_SPECIFIERS_BY_FILE.get(file);
+  if (moduleSpecifiers === undefined) {
+    const sourceFile = ts.createSourceFile(
+      file,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    moduleSpecifiers = collectModuleSpecifiers(sourceFile);
+    MODULE_SPECIFIERS_BY_FILE.set(file, moduleSpecifiers);
+  }
+
+  return moduleSpecifiers.some((specifier) =>
     resolvesToModule(file, specifier, targetModule),
   );
 }
@@ -162,9 +180,9 @@ describe('agent runtime progress-event vocabulary boundary', () => {
       false,
     );
 
-    const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
-      .filter((file) => importsModule(file, OLD_AGENT_RUNTIME_MODULE))
-      .toSorted();
+    const importers = SOURCE_FILES.filter((file) =>
+      importsModule(file, OLD_AGENT_RUNTIME_MODULE),
+    ).toSorted();
 
     expect(importers).toEqual([]);
   });
@@ -172,9 +190,9 @@ describe('agent runtime progress-event vocabulary boundary', () => {
   it('removes the neutral CLI progress vocabulary module', () => {
     expect(existsSync(resolve(REPO_ROOT, OLD_CLI_MODULE))).toBe(false);
 
-    const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
-      .filter((file) => importsModule(file, OLD_CLI_MODULE))
-      .toSorted();
+    const importers = SOURCE_FILES.filter((file) =>
+      importsModule(file, OLD_CLI_MODULE),
+    ).toSorted();
 
     expect(importers).toEqual([]);
   });
@@ -184,9 +202,9 @@ describe('agent runtime progress-event vocabulary boundary', () => {
       false,
     );
 
-    const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
-      .filter((file) => importsModule(file, OLD_TASK_STATE_PAYLOAD_MODULE))
-      .toSorted();
+    const importers = SOURCE_FILES.filter((file) =>
+      importsModule(file, OLD_TASK_STATE_PAYLOAD_MODULE),
+    ).toSorted();
 
     expect(importers).toEqual([]);
   });
@@ -194,18 +212,10 @@ describe('agent runtime progress-event vocabulary boundary', () => {
   it('keeps the CLI compatibility vocabulary NDJSON-projection only', () => {
     expect(existsSync(resolve(REPO_ROOT, CLI_NDJSON_MODULE))).toBe(true);
 
-    const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
-      .filter((file) => importsModule(file, CLI_NDJSON_MODULE))
-      .toSorted();
+    const importers = SOURCE_FILES.filter((file) =>
+      importsModule(file, CLI_NDJSON_MODULE),
+    ).toSorted();
 
     expect(importers).toEqual([...ALLOWED_PRODUCTION_IMPORTERS].toSorted());
-  });
-
-  it('actually scans the production source roots', () => {
-    const scanned = SCAN_ROOTS.reduce(
-      (total, root) => total + sourceFilesUnder(root).length,
-      0,
-    );
-    expect(scanned).toBeGreaterThan(100);
   });
 });

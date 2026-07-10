@@ -103,6 +103,10 @@ const PROVIDER_HANDLER_ROUTES: Record<ModelProvider, ProviderHandlerRoute> = {
         .ModelHandlerGLM,
     compatibilityKey: 'ModelHandlerGLM',
   },
+  [ModelProvider.META]: {
+    load: null,
+    compatibilityKey: null,
+  },
   [ModelProvider.OTHERS]: {
     load: async () =>
       (

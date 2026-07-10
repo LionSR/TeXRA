@@ -51,6 +51,8 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
+- **Updated model catalog** — `llm-zoo` 1.14 adds the GPT-5.6 model family,
+  while existing ChatGPT-subscription access to GPT-5.5 remains available.
 - **Read-only tool calls in one model response now run in parallel** —
   contiguous batches of side-effect-free tools (file reads, grep/glob, web
   fetch/search, arXiv/Crossref/Zotero/Loogle lookups, texcount) execute
