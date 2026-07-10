@@ -59,7 +59,7 @@ import {
 } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas/agent';
 
-import { mapToRecord } from '@utils/core';
+import { mapToRecord, normalizeFilePath } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import {
@@ -112,7 +112,7 @@ interface WorkflowStreamMatch {
 
 function normalizeOutputFiles(outputFiles?: readonly string[]): string[] {
   return (outputFiles ?? [])
-    .map((file) => file.replaceAll('\\', '/'))
+    .map((file) => normalizeFilePath(file))
     .filter((file) => file.length > 0)
     .sort();
 }
@@ -950,12 +950,12 @@ export class StreamSnapshotStore {
    */
   findWorkflowStreamsMatching(match: WorkflowStreamMatch): StreamTabId[] {
     const wantAgent = getCleanAgentName(match.agent);
-    const wantFile = match.inputFile.replaceAll('\\', '/');
+    const wantFile = normalizeFilePath(match.inputFile);
     const wantOutputFiles = normalizeOutputFiles(match.outputFiles);
     const result: StreamTabId[] = [];
     for (const [stream, cfg] of this.runConfigs) {
       if (cfg.agentCategory !== 'workflow') continue;
-      const cfgPrimaryInput = (cfg.inputFiles[0] ?? '').replaceAll('\\', '/');
+      const cfgPrimaryInput = normalizeFilePath(cfg.inputFiles[0] ?? '');
       if (
         getCleanAgentName(cfg.agent) !== wantAgent ||
         cfg.model !== match.model ||

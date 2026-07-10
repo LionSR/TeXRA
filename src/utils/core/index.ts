@@ -15,7 +15,7 @@
  * (the single home for generic string helpers) and are re-exported here for
  * existing @utils/core consumers.
  */
-import { customAlphabet } from 'nanoid';
+import { customAlphabet, nanoid } from 'nanoid';
 
 import type { ExecutionId } from '@shared/schemas';
 
@@ -321,6 +321,16 @@ export const hexId12 = customAlphabet('0123456789abcdef', 12);
 /** Generate a compact 12-char hex execution ID (48 bits of entropy). */
 export function generateExecutionId(): ExecutionId {
   return hexId12() as ExecutionId;
+}
+
+/**
+ * Generate a short unique ID for non-schema-constrained uses (temp
+ * filenames, log entry IDs). Defaults to nanoid's standard 21-char
+ * URL-safe alphabet; pass `size` for a shorter ID. Use {@link hexId12}
+ * instead when a schema constrains the ID to lowercase hex.
+ */
+export function generateShortId(size?: number): string {
+  return nanoid(size);
 }
 
 // ---------------------------------------------------------------------------

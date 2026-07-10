@@ -1,5 +1,7 @@
 import * as path from 'node:path';
 
+import { normalizeFilePath } from '@utils/core';
+
 import { findExternalRoot, type MatchedExternalRoot } from './externalRoots';
 
 /**
@@ -42,7 +44,7 @@ export function locatePathInRoot(
 ): ResolvedPath {
   // Normalize backslashes before posix.normalize so '..' segments collapse correctly.
   // On POSIX, backslashes are valid filename chars — path.normalize would preserve them.
-  const relative = path.posix.normalize(inputPath.replaceAll('\\', '/'));
+  const relative = path.posix.normalize(normalizeFilePath(inputPath));
   if (relative.startsWith('..')) {
     return annotateExternal({
       kind: 'external',

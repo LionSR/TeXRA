@@ -14,8 +14,6 @@
  *     buffered + flushed on an interval
  *   - finalize flushes any pending chunks immediately
  */
-import { nanoid } from 'nanoid';
-
 import type {
   AgentEvent,
   AgentTrace,
@@ -33,6 +31,7 @@ import {
   type StreamTabId,
   type ToolUseLog,
 } from '@shared/schemas';
+import { generateShortId } from '@utils/core';
 
 import { type StreamLogStore } from './StreamLogStore';
 
@@ -188,7 +187,7 @@ export function attachTranscriptRecorder(
     verbose?: boolean;
   }): void => {
     store.append(streamId, {
-      id: nanoid(),
+      id: generateShortId(),
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: params.level ?? 'info',
       timestamp: Date.now(),

@@ -1,8 +1,6 @@
 import { Box, Text } from 'ink';
-import stringWidth from 'string-width';
 
-import { summarizeFollowupMessage } from '@shared/subagentFollowup';
-
+import { numberedFollowUpPreview } from '../render/followUpPreview';
 import { truncateSummaryToWidth } from '../render/terminalText';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
@@ -54,17 +52,10 @@ export function queuedFollowUpPanelDisplay({
     : Math.min(messages.length, messageSlots);
   const rows: QueuedFollowUpPanelRow[] = messages
     .slice(0, visibleMessageCount)
-    .map((message, index) => {
-      const prefix = `${index + 1}. `;
-      const bodyWidth = Math.max(0, contentWidth - stringWidth(prefix));
-      return {
-        kind: 'message',
-        text: `${prefix}${truncateSummaryToWidth(
-          summarizeFollowupMessage(message),
-          bodyWidth,
-        )}`,
-      };
-    });
+    .map((message, index) => ({
+      kind: 'message',
+      text: numberedFollowUpPreview(message, index, contentWidth),
+    }));
 
   const hiddenCount = messages.length - visibleMessageCount;
   if (hiddenCount > 0) {
