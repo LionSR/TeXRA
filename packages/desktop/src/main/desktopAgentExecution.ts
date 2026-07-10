@@ -1095,7 +1095,8 @@ export class DesktopProgressBridge {
    * session still matches the current filter instead of unconditionally
    * resetting it to 'all' (#7851).
    */
-  revealStream(streamId: StreamTabId): void {
+  async revealStream(streamId: StreamTabId): Promise<void> {
+    await this.restartRepair;
     if (!this.streamLogs.has(streamId)) {
       return;
     }

@@ -21,6 +21,7 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { isChildRunLoopActive } from '@agent/runtime/childRunLoop';
 import {
   sendFollowUp,
@@ -283,6 +284,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       parentModel: context.model,
       agentCategory: AgentCategory.ToolUse,
     });
+    const rootUserInstruction = getCurrentToolCallContext()?.userInstruction;
 
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
@@ -290,7 +292,11 @@ Git worktree support: resolved from the active workspace at runtime.`,
       agent: agentName,
       agentSource: agent.source,
       model,
-      instruction: withToolUseSubagentHandoffInstruction(input.instruction),
+      instruction: withToolUseSubagentHandoffInstruction(
+        input.instruction,
+        rootUserInstruction,
+      ),
+      rootUserInstruction,
       memories: input.memories,
       workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
