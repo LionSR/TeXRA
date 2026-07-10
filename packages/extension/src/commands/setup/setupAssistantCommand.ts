@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
 import {
   resolveSetupLaunchModel,
   SETUP_INSTRUCTION,
@@ -27,7 +28,6 @@ import {
 } from '@shared/copy/onboarding';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
-import { hasAnyUsableSetupCredential as hasAnyUsablePlatformCredential } from '@tools/setup/platform';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -79,11 +79,14 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Pre-flight uses adapter-level checks so blank env keys do not count as
- * credentials and then fail later as "No model is available."
+ * Pre-flight uses the shared host-neutral predicate (adapter-level checks, so
+ * blank env keys do not count as credentials and then fail later as "No model
+ * is available") so this host can't drift from desktop's credential gate. The
+ * CLI has its own apiMode-aware policy and doesn't call this predicate — see
+ * the note on `hasUsableSetupCredential`.
  */
 export async function hasAnyUsableSetupCredential(): Promise<boolean> {
-  return hasAnyUsablePlatformCredential(platform().secrets);
+  return hasUsableSetupCredential(platform().secrets);
 }
 
 async function ensureCredentialOrPrompt(): Promise<boolean> {

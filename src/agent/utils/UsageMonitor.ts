@@ -17,6 +17,25 @@ import type { UsageLogStats } from '@telemetry/UsageLogTypes';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 
 /**
+ * Cache-miss tokens for this round, resolved once for both consumers of
+ * per-round usage:
+ * - UI display omits the field entirely when the provider didn't report it
+ *   (never shows a guessed number), and also when it's exactly zero.
+ * - Backend billing always needs a real number, so it falls back to the
+ *   derived estimate (input minus cache-read) when the provider is silent.
+ */
+function resolveRoundCacheMissTokens(
+  reported: number | undefined,
+  roundInputTokens: number,
+  roundCacheReadTokens: number,
+): { display: number | undefined; billing: number } {
+  return {
+    display: reported && reported > 0 ? reported : undefined,
+    billing: reported ?? Math.max(0, roundInputTokens - roundCacheReadTokens),
+  };
+}
+
+/**
  * Metadata for usage logging. Required because `agentCategory` controls
  * the `runKind` derivation in `recordUsage` — a silent default would
  * misreport usage runs from a future caller that forgot to set it.
@@ -115,12 +134,16 @@ export class UsageMonitor {
       const roundInputTokens = latestUsage?.inputTokens ?? 0;
       const roundOutputTokens = latestUsage?.outputTokens ?? 0;
       const roundCacheReadTokens = latestUsage?.cachedInputTokens ?? 0;
-      const roundCacheMissTokens = latestUsage?.cacheMissInputTokens;
       const roundCacheCreationTokens = latestUsage?.cacheCreationTokens ?? 0;
       const roundReasoningTokens = latestUsage?.reasoningTokens ?? 0;
       const roundCost = latestUsage?.cost ?? 0;
       const toolUseTokens = latestUsage?.toolUsePromptTokens ?? 0;
       const usageRoute = latestUsage?.usageRoute ?? this.currentUsageRoute();
+      const roundCacheMissTokens = resolveRoundCacheMissTokens(
+        latestUsage?.cacheMissInputTokens,
+        roundInputTokens,
+        roundCacheReadTokens,
+      );
 
       const { capabilities } = this.modelInfo;
       const supportsCaching =
@@ -142,8 +165,8 @@ export class UsageMonitor {
         ...(roundCacheReadTokens > 0 && {
           cacheReadInputTokens: roundCacheReadTokens,
         }),
-        ...((roundCacheMissTokens ?? 0) > 0 && {
-          cacheMissInputTokens: roundCacheMissTokens ?? 0,
+        ...(roundCacheMissTokens.display !== undefined && {
+          cacheMissInputTokens: roundCacheMissTokens.display,
         }),
         ...(roundCacheCreationTokens > 0 && {
           cacheCreationInputTokens: roundCacheCreationTokens,
@@ -184,9 +207,7 @@ export class UsageMonitor {
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
         cachedInputTokens: roundCacheReadTokens,
-        ...(roundCacheMissTokens != null && {
-          cacheMissInputTokens: roundCacheMissTokens,
-        }),
+        cacheMissInputTokens: roundCacheMissTokens.billing,
         cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
@@ -246,11 +267,10 @@ export class UsageMonitor {
       | 'inputTokens'
       | 'outputTokens'
       | 'cachedInputTokens'
-      | 'cacheMissInputTokens'
       | 'cacheCreationInputTokens'
       | 'reasoningTokens'
       | 'cost'
-    > & { usageRoute?: UsageRoute },
+    > & { cacheMissInputTokens: number; usageRoute?: UsageRoute },
   ): Promise<void> {
     try {
       const { config } = this.modelInfo;
@@ -258,10 +278,6 @@ export class UsageMonitor {
         config.provider.toLowerCase(),
       );
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
-      const cacheMissInputTokens =
-        usage.cacheMissInputTokens ??
-        Math.max(0, usage.inputTokens - cachedInputTokens);
-
       const usedRelay = usage.usageRoute === 'relay';
 
       UsageLogService.log({
@@ -269,14 +285,12 @@ export class UsageMonitor {
         provider,
         agentName: this.metadata.agentName,
         agentCategory: this.metadata.agentCategory,
-        inputTokens: cacheMissInputTokens,
+        inputTokens: usage.cacheMissInputTokens,
         outputTokens: usage.outputTokens,
         cost: roundTo(usage.cost, 6),
         responseTimeMs: Math.round(totalResponseTimeMs),
         cachedInputTokens,
-        ...(usage.cacheMissInputTokens != null && {
-          cacheMissInputTokens: usage.cacheMissInputTokens,
-        }),
+        cacheMissInputTokens: usage.cacheMissInputTokens,
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usedRelay,

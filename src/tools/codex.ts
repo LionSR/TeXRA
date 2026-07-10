@@ -48,6 +48,7 @@ import type {
   TodoItem,
   ToolUseLog,
 } from '@shared/schemas';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -83,13 +84,11 @@ import {
 
 // Type-only imports (kept separate for bundler efficiency)
 import type {
-  McpToolCallItem,
   RunResult,
   Thread,
   ThreadItem,
   ThreadOptions,
   TodoListItem,
-  WebSearchItem,
 } from '@openai/codex-sdk';
 
 // ============================================================================
@@ -145,7 +144,7 @@ function formatCodexDelivery(
 ): string {
   return formatChildRunDelivery(
     {
-      tag: 'codex-result',
+      tag: DELIVERY_TAG.codexResult,
       executionId,
       prompt,
       attributes: [{ name: 'thread-id', value: threadId || null }],
@@ -206,18 +205,14 @@ function logCodexItem(
       logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
     case 'mcp_tool_call': {
-      emitToolUseCard(logger, buildCodexMcpToolLog(item as McpToolCallItem));
+      emitToolUseCard(logger, buildCodexMcpToolLog(item));
       break;
     }
     case 'web_search':
-      logWebSearch(logger, { query: (item as WebSearchItem).query });
+      logWebSearch(logger, { query: item.query });
       break;
     case 'todo_list': {
-      publishCodexTodos(
-        childStreamId,
-        toProgressTodos(item as TodoListItem),
-        logger,
-      );
+      publishCodexTodos(childStreamId, toProgressTodos(item), logger);
       break;
     }
     case 'error':
@@ -238,9 +233,9 @@ function buildCodexLiveToolLog(
       return fileLog ? { ...fileLog, status } : null;
     }
     case 'mcp_tool_call':
-      return buildCodexMcpToolLog(item as McpToolCallItem);
+      return buildCodexMcpToolLog(item);
     case 'todo_list':
-      return buildCodexTodoToolLog(item as TodoListItem, status);
+      return buildCodexTodoToolLog(item, status);
     default:
       return null;
   }
@@ -272,11 +267,7 @@ function publishCodexItemProgress(params: {
   const { item, status, childStreamId, logger, refs } = params;
 
   if (item.type === 'todo_list') {
-    publishCodexTodos(
-      childStreamId,
-      toProgressTodos(item as TodoListItem),
-      logger,
-    );
+    publishCodexTodos(childStreamId, toProgressTodos(item), logger);
   }
 
   const toolLog = buildCodexLiveToolLog(item, status);
@@ -441,7 +432,7 @@ function startCodexLoop(params: {
       formatCodexDelivery(executionId, lastPrompt, wallTimeMs, turn, thread.id),
     formatError: (_turn, err) =>
       formatChildRunError(
-        { tag: 'codex-error', executionId, prompt: lastPrompt },
+        { tag: DELIVERY_TAG.codexError, executionId, prompt: lastPrompt },
         { message: toErrorMessage(err) },
       ),
     onSessionCleanup: () => {
