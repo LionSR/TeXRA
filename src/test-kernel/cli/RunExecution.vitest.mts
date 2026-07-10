@@ -21,7 +21,7 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
-import { SETUP_PLATFORM_TOOL_NAMES } from '@tools/setup/platform';
+import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -255,7 +255,7 @@ describe('executeCliRequest', () => {
         approvalPromptsUnavailable: false,
         runtimeUnavailableTools: [
           'inquiry',
-          ...SETUP_PLATFORM_TOOL_NAMES,
+          ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
           'inline_comment',
           DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
         ],
@@ -276,7 +276,7 @@ describe('executeCliRequest', () => {
       expect.objectContaining({
         runtimeUnavailableTools: [
           'inquiry',
-          ...SETUP_PLATFORM_TOOL_NAMES,
+          ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
           'inline_comment',
           DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
           'custom_tool',

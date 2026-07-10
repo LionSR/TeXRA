@@ -38,7 +38,11 @@ export class CliSecrets implements PlatformSecrets {
   constructor(private readonly filePath = cliSecretsPath()) {}
 
   async get(key: string): Promise<string | undefined> {
-    return cliEnvValue(key) ?? (await this.readSecrets())[key];
+    return cliEnvValue(key) ?? (await this.getStored(key));
+  }
+
+  async getStored(key: string): Promise<string | undefined> {
+    return (await this.readSecrets())[key];
   }
 
   async set(key: string, value: string): Promise<void> {
@@ -51,6 +55,10 @@ export class CliSecrets implements PlatformSecrets {
     await this.updateSecrets((data) => {
       delete data[key];
     });
+  }
+
+  async listStoredKeys(): Promise<readonly string[]> {
+    return Object.keys(await this.readSecrets());
   }
 
   getEnv(name: string): string | undefined {

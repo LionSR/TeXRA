@@ -34,7 +34,6 @@ import {
   setRuntimeExtensionId,
 } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
-import { getAuthStatus } from '@commands/auth';
 import { hasAnyUsableSetupCredential } from '@commands/setup';
 import {
   isResumeInFlight,
@@ -88,17 +87,12 @@ import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
-import {
-  apiKeyExists,
-  apiKeySecretName,
-  hasUsableApiKey,
-} from '@model/apiProviders';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { migrateLegacyGlobalBashApprovalOverride } from '@shared/settingsView/handlers/approvalHandlers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
-import { setSetupPlatform } from '@tools/setup';
+import { createDefaultSetupPlatform, setSetupPlatform } from '@tools/setup';
 import {
   SharedPRPollingSource,
   SharedRepoPollingSource,
@@ -548,35 +542,8 @@ export async function activate(context: vscode.ExtensionContext) {
       } satisfies vscode.TextDocumentShowOptions,
     );
   });
-  // Defense in depth: the only consumers today validate keys before reaching
-  // the config adapter, but the adapter is documented as `texra.*`-scoped and a
-  // future tool wiring through `platform.config` should not be able to read or
-  // write arbitrary VS Code settings by accident.
-  const assertTexraScopedKey = (key: string): void => {
-    if (!key.startsWith('texra.')) {
-      throw new Error(
-        `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
-      );
-    }
-  };
   setSetupPlatform({
-    secrets: {
-      providers: SecretManager.API_PROVIDERS,
-      setApiKey: (provider, key) =>
-        platform().secrets.set(apiKeySecretName(provider), key),
-      deleteApiKey: (provider) =>
-        platform().secrets.delete(apiKeySecretName(provider)),
-      apiKeyExists: (provider) => apiKeyExists(platform().secrets, provider),
-      hasUsableApiKey: (provider) =>
-        hasUsableApiKey(platform().secrets, provider),
-      storedApiKeyExists: async (provider) => {
-        const stored = await SecretManager.get(apiKeySecretName(provider));
-        return stored !== undefined;
-      },
-      anyUsableCredentialExists: () => hasAnyUsableSetupCredential(),
-      gitHubTokenExists: () => SecretManager.gitHubTokenExists(),
-      listStoredKeys: () => SecretManager.listKeys(),
-    },
+    ...createDefaultSetupPlatform(),
     commands: {
       invoke: (cmd, ...args) =>
         Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
@@ -588,25 +555,6 @@ export async function activate(context: vscode.ExtensionContext) {
           'workbench.extensions.installExtension',
           id,
         );
-      },
-    },
-    auth: {
-      getStatus: () => getAuthStatus(),
-    },
-    config: {
-      get: (key) => {
-        assertTexraScopedKey(key);
-        return vscode.workspace.getConfiguration(undefined, null).get(key);
-      },
-      update: async (key, value, target) => {
-        assertTexraScopedKey(key);
-        const scope =
-          target === 'workspace'
-            ? vscode.ConfigurationTarget.Workspace
-            : vscode.ConfigurationTarget.Global;
-        await vscode.workspace
-          .getConfiguration(undefined, null)
-          .update(key, value, scope);
       },
     },
     terminal: {

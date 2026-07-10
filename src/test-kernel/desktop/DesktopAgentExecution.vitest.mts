@@ -40,7 +40,7 @@ import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
-import { SETUP_PLATFORM_TOOL_NAMES } from '@tools/setup/platform';
+import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -2615,7 +2615,7 @@ describe('DesktopProgressBridge', () => {
         expect.objectContaining({
           openWorkflowOutput: expect.any(Function),
           runtimeUnavailableTools: [
-            ...SETUP_PLATFORM_TOOL_NAMES,
+            ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
             'inline_comment',
             DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
           ],
