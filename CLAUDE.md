@@ -467,11 +467,16 @@ Common aliases (full list in `tsconfig.json`):
 
 ## Release Process
 
-TeXRA ships three release tracks off the same CHANGELOG.md commit (versions are pre-bumped by `version-bump.yml`), with identical user-facing notes:
+TeXRA ships three release tracks off the same commit, with identical user-facing notes. Publishing itself is CI-driven (`.github/workflows/release.yml`, fired by `release: published`) — the manual steps are only: update the changelog, cut two tags, and create two GitHub Releases (one per tag). No local `vsce`/`ovsx`/`npm publish` invocation and no OTP are needed.
 
-1. Update CHANGELOG.md with user-facing changes (Features, Bug Fixes, Improvements)
-2. **VS Code extension** (tag `vX.Y.Z`): `npm run build:fast` → `gh release create` → publish with `vsce publish` and `ovsx publish`.
-3. **CLI** (tag `cli-vX.Y.Z`): `npm publish` from `packages/cli` (needs an OTP).
-4. **Desktop**: `.github/workflows/desktop-package.yml` builds signed macOS/Linux/Windows installers and publishes them to the public `texra-ai/texra-desktop-releases` repo.
+1. Update `CHANGELOG.md`: move `[Unreleased]` content into a new dated `## [X.Y.Z] - YYYY-MM-DD` section (folding in anything that accumulated since a prior draft that never shipped), commit, and push to `main`.
+2. Cut both tags off that commit and push them: `git tag vX.Y.Z <sha> && git tag cli-vX.Y.Z <sha> && git push origin vX.Y.Z cli-vX.Y.Z`.
+3. Create two GitHub Releases from those tags, body = the changelog section for that version (extract with something like `awk '/^## \[X.Y.Z\]/{f=1} /^## \[PREV\]/{f=0} f' CHANGELOG.md`):
+   - `gh release create vX.Y.Z --title vX.Y.Z --notes-file <notes>` — triggers `publish-extension`: builds the VSIX (`pnpm --filter texra build:fast`) and publishes to the VS Code Marketplace and Open VSX via stored PATs (`VSCE_PAT`/`OVSX_PAT`, `skipDuplicate: true`). Also triggers `version-bump.yml` (gated to the plain `vX.Y.Z` tag only, so it doesn't double-fire off the `cli-` tag), which opens a PR bumping every package manifest to the next dev version — that PR does **not** touch `CHANGELOG.md`.
+   - `gh release create cli-vX.Y.Z --title cli-vX.Y.Z --notes-file <notes>` — triggers `publish-cli`: `npm publish` from `packages/cli` over npm Trusted Publishing (OIDC `id-token: write`), so it runs unattended in CI — no OTP.
+   - Both jobs assert the release tag matches the corresponding `package.json` version and fail closed if it doesn't — cut the tags only after that manifest version is actually on `main`.
+   - If a tag/release for a version was created previously but the workflow never ran (e.g. abandoned mid-release), re-running `gh release create` reuses the existing tag — pass no `--target` (an explicit `--target` on a tag that already has a commit 422s).
+4. **Desktop**: `.github/workflows/desktop-package.yml` is `workflow_dispatch`-only (not release-triggered) — build signed macOS/Linux/Windows installers and publish them to the public `texra-ai/texra-desktop-releases` repo by dispatching it with `run_desktop_installers`, `run_windows_desktop`, `require_desktop_signing`, and `publish_desktop_release_artifacts` all `true`.
+5. If this release changes `llm-zoo`, also update the exact pin in `supabase/functions/relay/deno.json` and refresh `supabase/functions/relay/deno.lock` (called out in the `version-bump.yml` PR body, but easy to miss since it isn't part of the automated bump).
 
 **Changelog guidelines**: Focus on user-visible changes. Never document intermediate bugs fixed within the same PR.
