@@ -7,7 +7,7 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 
 // Third-party imports
@@ -38,6 +38,10 @@ interface PathsModule {
   resolveWorkspacePath(options?: {
     env?: { TEXRA_WORKSPACE_PATH?: string };
   }): string | undefined;
+  resolveDesktopDataRoot(
+    userDataPath: string,
+    options?: { env?: { TEXRA_DESKTOP_E2E_USER_DATA_PATH?: string } },
+  ): string;
 }
 
 async function walkTypeScriptFiles(dir: string): Promise<string[]> {
@@ -144,6 +148,21 @@ describe('desktop composition root and launch environment', () => {
     expect(
       resolveWorkspacePath({ env: { TEXRA_WORKSPACE_PATH: '   ' } }),
     ).toBeUndefined();
+  });
+
+  it('shares the CLI ~/.texra data root by default, isolating only under the e2e override (#7987)', async () => {
+    const { resolveDesktopDataRoot } =
+      await loadDesktopPlatformModule<PathsModule>('paths.ts');
+    const userDataPath = '/tmp/some-electron-user-data';
+
+    expect(resolveDesktopDataRoot(userDataPath, { env: {} })).toBe(
+      join(homedir(), '.texra'),
+    );
+    expect(
+      resolveDesktopDataRoot(userDataPath, {
+        env: { TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath },
+      }),
+    ).toBe(userDataPath);
   });
 
   it('finds resources in configured, packaged, and monorepo development layouts', async () => {
