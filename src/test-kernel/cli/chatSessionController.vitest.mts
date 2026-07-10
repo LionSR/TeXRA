@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   appendLocalUserTranscript: vi.fn(),
   clearLocalTranscript: vi.fn(),
   moveLocalTranscriptToStream: vi.fn(),
+  resolveCliResumeSnapshot: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -100,6 +101,14 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,
 }));
 
+vi.mock('@cli/runtime/sessionResume', () => ({
+  resolveCliResumeSnapshot: mocks.resolveCliResumeSnapshot,
+  explainNonResumable: (
+    resolution: { readonly kind: string },
+    id: string,
+  ): string => `not resumable (${resolution.kind}): ${id}`,
+}));
+
 import { StreamSnapshotStore } from '@transcript';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { wakeQueuedFollowUpStream } from '@agent/followUp/ToolUseFollowUp';
@@ -112,7 +121,7 @@ import {
   chatTuiCanStartRootRun,
   type TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
-import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ---------------------------------------------------------------------------
@@ -279,6 +288,7 @@ describe('createChatSessionController', () => {
     mocks.appendLocalUserTranscript.mockReset();
     mocks.clearLocalTranscript.mockReset();
     mocks.moveLocalTranscriptToStream.mockReset();
+    mocks.resolveCliResumeSnapshot.mockReset();
   });
 
   it('returns an object satisfying the ChatSessionController interface', () => {
@@ -375,6 +385,65 @@ describe('createChatSessionController', () => {
 
     preload.resolve(undefined);
     await expect(resumed).resolves.toBe(false);
+    expect(session.runCompleted).toBe(true);
+  });
+
+  it('reserves the root-run slot before resume() awaits the resolved snapshot', async () => {
+    const snapshot = deferred<{ readonly kind: 'not-found' }>();
+    mocks.resolveCliResumeSnapshot.mockReturnValueOnce(snapshot.promise);
+    const session = makeSession({ runCompleted: true });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    const resumed = ctrl.resume('aaaaaa' as ExecutionId);
+
+    // The claim (tryClaimRootRunSlot) must land synchronously, before
+    // resume() ever reaches its first await — same contract as
+    // tryResumeStream above.
+    expect(session.runPromise).toBeDefined();
+    expect(session.runCompleted).toBe(false);
+    expect(ctrl.canStartRootRun()).toBe(false);
+
+    snapshot.resolve({ kind: 'not-found' });
+    await resumed;
+    expect(session.runCompleted).toBe(true);
+  });
+
+  it('resume() suspended on the resolved snapshot keeps a concurrent follow-up wake from also claiming the root-run slot', async () => {
+    // Reproduces the finding's interleaving: resume(A) suspends on
+    // resolveCliResumeSnapshot (an await-suspension point) with the slot
+    // already claimed; a follow-up wake (tryResumeStream for a different
+    // stream) fires while A is still suspended. Pre-fix, resume(A) checked
+    // availability but claimed the slot only after this (and three more)
+    // awaits, so B's tryResumeStream would see the slot as free, claim it,
+    // and start doing real work — which resume(A) would then clobber when
+    // it woke back up and unconditionally overwrote session.runPromise.
+    // Post-fix, exactly one caller (A) ever holds the slot.
+    const snapshot = deferred<{ readonly kind: 'not-found' }>();
+    mocks.resolveCliResumeSnapshot.mockReturnValueOnce(snapshot.promise);
+    const session = makeSession({ runCompleted: true });
+    const snapshotStoreForB = makeResumeSnapshotStore({
+      executionId: undefined,
+    });
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore: snapshotStoreForB }),
+    );
+
+    const resumeA = ctrl.resume('aaaaaa' as ExecutionId);
+    // A is now suspended inside resolveCliResumeSnapshot; the slot is
+    // already claimed.
+    expect(session.runPromise).toBeDefined();
+    expect(session.runCompleted).toBe(false);
+
+    // The follow-up wake for a different stream fires while A is still
+    // suspended. It must bail out synchronously, before touching the
+    // snapshot store, because the slot is already held.
+    const resumedB = ctrl.tryResumeStream('stream-b');
+    expect(snapshotStoreForB.preload).not.toHaveBeenCalled();
+    await expect(resumedB).resolves.toBe(false);
+
+    // A remains the sole owner of the slot end to end.
+    snapshot.resolve({ kind: 'not-found' });
+    await resumeA;
     expect(session.runCompleted).toBe(true);
   });
 

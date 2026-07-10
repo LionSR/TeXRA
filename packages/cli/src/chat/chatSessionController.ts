@@ -69,6 +69,7 @@ import {
   markChatTuiRunCompleted,
   markChatTuiRunPending,
   publishChatTuiRootRunStartAvailability,
+  tryClaimRootRunSlot,
   type TuiSession,
 } from './tui/state/sessionRunState';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
@@ -341,93 +342,119 @@ export function createChatSessionController(
     id: ExecutionId,
     preResolved?: CliToolUseResumeResolution,
   ): Promise<void> => {
-    if (!chatTuiCanStartRootRun(session)) {
+    // Claim the root-run slot as the FIRST statement, synchronously, before
+    // any `await` below — see tryClaimRootRunSlot. This fuses the
+    // availability check and the claim into one atomic step so a concurrent
+    // tryResumeStream() (or another resume()) can never observe this call
+    // suspended between "checked available" and "claimed", and race in to
+    // claim the same slot out from under it.
+    let resolveRunPromise: () => void = () => {};
+    let rejectRunPromise: (error: unknown) => void = () => {};
+    const claimedRunPromise = new Promise<void>((resolve, reject) => {
+      resolveRunPromise = resolve;
+      rejectRunPromise = reject;
+    });
+    if (!tryClaimRootRunSlot(session, claimedRunPromise)) {
       appendLocalAssistantTranscript(
         'Finish the active chat before resuming a previous session.',
       );
       return;
     }
 
-    const resolution = preResolved ?? (await resolveCliResumeSnapshot(id));
-    if (resolution.kind !== 'toolUse') {
-      appendLocalErrorTranscript(explainNonResumable(resolution, id));
-      return;
+    try {
+      const resolution = preResolved ?? (await resolveCliResumeSnapshot(id));
+      if (resolution.kind !== 'toolUse') {
+        appendLocalErrorTranscript(explainNonResumable(resolution, id));
+        markChatTuiRunCompleted(session);
+        resolveRunPromise();
+        return;
+      }
+
+      clearLocalTranscript();
+      followUpQueue.clear();
+      session.streamId = resolution.streamId;
+      session.executionId = resolution.snapshot.executionId;
+      rootStreamId.set(resolution.streamId);
+
+      const currentModel = resolution.config.model;
+      const sessionContext = getSessionContext(currentModel);
+      patchSessionMeta({
+        agent: resolution.config.agent,
+        model: resolution.config.model,
+        modelSource: 'history',
+        canDelegate: chatAgentSupportsDelegation(resolution.config.agent),
+      });
+
+      await getDefaultStreamLogStore().ensureLoaded(resolution.streamId);
+      await snapshotStore.load([resolution.streamId]);
+      const restored = await snapshotStore.read(resolution.streamId);
+      patchStream(resolution.streamId, (slice) => {
+        const runUsages = Object.values(restored.runUsage);
+        return {
+          ...slice,
+          cumulativeUsage: runUsages.length
+            ? sumUsageStats(runUsages)
+            : slice.cumulativeUsage,
+          todos: restored.todos,
+          plan: restored.plan,
+        };
+      });
+      projectStreamTranscript(resolution.streamId);
+      activeStreamId.set(resolution.streamId);
+
+      const { runtimeHost, approvalsUnavailable, finalize } =
+        setupRunHost(sessionContext);
+      session.runtimeHost = runtimeHost;
+
+      const runChain = setCliHelperModel(currentModel)
+        .then(() =>
+          resumeToolUseFromSnapshot(resolution.snapshot, runtimeHost, {
+            approvalPromptsUnavailable: approvalsUnavailable,
+            runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+          }),
+        )
+        .then(() => {
+          if (session.streamId) {
+            projectStreamTranscript(session.streamId, { finalize: true });
+          }
+          session.runExitCode = CliExitCode.Success;
+          notify({ kind: 'agentFinished' });
+        })
+        .catch(reportRunFailure)
+        .finally(finalize);
+      // `session.runPromise` was already claimed synchronously above with
+      // `claimedRunPromise`; forward its settlement to the real run chain so
+      // exit-drain's `await session.runPromise` blocks until the continued
+      // run actually finishes (or is interrupted), not just until
+      // rehydration completes. `resume()`'s own returned promise still
+      // settles here, before the run finishes — fire-and-forget per the
+      // interface contract.
+      runChain.then(resolveRunPromise, rejectRunPromise);
+    } catch (error: unknown) {
+      markChatTuiRunCompleted(session);
+      resolveRunPromise();
+      throw error;
     }
-
-    clearLocalTranscript();
-    followUpQueue.clear();
-    session.runCompleted = false;
-    publishChatTuiRootRunStartAvailability(session);
-    session.stopRequested = false;
-    session.runExitCode = CliExitCode.Success;
-    session.streamId = resolution.streamId;
-    session.executionId = resolution.snapshot.executionId;
-    rootStreamId.set(resolution.streamId);
-
-    const currentModel = resolution.config.model;
-    const sessionContext = getSessionContext(currentModel);
-    patchSessionMeta({
-      agent: resolution.config.agent,
-      model: resolution.config.model,
-      modelSource: 'history',
-      canDelegate: chatAgentSupportsDelegation(resolution.config.agent),
-    });
-
-    await getDefaultStreamLogStore().ensureLoaded(resolution.streamId);
-    await snapshotStore.load([resolution.streamId]);
-    const restored = await snapshotStore.read(resolution.streamId);
-    patchStream(resolution.streamId, (slice) => {
-      const runUsages = Object.values(restored.runUsage);
-      return {
-        ...slice,
-        cumulativeUsage: runUsages.length
-          ? sumUsageStats(runUsages)
-          : slice.cumulativeUsage,
-        todos: restored.todos,
-        plan: restored.plan,
-      };
-    });
-    projectStreamTranscript(resolution.streamId);
-    activeStreamId.set(resolution.streamId);
-
-    const { runtimeHost, approvalsUnavailable, finalize } =
-      setupRunHost(sessionContext);
-    session.runtimeHost = runtimeHost;
-
-    session.runPromise = setCliHelperModel(currentModel)
-      .then(() =>
-        resumeToolUseFromSnapshot(resolution.snapshot, runtimeHost, {
-          approvalPromptsUnavailable: approvalsUnavailable,
-          runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
-        }),
-      )
-      .then(() => {
-        if (session.streamId) {
-          projectStreamTranscript(session.streamId, { finalize: true });
-        }
-        session.runExitCode = CliExitCode.Success;
-        notify({ kind: 'agentFinished' });
-      })
-      .catch(reportRunFailure)
-      .finally(finalize);
-    publishChatTuiRootRunStartAvailability(session);
   };
 
   const tryResumeStream = (streamId: StreamTabId): Promise<boolean> => {
-    if (!chatTuiCanStartRootRun(session)) {
-      return Promise.resolve(false);
-    }
-
     let resolveRun: (resumed: boolean) => void = () => {};
     let rejectRun: (error: unknown) => void = () => {};
     const runPromise = new Promise<boolean>((resolve, reject) => {
       resolveRun = resolve;
       rejectRun = reject;
     });
-    markChatTuiRunPending(
-      session,
-      runPromise.then(() => undefined),
-    );
+    // Claim the root-run slot as the FIRST statement, synchronously, before
+    // any `await` below — see tryClaimRootRunSlot and the matching comment
+    // in resume().
+    if (
+      !tryClaimRootRunSlot(
+        session,
+        runPromise.then(() => undefined),
+      )
+    ) {
+      return Promise.resolve(false);
+    }
 
     const runResume = async (): Promise<boolean> => {
       let finalize = (): void => markChatTuiRunCompleted(session);
