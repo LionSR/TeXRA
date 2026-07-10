@@ -158,7 +158,7 @@ export class ToolUseWaitNode<C> extends Node<
   ): Promise<string | undefined> {
     const { onFollowUpConsumed, logger, streamStatus } = this.services;
     const { runScope } = useLaunchRunContext();
-    const { streamId, runtimeHost } = runScope;
+    const { streamId } = runScope;
 
     if (execRes.kind === 'waiting') {
       return FlowTransition.WAITING;

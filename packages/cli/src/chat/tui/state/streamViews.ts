@@ -4,7 +4,7 @@
 // each rebuild them differently.
 
 // Local imports - shared schemas
-import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI state
 import {

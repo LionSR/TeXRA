@@ -204,10 +204,6 @@ export class MediaAttachmentState {
       }
     }
   }
-
-  hasFile(absolutePath: string): boolean {
-    return this.pathSet.has(absolutePath);
-  }
 }
 
 /** Internal schema for reasoning cache state. */
