@@ -221,6 +221,33 @@ const DISABLED_MODEL_SWITCH_REASON =
   'different conversation format; start new chat';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
+// Opt-in fixture for the PTY byte-identity check (issue #7972, follow-up from
+// #7967 / acceptance-gate items 4-5 in
+// docs/proposals/cli-child-stream-state-consolidation.md): seeds one child
+// stream through the same order-equivalent event sequences as the vitest
+// "child-stream ordered transition matrix"
+// (src/test-kernel/cli/TuiStateAndFocus.vitest.mts, scenarios 1-4) so
+// validate-tui.mjs can assert the rendered frame is byte-identical no matter
+// which order the roster/edge/status facts arrive in.
+const CHILD_EVENT_ORDER_VALUES = [
+  'canonical',
+  'roster-first',
+  'edge-first',
+  'status-first',
+] as const;
+type ChildEventOrder = (typeof CHILD_EVENT_ORDER_VALUES)[number];
+const CHILD_EVENT_ORDER_RAW = process.env.HARNESS_CHILD_EVENT_ORDER?.trim();
+if (
+  CHILD_EVENT_ORDER_RAW &&
+  !(CHILD_EVENT_ORDER_VALUES as readonly string[]).includes(
+    CHILD_EVENT_ORDER_RAW,
+  )
+) {
+  throw new Error(
+    `HARNESS_CHILD_EVENT_ORDER must be one of ${CHILD_EVENT_ORDER_VALUES.join(', ')}, got ${JSON.stringify(CHILD_EVENT_ORDER_RAW)}`,
+  );
+}
+const CHILD_EVENT_ORDER = CHILD_EVENT_ORDER_RAW as ChildEventOrder | undefined;
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
 const SHOW_IDLE_TODOS = process.env.HARNESS_TODOS_IDLE === '1';
 const SHOW_COMPLETED_TODOS_ONLY = process.env.HARNESS_TODOS_COMPLETED === '1';
@@ -984,6 +1011,49 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
   seedSubagentFollowupTranscript();
 }
 
+// One child stream, its roster/edge/status facts applied through the real
+// transition functions in each of the four orderings the vitest matrix
+// proves order-equivalent (canonical/roster-first/edge-first/status-first —
+// see the `CHILD_EVENT_ORDER_VALUES` comment above). No `startedAt` is set,
+// so `childElapsed` returns the static `elapsed` string instead of a
+// live-ticking duration (packages/cli/src/chat/tui/state/childControls.ts) —
+// required for the rendered frame to be byte-identical across separate
+// process launches, not just across orderings within one launch.
+const CHILD_EVENT_ORDER_STREAM_ID = 'harness-child-event-order-stream';
+const CHILD_EVENT_ORDER_EXECUTION_ID = 'harness-child-event-order-exec';
+const CHILD_EVENT_ORDER_AGENT_NAME = 'orderChecker';
+
+function seedChildEventOrderFixture(order: ChildEventOrder): void {
+  const childStreamId = CHILD_EVENT_ORDER_STREAM_ID;
+  const rosterRow: ActiveChildInfo = {
+    kind: 'subagent',
+    executionId: CHILD_EVENT_ORDER_EXECUTION_ID,
+    agentName: CHILD_EVENT_ORDER_AGENT_NAME,
+    childStreamId,
+    elapsed: '1m 4s',
+  };
+  const applyStatus = () =>
+    patchStream(childStreamId, (slice) => ({
+      ...slice,
+      status: STREAM_STATUS.RUNNING,
+      description: `${CHILD_EVENT_ORDER_AGENT_NAME} sub-workflow`,
+      entries: makeChildEntries(
+        CHILD_EVENT_ORDER_AGENT_NAME,
+        CHILD_EVENT_ORDER_EXECUTION_ID,
+      ),
+    }));
+  const applyRoster = () => applySubagentRoster(STREAM_ID, [rosterRow]);
+  const applyEdge = () => setParentStream(childStreamId, STREAM_ID);
+
+  const orderedSteps: Record<ChildEventOrder, readonly (() => void)[]> = {
+    canonical: [applyStatus, applyRoster, applyEdge],
+    'roster-first': [applyRoster, applyStatus, applyEdge],
+    'edge-first': [applyEdge, applyStatus, applyRoster],
+    'status-first': [applyStatus, applyEdge, applyRoster],
+  };
+  for (const step of orderedSteps[order]) step();
+}
+
 if (SHOW_CHILDREN) {
   const startedAt = Date.now() - 74_000;
   const nestedStartedAt = startedAt + 24_000;
@@ -1122,6 +1192,10 @@ if (SHOW_CHILDREN) {
       runStartedAt: nestedStartedAt,
     }));
   }
+}
+
+if (CHILD_EVENT_ORDER) {
+  seedChildEventOrderFixture(CHILD_EVENT_ORDER);
 }
 
 if (SHOW_TODOS) {
