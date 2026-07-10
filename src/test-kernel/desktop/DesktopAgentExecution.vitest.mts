@@ -1826,6 +1826,48 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('revealStream keeps a matching filter for a restored stream with no live session facts yet (issue #7851)', async () => {
+    const messages: unknown[] = [];
+    // A goal-owned stream restored from persisted workspaceState at launch,
+    // via stream-snapshot hydration -- its category lives in persisted
+    // hints, not in any live session fact (none has been emitted yet this
+    // session, so `getStreamState(streamId)?.kind` is undefined).
+    const bridge = await createBridge(messages, {
+      streamSnapshotStore: createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId: 'ghost-tool-use-stream',
+          agentCategory: AgentCategory.ToolUse,
+        }),
+      ]),
+    });
+
+    try {
+      const filterStreams = assertSupported(
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.FILTER_STREAMS
+        ],
+      );
+      await filterStreams({
+        command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS,
+        filter: 'toolUse',
+      });
+      messages.length = 0;
+
+      await bridge.revealStream('ghost-tool-use-stream');
+
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+          -1,
+        ),
+      ).toMatchObject({
+        activeStream: 'ghost-tool-use-stream',
+        agentFilter: 'toolUse',
+      });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('waits for desktop startup repair before revealing a goal-owned stream (issue #7850)', async () => {
     // Regression test: revealStream() used to check streamLogs.has()
     // synchronously, before streamLogs.load() (which only resolves inside
