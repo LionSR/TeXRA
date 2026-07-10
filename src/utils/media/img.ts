@@ -4,12 +4,12 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { PDFDocument } from '@cantoo/pdf-lib';
-import { nanoid } from 'nanoid';
 import { fromPath } from 'pdf2pic';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
+import { generateShortId } from '@utils/core';
 import { AbsoluteFS, getMimeType, WorkspaceFS } from '@utils/files';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -132,7 +132,10 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   }
 
   const ext = path.extname(imagePath);
-  const tempPath = path.join(os.tmpdir(), `texra-resized-${nanoid()}${ext}`);
+  const tempPath = path.join(
+    os.tmpdir(),
+    `texra-resized-${generateShortId()}${ext}`,
+  );
 
   // ImageMagick v7+: magick input -resize ... output
   // GraphicsMagick: gm convert input -resize ... output

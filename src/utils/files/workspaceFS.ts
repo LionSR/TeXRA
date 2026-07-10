@@ -3,6 +3,8 @@ import * as path from 'node:path';
 // Platform imports
 import { platform } from '@platform/platform';
 
+import { normalizeFilePath } from '@utils/core';
+
 // Local imports - filesystem
 import { RelativeFS } from './relativeFS';
 import {
@@ -33,7 +35,7 @@ export class WorkspaceFS extends RelativeFS {
     if (!this.getPath()) {
       return filePath;
     }
-    return platform().workspace.asRelativePath(filePath).replaceAll('\\', '/');
+    return normalizeFilePath(platform().workspace.asRelativePath(filePath));
   }
 
   /** Absolute path from relative. Already-absolute paths pass through. */
