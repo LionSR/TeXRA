@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
+import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const mocks = vi.hoisted(() => ({
@@ -47,7 +49,12 @@ vi.mock('@cli/runtime/supabaseAuth', () => ({
 }));
 
 vi.mock('@logger/logUtils', () => ({
+  debug: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  initialize: vi.fn(),
   setOutputChannelFactory: vi.fn(),
+  warn: vi.fn(),
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
@@ -204,8 +211,8 @@ describe('CLI platform init', () => {
 
     type NodePlatformOptions = {
       readonly agentResume: {
-        tryResumeStream(streamId: string): Promise<boolean>;
-        isResumeInFlight(streamId: string): boolean;
+        tryResumeStream(streamId: StreamTabId): Promise<boolean>;
+        isResumeInFlight(streamId: StreamTabId): boolean;
       };
     };
     const createNodePlatformCalls = mocks.createNodePlatform.mock
@@ -214,24 +221,40 @@ describe('CLI platform init', () => {
     expect(nodePlatformOptions?.agentResume).toBeDefined();
     if (!nodePlatformOptions) throw new Error('expected node platform options');
 
+    const streamId = 'stream:cli-resume' as StreamTabId;
+    let releaseResumeState!: () => void;
+    const pendingResumeState = new Promise<undefined>((resolve) => {
+      releaseResumeState = () => resolve(undefined);
+    });
+    const pendingResume = resolveAndResumeStream(streamId, {
+      runtimeHost: { emit: vi.fn() },
+      streamStatus: { isActiveOrResuming: () => false },
+      resolveResumeState: () => pendingResumeState,
+      resumeToolUseSnapshot: vi.fn(async () => false),
+      executeWorkflow: vi.fn(async () => {}),
+    });
+
+    expect(nodePlatformOptions.agentResume.isResumeInFlight(streamId)).toBe(
+      false,
+    );
+
     const tryResumeStream = vi.fn(async () => true);
-    const isResumeInFlight = vi.fn(() => true);
     const dispose = setCliAgentResumeHandler({
       tryResumeStream,
-      isResumeInFlight,
     });
 
     try {
       await expect(
-        nodePlatformOptions.agentResume.tryResumeStream('stream:cli-resume'),
+        nodePlatformOptions.agentResume.tryResumeStream(streamId),
       ).resolves.toBe(true);
-      expect(tryResumeStream).toHaveBeenCalledWith('stream:cli-resume');
-      expect(
-        nodePlatformOptions.agentResume.isResumeInFlight('stream:cli-resume'),
-      ).toBe(true);
-      expect(isResumeInFlight).toHaveBeenCalledWith('stream:cli-resume');
+      expect(tryResumeStream).toHaveBeenCalledWith(streamId);
+      expect(nodePlatformOptions.agentResume.isResumeInFlight(streamId)).toBe(
+        true,
+      );
     } finally {
       dispose();
+      releaseResumeState();
+      await pendingResume;
     }
   });
 

@@ -25,10 +25,7 @@ import {
   executeAgent,
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
-import {
-  isResumeInFlight,
-  resolveAndResumeStream,
-} from '@agent/runtime/resolveAndResumeStream';
+import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
@@ -171,9 +168,6 @@ export interface ChatSessionController {
 
   /** Resume a queued follow-up target from the CLI platform resume port. */
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
-
-  /** Whether a stream resume accepted by this controller is still preparing. */
-  isResumeInFlight(streamId: StreamTabId): boolean;
 
   /** Whether a new root run can be started right now. */
   canStartRootRun(): boolean;
@@ -536,7 +530,6 @@ export function createChatSessionController(
     resume,
     stop,
     tryResumeStream,
-    isResumeInFlight,
     canStartRootRun: () => chatTuiCanStartRootRun(session),
   };
 }
