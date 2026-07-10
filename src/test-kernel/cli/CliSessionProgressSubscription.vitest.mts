@@ -367,6 +367,38 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
+  it('forgets the last status when a stream is removed', () => {
+    const events = new SessionEventHub();
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
+
+    try {
+      emitSessionStatus(events, resumingStatusPayload);
+      emitSessionStatus(events, resumingStatusPayload);
+      events.emit({
+        scope: 'session',
+        event: { type: 'removeStream', payload: { streamId } },
+      });
+      emitSessionStatus(events, resumingStatusPayload);
+
+      expect(writeRecord).toHaveBeenCalledTimes(3);
+      expect(writeRecord).toHaveBeenNthCalledWith(
+        1,
+        progressRecord('updateStreamStatus', resumingStatusPayload),
+      );
+      expect(writeRecord).toHaveBeenNthCalledWith(
+        2,
+        progressRecord('removeStream', { streamId }),
+      );
+      expect(writeRecord).toHaveBeenNthCalledWith(
+        3,
+        progressRecord('updateStreamStatus', resumingStatusPayload),
+      );
+    } finally {
+      detach();
+    }
+  });
+
   it('drops malformed retained run facts instead of forwarding unchecked payloads', () => {
     const events = new SessionEventHub();
     const writeRecord = recordWriter();
