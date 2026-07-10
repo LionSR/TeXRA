@@ -147,6 +147,7 @@ const PROVIDER_REGISTRY = [
 /** Providers not in the main registry (no server-side keys, no model selection). */
 const EXTRA_DISPLAY_NAMES: Record<string, string> = {
   openRouter: 'OpenRouter',
+  [ModelProvider.META]: 'Meta',
   [ModelProvider.COPILOT]: 'Copilot',
   [ModelProvider.OTHERS]: 'Others',
 };
