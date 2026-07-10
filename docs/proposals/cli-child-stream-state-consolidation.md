@@ -171,8 +171,9 @@ prepared non-empty roster is delivered after the promotion fact. The current ros
 `packages/cli/src/chat/tui/state/cliState.ts:469-479`).
 
 An explicit edge fact must therefore outrank roster-derived topology. Once an explicit `null` is observed, an old
-roster may update retained display metadata but must not restore active membership or the parent edge. Only a
-later explicit non-null edge may reattach the child.
+roster must not restore active membership, refresh relationship metadata, or restore the parent edge. Only a later
+explicit non-null edge may reattach the child. After reattachment to a new parent, a late roster from the old
+parent is likewise incompatible and must not replace the new parent's active membership.
 
 ### 7. Explicit removal follows completion and must dominate late facts
 
@@ -180,9 +181,14 @@ Auto-close finalizes the run, disposes its trace, and only then emits `removeStr
 (`src/tools/childStream.ts:203-276`). Current removal deletes the child slice, scrubs all parent lists, clears
 focus, and removes topology edges (`packages/cli/src/chat/tui/state/cliState.ts:574-605`).
 
-The new owner must make removal final for that activation. A late roster, edge, or status from the completed
-activation must not recreate a selectable child. A subsequent `setActiveStream` for the same stream id is the
-only event that may begin a new activation and clear that removal guard.
+The new owner must make removal final for that stream identity within the TUI session. A late roster, edge,
+attachment, or status from the completed activation must not recreate a selectable child. Current direct-child
+ids include the unique execution id (`src/tools/childStream.ts:81-87`); a later activation must use a distinct
+`StreamTabId`. Supporting same-id reuse would require an activation generation in the event contract and is out
+of scope because late old facts and fresh pre-attachment status facts are otherwise indistinguishable.
+
+Removal of a parent must have the same authority. A late roster whose parent is removed, or a late edge pointing
+to that parent, must not recreate the removed parent as an ancestor.
 
 ### 8. Retained order and live overlay have different lifetimes
 
@@ -239,7 +245,7 @@ export interface ChildStreamEntry {
    */
   readonly edgeParentStreamId?: StreamTabId | null;
 
-  /** Explicit removeStream tombstone, cleared only by a new activation. */
+  /** Explicit removeStream tombstone for this session-scoped stream identity. */
   readonly removed: boolean;
 }
 
@@ -248,8 +254,10 @@ const CHILD_STREAMS = signal<ReadonlyMap<StreamTabId, ChildStreamEntry>>(
 );
 ```
 
-The map key is the child identity; `ChildStreamEntry` does not repeat `childStreamId`. No field stores lifecycle
-status. No entry is created merely because a root or child stream is attached.
+The map key is normally the child identity; `ChildStreamEntry` does not repeat `childStreamId`. The map may also
+hold a minimal tombstone for a removed parent-only stream. This keeps child-removal and parent-removal authority in
+the same collection instead of adding a second mutable `removedStreams` set. No field stores lifecycle status. No
+non-tombstone entry is created merely because a root or child stream is attached.
 
 `retainedOrder` is assigned from the current maximum for that parent when a roster first retains the child. It is
 computed from the map during the uncommon insertion transition, so no second mutable order counter is needed.
@@ -265,29 +273,32 @@ All former views are computed from `CHILD_STREAMS` and, where status or existenc
 
 ### Effective parent
 
-For a non-removed entry:
+For a non-removed entry, first choose a candidate parent:
 
 1. a string `edgeParentStreamId` is the current parent;
 2. `null` means no parent; and
 3. `undefined` falls back to `retainedParentStreamId`, which is the provisional parent learned from a roster.
 
-This precedence preserves roster-before-edge while preventing a late roster from reversing promotion.
+If the candidate parent has a removal tombstone, return no parent. This precedence preserves roster-before-edge,
+prevents a late roster from reversing promotion, and prevents late child facts from reviving a removed parent.
 
 ### Active subagents for a parent
 
-Select entries whose `activeParentStreamId` equals the requested parent and whose effective parent is that same
-parent. Require `summary`. Reconstruct `SubagentChildInfo` by adding the map key as `childStreamId` and reading
-`status` from `streams.get(childStreamId)?.status`.
+Return an empty result when the requested parent is tombstoned. Otherwise, select entries whose
+`activeParentStreamId` equals the requested parent and whose effective parent is that same parent. Require
+`summary`. Reconstruct `SubagentChildInfo` by adding the map key as `childStreamId` and reading `status` from
+`streams.get(childStreamId)?.status`.
 
 The active selector, not status, determines whether a control is killable. A terminal status that arrives after
 roster removal cannot make a retained child active again.
 
 ### Retained child streams for a parent
 
-Select non-removed entries whose `retainedParentStreamId` equals the requested parent, require `summary`, and sort
-by `retainedOrder`. Reconstruct each row with status from the child `StreamSlice`.
+Return an empty result when the requested parent is tombstoned. Otherwise, select non-removed entries whose
+`retainedParentStreamId` equals the requested parent, require `summary`, and sort by `retainedOrder`. Reconstruct
+each row with status from the child `StreamSlice`.
 
-Promotion does not erase this historical row. Explicit `removeStream(child)` does.
+Promotion does not erase this historical row. Explicit removal of the child or parent does.
 
 ### Current topology
 
@@ -315,7 +326,7 @@ not arrival time alone, determines authority.
 The precedence for relationship state is:
 
 ```text
-removeStream tombstone
+removeStream tombstone on the child or referenced parent
     > explicit setParentStream(id or null)
     > roster-derived provisional parent
     > no relationship
@@ -328,17 +339,23 @@ is never stored in `ChildStreamEntry`.
 
 For `child.activity(kind: 'subagents', parentStreamId, children)`:
 
-1. Treat `children` as the complete active-membership snapshot for that parent at this hub position.
-2. Clear `activeParentStreamId` for entries previously active under that parent but absent from the snapshot.
-3. For each included, non-tombstoned child, update `summary` after removing `childStreamId` and `status`.
-4. Set `activeParentStreamId` to the payload parent.
-5. On the first roster observation, set `retainedParentStreamId` and append `retainedOrder` in payload order.
-6. Do not write `edgeParentStreamId`. A roster supplies provisional topology only through the effective-parent
+1. If the payload parent is tombstoned, ignore the snapshot. Late facts cannot recreate a removed parent.
+2. Accept an included child only when neither child nor parent is tombstoned and the child's explicit edge is
+   either absent or equal to the payload parent. Explicit `null` and an explicit different parent make the row
+   incompatible.
+3. Treat the accepted children as the complete active-membership snapshot for that parent at this hub position.
+   Clear `activeParentStreamId` for entries previously active under that parent but absent or incompatible.
+4. For each accepted child, update `summary` after removing `childStreamId` and `status`.
+5. Set `activeParentStreamId` to the payload parent.
+6. On the first accepted roster observation, set `retainedParentStreamId` and append `retainedOrder` in payload
+   order.
+7. Do not write `edgeParentStreamId`. A roster supplies provisional topology only through the effective-parent
    fallback.
-7. Discard the roster's copied `status` for TUI state. The independently delivered lifecycle transition updates
+8. Discard the roster's copied `status` for TUI state. The independently delivered lifecycle transition updates
    the child `StreamSlice`; until it arrives, a derived row may have an undefined status.
 
-Rule 7 prevents a stale roster from overwriting a newer lifecycle event and leaves exactly one TUI status owner.
+Rule 2 prevents a late old-parent roster from erasing a completed reattachment. Rule 8 prevents a stale roster
+from overwriting a newer lifecycle event and leaves exactly one TUI status owner.
 
 ### Explicit parent edge
 
@@ -346,20 +363,23 @@ For `setParentStream(child, parent)`:
 
 - upsert an entry even if metadata is not yet known;
 - set `edgeParentStreamId` to the parent id or `null`;
+- clear `activeParentStreamId` when it names a different parent;
 - never delete retained metadata or retained order; and
-- ignore the fact while the entry is tombstoned by `removeStream`.
+- ignore the fact while the child is tombstoned by `removeStream`, or while a non-null parent is tombstoned.
 
-A non-null edge can explicitly reattach a promoted child. A roster cannot.
+A non-null edge can explicitly reattach a promoted child. Only a roster from that explicit parent may then mark
+the child active; a late roster from the former parent is ignored.
 
 ### Stream attachment
 
 For `setActiveStream(child)`:
 
+- ignore the fact when that stream id is tombstoned;
 - create or patch only the child's existing `StreamSlice`, as today;
-- do not create a `ChildStreamEntry` without relationship evidence; and
-- if a tombstone exists for this same id, remove the tombstone as the start of a new activation.
+- do not create a non-tombstone `ChildStreamEntry` without relationship evidence.
 
-The subsequent roster or edge determines whether the activated stream is a child.
+The subsequent roster or edge determines whether the activated stream is a child. A fresh activation after
+removal uses a distinct stream id; same-id revival is deliberately unsupported without generation-bearing facts.
 
 ### Stream status
 
@@ -367,10 +387,11 @@ For a status change:
 
 - update only `streams.get(child).status`, `substate`, and `runStartedAt`;
 - do not scan parent entries; and
-- ignore a late status for a tombstoned child until a new attachment clears the tombstone.
+- ignore a status for a tombstoned child.
 
 This deletes `updateChildStatusReferences`, `withMirroredChildStreamStatus`, and the three-list traversal in
-`setStreamStatusInCliState`.
+`setStreamStatusInCliState`. Status-before-attachment remains valid for a non-tombstoned, newly allocated stream
+id because status and attachment still write independent state.
 
 ### Completion
 
@@ -389,27 +410,33 @@ For the sequence `edge(parent) -> roster(parent, child) -> edge(null) -> late ro
 
 - `edgeParentStreamId` remains `null`;
 - the effective parent remains absent;
-- the active selector excludes the child because the roster parent does not equal the effective parent;
-- retained metadata may be refreshed, and the historical row remains under the former parent; and
+- the incompatible late roster cannot change active membership or summary metadata;
+- the historical row remains under the former parent; and
 - only a later explicit `edge(newParent)` can restore current topology.
 
 Thus a promoted child is top-level for parent/back routing, while the former parent may still show and focus its
 non-killable historical task row.
 
+For `edge(newParent) -> roster(newParent, child) -> late roster(oldParent, child)`, the explicit new edge makes the
+old-parent row incompatible. The child remains active under the new parent, and the late old-parent roster cannot
+overwrite its summary or `activeParentStreamId`.
+
 ### Explicit removal and parent removal
 
-For `removeStream(child)`:
+For `removeStream(stream)`:
 
-- delete the child `StreamSlice` and clear active focus as today;
-- replace any map entry with a minimal `removed: true` tombstone;
+- delete the stream's `StreamSlice` and clear active focus as today;
+- replace any map entry, or create a parent-only entry, with a minimal `removed: true` tombstone;
 - exclude the tombstone from every selector; and
-- ignore late roster, edge, and status facts until a new `setActiveStream(child)` clears it.
+- ignore every later roster, edge, attachment, and status fact for that stream id.
 
 The tombstone is bounded by the same session lifetime as retained history and is cleared by `resetCliState()`.
+It is not cleared by `setActiveStream`; a distinct stream id represents a fresh activation.
 
 If the removed stream is itself a parent, perform the current cross-reference cleanup in the map: clear active and
-retained associations to that parent and remove its current topology edges. Existing child slices remain, but no
-selector may return the removed parent as their ancestor.
+retained associations to that parent and replace current topology edges to it with explicit top-level edges.
+Roster snapshots from that parent and explicit edges to it are rejected while its tombstone exists. Existing child
+slices remain, but no selector may return the removed parent as their ancestor.
 
 ### Retained history
 
@@ -425,22 +452,24 @@ order.
 The implementation is acceptable only if all of the following hold after every event, not merely after a settled
 run.
 
-1. **One relationship owner.** Every child stream id has at most one `ChildStreamEntry`; no writable
-   `activeSubagents`, `childStreams`, or `parentStream` collection remains.
+1. **One relationship owner.** Every child stream id has at most one `ChildStreamEntry`; the same map may contain a
+   parent-only removal tombstone, and no writable `activeSubagents`, `childStreams`, `parentStream`, or removed-id
+   collection remains.
 2. **No status duplication.** `ChildStreamEntry` has no status field. Every derived row takes status from the
    child's `StreamSlice`.
 3. **Explicit topology wins.** Once an explicit edge is observed, roster facts cannot change current topology.
    Explicit `null` means top-level until another explicit non-null edge.
-4. **Roster exactness.** For a given parent, active membership after a roster fact is exactly the compatible,
-   non-tombstoned children in that fact.
+4. **Roster exactness.** For a non-removed parent, active membership after a roster fact is exactly the compatible,
+   non-tombstoned children in that fact. An incompatible old-parent roster cannot erase a new-parent membership.
 5. **Retention monotonicity.** A retained row and its order survive roster omission and terminal status. Only
    explicit removal of the child or its parent erases the association.
 6. **Focus does not invent topology.** Retained history may remain a forward-focus candidate, as it is today, but
    it cannot restore parent/back routing for a promoted child. An edge-only child becomes focusable only when its
    child slice exists.
-7. **Removal is final per activation.** Late facts cannot recreate a removed child. A new activation is explicit.
-8. **Determinism.** Replaying the same ordered hub facts from empty CLI state yields byte-identical derived focus
-   and control snapshots.
+7. **Removal is final per stream identity.** Late facts cannot recreate a removed child or parent. A fresh
+   activation uses a distinct `StreamTabId`; same-id reuse requires a future generation-bearing contract.
+8. **Determinism.** Replaying the same ordered facts from empty CLI state yields identical derived focus and
+   control values.
 9. **No persistence dependency.** Live selectors do not read, await, or subscribe to `StreamSnapshotStore`.
 10. **Process isolation.** `activeProcesses`, `processOutput`, and completed-process transcript behavior are
     unchanged in phase one.
@@ -456,13 +485,13 @@ ambiguous.
 Use this sequence:
 
 1. **Characterize the old implementation.** Extend existing tests and the PTY harness with the ordering matrix
-   below. Record deterministic focus/control projection bytes while the old representation is still the sole
-   owner. This commit changes tests only.
+   below. Record deterministic structured focus/control expectations while the old representation is still the
+   sole owner. This commit changes tests only.
 2. **Perform one atomic production cutover.** In one compiling commit, add the map owner and transition methods,
    route subagent roster/edge/removal events only to it, switch every CLI reader to selectors, and delete the two
    `StreamSlice` fields plus the writable parent map and status-mirroring helpers.
-3. **Compare through outputs, not shadow state.** Run the same characterization fixtures against the new owner and
-   require byte identity. Do not retain a runtime equivalence adapter or compatibility write.
+3. **Compare through outputs, not shadow state.** Run the same structured unit expectations and exact PTY frame
+   comparisons against the new owner. Do not retain a runtime equivalence adapter or compatibility write.
 4. **Keep process state untouched.** Any proposed process consolidation stops the PR and returns to a separate
    design gate.
 
@@ -477,32 +506,36 @@ Extend `src/test-kernel/cli/TuiStateAndFocus.vitest.mts`; do not create a new su
 
 - `A`: `setActiveStream(child)`;
 - `S(running|terminal)`: child status transition;
-- `R+`: parent roster includes the child;
-- `R-`: parent roster omits the child;
-- `E+`: explicit parent edge;
+- `R_P+` / `R_P-`: parent `P` roster includes or omits the child (and likewise for parent `Q`);
+- `E_P+`: explicit edge to parent `P` (and `E_Q+` for parent `Q`);
 - `E0`: explicit `null` edge (promotion); and
-- `X`: `removeStream(child)`.
+- `X(id)`: `removeStream(id)`.
 
 Drive at least these sequences with `test.each`, asserting after every step:
 
-1. Canonical: `A, S(running), R+, E+`.
-2. Roster first: `R+, A, S(running), E+`.
-3. Edge first: `E+, A, S(running), R+`.
-4. Status first: `S(running), A, E+, R+`.
-5. Completion: `A, S(running), R+, E+, R-, S(terminal)`.
-6. Promotion with stale roster: `A, S(running), R+, E+, E0, R+`.
-7. Explicit reattachment: sequence 6 followed by `E+` and a fresh `R+`.
-8. Removal with late facts: sequence 5 followed by `X, R+, E+, S(terminal)`.
-9. Fresh activation after removal: sequence 8 followed by `A, S(running), E+, R+`.
+1. Canonical: `A, S(running), R_P+, E_P+`.
+2. Roster first: `R_P+, A, S(running), E_P+`.
+3. Edge first: `E_P+, A, S(running), R_P+`.
+4. Status first: `S(running), A, E_P+, R_P+`.
+5. Completion: `A, S(running), R_P+, E_P+, R_P-, S(terminal)`.
+6. Promotion with stale roster: `A, S(running), R_P+, E_P+, E0, R_P+`.
+7. Explicit reattachment: sequence 6 followed by `E_Q+, R_Q+, R_P+`; the late `P` roster must not erase active
+   membership or metadata under `Q`.
+8. Child removal with late facts: sequence 5 followed by `X(child), R_P+, E_P+, A, S(terminal)`; every late fact
+   for the removed id remains suppressed.
+9. Fresh activation after removal: sequence 8 followed by `S(running)` before `A` for a distinct child id, then
+   `E_P+, R_P+`; the removed id remains absent and the new id works.
 10. Two-child retention: add children in one order, reorder and shrink rosters, complete one, and verify stable
     retained order and active overlay.
+11. Parent removal with late facts: establish `P -> child`, then `X(P), R_P+, E_P+`; no selector may return `P` as
+    an ancestor or active parent.
 
 The checkpoint assertions must cover effective parent, active rows, retained rows, focus forward/back, numeric
 focus targets, stream labels, follow-up routing, control-row killability, and removal cleanup.
 
-### Byte-identical focus/control snapshots
+### Structured unit checkpoints
 
-Before the cutover, add a deterministic serializer in the existing test file that records only public behavior:
+Before the cutover, record one structured value containing only public behavior:
 
 ```typescript
 {
@@ -518,14 +551,12 @@ Before the cutover, add a deterministic serializer in the existing test file tha
 }
 ```
 
-Sort object keys and topology pairs, preserve semantic row order, and serialize with `JSON.stringify`. Fix all
-timestamps or omit `startedAt` so elapsed labels are deterministic. Capture the old implementation's serialized
-strings as literals or committed Vitest snapshots. After cutover, compare strings with `toBe`, not structural
-matching; the UTF-8 bytes must be identical for the canonical, roster-first, edge-first, status-first, completion,
-and two-child retention cases.
+Sort topology pairs, preserve semantic row order, and fix or omit timestamps so expectations are deterministic.
+Use explicit `toEqual` expectations in the existing table rather than adding a serializer, committed snapshots,
+or a second byte-equivalence rig. Exact rendered-byte equivalence belongs only to the PTY layer below.
 
 Promotion and removal intentionally correct ambiguous old transient behavior. Give those cases explicit new
-goldens and assert the invariants above rather than claiming old-byte equivalence.
+expected values and assert the invariants above rather than claiming old-byte equivalence.
 
 Extend `src/test-kernel/cli/ChildControls.vitest.mts` for row labels and killability, and keep the existing process
 completion tests unchanged as a negative-scope guard.
@@ -537,9 +568,13 @@ The current harness seeds child arrays and edges directly
 default scenarios:
 
 1. `HARNESS_CHILD_EVENT_ORDER` selects `canonical`, `roster-first`, `edge-first`, `status-first`,
-   `promotion-late-roster`, or `completion-remove`.
-2. The fixture emits the real session/run facts through a `SessionEventHub` attached by
-   `attachTuiRunFactSubscription`; it does not call the new map mutators directly.
+   `promotion-late-roster`, `reattach-late-old-roster`, `parent-removal`, or `completion-remove`.
+2. The fixture emits attachment, roster, edge, and removal facts through a `SessionEventHub` attached by
+   `attachTuiRunFactSubscription`; it does not call the new map mutators directly. It installs
+   `subscribeStreamStatus()` as `runChatTui` does (`packages/cli/src/chat/tui/runChatTui.tsx:428`) and drives each
+   `S(...)` step through the real `StreamStatusService` transition path. The hub subscription deliberately ignores
+   session `updateStreamStatus` (`subscribeRuntimeHost.ts:318-360`), so emitting that fact alone is not a valid
+   status fixture.
 3. Each step is separated by a deterministic harness checkpoint so Ink renders the intermediate state. Use fixed
    ids and no wall-clock-derived elapsed labels.
 4. Add validator scenarios that exercise Tab focus, backward focus, the subagent picker, the task picker, and
@@ -548,8 +583,9 @@ default scenarios:
    Compare the exact rendered text returned by its existing `renderFrame()`
    (`packages/cli/scripts/validate-tui.mjs:3153-3163`), not only `expect` substrings. With equal dimensions and fixed
    data, the focus/control frames must be byte-identical.
-6. For promotion and removal, assert that no stale parent label, active count, focus target, or kill control
-   appears after the late facts. Then send the focus keys to prove that the TUI remains interactive.
+6. For promotion, reattachment, and child/parent removal, assert that no stale parent label, active count, focus
+   target, or kill control appears after the late facts. Then send the focus keys to prove that the TUI remains
+   interactive.
 
 The PTY layer is necessary because pure selectors cannot detect an Ink subscription wired to the wrong signal or
 a transient frame that exposes a stale control.
@@ -592,12 +628,19 @@ and net lines.
 - **Test files:** add 0; extend existing suites and the existing TUI harness/validator.
 - **New shared planes, vocabularies, schemas, reducers, or persistence stores:** **0**.
 - **Production lines:** estimated **net -40 to -100** after deleting status mirroring and repeated collection
-  plumbing. Regression tests will add lines, but they are permanent behavior tests rather than temporary
-  scaffolding.
+  plumbing.
+- **Test and harness lines:** estimated **+200 to +320** across the table-driven unit matrix and the existing PTY
+  harness/validator. There is one structured unit expectation rig and one rendered PTY rig; no duplicate byte
+  serializer or new test file.
+- **Whole-diff net lines:** estimated **+100 to +280** after production deletions. The positive line delta is the
+  stated staged reason required by R6: permanent coverage for previously untested race orderings, while mutable
+  collection, exported-symbol, and callable-declaration deltas remain negative.
 
 The implementation fails its R6 gate if it leaves any writable compatibility collection, adds a new production
 file without a measured need, has a positive exported-symbol delta, or has a positive authoritative-collection
-delta. A non-negative production-line result requires explicit maintainer re-review even if tests pass.
+delta. The implementation PR must replace every estimate above with actual whole-diff counts. A non-negative
+production-line result or whole-diff result above the stated range requires explicit maintainer re-review even if
+tests pass.
 
 ## Rejected alternatives
 
@@ -664,8 +707,8 @@ An implementation PR may begin only after this design is accepted. It must then 
 1. one CLI-local child-stream map and no legacy writable subagent relationship collections;
 2. the transition precedence and invariants in this document;
 3. no production dual-write stage;
-4. byte-identical focus/control snapshots for behavior-preserving orderings;
-5. PTY coverage of real event ordering, promotion, completion, and removal;
+4. structured unit equivalence and byte-identical PTY frames for behavior-preserving orderings;
+5. PTY coverage of real event ordering, promotion, reattachment, completion, and child/parent removal;
 6. no phase-one changes to `activeProcesses` or its output lifecycle;
 7. no shared CLI/webview reducer and no live-roster role for `StreamSnapshotStore`; and
 8. an updated, actual R6 census in the PR description.
