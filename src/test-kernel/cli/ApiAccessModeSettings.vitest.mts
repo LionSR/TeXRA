@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  enableCliIncludedModelAccess,
-  setCliApiMode,
-} from '@cli/runtime/apiAccessMode';
+import { setCliApiMode } from '@cli/runtime/apiAccessMode';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const mocks = vi.hoisted(() => ({
@@ -45,18 +42,6 @@ describe('CLI API access mode settings', () => {
     mocks.invalidateModelOptionsCache.mockClear();
     mocks.setUseIncludedModelAccess.mockReset();
     mocks.updateGlobalState.mockReset();
-  });
-
-  it('enables included access while clearing OpenRouter routing', async () => {
-    await enableCliIncludedModelAccess();
-
-    expect(mocks.setUseIncludedModelAccess).toHaveBeenCalledWith(true);
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      GlobalStateKey.USE_OPENROUTER,
-      false,
-    );
-    expectOpenRouterClearedBeforeIncludedAccess();
-    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
   });
 
   it('turns off OpenRouter routing when switching to included access', async () => {
