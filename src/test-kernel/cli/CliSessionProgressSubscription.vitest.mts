@@ -1,9 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { logConversationProgress, TraceEmitter } from '@agent/trace';
+import {
+  logConversationProgress,
+  TraceEmitter,
+  type AgentEvent,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import {
+  SessionEventHub,
+  type SessionEvent,
+  type SessionFact,
+} from '@agent/runtime/SessionEventHub';
+import type {
+  CliNdjsonProgressEvent,
+  CliNdjsonProgressEventPayloads,
+} from '@cli/runtime/cliNdjsonProgressEvents';
 import {
   attachCliSessionProgressProjection,
   type CliNdjsonProgressRecordWriter,
@@ -16,6 +28,7 @@ import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type ExecutionId,
+  type StorageKey,
   type StreamTabId,
   type UpdateStreamStatusPayload,
 } from '@shared/schemas';
@@ -23,8 +36,18 @@ import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const streamId = 'stream:cli-session-projection' as StreamTabId;
 const executionId = 'execution:cli-session-projection' as ExecutionId;
+const childStreamId = 'stream:cli-child' as StreamTabId;
+const childExecutionId = 'execution:cli-child' as ExecutionId;
+const processExecutionId = 'execution:cli-process' as ExecutionId;
+const storageKey = 'run-a' as StorageKey;
 
-function workflowConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
+type WorkflowConfig = Omit<AgentConfig, 'agentCategory'> & {
+  agentCategory: typeof AgentCategory.Workflow;
+};
+
+function workflowConfig(
+  overrides: Partial<Omit<AgentConfig, 'agentCategory'>> = {},
+): WorkflowConfig {
   return {
     agent: 'polish',
     agentCategory: AgentCategory.Workflow,
@@ -42,6 +65,258 @@ function workflowConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     ...overrides,
   };
 }
+
+function sessionFact<K extends SessionFact['type']>(
+  type: K,
+  payload: Extract<SessionFact, { type: K }>['payload'],
+): SessionEvent {
+  return {
+    scope: 'session',
+    event: { type, payload } as Extract<SessionFact, { type: K }>,
+  };
+}
+
+function runEvent(event: AgentEvent): SessionEvent {
+  return { scope: 'run', streamId, event };
+}
+
+type ProgressProjectionCases = {
+  [K in CliNdjsonProgressEvent]: {
+    readonly source: SessionEvent;
+    readonly payload: CliNdjsonProgressEventPayloads[K];
+  };
+};
+
+const projectionConfig = workflowConfig({
+  inputFiles: ['paper.tex', 'appendix.tex'],
+  contextFiles: ['notes.md'],
+});
+const inquiryThread = {
+  threadId: 'ei_123456789abc',
+  parentStreamId: streamId,
+  status: 'open' as const,
+  lastQuestionPreview: 'Which boundary condition is intended?',
+  lastActivityIso: '2026-07-10T12:00:00.000Z',
+  turnCount: 1,
+};
+const child = {
+  kind: 'subagent' as const,
+  executionId: childExecutionId,
+  childStreamId,
+  agentName: 'review',
+  status: 'running',
+};
+const process = {
+  kind: 'process' as const,
+  executionId: processExecutionId,
+  agentName: 'latexmk',
+  status: 'running',
+};
+
+const PROGRESS_PROJECTION_CASES = {
+  setActiveStream: {
+    source: sessionFact('setActiveStream', { streamId }),
+    payload: { streamId },
+  },
+  updateStreamStatus: {
+    source: sessionFact('updateStreamStatus', {
+      streamId,
+      status: STREAM_PHASE.RUNNING,
+    }),
+    payload: { streamId, status: STREAM_PHASE.RUNNING },
+  },
+  addOutputFiles: {
+    source: runEvent({
+      type: 'addOutputFiles',
+      streamId,
+      executionId,
+      filesByRound: { 1: [] },
+    }),
+    payload: { streamId, executionId, filesByRound: { 1: [] } },
+  },
+  updateMissingOutputs: {
+    source: runEvent({
+      type: 'updateMissingOutputs',
+      streamId,
+      executionId,
+      filesByRound: { 1: ['missing.tex'] },
+    }),
+    payload: {
+      streamId,
+      executionId,
+      filesByRound: { 1: ['missing.tex'] },
+    },
+  },
+  updateCompileFailures: {
+    source: runEvent({
+      type: 'updateCompileFailures',
+      streamId,
+      executionId,
+      filesByRound: { 1: [] },
+    }),
+    payload: { streamId, executionId, filesByRound: { 1: [] } },
+  },
+  clearMissingOutputs: {
+    source: sessionFact('clearMissingOutputs', { streamId }),
+    payload: { streamId },
+  },
+  setTaskState: {
+    source: runEvent({
+      type: 'run.config',
+      streamId,
+      executionId,
+      config: projectionConfig,
+    }),
+    payload: {
+      streamId,
+      executionId,
+      taskState: {
+        agentConfig: projectionConfig,
+        activeFiles: {
+          input: true,
+          context: true,
+          media: false,
+          output: false,
+        },
+      },
+    },
+  },
+  updateStreamUsage: {
+    source: runEvent({
+      type: 'usage',
+      stats: {},
+      data: {
+        streamId,
+        storageKey,
+        usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
+      },
+    }),
+    payload: {
+      streamId,
+      storageKey,
+      usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
+    },
+  },
+  inquiryThreadUpdated: {
+    source: sessionFact('inquiryThreadUpdated', inquiryThread),
+    payload: inquiryThread,
+  },
+  updateTodos: {
+    source: runEvent({
+      type: 'updateTodos',
+      streamId,
+      todos: [
+        {
+          content: 'Check the compactness lemma.',
+          status: 'pending',
+          activeForm: 'Checking the compactness lemma.',
+        },
+      ],
+    }),
+    payload: {
+      streamId,
+      todos: [
+        {
+          content: 'Check the compactness lemma.',
+          status: 'pending',
+          activeForm: 'Checking the compactness lemma.',
+        },
+      ],
+    },
+  },
+  updatePlan: {
+    source: runEvent({
+      type: 'updatePlan',
+      streamId,
+      plan: { objective: 'Check the compactness lemma.' },
+    }),
+    payload: {
+      streamId,
+      plan: { objective: 'Check the compactness lemma.' },
+    },
+  },
+  updateConversationProgress: {
+    source: runEvent({
+      type: 'conversation.progress',
+      progress: { toolCallCount: 5 },
+    }),
+    payload: { streamId, progress: { toolCallCount: 5 } },
+  },
+  updateRoundStage: {
+    source: runEvent({
+      type: 'stage.start',
+      id: 'round-2',
+      label: 'Round 3',
+      kind: 'round',
+      index: 2,
+      total: 4,
+    }),
+    payload: { streamId, roundStage: { index: 2, total: 4 } },
+  },
+  updateQueuedFollowUps: {
+    source: sessionFact('updateQueuedFollowUps', { streamId }),
+    payload: { streamId },
+  },
+  goalPaused: {
+    source: runEvent({ type: 'goalPaused', streamId }),
+    payload: { streamId },
+  },
+  updateActiveSubagents: {
+    source: runEvent({
+      type: 'child.activity',
+      kind: 'subagents',
+      parentStreamId: streamId,
+      children: [child],
+    }),
+    payload: { parentStreamId: streamId, children: [child] },
+  },
+  updateActiveProcesses: {
+    source: runEvent({
+      type: 'child.activity',
+      kind: 'processes',
+      parentStreamId: streamId,
+      processes: [process],
+    }),
+    payload: { parentStreamId: streamId, processes: [process] },
+  },
+  updateProcessOutput: {
+    source: runEvent({
+      type: 'process.output',
+      parentStreamId: streamId,
+      executionId: processExecutionId,
+      stdout: 'compiled paper.pdf\n',
+      stderr: '',
+    }),
+    payload: {
+      parentStreamId: streamId,
+      executionId: processExecutionId,
+      stdout: 'compiled paper.pdf\n',
+      stderr: '',
+    },
+  },
+  updateStreamDescription: {
+    source: sessionFact('updateStreamDescription', {
+      streamId,
+      description: 'Checking the compactness lemma',
+    }),
+    payload: { streamId, description: 'Checking the compactness lemma' },
+  },
+  setParentStream: {
+    source: sessionFact('setParentStream', {
+      childStreamId,
+      parentStreamId: streamId,
+    }),
+    payload: { childStreamId, parentStreamId: streamId },
+  },
+  removeStream: {
+    source: sessionFact('removeStream', { streamId: childStreamId }),
+    payload: { streamId: childStreamId },
+  },
+  goalStateChanged: {
+    source: sessionFact('goalStateChanged', { streamId }),
+    payload: { streamId },
+  },
+} satisfies ProgressProjectionCases;
 
 function recordWriter(): CliNdjsonProgressRecordWriter {
   return vi.fn() as CliNdjsonProgressRecordWriter;
@@ -123,6 +398,29 @@ function emitSessionStatus(
 }
 
 describe('attachCliSessionProgressProjection', () => {
+  it('projects every public NDJSON progress event with its typed payload', () => {
+    const events = new SessionEventHub();
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
+    const cases = Object.entries(PROGRESS_PROJECTION_CASES);
+
+    try {
+      for (const projection of Object.values(PROGRESS_PROJECTION_CASES)) {
+        events.emit(projection.source);
+      }
+
+      expect(writeRecord).toHaveBeenCalledTimes(cases.length);
+      for (const [index, [event, projection]] of cases.entries()) {
+        expect(writeRecord).toHaveBeenNthCalledWith(
+          index + 1,
+          progressRecord(event, projection.payload),
+        );
+      }
+    } finally {
+      detach();
+    }
+  });
+
   it('writes retained session facts as public NDJSON progress records', () => {
     const events = new SessionEventHub();
     const writeRecord = recordWriter();
@@ -171,101 +469,6 @@ describe('attachCliSessionProgressProjection', () => {
       });
 
       expect(writeRecord).not.toHaveBeenCalled();
-    } finally {
-      detach();
-    }
-  });
-
-  it('writes removeStream as a public NDJSON progress record', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-
-    try {
-      events.emit({
-        scope: 'session',
-        event: {
-          type: 'removeStream',
-          payload: { streamId },
-        },
-      });
-
-      expect(writeRecord).toHaveBeenCalledWith(
-        progressRecord('removeStream', { streamId }),
-      );
-    } finally {
-      detach();
-    }
-  });
-
-  it('writes valid retained run facts as public NDJSON progress records', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-
-    try {
-      events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'usage',
-          stats: {},
-          data: {
-            streamId,
-            storageKey: 'run-a',
-            usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
-          },
-        },
-      });
-
-      expect(writeRecord).toHaveBeenCalledWith(
-        progressRecord('updateStreamUsage', {
-          streamId,
-          storageKey: 'run-a',
-          usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
-        }),
-      );
-    } finally {
-      detach();
-    }
-  });
-
-  it('projects run config facts to the public setTaskState event', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-    const config = workflowConfig({
-      inputFiles: ['paper.tex', 'appendix.tex'],
-      contextFiles: ['notes.md'],
-    });
-
-    try {
-      events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'run.config',
-          streamId,
-          executionId,
-          config,
-        },
-      });
-
-      expect(writeRecord).toHaveBeenCalledWith(
-        progressRecord('setTaskState', {
-          streamId,
-          executionId,
-          taskState: {
-            agentConfig: config,
-            activeFiles: {
-              input: true,
-              context: true,
-              media: false,
-              output: false,
-            },
-          },
-        }),
-      );
     } finally {
       detach();
     }
