@@ -149,6 +149,63 @@ describe('summarizeSubagentFollowup', () => {
     ).toBe(false);
   });
 
+  // Embedded-block recognizer (EMBEDDED_DELIVERY_BLOCK_RE /
+  // EMBEDDED_DELIVERY_OPEN_RE) is derived from the same DELIVERY_TAGS
+  // vocabulary as SUBAGENT_TAG_RE, not just `<subagent-*>` — regression
+  // coverage for a non-`subagent` family (`codex-result`) leaking as raw XML
+  // when embedded mid-stream in assistant text (issue #7846, follow-up to
+  // #7679/#7788).
+
+  it('summarizes an embedded codex-result block inside assistant text', () => {
+    const text = [
+      'before',
+      '<codex-result id="abc" thread-id="t1">',
+      '<wall-time>4sec</wall-time>',
+      '<response>Refactor complete.</response>',
+      '</codex-result>',
+      'after',
+    ].join('\n');
+    expect(summarizeEmbeddedSubagentFollowups(text)).toBe(
+      ['before', '✓ codex completed · 4sec\nRefactor complete.', 'after'].join(
+        '\n',
+      ),
+    );
+  });
+
+  it('summarizes an incomplete embedded codex-result block while streaming', () => {
+    const text = [
+      'before',
+      '<codex-result id="abc" thread-id="t1">',
+      'The response is still streaming.',
+    ].join('\n');
+
+    expect(summarizeEmbeddedSubagentFollowups(text)).toBe(
+      ['before', '✓ codex completed'].join('\n'),
+    );
+  });
+
+  it('detects incomplete embedded codex-result blocks', () => {
+    expect(
+      hasIncompleteEmbeddedSubagentFollowup(
+        [
+          'before',
+          '<codex-result id="abc" thread-id="t1">',
+          'The response is still streaming.',
+        ].join('\n'),
+      ),
+    ).toBe(true);
+    expect(
+      hasIncompleteEmbeddedSubagentFollowup(
+        [
+          'before',
+          '<codex-result id="abc" thread-id="t1">',
+          '<response>Done.</response>',
+          '</codex-result>',
+        ].join('\n'),
+      ),
+    ).toBe(false);
+  });
+
   it('summarizes a completed result with wall time and response', () => {
     const xml = [
       '<subagent-result id="abc" agent="research" category="toolUse" status="completed">',
@@ -293,5 +350,26 @@ describe('summarizeSubagentFollowup', () => {
     expect(summarizeSubagentFollowup(xml)).toBe(
       'exec-1 (research, toolUse) running → completed',
     );
+  });
+
+  // `\b` after the tag alternation is not a safe terminator: `-` is a
+  // non-word character, so a future hyphen-extended tag (e.g. a hypothetical
+  // `codex-result-partial`) would prefix-match the existing `codex-result`
+  // entry. No current DELIVERY_TAGS entry is a prefix of another, but the
+  // vocabulary is a shared, growing const, so the recognizers anchor on an
+  // explicit delimiter (whitespace, `/`, or `>`) instead of `\b`. This fake
+  // tag is constructed locally and must never be added to DELIVERY_TAGS.
+  it('does not prefix-match a hyphen-extended fake tag onto a real one', () => {
+    const standalone =
+      '<codex-result-partial id="abc"><response>fake</response></codex-result-partial>';
+    expect(summarizeSubagentFollowup(standalone)).toBe(standalone);
+
+    const embedded = [
+      'before',
+      '<codex-result-partial id="abc">',
+      'still streaming, not a real delivery tag',
+    ].join('\n');
+    expect(hasIncompleteEmbeddedSubagentFollowup(embedded)).toBe(false);
+    expect(summarizeEmbeddedSubagentFollowups(embedded)).toBe(embedded);
   });
 });
