@@ -37,7 +37,7 @@ These `.yaml` files have two main parts (and thankfully, YAML is usually less pr
 2.  **`prompts`**: Contain text templates that TeXRA fills with your specific context (input files, instructions) to guide the LLM at different stages:
     - `systemPrompt`: Sets the overall role and high-level instructions for the LLM.
     - `userPrefix`: Provides the main context, including your input file(s) (available via e.g., `{{ INPUT_CONTENT }}`) and the specific instruction you typed in the UI (available via `{{ INSTRUCTION }}`).
-    - `userRequest`: Asks the LLM to perform the initial task (Round 0). Often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped within the XML tags defined by `settings.documentTag` (e.g., `<document>...</document>`). You can also provide an **array** here: the first entry becomes the round 0 request, and any additional entries drive automatic reflection rounds (Round 1+). When a run consumes more rounds than entries you specify, the first reflection template is reused.
+    - `userRequest`: Asks the LLM to perform the initial task (Round 0). Often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped in the fixed `<documents>` container, with one `<document name="...">...</document>` entry per output file. You can also provide an **array** here: the first entry becomes the round 0 request, and any additional entries drive automatic reflection rounds (Round 1+). When a run consumes more rounds than entries you specify, the first reflection template is reused.
 
 _(Prompts use Jinja2 templating. For a detailed list of available variables like `{{ INPUT_CONTENT }}` and how to use them, see the [Custom Agents](./custom-agents.md) guide.)_
 
@@ -72,8 +72,8 @@ sequenceDiagram
 
 1.  **Initialization:** TeXRA loads the agent definition and reads the files you selected.
 2.  **Prompt Construction:** It combines the agent's `systemPrompt`, `userPrefix` (filled with your files and instruction), and `userRequest` templates into a full prompt for the LLM.
-3.  **LLM Interaction (Round 0):** TeXRA sends the prompt to the selected LLM API. The LLM generates a response, typically including reasoning (`<scratchpad>`) and the final answer wrapped in XML tags (e.g., `<document>...</document>`).
-4.  **Processing:** TeXRA saves the raw LLM response (often as an `.xml` file internally, e.g., `r{round}/output.xml`). It then parses this file, extracts the content from the primary XML tag (defined by `settings.documentTag`), and saves _that extracted content_ to the final output file in task storage (e.g., `r{round}/output.tex`, so Round 0 is `r0/output.tex`, the first reflection is `r1/output.tex`, and so on). You can monitor this in the [ProgressBoard](./progress-board.md). For LaTeX files, TeXRA can also automatically generate a `latexdiff` file comparing the output to the input, enhancing observability. See the [LaTeX Diff guide](./latex-diff.md) for details.
+3.  **LLM Interaction (Round 0):** TeXRA sends the prompt to the selected LLM API. The LLM generates a response, typically including reasoning (`<scratchpad>`) and the final answer wrapped in the fixed `<documents><document name="...">...</document></documents>` container.
+4.  **Processing:** TeXRA saves the raw LLM response (often as an `.xml` file internally, e.g., `r{round}/output.xml`). It then parses this file and extracts the content from each `<document name="...">` entry into its own file under the round directory in task storage, named after that entry's `name` (e.g., a single-document response lands at `r{round}/output.tex`, so Round 0 is `r0/output.tex` and the first reflection is `r1/output.tex`; additional `<document name="chapters/main.tex">` entries land alongside it as `r{round}/chapters/main.tex`, and so on). You can monitor this in the [ProgressBoard](./progress-board.md). For LaTeX files, TeXRA can also automatically generate a `latexdiff` file comparing each output to its input, enhancing observability. See the [LaTeX Diff guide](./latex-diff.md) for details.
 
 Clicking **Execute** is not the only way in — the same
 load-definition → prompt → rounds → save-to-run-storage pipeline runs
@@ -94,7 +94,7 @@ Each round lands in its own folder under task storage:
 <RoundOutputTree />
 <p class="hero-caption">Every round saves the raw <code>output.xml</code>, the extracted <code>output.tex</code>, and an optional <code>latexdiff</code> PDF—<code>r0/</code> is the draft; <code>r1/</code> and later are reflection passes.</p>
 
-**Continuation Handling:** If the LLM response gets cut off due to output token limits before generating the required `endTag`, TeXRA automatically sends a continuation prompt. This prompt asks the model to resume generating exactly where it left off, ensuring complete outputs even for very long tasks. This happens seamlessly within a processing round.
+**Continuation Handling:** If the LLM response gets cut off due to output token limits before generating the closing `</documents>` tag, TeXRA automatically sends a continuation prompt. This prompt asks the model to resume generating exactly where it left off, ensuring complete outputs even for very long tasks. This happens seamlessly within a processing round.
 
 ### What Goes Into the Prompt
 
