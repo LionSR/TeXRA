@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
+import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
 describe('CLI unavailable tools', () => {
@@ -11,7 +12,7 @@ describe('CLI unavailable tools', () => {
       'inquiry',
       ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
       'inline_comment',
-      'diagnostics.add',
+      DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
     ]);
   });
 });

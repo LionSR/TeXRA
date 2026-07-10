@@ -13,6 +13,7 @@ const agentHandles = vi.fn<() => { agentName: string }[]>();
 const mocks = vi.hoisted(() => ({
   getUseOpenRouter: vi.fn<() => boolean>(),
   hasUsableApiKey: vi.fn<(provider: string) => Promise<boolean>>(),
+  hasAnyUsableSetupCredential: vi.fn<() => Promise<boolean>>(),
   showWarningMessage: vi.fn<() => Promise<string | undefined>>(),
   showQuickPick: vi.fn<() => Promise<unknown>>(),
   createQuickPick: vi.fn<(qp: unknown) => void>(),
@@ -100,6 +101,10 @@ vi.mock('@auth/serverKeys', () => ({
     canUseServerSideKeysForModel: () => Promise.resolve(false),
     canUseModelSync: () => false,
   }),
+}));
+
+vi.mock('@tools/setup/platform', () => ({
+  hasAnyUsableSetupCredential: mocks.hasAnyUsableSetupCredential,
 }));
 
 vi.mock('@common/state', () => ({
@@ -214,6 +219,7 @@ await import('@agent/runtime/executionRegistry');
 await import('@controllers/onboarding/setupLaunch');
 await import('@auth/codex');
 await import('@auth/serverKeys');
+await import('@tools/setup/platform');
 await import('@common/state');
 
 // Module under test — imported after all mock factories are materialized.
@@ -225,6 +231,7 @@ describe('setup assistant routing check ordering', () => {
     agentHandles.mockReturnValue([]);
     mocks.getUseOpenRouter.mockReset();
     mocks.hasUsableApiKey.mockReset();
+    mocks.hasAnyUsableSetupCredential.mockReset();
     mocks.showWarningMessage.mockReset();
     mocks.showQuickPick.mockReset();
     mocks.createQuickPick.mockReset();
@@ -238,6 +245,7 @@ describe('setup assistant routing check ordering', () => {
     // Default: no OpenRouter, no keys — safe baseline.
     mocks.getUseOpenRouter.mockReturnValue(false);
     mocks.hasUsableApiKey.mockResolvedValue(false);
+    mocks.hasAnyUsableSetupCredential.mockResolvedValue(false);
     mocks.showWarningMessage.mockResolvedValue(undefined);
     mocks.showQuickPick.mockResolvedValue(undefined);
     mocks.showInformationMessage.mockResolvedValue(undefined);
@@ -289,6 +297,7 @@ describe('setup assistant routing check ordering', () => {
     mocks.hasUsableApiKey.mockImplementation(
       async (provider: string) => provider === 'openRouter',
     );
+    mocks.hasAnyUsableSetupCredential.mockResolvedValue(true);
 
     const result = await launchSetupAssistant();
 
@@ -304,6 +313,7 @@ describe('setup assistant routing check ordering', () => {
     mocks.hasUsableApiKey.mockImplementation(
       async (provider: string) => provider === 'openRouter',
     );
+    mocks.hasAnyUsableSetupCredential.mockResolvedValue(true);
     mocks.selectSetupCredentialModelExcludingOpenRouter.mockRejectedValue(
       new Error('credential scan unavailable'),
     );

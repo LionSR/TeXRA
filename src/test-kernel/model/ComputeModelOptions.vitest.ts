@@ -66,8 +66,10 @@ function createModelOptionsAccess(
     visibleModels: ['gpt55'],
     secrets: {
       get: async (key) => secrets[key],
+      getStored: async (key) => secrets[key],
       set: async () => {},
       delete: async () => {},
+      listStoredKeys: async () => Object.keys(secrets),
       getEnv: () => undefined,
     },
     useOpenRouter: false,

@@ -4,7 +4,7 @@
  * Each tool has one responsibility:
  *   - probe_environment — read-only environment snapshot
  *   - verify_setup — re-check dependencies
- *   - set_api_key / unset_api_key — SecretStorage writes
+ *   - set_api_key / unset_api_key — persisted credential writes
  *   - list_api_keys — enumerate stored secret key names for auditing
  *   - invoke_command — bridge to allowlisted VS Code commands
  *   - install_vscode_extension — install LaTeX Workshop / Lean 4
