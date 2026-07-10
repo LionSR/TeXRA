@@ -11,8 +11,11 @@ import React from 'react';
 
 import { getAgentsByCategory, loadAgents } from '@agent/index';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { platform, tryPlatform } from '@platform/platform';
 import {
@@ -20,6 +23,7 @@ import {
   LIVE_ELAPSED_STREAM_STATUSES,
   LOG_LEVELS,
   MESSAGE_TYPES,
+  STREAM_PHASE,
   STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
@@ -91,6 +95,8 @@ import {
   type ApprovalDecision,
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
+import { attachTuiRunFactSubscription } from '../src/chat/tui/state/subscribeRuntimeHost';
+import { subscribeStreamStatus } from '../src/chat/tui/state/subscribeStreamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
@@ -221,19 +227,26 @@ const DISABLED_MODEL_SWITCH_REASON =
   'different conversation format; start new chat';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
-// Opt-in fixture for the PTY byte-identity check (issue #7972, follow-up from
-// #7967 / acceptance-gate items 4-5 in
-// docs/proposals/cli-child-stream-state-consolidation.md): seeds one child
-// stream through the same order-equivalent event sequences as the vitest
-// "child-stream ordered transition matrix"
-// (src/test-kernel/cli/TuiStateAndFocus.vitest.mts, scenarios 1-4) so
-// validate-tui.mjs can assert the rendered frame is byte-identical no matter
-// which order the roster/edge/status facts arrive in.
+// Opt-in fixture for the PTY ordering tests (issue #7972, follow-up from
+// #7967 / the "PTY ordering tests" section of
+// docs/proposals/cli-child-stream-state-consolidation.md): drives one child
+// stream through the real event-subscription path
+// (attachTuiRunFactSubscription + subscribeStreamStatus, exactly as
+// runChatTui.tsx/chatSessionController.ts wire a real run — see
+// `seedChildEventOrderFixture` below) in each of the eight orderings the
+// design names, so validate-tui.mjs can assert both intermediate render
+// checkpoints and (for the four order-equivalent cases) a byte-identical
+// settled frame no matter which order the attachment/roster/edge/status
+// facts arrive in.
 const CHILD_EVENT_ORDER_VALUES = [
   'canonical',
   'roster-first',
   'edge-first',
   'status-first',
+  'promotion-late-roster',
+  'reattach-late-old-roster',
+  'parent-removal',
+  'completion-remove',
 ] as const;
 type ChildEventOrder = (typeof CHILD_EVENT_ORDER_VALUES)[number];
 const CHILD_EVENT_ORDER_RAW = process.env.HARNESS_CHILD_EVENT_ORDER?.trim();
@@ -1011,47 +1024,258 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
   seedSubagentFollowupTranscript();
 }
 
-// One child stream, its roster/edge/status facts applied through the real
-// transition functions in each of the four orderings the vitest matrix
-// proves order-equivalent (canonical/roster-first/edge-first/status-first —
-// see the `CHILD_EVENT_ORDER_VALUES` comment above). No `startedAt` is set,
-// so `childElapsed` returns the static `elapsed` string instead of a
-// live-ticking duration (packages/cli/src/chat/tui/state/childControls.ts) —
-// required for the rendered frame to be byte-identical across separate
-// process launches, not just across orderings within one launch.
-const CHILD_EVENT_ORDER_STREAM_ID = 'harness-child-event-order-stream';
+// One child stream, its attachment/roster/edge/status/removal facts driven
+// through the real production subscription path rather than the CHILD_STREAMS
+// map mutators (`applySubagentRoster`/`setParentStream`) directly — a
+// regression in `attachTuiRunFactSubscription` or `subscribeStreamStatus`
+// wiring must be able to fail these scenarios, matching the "PTY ordering
+// tests" section of docs/proposals/cli-child-stream-state-consolidation.md.
+// No `startedAt` is set on the roster row, so `childElapsed` returns the
+// static `elapsed` string instead of a live-ticking duration
+// (packages/cli/src/chat/tui/state/childControls.ts); `setActiveStream`
+// always sets `suppressViewSwitch: true` so the harness's own active/focused
+// stream (and its live wall-clock `runStartedAt` elapsed display) stays on
+// the root session throughout — required for the four order-equivalent
+// scenarios' settled frame to be byte-identical across separate process
+// launches, not just across orderings within one launch.
+const CHILD_EVENT_ORDER_STREAM_ID =
+  'harness-child-event-order-stream' as StreamTabId;
 const CHILD_EVENT_ORDER_EXECUTION_ID = 'harness-child-event-order-exec';
 const CHILD_EVENT_ORDER_AGENT_NAME = 'orderChecker';
+// Second, never-displayed parent identity used only by the promotion/
+// reattachment/parent-removal orderings (matrix scenarios 7/11 in
+// TuiStateAndFocus.vitest.mts) — reusing the harness's own root `STREAM_ID`
+// as a *removable* parent would tear down the harness's own active session.
+const CHILD_EVENT_ORDER_OTHER_PARENT_ID =
+  'harness-child-event-order-other-parent' as StreamTabId;
+// Small but non-zero: each step must land in its own macrotask so Ink
+// commits (and the PTY validator can observe) a render between ordered
+// facts, per the "deterministic harness checkpoint" requirement in the
+// design doc. The validator polls for each checkpoint's expected text
+// rather than relying on this delay's exact value.
+const CHILD_EVENT_ORDER_STEP_DELAY_MS = Number(
+  process.env.HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS ?? '60',
+);
 
-function seedChildEventOrderFixture(order: ChildEventOrder): void {
-  const childStreamId = CHILD_EVENT_ORDER_STREAM_ID;
-  const rosterRow: ActiveChildInfo = {
+function childEventOrderRosterRow(): ActiveChildInfo {
+  return {
     kind: 'subagent',
     executionId: CHILD_EVENT_ORDER_EXECUTION_ID,
     agentName: CHILD_EVENT_ORDER_AGENT_NAME,
-    childStreamId,
+    childStreamId: CHILD_EVENT_ORDER_STREAM_ID,
     elapsed: '1m 4s',
   };
-  const applyStatus = () =>
-    patchStream(childStreamId, (slice) => ({
-      ...slice,
-      status: STREAM_STATUS.RUNNING,
-      description: `${CHILD_EVENT_ORDER_AGENT_NAME} sub-workflow`,
-      entries: makeChildEntries(
-        CHILD_EVENT_ORDER_AGENT_NAME,
-        CHILD_EVENT_ORDER_EXECUTION_ID,
-      ),
-    }));
-  const applyRoster = () => applySubagentRoster(STREAM_ID, [rosterRow]);
-  const applyEdge = () => setParentStream(childStreamId, STREAM_ID);
+}
 
-  const orderedSteps: Record<ChildEventOrder, readonly (() => void)[]> = {
-    canonical: [applyStatus, applyRoster, applyEdge],
-    'roster-first': [applyRoster, applyStatus, applyEdge],
-    'edge-first': [applyEdge, applyStatus, applyRoster],
-    'status-first': [applyStatus, applyEdge, applyRoster],
+// `child.activity(kind: 'subagents')` run fact — the real roster wiring
+// (`ExecutionRegistry.emitChildActivity`, src/agent/runtime/executionRegistry.ts).
+function emitChildEventOrderRoster(
+  parentStreamId: StreamTabId,
+  children: readonly ActiveChildInfo[],
+): void {
+  defaultSession().events.emit({
+    scope: 'run',
+    streamId: parentStreamId,
+    event: {
+      type: 'child.activity',
+      kind: 'subagents',
+      parentStreamId,
+      children,
+    },
+  });
+}
+
+// `setParentStream` session fact — the real edge wiring
+// (`ExecutionRegistry.emitParentStreamUpdate`).
+function emitChildEventOrderEdge(
+  childStreamId: StreamTabId,
+  parentStreamId: StreamTabId | null,
+): void {
+  defaultSession().events.emit({
+    scope: 'session',
+    event: {
+      type: 'setParentStream',
+      payload: { childStreamId, parentStreamId },
+    },
+  });
+}
+
+// `removeStream` session fact — the real removal wiring (src/tools/childStream.ts).
+function emitChildEventOrderRemoval(streamId: StreamTabId): void {
+  defaultSession().events.emit({
+    scope: 'session',
+    event: { type: 'removeStream', payload: { streamId } },
+  });
+}
+
+// `setActiveStream` session fact ("attachment") — always background-registers
+// (`suppressViewSwitch: true`) so the harness's own active/focused stream
+// never becomes the child (see the wall-clock note above).
+function emitChildEventOrderAttachment(streamId: StreamTabId): void {
+  defaultSession().events.emit({
+    scope: 'session',
+    event: {
+      type: 'setActiveStream',
+      payload: { streamId, suppressViewSwitch: true },
+    },
+  });
+}
+
+// Real `StreamStatusService` transitions — `subscribeStreamStatus()` is what
+// projects these into `cliState` (see `seedChildEventOrderFixture`), exactly
+// as `runChatTui.tsx` wires it for a real session.
+function transitionChildEventOrderRunning(streamId: StreamTabId): void {
+  StreamStatusService.transition(
+    streamId,
+    STREAM_PHASE.RUNNING,
+    STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    { events: defaultSession().events },
+  );
+}
+
+function transitionChildEventOrderTerminal(streamId: StreamTabId): void {
+  StreamStatusService.transitionToTerminal(streamId, STREAM_PHASE.COMPLETED, {
+    events: defaultSession().events,
+  });
+}
+
+// Late resume-transition attempt for an already-removed stream: unlike a
+// repeated terminal transition (a same-value no-op the status machine drops
+// before it ever reaches `cliState`), COMPLETED -> RUNNING via `resume` is a
+// transition the machine itself allows, so it reaches
+// `setStreamStatusInCliState` and actually exercises that function's
+// `isChildStreamRemoved` tombstone guard (see `completion-remove` below).
+function attemptChildEventOrderLateResume(streamId: StreamTabId): void {
+  StreamStatusService.transition(
+    streamId,
+    STREAM_PHASE.RUNNING,
+    STREAM_TRANSITION_CAUSE.RESUME,
+    { events: defaultSession().events },
+  );
+}
+
+/**
+ * The eight orderings named by the design doc's "PTY ordering tests"
+ * section, expressed as the ordered real-fact steps
+ * `seedChildEventOrderFixture` schedules one macrotask apart. `canonical`
+ * through `status-first` are byte-identical settled orderings of the same
+ * four facts (attachment, running status, roster, edge) — see the vitest
+ * "child-stream ordered transition matrix" (scenarios 1-4,
+ * src/test-kernel/cli/TuiStateAndFocus.vitest.mts) this mirrors at the PTY
+ * layer. The remaining four correct old ambiguous transients (promotion,
+ * reattachment, parent removal, completion+removal — matrix scenarios 6, 7,
+ * 11, and 5-then-8) get their own checkpoint expectations in
+ * validate-tui.mjs rather than byte-equivalence.
+ */
+function childEventOrderSteps(order: ChildEventOrder): readonly (() => void)[] {
+  const child = CHILD_EVENT_ORDER_STREAM_ID;
+  const root = STREAM_ID as StreamTabId;
+  const other = CHILD_EVENT_ORDER_OTHER_PARENT_ID;
+  const A = () => emitChildEventOrderAttachment(child);
+  const Srun = () => transitionChildEventOrderRunning(child);
+  const Sterm = () => transitionChildEventOrderTerminal(child);
+  const RPlus = (parent: StreamTabId) =>
+    emitChildEventOrderRoster(parent, [childEventOrderRosterRow()]);
+  const RMinus = (parent: StreamTabId) => emitChildEventOrderRoster(parent, []);
+  const EPlus = (parent: StreamTabId) => emitChildEventOrderEdge(child, parent);
+  const E0 = () => emitChildEventOrderEdge(child, null);
+  const X = (streamId: StreamTabId) => emitChildEventOrderRemoval(streamId);
+
+  switch (order) {
+    case 'canonical':
+      return [A, Srun, () => RPlus(root), () => EPlus(root)];
+    case 'roster-first':
+      return [() => RPlus(root), A, Srun, () => EPlus(root)];
+    case 'edge-first':
+      return [() => EPlus(root), A, Srun, () => RPlus(root)];
+    case 'status-first':
+      return [Srun, A, () => EPlus(root), () => RPlus(root)];
+    case 'promotion-late-roster':
+      // Matrix 6: A, S(running), R_P+, E_P+, E0, R_P+ — a stale roster from
+      // the former parent must not resurrect the edge or active membership.
+      return [
+        A,
+        Srun,
+        () => RPlus(root),
+        () => EPlus(root),
+        E0,
+        () => RPlus(root),
+      ];
+    case 'reattach-late-old-roster':
+      // Matrix 7 (relabeled so the *current* parent is the renderable root):
+      // attach/run/roster/edge under `other`, promote, a stale `other`
+      // roster, then an explicit edge+roster to `root`, and finally a late
+      // roster from `other` again — which must not erase active membership
+      // under `root`.
+      return [
+        A,
+        Srun,
+        () => RPlus(other),
+        () => EPlus(other),
+        E0,
+        () => RPlus(other),
+        () => EPlus(root),
+        () => RPlus(root),
+        () => RPlus(other),
+      ];
+    case 'parent-removal':
+      // Matrix 11: P -> child, X(P), R_P+, E_P+ — `other` stands in for the
+      // removed parent so the harness's own active root session is never
+      // torn down by the removal itself.
+      return [
+        Srun,
+        () => RPlus(other),
+        () => EPlus(other),
+        () => X(other),
+        () => RPlus(other),
+        () => EPlus(other),
+      ];
+    case 'completion-remove':
+      // Matrix 5 then 8: roster omission arrives before the terminal status,
+      // then the child itself is removed and every later fact for it —
+      // including a late attachment and a late resume attempt — must stay
+      // suppressed.
+      return [
+        A,
+        Srun,
+        () => RPlus(root),
+        () => EPlus(root),
+        () => RMinus(root),
+        Sterm,
+        () => X(child),
+        () => RPlus(root),
+        () => EPlus(root),
+        A,
+        () => attemptChildEventOrderLateResume(child),
+      ];
+  }
+}
+
+function seedChildEventOrderFixture(order: ChildEventOrder): void {
+  // Mirror real CLI startup: `runChatTui.tsx` installs `subscribeStreamStatus()`
+  // once per session, and `chatSessionController.ts`'s `setupRunHost` attaches
+  // `attachTuiRunFactSubscription(defaultSession().events)` per run. Attaching
+  // both here — instead of calling `applySubagentRoster`/`setParentStream`
+  // directly — means a regression in either subscription would leave these
+  // scenarios failing instead of silently green.
+  subscribeStreamStatus();
+  attachTuiRunFactSubscription(defaultSession().events);
+
+  const steps = childEventOrderSteps(order);
+  let stepIndex = 0;
+  const runNextStep = (): void => {
+    if (stepIndex >= steps.length) return;
+    const step = steps[stepIndex];
+    stepIndex += 1;
+    step();
+    setTimeout(runNextStep, CHILD_EVENT_ORDER_STEP_DELAY_MS);
   };
-  for (const step of orderedSteps[order]) step();
+  // Deferred, not called inline: `seedChildEventOrderFixture` itself still
+  // runs before `render()` in source order (like every other opt-in harness
+  // fixture below), but every step above must run after `<App>` has mounted
+  // so Ink actually renders each intermediate state instead of only the
+  // fully-seeded final one.
+  setTimeout(runNextStep, CHILD_EVENT_ORDER_STEP_DELAY_MS);
 }
 
 if (SHOW_CHILDREN) {
