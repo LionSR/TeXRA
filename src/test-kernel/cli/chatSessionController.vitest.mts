@@ -104,6 +104,7 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
 
 import { StreamSnapshotStore } from '@transcript';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
@@ -423,6 +424,43 @@ describe('createChatSessionController', () => {
     expect(mocks.projectStreamTranscript).toHaveBeenCalledWith('stream-1', {
       finalize: true,
     });
+  });
+
+  it('does not auto-resume after stop during helper-model setup', async () => {
+    const helperModel = deferred();
+    const session = makeSession({ runCompleted: true });
+    const config = makeResumeConfig();
+    const snapshotStore = makeResumeSnapshotStore({
+      executionId: 'exec-1',
+      config,
+    });
+    mocks.setCliHelperModel.mockReturnValueOnce(helperModel.promise);
+    mocks.resolveAndResumeStream.mockImplementationOnce(
+      async (_streamId: StreamTabId, ports: ResumeStreamPorts) =>
+        ports.isCancellationRequested?.() !== true,
+    );
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    const resumed = ctrl.tryResumeStream('stream-1');
+    await vi.waitFor(() =>
+      expect(mocks.setCliHelperModel).toHaveBeenCalledWith(config.model),
+    );
+    ctrl.stop();
+    helperModel.resolve(undefined);
+
+    await expect(resumed).resolves.toBe(false);
+    expect(mocks.resolveAndResumeStream).toHaveBeenCalledWith(
+      'stream-1',
+      expect.objectContaining({
+        isCancellationRequested: expect.any(Function),
+      }),
+    );
+    expect(mocks.projectStreamTranscript).not.toHaveBeenCalledWith('stream-1', {
+      finalize: true,
+    });
+    expect(mocks.notify).not.toHaveBeenCalledWith({ kind: 'agentFinished' });
   });
 
   it('does not finalize the stream transcript when auto-resume returns false', async () => {

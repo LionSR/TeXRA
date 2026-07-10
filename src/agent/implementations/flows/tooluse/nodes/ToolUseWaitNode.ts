@@ -7,6 +7,7 @@ import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
+  userFollowUpInstruction,
   type AppendFollowUpResult,
 } from '@agent/followUp/followUpMessages';
 import { STREAM_PHASE } from '@shared/schemas';
@@ -183,6 +184,10 @@ export class ToolUseWaitNode<C> extends Node<
     // also don't need to be replayed in the chat log.
     if (!execRes.synthetic) {
       onFollowUpConsumed?.();
+      const instruction = userFollowUpInstruction(execRes.followUps);
+      if (instruction && shared.stateSlices) {
+        shared.stateSlices.userChannels.transient.INSTRUCTION = instruction;
+      }
     }
 
     for (const followUp of execRes.followUps) {

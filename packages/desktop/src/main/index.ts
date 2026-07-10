@@ -610,7 +610,7 @@ function createWindow(options: {
     revealStream: async (streamId) => {
       try {
         const execution = await getAgentExecution();
-        execution.progress.revealStream(streamId);
+        await execution.progress.revealStream(streamId);
       } catch (error) {
         if (!windowClosed) reportAsyncError(error);
       }
