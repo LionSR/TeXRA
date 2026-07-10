@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   CATALOG_DERIVED_CONTRIBUTES,
+  collectRelativeFiles,
   EXCLUDED_TRACE_VIEWER_DIR,
   extensionManifestSnapshot,
   readJson,
@@ -47,20 +48,6 @@ function readVsixEntry(vsixPath, entryPath) {
 
 function hashBuffer(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
-}
-
-function walkFiles(dir, prefix = '') {
-  const results = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const relativePath = path.posix.join(prefix, entry.name);
-    const absolutePath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...walkFiles(absolutePath, relativePath));
-    } else if (entry.isFile()) {
-      results.push(relativePath);
-    }
-  }
-  return results.sort();
 }
 
 function assert(condition, message, failures) {
@@ -136,7 +123,7 @@ const RESOURCE_HASH_EXCLUDED_PREFIX = `${EXCLUDED_TRACE_VIEWER_DIR}/`;
 
 function verifyResourceHashes(vsixPath, entries, failures) {
   const resourcesDir = path.join(extensionDir, 'resources');
-  const sourceFiles = walkFiles(resourcesDir).filter(
+  const sourceFiles = collectRelativeFiles(resourcesDir).filter(
     (file) => !file.startsWith(RESOURCE_HASH_EXCLUDED_PREFIX),
   );
   const sourceFileSet = new Set(sourceFiles);

@@ -50,6 +50,27 @@ export function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+/** Return recursive file paths with stable VSIX-compatible separators. */
+export function collectRelativeFiles(directory) {
+  const visit = (currentDirectory, prefix) => {
+    const files = [];
+    for (const entry of fs.readdirSync(currentDirectory, {
+      withFileTypes: true,
+    })) {
+      const relativePath = path.posix.join(prefix, entry.name);
+      const absolutePath = path.join(currentDirectory, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...visit(absolutePath, relativePath));
+      } else if (entry.isFile()) {
+        files.push(relativePath);
+      }
+    }
+    return files;
+  };
+
+  return visit(directory, '').sort();
+}
+
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (!value || typeof value !== 'object') return value;

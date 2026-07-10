@@ -99,6 +99,17 @@ describe('maybeBuildGoalContinuation', () => {
     expect(out).not.toContain('plan(command="pause")');
   });
 
+  it('renders an objective containing nunjucks-significant syntax as literal text', async () => {
+    // The objective is a context *value* substituted into the template, not
+    // concatenated into the template source — nunjucks must not re-parse it
+    // as template syntax (no injection, no `{{ 1 + 1 }}` evaluating to `2`).
+    const objective =
+      'Finish {% for x in y %}{{ 1 + 1 }}{# comment #}{% endfor %} the "quoted" \\task\\.';
+    await GoalStore.start(STREAM_ID, objective);
+    const out = await maybeBuildGoalContinuation(STREAM_ID);
+    expect(out).toContain(objective);
+  });
+
   it('continues rendering after more than two hours elapsed', async () => {
     const startedAt = new Date('2026-06-17T00:00:00.000Z');
     const afterTwoHours = new Date(

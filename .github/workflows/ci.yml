@@ -11,7 +11,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Nightly `schedule` runs use github.ref == refs/heads/main, the same ref a
+  # push to main uses. Without the event_name suffix, cancel-in-progress would
+  # let a same-ref push cancel the nightly runtime-validation timing run (or
+  # vice versa) — see #7756.
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
