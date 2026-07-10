@@ -44,6 +44,13 @@ export interface ElectronPlatformInitResult {
   lifecycle: LifecycleHost;
   progressSnapshotStore: StreamSnapshotStore;
   /**
+   * Desktop's memory/history/executions data root (`~/.texra` in
+   * production, see `resolveDesktopDataRoot()`). Threaded out so crash
+   * reporting can scrub it from event payloads the same way it already
+   * scrubs `userData` — this root no longer lives under `userData` (#7987).
+   */
+  dataRoot: string;
+  /**
    * Whether TeXRA had run on this machine before this session, captured from
    * `LAST_KNOWN_VERSION` BEFORE the bundled-agent directory sync writes that
    * key during this same init. Threaded out so the onboarding backfill can
@@ -218,6 +225,7 @@ export async function initializeElectronPlatform(
     workspacePath,
     lifecycle,
     progressSnapshotStore: snapshotStore,
+    dataRoot,
     hasPriorInstall,
     resourcesPath,
   };
