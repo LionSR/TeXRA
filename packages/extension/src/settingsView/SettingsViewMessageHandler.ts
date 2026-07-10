@@ -109,8 +109,9 @@ type MessageFor<C extends SettingsViewInboundMessage['command']> =
 
 // Plans the terminal command for a tool-dashboard install/auth action.
 // Extension-only: unlike the desktop's tool-command handling, no other
-// host calls this, so it's kept local to its single caller rather than
-// exported from the shared settingsView controllers.
+// host calls this, so it's kept next to its single production caller
+// rather than living in the shared settingsView controllers (exported
+// here only so the Vitest suite can import it directly).
 type ToolTerminalAction =
   | {
       readonly kind: 'terminal';
@@ -124,7 +125,9 @@ type ToolTerminalAction =
 
 export function planToolTerminalAction(input: {
   readonly toolId: string;
-  readonly commandKind: 'install' | 'auth';
+  readonly commandKind: MessageFor<
+    typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND
+  >['kind'];
 }): ToolTerminalAction {
   const def = findExternalToolDef(input.toolId);
   if (!def) return { kind: 'none', reason: 'unknownTool' };
