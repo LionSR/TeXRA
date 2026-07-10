@@ -9,8 +9,7 @@
  */
 
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { isCodexSubscriptionActive } from '@auth/codex';
-import { getServerSideKeyService } from '@auth/serverKeys';
+import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
 import {
   API_PROVIDERS,
   apiKeyExists,
@@ -18,9 +17,7 @@ import {
   hasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
-import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { platform as currentPlatform } from '@platform/platform';
-import type { PlatformSecrets } from '@platform/secrets';
 import {
   GITHUB_TOKEN_ENV_VARS,
   GITHUB_TOKEN_STORAGE_KEY,
@@ -149,17 +146,6 @@ async function defaultAuthStatus(): Promise<{
   return { authenticated: true, email: user?.email, tier };
 }
 
-/** Return whether any supported credential can launch the setup model. */
-export async function hasAnyUsableSetupCredential(
-  secrets: PlatformSecrets,
-): Promise<boolean> {
-  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
-  for (const provider of API_PROVIDERS) {
-    if (await hasUsableApiKey(secrets, provider)) return true;
-  }
-  return getServerSideKeyService().canUseServerSideKeys();
-}
-
 /**
  * Derive setup capabilities shared by every host from their existing platform
  * ports. This is the sole owner of the common setup wiring; hosts add only
@@ -179,7 +165,7 @@ export function createDefaultSetupPlatform(): SetupPlatform {
       hasUsableApiKey: (provider) => hasUsableApiKey(secrets, provider),
       storedApiKeyExists: async (provider) =>
         (await secrets.getStored(apiKeySecretName(provider))) !== undefined,
-      anyUsableCredentialExists: () => hasAnyUsableSetupCredential(secrets),
+      anyUsableCredentialExists: () => hasUsableSetupCredential(secrets),
       gitHubTokenExists: async () => {
         if (
           normalizeGitHubToken(
