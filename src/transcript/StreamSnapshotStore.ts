@@ -666,7 +666,7 @@ export class StreamSnapshotStore {
    * collection keyed by `StreamTabId` (excluding `streamVersions`, which
    * intentionally survives eviction to keep guarding in-flight races, and
    * `pendingWrites`, which is keyed by `${stream}::${key}` and handled
-   * separately). `allKnownStreams()`, `evict()`, and `evictAll()} all derive
+   * separately). `allKnownStreams()`, `evict()`, and `evictAll()` all derive
    * from this one list instead of three independently hand-maintained ones,
    * so a new per-stream field can't be wired into eviction inconsistently.
    */
