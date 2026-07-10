@@ -12,10 +12,7 @@ import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
-import {
-  buildToolDashboardItems,
-  buildToolDashboardTerminalAction,
-} from '@controllers/settingsView/ToolDashboardData';
+import { buildToolDashboardItems } from '@controllers/settingsView/ToolDashboardData';
 import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
@@ -73,6 +70,7 @@ import {
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
+import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
   getLastCheckResults,
   refreshToolAvailability,
@@ -108,6 +106,42 @@ import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 // Re-use the shared type helper for extracting specific message types.
 type MessageFor<C extends SettingsViewInboundMessage['command']> =
   SettingsMessageFor<C>;
+
+// Plans the terminal command for a tool-dashboard install/auth action.
+// Extension-only: unlike the desktop's tool-command handling, no other
+// host calls this, so it's kept next to its single production caller
+// rather than living in the shared settingsView controllers (exported
+// here only so the Vitest suite can import it directly).
+type ToolTerminalAction =
+  | {
+      readonly kind: 'terminal';
+      readonly name: string;
+      readonly command: string;
+    }
+  | {
+      readonly kind: 'none';
+      readonly reason: 'unknownTool' | 'missingCommand';
+    };
+
+export function planToolTerminalAction(input: {
+  readonly toolId: string;
+  readonly commandKind: MessageFor<
+    typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND
+  >['kind'];
+}): ToolTerminalAction {
+  const def = findExternalToolDef(input.toolId);
+  if (!def) return { kind: 'none', reason: 'unknownTool' };
+
+  const command =
+    input.commandKind === 'install' ? def.installCommand : def.authCommand;
+  if (!command) return { kind: 'none', reason: 'missingCommand' };
+
+  return {
+    kind: 'terminal',
+    name: `TeXRA: ${def.name}`,
+    command,
+  };
+}
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -508,7 +542,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private handleRunToolCommand(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND>,
   ): void {
-    const action = buildToolDashboardTerminalAction({
+    const action = planToolTerminalAction({
       toolId: data.toolId,
       commandKind: data.kind,
     });
