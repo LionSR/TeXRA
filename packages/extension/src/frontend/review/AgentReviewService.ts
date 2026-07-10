@@ -335,6 +335,7 @@ class AgentReviewServiceImpl {
         {
           runtimeHost: extensionAgentRuntimeHost,
           openWorkflowOutput: openFinalOutputIfAvailable,
+          stopAfterCycle: true,
         },
       );
       outcome = result.outcome;
