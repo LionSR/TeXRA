@@ -303,6 +303,27 @@ export async function getTeXCount(
   }
 }
 
+export interface TeXCountStat {
+  label: string;
+}
+
+/** Headline stats extracted from texcount's raw text report, in display order. */
+const TEXCOUNT_STAT_PATTERNS: readonly [RegExp, string][] = [
+  [/Words in text:\s*(\d+)/, 'Text: $1 words'],
+  [/Words in headers:\s*(\d+)/, 'Headers: $1'],
+  [/Words in float captions:\s*(\d+)/, 'Captions: $1'],
+  [/Number of inline math:\s*(\d+)/, 'Inline math: $1'],
+  [/Number of displayed math:\s*(\d+)/, 'Display math: $1'],
+];
+
+/** Parse texcount's raw text output into the headline stats it reports. */
+export function parseTeXCountStats(output: string): TeXCountStat[] {
+  return TEXCOUNT_STAT_PATTERNS.map(([pattern, template]) => {
+    const match = output.match(pattern);
+    return match ? { label: template.replace('$1', match[1]) } : null;
+  }).filter(filterNotNull);
+}
+
 export async function getTeXCountStats(
   filePaths: string | string[],
   channel: string = CHANNEL,
