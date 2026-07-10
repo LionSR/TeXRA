@@ -156,7 +156,7 @@ describe('BashTool error feedback', () => {
 
   it('reports a real rejection distinctly from an approval timeout', async () => {
     // Regression coverage for #7444: a host-side approval timeout must not
-    // collapse into the same "User rejected bash command" shape as an
+    // collapse into the same "User rejected command" shape as an
     // explicit reject once it reaches the agent.
     vi.mocked(requestBashApproval).mockResolvedValueOnce({
       accepted: false,
@@ -164,7 +164,7 @@ describe('BashTool error feedback', () => {
     });
     const rejected = await new BashTool().call({ command: 'echo rejected' });
     expect(rejected.status).toBe('error');
-    expect(rejected.error).toContain('User rejected bash command');
+    expect(rejected.error).toContain('User rejected command');
 
     vi.mocked(requestBashApproval).mockResolvedValueOnce({
       accepted: false,
@@ -173,7 +173,7 @@ describe('BashTool error feedback', () => {
     });
     const timedOut = await new BashTool().call({ command: 'echo timeout' });
     expect(timedOut.status).toBe('error');
-    expect(timedOut.error).not.toContain('User rejected bash command');
+    expect(timedOut.error).not.toContain('User rejected command');
     expect(timedOut.error).toContain('timed out');
   });
 });
