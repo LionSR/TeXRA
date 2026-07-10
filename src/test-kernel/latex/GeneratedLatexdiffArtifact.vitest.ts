@@ -64,9 +64,9 @@ describe('buildLatexdiffAwareFixInstruction', () => {
 
   it('leaves the base instruction untouched for a plain source file', async () => {
     const base = 'Fix the LaTeX compilation errors in main.tex.';
-    expect(await buildLatexdiffAwareFixInstruction(base, '/paper/main.tex')).toBe(
-      base,
-    );
+    expect(
+      await buildLatexdiffAwareFixInstruction(base, '/paper/main.tex'),
+    ).toBe(base);
   });
 
   it('adds latexdiff-artifact guidance when the inferred source exists', async () => {
