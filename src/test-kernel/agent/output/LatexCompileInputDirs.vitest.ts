@@ -211,6 +211,15 @@ describe('workflow LaTeX compile input directories', () => {
     ).toBe(path.join(workspacePath, 'Draft'));
     expect(
       resolveWorkspaceSourceDir(
+        createRunStorageLocation(
+          path.join(runDir(executionId), 'original', 'r3', 'Draft', 'main.tex'),
+          path.join('r3', 'Draft', 'main.tex'),
+          executionId,
+        ),
+      ),
+    ).toBe(path.join(workspacePath, 'r3', 'Draft'));
+    expect(
+      resolveWorkspaceSourceDir(
         createWorkspaceLocation(
           path.join(workspacePath, 'r3', 'Draft', 'main.tex'),
           path.join('r3', 'Draft', 'main.tex'),

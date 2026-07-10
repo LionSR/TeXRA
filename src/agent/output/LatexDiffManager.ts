@@ -391,6 +391,8 @@ export class LatexDiffManager {
       sourceLocation.kind === 'runStorage'
         ? path.dirname(sourceLocation.absolutePath)
         : null,
+      // Snapshot bases live under `original/`, while between-round bases live
+      // under `r<N>/`; map either back without confusing a real `r<N>` folder.
       resolveWorkspaceSourceDir(referenceLocation) ??
         path.dirname(referenceLocation.absolutePath),
     ].filter((dir): dir is string => dir !== null);

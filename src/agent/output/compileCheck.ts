@@ -25,6 +25,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { readPlatformSetting } from '@utils/config/platformSettings';
+import { getRunDir } from '@utils/files/runStorageFs';
 
 import {
   publishCompiledPdfArtifact,
@@ -67,8 +68,8 @@ function getCompileDisplayName(file: OutputFileInfo): string {
 
 /**
  * Resolve a workspace/run-storage location back to its live source folder.
- * A run-storage location's leading `r<digits>/` round segment is removed;
- * workspace locations retain the same segment as a real directory name.
+ * A round output's leading `r<digits>/` segment is removed. Workspace files
+ * and original snapshots retain the same segment as a real directory name.
  */
 export function resolveWorkspaceSourceDir(
   location: FileLocation,
@@ -76,10 +77,13 @@ export function resolveWorkspaceSourceDir(
   const workspaceRoot = WorkspaceFS.getPath();
   if (!workspaceRoot || location.kind === 'external') return undefined;
 
-  const separatorMatch =
+  const runStorageRelative =
     location.kind === 'runStorage'
-      ? /^([^/\\]+)[/\\]/.exec(location.relativePath)
+      ? path.relative(getRunDir(location.executionId), location.absolutePath)
       : null;
+  const separatorMatch = runStorageRelative
+    ? /^([^/\\]+)[/\\]/.exec(runStorageRelative)
+    : null;
   const workspaceRelative =
     separatorMatch && parseWorkflowOutputRoundDir(separatorMatch[1]) !== null
       ? location.relativePath.slice(separatorMatch[0].length)
