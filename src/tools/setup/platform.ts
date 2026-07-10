@@ -1,15 +1,29 @@
 /**
  * VS Code-free platform adapter for setup tools.
  *
- * Setup tools live in the `@tools/*` VS Code-free zone, but still need to
- * touch SecretStorage, Memento state, commands, and extensions. Those
- * capabilities are injected from `extension.ts` at activation time.
+ * Setup tools live in the `@tools/*` VS Code-free zone. Their common
+ * credential and configuration capabilities derive from the shared platform;
+ * only VS Code-specific interactions are supplied by the extension host.
  *
  * Keep this interface narrow — add methods only when a setup tool needs them.
  */
 
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
+import {
+  API_PROVIDERS,
+  apiKeyExists,
+  apiKeySecretName,
+  hasUsableApiKey,
+  type ApiProvider,
+} from '@model/apiProviders';
+import { platform as currentPlatform } from '@platform/platform';
+import {
+  GITHUB_TOKEN_ENV_VARS,
+  GITHUB_TOKEN_STORAGE_KEY,
+  normalizeGitHubToken,
+} from '@tools/github/githubAuth';
 import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
-import type { ApiProvider } from '@model/apiProviders';
 
 /** Per-provider API key surface. */
 export interface SetupSecretsAdapter {
@@ -24,7 +38,7 @@ export interface SetupSecretsAdapter {
    */
   hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
   /**
-   * Like `apiKeyExists` but only reports SecretStorage entries — ignores
+   * Like `apiKeyExists` but only reports persisted entries — ignores
    * environment-variable-backed keys. Needed by `unset_api_key` so the
    * agent doesn't claim to have removed a key that still comes from
    * `PROVIDER_API_KEY` in the user's shell.
@@ -33,11 +47,10 @@ export interface SetupSecretsAdapter {
   /** True when any credential can launch a setup model right now. */
   anyUsableCredentialExists(): Promise<boolean>;
   gitHubTokenExists(): Promise<'secret' | 'env' | 'none'>;
-  /** List of provider names known to TeXRA (matches SecretManager.API_PROVIDERS). */
+  /** List of provider names known to TeXRA. */
   providers: readonly ApiProvider[];
   /**
-   * All secret key names currently stored in SecretStorage. Values are never
-   * returned — only names. Added in VS Code 1.105 (`SecretStorage.keys()`).
+   * All persisted secret key names. Values are never returned — only names.
    */
   listStoredKeys(): Promise<readonly string[]>;
 }
@@ -93,40 +106,113 @@ export type { TerminalRunResult };
 /** Aggregated setup platform. */
 export interface SetupPlatform {
   secrets: SetupSecretsAdapter;
-  commands: SetupCommandAdapter;
-  extensions: SetupExtensionAdapter;
   auth: SetupAuthAdapter;
   config: SetupConfigAdapter;
-  terminal: SetupTerminalAdapter;
+  /** VS Code-only command invocation. */
+  commands?: SetupCommandAdapter;
+  /** VS Code extension inspection and installation. */
+  extensions?: SetupExtensionAdapter;
+  /** VS Code integrated-terminal execution. */
+  terminal?: SetupTerminalAdapter;
 }
 
-/** Tools whose implementation calls {@link getSetupPlatform}. */
-export const SETUP_PLATFORM_TOOL_NAMES = [
-  'probe_environment',
-  'verify_setup',
-  'set_api_key',
-  'unset_api_key',
-  'list_api_keys',
+/** Setup tools that require a VS Code-specific adapter. */
+export const SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES = [
   'invoke_command',
   'install_vscode_extension',
-  'read_config',
-  'update_config',
   'send_to_terminal',
 ] as const;
 
-let platform: SetupPlatform | undefined;
-
-/** Register the platform implementation. Called once from `extension.ts`. */
-export function setSetupPlatform(impl: SetupPlatform): void {
-  platform = impl;
-}
-
-/** Get the registered platform, throwing if not yet wired. */
-export function getSetupPlatform(): SetupPlatform {
-  if (!platform) {
+function assertTexraScopedKey(key: string): void {
+  if (!key.startsWith('texra.')) {
     throw new Error(
-      'Setup platform not initialized. Wire it from extension.ts via setSetupPlatform().',
+      `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
     );
   }
-  return platform;
+}
+
+async function defaultAuthStatus(): Promise<{
+  authenticated: boolean;
+  email?: string;
+  tier?: string;
+}> {
+  const authenticated = await SupabaseClient.isAuthenticated();
+  if (!authenticated) return { authenticated: false };
+
+  const [user, tier] = await Promise.all([
+    SupabaseClient.getUser(),
+    SupabaseClient.getUserTier(),
+  ]);
+  return { authenticated: true, email: user?.email, tier };
+}
+
+/**
+ * Derive setup capabilities shared by every host from their existing platform
+ * ports. This is the sole owner of the common setup wiring; hosts add only
+ * capabilities that cannot exist outside VS Code.
+ */
+export function createDefaultSetupPlatform(): SetupPlatform {
+  const services = currentPlatform();
+  const { secrets, config } = services;
+
+  return {
+    secrets: {
+      providers: API_PROVIDERS,
+      setApiKey: (provider, key) =>
+        secrets.set(apiKeySecretName(provider), key),
+      deleteApiKey: (provider) => secrets.delete(apiKeySecretName(provider)),
+      apiKeyExists: (provider) => apiKeyExists(secrets, provider),
+      hasUsableApiKey: (provider) => hasUsableApiKey(secrets, provider),
+      storedApiKeyExists: async (provider) =>
+        (await secrets.listStoredKeys()).includes(apiKeySecretName(provider)),
+      anyUsableCredentialExists: () => hasUsableSetupCredential(secrets),
+      gitHubTokenExists: async () => {
+        if (
+          normalizeGitHubToken(
+            await secrets.getStored(GITHUB_TOKEN_STORAGE_KEY),
+          )
+        ) {
+          return 'secret';
+        }
+        return GITHUB_TOKEN_ENV_VARS.some((name) =>
+          normalizeGitHubToken(secrets.getEnv(name)),
+        )
+          ? 'env'
+          : 'none';
+      },
+      listStoredKeys: () => secrets.listStoredKeys(),
+    },
+    auth: { getStatus: defaultAuthStatus },
+    config: {
+      get: (key) => {
+        assertTexraScopedKey(key);
+        return config.get(key);
+      },
+      update: async (key, value, target) => {
+        assertTexraScopedKey(key);
+        await config.update(
+          key,
+          value,
+          target === 'workspace' ? 'workspace' : 'global',
+        );
+      },
+    },
+  };
+}
+
+let override: SetupPlatform | undefined;
+
+/** Register host-specific setup capabilities, usually from `extension.ts`. */
+export function setSetupPlatform(impl: SetupPlatform): void {
+  override = impl;
+}
+
+/** Get host overrides when present, otherwise derive the common default. */
+export function getSetupPlatform(): SetupPlatform {
+  return override ?? createDefaultSetupPlatform();
+}
+
+/** Test support for exercising the host-neutral default after an override. */
+export function __resetSetupPlatformForTests(): void {
+  override = undefined;
 }
