@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentPromptSchema } from '@agent/core/definition/AgentDataclass';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUsePrepareNode } from '@agent/implementations/flows/tooluse/nodes/ToolUsePrepareNode';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 
 function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},
@@ -87,5 +90,52 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
     await expect(node.exec(undefined)).rejects.toThrow('boom');
 
     expect(services.logger.info).not.toHaveBeenCalled();
+  });
+});
+
+function buildSnapshot(
+  overrides: Partial<ToolUseSessionSnapshot> = {},
+): ToolUseSessionSnapshot {
+  return {
+    messages: [
+      { role: 'system', content: [{ type: 'text', text: 'stale system' }] },
+    ],
+    run: AgentRunStateSnapshotSchema.parse({}),
+    workspace: AgentWorkspaceState.create().toSnapshot(),
+    user: { input: {}, transient: {} },
+    ...overrides,
+  } as ToolUseSessionSnapshot;
+}
+
+describe('ToolUsePrepareNode resume (system message refresh delegation)', () => {
+  it('delegates the persisted system message rebuild to the model handler port, not a local re-derivation', async () => {
+    // The node must hand the stale persisted messages and the freshly
+    // rebuilt system text straight to the model handler and use whatever
+    // comes back — it has no business knowing provider message shape.
+    const refreshedMessages = [
+      { role: 'system', content: [{ type: 'text', text: 'refreshed' }] },
+    ];
+    const refreshSystemMessage = vi.fn(() => refreshedMessages);
+    const snapshot = buildSnapshot();
+    const services = buildServices({
+      snapshot,
+      modelHandler: {
+        consumeInsertedAttachmentKinds: vi.fn(() => []),
+        initializeMessages: vi.fn(async () => []),
+        refreshSystemMessage,
+      } as never,
+    });
+    const node = new ToolUsePrepareNode().setServices(services);
+
+    const result = await node.exec(undefined);
+
+    expect(refreshSystemMessage).toHaveBeenCalledWith(
+      snapshot.messages,
+      expect.stringMatching(/^You are careful\.\n/),
+    );
+    expect(result.result.messages).toBe(refreshedMessages);
+    expect(result.result.shouldSkipCycle).toBe(true);
+    // initializeMessages is the fresh-session path; resume must not call it.
+    expect(services.modelHandler.initializeMessages).not.toHaveBeenCalled();
   });
 });
