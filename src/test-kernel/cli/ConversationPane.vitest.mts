@@ -19,7 +19,7 @@ import {
   appendStaticTranscriptItems,
   sessionHeaderIdentityLine,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
-import { staticScrollbackTarget } from '@cli/chat/tui/App';
+import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
 import {
   transcriptViewportChange,
   transcriptViewportKey,
