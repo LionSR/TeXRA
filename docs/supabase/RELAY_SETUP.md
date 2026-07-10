@@ -29,11 +29,12 @@ The API keys are stored as Supabase secrets and the relay forwards requests to t
 ```bash
 cd /path/to/TeXRA
 supabase login
+export SUPABASE_PROJECT_REF="${SUPABASE_PROJECT_REF:-jntubmcgbhwtcktubelv}"
 node scripts/deploy-relay.mjs
 ```
 
-The script deploys to the production Supabase project by default. Set
-`SUPABASE_PROJECT_REF` to deploy the relay to another project.
+The exported reference defaults to the production project. Set
+`SUPABASE_PROJECT_REF` before running the block to target another project.
 
 ### 2. Set API Key Secrets
 
@@ -43,18 +44,14 @@ _linked_ in this checkout (or fails if none is linked), which on a fresh
 checkout means the keys silently land on the wrong project or nowhere at all:
 
 ```bash
-# Same ref as `node scripts/deploy-relay.mjs` (defaults to the production
-# project; matches $SUPABASE_PROJECT_REF if you overrode it above).
-PROJECT_REF="${SUPABASE_PROJECT_REF:-jntubmcgbhwtcktubelv}"
-
 # Required secrets (set only the ones you want to support)
-supabase secrets set OPENAI_API_KEY="sk-..." --project-ref "$PROJECT_REF"
-supabase secrets set ANTHROPIC_API_KEY="sk-ant-..." --project-ref "$PROJECT_REF"
-supabase secrets set GOOGLE_API_KEY="AIza..." --project-ref "$PROJECT_REF"
-supabase secrets set XAI_API_KEY="xai-..." --project-ref "$PROJECT_REF"
-supabase secrets set DEEPSEEK_API_KEY="sk-..." --project-ref "$PROJECT_REF"
-supabase secrets set MOONSHOT_API_KEY="sk-..." --project-ref "$PROJECT_REF"
-supabase secrets set DASHSCOPE_API_KEY="sk-..." --project-ref "$PROJECT_REF"
+supabase secrets set OPENAI_API_KEY="sk-..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set ANTHROPIC_API_KEY="sk-ant-..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set GOOGLE_API_KEY="AIza..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set XAI_API_KEY="xai-..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set DEEPSEEK_API_KEY="sk-..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set MOONSHOT_API_KEY="sk-..." --project-ref "$SUPABASE_PROJECT_REF"
+supabase secrets set DASHSCOPE_API_KEY="sk-..." --project-ref "$SUPABASE_PROJECT_REF"
 ```
 
 ### 3. Verify Deployment
