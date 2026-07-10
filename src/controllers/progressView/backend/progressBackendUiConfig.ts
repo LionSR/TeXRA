@@ -41,6 +41,26 @@ type ReplayableApprovalRequestHandlerSet = {
 };
 
 /**
+ * The full key set of {@link ApprovalRequestHandlerSet}, enforced exhaustive
+ * via `satisfies`: adding or renaming a handler kind fails this map until
+ * it's updated here, which keeps both {@link replayApprovalRequestHandlers}
+ * and the `hasPendingPermissions` guard below in sync with the interface.
+ */
+const APPROVAL_REQUEST_HANDLER_KEY_MAP = {
+  toolEdit: true,
+  bash: true,
+  externalInquiry: true,
+  retry: true,
+  agentProposal: true,
+  planApproval: true,
+  userQuestion: true,
+} satisfies Record<keyof ApprovalRequestHandlerSet, true>;
+
+const APPROVAL_REQUEST_HANDLER_KEYS = Object.keys(
+  APPROVAL_REQUEST_HANDLER_KEY_MAP,
+) as Array<keyof ApprovalRequestHandlerSet>;
+
+/**
  * Host-specific show/resolve transport for one approval kind. retry and
  * agentProposal differ across hosts (the extension shows a retry panel and
  * upgrades proposals with model/agent dropdowns; the desktop cancels retries
@@ -145,19 +165,7 @@ export function buildApprovalRequestHandlerSet(
 export function replayApprovalRequestHandlers(
   handlers: ReplayableApprovalRequestHandlerSet,
 ): void {
-  const replayOrder: Record<keyof ApprovalRequestHandlerSet, true> = {
-    toolEdit: true,
-    bash: true,
-    externalInquiry: true,
-    retry: true,
-    agentProposal: true,
-    planApproval: true,
-    userQuestion: true,
-  };
-
-  for (const key of Object.keys(replayOrder) as Array<
-    keyof ApprovalRequestHandlerSet
-  >) {
+  for (const key of APPROVAL_REQUEST_HANDLER_KEYS) {
     handlers[key].replay();
   }
 }
@@ -176,9 +184,9 @@ export interface ProgressBackendUiConfigParams {
  *
  * The tool-edit callbacks delegate to their handler, so host differences live
  * entirely in how each handler is constructed (its show/resolve transport and
- * `canSend` gate) — not in this wiring. The guard ORs `hasPendingForStream`
- * across all handlers, reusing the handler's empty-streamId-blocks-all rule
- * instead of re-deriving it per host.
+ * `canSend` gate) — not in this wiring. The guard checks `hasPendingForStream`
+ * across all handlers (see {@link APPROVAL_REQUEST_HANDLER_KEYS}), reusing the
+ * handler's empty-streamId-blocks-all rule instead of re-deriving it per host.
  */
 export function createProgressBackendUiConfig(
   params: ProgressBackendUiConfigParams,
@@ -200,12 +208,8 @@ export function createProgressBackendUiConfig(
       },
     },
     hasPendingPermissions: (streamId) =>
-      handlers.retry.hasPendingForStream(streamId) ||
-      handlers.toolEdit.hasPendingForStream(streamId) ||
-      handlers.bash.hasPendingForStream(streamId) ||
-      handlers.agentProposal.hasPendingForStream(streamId) ||
-      handlers.planApproval.hasPendingForStream(streamId) ||
-      handlers.externalInquiry.hasPendingForStream(streamId) ||
-      handlers.userQuestion.hasPendingForStream(streamId),
+      APPROVAL_REQUEST_HANDLER_KEYS.some((key) =>
+        handlers[key].hasPendingForStream(streamId),
+      ),
   };
 }
