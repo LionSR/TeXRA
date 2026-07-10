@@ -425,6 +425,37 @@ describe('createChatSessionController', () => {
     });
   });
 
+  it('does not auto-resume after stop during helper-model setup', async () => {
+    const modelSetup = deferred();
+    const session = makeSession({ runCompleted: true });
+    const config = makeResumeConfig();
+    const snapshotStore = makeResumeSnapshotStore({
+      executionId: 'exec-1',
+      config,
+    });
+    mocks.setCliHelperModel.mockReturnValueOnce(modelSetup.promise);
+    mocks.resolveAndResumeStream.mockImplementationOnce(
+      async (_streamId, ports: { isCancellationRequested?(): boolean }) =>
+        !(ports.isCancellationRequested?.() ?? false),
+    );
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    const resumed = ctrl.tryResumeStream('stream-1');
+    await vi.waitFor(() => expect(mocks.setCliHelperModel).toHaveBeenCalled());
+    ctrl.stop();
+    modelSetup.resolve(undefined);
+
+    await expect(resumed).resolves.toBe(false);
+    expect(mocks.resolveAndResumeStream).toHaveBeenCalledWith(
+      'stream-1',
+      expect.objectContaining({
+        isCancellationRequested: expect.any(Function),
+      }),
+    );
+  });
+
   it('does not finalize the stream transcript when auto-resume returns false', async () => {
     const session = makeSession({ runCompleted: true });
     const config = makeResumeConfig();

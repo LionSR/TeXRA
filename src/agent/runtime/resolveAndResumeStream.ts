@@ -27,6 +27,8 @@ interface ResolvedResumeState {
 export interface ResumeStreamPorts {
   /** Runtime host receiving the RESUMING/WAITING status updates. */
   readonly runtimeHost: AgentRuntimeHost;
+  /** True when the host cancelled this resume while it was preparing. */
+  isCancellationRequested?(): boolean;
   /**
    * The status machine of the session that owns this stream — per-window on
    * desktop, the default session's machine in the extension/CLI. The
@@ -87,6 +89,7 @@ export async function resolveAndResumeStream(
   ports: ResumeStreamPorts,
 ): Promise<boolean> {
   if (
+    ports.isCancellationRequested?.() ||
     ports.streamStatus.isActiveOrResuming(streamId) ||
     resumeInFlight.has(streamId)
   ) {
@@ -122,7 +125,10 @@ export async function resolveAndResumeStream(
     // that flips this stream active/resuming while we awaited retrieval. If that
     // happened, abandon the resume rather than clobbering the launched run's
     // status.
-    if (ports.streamStatus.isActiveOrResuming(streamId)) {
+    if (
+      ports.isCancellationRequested?.() ||
+      ports.streamStatus.isActiveOrResuming(streamId)
+    ) {
       return false;
     }
 

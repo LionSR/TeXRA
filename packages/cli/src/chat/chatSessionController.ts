@@ -473,6 +473,7 @@ export function createChatSessionController(
           resolveAndResumeStream(streamId, {
             runtimeHost,
             streamStatus: defaultSession().status,
+            isCancellationRequested: () => session.stopRequested,
             resolveResumeState: async () => ({
               runState: config,
               executionId,

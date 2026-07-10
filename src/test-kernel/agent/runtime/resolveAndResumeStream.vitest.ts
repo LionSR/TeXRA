@@ -134,6 +134,21 @@ describe('resolveAndResumeStream', () => {
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
   });
 
+  it('abandons resume when cancellation is requested during retrieval', async () => {
+    let cancellationRequested = false;
+    retrieveSessionResumeDataMock.mockImplementation(async () => {
+      cancellationRequested = true;
+      return { type: 'toolUse', snapshot: { streamId: STREAM } };
+    });
+    const ports = basePorts({
+      isCancellationRequested: () => cancellationRequested,
+    });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.resumeToolUseSnapshot).not.toHaveBeenCalled();
+    expect(ports.executeWorkflow).not.toHaveBeenCalled();
+  });
+
   it('skips resume without resolving when the stream is already active', async () => {
     seedStreamStatusForTest(StreamStatusService, STREAM, STREAM_STATUS.RUNNING);
     const ports = basePorts();

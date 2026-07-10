@@ -72,6 +72,10 @@ All notable changes to this project will be documented in this file.
   progress, command results, doctor output, and structured error/instruction
   records now share one queued stdout writer.
 
+- **Ctrl-C cancels pending automatic resumes** — stopping while a queued
+  follow-up is preparing can no longer restart the cancelled stream after an
+  asynchronous model or session-state lookup finishes.
+
 ### Desktop
 
 #### Bug Fixes
