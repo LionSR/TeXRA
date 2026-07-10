@@ -436,9 +436,18 @@ export async function withCliMultiAgentPresetVisibility<T>(
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
   );
 
+  const visibilityApplied = (async () => {
+    await workspaceState.update(WorkspaceStateKey.ENABLED_AGENTS, [
+      ...plan.workflowAgentKeys,
+    ]);
+    await workspaceState.update(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, [
+      ...plan.toolUseAgentKeys,
+    ]);
+  })();
   let restorePromise: Promise<void> | undefined;
   const restoreVisibility = (): Promise<void> => {
     restorePromise ??= (async () => {
+      await visibilityApplied.catch(() => undefined);
       await workspaceState.update(
         WorkspaceStateKey.ENABLED_AGENTS,
         previousWorkflowAgents,
@@ -456,12 +465,7 @@ export async function withCliMultiAgentPresetVisibility<T>(
   );
 
   try {
-    await workspaceState.update(WorkspaceStateKey.ENABLED_AGENTS, [
-      ...plan.workflowAgentKeys,
-    ]);
-    await workspaceState.update(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, [
-      ...plan.toolUseAgentKeys,
-    ]);
+    await visibilityApplied;
     return await operation();
   } finally {
     shutdownRestore.dispose();
