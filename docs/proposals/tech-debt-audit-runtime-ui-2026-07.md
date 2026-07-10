@@ -344,39 +344,22 @@ bash cancellation lives in the controller.
 for bash and a full controller for tool-edit adds a type/factory for a 3-line
 win (net-add). Just delete the dead calls.
 
-### A8. Run-fact decode cascade is hand-reimplemented in 4 consumers with a divergent validation predicate (MED, PLAUSIBLE; documented-better-solution; net-add caveat)
+### A8. RETRACTED — decode-cascade claim rests on the retired `'runFact.'` protocol (#7713 follow-through)
 
-**Pins.** Run facts ride the untyped `domain` `AgentEvent` as
-`key:'runFact.'+name`, `data:unknown`, so every consumer independently recovers
-the name via `fromRunFactDomainKey` and parses the payload. Exactly 4 production
-importers (`runFactEvents.ts:11-18` R8 census, dated 2026-07-07):
-`ProgressFactApplier.ts:202-348` casts the 3 output-file facts with `isObject`+`as`
-(`:271-293`, unvalidated); `StreamSnapshotStore.ts:91-102,300-333` Zod-validates
-the same facts; `sessionProgressSubscription.ts:130-134` casts (headless
-passthrough); `subscribeRuntimeHost.ts:269-272` returns false for the 3
-output-file facts (skips them). Just-merged #7627 touched
-`sessionProgressSubscription` but did not consolidate the decode.
-
-**Mechanism.** The decode is duplicated 4× and the validation predicate diverges
-(Zod vs unsafe cast vs skip) for the same 3 facts. Emitters are trusted core code
-so the cast never corrupts today; the live cost is drift risk — a new run fact must
-be wired into 4 hand-written cascades, and missing one silently drops it on that
-host.
-
-**Fix (share the decode, not the sink).** Extract one pure Zod-validated
-`decodeRunFact(streamId, event): RunFactDecoded | undefined` (a discriminated
-union of the 6 run facts + conversationProgress/usage/setTaskState/roundStage/
-child-activity/process-output) in `runFactEvents.ts` (already imported by all 4);
-relocate the 3 local `*RunFactSchema` there (net 0 schemas). Each consumer becomes
-a `switch` on `decoded.kind` → its own sink. **Honest caveat (R6):** this repo's
-refactor-LoC lesson shows extractions across divergent sites net-_add_; the payoff
-is single-validation + one wire-up point at the cost of +1 function/+1 type, not a
-LoC win. Stepping-stone to the v0.41 typed-arm end state.
-
-**Rejected trap (R4).** Sharing the _sink_ (one reducer across CLI+webview+persistence)
-is confirmed-divergent — CLI keeps `status.cause` (`:96`) the webview drops; CLI
-TUI skips the 3 output-file facts. Share only the decode; each consumer keeps its
-own apply.
+**Correction (2026-07-10, follow-through on #7713).** This finding's pins rest
+on the same fabricated/stale protocol as A13: run facts riding the `domain`
+`AgentEvent` as `key:'runFact.'+name` with consumers recovering the name via
+`fromRunFactDomainKey`. Verified independently at HEAD: `fromRunFactDomainKey`,
+`toRunFactDomainKey`, and `RUN_FACT_DOMAIN_PREFIX` have zero hits repo-wide
+(`git grep` across `src/` and `packages/`), and `runFactEvents.ts` is a 34-line
+module exporting only `RunFactPayloads`/`RunFactEventName`/`emitRunFact` — the
+string-prefix protocol was retired during the Stage-5 close-out (#6968), so the
+described 4× hand-decode cascade cannot exist as cited. The four file:line pins
+above date from before that retirement and no longer describe the code. If a
+divergent-validation concern survives in the post-Stage-5 typed-arm shape, it
+needs a fresh audit with true pins to re-file; nothing here should be cited as
+evidence. (Issue #7713 flagged five sibling fabrications, retracted in the same
+PR; this one was found by the same grep and retracted for consistency.)
 
 ### A9. `goalStateChanged → updateGoalActive` derivation duplicated in extension + desktop; the shared applier receives the fact but no-ops it (LOW; net ≈ −20 LoC, −2 subscription surfaces)
 
