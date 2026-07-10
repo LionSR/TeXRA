@@ -1048,22 +1048,30 @@ transcript row does not need the machine to carry the extra bit).
 write site (`TexraTranscriptRecorder.ts:235`) moves from a bare string
 literal to `StreamPhase.RUNNING`.
 
-### 8.3 Boundary plan: one legacy parse, at the transcript-read boundary
+### 8.3 Boundary plan: two true boundaries — `StreamLogStore`'s persisted read, and the standalone trace-viewer's file import
 
 Binding directive (maintainer, desktop-never-released + no-scattered-shims):
 during the released-data window (CLI + VS Code extension both ship
 historical transcripts with `data.status: 'error' | 'stopped'` group-end
-rows), **the only legacy parse lives at `StreamLogStore`'s read side** —
-everywhere else gets canonical `RunOutcome`/`StreamPhase` values.
+rows), **the only legacy parse in the in-app path lives at `StreamLogStore`'s
+read side** — everywhere else that loads through `StreamLogStore`, live or
+persisted, gets canonical `RunOutcome`/`StreamPhase` values. The standalone
+trace-viewer's file import is a separate concern outside this directive's
+scope; it keeps its own boundary, registered at the end of this section.
 
 **Today**, per §8.1, there are _two_ scattered legacy-tolerant parses instead
-of one: `logSlice.ts:82,109` and `replayTrace.ts:116`. Neither is the read
-boundary — `StreamLogStore.parsePersistedEntries`
+of one in the in-app path: `logSlice.ts:82,109` and `replayTrace.ts:116`.
+Neither is the read boundary — `StreamLogStore.parsePersistedEntries`
 (`src/transcript/StreamLogStore.ts:798-848`) is: it is the one function every
-persisted row passes through via `PersistedStreamLogEntrySchema.safeParse`
-(`src/shared/schemas/log.ts:149-152`) before entering the in-memory
-`StreamLog`, for both the extension's live progress view and the
-CLI/trace-viewer's historical replay (both load through `StreamLogStore`).
+persisted row passes through — the `.safeParse(raw)` call itself sits at
+`StreamLogStore.ts:823`, against the `PersistedStreamLogEntrySchema` union
+_defined_ (not called) at `src/shared/schemas/log.ts:149-152` — before
+entering the in-memory `StreamLog`, for both the extension's live progress
+view (which rehydrates released streams via `ensureLoaded`/`load`,
+`StreamLogStore.ts:228,631`) and the CLI's own transcript readers
+(`packages/cli/src/chat/…`, `runtime/runExecution.ts`), which also load
+through `StreamLogStore`. The standalone trace-viewer does **not** load
+through `StreamLogStore` and is a separate boundary — see below.
 `data` stays `z.unknown()` in that schema (correctly — Tier 3 in §4 already
 documents `StreamLog` group-end rows as "opaque… display code pattern-matches
 `status:'error'`"), so today's union does not — and after this cutover still
@@ -1087,16 +1095,90 @@ entry's `data.status` is normalized in place at load time:
   transcript's _displayed_ label changes, only its typed value.
 - On-disk `'error'` → `RunOutcome.FAILED` (row 6; 1:1, lossless).
 
-Post-boundary, `StreamLog`/`StreamLogStore` and everything downstream —
-`logSlice.ts`, `replayTrace.ts`, the CLI's transcript readers, trace-viewer —
-only ever observe canonical `StreamPhase`/`RunOutcome` values. `logSlice.ts`'s
-`isTaskGroupStatus(...) ? ... : STREAM_STATUS.STOPPED` fallback and
-`replayTrace.ts`'s `StreamStatusSchema.safeParse` become dead code (their
-`else`/failure branches can no longer be hit) and are deleted as a mechanical
-follow-up once the boundary lands and both consumers are retyped to expect
+**The live-emission path needs no parse at all — it is canonical by
+construction, not by normalization, so §8.3's boundary story is not just the
+persisted-read side.** `StreamLogStore.append()` (`StreamLogStore.ts:287-297`)
+is the one entry point every live producer writes through
+(`TexraTranscriptRecorder.ts:137,189,226,263`, which back the four §8.1
+producers — `AgentRunLifecycle.ts:138,369`, `TraceEmitter.ts:212,300`, and
+`StreamLogStore.endRunningEntriesInLoadedLogs`) — and `append()` never calls
+`parsePersistedEntries`; only the disk-load paths do
+(`ensureLoaded`/`load`/`loadStreamSummary`, `StreamLogStore.ts:228,631`).
+`WebviewBridge` (`src/controllers/progressView/backend/WebviewBridge.ts:151`)
+then streams these entries straight from the in-memory `StreamLog` to the
+webview's `logSlice.ts` `LOG_DELTA` handler — no disk read, no parse,
+anywhere on that path. Once step 1 retypes all four producers to emit
+`RunOutcome`/`StreamPhase` directly (§8.2), every entry `append()` ever sees
+is canonical the instant it is created; `parsePersistedEntries`'s
+normalization exists solely to backfill rows that predate the cutover and
+were already sitting on disk, not to process anything a live run produces
+today or after.
+
+That also answers the in-memory mixed-vocabulary question directly: because
+step 1 retypes all four live producers in the **same PR** as the boundary
+(§8.4 step 1), there is no rollout window in which some in-memory
+`GROUP_END`/`GROUP_START` rows are canonical and others are still
+legacy-typed. Every producer capable of writing a fresh row cuts over
+atomically in that one PR; the only legacy-shaped rows any consumer can ever
+observe afterward are ones that were already persisted to disk before the PR
+merged, and those get normalized once, at load time, by
+`parsePersistedEntries`. No consumer — live or persisted-read — sees a mix
+of old and new vocabulary once step 1 ships.
+
+Post-boundary, `StreamLog`/`StreamLogStore` and everything downstream that
+loads through it — `logSlice.ts`, the CLI's own transcript readers — only
+ever observe canonical `StreamPhase`/`RunOutcome` values, whether an entry
+arrived live via `append()` or was rehydrated from disk via
+`parsePersistedEntries`. `logSlice.ts`'s
+`isTaskGroupStatus(...) ? ... : STREAM_STATUS.STOPPED` fallback becomes dead
+code on that path (its `else` branch can no longer be hit by anything
+`StreamLogStore` hands it) and is deleted as a mechanical follow-up once the
+boundary lands and `logSlice.ts` is retyped to expect
 `StreamPhase`/`RunOutcome` — not before, per the "consumers get canonical"
 half of the directive (deleting the fallback before the boundary normalizes
-would just move the crash site).
+would just move the crash site). That deletion is conditioned on **both**
+of `logSlice.ts`'s callers going canonical, not just `StreamLogStore`'s —
+see the standalone trace-viewer boundary immediately below, which also feeds
+`logSlice.ts` and is not downstream of `parsePersistedEntries` at all.
+
+**A second, independent true boundary: the standalone trace-viewer's file
+import.** `packages/trace-viewer/` is not a `StreamLogStore` client at all —
+its `main.ts`'s `loadTrace()` reads either an inlined
+`window.__TEXRA_TRACE__` (the CLI's single-file export) or a fetched
+`trace.json`, validates it through `parseTraceData`
+(`packages/trace-viewer/src/traceDataSchema.ts`), and feeds the result
+straight to `replayTrace()` (`packages/trace-viewer/src/replayTrace.ts:131`);
+`StreamLogStore.parsePersistedEntries` never runs in that call chain —
+`replayTrace.ts` only imports `TraceDocument` as a type. These exported
+trace files are, by `main.ts`'s own doc comment, "externally-authored…
+exported by whatever TeXRA version produced them" — a file exported before
+this cutover ships stays on-disk in the legacy vocabulary forever; nothing
+re-normalizes it retroactively, since a static exported JSON file never
+passes through a live `StreamLogStore` instance again. That makes the
+trace-viewer's import path a second, genuinely independent boundary, not a
+downstream consumer of the first, and §8.3's opening directive ("the only
+legacy parse lives at `StreamLogStore`'s read side") is scoped to the in-app
+path only — it does not extend here. Concretely: `replayTrace.ts`'s
+`toStreamLifecycleStatus` keeps its own `StreamStatusSchema.safeParse`
+legacy-arm (`:116`) permanently, as this boundary's one owner of the
+overall-run status. It does **not**, however, currently normalize the
+individual `GROUP_START`/`GROUP_END` `data.status` values on the entries it
+forwards — `replayTrace()` dispatches `trace.entries` verbatim into the same
+`LOG_DELTA`/`logSlice.ts` pipeline the in-app live path uses (`replayTrace.ts:182`),
+so those raw per-entry values land on `logSlice.ts`'s `isTaskGroupStatus`
+fallback exactly as a pre-cutover on-disk row would. That means the
+`logSlice.ts` fallback (previous paragraph) is not purely in-app dead weight
+once `StreamLogStore` goes canonical — it is the shared landing point both
+boundaries currently feed, and it can only be deleted once the trace-viewer
+import path also normalizes per-entry `data.status` the same way
+`parsePersistedEntries` does (a follow-up for whichever PR does the
+trace-viewer's own cutover, out of scope for step 1 itself but recorded here
+so the eventual `logSlice.ts` fallback deletion isn't done prematurely).
+§8.4 step 3's acceptance-gate grep (R8) must count `replayTrace.ts`'s
+`StreamStatusSchema.safeParse` as a second permitted survivor alongside
+`StreamLogStore`'s boundary, not something to delete: deleting it would
+break historical export files opened outside a running extension/CLI, which
+is exactly the case this boundary exists to serve.
 
 The Tier-4 frozen CLI JSON projection (`terminalStatus.ts:78`) is
 unaffected: it derives `endGroupStatus` from `RunOutcome` via
@@ -1148,9 +1230,24 @@ already logged in §5). R6: each per-host PR is a like-for-like swap
 (`STREAM_STATUS.X` → `STREAM_PHASE.X` at call sites already trait-gated), so
 expect small negative-to-flat diffs per file, no structural growth.
 
+The census also sweeps the **task-group status consumers**, which read the
+group-end/group-start-derived status this addendum's step 1 retypes at the
+source, not the generic per-stream status §2 already covers — call them out
+explicitly so step 2's per-host PR authors don't miss them as "just more of
+the 39": `TaskGroupSchema.status` (`src/shared/schemas/taskGroup.ts:10`,
+typed `TaskGroupStatusSchema`) is the wire/state type `logSlice.ts`'s
+`updateTaskGroups` populates from `GROUP_START`/`GROUP_END` rows (§8.3), and
+`packages/extension/src/progressView/frontend/components/TaskGroupList.ts`
+is its primary renderer — `getStatusIcon` (`:60-68`) switches on
+`STREAM_STATUS.RUNNING`/`ERROR`/`STOPPED`, and the completion-sound check
+(`:301-304`) compares `group.status` against `STREAM_STATUS.READY`/`STOPPED`.
+Both retype to `StreamPhase`/`RunOutcome` in lockstep with `logSlice.ts`
+itself, and `TaskGroupListIndex.vitest.ts` (already named in §8.5) is the
+existing suite that pins `TaskGroupList`'s fixtures for this migration.
+
 **Step 3 — Delete the legacy enums (goal item 4; original D1 task-3 list,
 finally unblocked).** Once step 2 empties the reader census, delete
-`STREAM_STATUS`/`STREAM_STATUS_TRAITS`/`StreamStatusSchema`,
+`STREAM_STATUS`/`STREAM_STATUS_TRAITS`,
 `EndGroupStatusSchema`/`END_GROUP_STATUS`, and the
 `legacyEndGroupStatusForOutcome`/`groupEndStatusForOutcome`/
 `terminalStreamStatusForOutcome` helpers — except the read-shim forms the
@@ -1158,11 +1255,17 @@ D1 ledger (#6981) already dates for the tier-3 persisted-format shims
 (`meta.json.taskState`, desktop `terminalStatus`, the boundary normalization
 this step 1 added in §8.3, which **stays** as the permanent legacy-transcript
 reader, not a temporary shim — released transcripts never get rewritten, so
-this parse never ages out). R8: consumer count is exactly the step-2 output
-(should be 0 production readers of the deleted symbols; the boundary
-normalizer in `StreamLogStore` is the sole permitted survivor, named in the
-D1 acceptance-gate grep). R6: this step is the actual deletion payoff —
-net-negative, size M per the parent issue's own estimate.
+this parse never ages out). `StreamStatusSchema` itself is in that same
+surviving set, not fully deleted: `replayTrace.ts`'s `toStreamLifecycleStatus`
+(§8.3's second boundary) keeps calling `StreamStatusSchema.safeParse`
+permanently, so the schema stays exported for that one caller even after
+every other production reader of it is gone. R8: consumer count is exactly
+the step-2 output (should be 0 production readers of the deleted symbols
+outside the two permitted boundary survivors — `StreamLogStore`'s
+`parsePersistedEntries` normalization and `replayTrace.ts`'s
+`StreamStatusSchema.safeParse` — both named in the D1 acceptance-gate grep).
+R6: this step is the actual deletion payoff — net-negative, size M per the
+parent issue's own estimate.
 
 ### 8.5 Test plan
 
@@ -1197,20 +1300,24 @@ the ones step 1 extends (R7 — no new suites):
   `closeRunningTaskGroupsForStreams` caller; extend alongside
   `RestartRepair.vitest.ts` for the desktop-specific classification path.
 - `src/test-kernel/traceViewer/replayTrace.vitest.ts` — pins
-  `toStreamLifecycleStatus`'s `GROUP_END`-row read (§8.1); once the boundary
-  normalizes at load time (step 1) this suite's legacy-string fixtures move
-  from "the format `replayTrace` must tolerate" to "the format
-  `StreamLogStore` must tolerate", surfaced through `StreamLogStore` fixtures
-  instead of hand-built raw entries — flag this suite for a follow-up rebase
-  onto the boundary once `logSlice.ts`/`replayTrace.ts`'s own fallbacks are
-  deleted (§8.3), not in step 1 itself.
+  `toStreamLifecycleStatus`'s `GROUP_END`-row read (§8.1). Unlike
+  `logSlice.ts`'s in-app fallback, `replayTrace.ts`'s legacy-string fixtures
+  do **not** move to `StreamLogStore` fixtures or get deleted once the
+  `StreamLogStore` boundary lands — the trace-viewer is §8.3's second,
+  independent boundary and keeps tolerating both vocabularies permanently
+  (exported trace files never pass through `StreamLogStore`). Step 1 only
+  needs this suite unchanged; add cases here (or in a trace-viewer follow-up)
+  once the trace-viewer's own per-entry `GROUP_START`/`GROUP_END`
+  normalization (§8.3, flagged as future work) lands, not before.
 - `src/test-kernel/progressView/LogDeltaTextDeltas.vitest.ts` — the one
   existing suite that drives `logSlice.ts`'s exported `logHandlers` directly
   (`:9`), today only over `STREAM_LOG_ENTRY_TYPES.LOG` fixtures; it does not
   yet exercise the `GROUP_END` handler (§8.1's other read site) — step 1 adds
   a `GROUP_END` case here (still R7: an existing suite gains a case, not a
-  new file) asserting `isTaskGroupStatus`'s fallback is unreachable once the
-  boundary normalizes.
+  new file) asserting `isTaskGroupStatus`'s fallback is unreachable for
+  entries sourced from `StreamLogStore` once the boundary normalizes — it
+  stays reachable (and still needs coverage) for entries the standalone
+  trace-viewer forwards unnormalized, per §8.3's second boundary.
 - `src/test-kernel/progressView/TaskGroupListIndex.vitest.ts` — covers
   `TaskGroupList`'s rendering of hand-built `TaskGroup[]` fixtures (not
   `logSlice.ts`'s projection itself); listed for step 2 below since it
