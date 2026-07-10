@@ -902,10 +902,10 @@ describe('CLI multi-agent presets', () => {
         expect(shutdownSettled).toBe(false);
       } finally {
         releaseRestoration();
+        updateSpy.mockRestore();
       }
 
       await Promise.all([operation, shutdown]);
-      updateSpy.mockRestore();
 
       expect({
         workflow: workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS),
