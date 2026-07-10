@@ -35,9 +35,9 @@ const DELIVERY_TAG_ALTERNATION = DELIVERY_TAG_NAMES.join('|');
 // the vocabulary is a shared, growing const). Every producer
 // (deliveryEnvelope.ts / subagentResults.ts / sanitizeTag.ts) only ever
 // follows a tag name with whitespace (attributes), `>` (bare open, e.g.
-// `<execution-activity>`), or `/` (self-closing `... />`), so anchor on that
-// explicit delimiter set instead.
-const TAG_NAME_END = '(?=[\\s/>])';
+// `<execution-activity>`), or the exact `/>` self-closing delimiter, so anchor
+// on those delimiters instead of accepting any slash continuation.
+const TAG_NAME_END = '(?=[\\s>]|/>)';
 const SUBAGENT_TAG_RE = new RegExp(
   `^<(${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}`,
 );
