@@ -8,8 +8,15 @@
  * Keep this interface narrow — add methods only when a setup tool needs them.
  */
 
-import { SupabaseClient } from '@auth/SupabaseClient';
+// Local imports
 import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
+import { platform as currentPlatform } from '@platform/platform';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import {
+  fetchRelayTokenStatus,
+  getConfiguredRelayToken,
+} from '@auth/relayToken';
+import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
 import {
   API_PROVIDERS,
   apiKeyExists,
@@ -17,9 +24,7 @@ import {
   hasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
-import { platform as currentPlatform } from '@platform/platform';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
-import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
 
 /** Per-provider API key surface. */
 export interface SetupSecretsAdapter {
@@ -132,6 +137,12 @@ async function defaultAuthStatus(): Promise<{
   email?: string;
   tier?: string;
 }> {
+  const relayToken = getConfiguredRelayToken();
+  if (relayToken) {
+    // Prime the relay-status cache that isAuthenticated() consults below.
+    await fetchRelayTokenStatus(relayToken);
+  }
+
   const authenticated = await SupabaseClient.isAuthenticated();
   if (!authenticated) return { authenticated: false };
 
