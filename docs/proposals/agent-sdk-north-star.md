@@ -21,7 +21,7 @@ The **run API is already SDK-shaped** — the north-star test fails at the
 _environment boundary_, not the run surface:
 
 - `runAgent` is 92 LoC; `AgentConfigPayload` requires exactly two fields
-  (`agent`, `model`); the `AgentEvent` union (17 arms) is a clean one-way
+  (`agent`, `model`); the `AgentEvent` union (20 arms) is a clean one-way
   typed fact stream; `AgentFlowResult` returns typed outcome + usage.
 - The landed session-runtime surface — `SessionHandle`, `session.events`
   (`SessionEventHub`), `session.interactions` (`HostInteractions`),
