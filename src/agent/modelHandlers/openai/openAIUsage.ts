@@ -136,6 +136,8 @@ export function normalizeOpenAIUsage(
           outputTokens: usage.completion_tokens ?? 0,
           cachedTokens,
           cacheMissTokens,
+          cacheCreationTokens:
+            usage.prompt_tokens_details?.cache_write_tokens ?? 0,
           reasoningTokens:
             usage.completion_tokens_details?.reasoning_tokens ?? 0,
         };

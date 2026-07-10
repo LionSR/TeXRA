@@ -192,6 +192,39 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     assert.equal(usage.cacheMissInputTokens, 30);
   });
 
+  it('maps prompt_tokens_details.cache_write_tokens to cacheCreationTokens', () => {
+    const handler = new ModelHandlerDeepSeek(buildConfig());
+
+    const usage = handler.normalizeUsage(
+      {
+        prompt_tokens: 100,
+        completion_tokens: 20,
+        total_tokens: 120,
+        prompt_tokens_details: { cached_tokens: 10, cache_write_tokens: 15 },
+      } as any,
+      2500,
+    );
+
+    assert.equal(usage.cacheCreationTokens, 15);
+    assert.equal(usage.cachedInputTokens, 10);
+  });
+
+  it('defaults cacheCreationTokens to undefined when cache_write_tokens is absent', () => {
+    const handler = new ModelHandlerDeepSeek(buildConfig());
+
+    const usage = handler.normalizeUsage(
+      {
+        prompt_tokens: 100,
+        completion_tokens: 20,
+        total_tokens: 120,
+        prompt_tokens_details: { cached_tokens: 0 },
+      } as any,
+      2500,
+    );
+
+    assert.equal(usage.cacheCreationTokens, undefined);
+  });
+
   it('passes thinking toggle and low effort in OpenAI wire format', async () => {
     const handler = new ModelHandlerDeepSeek(
       buildConfig({
