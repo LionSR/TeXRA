@@ -808,9 +808,18 @@ describe('CLI multi-agent presets', () => {
       ],
     });
 
-    await withCliMultiAgentPresetVisibility(plan, () =>
-      lifecycle.runShutdown(),
-    );
+    let markOperationStarted!: () => void;
+    const operationStarted = new Promise<void>((resolve) => {
+      markOperationStarted = resolve;
+    });
+    const pending = withCliMultiAgentPresetVisibility(plan, async () => {
+      markOperationStarted();
+      await new Promise<never>(() => undefined);
+    });
+    void pending.catch(() => undefined);
+
+    await operationStarted;
+    await lifecycle.runShutdown();
 
     expect({
       workflow: workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS),
