@@ -7,6 +7,7 @@ import type { StreamLifecycleStatus, StreamTabId } from '@shared/schemas';
 
 import { resolveChildControlDisplayTargets } from './childControls';
 import { activeStreamScope } from './streamViews';
+import type { ChildStreamEntries } from './childExecutions';
 import type { StreamSlice } from './cliState';
 
 export type FocusedChildFollowUpRoute =
@@ -76,12 +77,14 @@ export function focusedChildInputDisabledMessage(init: {
 }
 
 export function stoppedFocusedChildFollowUpMessage(init: {
+  readonly childStreamEntries: ChildStreamEntries;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): string {
   const controls = resolveChildControlDisplayTargets({
     activeStreamId: init.streamId,
+    childStreamEntries: init.childStreamEntries,
     parentStream: init.parentStream,
     streams: init.streams,
   });

@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI state
 import {
+  buildChildStreamEntries,
+  type ChildStreamEntryRow,
+} from '@test/support/childStreamEntries';
+import {
   compactPickerOverflowText,
   computePickerListLayout,
   computeTaskDetailLayout,
@@ -39,7 +43,11 @@ import {
   resolveChildControlDisplayTargets,
   resolveChildControlStreamTarget,
 } from '@cli/chat/tui/state/childControls';
-import { visibleSubagentRows } from '@cli/chat/tui/state/childExecutions';
+import {
+  activeSubagentsFor,
+  visibleSubagentRows,
+  type ChildStreamEntries,
+} from '@cli/chat/tui/state/childExecutions';
 import { streamDisplayLabel } from '@cli/chat/tui/state/streamViews';
 import {
   NO_BYPASS,
@@ -52,6 +60,7 @@ import {
   STREAM_STATUS,
   TOOL_USE_STATUS,
   type NormalizedToolUse,
+  type StreamTabId,
 } from '@shared/schemas';
 
 function tail(stdout: string, stderr = ''): ProcessOutputTail {
@@ -80,11 +89,7 @@ function toolUse(
 
 function slice(
   overrides: Partial<StreamSlice> = {},
-): Pick<
-  StreamSlice,
-  'activeProcesses' | 'activeSubagents' | 'childStreams' | 'processOutput'
-> &
-  StreamSlice {
+): Pick<StreamSlice, 'activeProcesses' | 'processOutput'> & StreamSlice {
   return {
     streamId: 'root',
     category: undefined,
@@ -98,9 +103,7 @@ function slice(
     entries: [],
     queuedFollowUps: 0,
     queuedFollowUpMessages: [],
-    activeSubagents: [],
     activeProcesses: [],
-    childStreams: [],
     todos: [],
     plan: null,
     processOutput: new Map(),
@@ -109,38 +112,93 @@ function slice(
   };
 }
 
+/** Build a `{ id: StreamSlice }` streams map entry carrying just the status
+ *  each `ChildStreamEntryRow` used to embed directly — the new selectors
+ *  read status from the child's own `StreamSlice`, not the roster row. */
+function childStatusStreams(
+  rows: readonly ChildStreamEntryRow[],
+): ReadonlyMap<StreamTabId, StreamSlice> {
+  return new Map(
+    rows.map((row) => [
+      row.childStreamId,
+      slice({
+        streamId: row.childStreamId,
+        // Test fixtures reuse the loosely-typed `ActiveChildInfo.status`
+        // strings (e.g. legacy 'stopped'/'initializing') that
+        // `StreamLifecycleStatusSchema` accepts and normalizes at runtime,
+        // but the static `StreamLifecycleStatus` type doesn't include them.
+        status: row.status as StreamSlice['status'],
+      }),
+    ]),
+  );
+}
+
+/** Build a `ChildStreamEntries` map for `parentStreamId` plus a merged
+ *  `streams` map (parent + each child's own status slice, with `extraStreams`
+ *  overlaid last so a test's own per-child slice overrides win). */
+function childFixture(
+  parentStreamId: StreamTabId,
+  init: {
+    readonly retained?: readonly ChildStreamEntryRow[];
+    readonly activeOnly?: readonly ChildStreamEntryRow[];
+    readonly parentSlice?: StreamSlice;
+    readonly extraStreams?: ReadonlyMap<StreamTabId, StreamSlice>;
+  },
+): {
+  readonly entries: ChildStreamEntries;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+} {
+  const rows = [...(init.retained ?? []), ...(init.activeOnly ?? [])];
+  const streams = new Map<StreamTabId, StreamSlice>([
+    [parentStreamId, init.parentSlice ?? slice({ streamId: parentStreamId })],
+    ...childStatusStreams(rows),
+    ...(init.extraStreams ?? []),
+  ]);
+  return {
+    entries: buildChildStreamEntries({
+      parentStreamId,
+      retained: init.retained,
+      activeOnly: init.activeOnly,
+    }),
+    streams,
+  };
+}
+
 describe('CLI child execution controls', () => {
   it('maps Alt-number focus jumps to visible descendant streams', () => {
-    const root = slice({
-      // Only subagents own a stream tab, so both live-only ("agent-1", still in
-      // activeSubagents but not yet retained in childStreams) and
-      // retained ("agent-2") subagent rows are valid focus-jump targets —
-      // background processes never are.
-      activeSubagents: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'critic',
-          childStreamId: 'child-a',
-        },
-        {
-          kind: 'subagent',
-          executionId: 'agent-3',
-          agentName: 'bash',
-          childStreamId: 'child-b',
-        },
-      ],
-      childStreams: [
+    // Only subagents own a stream tab, so a retained row is a valid
+    // focus-jump target only once its own `StreamSlice` exists ("agent-1"
+    // has none yet and is skipped); an active-only row with an edge is
+    // reachable once its slice exists ("agent-3") — background processes
+    // never are.
+    const entries = buildChildStreamEntries({
+      parentStreamId: 'root' as StreamTabId,
+      retained: [
         {
           kind: 'subagent',
           executionId: 'agent-2',
           agentName: 'critic',
-          childStreamId: 'child-c',
+          childStreamId: 'child-c' as StreamTabId,
+        },
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a' as StreamTabId,
+          active: false,
+        },
+      ],
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-3',
+          agentName: 'bash',
+          childStreamId: 'child-b' as StreamTabId,
         },
       ],
     });
     const streams = new Map<StreamSlice['streamId'], StreamSlice>([
-      ['root', root],
+      ['root', slice({ streamId: 'root' })],
       ['child-b', slice({ streamId: 'child-b' })],
       ['child-c', slice({ streamId: 'child-c' })],
     ]);
@@ -148,6 +206,7 @@ describe('CLI child execution controls', () => {
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: 'root',
+        childStreamEntries: entries,
         parentStream: new Map(),
         streams,
         zeroBasedIndex: 0,
@@ -156,6 +215,7 @@ describe('CLI child execution controls', () => {
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: 'root',
+        childStreamEntries: entries,
         parentStream: new Map(),
         streams,
         zeroBasedIndex: 1,
@@ -164,6 +224,7 @@ describe('CLI child execution controls', () => {
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: 'root',
+        childStreamEntries: entries,
         parentStream: new Map(),
         streams,
         zeroBasedIndex: 2,
@@ -172,16 +233,8 @@ describe('CLI child execution controls', () => {
   });
 
   it('maps Alt-number focus jumps through the focused child stream tree', () => {
-    const root = slice({
-      activeSubagents: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'critic',
-          childStreamId: 'child-a',
-        },
-      ],
-      childStreams: [
+    const { entries } = childFixture('root', {
+      retained: [
         {
           kind: 'subagent',
           executionId: 'agent-2',
@@ -189,9 +242,17 @@ describe('CLI child execution controls', () => {
           childStreamId: 'child-b',
         },
       ],
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+        },
+      ],
     });
     const streams = new Map<StreamSlice['streamId'], StreamSlice>([
-      ['root', root],
+      ['root', slice({ streamId: 'root' })],
       ['child-a', slice({ streamId: 'child-a' })],
       ['child-b', slice({ streamId: 'child-b' })],
     ]);
@@ -206,6 +267,7 @@ describe('CLI child execution controls', () => {
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: 'child-a',
+        childStreamEntries: entries,
         parentStream,
         streams,
         zeroBasedIndex: 0,
@@ -214,6 +276,7 @@ describe('CLI child execution controls', () => {
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: 'child-a',
+        childStreamEntries: entries,
         parentStream,
         streams,
         zeroBasedIndex: 1,
@@ -222,27 +285,7 @@ describe('CLI child execution controls', () => {
   });
 
   it('builds subagent and process picker items with stable labels and tails', () => {
-    const state = slice({
-      activeSubagents: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'critic',
-          childStreamId: 'child-a',
-          status: 'running',
-          elapsed: '12s',
-        },
-      ],
-      childStreams: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-2',
-          agentName: 'reviewer',
-          childStreamId: 'child-b',
-          status: 'stopped',
-          elapsed: '20s',
-        },
-      ],
+    const parentSlice = slice({
       activeProcesses: [
         {
           kind: 'process',
@@ -254,8 +297,34 @@ describe('CLI child execution controls', () => {
       ],
       processOutput: new Map([['proc-1', tail('first\nsecond\n', 'warning')]]),
     });
+    const { entries, streams } = childFixture('root', {
+      parentSlice,
+      retained: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-2',
+          agentName: 'reviewer',
+          childStreamId: 'child-b',
+          status: 'stopped',
+          elapsed: '20s',
+          active: false,
+        },
+      ],
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+          status: 'running',
+          elapsed: '12s',
+        },
+      ],
+    });
 
-    expect(buildChildControlItems(state, 'subagents')).toMatchObject([
+    expect(
+      buildChildControlItems('root', entries, streams, 'subagents'),
+    ).toMatchObject([
       {
         executionId: 'agent-2',
         childStreamId: 'child-b',
@@ -277,7 +346,9 @@ describe('CLI child execution controls', () => {
         tailLines: [],
       },
     ]);
-    expect(buildChildControlItems(state, 'tasks')).toMatchObject([
+    expect(
+      buildChildControlItems('root', entries, streams, 'tasks'),
+    ).toMatchObject([
       {
         executionId: 'agent-2',
         childStreamId: 'child-b',
@@ -308,18 +379,7 @@ describe('CLI child execution controls', () => {
   });
 
   it('derives live elapsed text for running child executions', () => {
-    const state = slice({
-      activeSubagents: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'critic',
-          childStreamId: 'child-a',
-          status: 'running',
-          startedAt: 1_000,
-          elapsed: '1s',
-        },
-      ],
+    const parentSlice = slice({
       activeProcesses: [
         {
           kind: 'process',
@@ -331,9 +391,23 @@ describe('CLI child execution controls', () => {
         },
       ],
     });
+    const { entries, streams } = childFixture('root', {
+      parentSlice,
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+          status: 'running',
+          startedAt: 1_000,
+          elapsed: '1s',
+        },
+      ],
+    });
 
     expect(
-      buildChildControlItems(state, 'subagents', new Map(), 62_000),
+      buildChildControlItems('root', entries, streams, 'subagents', 62_000),
     ).toMatchObject([
       {
         executionId: 'agent-1',
@@ -341,7 +415,7 @@ describe('CLI child execution controls', () => {
         elapsed: '1m 1s',
       },
     ]);
-    expect(childElapsed(state.activeProcesses[0], 62_000)).toBe('1s');
+    expect(childElapsed(parentSlice.activeProcesses[0], 62_000)).toBe('1s');
     expect(
       childElapsed(
         { startedAt: 0, status: STREAM_STATUS.RUNNING, elapsed: '1s' },
@@ -351,17 +425,7 @@ describe('CLI child execution controls', () => {
   });
 
   it('uses CLI-facing labels in picker descriptions', () => {
-    const state = slice({
-      activeSubagents: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'review',
-          childStreamId: 'child-a',
-          status: STREAM_STATUS.WAITING,
-          elapsed: '20s',
-        },
-      ],
+    const parentSlice = slice({
       activeProcesses: [
         {
           kind: 'process',
@@ -373,15 +437,32 @@ describe('CLI child execution controls', () => {
       ],
       processOutput: new Map([['proc-1', tail('last line')]]),
     });
+    const { entries, streams } = childFixture('root', {
+      parentSlice,
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'review',
+          childStreamId: 'child-a',
+          status: STREAM_STATUS.WAITING,
+          elapsed: '20s',
+        },
+      ],
+    });
 
-    expect(buildChildControlItems(state, 'subagents')).toMatchObject([
+    expect(
+      buildChildControlItems('root', entries, streams, 'subagents'),
+    ).toMatchObject([
       {
         executionId: 'agent-1',
         description: 'waiting for you · 20s',
         statusLabel: 'waiting for you',
       },
     ]);
-    expect(buildChildControlItems(state, 'tasks')).toMatchObject([
+    expect(
+      buildChildControlItems('root', entries, streams, 'tasks'),
+    ).toMatchObject([
       {
         executionId: 'agent-1',
         description: 'waiting for you · 20s',
@@ -396,64 +477,92 @@ describe('CLI child execution controls', () => {
   });
 
   it('keys live child elapsed timers by active execution identity', () => {
-    expect(liveChildExecutionElapsedKey(undefined)).toBeUndefined();
+    expect(liveChildExecutionElapsedKey([], [])).toBeUndefined();
 
-    const state = slice({
-      activeSubagents: [
-        {
-          kind: 'subagent',
-          childStreamId: 'agent-2-stream',
-          executionId: 'agent-2',
-          agentName: 'critic',
-          status: 'running',
-          startedAt: 2_000,
-        },
-        {
-          kind: 'subagent',
-          childStreamId: 'agent-1-stream',
-          executionId: 'agent-1',
-          agentName: 'reviewer',
-          status: 'initializing',
-          startedAt: 1_000,
-        },
-      ],
-      activeProcesses: [
-        {
-          kind: 'process',
-          executionId: 'proc-1',
-          agentName: 'latexmk',
-          status: 'waiting',
-          startedAt: 500,
-          elapsed: '1s',
-        },
-      ],
-    });
+    const activeSubagents = activeSubagentsFor(
+      'root',
+      buildChildStreamEntries({
+        parentStreamId: 'root',
+        activeOnly: [
+          {
+            kind: 'subagent',
+            childStreamId: 'agent-2-stream',
+            executionId: 'agent-2',
+            agentName: 'critic',
+            status: 'running',
+            startedAt: 2_000,
+          },
+          {
+            kind: 'subagent',
+            childStreamId: 'agent-1-stream',
+            executionId: 'agent-1',
+            agentName: 'reviewer',
+            status: 'initializing',
+            startedAt: 1_000,
+          },
+        ],
+      }),
+      new Map([
+        [
+          'agent-2-stream',
+          slice({ streamId: 'agent-2-stream', status: 'running' }),
+        ],
+        [
+          'agent-1-stream',
+          slice({
+            streamId: 'agent-1-stream',
+            status: 'initializing' as StreamSlice['status'],
+          }),
+        ],
+      ]),
+    );
+    const activeProcesses = [
+      {
+        kind: 'process' as const,
+        executionId: 'proc-1',
+        agentName: 'latexmk',
+        status: 'waiting',
+        startedAt: 500,
+        elapsed: '1s',
+      },
+    ];
 
-    expect(liveChildExecutionElapsedKey(state)).toBe(
+    expect(liveChildExecutionElapsedKey(activeSubagents, activeProcesses)).toBe(
       'agent-1:1000,agent-2:2000',
     );
     expect(
       liveChildExecutionElapsedKey(
-        slice({
-          activeSubagents: [
-            {
-              kind: 'subagent',
-              childStreamId: 'agent-1-stream',
-              executionId: 'agent-1',
-              agentName: 'critic',
-              status: 'completed',
-              startedAt: 1_000,
-              elapsed: '1s',
-            },
-          ],
-        }),
+        activeSubagentsFor(
+          'root',
+          buildChildStreamEntries({
+            parentStreamId: 'root',
+            activeOnly: [
+              {
+                kind: 'subagent',
+                childStreamId: 'agent-1-stream',
+                executionId: 'agent-1',
+                agentName: 'critic',
+                status: 'completed',
+                startedAt: 1_000,
+                elapsed: '1s',
+              },
+            ],
+          }),
+          new Map([
+            [
+              'agent-1-stream',
+              slice({ streamId: 'agent-1-stream', status: 'completed' }),
+            ],
+          ]),
+        ),
+        [],
       ),
     ).toBeUndefined();
   });
 
   it('uses stream descriptions as visible task commands', () => {
-    const state = slice({
-      activeSubagents: [
+    const { entries, streams } = childFixture('root', {
+      activeOnly: [
         {
           kind: 'subagent',
           executionId: 'agent-1',
@@ -462,25 +571,29 @@ describe('CLI child execution controls', () => {
           status: 'running',
         },
       ],
+      extraStreams: new Map([
+        [
+          'child-a',
+          slice({
+            streamId: 'child-a',
+            status: 'running',
+            description: 'timeout 1800 texra run paper',
+            entries: [
+              {
+                id: 'entry-1',
+                role: 'assistant',
+                text: 'line one\nline two',
+                finalized: true,
+              },
+            ],
+          }),
+        ],
+      ]),
     });
-    const streams = new Map([
-      [
-        'child-a',
-        slice({
-          description: 'timeout 1800 texra run paper',
-          entries: [
-            {
-              id: 'entry-1',
-              role: 'assistant',
-              text: 'line one\nline two',
-              finalized: true,
-            },
-          ],
-        }),
-      ],
-    ]);
 
-    expect(buildChildControlItems(state, 'tasks', streams)).toMatchObject([
+    expect(
+      buildChildControlItems('root', entries, streams, 'tasks'),
+    ).toMatchObject([
       {
         executionId: 'agent-1',
         label: 'bash',
@@ -491,8 +604,8 @@ describe('CLI child execution controls', () => {
   });
 
   it('includes tool and process transcript rows in task details', () => {
-    const state = slice({
-      activeSubagents: [
+    const { entries, streams } = childFixture('root', {
+      activeOnly: [
         {
           kind: 'subagent',
           executionId: 'agent-1',
@@ -501,45 +614,49 @@ describe('CLI child execution controls', () => {
           status: 'completed',
         },
       ],
-    });
-    const streams = new Map([
-      [
-        'child-a',
-        slice({
-          entries: [
-            {
-              id: 'tool-1',
-              role: 'tool',
-              text: '',
-              finalized: true,
-              toolUse: toolUse(
-                'bash',
-                { command: 'pnpm test' },
-                {
-                  headerSummary: 'pnpm test',
-                  outputText: 'ok\nsecond line',
-                },
-              ),
-            },
-            {
-              id: 'process-1',
-              role: 'process',
-              text: '',
-              finalized: true,
-              process: {
-                executionId: 'proc-1',
-                title: 'latexmk',
-                status: 'completed',
-                isError: false,
-                tailLines: ['built pdf'],
+      extraStreams: new Map([
+        [
+          'child-a',
+          slice({
+            streamId: 'child-a',
+            status: 'completed',
+            entries: [
+              {
+                id: 'tool-1',
+                role: 'tool',
+                text: '',
+                finalized: true,
+                toolUse: toolUse(
+                  'bash',
+                  { command: 'pnpm test' },
+                  {
+                    headerSummary: 'pnpm test',
+                    outputText: 'ok\nsecond line',
+                  },
+                ),
               },
-            },
-          ],
-        }),
-      ],
-    ]);
+              {
+                id: 'process-1',
+                role: 'process',
+                text: '',
+                finalized: true,
+                process: {
+                  executionId: 'proc-1',
+                  title: 'latexmk',
+                  status: 'completed',
+                  isError: false,
+                  tailLines: ['built pdf'],
+                },
+              },
+            ],
+          }),
+        ],
+      ]),
+    });
 
-    expect(buildChildControlItems(state, 'tasks', streams)).toMatchObject([
+    expect(
+      buildChildControlItems('root', entries, streams, 'tasks'),
+    ).toMatchObject([
       {
         executionId: 'agent-1',
         tailLines: [
@@ -554,8 +671,16 @@ describe('CLI child execution controls', () => {
   });
 
   it('keeps retained subagent streams selectable after they leave the active list', () => {
-    const state = slice({
-      activeSubagents: [
+    const { entries, streams } = childFixture('root', {
+      retained: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+          status: 'completed',
+          active: false,
+        },
         {
           kind: 'subagent',
           executionId: 'agent-2',
@@ -564,25 +689,11 @@ describe('CLI child execution controls', () => {
           status: 'running',
         },
       ],
-      childStreams: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'critic',
-          childStreamId: 'child-a',
-          status: 'completed',
-        },
-        {
-          kind: 'subagent',
-          executionId: 'agent-2',
-          agentName: 'polisher',
-          childStreamId: 'child-b',
-          status: 'waiting',
-        },
-      ],
     });
 
-    expect(buildChildControlItems(state, 'subagents')).toMatchObject([
+    expect(
+      buildChildControlItems('root', entries, streams, 'subagents'),
+    ).toMatchObject([
       {
         executionId: 'agent-1',
         childStreamId: 'child-a',
@@ -603,8 +714,16 @@ describe('CLI child execution controls', () => {
   });
 
   it('keeps retained subagent streams visible in the side-panel row model', () => {
-    const state = slice({
-      activeSubagents: [
+    const { entries, streams } = childFixture('root', {
+      retained: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+          status: 'completed',
+          active: false,
+        },
         {
           kind: 'subagent',
           executionId: 'agent-2',
@@ -613,25 +732,9 @@ describe('CLI child execution controls', () => {
           status: 'running',
         },
       ],
-      childStreams: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'critic',
-          childStreamId: 'child-a',
-          status: 'completed',
-        },
-        {
-          kind: 'subagent',
-          executionId: 'agent-2',
-          agentName: 'polisher',
-          childStreamId: 'child-b',
-          status: 'waiting',
-        },
-      ],
     });
 
-    expect(visibleSubagentRows(state)).toMatchObject([
+    expect(visibleSubagentRows('root', entries, streams)).toMatchObject([
       {
         kind: 'subagent',
         executionId: 'agent-1',
@@ -645,12 +748,20 @@ describe('CLI child execution controls', () => {
         status: 'running',
       },
     ]);
-    expect(hasChildControlItems(state, 'tasks')).toBe(true);
+    expect(hasChildControlItems('root', entries, streams, 'tasks')).toBe(true);
   });
 
   it('keeps stopped subagents in their retained task order', () => {
-    const state = slice({
-      activeSubagents: [
+    const { entries, streams } = childFixture('root', {
+      retained: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+          status: 'stopped',
+          active: false,
+        },
         {
           kind: 'subagent',
           executionId: 'agent-2',
@@ -659,25 +770,11 @@ describe('CLI child execution controls', () => {
           status: 'running',
         },
       ],
-      childStreams: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'critic',
-          childStreamId: 'child-a',
-          status: 'stopped',
-        },
-        {
-          kind: 'subagent',
-          executionId: 'agent-2',
-          agentName: 'polisher',
-          childStreamId: 'child-b',
-          status: 'waiting',
-        },
-      ],
     });
 
-    expect(buildChildControlItems(state, 'tasks')).toMatchObject([
+    expect(
+      buildChildControlItems('root', entries, streams, 'tasks'),
+    ).toMatchObject([
       {
         kind: 'subagent',
         executionId: 'agent-1',
@@ -698,25 +795,25 @@ describe('CLI child execution controls', () => {
   });
 
   it('opens the child side panel when only retained subagent streams remain', () => {
-    const state = slice({
-      childStreams: [
+    const { entries, streams } = childFixture('root', {
+      retained: [
         {
           kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: 'child-a',
           status: 'completed',
+          active: false,
         },
       ],
     });
 
-    expect(hasChildControlItems(state, 'tasks')).toBe(true);
+    expect(hasChildControlItems('root', entries, streams, 'tasks')).toBe(true);
   });
 
   it('falls back to the parent subagent list when the focused child is a leaf', () => {
-    const parent = slice({
-      streamId: 'main',
-      activeSubagents: [
+    const { entries, streams } = childFixture('main', {
+      activeOnly: [
         {
           kind: 'subagent',
           executionId: 'agent-1',
@@ -726,21 +823,20 @@ describe('CLI child execution controls', () => {
         },
       ],
     });
-    const child = slice({ streamId: 'review-stream' });
     const target = resolveChildControlStreamTarget({
       activeStreamId: 'review-stream',
+      childStreamEntries: entries,
       mode: 'subagents',
       parentStream: new Map([['review-stream', 'main']]),
-      streams: new Map([
-        ['main', parent],
-        ['review-stream', child],
-      ]),
+      streams,
     });
 
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('review-stream');
     expect(target.hasItems).toBe(true);
-    expect(buildChildControlItems(target.slice!, 'subagents')).toMatchObject([
+    expect(
+      buildChildControlItems('main', entries, streams, 'subagents'),
+    ).toMatchObject([
       {
         executionId: 'agent-1',
         childStreamId: 'review-stream',
@@ -751,9 +847,8 @@ describe('CLI child execution controls', () => {
   });
 
   it('labels child-control stream scopes with friendly stream names', () => {
-    const parent = slice({
-      streamId: 'main',
-      activeSubagents: [
+    const { entries, streams } = childFixture('main', {
+      activeOnly: [
         {
           kind: 'subagent',
           executionId: 'agent-1',
@@ -763,15 +858,11 @@ describe('CLI child execution controls', () => {
         },
       ],
     });
-    const child = slice({ streamId: 'review-stream' });
     const parentStream = new Map([['review-stream', 'main']] as const);
-    const streams = new Map([
-      ['main', parent],
-      ['review-stream', child],
-    ] as const);
 
     expect(
       streamDisplayLabel({
+        childStreamEntries: entries,
         parentStream,
         streamId: 'main',
         streams,
@@ -779,6 +870,7 @@ describe('CLI child execution controls', () => {
     ).toBe('main');
     expect(
       streamDisplayLabel({
+        childStreamEntries: entries,
         parentStream,
         streamId: 'review-stream',
         streams,
@@ -787,9 +879,8 @@ describe('CLI child execution controls', () => {
   });
 
   it('resolves child-control display targets with labels and availability', () => {
-    const parent = slice({
-      streamId: 'main',
-      activeSubagents: [
+    const { entries, streams } = childFixture('main', {
+      activeOnly: [
         {
           kind: 'subagent',
           executionId: 'agent-1',
@@ -799,15 +890,12 @@ describe('CLI child execution controls', () => {
         },
       ],
     });
-    const child = slice({ streamId: 'review-stream' });
     const parentStream = new Map([['review-stream', 'main']] as const);
     const targets = resolveChildControlDisplayTargets({
       activeStreamId: 'review-stream',
+      childStreamEntries: entries,
       parentStream,
-      streams: new Map([
-        ['main', parent],
-        ['review-stream', child],
-      ] as const),
+      streams,
     });
 
     expect(targets.subagents).toMatchObject({
@@ -827,9 +915,8 @@ describe('CLI child execution controls', () => {
   });
 
   it('keeps subagent controls on the focused child when it has descendants', () => {
-    const child = slice({
-      streamId: 'review-stream',
-      activeSubagents: [
+    const { entries, streams } = childFixture('review-stream', {
+      activeOnly: [
         {
           kind: 'subagent',
           executionId: 'agent-2',
@@ -841,14 +928,17 @@ describe('CLI child execution controls', () => {
     });
     const target = resolveChildControlStreamTarget({
       activeStreamId: 'review-stream',
+      childStreamEntries: entries,
       mode: 'subagents',
       parentStream: new Map([['review-stream', 'main']]),
-      streams: new Map([['review-stream', child]]),
+      streams,
     });
 
     expect(target.streamId).toBe('review-stream');
     expect(target.hasItems).toBe(true);
-    expect(buildChildControlItems(target.slice!, 'subagents')).toMatchObject([
+    expect(
+      buildChildControlItems('review-stream', entries, streams, 'subagents'),
+    ).toMatchObject([
       {
         executionId: 'agent-2',
         childStreamId: 'detail-stream',
@@ -862,6 +952,7 @@ describe('CLI child execution controls', () => {
     const child = slice({ streamId: 'review-stream' });
     const target = resolveChildControlStreamTarget({
       activeStreamId: 'review-stream',
+      childStreamEntries: new Map(),
       mode: 'subagents',
       parentStream: new Map([['review-stream', 'main']]),
       streams: new Map([
@@ -876,9 +967,8 @@ describe('CLI child execution controls', () => {
   });
 
   it('falls back to the nearest ancestor subagent list when a focused grandchild is a leaf', () => {
-    const main = slice({
-      streamId: 'main',
-      activeSubagents: [
+    const { entries, streams: mainFixtureStreams } = childFixture('main', {
+      activeOnly: [
         {
           kind: 'subagent',
           executionId: 'agent-1',
@@ -888,26 +978,28 @@ describe('CLI child execution controls', () => {
         },
       ],
     });
-    const child = slice({ streamId: 'review-stream' });
-    const grandchild = slice({ streamId: 'detail-stream' });
+    const streams = new Map([
+      ...mainFixtureStreams,
+      ['review-stream', slice({ streamId: 'review-stream' })],
+      ['detail-stream', slice({ streamId: 'detail-stream' })],
+    ]);
     const target = resolveChildControlStreamTarget({
       activeStreamId: 'detail-stream',
+      childStreamEntries: entries,
       mode: 'subagents',
       parentStream: new Map([
         ['review-stream', 'main'],
         ['detail-stream', 'review-stream'],
       ]),
-      streams: new Map([
-        ['main', main],
-        ['review-stream', child],
-        ['detail-stream', grandchild],
-      ]),
+      streams,
     });
 
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('detail-stream');
     expect(target.hasItems).toBe(true);
-    expect(buildChildControlItems(target.slice!, 'subagents')).toMatchObject([
+    expect(
+      buildChildControlItems('main', entries, streams, 'subagents'),
+    ).toMatchObject([
       {
         executionId: 'agent-1',
         childStreamId: 'review-stream',
@@ -918,35 +1010,35 @@ describe('CLI child execution controls', () => {
   });
 
   it('falls back to the parent task list when the focused child is a leaf', () => {
-    const child = slice({ streamId: 'review-stream' });
+    const { entries, streams: mainFixtureStreams } = childFixture('main', {
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'review',
+          childStreamId: 'review-stream',
+          status: 'running',
+        },
+      ],
+    });
+    const streams = new Map([
+      ...mainFixtureStreams,
+      ['review-stream', slice({ streamId: 'review-stream' })],
+    ]);
     const target = resolveChildControlStreamTarget({
       activeStreamId: 'review-stream',
+      childStreamEntries: entries,
       mode: 'tasks',
       parentStream: new Map([['review-stream', 'main']]),
-      streams: new Map([
-        [
-          'main',
-          slice({
-            streamId: 'main',
-            activeSubagents: [
-              {
-                kind: 'subagent',
-                executionId: 'agent-1',
-                agentName: 'review',
-                childStreamId: 'review-stream',
-                status: 'running',
-              },
-            ],
-          }),
-        ],
-        ['review-stream', child],
-      ]),
+      streams,
     });
 
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('review-stream');
     expect(target.hasItems).toBe(true);
-    expect(buildChildControlItems(target.slice!, 'tasks')).toMatchObject([
+    expect(
+      buildChildControlItems('main', entries, streams, 'tasks'),
+    ).toMatchObject([
       {
         executionId: 'agent-1',
         childStreamId: 'review-stream',
@@ -957,35 +1049,32 @@ describe('CLI child execution controls', () => {
   });
 
   it('falls back to retained parent task rows when only stopped child streams remain', () => {
-    const child = slice({ streamId: 'review-stream' });
+    const { entries, streams } = childFixture('main', {
+      retained: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'review',
+          childStreamId: 'review-stream',
+          status: 'stopped',
+          active: false,
+        },
+      ],
+    });
     const target = resolveChildControlStreamTarget({
       activeStreamId: 'review-stream',
+      childStreamEntries: entries,
       mode: 'tasks',
       parentStream: new Map([['review-stream', 'main']]),
-      streams: new Map([
-        [
-          'main',
-          slice({
-            streamId: 'main',
-            childStreams: [
-              {
-                kind: 'subagent',
-                executionId: 'agent-1',
-                agentName: 'review',
-                childStreamId: 'review-stream',
-                status: 'stopped',
-              },
-            ],
-          }),
-        ],
-        ['review-stream', child],
-      ]),
+      streams,
     });
 
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('review-stream');
     expect(target.hasItems).toBe(true);
-    expect(buildChildControlItems(target.slice!, 'tasks')).toMatchObject([
+    expect(
+      buildChildControlItems('main', entries, streams, 'tasks'),
+    ).toMatchObject([
       {
         executionId: 'agent-1',
         childStreamId: 'review-stream',
@@ -1009,34 +1098,32 @@ describe('CLI child execution controls', () => {
         },
       ],
     });
+    const { entries, streams: mainFixtureStreams } = childFixture('main', {
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'review',
+          childStreamId: 'review-stream',
+          status: 'running',
+        },
+      ],
+    });
+    const streams = new Map([...mainFixtureStreams, ['review-stream', child]]);
     const target = resolveChildControlStreamTarget({
       activeStreamId: 'review-stream',
+      childStreamEntries: entries,
       mode: 'tasks',
       parentStream: new Map([['review-stream', 'main']]),
-      streams: new Map([
-        [
-          'main',
-          slice({
-            streamId: 'main',
-            activeSubagents: [
-              {
-                kind: 'subagent',
-                executionId: 'agent-1',
-                agentName: 'review',
-                childStreamId: 'review-stream',
-                status: 'running',
-              },
-            ],
-          }),
-        ],
-        ['review-stream', child],
-      ]),
+      streams,
     });
 
     expect(target.streamId).toBe('review-stream');
     expect(target.slice).toBe(child);
     expect(target.hasItems).toBe(true);
-    expect(buildChildControlItems(target.slice!, 'tasks')).toMatchObject([
+    expect(
+      buildChildControlItems('review-stream', entries, streams, 'tasks'),
+    ).toMatchObject([
       {
         executionId: 'proc-1',
         kind: 'process',
