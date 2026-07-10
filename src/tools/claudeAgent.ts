@@ -55,6 +55,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
@@ -577,7 +578,17 @@ async function launchClaudeAgentSession(
 ): Promise<ToolResult> {
   const config = await getClaudeAgentConfig();
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
-  const workspace = config.buildClaudeAgentWorkspaceOptions(workingDir);
+  // Mirrors codex behavior so subagents can see the project: when the call
+  // is made from inside the workspace, the agent runs in that directory but
+  // is also granted read access to the workspace root so it can inspect
+  // sibling files. Out-of-workspace cwds run isolated (matches codex). The
+  // claude-agent-sdk's `Options` type names these fields `cwd` /
+  // `additionalDirectories`, unlike codex's `workingDirectory`.
+  const resolvedWorkspace = buildAgentWorkspaceOptions(workingDir);
+  const workspace = {
+    cwd: resolvedWorkspace.workingDirectory,
+    additionalDirectories: resolvedWorkspace.additionalDirectories,
+  };
   const env = await config.buildClaudeAgentEnv();
   const agentConfig = config.buildClaudeAgentConfig(input.prompt);
   const preview = truncateWithEllipsis(input.prompt, 60);
