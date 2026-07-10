@@ -114,6 +114,7 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
       tabIndex: SETTINGS_TAB_INDEX.TOOLS,
     },
   );
+  // The panel becomes active before its asynchronous dashboard content renders.
   await launched.page.waitForFunction(
     () => {
       const dialog = document.querySelector(
@@ -122,7 +123,18 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
       const settingsApp = dialog?.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
       if (!root) return false;
-      return root.querySelector('wa-tab-panel[name="tools"][active]') != null;
+      const panel = root.querySelector<HTMLElement>(
+        'wa-tab-panel[name="tools"][active]',
+      );
+      const toolsTab = panel?.querySelector<HTMLElement & { loaded: boolean }>(
+        'tools-tab',
+      );
+      if (!panel || toolsTab?.loaded !== true || !toolsTab.shadowRoot) {
+        return false;
+      }
+      const hasRenderedTools =
+        toolsTab.shadowRoot.querySelectorAll('tool-card').length > 0;
+      return hasRenderedTools && panel.scrollHeight > panel.clientHeight;
     },
     undefined,
     { timeout: 10_000 },
@@ -148,7 +160,25 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
     );
     if (panel) panel.scrollTop = panel.scrollHeight;
   });
-  await launched.page.waitForTimeout(150);
+  await launched.page.waitForFunction(
+    () => {
+      const dialog = document.querySelector(
+        'wa-dialog.desktop-settings-overlay',
+      );
+      const settingsApp = dialog?.querySelector('settings-app');
+      const root = settingsApp?.shadowRoot;
+      const panel = root?.querySelector<HTMLElement>(
+        'wa-tab-panel[name="tools"]',
+      );
+      return (
+        panel != null &&
+        panel.scrollTop > 0 &&
+        panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 1
+      );
+    },
+    undefined,
+    { timeout: 5000 },
+  );
 
   const probeAfter = await readToolsPanelMetrics();
   console.log('tools panel after scroll:', probeAfter);
@@ -161,7 +191,11 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
   expect(probeBefore).not.toBeNull();
   expect(probeAfter).not.toBeNull();
   // Real verification: the panel must be scrollable (content > viewport),
-  // and scrollTop must move when we set it.
+  // start at the top, and reach the bottom when scrolled.
   expect(probeBefore!.scrollHeight).toBeGreaterThan(probeBefore!.clientHeight);
+  expect(probeBefore!.scrollTop).toBe(0);
   expect(probeAfter!.scrollTop).toBeGreaterThan(0);
+  expect(
+    probeAfter!.scrollTop + probeAfter!.clientHeight,
+  ).toBeGreaterThanOrEqual(probeAfter!.scrollHeight - 1);
 });
