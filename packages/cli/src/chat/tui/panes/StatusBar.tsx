@@ -50,7 +50,6 @@ import {
   pendingExitHint as pendingExitHintSignal,
   pendingExitResumeId as pendingExitResumeIdSignal,
   activeStreamId as activeStreamIdSignal,
-  parentStream as parentStreamSignal,
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
   NO_BYPASS,
@@ -61,6 +60,7 @@ import {
 import {
   activeSubagentsFor,
   childStreamEntries as childStreamEntriesSignal,
+  parentStream as parentStreamSignal,
 } from '../state/childExecutions';
 import {
   activeStreamScope,

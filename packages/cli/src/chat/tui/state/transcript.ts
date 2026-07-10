@@ -5,13 +5,13 @@ import { type StreamLifecycleStatus, type StreamTabId } from '@shared/schemas';
 import {
   activeStreamId,
   rootStreamId,
-  parentStream,
   registerCliStateResetHook,
   removeStream,
   patchStream,
   streams,
   type ConversationEntry,
 } from './cliState';
+import { parentStream } from './childExecutions';
 import { activeStreamParentOrSelfId } from './streamViews';
 
 export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;

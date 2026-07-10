@@ -18,8 +18,6 @@ import {
   activeStreamId,
   rootRunStartAvailable,
   rootStreamId,
-  parentStream,
-  setParentStream,
   removeStream,
   resetCliState,
   patchStream,
@@ -55,7 +53,9 @@ import {
   applySubagentRoster,
   childStreamEntries,
   isChildStreamRemoved,
+  parentStream,
   retainedChildStreamsFor,
+  setParentStream,
   visibleSubagentRows,
 } from '@cli/chat/tui/state/childExecutions';
 import {
@@ -3621,5 +3621,18 @@ describe('child-stream ordered transition matrix', () => {
     expect(parentStream.get().get(kid)).toBeUndefined();
     expect(activeRows(parentP)).toEqual([]);
     expect(retainedRows(parentP)).toEqual([]);
+  });
+
+  it('12. identical roster snapshot applied twice is a no-op (no store write)', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow(STREAM_STATUS.RUNNING)]);
+    const entriesAfterFirst = childStreamEntries.get();
+
+    // The runtime resends a fresh array/row object on every poll even when
+    // nothing changed; `rosterRow` below is a distinct object with identical
+    // field values, not `===` to the first call's row.
+    applySubagentRoster(parentP, [rosterRow(STREAM_STATUS.RUNNING)]);
+
+    expect(childStreamEntries.get()).toBe(entriesAfterFirst);
   });
 });
