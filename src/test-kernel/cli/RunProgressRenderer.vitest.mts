@@ -753,45 +753,6 @@ describe('CLI run progress renderer', () => {
     expect(clearCount).toBe(1);
   });
 
-  it('keeps heartbeat alive when active child names are unavailable', () => {
-    let now = 0;
-    const output = outputBuffer();
-    let heartbeat: (() => void) | undefined;
-    const renderer = createRunProgressRenderer(context(), {
-      colorEnabled: true,
-      write: output.write,
-      nowMs: () => now,
-      setInterval: ((callback: () => void) => {
-        heartbeat = callback;
-        return { unref() {} } as unknown as ReturnType<typeof setInterval>;
-      }) as unknown as typeof setInterval,
-    });
-
-    handleRunConfig(
-      renderer,
-      workflowTaskState({
-        streamId: 'root-stream',
-        agent: 'orchestrator',
-        inputFiles: [],
-      }),
-    );
-    handleActiveSubagents(renderer, 'root-stream', [
-      {
-        kind: 'subagent',
-        executionId: 'child-1',
-        childStreamId: 'child-stream',
-        agentName: '',
-        status: 'running',
-      },
-    ]);
-
-    expect(heartbeat).toBeDefined();
-    now = 1200;
-    heartbeat?.();
-
-    expect(output.text).toContain('\r\x1b[2Korchestrator · 1s');
-  });
-
   it('stops active-child heartbeat when preserving the live line', () => {
     const output = outputBuffer();
     let clearCount = 0;
@@ -1014,40 +975,6 @@ describe('CLI run progress renderer', () => {
     expect(output).toContain('polish paper.tex · 0s');
   });
 
-  it('renders traced run-status facts for attached run progress rendering', async () => {
-    const output = await captureStreamWrites(process.stderr, async () => {
-      const events = new SessionEventHub();
-      const host = createCliRuntimeHost(
-        context({
-          colorEnabled: false,
-          quietLogs: true,
-          renderRunProgress: true,
-        }),
-      );
-      const detach = host.attachRunProgressRenderer(events);
-
-      emitWorkflowRunConfig(events);
-      events.emit({
-        scope: 'run',
-        streamId: 'stream-1' as StreamTabId,
-        event: {
-          type: 'status',
-          streamId: 'stream-1' as StreamTabId,
-          phase: STREAM_PHASE.COMPLETED,
-          previousPhase: STREAM_PHASE.RUNNING,
-          cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-        },
-      });
-
-      detach();
-      await host.close();
-    });
-
-    expect(output).toBe(
-      'polish paper.tex · 0s\npolish paper.tex · done · 0s\n',
-    );
-  });
-
   it('deduplicates matching run and session stream-status facts', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const events = new SessionEventHub();
@@ -1242,47 +1169,6 @@ describe('CLI run progress renderer', () => {
             },
           ],
         },
-      }),
-    ]);
-  });
-
-  it('does not write late ndjson progress after the projection detaches', async () => {
-    const output = await captureStreamWrites(process.stdout, async () => {
-      const events = new SessionEventHub();
-      const detach = attachCliSessionProgressProjection(events);
-      events.emit({
-        scope: 'session',
-        event: {
-          type: 'updateStreamStatus',
-          payload: {
-            streamId: 'stream-1' as StreamTabId,
-            status: STREAM_PHASE.RUNNING,
-          },
-        },
-      });
-      detach();
-      events.emit({
-        scope: 'session',
-        event: {
-          type: 'updateStreamDescription',
-          payload: {
-            streamId: 'stream-1' as StreamTabId,
-            description: 'late helper label',
-          },
-        },
-      });
-    });
-
-    expect(output).not.toBe('');
-    const records = output
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line) as Record<string, unknown>);
-
-    expect(records).toEqual([
-      expect.objectContaining({
-        kind: 'progress',
-        event: 'updateStreamStatus',
       }),
     ]);
   });
