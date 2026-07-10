@@ -14,7 +14,6 @@ import type { StreamTabId } from '@shared/schemas';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
-  parentStream as parentStreamSignal,
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
   type ConversationEntry,
@@ -23,6 +22,7 @@ import {
 } from '../state/cliState';
 import {
   childStreamEntries as childStreamEntriesSignal,
+  parentStream as parentStreamSignal,
   type ChildStreamEntries,
 } from '../state/childExecutions';
 import { streamViewForId } from '../state/streamViews';

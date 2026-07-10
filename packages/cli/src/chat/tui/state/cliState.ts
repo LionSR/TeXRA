@@ -24,18 +24,9 @@ import {
 import {
   applyChildStreamRemoval,
   isChildStreamRemoved,
-  parentStream,
   resetChildStreamEntries,
-  setParentStream,
 } from './childExecutions';
 import type { ChildControlMode } from './childControls';
-
-// Child-stream relationship topology (roster, retained history, current
-// parent) is owned by `childExecutions.ts`; re-exported here so every
-// existing `import { parentStream, setParentStream } from './cliState'`
-// consumer is unchanged. See that module for the map, transitions, and
-// selectors.
-export { parentStream, setParentStream };
 
 // ---------------------------------------------------------------------------
 // types
