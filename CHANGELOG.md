@@ -68,6 +68,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Ctrl-C reliably cancels queued-follow-up auto-resume** — stopping while an
+  automatic resume is still loading configuration or session data no longer
+  allows that stale preparation to restart the cancelled stream.
 - **NDJSON records preserve their emission order under stdout backpressure** —
   progress, command results, doctor output, and structured error/instruction
   records now share one queued stdout writer.
