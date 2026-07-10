@@ -282,6 +282,19 @@ export const GettingStartedActionSchema = z.enum([
 ]);
 export type GettingStartedAction = z.infer<typeof GettingStartedActionSchema>;
 
+/**
+ * Single source of truth for the getting-started action command IDs, shared
+ * by the Main view banner and the Progress view empty-state list so the two
+ * surfaces can't drift out of sync.
+ */
+export const GETTING_STARTED_COMMANDS = {
+  runSetup: 'texra.runSetupAssistant',
+  createSampleProject: 'texra.createSampleProject',
+  cloneOverleaf: 'texra.cloneOverleafProject',
+  downloadArxiv: 'texra.downloadArXivSource',
+  openWalkthrough: 'texra.openGettingStarted',
+} satisfies Record<GettingStartedAction, string>;
+
 const GettingStartedActionDetailSchema = z.object({
   action: GettingStartedActionSchema,
 });
