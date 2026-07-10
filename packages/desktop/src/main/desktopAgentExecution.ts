@@ -1088,7 +1088,8 @@ export class DesktopProgressBridge {
    * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
    * run works the same way on both hosts.
    */
-  revealStream(streamId: StreamTabId): void {
+  async revealStream(streamId: StreamTabId): Promise<void> {
+    await this.restartRepair;
     if (!this.streamLogs.has(streamId)) {
       return;
     }
