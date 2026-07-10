@@ -14,7 +14,7 @@ describe('bestConnectionMethod helper model routing', () => {
     createHelperModelKit.mockReset();
   });
 
-  it('uses the configured helper model when no provider key is passed', async () => {
+  it('uses the configured helper model', async () => {
     const initializeMessages = vi.fn(async () => [{ role: 'user' }]);
     const createResponse = vi.fn(async () => ({ response: { id: 'r1' } }));
     const extractResponse = vi.fn(() => ({

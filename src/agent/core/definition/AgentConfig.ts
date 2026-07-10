@@ -25,6 +25,8 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   agentSource: AgentSourceSchema.nullish(),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
   instruction: z.string().prefault(DEFAULT_AGENT_INSTRUCTION),
+  /** Original user instruction preserved across nested tool-use delegation. */
+  rootUserInstruction: z.string().nullish(),
   /** Optional user-facing text for logs when instruction contains hidden context. */
   displayInstruction: z.string().nullish(),
   agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
