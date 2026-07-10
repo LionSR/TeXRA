@@ -10,27 +10,12 @@ import { normalizeFilePath } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 
+import { isKVFile } from './executionKvFiles';
+
 export interface RunDirectoryEntry {
   readonly path: string;
   readonly size: number;
   readonly isDir: boolean;
-}
-
-/** Internal KV metadata files stored alongside generated files. */
-const KV_FILES = new Set([
-  'meta.json',
-  'config.json',
-  'conversation.json',
-  'todos.json',
-  'report.json',
-  'workspace-files.json',
-  'result-meta.json',
-]);
-
-function isKVFile(name: string): boolean {
-  return (
-    KV_FILES.has(name) || name.startsWith('child-') || name.startsWith('flow_')
-  );
 }
 
 async function walkDirectory(
