@@ -9,12 +9,14 @@
  */
 
 // Local imports
+import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
+import { platform as currentPlatform } from '@platform/platform';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   fetchRelayTokenStatus,
   getConfiguredRelayToken,
 } from '@auth/relayToken';
-import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
+import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
 import {
   API_PROVIDERS,
   apiKeyExists,
@@ -22,13 +24,11 @@ import {
   hasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
-import { platform as currentPlatform } from '@platform/platform';
 import {
   GITHUB_TOKEN_ENV_VARS,
   GITHUB_TOKEN_STORAGE_KEY,
   normalizeGitHubToken,
 } from '@tools/github/githubAuth';
-import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
 
 /** Per-provider API key surface. */
 export interface SetupSecretsAdapter {
