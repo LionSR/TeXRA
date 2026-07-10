@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseTexCountStats } from '@latex/texcount';
+import { parseTeXCountStats } from '@latex/texcount';
 
-describe('parseTexCountStats', () => {
+describe('parseTeXCountStats', () => {
   it('extracts every recognized stat from a full texcount report', () => {
     const output = [
       'Words in text: 1234',
@@ -15,7 +15,7 @@ describe('parseTexCountStats', () => {
       'Number of displayed math: 7',
     ].join('\n');
 
-    expect(parseTexCountStats(output)).toEqual([
+    expect(parseTeXCountStats(output)).toEqual([
       { label: 'Text: 1234 words' },
       { label: 'Headers: 12' },
       { label: 'Captions: 34' },
@@ -25,13 +25,13 @@ describe('parseTexCountStats', () => {
   });
 
   it('omits stats missing from the report instead of padding with blanks', () => {
-    expect(parseTexCountStats('Words in text: 10')).toEqual([
+    expect(parseTeXCountStats('Words in text: 10')).toEqual([
       { label: 'Text: 10 words' },
     ]);
   });
 
   it('returns an empty array when nothing matches', () => {
-    expect(parseTexCountStats('texcount produced no usable output')).toEqual(
+    expect(parseTeXCountStats('texcount produced no usable output')).toEqual(
       [],
     );
   });
