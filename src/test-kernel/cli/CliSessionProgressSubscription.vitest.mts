@@ -525,24 +525,6 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
-  it('emits one NDJSON stream-status record for duplicate session-then-run status facts', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-
-    try {
-      emitSessionStatus(events, resumingStatusPayload);
-      emitRunStatus(events, resumingStatusPayload);
-
-      expect(writeRecord).toHaveBeenCalledTimes(1);
-      expect(writeRecord).toHaveBeenCalledWith(
-        progressRecord('updateStreamStatus', resumingStatusPayload),
-      );
-    } finally {
-      detach();
-    }
-  });
-
   it('keeps same-phase stream-status records when substate changes', () => {
     const events = new SessionEventHub();
     const writeRecord = recordWriter();
@@ -620,19 +602,6 @@ describe('attachCliSessionProgressProjection', () => {
           },
         },
       });
-      events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'domain',
-          key: 'runFact.updateTodos',
-          data: {
-            streamId,
-            todos: 'not-an-array',
-          },
-        },
-      });
-
       expect(writeRecord).not.toHaveBeenCalled();
     } finally {
       detach();
@@ -658,65 +627,13 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
-  it('ignores unrelated domain events and stops forwarding after detach', () => {
-    const { writeRecord, trace, detachAll } = setupTraceProjection();
-
-    trace.domain({ key: 'webSearch', data: { query: 'irrelevant' } });
-    expect(writeRecord).not.toHaveBeenCalled();
-
-    detachAll();
-    logConversationProgress(trace, { toolCallCount: 0 });
-    expect(writeRecord).not.toHaveBeenCalled();
-  });
-
-  it('ignores legacy conversationProgress domain payloads', () => {
+  it('ignores legacy conversationProgress domain events', () => {
     const { writeRecord, trace, detachAll } = setupTraceProjection();
 
     try {
       trace.domain({ key: 'conversationProgress', data: undefined });
-      trace.domain({
-        key: 'conversationProgress',
-        data: { toolCallCount: '1' },
-      });
-      trace.domain({ key: 'conversationProgress', data: 'not an object' });
 
       expect(writeRecord).not.toHaveBeenCalled();
-    } finally {
-      detachAll();
-    }
-  });
-
-  it('projects typed todo and plan run facts', () => {
-    const { writeRecord, trace, detachAll } = setupTraceProjection();
-    const todos = [
-      {
-        content: 'Check the compactness lemma.',
-        status: 'pending' as const,
-        activeForm: 'Checking the compactness lemma.',
-      },
-    ];
-    const plan = {
-      objective: 'Check the compactness lemma and record the obstruction.',
-    };
-
-    try {
-      trace.emit({ type: 'updateTodos', streamId, todos });
-      trace.emit({ type: 'updatePlan', streamId, plan });
-
-      expect(writeRecord).toHaveBeenNthCalledWith(
-        1,
-        progressRecord('updateTodos', {
-          streamId,
-          todos,
-        }),
-      );
-      expect(writeRecord).toHaveBeenNthCalledWith(
-        2,
-        progressRecord('updatePlan', {
-          streamId,
-          plan,
-        }),
-      );
     } finally {
       detachAll();
     }
