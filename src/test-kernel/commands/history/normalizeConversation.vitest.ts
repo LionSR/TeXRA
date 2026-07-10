@@ -11,8 +11,12 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { normalizeConversationForExport } from '@agent/export/normalizeConversation';
+import {
+  mediaAttachmentKindToContentBlock,
+  normalizeConversationForExport,
+} from '@agent/export/normalizeConversation';
 import type { ExportNode } from '@agent/export/schemas';
+import type { MediaAttachmentKind } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -634,5 +638,42 @@ describe('Edge cases', () => {
       kind: 'tool-result',
       text: 'execution output',
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mediaAttachmentKindToContentBlock — attachment-marker round trip
+// ---------------------------------------------------------------------------
+
+describe('mediaAttachmentKindToContentBlock', () => {
+  it('round-trips every MediaAttachmentKind through normalizeConversationForExport', () => {
+    // Callers that only recorded the attachment *kind* (never the bytes —
+    // see completedRunArchive's userMessageEntryToMessages) synthesize the
+    // marker block via this constructor rather than writing `{ type: kind }`
+    // themselves. Prove the round trip for every kind the schema defines, so
+    // the two stay in sync: this module's own switch (not the caller's) is
+    // what breaks the build if a kind is added or renamed.
+    const kinds: MediaAttachmentKind[] = ['image', 'document'];
+
+    for (const kind of kinds) {
+      const nodes = normalize([
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'see attached' },
+            mediaAttachmentKindToContentBlock(kind),
+          ],
+        },
+      ]);
+
+      expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
+      expect(nodes[0]).toMatchObject({
+        kind: 'user-message',
+        parts: [
+          { type: 'text', text: 'see attached' },
+          { type: 'attachment', attachmentType: kind },
+        ],
+      });
+    }
   });
 });
