@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Setup no longer reports expired or revoked relay tokens as signed in** —
+  authentication status now verifies configured CI relay tokens while still
+  preserving valid Supabase sessions and direct API-key-only setup.
 - **Workflow LaTeX compilation resolves source directories consistently** —
   compile checks and latexdiff PDF builds now share one workspace-source
   resolver, and a real workspace folder named `r1`, `r2`, and so on is no

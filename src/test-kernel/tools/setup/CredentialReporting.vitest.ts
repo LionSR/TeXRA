@@ -23,6 +23,33 @@ function installChatGptOnlySetupPlatform(): void {
   });
 }
 
+async function assertAuthPrecedesCredentialProbe(
+  run: () => Promise<unknown>,
+): Promise<void> {
+  const calls: string[] = [];
+  const platform = createFakeSetupPlatform();
+  setSetupPlatform({
+    ...platform,
+    auth: {
+      async getStatus() {
+        calls.push('auth');
+        return { authenticated: false };
+      },
+    },
+    secrets: {
+      ...platform.secrets,
+      async anyUsableCredentialExists() {
+        calls.push('credential');
+        return false;
+      },
+    },
+  });
+
+  await run();
+
+  assert.deepEqual(calls, ['auth', 'credential']);
+}
+
 describe('setup credential reporting', () => {
   it('reports a usable non-API-key credential in the environment probe headline', async () => {
     installChatGptOnlySetupPlatform();
@@ -44,6 +71,18 @@ describe('setup credential reporting', () => {
     assert.match(
       result.output ?? '',
       /Credentials: usable model credential available\./,
+    );
+  });
+
+  it('settles authentication before the environment credential probe', async () => {
+    await assertAuthPrecedesCredentialProbe(() =>
+      new ProbeEnvironmentTool().call({}),
+    );
+  });
+
+  it('settles authentication before the setup credential probe', async () => {
+    await assertAuthPrecedesCredentialProbe(() =>
+      new VerifySetupTool().call({}),
     );
   });
 });
