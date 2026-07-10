@@ -13,6 +13,11 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
+  AgentWorkspaceState,
+  AgentWorkspaceCurrentSnapshotSchema,
+  type AgentWorkspaceSnapshot,
+} from '@agent/core/state/AgentWorkspaceState';
+import {
   PersistedFlow,
   flowKey,
   stampFlowRecordSchemaVersion,
@@ -114,6 +119,28 @@ export function getToolUseFlowErrorResult(
 }
 
 /**
+ * Normalize a resumed flow record's workspace snapshot through the
+ * legacy-capable hydration boundary (`AgentWorkspaceState.fromSnapshot`).
+ * When a persisted tool-use flow's cursor is already past
+ * `ToolUsePrepareNode` (that node's own one-time hydration never runs on
+ * resume), this is the only remaining opportunity to migrate a pre-refactor
+ * top-level `{todos, plan}` workspace snapshot before per-cycle code
+ * (`ToolUseCycleNode.prep()`) re-derives state via the canonical-only
+ * `fromCanonicalSnapshot`, which has no legacy fallback and throws on that
+ * shape. Cheap and idempotent: skips the round-trip when the snapshot is
+ * already canonical.
+ */
+export function normalizeResumedWorkspaceSnapshot(
+  workspaceSnapshot: unknown,
+): AgentWorkspaceSnapshot {
+  const canonical =
+    AgentWorkspaceCurrentSnapshotSchema.safeParse(workspaceSnapshot);
+  return canonical.success
+    ? canonical.data
+    : AgentWorkspaceState.fromSnapshot(workspaceSnapshot).toSnapshot();
+}
+
+/**
  * Build the canonical self-heal payload for a resumed flow record's `shared`
  * blob from the resume boundary's already-validated snapshot
  * (`SessionResumeRetrieval.retrieveToolUseResumeData` -- the single owner of
@@ -134,7 +161,7 @@ export function buildResumedSharedFromSnapshot(
       snapshot.modelHandlerCompatibilityKey ?? undefined,
     stateSlices: {
       runStateSnapshot: snapshot.run,
-      workspaceSnapshot: snapshot.workspace,
+      workspaceSnapshot: normalizeResumedWorkspaceSnapshot(snapshot.workspace),
       userChannels: snapshot.user,
     },
   };
@@ -383,9 +410,33 @@ export async function runToolUseFlow<C = unknown>(
         // boundary above was never consulted for this call (e.g. a fresh
         // launch that happens to find a leftover record for its execution
         // id). Migrate/backfill here so PersistedFlow.ensureRecord's
-        // unchecked raw read never sees a stale legacy shape.
+        // unchecked raw read never sees a stale legacy shape. `migrateSharedState`
+        // above only unwraps the outer structural wrapper -- it never touches
+        // the nested `stateSlices.workspaceSnapshot`, so a legacy top-level
+        // `{todos, plan}` workspace snapshot must be normalized here too
+        // (same reasoning as the resumeSnapshot branch above).
         let migratedData = migrationResult.data;
         let shouldWriteShared = migrationResult.migrated;
+        if (
+          migratedData.stateSlices &&
+          !AgentWorkspaceCurrentSnapshotSchema.safeParse(
+            migratedData.stateSlices.workspaceSnapshot,
+          ).success
+        ) {
+          logger.debug(
+            'Migrated legacy workspace snapshot in resumed flow record.',
+          );
+          migratedData = {
+            ...migratedData,
+            stateSlices: {
+              ...migratedData.stateSlices,
+              workspaceSnapshot: normalizeResumedWorkspaceSnapshot(
+                migratedData.stateSlices.workspaceSnapshot,
+              ),
+            },
+          };
+          shouldWriteShared = true;
+        }
         const sharedModel = migratedData.stateSlices
           ? (currentModelFromUserChannels(
               migratedData.stateSlices.userChannels,
