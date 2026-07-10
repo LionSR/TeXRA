@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+import { parse as parseYaml } from 'yaml';
 
 import {
   FREE_TIER,
@@ -26,6 +28,8 @@ const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../..',
 );
+
+const require = createRequire(import.meta.url);
 
 describe('relay shared configuration parity', () => {
   it('keeps client and relay tier strings identical', () => {
@@ -89,15 +93,48 @@ describe('relay shared configuration parity', () => {
       resolve(REPO_ROOT, 'pnpm-lock.yaml'),
       'utf8',
     );
-    // Top-level package entries in the pnpm-lock.yaml `packages:` block are
-    // indented exactly two spaces, e.g. "  llm-zoo@1.12.0:". A tolerant
-    // regex avoids pulling in a full YAML parser for a multi-megabyte file.
-    const resolvedMatch = pnpmLockYaml.match(/^ {2}llm-zoo@([^:\s(]+):/m);
+    // Scanning the deduplicated `packages:` catalog with a regex is
+    // ambiguous: it can match a transitive dependency's `llm-zoo@…:` entry,
+    // or (once workspace members' ranges diverge) the wrong one of several
+    // peer-suffixed keys for the same package. Read the root importer's
+    // resolved version directly instead — `importers['.'].dependencies` is
+    // unambiguous by construction.
+    const lockfile = parseYaml(pnpmLockYaml) as {
+      importers?: Record<
+        string,
+        { dependencies?: Record<string, { version?: string }> }
+      >;
+    };
+    const rootLlmZoo = lockfile.importers?.['.']?.dependencies?.['llm-zoo'];
     expect(
-      resolvedMatch,
-      'pnpm-lock.yaml is missing a resolved llm-zoo package entry',
-    ).not.toBeNull();
-    const resolvedVersion = resolvedMatch![1];
+      rootLlmZoo?.version,
+      "pnpm-lock.yaml is missing the root importer's resolved llm-zoo version",
+    ).toBeDefined();
+    // pnpm suffixes the version with resolved peer deps, e.g.
+    // "1.12.0(zod@4.4.3)"; strip that to get the plain semver.
+    const resolvedVersion = rootLlmZoo!.version!.replace(/\(.*\)$/, '');
+
+    // Strongest oracle: compare against the version pnpm actually installed
+    // on disk, not just what the lockfile claims it resolved. This catches
+    // any remaining lockfile-parsing mistake, not just the wrong-entry class
+    // above. llm-zoo's `exports` map has no `./package.json` subpath, so
+    // resolve it by walking the same node_modules search path Node itself
+    // would use for the package's main entry point.
+    const llmZooPackageJsonPath = (require.resolve.paths('llm-zoo') ?? [])
+      .map((dir) => resolve(dir, 'llm-zoo', 'package.json'))
+      .find((candidate) => existsSync(candidate));
+    expect(
+      llmZooPackageJsonPath,
+      'could not resolve an installed llm-zoo/package.json',
+    ).toBeDefined();
+    const installedPackageJson = JSON.parse(
+      readFileSync(llmZooPackageJsonPath!, 'utf8'),
+    ) as { version?: string };
+    expect(
+      installedPackageJson.version,
+      "pnpm-lock.yaml's resolved llm-zoo version does not match the " +
+        'installed llm-zoo/package.json version',
+    ).toBe(resolvedVersion);
 
     const relayDenoJson = JSON.parse(
       readFileSync(
