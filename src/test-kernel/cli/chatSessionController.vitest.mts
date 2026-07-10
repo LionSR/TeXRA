@@ -52,6 +52,7 @@ vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
 }));
 
 vi.mock('@agent/runtime/SessionHandle', () => ({
+  currentSession: mocks.defaultSession,
   defaultSession: mocks.defaultSession,
 }));
 
@@ -101,6 +102,7 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
 
 import { StreamSnapshotStore } from '@transcript';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { wakeQueuedFollowUpStream } from '@agent/followUp/ToolUseFollowUp';
 import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -376,7 +378,7 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
   });
 
-  it('declines a wake while the CLI root slot is busy', async () => {
+  it('reports a failed persisted-child wake while the CLI root slot is busy', async () => {
     const session = makeSession({
       runPromise: new Promise(() => {}),
       runCompleted: false,
@@ -386,7 +388,13 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
 
-    await expect(ctrl.tryResumeStream('child-stream')).resolves.toBe(false);
+    await expect(
+      wakeQueuedFollowUpStream(
+        'child-stream',
+        { status: 'queued', reason: 'waiting' },
+        ctrl,
+      ),
+    ).resolves.toEqual({ kind: 'queued_resume_failed' });
 
     expect(snapshotStore.preload).not.toHaveBeenCalled();
   });

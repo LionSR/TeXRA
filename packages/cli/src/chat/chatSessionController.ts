@@ -166,7 +166,10 @@ export interface ChatSessionController {
   /** Request stop of the active run (idempotent). */
   stop(): void;
 
-  /** Resume a queued follow-up target from the CLI platform resume port. */
+  /**
+   * Attempt to resume a queued follow-up target from the CLI platform port.
+   * Returns true only when this controller accepts the target resume.
+   */
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
 
   /** Whether a new root run can be started right now. */
