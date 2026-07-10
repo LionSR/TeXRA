@@ -55,19 +55,48 @@ describe('PromptBuilder', () => {
 
     assert.match(
       prompts.instructionSuffix,
-      /For a self-contained request, do not inspect or write memory/,
+      /do not read unpinned memory files or write memory/,
     );
     assert.match(
       prompts.instructionSuffix,
       /use the `view` command with path `\/memories`/,
     );
+  });
+
+  it('keeps pinned-memory consultation unconditional even for self-contained requests', async () => {
+    // Regression test for #7957: relevance gating (added in #7855) must not
+    // silently drop pinned memories, which are documented as loading every
+    // session (docs/guide/memory.md, MemoryTool's description).
+    const prompts = await buildInitialToolUsePrompts(
+      {
+        systemPrompt: 'system',
+        userPrefix: '',
+        userRequest: 'request',
+      } as AgentPrompt,
+      {},
+      undefined,
+      { resolvedToolNames: ['memory'] },
+    );
+
+    // Behavioral contract, not exact prose (review note on #7959): pinned
+    // files must be individually viewed at session start — a directory
+    // listing alone does not load their content — and this must hold even
+    // for self-contained-looking requests.
     assert.match(
       prompts.instructionSuffix,
-      /When memory is relevant, consult pinned memories first/,
+      /Pinned memories are always loaded/,
+    );
+    assert.match(
+      prompts.instructionSuffix,
+      /`view` each \[pinned\] file|`view` each pinned file|read each pinned memory file/,
+    );
+    assert.match(
+      prompts.instructionSuffix,
+      /regardless of how self-contained|even for requests that otherwise look self-contained/,
     );
     assert.doesNotMatch(
       prompts.instructionSuffix,
-      /Always consult pinned memories at session start/,
+      /When memory is relevant, consult pinned memories first/,
     );
     assert.match(
       prompts.instructionSuffix,
