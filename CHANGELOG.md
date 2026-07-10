@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - **Setup no longer reports expired or revoked relay tokens as signed in** —
   authentication status now verifies configured CI relay tokens while still
   preserving valid Supabase sessions and direct API-key-only setup.
+- **Workflow LaTeX compilation resolves source directories consistently** —
+  compile checks and latexdiff PDF builds now share one workspace-source
+  resolver, and a real workspace folder named `r1`, `r2`, and so on is no
+  longer mistaken for a run-storage round folder.
 - **OpenRouter transient server errors no longer stall a request for up to an
   hour** — the OpenRouter SDK's built-in retry window is now capped at 30
   seconds, so a persistent 5XX surfaces through TeXRA's visible retry/failure
@@ -62,6 +66,14 @@ All notable changes to this project will be documented in this file.
   references, outcome, and cost are readable as JSON via the executions tool
   (`/executions/{id}/result`), so follow-on agents can chain on data instead
   of parsing prose.
+
+### CLI
+
+#### Bug Fixes
+
+- **NDJSON records preserve their emission order under stdout backpressure** —
+  progress, command results, doctor output, and structured error/instruction
+  records now share one queued stdout writer.
 
 ### Desktop
 

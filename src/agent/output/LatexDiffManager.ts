@@ -16,14 +16,12 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
-import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
   FlexibleFS,
   TaskRunFileService,
-  WorkspaceFS,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 import { getComparablePath } from '@utils/files/taskRunStorage';
@@ -33,6 +31,7 @@ import {
   publishCompiledPdfArtifact,
   type CompiledPdfArtifact,
 } from './compiledPdfArtifacts';
+import { resolveWorkspaceSourceDir } from './compileCheck';
 import { tryOperation } from './outputOperations';
 import type { RoundFileEntry, RoundFileMapping } from './types';
 
@@ -66,37 +65,6 @@ export class LatexDiffManager {
       .fs.realPath(location.absolutePath)
       .catch(() => location.absolutePath);
     return path.dirname(resolved);
-  }
-
-  /**
-   * Directory of the document's live workspace source, the one place that
-   * carries the `figures/` and `.bib` dependencies the diff still `\input`s.
-   * The base location is never the live workspace file: `resolveBaseFilesForDiff`
-   * (`snapshotResolution.ts`) rewrites a round diff base to its
-   * `executions/<id>/original/<rel>` snapshot, and a between-round diff base is
-   * the prior round's output at `r<N>/<rel>`. Both keep the path
-   * workspace-relative apart from a leading run-storage `r<N>/` round segment,
-   * so strip that and map onto the workspace root; fall back to the file's own
-   * directory for external bases or when no workspace is open.
-   *
-   * Assumption: a leading `r<digits>/` segment is a run-storage round prefix,
-   * not a real workspace folder. A document whose live source genuinely sits
-   * under a top-level `r<digits>/` folder (e.g. a "revision 1" `r1/`) would be
-   * mis-stripped: unavoidable with a relativePath-only heuristic, and rare
-   * since it collides with the round-directory naming.
-   */
-  private resolveWorkspaceSourceDir(location: FileLocation): string {
-    const workspaceRoot = WorkspaceFS.getPath();
-    if (workspaceRoot && location.kind !== 'external') {
-      const separatorMatch = /^([^/\\]+)[/\\]/.exec(location.relativePath);
-      const workspaceRelative =
-        separatorMatch &&
-        parseWorkflowOutputRoundDir(separatorMatch[1]) !== null
-          ? location.relativePath.slice(separatorMatch[0].length)
-          : location.relativePath;
-      return path.join(workspaceRoot, path.dirname(workspaceRelative));
-    }
-    return path.dirname(location.absolutePath);
   }
 
   private logLatexdiffResult(
@@ -423,7 +391,10 @@ export class LatexDiffManager {
       sourceLocation.kind === 'runStorage'
         ? path.dirname(sourceLocation.absolutePath)
         : null,
-      this.resolveWorkspaceSourceDir(referenceLocation),
+      // Snapshot bases live under `original/`, while between-round bases live
+      // under `r<N>/`; map either back without confusing a real `r<N>` folder.
+      resolveWorkspaceSourceDir(referenceLocation) ??
+        path.dirname(referenceLocation.absolutePath),
     ].filter((dir): dir is string => dir !== null);
     const compiled = await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
