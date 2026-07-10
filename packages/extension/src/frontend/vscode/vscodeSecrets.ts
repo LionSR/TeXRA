@@ -35,7 +35,14 @@ export class VscodeSecrets implements PlatformSecrets {
   }
 
   async listStoredKeys(): Promise<readonly string[]> {
-    return this.storage.keys();
+    try {
+      return await this.storage.keys();
+    } catch (error) {
+      throw new Error(
+        'SecretStorage key enumeration is not supported by this host. Stored secrets may still exist, but TeXRA cannot audit their names here.',
+        { cause: error },
+      );
+    }
   }
 
   getEnv(name: string): string | undefined {

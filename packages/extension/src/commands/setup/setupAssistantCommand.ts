@@ -12,9 +12,7 @@ import { registerExecution } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
-import { isCodexSubscriptionActive } from '@auth/codex';
 import { AUTH_COMMANDS } from '@auth/constants';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { GlobalStateKey, globalSM } from '@common/state';
@@ -22,7 +20,6 @@ import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import * as logger from '@logger/logUtils';
-import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
@@ -30,6 +27,7 @@ import {
 } from '@shared/copy/onboarding';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
+import { hasAnyUsableSetupCredential as hasAnyUsablePlatformCredential } from '@tools/setup/platform';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -85,13 +83,7 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
  * credentials and then fail later as "No model is available."
  */
 export async function hasAnyUsableSetupCredential(): Promise<boolean> {
-  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
-    return true;
-  }
-  for (const provider of SecretManager.API_PROVIDERS) {
-    if (await SecretManager.hasUsableApiKey(provider)) return true;
-  }
-  return getServerSideKeyService().canUseServerSideKeys();
+  return hasAnyUsablePlatformCredential(platform().secrets);
 }
 
 async function ensureCredentialOrPrompt(): Promise<boolean> {

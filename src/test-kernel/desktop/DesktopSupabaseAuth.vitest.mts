@@ -47,8 +47,10 @@ function createCoordinator() {
 function createSecrets() {
   return {
     get: vi.fn(async () => undefined),
+    getStored: vi.fn(async () => undefined),
     set: vi.fn(async () => {}),
     delete: vi.fn(async () => {}),
+    listStoredKeys: vi.fn(async () => []),
     getEnv: vi.fn(() => undefined),
   };
 }

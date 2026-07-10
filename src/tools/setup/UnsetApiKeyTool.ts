@@ -20,7 +20,7 @@ type UnsetApiKeyInput = z.infer<typeof UnsetApiKeyInputSchema>;
 
 export class UnsetApiKeyTool extends defineTool({
   name: 'unset_api_key',
-  description: `Remove a provider's API key from SecretStorage. Use when the user wants to rotate or clear credentials. Non-destructive of any other state — just deletes that one secret. If the key is actually coming from a \`<PROVIDER>_API_KEY\` environment variable, this tool will report that — SecretStorage has nothing to remove, and the env var must be cleared in the user's shell.`,
+  description: `Remove a provider's API key from TeXRA's persisted credential store. Use when the user wants to rotate or clear credentials. Non-destructive of any other state — just deletes that one secret. If the key is actually coming from a \`<PROVIDER>_API_KEY\` environment variable, this tool will report that — the credential store has nothing to remove, and the env var must be cleared in the user's shell.`,
   schema: UnsetApiKeyInputSchema,
 }) {
   protected async execute(input: UnsetApiKeyInput): Promise<ToolResult> {
@@ -30,7 +30,7 @@ export class UnsetApiKeyTool extends defineTool({
 
     const storedExists = await platform.secrets.storedApiKeyExists(provider);
     if (!storedExists) {
-      // If no SecretStorage entry exists but a *usable* (non-blank) key
+      // If no persisted entry exists but a *usable* (non-blank) key
       // is still reported, it's coming from the `<PROVIDER>_API_KEY`
       // env var — `deleteApiKey` can't touch that, so be explicit.
       // Use `hasUsableApiKey` (not `apiKeyExists`) so a stale
@@ -41,7 +41,7 @@ export class UnsetApiKeyTool extends defineTool({
         return {
           status: 'executed',
           summary: `${provider} key is env-var-backed`,
-          output: `No stored API key for "${provider}" to remove, but one is still active via the ${envVar} environment variable. SecretStorage has nothing to clear — unset ${envVar} in your shell (or the source that sets it) to remove this credential.`,
+          output: `No stored API key for "${provider}" to remove, but one is still active via the ${envVar} environment variable. The credential store has nothing to clear — unset ${envVar} in your shell (or the source that sets it) to remove this credential.`,
         };
       }
       return {

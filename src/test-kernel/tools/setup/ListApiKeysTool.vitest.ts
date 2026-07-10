@@ -36,15 +36,15 @@ function installPlatformWithKeys(keys: readonly string[]): void {
 const tool = new ListApiKeysTool();
 
 describe('list_api_keys tool', () => {
-  it('reports empty SecretStorage', async () => {
+  it('reports an empty credential store', async () => {
     installPlatformWithKeys([]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
     assert.equal(result.summary, 'No secrets stored');
-    assert.match(result.output ?? '', /SecretStorage is empty/);
+    assert.match(result.output ?? '', /credential store is empty/);
   });
 
-  it('reports unsupported SecretStorage enumeration instead of an empty store', async () => {
+  it('reports unsupported enumeration instead of an empty store', async () => {
     installPlatform(async () => {
       throw new Error('SecretStorage key enumeration is not supported');
     });
@@ -53,10 +53,10 @@ describe('list_api_keys tool', () => {
 
     assert.equal(result.status, 'error');
     assert.match(result.error ?? '', /enumeration is not supported/);
-    assert.doesNotMatch(result.output ?? '', /SecretStorage is empty/);
+    assert.doesNotMatch(result.output ?? '', /credential store is empty/);
   });
 
-  it('shows known provider keys by provider name, not raw SecretStorage key', async () => {
+  it('shows known provider keys by provider name, not raw storage key', async () => {
     installPlatformWithKeys([apiKeySecretName('anthropic')]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');

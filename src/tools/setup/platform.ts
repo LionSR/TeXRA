@@ -20,6 +20,7 @@ import {
 } from '@model/apiProviders';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { platform as currentPlatform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   GITHUB_TOKEN_ENV_VARS,
   GITHUB_TOKEN_STORAGE_KEY,
@@ -40,7 +41,7 @@ export interface SetupSecretsAdapter {
    */
   hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
   /**
-   * Like `apiKeyExists` but only reports SecretStorage entries — ignores
+   * Like `apiKeyExists` but only reports persisted entries — ignores
    * environment-variable-backed keys. Needed by `unset_api_key` so the
    * agent doesn't claim to have removed a key that still comes from
    * `PROVIDER_API_KEY` in the user's shell.
@@ -148,6 +149,17 @@ async function defaultAuthStatus(): Promise<{
   return { authenticated: true, email: user?.email, tier };
 }
 
+/** Return whether any supported credential can launch the setup model. */
+export async function hasAnyUsableSetupCredential(
+  secrets: PlatformSecrets,
+): Promise<boolean> {
+  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
+  for (const provider of API_PROVIDERS) {
+    if (await hasUsableApiKey(secrets, provider)) return true;
+  }
+  return getServerSideKeyService().canUseServerSideKeys();
+}
+
 /**
  * Derive setup capabilities shared by every host from their existing platform
  * ports. This is the sole owner of the common setup wiring; hosts add only
@@ -156,8 +168,6 @@ async function defaultAuthStatus(): Promise<{
 export function createDefaultSetupPlatform(): SetupPlatform {
   const services = currentPlatform();
   const { secrets, config } = services;
-  const getStored = (key: string) =>
-    secrets.getStored?.(key) ?? secrets.get(key);
 
   return {
     secrets: {
@@ -168,16 +178,14 @@ export function createDefaultSetupPlatform(): SetupPlatform {
       apiKeyExists: (provider) => apiKeyExists(secrets, provider),
       hasUsableApiKey: (provider) => hasUsableApiKey(secrets, provider),
       storedApiKeyExists: async (provider) =>
-        (await getStored(apiKeySecretName(provider))) !== undefined,
-      anyUsableCredentialExists: async () => {
-        if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
-        for (const provider of API_PROVIDERS) {
-          if (await hasUsableApiKey(secrets, provider)) return true;
-        }
-        return getServerSideKeyService().canUseServerSideKeys();
-      },
+        (await secrets.getStored(apiKeySecretName(provider))) !== undefined,
+      anyUsableCredentialExists: () => hasAnyUsableSetupCredential(secrets),
       gitHubTokenExists: async () => {
-        if (normalizeGitHubToken(await getStored(GITHUB_TOKEN_STORAGE_KEY))) {
+        if (
+          normalizeGitHubToken(
+            await secrets.getStored(GITHUB_TOKEN_STORAGE_KEY),
+          )
+        ) {
           return 'secret';
         }
         return GITHUB_TOKEN_ENV_VARS.some((name) =>
@@ -186,7 +194,7 @@ export function createDefaultSetupPlatform(): SetupPlatform {
           ? 'env'
           : 'none';
       },
-      listStoredKeys: () => secrets.listStoredKeys?.() ?? Promise.resolve([]),
+      listStoredKeys: () => secrets.listStoredKeys(),
     },
     auth: { getStatus: defaultAuthStatus },
     config: {
