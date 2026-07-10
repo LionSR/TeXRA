@@ -1090,7 +1090,7 @@ describe('CLI run progress renderer', () => {
     // (mirroring the extension's INSTRUCTION_ACTION_VIEW), not printed
     // verbatim.
     expect(output).toContain(
-      'API key not found. Set your API key in Settings and run again. (set your API key (texra config), see the configuration guide)',
+      'API key not found. Set your API key in Settings and run again. (set your API key (texra setup), see the configuration guide)',
     );
     expect(output).not.toContain('set-api-key');
     expect(output).not.toContain('open-configuration-guide');
