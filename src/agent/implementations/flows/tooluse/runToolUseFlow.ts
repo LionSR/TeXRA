@@ -22,6 +22,7 @@ import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass'
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { deriveRunOutcome } from '@common/constants/streamStatus';
@@ -60,11 +61,14 @@ export interface RunToolUseFlowInput<
 > extends BaseFlowContextInit<C> {
   setting: AgentToolUseSetting;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
+  /** One batch already drained by an external child-turn owner. */
+  drainedFollowUps?: readonly FollowUpQueueBatchItem[];
   onFollowUpConsumed?: () => void;
   /** When true, delegation tools are filtered out to prevent nesting, and
-   *  every cycle suspends at WAITING (see `ToolUseWaitNode`) instead of
-   *  blocking in-flow for the next follow-up — the child-run loop owns
-   *  delivery and turn-to-turn continuation. */
+   *  every completed model cycle suspends at WAITING (see `ToolUseWaitNode`)
+   *  instead of blocking in-flow for the next follow-up. A resumed flow may
+   *  first consume `drainedFollowUps`; the child-run loop still owns
+   *  delivery and every later turn boundary. */
   isSubagent?: boolean;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
@@ -368,7 +372,7 @@ export async function runToolUseFlow<C = unknown>(
 
     const prepareNode = new ToolUsePrepareNode<C>();
     const cycleNode = new ToolUseCycleNode<C>();
-    const waitNode = new ToolUseWaitNode<C>();
+    const waitNode = new ToolUseWaitNode<C>(input.drainedFollowUps);
     prepareNode.next(cycleNode);
     cycleNode.next(waitNode);
     waitNode.on(FlowTransition.CONTINUE, cycleNode);
