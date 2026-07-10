@@ -58,7 +58,7 @@ function defaultPackagedExecutables() {
     return [join(packagedRoot, 'win-unpacked', 'TeXRA.exe')];
   }
   if (process.platform === 'linux') {
-    return [join(packagedRoot, 'linux-unpacked', '@texradesktop')];
+    return [join(packagedRoot, 'linux-unpacked', 'texra')];
   }
   return [];
 }

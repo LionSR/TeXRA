@@ -54,6 +54,7 @@ win:
         - x64
 linux:
   category: Office
+  executableName: texra
   icon: build/icon.png
   maintainer: TeXRA.ai <contact@texra.ai>
   target:

@@ -168,7 +168,7 @@ jobs:
       - name: Smoke-test Linux packaged desktop app
         run: >-
           xvfb-run --auto-servernum pnpm run desktop:package:smoke -- --app
-          packages/desktop/dist-packaged/linux-unpacked/@texradesktop
+          packages/desktop/dist-packaged/linux-unpacked/texra
 
       - name: Upload Linux desktop installers
         uses: actions/upload-artifact@v7
