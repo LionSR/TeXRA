@@ -381,7 +381,7 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
   });
 
-  it('treats a busy CLI root slot as a non-dropping wake outcome', async () => {
+  it('declines a wake while the CLI root slot is busy', async () => {
     const session = makeSession({
       runPromise: new Promise(() => {}),
       runCompleted: false,
@@ -391,7 +391,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
 
-    await expect(ctrl.tryResumeStream('child-stream')).resolves.toBe(true);
+    await expect(ctrl.tryResumeStream('child-stream')).resolves.toBe(false);
 
     expect(snapshotStore.preload).not.toHaveBeenCalled();
   });
