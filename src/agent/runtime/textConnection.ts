@@ -1,9 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
-import OpenAI from 'openai';
-import { MODEL_CONFIGS } from 'llm-zoo';
-
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
-import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 import {
   createHelperModelKit,
   runHelperModelCompletion,
@@ -101,36 +95,10 @@ async function bestConnectionMethodWithHelperModel(
 export async function bestConnectionMethod(
   str1: string,
   str2: string,
-  openaiApiKey?: string,
   n: number = 1,
 ): Promise<ConnectionResult> {
   try {
-    if (!openaiApiKey) {
-      return await bestConnectionMethodWithHelperModel(str1, str2, n);
-    }
-
-    const prompt = buildPrompt(str1, str2);
-    const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt41']);
-    const baseURL = handler.getBaseUrl() ?? undefined;
-    const client = new OpenAI({ apiKey: openaiApiKey, baseURL });
-
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4.1',
-      temperature: 0,
-      n,
-      messages: [
-        {
-          role: 'system',
-          content: SYSTEM_PROMPT,
-        },
-        { role: 'user', content: prompt },
-      ],
-    });
-
-    const choices = completion.choices.map(
-      (choice) => choice.message.content?.trim() ?? '',
-    );
-    return getMajorityChoice(choices);
+    return await bestConnectionMethodWithHelperModel(str1, str2, n);
   } catch (err) {
     logConnectionError('bestConnectionMethod', err);
     return DEFAULT_RESULT;
@@ -143,37 +111,10 @@ export async function bestConnectionMethod(
 export async function bestConnectionMethodAnthropic(
   str1: string,
   str2: string,
-  anthropicApiKey?: string,
   n: number = 1,
 ): Promise<ConnectionResult> {
   try {
-    if (!anthropicApiKey) {
-      return await bestConnectionMethodWithHelperModel(str1, str2, n);
-    }
-
-    const prompt = buildPrompt(str1, str2);
-    const handler = new ModelHandlerAnthropic(MODEL_CONFIGS['sonnet37']);
-    const baseURL = handler.getBaseUrl() ?? undefined;
-    const client = new Anthropic({ apiKey: anthropicApiKey, baseURL });
-
-    const choices = await Promise.all(
-      Array.from({ length: n }, () =>
-        client.messages
-          .create({
-            model: 'claude-3-7-sonnet-20250219',
-            max_tokens: 128,
-            messages: [{ role: 'user', content: prompt }],
-          })
-          .then((response) => {
-            const textBlock = response.content.find(
-              (block) => block.type === 'text',
-            );
-            return textBlock?.text.trim() || 'B';
-          }),
-      ),
-    );
-
-    return getMajorityChoice(choices);
+    return await bestConnectionMethodWithHelperModel(str1, str2, n);
   } catch (err) {
     logConnectionError('bestConnectionMethodAnthropic', err);
     return DEFAULT_RESULT;
