@@ -7,7 +7,7 @@ import {
   statusBarSegmentText,
   statusBarStreamTarget,
   type StatusBarDisplayInput,
-} from '@cli/chat/tui/panes/StatusBar';
+} from '@cli/chat/tui/panes/statusBarDisplay';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
