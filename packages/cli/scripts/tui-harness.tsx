@@ -11,6 +11,8 @@ import React from 'react';
 
 import { getAgentsByCategory, loadAgents } from '@agent/index';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -20,6 +22,7 @@ import {
   LIVE_ELAPSED_STREAM_STATUSES,
   LOG_LEVELS,
   MESSAGE_TYPES,
+  STREAM_PHASE,
   STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
@@ -91,6 +94,8 @@ import {
   type ApprovalDecision,
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
+import { subscribeStreamStatus } from '../src/chat/tui/state/subscribeStreamStatus';
+import { attachTuiRunFactSubscription } from '../src/chat/tui/state/subscribeRuntimeHost';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
@@ -221,6 +226,20 @@ const DISABLED_MODEL_SWITCH_REASON =
   'different conversation format; start new chat';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
+const CHILD_EVENT_ORDER_NAMES = [
+  'canonical',
+  'roster-first',
+  'edge-first',
+  'status-first',
+  'promotion-late-roster',
+  'reattach-late-old-roster',
+  'parent-removal',
+  'completion-remove',
+] as const;
+type ChildEventOrder = (typeof CHILD_EVENT_ORDER_NAMES)[number];
+const CHILD_EVENT_ORDER = parseChildEventOrder(
+  process.env.HARNESS_CHILD_EVENT_ORDER,
+);
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
 const SHOW_IDLE_TODOS = process.env.HARNESS_TODOS_IDLE === '1';
 const SHOW_COMPLETED_TODOS_ONLY = process.env.HARNESS_TODOS_COMPLETED === '1';
@@ -250,6 +269,20 @@ if (!HARNESS_CWD_INPUT && process.env.HARNESS_KEEP_CWD !== '1') {
 }
 for (const followUp of QUEUED_FOLLOW_UPS) {
   HARNESS_FOLLOW_UP_QUEUE.enqueue(followUp);
+}
+
+function parseChildEventOrder(
+  value: string | undefined,
+): ChildEventOrder | undefined {
+  const normalized = value?.trim();
+  if (!normalized) return undefined;
+  const order = CHILD_EVENT_ORDER_NAMES.find(
+    (candidate) => candidate === normalized,
+  );
+  if (order) return order;
+  throw new Error(
+    `Unknown HARNESS_CHILD_EVENT_ORDER ${JSON.stringify(normalized)}; expected one of ${CHILD_EVENT_ORDER_NAMES.join(', ')}`,
+  );
 }
 
 function seedHarnessProjectSkill(): void {
@@ -956,6 +989,256 @@ function harnessInitialEntries(): ConversationEntry[] {
   return makeEntries(ENTRY_COUNT);
 }
 
+type ChildEventStep =
+  | 'A'
+  | 'S(running)'
+  | 'S(terminal)'
+  | 'R_P+'
+  | 'R_P-'
+  | 'R_Q+'
+  | 'E_P+'
+  | 'E_Q+'
+  | 'E0'
+  | 'X(child)'
+  | 'X(P)';
+
+const CHILD_EVENT_SEQUENCES = {
+  canonical: ['A', 'S(running)', 'R_P+', 'E_P+'],
+  'roster-first': ['R_P+', 'A', 'S(running)', 'E_P+'],
+  'edge-first': ['E_P+', 'A', 'S(running)', 'R_P+'],
+  'status-first': ['S(running)', 'A', 'E_P+', 'R_P+'],
+  'promotion-late-roster': ['A', 'S(running)', 'R_P+', 'E_P+', 'E0', 'R_P+'],
+  'reattach-late-old-roster': [
+    'A',
+    'S(running)',
+    'R_P+',
+    'E_P+',
+    'E0',
+    'R_P+',
+    'E_Q+',
+    'R_Q+',
+    'R_P+',
+  ],
+  'parent-removal': ['A', 'S(running)', 'R_P+', 'E_P+', 'X(P)', 'R_P+', 'E_P+'],
+  'completion-remove': [
+    'A',
+    'S(running)',
+    'R_P+',
+    'E_P+',
+    'R_P-',
+    'S(terminal)',
+    'X(child)',
+    'R_P+',
+    'E_P+',
+    'A',
+    'S(running)',
+  ],
+} as const satisfies Record<ChildEventOrder, readonly ChildEventStep[]>;
+
+const HARNESS_EVENT_PARENT_P = STREAM_ID as StreamTabId;
+const HARNESS_EVENT_PARENT_Q = 'harness-event-parent-q' as StreamTabId;
+const HARNESS_EVENT_CHILD = 'harness-event-child-stream' as StreamTabId;
+const HARNESS_EVENT_CHILD_ROW = {
+  kind: 'subagent' as const,
+  executionId: 'harness-event-child' as ExecutionId,
+  agentName: 'eventChild',
+  childStreamId: HARNESS_EVENT_CHILD,
+};
+const CHILD_EVENT_FIXTURE_DISPOSERS: Array<() => void> = [];
+
+function emitHarnessAttachment(
+  hub: SessionEventHub,
+  streamId: StreamTabId,
+  suppressViewSwitch: boolean,
+): void {
+  hub.emit({
+    scope: 'session',
+    event: {
+      type: 'setActiveStream',
+      payload: {
+        streamId,
+        agentCategory: AgentCategory.ToolUse,
+        suppressViewSwitch,
+      },
+    },
+  });
+}
+
+function emitHarnessRoster(
+  hub: SessionEventHub,
+  parentStreamId: StreamTabId,
+  children: readonly ActiveChildInfo[],
+): void {
+  hub.emit({
+    scope: 'run',
+    streamId: parentStreamId,
+    event: {
+      type: 'child.activity',
+      kind: 'subagents',
+      parentStreamId,
+      children,
+    },
+  });
+}
+
+function emitHarnessEdge(
+  hub: SessionEventHub,
+  parentStreamId: StreamTabId | null,
+): void {
+  hub.emit({
+    scope: 'session',
+    event: {
+      type: 'setParentStream',
+      payload: {
+        childStreamId: HARNESS_EVENT_CHILD,
+        parentStreamId,
+      },
+    },
+  });
+}
+
+function emitHarnessRemoval(hub: SessionEventHub, streamId: StreamTabId): void {
+  hub.emit({
+    scope: 'session',
+    event: { type: 'removeStream', payload: { streamId } },
+  });
+}
+
+function omitHarnessRunStartedAt(streamId: StreamTabId): void {
+  const slice = streams.get().get(streamId);
+  if (!slice || slice.runStartedAt === undefined) return;
+  patchStream(streamId, (current) => ({
+    ...current,
+    runStartedAt: undefined,
+  }));
+}
+
+function applyHarnessChildEventStep(
+  hub: SessionEventHub,
+  step: ChildEventStep,
+): void {
+  switch (step) {
+    case 'A':
+      emitHarnessAttachment(hub, HARNESS_EVENT_CHILD, true);
+      return;
+    case 'S(running)': {
+      const cause =
+        StreamStatusService.get(HARNESS_EVENT_CHILD) === undefined
+          ? 'lifecycle'
+          : 'resume';
+      const transitioned = StreamStatusService.transition(
+        HARNESS_EVENT_CHILD,
+        STREAM_PHASE.RUNNING,
+        cause,
+        { events: hub },
+      );
+      if (!transitioned) {
+        throw new Error('HARNESS_CHILD_EVENT_ORDER rejected S(running)');
+      }
+      omitHarnessRunStartedAt(HARNESS_EVENT_CHILD);
+      return;
+    }
+    case 'S(terminal)': {
+      const transitioned = StreamStatusService.transitionToTerminal(
+        HARNESS_EVENT_CHILD,
+        STREAM_PHASE.COMPLETED,
+        { events: hub },
+      );
+      if (!transitioned) {
+        throw new Error('HARNESS_CHILD_EVENT_ORDER rejected S(terminal)');
+      }
+      return;
+    }
+    case 'R_P+':
+      emitHarnessRoster(hub, HARNESS_EVENT_PARENT_P, [HARNESS_EVENT_CHILD_ROW]);
+      return;
+    case 'R_P-':
+      emitHarnessRoster(hub, HARNESS_EVENT_PARENT_P, []);
+      return;
+    case 'R_Q+':
+      emitHarnessRoster(hub, HARNESS_EVENT_PARENT_Q, [HARNESS_EVENT_CHILD_ROW]);
+      return;
+    case 'E_P+':
+      emitHarnessEdge(hub, HARNESS_EVENT_PARENT_P);
+      return;
+    case 'E_Q+':
+      emitHarnessEdge(hub, HARNESS_EVENT_PARENT_Q);
+      return;
+    case 'E0':
+      emitHarnessEdge(hub, null);
+      return;
+    case 'X(child)':
+      emitHarnessRemoval(hub, HARNESS_EVENT_CHILD);
+      return;
+    case 'X(P)':
+      emitHarnessRemoval(hub, HARNESS_EVENT_PARENT_P);
+      return;
+  }
+}
+
+async function writeHarnessChildEventCheckpoint(label: string): Promise<void> {
+  const checkpoint = `\u001BPtexra-harness-child-event:${label}\u001B\\`;
+  await new Promise<void>((resolve, reject) => {
+    HARNESS_STDOUT.write(checkpoint, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+async function runHarnessChildEventOrder(
+  ink: ReturnType<typeof render>,
+  hub: SessionEventHub,
+  order: ChildEventOrder,
+): Promise<void> {
+  emitHarnessAttachment(hub, HARNESS_EVENT_PARENT_Q, true);
+  hub.emit({
+    scope: 'session',
+    event: {
+      type: 'updateStreamDescription',
+      payload: {
+        streamId: HARNESS_EVENT_PARENT_Q,
+        description: 'new parent Q',
+      },
+    },
+  });
+  patchStream(HARNESS_EVENT_PARENT_Q, (slice) => ({
+    ...slice,
+    entries: [
+      harnessMessageEntry(
+        'harness-event-parent-q-ready',
+        'Harness new parent Q.',
+      ),
+    ],
+  }));
+  ink.rerender(renderHarnessApp());
+  await ink.waitUntilRenderFlush();
+  await writeHarnessChildEventCheckpoint('setup');
+
+  for (const [index, step] of CHILD_EVENT_SEQUENCES[order].entries()) {
+    applyHarnessChildEventStep(hub, step);
+    ink.rerender(renderHarnessApp());
+    await ink.waitUntilRenderFlush();
+    await writeHarnessChildEventCheckpoint(`step-${index + 1}`);
+  }
+
+  if (streams.get().has(HARNESS_EVENT_CHILD)) {
+    patchStream(HARNESS_EVENT_CHILD, (slice) => ({
+      ...slice,
+      description: 'event-driven child fixture',
+      entries: makeChildEntries('eventChild', 'event-order'),
+    }));
+    ink.rerender(renderHarnessApp());
+    await ink.waitUntilRenderFlush();
+  }
+  if (order === 'parent-removal') {
+    emitHarnessAttachment(hub, HARNESS_EVENT_PARENT_Q, false);
+    ink.rerender(renderHarnessApp());
+    await ink.waitUntilRenderFlush();
+  }
+  await writeHarnessChildEventCheckpoint('ready');
+}
+
 sessionMeta.set({
   agent: 'chat',
   model: 'harness-model',
@@ -1637,32 +1920,52 @@ function handleHarnessCtrlC(): void {
 const restoreStdoutListenerLimit = installTuiStdoutListenerLimit(
   process.stdout,
 );
-const ink = render(
-  <App
-    onSubmit={handleHarnessSubmit}
-    onKillExecution={markHarnessExecutionStopped}
-    canInterruptActiveRun={() => canInterrupt}
-    canStopActiveRun={() => canInterrupt}
-    colorEnabled={HARNESS_COLOR_ENABLED}
-    onInterruptActive={markHarnessInterrupted}
-    onTranscriptViewportChange={
-      viewportController.handleTranscriptViewportChange
-    }
-    onCtrlC={handleHarnessCtrlC}
-  />,
-  {
-    stdout: HARNESS_STDOUT,
-    stderr: process.stderr,
-    stdin: process.stdin,
-    exitOnCtrlC: false,
-  },
-);
+function renderHarnessApp(): React.JSX.Element {
+  return (
+    <App
+      onSubmit={handleHarnessSubmit}
+      onKillExecution={markHarnessExecutionStopped}
+      canInterruptActiveRun={() => canInterrupt}
+      canStopActiveRun={() => canInterrupt}
+      colorEnabled={HARNESS_COLOR_ENABLED}
+      onInterruptActive={markHarnessInterrupted}
+      onTranscriptViewportChange={
+        viewportController.handleTranscriptViewportChange
+      }
+      onCtrlC={handleHarnessCtrlC}
+    />
+  );
+}
+
+const ink = render(renderHarnessApp(), {
+  stdout: HARNESS_STDOUT,
+  stderr: process.stderr,
+  stdin: process.stdin,
+  exitOnCtrlC: false,
+});
 inkRef.current = ink;
+
+if (CHILD_EVENT_ORDER) {
+  const hub = new SessionEventHub();
+  CHILD_EVENT_FIXTURE_DISPOSERS.push(
+    attachTuiRunFactSubscription(hub),
+    subscribeStreamStatus(),
+  );
+  void runHarnessChildEventOrder(ink, hub, CHILD_EVENT_ORDER).catch((error) => {
+    process.stderr.write(
+      `[tui-harness] HARNESS_CHILD_EVENT_ORDER failed: ${toErrorMessage(error)}\n`,
+    );
+    void exitHarness(1);
+  });
+}
 
 let harnessExiting = false;
 async function exitHarness(exitCode: number): Promise<void> {
   if (harnessExiting) return;
   harnessExiting = true;
+  for (const dispose of CHILD_EVENT_FIXTURE_DISPOSERS.splice(0).toReversed()) {
+    dispose();
+  }
   ink.unmount();
   try {
     await tryPlatform()?.lifecycle.runShutdown();

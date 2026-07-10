@@ -53,6 +53,7 @@ const LF = String.fromCharCode(10); // Ctrl-J
 const KITTY_SHIFT_ENTER = ESC + '[13;2u';
 const UP = ESC + '[A';
 const DOWN = ESC + '[B';
+const BACK_TAB = ESC + '[Z';
 const PAGE_DOWN = ESC + '[6~';
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
 const shortcutModifierLabel = process.platform === 'darwin' ? 'Esc' : 'Alt';
@@ -96,6 +97,202 @@ const PHYSICIST_LOCAL_TOOL_USE_AGENTS = [
 ].join('||');
 const PHYSICIST_WORKFLOW_AGENTS = ['correct', 'polish'].join('||');
 const TWO_OPENAI_MODELS = ['gpt55', 'gpt55pro'].join('||');
+const CHILD_EVENT_READY_MARKER = 'texra-harness-child-event:ready';
+const CHILD_EVENT_ROOT_HEADER = 'agent: chat · model: harness-model';
+const CHILD_EVENT_TEXT = 'eventChild is checking the event-order details';
+const CHILD_EVENT_Q_TEXT = 'Harness new parent Q.';
+const CHILD_EVENT_REMOVED_TEXT = ['eventChild', '1 sub', 'parent: main'];
+const CLOSE_CHILD_EVENT_PANEL = { input: ESC };
+
+function childEventEnv(order) {
+  return {
+    HARNESS_CAN_INTERRUPT: '1',
+    HARNESS_CHILD_EVENT_ORDER: order,
+    HARNESS_ENTRIES: '2',
+  };
+}
+
+function childEventCheckpoint(input, name, expect = [], unexpect = []) {
+  return { input, checkpoint: { name, expect, unexpect } };
+}
+
+function childEventScenario(name, order, details) {
+  return {
+    name: `child-event-order-${name}`,
+    cols: 100,
+    rows: 20,
+    env: childEventEnv(order),
+    sharedWorkspace: 'child-event-order',
+    bootRawExpect: CHILD_EVENT_READY_MARKER,
+    frame: 'viewport',
+    ...details,
+  };
+}
+
+const CHILD_EVENT_EQUIVALENCE_KEYS = [
+  childEventCheckpoint('\t', 'Tab focuses the child', [
+    CHILD_EVENT_TEXT,
+    '[1:eventChild]*',
+  ]),
+  childEventCheckpoint(BACK_TAB, 'Shift-Tab returns to the parent', [
+    CHILD_EVENT_ROOT_HEADER,
+    '[main] 1:eventChild*',
+  ]),
+  childEventCheckpoint(
+    ESC + 's',
+    'subagent picker',
+    ['Subagents', 'Stream: main', 'eventChild', 'f focus'],
+    ['Tasks and sub-workflows'],
+  ),
+  CLOSE_CHILD_EVENT_PANEL,
+  childEventCheckpoint(
+    ESC + 'p',
+    'task picker',
+    ['Tasks and sub-workflows', 'Stream: main', 'eventChild', 'k kill'],
+    ['Subagents'],
+  ),
+  CLOSE_CHILD_EVENT_PANEL,
+];
+
+function equivalentChildEventScenario(order, equivalentFrameTo) {
+  return childEventScenario(order, order, {
+    keys: CHILD_EVENT_EQUIVALENCE_KEYS,
+    expect: [
+      CHILD_EVENT_ROOT_HEADER,
+      'eventChild running',
+      '1 sub',
+      '[main] 1:eventChild*',
+    ],
+    ...(equivalentFrameTo ? { equivalentFrameTo } : {}),
+  });
+}
+
+const CHILD_EVENT_ORDER_SCENARIOS = [
+  equivalentChildEventScenario('canonical'),
+  equivalentChildEventScenario('roster-first', 'child-event-order-canonical'),
+  equivalentChildEventScenario('edge-first', 'child-event-order-canonical'),
+  equivalentChildEventScenario('status-first', 'child-event-order-canonical'),
+  childEventScenario('follow-up', 'canonical', {
+    keys: [
+      childEventCheckpoint('\t', 'follow-up child focus', [
+        CHILD_EVENT_TEXT,
+        '[1:eventChild]*',
+      ]),
+      'child event follow-up',
+      '\r',
+    ],
+    expect: ['Harness received: child event follow-up', '[1:eventChild]*'],
+    unexpect: ['entry-1 chat history line', 'entry-2 chat history line'],
+  }),
+  childEventScenario('promotion-late-roster', 'promotion-late-roster', {
+    keys: [
+      childEventCheckpoint(
+        ESC + 'p',
+        'promoted child is historical only',
+        ['Tasks and sub-workflows', 'eventChild'],
+        ['k kill', '1 sub'],
+      ),
+      CLOSE_CHILD_EVENT_PANEL,
+      childEventCheckpoint(
+        '\t',
+        'promoted retained child remains focusable',
+        [CHILD_EVENT_ROOT_HEADER, CHILD_EVENT_TEXT],
+        ['subagent:', 'parent: main', '1 sub'],
+      ),
+      childEventCheckpoint(
+        BACK_TAB,
+        'promoted child has no stale back edge',
+        [CHILD_EVENT_ROOT_HEADER, CHILD_EVENT_TEXT],
+        ['subagent:', 'parent: main', '1 sub'],
+      ),
+    ],
+    expect: [CHILD_EVENT_ROOT_HEADER, CHILD_EVENT_TEXT],
+    unexpect: ['subagent:', 'parent: main', '1 sub', 'k kill'],
+  }),
+  childEventScenario('reattach-late-old-roster', 'reattach-late-old-roster', {
+    keys: [
+      childEventCheckpoint(
+        ESC + 'p',
+        'old parent retains only history',
+        ['Tasks and sub-workflows', 'eventChild'],
+        ['k kill', '1 sub'],
+      ),
+      CLOSE_CHILD_EVENT_PANEL,
+      childEventCheckpoint('\t', 'reattached child focus', [
+        CHILD_EVENT_TEXT,
+        '[1:eventChild]*',
+      ]),
+      childEventCheckpoint(
+        BACK_TAB,
+        'back focus follows the new parent',
+        [CHILD_EVENT_Q_TEXT, 'eventChild running', '1 sub'],
+        ['entry-1 chat history line'],
+      ),
+      childEventCheckpoint(
+        ESC + 's',
+        'new parent owns the active child control',
+        ['Subagents', 'eventChild', 'f focus'],
+      ),
+      CLOSE_CHILD_EVENT_PANEL,
+    ],
+    expect: [CHILD_EVENT_Q_TEXT, 'eventChild running', '1 sub'],
+    unexpect: ['entry-1 chat history line'],
+  }),
+  childEventScenario('parent-removal', 'parent-removal', {
+    keys: [
+      childEventCheckpoint(
+        '\t',
+        'forward focus ignores the removed parent tree',
+        [CHILD_EVENT_Q_TEXT],
+        CHILD_EVENT_REMOVED_TEXT,
+      ),
+      childEventCheckpoint(
+        BACK_TAB,
+        'back focus remains interactive after parent removal',
+        [CHILD_EVENT_Q_TEXT],
+        CHILD_EVENT_REMOVED_TEXT,
+      ),
+      childEventCheckpoint(
+        ESC + 's',
+        'removed parent exposes no subagent picker target',
+        [CHILD_EVENT_Q_TEXT],
+        ['Subagents', 'eventChild', '1 sub'],
+      ),
+      childEventCheckpoint(
+        ESC + 'p',
+        'removed parent exposes no task picker target',
+        [CHILD_EVENT_Q_TEXT],
+        ['Tasks and sub-workflows', 'eventChild', 'k kill'],
+      ),
+    ],
+    expect: [CHILD_EVENT_Q_TEXT],
+    unexpect: ['eventChild', '1 sub', 'parent: main', 'k kill'],
+  }),
+  childEventScenario('completion-remove', 'completion-remove', {
+    keys: [
+      childEventCheckpoint(
+        '\t',
+        'removed child is not a forward focus target',
+        [CHILD_EVENT_ROOT_HEADER],
+        CHILD_EVENT_REMOVED_TEXT,
+      ),
+      childEventCheckpoint(
+        ESC + 's',
+        'removed child exposes no subagent picker target',
+        [],
+        ['Subagents', 'eventChild', '1 sub'],
+      ),
+      childEventCheckpoint(
+        ESC + 'p',
+        'removed child exposes no task picker target',
+        [],
+        ['Tasks and sub-workflows', 'eventChild', 'k kill'],
+      ),
+    ],
+    expect: [CHILD_EVENT_ROOT_HEADER],
+    unexpect: ['eventChild', '1 sub', 'parent: main', 'k kill'],
+  }),
+];
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
@@ -1882,6 +2079,7 @@ const SCENARIOS = [
     expect: ['[/status]details', '[/model]models'],
     unexpect: ['Apply edit to draft.tex?', '1 approval'],
   },
+  ...CHILD_EVENT_ORDER_SCENARIOS,
   {
     name: 'subagents',
     frame: 'scrollback',
@@ -3029,6 +3227,16 @@ const only = args.scenarios;
 const scenarioByName = new Map(
   SCENARIOS.map((scenario) => [scenario.name, scenario]),
 );
+for (const scenario of SCENARIOS) {
+  if (!scenario.equivalentFrameTo) continue;
+  const oracle = scenarioByName.get(scenario.equivalentFrameTo);
+  if (!oracle) {
+    console.error(
+      `[validate-tui] ${scenario.name} names an unknown frame oracle: ${scenario.equivalentFrameTo}`,
+    );
+    process.exit(1);
+  }
+}
 const unknownScenarios = [
   ...new Set(only.filter((name) => !scenarioByName.has(name))),
 ];
@@ -3041,8 +3249,22 @@ if (unknownScenarios.length > 0) {
   );
   process.exit(1);
 }
+function selectedScenariosWithFrameOracles(names) {
+  const selected = [];
+  const seen = new Set();
+  const add = (name) => {
+    if (seen.has(name)) return;
+    const scenario = scenarioByName.get(name);
+    if (scenario.equivalentFrameTo) add(scenario.equivalentFrameTo);
+    seen.add(name);
+    selected.push(scenario);
+  };
+  for (const name of names) add(name);
+  return selected;
+}
+
 const scenarios = only.length
-  ? only.map((name) => scenarioByName.get(name))
+  ? selectedScenariosWithFrameOracles(only)
   : SCENARIOS;
 if (args.listSelected) {
   console.log(scenarios.map((scenario) => scenario.name).join('\n'));
@@ -3142,6 +3364,22 @@ function scenarioRows(scenario) {
   return Number(scenario.rows ?? DEFAULT_ROWS);
 }
 
+for (const scenario of SCENARIOS) {
+  if (!scenario.equivalentFrameTo) continue;
+  const oracle = scenarioByName.get(scenario.equivalentFrameTo);
+  if (
+    scenarioCols(scenario) !== scenarioCols(oracle) ||
+    scenarioRows(scenario) !== scenarioRows(oracle) ||
+    (scenario.frame ?? DEFAULT_FRAME_MODE) !==
+      (oracle.frame ?? DEFAULT_FRAME_MODE)
+  ) {
+    console.error(
+      `[validate-tui] ${scenario.name} must match ${oracle.name} dimensions and frame mode`,
+    );
+    process.exit(1);
+  }
+}
+
 function makeTerm(scenario) {
   return new Terminal({
     cols: scenarioCols(scenario),
@@ -3176,6 +3414,62 @@ function scenarioFrame(scenario, fullFrame, rows) {
   throw new Error(
     `unknown validate-tui frame mode for ${scenario.name}: ${frameMode}`,
   );
+}
+
+function exactFrameDifference(actualFrame, expectedFrame, oracleName) {
+  const actual = Buffer.from(actualFrame, 'utf8');
+  const expected = Buffer.from(expectedFrame, 'utf8');
+  if (actual.equals(expected)) return undefined;
+
+  const sharedLength = Math.min(actual.length, expected.length);
+  let offset = 0;
+  while (offset < sharedLength && actual[offset] === expected[offset]) {
+    offset += 1;
+  }
+  const byteAt = (bytes) =>
+    offset < bytes.length
+      ? `0x${bytes[offset].toString(16).padStart(2, '0')}`
+      : 'end-of-frame';
+  return `rendered frame is not byte-identical to ${oracleName}: first UTF-8 byte difference at ${offset} (${byteAt(actual)} != ${byteAt(expected)}; ${actual.length} != ${expected.length} bytes)`;
+}
+
+function equivalentFrameFailures(result, oracle) {
+  const failures = [];
+  const finalDifference = exactFrameDifference(
+    result.frame,
+    oracle.frame,
+    oracle.name,
+  );
+  if (finalDifference) failures.push(finalDifference);
+
+  const actualCheckpoints = result.checkpointFrames ?? [];
+  const expectedCheckpoints = oracle.checkpointFrames ?? [];
+  if (actualCheckpoints.length !== expectedCheckpoints.length) {
+    failures.push(
+      `checkpoint frame count differs from ${oracle.name}: ${actualCheckpoints.length} != ${expectedCheckpoints.length}`,
+    );
+  }
+  const comparableCount = Math.min(
+    actualCheckpoints.length,
+    expectedCheckpoints.length,
+  );
+  for (let index = 0; index < comparableCount; index += 1) {
+    const actual = actualCheckpoints[index];
+    const expected = expectedCheckpoints[index];
+    if (actual.name !== expected.name) {
+      failures.push(
+        `checkpoint ${index + 1} differs from ${oracle.name}: ${JSON.stringify(actual.name)} != ${JSON.stringify(expected.name)}`,
+      );
+      continue;
+    }
+    const difference = exactFrameDifference(
+      actual.frame,
+      expected.frame,
+      `${oracle.name} checkpoint ${JSON.stringify(expected.name)}`,
+    );
+    if (difference) failures.push(difference);
+  }
+  return failures;
 }
 
 function expectedFrameTextVisible(scenario, frame) {
@@ -3267,6 +3561,7 @@ function orderedTextFailure(frame, check) {
 }
 
 const SNAPSHOT_WORKSPACES_DIR = 'workspaces';
+const sharedWorkspaceDirs = new Map();
 
 function snapshotScenarioSlug(index, name) {
   const prefix = String(index + 1).padStart(2, '0');
@@ -3284,6 +3579,17 @@ function snapshotWorkspaceDir(index, name) {
     SNAPSHOT_WORKSPACES_DIR,
     snapshotScenarioSlug(index, name),
   );
+}
+
+function sharedScenarioWorkspaceDir(key) {
+  const existing = sharedWorkspaceDirs.get(key);
+  if (existing) return existing;
+  const dir = snapshotDir
+    ? path.join(snapshotDir, SNAPSHOT_WORKSPACES_DIR, `shared-${key}`)
+    : mkdtempSync(path.join(tmpdir(), `texra-tui-${key}-`));
+  mkdirSync(dir, { recursive: true });
+  sharedWorkspaceDirs.set(key, dir);
+  return dir;
 }
 
 function resetSnapshotDir(dir) {
@@ -3558,7 +3864,9 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     return renderFrame(term);
   };
   const childEnv = scenarioChildEnv(scenario, cols, rows);
-  const workspaceDir = snapshotWorkspaceDir(index, scenario.name);
+  const workspaceDir = scenario.sharedWorkspace
+    ? sharedScenarioWorkspaceDir(scenario.sharedWorkspace)
+    : snapshotWorkspaceDir(index, scenario.name);
   if (workspaceDir && childEnv.HARNESS_CWD == null) {
     mkdirSync(workspaceDir, { recursive: true });
     childEnv.HARNESS_CWD = workspaceDir;
@@ -3608,6 +3916,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     if (exited) break;
     if (
       (await frameSnapshot()).includes(bootExpect) &&
+      (!scenario.bootRawExpect || rawOutput.includes(scenario.bootRawExpect)) &&
       Date.now() - lastData > 600
     ) {
       booted = true;
@@ -3615,10 +3924,50 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     }
   }
 
+  const checkpointFailures = [];
+  const checkpointFrames = [];
+  const checkKeyCheckpoint = async (checkpoint) => {
+    const deadline = Date.now() + Number(checkpoint.settleMs ?? 2500);
+    let checkpointFrame = '';
+    while (Date.now() < deadline) {
+      const fullCheckpointFrame = await frameSnapshot();
+      checkpointFrame = scenarioFrame(scenario, fullCheckpointFrame, rows);
+      const expectedVisible = (checkpoint.expect ?? []).every((text) =>
+        checkpointFrame.includes(text),
+      );
+      const unexpectedAbsent = (checkpoint.unexpect ?? []).every(
+        (text) => !checkpointFrame.includes(text),
+      );
+      if (expectedVisible && unexpectedAbsent && Date.now() - lastData >= 100) {
+        break;
+      }
+      await sleep(60);
+    }
+    const prefix = `checkpoint ${JSON.stringify(checkpoint.name)}`;
+    for (const text of checkpoint.expect ?? []) {
+      if (!checkpointFrame.includes(text)) {
+        checkpointFailures.push(
+          `${prefix} expected text missing: ${JSON.stringify(text)}`,
+        );
+      }
+    }
+    for (const text of checkpoint.unexpect ?? []) {
+      if (checkpointFrame.includes(text)) {
+        checkpointFailures.push(
+          `${prefix} unexpected text present: ${JSON.stringify(text)}`,
+        );
+      }
+    }
+    checkpointFrames.push({ name: checkpoint.name, frame: checkpointFrame });
+  };
+
   for (const key of scenario.keys ?? []) {
     const input = typeof key === 'string' ? key : key.input;
     child.write(input);
     await sleep(Number(key.delayMs ?? scenario.keyDelayMs ?? 500));
+    if (typeof key !== 'string' && key.checkpoint) {
+      await checkKeyCheckpoint(key.checkpoint);
+    }
   }
   for (const resize of scenario.resizes ?? []) {
     child.resize(Number(resize.cols ?? cols), Number(resize.rows ?? rows));
@@ -3667,7 +4016,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     (t) => !collapsedFrame.includes(t),
   );
   const present = (scenario.unexpect ?? []).filter((t) => frame.includes(t));
-  const failures = [];
+  const failures = [...checkpointFailures];
   if (!booted) failures.push('input prompt never rendered (boot timeout)');
   for (const t of missing)
     failures.push(`expected text missing: ${JSON.stringify(t)}`);
@@ -3759,6 +4108,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     skipped: false,
     failures,
     frame,
+    checkpointFrames,
     rows,
   };
 }
@@ -3771,6 +4121,19 @@ const results = [];
 for (const [index, scenario] of scenarios.entries()) {
   // eslint-disable-next-line no-await-in-loop
   const result = await runScenario(scenario, index);
+  if (!result.skipped && scenario.equivalentFrameTo) {
+    const oracle = results.find(
+      (candidate) => candidate.name === scenario.equivalentFrameTo,
+    );
+    if (!oracle || oracle.skipped) {
+      result.failures.push(
+        `byte-equivalence oracle unavailable: ${scenario.equivalentFrameTo}`,
+      );
+    } else {
+      result.failures.push(...equivalentFrameFailures(result, oracle));
+    }
+    result.ok = result.failures.length === 0;
+  }
   results.push(result);
   writeSnapshot(index, result.name, result.frame);
   if (result.skipped) {
@@ -3792,6 +4155,11 @@ for (const [index, scenario] of scenarios.entries()) {
   }
 }
 writeSnapshotReport(results);
+if (!snapshotDir) {
+  for (const dir of sharedWorkspaceDirs.values()) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 console.log('');
 console.log(
