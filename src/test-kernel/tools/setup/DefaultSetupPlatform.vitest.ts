@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { platform } from '@platform/platform';
@@ -16,6 +16,7 @@ setupPlatform({
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   __resetSetupPlatformForTests();
 });
 
@@ -50,5 +51,16 @@ describe('default setup platform', () => {
     expect(() => getSetupPlatform().config.get('editor.fontSize')).toThrow(
       'Setup config adapter is scoped to texra.* keys',
     );
+  });
+
+  it('recognizes a stored key even when its value cannot be read', async () => {
+    vi.spyOn(platform().secrets, 'getStored').mockResolvedValue(undefined);
+    vi.spyOn(platform().secrets, 'listStoredKeys').mockResolvedValue([
+      'apiKey.openai',
+    ]);
+
+    await expect(
+      getSetupPlatform().secrets.storedApiKeyExists('openai'),
+    ).resolves.toBe(true);
   });
 });

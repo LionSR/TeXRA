@@ -164,7 +164,7 @@ export function createDefaultSetupPlatform(): SetupPlatform {
       apiKeyExists: (provider) => apiKeyExists(secrets, provider),
       hasUsableApiKey: (provider) => hasUsableApiKey(secrets, provider),
       storedApiKeyExists: async (provider) =>
-        (await secrets.getStored(apiKeySecretName(provider))) !== undefined,
+        (await secrets.listStoredKeys()).includes(apiKeySecretName(provider)),
       anyUsableCredentialExists: () => hasUsableSetupCredential(secrets),
       gitHubTokenExists: async () => {
         if (
