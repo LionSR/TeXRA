@@ -181,7 +181,10 @@ export function mediaAttachmentKindToContentBlock(
     case 'document':
       return { type: 'document' };
     default:
-      return assertNever(kind, `Unmapped media attachment kind: ${String(kind)}`);
+      return assertNever(
+        kind,
+        `Unmapped media attachment kind: ${String(kind)}`,
+      );
   }
 }
 
