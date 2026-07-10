@@ -275,5 +275,85 @@ describe('desktop update checker', () => {
         ),
       ).toBe(nowMs + 1000);
     });
+
+    it('does not persist the throttle stamp when notification fails', async () => {
+      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
+      const globalState = new MemoryStateStore();
+      const nowMs = Date.UTC(2026, 0, 1);
+      let notifyCalls = 0;
+
+      const run = (notify: () => void | Promise<void>) =>
+        checkForDesktopUpdate({
+          currentVersion: '0.39.3',
+          globalState,
+          isPackaged: true,
+          env: {},
+          notify,
+          now: () => nowMs,
+          fetchRelease: async () => release,
+        });
+
+      await expect(
+        run(() => {
+          notifyCalls += 1;
+          throw new Error('dialog failed');
+        }),
+      ).rejects.toThrow('dialog failed');
+      expect(
+        globalState.values.get(
+          GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
+        ),
+      ).toBeUndefined();
+
+      await run(() => {
+        notifyCalls += 1;
+      });
+      expect(notifyCalls).toBe(2);
+      expect(
+        globalState.values.get(
+          GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
+        ),
+      ).toBe(nowMs);
+    });
+
+    it('coalesces concurrent checks into one fetch and notification', async () => {
+      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
+      const globalState = new MemoryStateStore();
+      let fetchCalls = 0;
+      let firstNotifyCalls = 0;
+      let secondNotifyCalls = 0;
+      let resolveFetch: ((value: DesktopLatestRelease) => void) | undefined;
+      const pendingRelease = new Promise<DesktopLatestRelease>((resolve) => {
+        resolveFetch = resolve;
+      });
+      const options = {
+        currentVersion: '0.39.3',
+        globalState,
+        isPackaged: true,
+        env: {},
+        notify: () => {
+          firstNotifyCalls += 1;
+        },
+        fetchRelease: async () => {
+          fetchCalls += 1;
+          return pendingRelease;
+        },
+      };
+
+      const first = checkForDesktopUpdate(options);
+      const second = checkForDesktopUpdate({
+        ...options,
+        notify: () => {
+          secondNotifyCalls += 1;
+        },
+      });
+      expect(fetchCalls).toBe(1);
+
+      resolveFetch?.(release);
+      await Promise.all([first, second]);
+      expect(fetchCalls).toBe(1);
+      expect(firstNotifyCalls).toBe(0);
+      expect(secondNotifyCalls).toBe(1);
+    });
   });
 });

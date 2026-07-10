@@ -85,15 +85,40 @@ export interface CheckForDesktopUpdateOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+let desktopUpdateCheckInFlight: Promise<void> | undefined;
+let desktopUpdateCheckNotify:
+  CheckForDesktopUpdateOptions['notify'] | undefined;
+
 /**
  * At most once per day (persisted in global state), check for a newer
  * desktop release and notify at most once per release version. The daily
- * throttle stamp is only persisted after a successful fetch, so a failed
- * check (network hiccup, GitHub API hiccup, timeout) simply retries on the
- * next launch instead of being suppressed for a full day; failures never
- * interrupt startup.
+ * throttle stamp is only persisted after a successful fetch and any required
+ * notification, so a failed check retries on the next launch instead of being
+ * suppressed for a full day. Concurrent callers share one process-level check.
  */
-export async function checkForDesktopUpdate({
+export function checkForDesktopUpdate(
+  options: CheckForDesktopUpdateOptions,
+): Promise<void> {
+  // Window recreation may call again while the fetch is pending. Keep the
+  // newest callback so any eventual dialog is parented to the live window.
+  desktopUpdateCheckNotify = options.notify;
+  if (desktopUpdateCheckInFlight) return desktopUpdateCheckInFlight;
+
+  const check = runDesktopUpdateCheck({
+    ...options,
+    notify: (release) => desktopUpdateCheckNotify?.(release),
+  });
+  const tracked = check.finally(() => {
+    if (desktopUpdateCheckInFlight === tracked) {
+      desktopUpdateCheckInFlight = undefined;
+      desktopUpdateCheckNotify = undefined;
+    }
+  });
+  desktopUpdateCheckInFlight = tracked;
+  return tracked;
+}
+
+async function runDesktopUpdateCheck({
   currentVersion,
   globalState,
   isPackaged,
@@ -114,23 +139,32 @@ export async function checkForDesktopUpdate({
 
   const release = await fetchRelease();
   if (!release) return;
-  // Only persist the throttle stamp once the fetch actually succeeded.
-  await globalState.update(
-    GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-    nowMs,
-  );
   if (!isNewerDesktopVersion(release.version, currentVersion)) {
+    await globalState.update(
+      GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
+      nowMs,
+    );
     return;
   }
 
   const lastNotifiedVersion = globalState.get<string>(
     GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
   );
-  if (lastNotifiedVersion === release.version) return;
+  if (lastNotifiedVersion === release.version) {
+    await globalState.update(
+      GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
+      nowMs,
+    );
+    return;
+  }
 
   await notify(release);
   await globalState.update(
     GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
     release.version,
+  );
+  await globalState.update(
+    GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
+    nowMs,
   );
 }
