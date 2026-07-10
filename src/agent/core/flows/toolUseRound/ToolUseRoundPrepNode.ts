@@ -8,6 +8,7 @@ import {
 import {
   appendFollowUpAsUserMessage,
   followUpDisplayText,
+  userFollowUpInstruction,
   type AppendFollowUpResult,
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
@@ -75,6 +76,10 @@ export class ToolUseRoundPrepNode<C> extends BaseNode<
     // This ensures user's message typed during tool execution is seen
     // before the model starts thinking/responding
     if (prepRes.queuedFollowUps?.length) {
+      if (!prepRes.synthetic) {
+        const instruction = userFollowUpInstruction(prepRes.queuedFollowUps);
+        if (instruction) shared.currentUserInstruction = instruction;
+      }
       for (const followUp of prepRes.queuedFollowUps) {
         // A non-synthetic follow-up's transcript row must be logged whether
         // appendFollowUpAsUserMessage succeeds or throws (e.g. a corrupt/
