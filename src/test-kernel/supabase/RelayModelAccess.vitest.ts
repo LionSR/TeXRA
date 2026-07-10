@@ -83,6 +83,10 @@ describe('relay tier model access', () => {
     // filtered by RELAY_PROVIDERS.has(m.provider) — a retired model from a
     // provider the relay cannot forward to (here 'meta') must still be
     // rejected as a denial guard, independent of forwarding eligibility.
+    // Assert the fixture premise against the same source RELAY_PROVIDERS is
+    // built from, so this test fails loudly (instead of going vacuous) if
+    // 'meta' is ever added to the relay allowlist.
+    assert.equal(TIER_CONFIG.providers.includes('meta'), false);
     assert.equal(isRetiredModelRequest('legacy-meta-model'), true);
     assert.equal(isModelAllowedForTier(MAX_TIER, 'legacy-meta-model'), false);
     assert.equal(isModelAllowedForTier(ULTRA_TIER, 'legacy-meta-model'), false);
