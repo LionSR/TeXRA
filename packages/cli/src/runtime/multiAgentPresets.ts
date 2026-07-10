@@ -447,6 +447,7 @@ export async function withCliMultiAgentPresetVisibility<T>(
   let restorePromise: Promise<void> | undefined;
   const restoreVisibility = (): Promise<void> => {
     restorePromise ??= (async () => {
+      // A partial apply still needs rollback; the original error continues from the try block.
       await visibilityApplied.catch(() => undefined);
       await workspaceState.update(
         WorkspaceStateKey.ENABLED_AGENTS,
