@@ -113,9 +113,24 @@ const HARNESS = process.env.TEXRA_TUI_HARNESS
 // `mkdtempSync` cwd (tui-harness.tsx's default) — the harness reflects `cwd`
 // in rendered session chrome, and a different path per scenario would fail
 // the comparison for a reason unrelated to child-stream event ordering.
+// Removed on every exit path (including `--help`/`--list`, which never touch
+// it) rather than only after a run that selects these scenarios, so it never
+// leaks a temp dir the way an un-cleaned-up `mkdtempSync` normally would.
 const CHILD_EVENT_ORDER_CWD = mkdtempSync(
   path.join(tmpdir(), 'texra-tui-child-event-order-'),
 );
+process.on('exit', () => {
+  rmSync(CHILD_EVENT_ORDER_CWD, { recursive: true, force: true });
+});
+// Each ordered fact lands in its own macrotask inside the harness (see
+// `seedChildEventOrderFixture` in tui-harness.tsx). This must clear the boot
+// detector's own 600ms PTY-quiet gate (below) — otherwise a fast-firing
+// fixture keeps resetting that timer and boot detection doesn't settle until
+// the whole sequence has already finished, collapsing every checkpoint into
+// the final frame. Checkpoints themselves wait for their expected text
+// (not a fixed sleep), so this value only needs to clear that gate, not
+// bound total scenario time precisely.
+const HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS = '900';
 
 // --- scenarios (verified against the committed harness) ------------------
 const SCENARIOS = [
@@ -1911,14 +1926,24 @@ const SCENARIOS = [
     ],
     unexpect: ['[Option-p]tasks', '[Option-s]subagents'],
   },
-  // Rendered-byte-level counterpart to the vitest "child-stream ordered
-  // transition matrix" (src/test-kernel/cli/TuiStateAndFocus.vitest.mts,
-  // scenarios 1-4): the same roster/edge/status facts arrive in a different
-  // order in each of these four scenarios but must converge on the same
-  // final child-stream state per the design's precedence rule
-  // (docs/proposals/cli-child-stream-state-consolidation.md), so their
-  // rendered PTY frames must be byte-identical. `compareGroup` below drives
-  // that check post-run (issue #7972).
+  // PTY ordering tests (issue #7972): the harness drives one child stream's
+  // attachment/roster/edge/status/removal facts through the real
+  // `attachTuiRunFactSubscription`/`subscribeStreamStatus` subscription path —
+  // not the CHILD_STREAMS map mutators directly — one macrotask apart, so
+  // Ink actually renders each intermediate state. `checkpoints` (handled in
+  // `runScenarioWithResources`) polls for each ordered fact's expected text in
+  // turn, so a transiently-wrong frame (a stale control, a premature or
+  // missing active count) fails the scenario, not just the final settled one.
+  //
+  // `canonical`/`roster-first`/`edge-first`/`status-first` apply the same four
+  // facts (attachment, running status, roster, edge) in every order the
+  // vitest "child-stream ordered transition matrix" proves order-equivalent
+  // (src/test-kernel/cli/TuiStateAndFocus.vitest.mts, scenarios 1-4) and must
+  // converge on a byte-identical settled frame — `compareGroup` drives that
+  // check post-run. The remaining four correct old ambiguous transients
+  // (promotion, reattachment, parent removal, completion+removal — matrix
+  // scenarios 6, 7, 11, and 5-then-8) get their own checkpoint expectations
+  // instead of byte-equivalence, per the design doc.
   {
     name: 'child-event-order-canonical',
     compareGroup: 'child-event-order',
@@ -1926,9 +1951,26 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'canonical',
+      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
       HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
     },
-    bootExpect: '[Tab]streams',
+    // Steps: A, S(running), R_P+, E_P+.
+    checkpoints: [
+      {
+        expect: ['[Tab]streams'],
+        unexpect: ['1 sub', 'orderChecker'],
+      },
+      {
+        expect: ['[Tab]streams'],
+        unexpect: ['1 sub', 'orderChecker'],
+      },
+      {
+        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+      },
+      {
+        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+      },
+    ],
     expect: ['orderChecker', '1 sub', '[Tab]streams'],
   },
   {
@@ -1938,9 +1980,28 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'roster-first',
+      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
       HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
     },
-    bootExpect: '[Tab]streams',
+    // Steps: R_P+, A, S(running), E_P+.
+    checkpoints: [
+      {
+        // Active via the roster's retained-parent fallback, before the
+        // child's own StreamSlice exists — not yet focusable.
+        expect: ['1 sub', 'orderChecker · 1m 4s'],
+        unexpect: ['[Tab]streams', 'orderChecker running'],
+      },
+      {
+        expect: ['[Tab]streams', '1:orderChecker'],
+        unexpect: ['1:orderChecker*', 'orderChecker running'],
+      },
+      {
+        expect: ['orderChecker running', '1:orderChecker*'],
+      },
+      {
+        expect: ['orderChecker running', '1:orderChecker*'],
+      },
+    ],
     expect: ['orderChecker', '1 sub', '[Tab]streams'],
   },
   {
@@ -1950,9 +2011,29 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'edge-first',
+      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
       HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
     },
-    bootExpect: '[Tab]streams',
+    // Steps: E_P+, A, S(running), R_P+.
+    checkpoints: [
+      {
+        // Reachable via the explicit edge alone (focus-cycle invariant), but
+        // not yet counted active — that needs the roster.
+        expect: ['[Tab]streams', 'harness-child-eve'],
+        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve…*'],
+      },
+      {
+        expect: ['harness-child-eve…*'],
+        unexpect: ['1 sub', 'orderChecker'],
+      },
+      {
+        expect: ['harness-child-eve…*'],
+        unexpect: ['1 sub', 'orderChecker'],
+      },
+      {
+        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+      },
+    ],
     expect: ['orderChecker', '1 sub', '[Tab]streams'],
   },
   {
@@ -1962,10 +2043,193 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'status-first',
+      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
       HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
     },
-    bootExpect: '[Tab]streams',
+    // Steps: S(running), A, E_P+, R_P+.
+    checkpoints: [
+      {
+        expect: ['[Tab]streams'],
+        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
+      },
+      {
+        expect: ['harness-child-eve…*'],
+        unexpect: ['1 sub', 'orderChecker'],
+      },
+      {
+        expect: ['harness-child-eve…*'],
+        unexpect: ['1 sub', 'orderChecker'],
+      },
+      {
+        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+      },
+    ],
     expect: ['orderChecker', '1 sub', '[Tab]streams'],
+  },
+  // The remaining four orderings correct old ambiguous transients (promotion,
+  // reattachment, parent removal, completion+removal) instead of being
+  // order-equivalent with the four above, so they get their own checkpoint
+  // expectations — no `compareGroup` — per the design doc.
+  {
+    name: 'child-event-order-promotion-late-roster',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILD_EVENT_ORDER: 'promotion-late-roster',
+      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
+    },
+    // Steps: A, S(running), R_P+, E_P+, E0 (promote to top-level), R_P+ (late,
+    // stale roster from the former parent).
+    checkpoints: [
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
+      { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
+      {
+        // Promoted to top-level: no longer active under root, but the
+        // retained/historical row survives.
+        expect: ['1:main*', 'orderChecker running'],
+        unexpect: ['1 sub', '1:orderChecker*'],
+      },
+      {
+        // A stale roster resend from the former parent must not resurrect
+        // the edge or active membership.
+        expect: ['1:main*', 'orderChecker running'],
+        unexpect: ['1 sub', '1:orderChecker*'],
+      },
+    ],
+    // Prove the TUI is still interactive after the late fact: Tab finds the
+    // promoted (now top-level) stream reachable and switches to it — its
+    // status bar shows a real, wall-clock elapsed time once focused, so this
+    // only asserts the exit path still works cleanly rather than exact text.
+    keys: ['\t'],
+    expectExit: true,
+  },
+  {
+    name: 'child-event-order-reattach-late-old-roster',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILD_EVENT_ORDER: 'reattach-late-old-roster',
+      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
+    },
+    // Steps: A, S(running), R_other+, E_other+, E0, R_other+ (stale), E_P+
+    // (root), R_P+ (root), R_other+ (late, stale — from the child's former,
+    // never-displayed parent).
+    checkpoints: [
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      // Facts scoped to the never-displayed former parent must not leak into
+      // root's own view at any point.
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      {
+        expect: ['harness-child-eve…*'],
+        unexpect: ['1 sub', 'orderChecker'],
+      },
+      {
+        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+      },
+      {
+        // A late, stale roster from the child's former parent must not erase
+        // active membership under the new (root) parent.
+        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+      },
+    ],
+    // Prove the TUI is still interactive: Tab finds the reattached child
+    // reachable and switches focus to it (a real, wall-clock elapsed time
+    // appears once focused), so this only asserts the exit path still works
+    // cleanly rather than exact post-focus text.
+    keys: ['\t'],
+    expectExit: true,
+  },
+  {
+    name: 'child-event-order-parent-removal',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILD_EVENT_ORDER: 'parent-removal',
+      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
+    },
+    // Steps: S(running) [child], R_other+, E_other+, X(other) [parent
+    // removal], R_other+ (late), E_other+ (late) — `other` is never root, so
+    // none of this should ever surface on root's own view; the assertion is
+    // that late facts naming a removed parent don't resurrect it anywhere or
+    // wedge the TUI.
+    checkpoints: [
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { unexpect: ['1 sub', 'orderChecker'] },
+      { unexpect: ['1 sub', 'orderChecker'] },
+      { unexpect: ['1 sub', 'orderChecker'] },
+      { unexpect: ['1 sub', 'orderChecker'] },
+      { unexpect: ['1 sub', 'orderChecker'] },
+    ],
+    // Prove the TUI is still interactive after the removal + late facts:
+    // nothing under the removed parent was ever reachable from root, so Tab
+    // is a no-op here (unlike promotion/reattachment above) and the frame —
+    // and the exit path — must stay exactly as before.
+    keys: ['\t'],
+    expect: ['◆ — personal'],
+    unexpect: ['1 sub', 'orderChecker'],
+    expectExit: true,
+  },
+  {
+    name: 'child-event-order-completion-remove',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILD_EVENT_ORDER: 'completion-remove',
+      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
+    },
+    // Steps: A, S(running), R_P+, E_P+, R_P- (roster omission), S(terminal),
+    // X(child), R_P+ (late), E_P+ (late), A (late), late resume attempt.
+    checkpoints: [
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
+      { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
+      {
+        // Untrack (roster omission) arrives before the terminal status: the
+        // retained/historical row survives, but active membership does not.
+        expect: ['orderChecker running'],
+        unexpect: ['1 sub'],
+      },
+      {
+        expect: ['orderChecker completed', '1:orderChecker(completed)'],
+        unexpect: ['1 sub', 'orderChecker running'],
+      },
+      {
+        // Removal scrubs every trace, including the retained/historical row.
+        unexpect: ['orderChecker', '1 sub', '1:orderChecker', '[Tab]streams'],
+      },
+      {
+        unexpect: ['orderChecker', '1 sub', '1:orderChecker', '[Tab]streams'],
+      },
+      {
+        unexpect: ['orderChecker', '1 sub', '1:orderChecker', '[Tab]streams'],
+      },
+      {
+        // A late re-attachment attempt for the removed id must stay ignored.
+        unexpect: ['orderChecker', '1 sub', '1:orderChecker', '[Tab]streams'],
+      },
+      {
+        // A late resume-transition attempt is the one status fact that would
+        // otherwise reach `setStreamStatusInCliState` (a repeated terminal
+        // transition is a same-value no-op the status machine drops before
+        // it gets there) — it must still stay suppressed by the removal
+        // tombstone.
+        unexpect: ['orderChecker', '1 sub', '1:orderChecker', '[Tab]streams'],
+      },
+    ],
+    // Prove the TUI is still interactive after the removal + late facts:
+    // the removed child is unreachable, so Tab is a no-op and the frame —
+    // and the exit path — must stay exactly as before.
+    keys: ['\t'],
+    expect: ['◆ — personal'],
+    unexpect: ['orderChecker', '1 sub'],
+    expectExit: true,
   },
   {
     name: 'failed-subagent-status',
@@ -3680,6 +3944,66 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     }
   }
 
+  // Ordered render checkpoints (issue #7972): scenarios that drive the
+  // harness's opt-in event-ordering fixture (see
+  // `HARNESS_CHILD_EVENT_ORDER`/`seedChildEventOrderFixture` in
+  // tui-harness.tsx) apply one fact per macrotask after boot instead of
+  // seeding everything up front, so this polls for each checkpoint's
+  // expected text in turn — catching a transiently-wrong frame (a stale
+  // control, a premature or lingering active count) between ordered facts,
+  // not just whatever the fully-settled scrollback happens to look like.
+  // A checkpoint whose expect/unexpect condition is already (trivially)
+  // satisfied by the previous checkpoint's frame — the harness applies
+  // several ordered facts in a row with no new visible text, e.g. a bare
+  // running-status transition before any roster/edge fact — resolves as
+  // soon as the PTY is quiet, in well under the harness's own per-step
+  // delay. Without pacing, that lets the validator race checkpoints ahead
+  // of the harness's real progress: by the time it reaches a later
+  // checkpoint with a genuinely new expectation, the harness may not have
+  // gotten there yet, so it fails as "missing" rather than "not yet true".
+  // Pace evaluation to the harness's own schedule (still poll-based beyond
+  // that, so CI slowness only ever costs time, never correctness).
+  const checkpointStepDelayMs = Number(
+    scenario.env?.HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS ?? 0,
+  );
+  const checkpointsStart = Date.now();
+  const checkpointFailures = [];
+  for (const [checkpointIndex, checkpoint] of (
+    scenario.checkpoints ?? []
+  ).entries()) {
+    const minReadyAt =
+      checkpointsStart + checkpointStepDelayMs * (checkpointIndex + 1);
+    if (Date.now() < minReadyAt) await sleep(minReadyAt - Date.now());
+    const checkpointDeadline =
+      Date.now() +
+      Number(checkpoint.timeoutMs ?? scenario.checkpointMs ?? 4000);
+    let checkpointFrame = scenarioFrame(scenario, await frameSnapshot(), rows);
+    while (Date.now() < checkpointDeadline) {
+      if (exited) break;
+      const quiet = Date.now() - lastData >= 150;
+      checkpointFrame = scenarioFrame(scenario, await frameSnapshot(), rows);
+      const satisfied =
+        (checkpoint.expect ?? []).every((t) => checkpointFrame.includes(t)) &&
+        (checkpoint.unexpect ?? []).every((t) => !checkpointFrame.includes(t));
+      if (quiet && satisfied) break;
+      await sleep(40);
+    }
+    for (const t of checkpoint.expect ?? []) {
+      if (!checkpointFrame.includes(t)) {
+        checkpointFailures.push(
+          `checkpoint ${checkpointIndex + 1}: expected text missing: ${JSON.stringify(t)}`,
+        );
+      }
+    }
+    for (const t of checkpoint.unexpect ?? []) {
+      if (checkpointFrame.includes(t)) {
+        checkpointFailures.push(
+          `checkpoint ${checkpointIndex + 1}: unexpected text present: ${JSON.stringify(t)}`,
+        );
+      }
+    }
+  }
+
   for (const key of scenario.keys ?? []) {
     const input = typeof key === 'string' ? key : key.input;
     child.write(input);
@@ -3732,7 +4056,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     (t) => !collapsedFrame.includes(t),
   );
   const present = (scenario.unexpect ?? []).filter((t) => frame.includes(t));
-  const failures = [];
+  const failures = [...checkpointFailures];
   if (!booted) failures.push('input prompt never rendered (boot timeout)');
   for (const t of missing)
     failures.push(`expected text missing: ${JSON.stringify(t)}`);
