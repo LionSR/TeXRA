@@ -256,6 +256,8 @@ export function attachCliSessionProgressProjection(
       const streamId = projected.payload.streamId;
       if (lastStatusByStream.get(streamId) === key) return;
       lastStatusByStream.set(streamId, key);
+    } else if (projected.event === 'removeStream') {
+      lastStatusByStream.delete(projected.payload.streamId);
     }
     emitProjectedProgressEvent(writeRecord, projected);
   }

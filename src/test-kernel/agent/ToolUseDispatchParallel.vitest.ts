@@ -9,8 +9,10 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 import { createRunTrace } from '@transcript';
 import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { SdkToolCall } from '@agent/types/IModelHandler';
@@ -65,6 +67,7 @@ function makeCall(
 
 interface HarnessOptions {
   tools: Record<string, ITool>;
+  rootUserInstruction?: string;
   checkInterruption?: () => boolean;
   setAbortController?: (controller: AbortController | null) => void;
 }
@@ -72,6 +75,9 @@ interface HarnessOptions {
 function dispatchHarness(opts: HarnessOptions) {
   const runTrace = createRunTrace('DispatchParallelTest' as StreamTabId);
   const services = {
+    config: AgentConfigSchema.parse({
+      rootUserInstruction: opts.rootUserInstruction,
+    }),
     logger: runTrace.trace,
     toolRegistry: new MapToolRegistry(opts.tools),
     checkInterruption: opts.checkInterruption ?? (() => false),
@@ -88,8 +94,14 @@ function dispatchHarness(opts: HarnessOptions) {
 async function runDispatch(
   node: ToolUseDispatchNode<unknown>,
   calls: SdkToolCall[],
+  currentUserInstruction?: string,
 ): Promise<unknown[]> {
-  const shared = { toolCalls: calls, shouldStop: false, messages: [] };
+  const shared = {
+    toolCalls: calls,
+    shouldStop: false,
+    messages: [],
+    currentUserInstruction,
+  };
   const prepped = await (
     node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
   ).prep(shared);
@@ -110,6 +122,36 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
   beforeAll(async () => {
     const { initPlatform } = await import('@platform/platform');
     initPlatform(createFakePlatform({ workspacePath: '/workspace' }));
+  });
+
+  it('preserves the unwrapped root instruction across nested delegation', async () => {
+    let observedInstruction: string | undefined;
+    const inspectContext: ITool = {
+      definition: {
+        name: 'inspect_context',
+        description: 'inspect_context',
+        parameters: {},
+      },
+      async call(): Promise<ToolResult> {
+        observedInstruction = getCurrentToolCallContext()?.userInstruction;
+        return { status: 'executed', output: 'ok' };
+      },
+    } as ITool;
+    const { node, dispose } = dispatchHarness({
+      tools: { inspect_context: inspectContext },
+      rootUserInstruction: 'Do not use files or external tools.',
+    });
+
+    try {
+      await runDispatch(
+        node,
+        [makeCall('c1', 'inspect_context', {})],
+        'Wrapped child instruction with prior handoff boilerplate.',
+      );
+      assert.equal(observedInstruction, 'Do not use files or external tools.');
+    } finally {
+      dispose();
+    }
   });
 
   it('executes contiguous parallel-safe calls concurrently, preserving order', async () => {
