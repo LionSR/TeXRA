@@ -22,8 +22,8 @@ import { isDebugModeEnabled } from '@logger/logUtils';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchMainViewInbound,
+  GETTING_STARTED_COMMANDS,
   MainViewInboundHandlerRegistry,
-  type GettingStartedAction,
 } from '@shared/schemas';
 import { PROVIDER_URLS } from '@shared/constants/providers';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
@@ -43,14 +43,6 @@ export interface MainViewOnboardingHooks {
    */
   refreshOnboardingFunnel(): Promise<void>;
 }
-
-const GETTING_STARTED_COMMANDS = {
-  runSetup: 'texra.runSetupAssistant',
-  createSampleProject: 'texra.createSampleProject',
-  cloneOverleaf: 'texra.cloneOverleafProject',
-  downloadArxiv: 'texra.downloadArXivSource',
-  openWalkthrough: 'texra.openGettingStarted',
-} satisfies Record<GettingStartedAction, string>;
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
