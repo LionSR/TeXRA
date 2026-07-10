@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { platform } from '@platform/platform';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -19,7 +20,9 @@ import {
   cliMultiAgentPresetTeamLaunchBlockReason,
   planCliMultiAgentPresets,
   planCliMultiAgentPresetRun,
+  withCliMultiAgentPresetVisibility,
 } from '@cli/runtime/multiAgentPresets';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 function agent(
   name: string,
@@ -783,5 +786,38 @@ describe('CLI multi-agent presets', () => {
     expect(plan.rootAgent?.name).toBe('leanOrchestrator');
     expect(plan.missingToolUseAgents).toEqual([]);
     expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
+  });
+
+  it('restores temporary team visibility during platform shutdown', async () => {
+    const { lifecycle, workspaceState } = platform();
+    const previousWorkflowAgents = ['builtInWorkflow:generic'];
+    const previousToolUseAgents = ['builtInToolUse:agent'];
+    await workspaceState.update(
+      WorkspaceStateKey.ENABLED_AGENTS,
+      previousWorkflowAgents,
+    );
+    await workspaceState.update(
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      previousToolUseAgents,
+    );
+    const preset = findPreset('physicist');
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [agent('correct', AgentCategory.Workflow)],
+      toolUseAgents: [
+        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+      ],
+    });
+
+    await withCliMultiAgentPresetVisibility(plan, () =>
+      lifecycle.runShutdown(),
+    );
+
+    expect({
+      workflow: workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS),
+      toolUse: workspaceState.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
+    }).toEqual({
+      workflow: previousWorkflowAgents,
+      toolUse: previousToolUseAgents,
+    });
   });
 });
