@@ -50,16 +50,26 @@ export async function runAgent(
   request: ValidatedExecutionRequest,
   options: RunAgentOptions,
 ): Promise<AgentFlowResult> {
+  // Split the `runAgent`-only options off; the rest (`executeAgentOptions`) is
+  // exactly the `Pick<ExecuteAgentOptions, …>` that `RunAgentOptions` extends, so
+  // it forwards verbatim and a newly-picked option needs no change here.
+  const {
+    openWorkflowOutput,
+    registerExecution: registerExecutionOption,
+    preferHelperModel,
+    ...executeAgentOptions
+  } = options;
+
   const executionId =
     request.executionId ?? (generateExecutionId() as ExecutionId);
   const shouldRegister =
-    options.registerExecution ?? request.executionId === undefined;
+    registerExecutionOption ?? request.executionId === undefined;
 
   // Only the "fix LaTeX" VS Code actions opt in (preferHelperModel); the agent
   // then runs on the configured helper model. A direct main-view launch keeps the
   // model the user picked. Resolved before registerExecution so the stored record
   // and the run agree.
-  const config = options.preferHelperModel
+  const config = preferHelperModel
     ? await applyHelperModelPreference(request.config)
     : request.config;
 
@@ -73,18 +83,9 @@ export async function runAgent(
     );
   }
 
-  const result = await executeAgent(config, executionId, {
-    runtimeHost: options.runtimeHost,
-    enforceCategory: options.enforceCategory,
-    stopAfterCycle: options.stopAfterCycle,
-    approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-    runtimeUnavailableTools: options.runtimeUnavailableTools,
-    session: options.session,
-    modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-    onRun: options.onRun,
-  });
+  const result = await executeAgent(config, executionId, executeAgentOptions);
   if (result.category === 'workflow') {
-    await options.openWorkflowOutput?.(result);
+    await openWorkflowOutput?.(result);
   }
   return result;
 }
