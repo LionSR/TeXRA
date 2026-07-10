@@ -14,15 +14,6 @@ export const latexTabStyles: CSSResult = css`
     margin-bottom: var(--wa-space-s);
   }
 
-  .latex-title {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-medium);
-    color: var(--wa-color-text-normal);
-  }
-
   .latex-description {
     margin-bottom: var(--wa-space-s);
     color: var(--color-text-secondary);
