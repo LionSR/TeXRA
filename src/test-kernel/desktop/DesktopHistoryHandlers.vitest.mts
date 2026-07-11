@@ -187,6 +187,32 @@ describe('DesktopHistoryHandlers', () => {
     });
   });
 
+  it('shares the controller load across concurrent first exports', async () => {
+    chatExportMocks.buildExportInput.mockResolvedValue({
+      status: 'ok',
+      exportInput: EXPORT_INPUT,
+    });
+    chatExportMocks.exportAsMarkdown.mockResolvedValue({
+      storagePath: 'executions/abc/chat.md',
+      absolutePath: '/tmp/executions/abc/chat.md',
+    });
+    const actions = createHistoryActions();
+
+    await Promise.all([
+      assertSupported(actions.exportChatMd)({
+        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+        historyId: 'abc',
+      }),
+      assertSupported(actions.exportChatMd)({
+        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+        historyId: 'def',
+      }),
+    ]);
+
+    expect(chatExportMocks.constructorDeps).toHaveLength(1);
+    expect(chatExportMocks.buildExportInput).toHaveBeenCalledTimes(2);
+  });
+
   it('falls back to opening the .tex source when LaTeX compilation fails', async () => {
     chatExportMocks.buildExportInput.mockResolvedValue({
       status: 'ok',
