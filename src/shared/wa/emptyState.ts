@@ -14,6 +14,10 @@ interface EmptyStateAction {
   readonly onClick: () => void;
   readonly appearance?: 'filled' | 'outlined';
   readonly variant?: 'brand' | 'neutral';
+  // Defaults to 'medium' (the <wa-button> default). Lets compact panels
+  // (e.g. a getting-started row packed with several actions) opt into
+  // 'small' without forking the helper.
+  readonly size?: 'small' | 'medium';
   // Forwarded onto the underlying <wa-button>. Lets callers re-apply host-
   // specific button classes (e.g. desktop-primary-button) for theming hooks.
   readonly className?: string;
@@ -87,6 +91,7 @@ export function renderEmptyState({
                       class=${ifDefined(action.className)}
                       appearance=${action.appearance ?? 'outlined'}
                       variant=${action.variant ?? 'neutral'}
+                      size=${ifDefined(action.size)}
                       @click=${action.onClick}
                     >
                       ${
