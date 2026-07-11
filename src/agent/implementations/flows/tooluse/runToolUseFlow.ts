@@ -13,6 +13,11 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
+  AgentWorkspaceState,
+  AgentWorkspaceCurrentSnapshotSchema,
+  type AgentWorkspaceSnapshot,
+} from '@agent/core/state/AgentWorkspaceState';
+import {
   PersistedFlow,
   flowKey,
   stampFlowRecordSchemaVersion,
@@ -111,6 +116,55 @@ export function getToolUseFlowErrorResult(
   error: unknown,
 ): RunToolUseFlowResult | undefined {
   return error instanceof ToolUseFlowError ? error.result : undefined;
+}
+
+/**
+ * Normalize a resumed flow record's workspace snapshot through the
+ * legacy-capable hydration boundary (`AgentWorkspaceState.fromSnapshot`).
+ * When a persisted tool-use flow's cursor is already past
+ * `ToolUsePrepareNode` (that node's own one-time hydration never runs on
+ * resume), this is the only remaining opportunity to migrate a pre-refactor
+ * top-level `{todos, plan}` workspace snapshot before per-cycle code
+ * (`ToolUseCycleNode.prep()`) re-derives state via the canonical-only
+ * `fromCanonicalSnapshot`, which has no legacy fallback and throws on that
+ * shape. Cheap and idempotent: skips the round-trip when the snapshot is
+ * already canonical.
+ */
+export function normalizeResumedWorkspaceSnapshot(
+  workspaceSnapshot: unknown,
+): AgentWorkspaceSnapshot {
+  const canonical =
+    AgentWorkspaceCurrentSnapshotSchema.safeParse(workspaceSnapshot);
+  return canonical.success
+    ? canonical.data
+    : AgentWorkspaceState.fromSnapshot(workspaceSnapshot).toSnapshot();
+}
+
+/**
+ * Build the canonical self-heal payload for a resumed flow record's `shared`
+ * blob from the resume boundary's already-validated snapshot
+ * (`SessionResumeRetrieval.retrieveToolUseResumeData` -- the single owner of
+ * FlowRecord.shared's legacy-format migration and modelHandlerCompatibilityKey
+ * backfill). `structuralBase` is the record's own `migrateSharedState` output
+ * (structural unwrap only), which supplies any pass-through fields the
+ * snapshot's narrower resume contract doesn't carry (e.g. `systemPrompt`,
+ * `lastError`) so they survive the write-back untouched.
+ */
+export function buildResumedSharedFromSnapshot(
+  structuralBase: ToolUseRunShared,
+  snapshot: ToolUseSessionSnapshot,
+): ToolUseRunShared {
+  return {
+    ...structuralBase,
+    messages: snapshot.messages,
+    modelHandlerCompatibilityKey:
+      snapshot.modelHandlerCompatibilityKey ?? undefined,
+    stateSlices: {
+      runStateSnapshot: snapshot.run,
+      workspaceSnapshot: normalizeResumedWorkspaceSnapshot(snapshot.workspace),
+      userChannels: snapshot.user,
+    },
+  };
 }
 
 interface ToolUseFlowContext {
@@ -331,9 +385,58 @@ export async function runToolUseFlow<C = unknown>(
         logger.warn('Failed to parse flow record shared state, starting fresh');
         await kv.delete(flowKey(executionId));
         flowRecord = null;
+      } else if (input.resumeSnapshot) {
+        // The resume boundary (SessionResumeRetrieval.retrieveToolUseResumeData)
+        // already migrated this record's legacy shapes and strictly validated
+        // the result into `input.resumeSnapshot` before this flow was ever
+        // launched -- it is the single owner of FlowRecord.shared's
+        // legacy-format parsing and modelHandlerCompatibilityKey backfill (see
+        // its CurrentToolUseFlowRecordStateSchema). Consume its canonical
+        // fields directly here instead of re-deriving them; `migrateSharedState`
+        // above is only used for its structural unwrap so that pass-through
+        // fields the snapshot's narrower contract doesn't carry (systemPrompt,
+        // lastError, ...) survive this self-heal write of the KV blob that
+        // PersistedFlow.ensureRecord's unchecked raw read (below) depends on.
+        flowRecord.shared = buildResumedSharedFromSnapshot(
+          migrationResult.data,
+          input.resumeSnapshot,
+        );
+        await kv.write(
+          flowKey(executionId),
+          stampFlowRecordSchemaVersion(flowRecord),
+        );
       } else {
+        // Defensive fallback only: no resumeSnapshot means the resume
+        // boundary above was never consulted for this call (e.g. a fresh
+        // launch that happens to find a leftover record for its execution
+        // id). Migrate/backfill here so PersistedFlow.ensureRecord's
+        // unchecked raw read never sees a stale legacy shape. `migrateSharedState`
+        // above only unwraps the outer structural wrapper -- it never touches
+        // the nested `stateSlices.workspaceSnapshot`, so a legacy top-level
+        // `{todos, plan}` workspace snapshot must be normalized here too
+        // (same reasoning as the resumeSnapshot branch above).
         let migratedData = migrationResult.data;
         let shouldWriteShared = migrationResult.migrated;
+        if (
+          migratedData.stateSlices &&
+          !AgentWorkspaceCurrentSnapshotSchema.safeParse(
+            migratedData.stateSlices.workspaceSnapshot,
+          ).success
+        ) {
+          logger.debug(
+            'Migrated legacy workspace snapshot in resumed flow record.',
+          );
+          migratedData = {
+            ...migratedData,
+            stateSlices: {
+              ...migratedData.stateSlices,
+              workspaceSnapshot: normalizeResumedWorkspaceSnapshot(
+                migratedData.stateSlices.workspaceSnapshot,
+              ),
+            },
+          };
+          shouldWriteShared = true;
+        }
         const sharedModel = migratedData.stateSlices
           ? (currentModelFromUserChannels(
               migratedData.stateSlices.userChannels,
