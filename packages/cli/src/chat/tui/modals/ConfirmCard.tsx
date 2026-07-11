@@ -15,6 +15,7 @@ import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput } from '../input/inputKeys';
 import { KEY_HINT_SEPARATOR, KeyHints } from '../ui/KeyHints';
+import { BorderedPanel } from '../ui/BorderedPanel';
 import type {
   ApprovalBypassKind,
   ApprovalDecision,
@@ -184,20 +185,14 @@ export function ConfirmCard({
   }
 
   return (
-    <Box
+    <BorderedPanel
       borderStyle={borderStyle}
-      borderColor={color}
-      flexDirection="column"
-      paddingX={1}
+      color={color}
+      title={title}
+      footer={<KeyHints hints={hints} confirmCancel={false} />}
     >
-      <Text bold color={color}>
-        {title}
-      </Text>
       {children}
       {feedbackMode ? feedbackInput(1) : null}
-      <Box marginTop={1}>
-        <KeyHints hints={hints} confirmCancel={false} />
-      </Box>
-    </Box>
+    </BorderedPanel>
   );
 }
