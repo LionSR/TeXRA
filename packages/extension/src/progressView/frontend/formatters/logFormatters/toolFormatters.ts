@@ -11,6 +11,9 @@
  * public entry point so existing import paths keep working.
  */
 
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/details/details.js';
+
 // Local imports - shared utilities
 import type { LogMessageData } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
@@ -197,7 +200,7 @@ export function formatToolUseTemplate(
   const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" role="button" tabindex="0"><wa-icon library=${TEXRA_ICON_LIBRARY} name="reply" aria-hidden="true"></wa-icon> Setup</span>` : nothing}`;
 
   // prettier-ignore
-  return html`<details class=${classMap({
+  return html`<wa-details appearance="plain" class=${classMap({
     'banner-details': true,
     'tool-use-details': true,
     'tool-use-error': showAsError,
@@ -208,5 +211,6 @@ export function formatToolUseTemplate(
     label: titleText,
     labelClass: 'tool-use-title',
     extraContent,
-  })}${bannerContentTemplate}</details>`;
+    summarySlot: true,
+  })}${bannerContentTemplate}</wa-details>`;
 }

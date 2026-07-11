@@ -91,6 +91,14 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
       expect(anchor).not.toBeNull();
       expect(anchor?.getAttribute('href')).toBe(url);
       expect(anchor?.textContent).toContain('Click me');
+
+      // Element-name pin (#8156): web-search banners render through
+      // <wa-details>, matching the wa-details convention used elsewhere on
+      // this surface — never the native <details> element.
+      expect(
+        container.querySelector('wa-details.tool-use-details'),
+      ).not.toBeNull();
+      expect(container.querySelector('details')).toBeNull();
     });
 
     it('renders a mailto URL as a real clickable href', async () => {
