@@ -509,6 +509,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const store = getExecutionStore(executionId);
     const readSpy = vi.spyOn(store, 'read');
     const writeSpy = vi.spyOn(store, 'write');
+    const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
       const result = await runResumedFlow(
@@ -521,9 +522,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(readSpy).not.toHaveBeenCalled();
       expect(writeSpy).not.toHaveBeenCalled();
+      expect(deleteSpy).not.toHaveBeenCalled();
     } finally {
       readSpy.mockRestore();
       writeSpy.mockRestore();
+      deleteSpy.mockRestore();
     }
   });
 
@@ -551,6 +554,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       };
     });
     const writeSpy = vi.spyOn(store, 'write');
+    const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
       const result = await runResumedFlow(
@@ -565,9 +569,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(readSpy).toHaveBeenCalledWith(flowKey(executionId));
       expect(writeSpy).not.toHaveBeenCalled();
+      expect(deleteSpy).not.toHaveBeenCalled();
     } finally {
       readSpy.mockRestore();
       writeSpy.mockRestore();
+      deleteSpy.mockRestore();
     }
   });
 
