@@ -404,9 +404,11 @@ function startClaudeAgentLoop(params: {
    * Set when this launch is the disk-based fallback for a session_id the
    * in-memory registry no longer knows about (extension reload or crash). The
    * id is claimed synchronously before fallback setup begins, seeds the first
-   * turn's `resume` option, and is promoted to an active entry onSessionStart.
+   * turn's `resume` option, and is promoted after that turn succeeds.
    */
   resumeSessionId: string | undefined;
+  /** Release the fallback claim if the loop exits before promoting it. */
+  releaseFallbackClaim: (() => void) | undefined;
 }): void {
   const {
     childStream,
@@ -468,9 +470,6 @@ function startClaudeAgentLoop(params: {
 
   const strategy: ChildRunStrategy<TurnResult> = {
     stageLabel: 'Claude Code session',
-    onSessionStart: fallbackSessionId
-      ? (session) => registerSession(fallbackSessionId, session)
-      : undefined,
     launch: (ports, abortController) =>
       runTurn(
         [{ text: initialPrompt, origin: 'user' }],
@@ -485,6 +484,7 @@ function startClaudeAgentLoop(params: {
       if (turn.errorMessage) log.error(turn.errorMessage);
     },
     onTurnSuccess: (turn, session) => {
+      if (fallbackSessionId) registerSession(fallbackSessionId, session);
       if (turn.sessionId) registerSession(turn.sessionId, session);
     },
     publishUsage: (turn) => {
@@ -508,8 +508,10 @@ function startClaudeAgentLoop(params: {
           ),
         },
       ),
-    onSessionCleanup: () =>
-      ClaudeAgentSessions.releaseByExecutionId(executionId),
+    releaseSessionOwnership: () => {
+      params.releaseFallbackClaim?.();
+      ClaudeAgentSessions.releaseByExecutionId(executionId);
+    },
   };
 
   startChildRunLoop({
@@ -557,7 +559,7 @@ export class ClaudeAgentTool extends defineTool({
             summaryLabel: 'Claude Code CLI',
             queuedLabel: 'Claude Code session',
           },
-          launch: () => {
+          launch: (releaseClaim) => {
             // A missing in-memory entry denotes a disk-based SDK fallback.
             const { streamId, runtimeHost } = requireRunStream(
               CLAUDE_AGENT_NAME,
@@ -572,6 +574,7 @@ export class ClaudeAgentTool extends defineTool({
               getRunContextExecutionId(runContext),
               getRunContextWorkingDirectory(runContext),
               runtimeHost,
+              releaseClaim,
             );
           },
         });
@@ -589,6 +592,7 @@ async function launchClaudeAgentSession(
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
   runtimeHost: AgentRuntimeHost,
+  releaseFallbackClaim: (() => void) | undefined,
 ): Promise<ToolResult> {
   const config = await getClaudeAgentConfig();
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
@@ -631,6 +635,7 @@ async function launchClaudeAgentSession(
         pathToClaudeCodeExecutable: await findClaudeBinaryPath(),
         runtimeHost,
         resumeSessionId: input.session_id ?? undefined,
+        releaseFallbackClaim,
       }),
     summary: `Launched Claude Code CLI: ${preview}`,
     launchedLine: `Claude Code agent launched (model: ${model}, permission: ${permissionMode}).`,
