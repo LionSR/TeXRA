@@ -120,7 +120,12 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
   },
   'Citation Management': {
     description: 'Manage references with Zotero',
-    tools: ['zotero_add', 'zotero_search', 'zotero_export'],
+    tools: [
+      'zotero_add',
+      'zotero_search',
+      'zotero_export',
+      'zotero_collections',
+    ],
     keywords: ['zotero', 'citation', 'reference', 'bibliography', 'endnote'],
   },
   Computation: {
