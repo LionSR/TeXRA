@@ -169,12 +169,12 @@ export const codeBlockStyles = css`
   .hljs-meta,
   .hljs-meta .hljs-keyword,
   .hljs-meta .hljs-string {
-    color: var(--wa-color-symbol-keyword, #0000ff);
+    color: var(--wa-color-symbol-keyword, var(--wa-color-text-link));
   }
 
   .hljs-addition {
     background-color: var(--wa-color-diff-inserted);
-    color: var(--wa-color-git-added, #22863a);
+    color: var(--wa-color-git-added, #3fb950);
   }
 
   .hljs-deletion {
