@@ -4,6 +4,9 @@ import { customElement, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register Web Awesome components
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/radio/radio.js';
+import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared styles
@@ -61,7 +64,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
           ${repeat(
             data.questions,
             (question) => question.question,
-            (question, index) => this.renderQuestion(question, index),
+            (question) => this.renderQuestion(question),
           )}
         </div>
         <div class="user-question-request__actions">
@@ -98,13 +101,8 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
     return super.handleKeyboardShortcut(key);
   }
 
-  private renderQuestion(
-    question: UserQuestionPrompt,
-    index: number,
-  ): TemplateResult {
+  private renderQuestion(question: UserQuestionPrompt): TemplateResult {
     const current = this.selections[question.question] ?? [];
-    const inputType = question.multiSelect ? 'checkbox' : 'radio';
-    const name = `user-question-${index}`;
 
     return html`
       <section class="user-question-request__question">
@@ -119,29 +117,29 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
           <span>${question.question}</span>
         </div>
         <div class="user-question-request__options">
-          ${repeat(
-            question.options,
-            (option) => option.label,
-            (option) => html`
-              <label class="user-question-request__option">
-                <input
-                  type=${inputType}
-                  name=${name}
-                  .checked=${current.includes(option.label)}
-                  @change=${(event: Event) =>
-                    this.updateSelection(question, option.label, event)}
-                />
-                <span>
-                  <strong>${option.label}</strong>
-                  ${
-                    option.description
-                      ? html`<small>${option.description}</small>`
-                      : nothing
-                  }
-                </span>
-              </label>
-            `,
-          )}
+          ${
+            question.multiSelect
+              ? repeat(
+                  question.options,
+                  (option) => option.label,
+                  (option) =>
+                    this.renderCheckboxOption(question, option, current),
+                )
+              : html`
+                  <wa-radio-group
+                    aria-label=${question.question}
+                    .value=${current[0] ?? ''}
+                    @change=${(event: Event) =>
+                      this.updateSingleSelection(question, event)}
+                  >
+                    ${repeat(
+                      question.options,
+                      (option) => option.label,
+                      (option) => this.renderRadioOption(option),
+                    )}
+                  </wa-radio-group>
+                `
+          }
         </div>
         ${
           question.allowFreeText
@@ -159,21 +157,70 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
     `;
   }
 
+  private renderOptionLabel(
+    option: UserQuestionPrompt['options'][number],
+  ): TemplateResult {
+    return html`
+      <strong>${option.label}</strong>
+      ${
+        option.description
+          ? html`<small>${option.description}</small>`
+          : nothing
+      }
+    `;
+  }
+
+  private renderCheckboxOption(
+    question: UserQuestionPrompt,
+    option: UserQuestionPrompt['options'][number],
+    current: string[],
+  ): TemplateResult {
+    return html`
+      <wa-checkbox
+        class="user-question-request__option"
+        ?checked=${current.includes(option.label)}
+        @change=${(event: Event) =>
+          this.updateSelection(question, option.label, event)}
+      >
+        ${this.renderOptionLabel(option)}
+      </wa-checkbox>
+    `;
+  }
+
+  private renderRadioOption(
+    option: UserQuestionPrompt['options'][number],
+  ): TemplateResult {
+    return html`
+      <wa-radio class="user-question-request__option" value=${option.label}>
+        ${this.renderOptionLabel(option)}
+      </wa-radio>
+    `;
+  }
+
   private updateSelection(
     question: UserQuestionPrompt,
     label: string,
     event: Event,
   ): void {
-    const checked = (event.currentTarget as HTMLInputElement).checked;
+    const checked = (event.target as HTMLElement & { checked?: boolean })
+      .checked;
     const current = this.selections[question.question] ?? [];
-    const next = question.multiSelect
-      ? checked
-        ? [...current, label]
-        : current.filter((item) => item !== label)
-      : checked
-        ? [label]
-        : [];
+    const next = checked
+      ? [...current, label]
+      : current.filter((item) => item !== label);
     this.selections = { ...this.selections, [question.question]: next };
+  }
+
+  private updateSingleSelection(
+    question: UserQuestionPrompt,
+    event: Event,
+  ): void {
+    const value =
+      (event.target as HTMLElement & { value?: string }).value ?? '';
+    this.selections = {
+      ...this.selections,
+      [question.question]: value ? [value] : [],
+    };
   }
 
   private updateFreeText(question: string, event: Event): void {

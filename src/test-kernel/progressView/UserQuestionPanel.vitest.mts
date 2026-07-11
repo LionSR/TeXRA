@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { UserQuestionPanel } from '@progressView/frontend/components/UserQuestionPanel';
 
 // Local imports - shared constants
+import type { UserQuestionPrompt } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - test utilities
@@ -75,29 +76,33 @@ function restoreDom(): void {
   }
 }
 
-function createPermission(): UserQuestionPanel['permission'] {
+function createPermission(
+  questions: UserQuestionPrompt[] = [
+    {
+      question: 'Choose an answer',
+      options: [{ label: 'A' }, { label: 'B' }],
+      allowFreeText: true,
+    },
+  ],
+): UserQuestionPanel['permission'] {
   return {
     kind: PERMISSION_KIND.USER_QUESTION,
     data: {
       requestId: 'question-1',
       allowBypass: false,
       streamId: 'stream-1',
-      questions: [
-        {
-          question: 'Choose an answer',
-          options: [{ label: 'A' }, { label: 'B' }],
-          allowFreeText: true,
-        },
-      ],
+      questions,
     },
   };
 }
 
-async function mountPanel(): Promise<UserQuestionPanel> {
+async function mountPanel(
+  permission: UserQuestionPanel['permission'] = createPermission(),
+): Promise<UserQuestionPanel> {
   const element = document.createElement(
     'user-question-panel',
   ) as UserQuestionPanel;
-  element.permission = createPermission();
+  element.permission = permission;
   document.body.append(element);
   await element.updateComplete;
   return element;
@@ -146,5 +151,76 @@ describe('user-question-panel', () => {
     expect(button?.disabled).toBe(true);
     expect(element.handleKeyboardShortcut('y')).toBe(true);
     expect(actions).toEqual([]);
+  });
+
+  it('renders multi-select options as wa-checkbox and accumulates checked labels', async () => {
+    const element = await mountPanel(
+      createPermission([
+        {
+          question: 'Pick any',
+          options: [{ label: 'Red' }, { label: 'Blue' }],
+          multiSelect: true,
+        },
+      ]),
+    );
+
+    const checkboxes = element.shadowRoot?.querySelectorAll('wa-checkbox');
+    expect(checkboxes?.length).toBe(2);
+    expect(element.shadowRoot?.querySelector('input[type="checkbox"]')).toBe(
+      null,
+    );
+
+    const [red, blue] = [...(checkboxes ?? [])] as (HTMLElement & {
+      checked?: boolean;
+    })[];
+    red.checked = true;
+    red.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    blue.checked = true;
+    blue.dispatchEvent(
+      new Event('change', { bubbles: true, composed: true }),
+    );
+    await element.updateComplete;
+
+    const button = element.shadowRoot?.querySelector(
+      'wa-button[data-action="submit"]',
+    ) as HTMLElement & { disabled?: boolean };
+    expect(button?.disabled).toBe(false);
+
+    const actions = collectActions(element);
+    element.handleKeyboardShortcut('y');
+    expect(actions).toEqual(['submit']);
+  });
+
+  it('renders single-select options as wa-radio-group/wa-radio with no native inputs', async () => {
+    const element = await mountPanel(
+      createPermission([
+        {
+          question: 'Pick one',
+          options: [{ label: 'Yes' }, { label: 'No' }],
+          multiSelect: false,
+        },
+      ]),
+    );
+
+    expect(element.shadowRoot?.querySelector('wa-radio-group')).not.toBe(
+      null,
+    );
+    expect(element.shadowRoot?.querySelectorAll('wa-radio').length).toBe(2);
+    expect(element.shadowRoot?.querySelector('input[type="radio"]')).toBe(
+      null,
+    );
+
+    const radioGroup = element.shadowRoot?.querySelector(
+      'wa-radio-group',
+    ) as HTMLElement & { value?: string };
+    radioGroup.value = 'No';
+    radioGroup.dispatchEvent(
+      new Event('change', { bubbles: true, composed: true }),
+    );
+    await element.updateComplete;
+
+    const actions = collectActions(element);
+    element.handleKeyboardShortcut('y');
+    expect(actions).toEqual(['submit']);
   });
 });

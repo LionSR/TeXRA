@@ -52,22 +52,23 @@ export const userQuestionPanelStyles: CSSResult = css`
     gap: ${sp.small};
   }
 
-  .user-question-request__option {
-    display: grid;
-    grid-template-columns: auto 1fr;
+  wa-radio-group {
+    display: flex;
+  }
+
+  wa-radio-group::part(radios) {
+    display: flex;
+    flex-direction: column;
     gap: ${sp.small};
-    align-items: start;
+  }
+
+  .user-question-request__option {
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
     color: var(--wa-color-text-normal);
-    cursor: pointer;
   }
 
-  .user-question-request__option input {
-    margin-top: 0.2rem;
-  }
-
-  .user-question-request__option span {
+  .user-question-request__option::part(label) {
     display: flex;
     flex-direction: column;
     gap: ${sp.tiny};

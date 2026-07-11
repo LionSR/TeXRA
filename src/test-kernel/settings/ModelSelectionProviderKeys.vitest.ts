@@ -13,6 +13,8 @@ type ModelSelectionListElement = HTMLElement & {
   updateComplete: Promise<boolean>;
 };
 
+type ModelSelectionEventDetail = { modelName: string; enabled: boolean };
+
 const deepseekModel: ModelSelectionItem = {
   name: 'deepseek',
   label: 'DeepSeek V4 Flash',
@@ -76,5 +78,36 @@ describe('ModelSelectionList provider key status', () => {
     expect(helperOption?.textContent?.trim()).toBe(
       'DeepSeek V4 Flash (deepseek)',
     );
+  });
+
+  it('renders the per-model enabled toggle as wa-switch and emits model-enabled-set on change', async () => {
+    const list = await renderModelSelectionList(() => {});
+
+    const providerToggle = list.shadowRoot!.querySelector<HTMLElement>(
+      '.provider-group-toggle',
+    );
+    providerToggle?.click();
+    await list.updateComplete;
+
+    expect(list.shadowRoot!.querySelector('.model-row wa-checkbox')).toBe(
+      null,
+    );
+    const modelSwitch = list.shadowRoot!.querySelector(
+      '.model-row wa-switch',
+    ) as HTMLElement & { checked?: boolean };
+    expect(modelSwitch).not.toBeNull();
+    expect(modelSwitch.checked).toBe(true);
+
+    let detail: ModelSelectionEventDetail | undefined;
+    list.addEventListener('model-enabled-set', (event) => {
+      detail = (event as CustomEvent<ModelSelectionEventDetail>).detail;
+    });
+
+    modelSwitch.checked = false;
+    modelSwitch.dispatchEvent(
+      new Event('change', { bubbles: true, composed: true }),
+    );
+
+    expect(detail).toEqual({ modelName: 'deepseek', enabled: false });
   });
 });
