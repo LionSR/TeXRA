@@ -3,12 +3,22 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - node/flow primitives under test
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
+import { StreamLogStore } from '@transcript/StreamLogStore';
+import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
+import { TraceEmitter } from '@agent/trace';
 import { BaseNode } from '@agent/node';
 import {
   RoundPersistedFlow,
   type RoundAwareState,
 } from '@agent/node/roundPersistedFlow';
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
+import {
+  RUN_OUTCOME,
+  STREAM_LOG_ENTRY_TYPES,
+  type RunOutcome,
+  type StreamTabId,
+} from '@shared/schemas';
+import { isObject } from '@utils/core';
 
 /**
  * Regression coverage for #7077: a compile failure on what would have been
@@ -148,4 +158,127 @@ describe('RoundPersistedFlow bounded compile-repair round (#7077)', () => {
     expect(finalShared.roundsRun).toEqual([0, 1, 2]);
     expect(finalShared.compileRepairRoundGranted).toBe(true);
   });
+});
+
+type OutcomeShared = RoundAwareState;
+
+interface OutcomeControl {
+  readonly terminalOutcome: RunOutcome | 'throws';
+  interrupted: boolean;
+}
+
+class OutcomeRoundNode extends BaseNode<OutcomeShared> {
+  constructor(private readonly control: OutcomeControl) {
+    super();
+  }
+
+  async post(shared: OutcomeShared): Promise<undefined> {
+    if (shared.currentRound + 1 !== shared.totalRounds) return undefined;
+
+    if (this.control.terminalOutcome === 'throws') {
+      throw new Error('reflection round threw');
+    } else if (this.control.terminalOutcome === RUN_OUTCOME.FAILED) {
+      shared.lastError = {
+        message: 'reflection round failed',
+        userRetryable: false,
+      };
+      shared.continueRounds = false;
+    } else if (this.control.terminalOutcome === RUN_OUTCOME.CANCELLED) {
+      this.control.interrupted = true;
+    }
+
+    return undefined;
+  }
+}
+
+describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
+  it.each([
+    {
+      name: 'completed',
+      terminalOutcome: RUN_OUTCOME.COMPLETED,
+      persistedOutcome: RUN_OUTCOME.COMPLETED,
+    },
+    {
+      name: 'failed',
+      terminalOutcome: RUN_OUTCOME.FAILED,
+      persistedOutcome: RUN_OUTCOME.FAILED,
+    },
+    {
+      name: 'cancelled',
+      terminalOutcome: RUN_OUTCOME.CANCELLED,
+      persistedOutcome: RUN_OUTCOME.CANCELLED,
+    },
+    {
+      name: 'thrown failure',
+      terminalOutcome: 'throws' as const,
+      persistedOutcome: RUN_OUTCOME.FAILED,
+    },
+  ])(
+    'persists completed transition and $name final-round GROUP_END outcomes',
+    async ({ name, terminalOutcome, persistedOutcome }) => {
+      const kv = createFakeKv();
+      const logger = new TraceEmitter();
+      const streamId = `stream:reflection-round-${name}` as StreamTabId;
+      const store = new StreamLogStore();
+      const control: OutcomeControl = {
+        terminalOutcome,
+        interrupted: false,
+      };
+      const flow = new RoundPersistedFlow<OutcomeShared>(
+        new OutcomeRoundNode(control),
+        kv,
+        {
+          callbacks: {
+            createRoundStage: (roundIndex, parent, shared) =>
+              logger.openStage(`r${roundIndex}`, {
+                parent: parent ?? undefined,
+                kind: 'round',
+                index: roundIndex,
+                total: shared.totalRounds,
+              }),
+            checkInterruption: () => control.interrupted,
+          },
+        },
+      );
+      const shared: OutcomeShared = {
+        currentRound: 0,
+        totalRounds: 2,
+        continueRounds: true,
+      };
+
+      store.ensureStream(streamId);
+      const recorder = attachTranscriptRecorder(logger, streamId, store);
+
+      try {
+        const run = flow.run(shared);
+        if (terminalOutcome === 'throws') {
+          await expect(run).rejects.toThrow('reflection round threw');
+        } else {
+          await expect(run).resolves.toBe(terminalOutcome);
+        }
+
+        const roundEndStatuses =
+          store
+            .get(streamId)
+            ?.getRange(0)
+            .flatMap((entry) => {
+              if (
+                entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
+                isObject(entry.data) &&
+                entry.data.kind === 'round'
+              ) {
+                return [entry.data.status];
+              }
+              return [];
+            }) ?? [];
+
+        expect(roundEndStatuses).toEqual([
+          RUN_OUTCOME.COMPLETED,
+          persistedOutcome,
+        ]);
+      } finally {
+        recorder.unsubscribe();
+      }
+    },
+  );
 });
