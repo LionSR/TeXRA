@@ -102,6 +102,11 @@ jobs:
           fi
           pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
 
+      - name: Smoke-test macOS packaged desktop app
+        run: >-
+          pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/mac-universal/TeXRA.app/Contents/MacOS/TeXRA
+
       - name: Check macOS packaged desktop app contents
         run: pnpm run check:desktop-package
 
@@ -145,11 +150,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Linux desktop smoke dependencies
+        run: pnpm --filter @texra/desktop exec playwright install-deps chromium
+
       - name: Build desktop app
         run: pnpm run desktop:build
 
       - name: Package Linux desktop installers
         run: pnpm --filter @texra/desktop package:dist
+
+      - name: Smoke-test Linux packaged desktop app
+        run: >-
+          xvfb-run --auto-servernum pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/linux-unpacked/texra
 
       - name: Check Linux packaged desktop app contents
         run: pnpm run check:desktop-package
@@ -219,6 +232,11 @@ jobs:
 
       - name: Package Windows desktop installer
         run: pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
+
+      - name: Smoke-test Windows packaged desktop app
+        run: >-
+          pnpm run desktop:package:smoke -- --app
+          packages/desktop/dist-packaged/win-unpacked/TeXRA.exe
 
       - name: Check Windows packaged desktop app contents
         run: pnpm run check:desktop-package
