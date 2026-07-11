@@ -658,9 +658,7 @@ export async function recordAnswerForOpenTurn(params: {
     async (existing, lastTurn, timestamp) => {
       const turnPath = threadTurnDir(params.threadId, lastTurn.turnIndex);
       const td = turnDir(lastTurn.turnIndex);
-      const answerRelativePath = normalizeFilePath(
-        path.join(td, 'answer.txt'),
-      );
+      const answerRelativePath = normalizeFilePath(path.join(td, 'answer.txt'));
       const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 
       await GlobalStorageFS.write(
