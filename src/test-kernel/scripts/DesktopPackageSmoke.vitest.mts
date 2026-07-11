@@ -9,6 +9,7 @@ import { buildDesktopSmokeEnvironment } from '../../../scripts/desktop-package-s
 import {
   stopChild,
   waitForExit,
+  waitForTermination,
 } from '../../../scripts/smoke-process-utils.mjs';
 
 describe('packaged desktop smoke environment', () => {
@@ -54,11 +55,23 @@ describe('packaged desktop smoke process observation', () => {
       },
     };
 
-    await expect(waitForExit(child)).resolves.toEqual({
+    await expect(waitForTermination(child)).resolves.toEqual({
       code: 0,
       signal: null,
     });
     expect(child.off).toHaveBeenCalledOnce();
+  });
+
+  it('reports a process error to callers that require launch success', async () => {
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+    });
+    const exit = waitForExit(child);
+
+    child.emit('error', new Error('spawn failed'));
+
+    await expect(exit).rejects.toThrow('spawn failed');
   });
 
   it('does not mistake a process error for an exit during forced teardown', async () => {
@@ -80,7 +93,7 @@ describe('packaged desktop smoke process observation', () => {
       return true;
     });
 
-    const exit = await stopChild(child, waitForExit(child), {
+    const exit = await stopChild(child, waitForTermination(child), {
       graceMs: 5,
       label: 'test child',
     });
