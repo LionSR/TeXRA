@@ -62,7 +62,7 @@ export function queuedFollowUpPanelDisplay({
     rows.push({
       kind: 'overflow',
       text: truncateSummaryToWidth(
-        `… ${hiddenCount} more queued`,
+        `… +${hiddenCount} more queued`,
         contentWidth,
       ),
     });

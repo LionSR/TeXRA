@@ -130,13 +130,15 @@ export function compactRows(params: {
   if (allRows.length <= rowBudget) {
     return { hiddenCount: 0, rows: allRows };
   }
-  if (rowBudget <= 1) {
-    return {
-      hiddenCount: allRows.length,
-      rows: [],
-    };
+  if (rowBudget <= 0) {
+    return { hiddenCount: allRows.length, rows: [] };
   }
-  const visibleRows = allRows.slice(0, rowBudget - 1);
+  // At one row, show the highest-signal item (the first row — already
+  // priority-ordered by the caller's active overlay) instead of spending the
+  // only row on the hidden-count marker. Mirrors TodosPlanPanel's
+  // `compactTodosPlanRows`, the other bottom panel sharing this row budget.
+  const visibleCount = rowBudget === 1 ? 1 : rowBudget - 1;
+  const visibleRows = allRows.slice(0, visibleCount);
   return {
     hiddenCount: allRows.length - visibleRows.length,
     rows: visibleRows,
@@ -208,7 +210,7 @@ export function SubagentList(
           <Text
             dimColor
             wrap="truncate-end"
-          >{`   +${hiddenCount} more child execution${hiddenCount === 1 ? '' : 's'}`}</Text>
+          >{`   … +${hiddenCount} more child execution${hiddenCount === 1 ? '' : 's'}`}</Text>
         ) : null}
       </Box>
     );
