@@ -164,6 +164,43 @@ describe('formatConversation', () => {
     expect(output).not.toContain('the full fetched page text');
   });
 
+  it('does not emit an empty marker for a fieldless live web-fetch result', () => {
+    const output = formatConversation([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'web_fetch_tool_result',
+            content: {
+              type: 'web_fetch_result',
+              content: { type: 'document' },
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(output).not.toContain('[tool_result: ]');
+    expect(output).toContain('web_fetch_result');
+  });
+
+  it('summarizes a content-only web-fetch result without dumping page text', () => {
+    const output = formatConversation([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'web_fetch_tool_result',
+            page_content: 'fetched page text',
+          },
+        ],
+      },
+    ]);
+
+    expect(output).toContain('[tool_result: web_fetch_result]');
+    expect(output).not.toContain('fetched page text');
+  });
+
   it('does not throw on an undefined content block', () => {
     expect(() =>
       formatConversation([{ role: 'user', content: [undefined] }]),
