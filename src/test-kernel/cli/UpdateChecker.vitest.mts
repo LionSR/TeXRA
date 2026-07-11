@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildUpdateCommand,
+  checkCliUpdateAvailable,
   detectInstallMethod,
   fetchLatestCliVersion,
   fetchLatestHomebrewFormulaVersion,
@@ -9,6 +10,23 @@ import {
   isNewerVersion,
   isPackageManagerInstall,
 } from '@cli/runtime/updateChecker';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+
+class MemoryStateStore {
+  readonly values = new Map<string, unknown>();
+
+  get<T>(key: string, defaultValue?: T): T {
+    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
+  }
+
+  async update(key: string, value: unknown): Promise<void> {
+    if (value === undefined) {
+      this.values.delete(key);
+    } else {
+      this.values.set(key, value);
+    }
+  }
+}
 
 describe('isNewerVersion', () => {
   it('compares numerically across all components', () => {
@@ -273,5 +291,110 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
         timeoutMs: 123,
       },
     ]);
+  });
+});
+
+describe('checkCliUpdateAvailable', () => {
+  const currentVersion = '0.39.3';
+  const latestVersion = '0.40.0';
+
+  it('checks on a first launch (no prior lastCheckedAt) and reports a newer version', async () => {
+    const globalState = new MemoryStateStore();
+    let fetchCalls = 0;
+
+    const latest = await checkCliUpdateAvailable({
+      currentVersion,
+      globalState,
+      fetchLatest: async () => {
+        fetchCalls += 1;
+        return latestVersion;
+      },
+    });
+
+    expect(fetchCalls).toBe(1);
+    expect(latest).toBe(latestVersion);
+  });
+
+  it('returns undefined when the fetched version is not newer', async () => {
+    const globalState = new MemoryStateStore();
+
+    const latest = await checkCliUpdateAvailable({
+      currentVersion: latestVersion,
+      globalState,
+      fetchLatest: async () => latestVersion,
+    });
+
+    expect(latest).toBeUndefined();
+  });
+
+  it('throttles repeated checks within the same day', async () => {
+    const globalState = new MemoryStateStore();
+    let fetchCalls = 0;
+    // A realistic epoch timestamp: on the very first check ever,
+    // `lastCheckedAt` defaults to 0, and this must be far enough past that
+    // default to *not* be throttled (matching a real first launch).
+    let nowMs = Date.UTC(2026, 0, 1);
+
+    const run = () =>
+      checkCliUpdateAvailable({
+        currentVersion,
+        globalState,
+        now: () => nowMs,
+        fetchLatest: async () => {
+          fetchCalls += 1;
+          return latestVersion;
+        },
+      });
+
+    await run();
+    expect(fetchCalls).toBe(1);
+
+    // Same process/day, ten minutes later: still throttled — no network hit.
+    nowMs += 10 * 60 * 1000;
+    await run();
+    expect(fetchCalls).toBe(1);
+
+    // A full day later: throttle window has elapsed.
+    nowMs += 24 * 60 * 60 * 1000;
+    await run();
+    expect(fetchCalls).toBe(2);
+  });
+
+  it('does not persist the throttle stamp on a failed fetch, so the next launch retries', async () => {
+    const globalState = new MemoryStateStore();
+    let fetchCalls = 0;
+    const nowMs = Date.UTC(2026, 0, 1);
+
+    await checkCliUpdateAvailable({
+      currentVersion,
+      globalState,
+      now: () => nowMs,
+      fetchLatest: async () => {
+        fetchCalls += 1;
+        return undefined; // simulates a network/registry failure
+      },
+    });
+
+    expect(fetchCalls).toBe(1);
+    expect(
+      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+    ).toBeUndefined();
+
+    // Immediately "relaunching" (same day) must retry rather than being
+    // throttled for a full 24h off the back of the earlier failure.
+    await checkCliUpdateAvailable({
+      currentVersion,
+      globalState,
+      now: () => nowMs + 1000,
+      fetchLatest: async () => {
+        fetchCalls += 1;
+        return latestVersion;
+      },
+    });
+
+    expect(fetchCalls).toBe(2);
+    expect(
+      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+    ).toBe(nowMs + 1000);
   });
 });

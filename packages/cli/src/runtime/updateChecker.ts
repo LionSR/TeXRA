@@ -1,10 +1,14 @@
 import { spawn } from 'node:child_process';
+import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { gt as semverGt, valid as semverValid } from 'semver';
 import { z } from 'zod';
 
+import { JsonStore } from '@platform/defaults/jsonStore';
+import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { executeCommand } from '@utils/system/execUtils';
 
 import {
@@ -16,6 +20,7 @@ import {
 import { CliExitCode } from './exitCodes';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle, type CliStyle } from './style';
+import type { StateStore } from '@platform/interfaces';
 
 /** Published package name on npm; the `texra` bin lives here. */
 const CLI_PACKAGE_NAME = '@texra-ai/cli';
@@ -30,6 +35,11 @@ const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_TIMEOUT_MS = 2500;
 const HOMEBREW_COMMAND_TIMEOUT_MS = 10000;
 const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
+/**
+ * Check for a new release at most once per day, matching the desktop update
+ * checker's cadence (see `desktopUpdateChecker.ts`'s `CHECK_INTERVAL_MS`).
+ */
+const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /** Package manager the running binary was installed with. */
 export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
@@ -269,14 +279,53 @@ function announceUpdateInstalled(latest: string, style: CliStyle): never {
   process.exit(CliExitCode.Success);
 }
 
+export interface CheckCliUpdateAvailableOptions {
+  currentVersion: string;
+  globalState: StateStore;
+  /** Fetch the latest published version, or undefined on any failure. */
+  fetchLatest: () => Promise<string | undefined>;
+  now?: () => number;
+}
+
+/**
+ * At most once per day (persisted in global state), fetch the latest
+ * published version and report it when newer than `currentVersion`. Mirrors
+ * the desktop update checker's throttle (see `checkForDesktopUpdate` in
+ * `desktopUpdateChecker.ts`): the daily stamp is only persisted after a
+ * successful fetch, so a failed check (offline, registry hiccup) retries on
+ * the next launch instead of being suppressed for a full day.
+ */
+export async function checkCliUpdateAvailable({
+  currentVersion,
+  globalState,
+  fetchLatest,
+  now = Date.now,
+}: CheckCliUpdateAvailableOptions): Promise<string | undefined> {
+  const lastCheckedAt = globalState.get<number>(
+    GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
+    0,
+  );
+  const nowMs = now();
+  if (nowMs - lastCheckedAt < CHECK_INTERVAL_MS) return undefined;
+
+  const latest = await fetchLatest();
+  if (!latest) return undefined;
+  await globalState.update(
+    GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
+    nowMs,
+  );
+  return isNewerVersion(latest, currentVersion) ? latest : undefined;
+}
+
 let notified = false;
 
 /**
- * Once per process: check the package source for a newer release and, in an
- * interactive terminal, offer to run the matching global install. npm-like
- * installs read the npm registry; Homebrew installs refresh local tap metadata
- * before reading the formula version. Failures are silent so a flaky network
- * never gets between the user and their session.
+ * Once per process: check the package source for a newer release (at most
+ * once per day — see {@link checkCliUpdateAvailable}) and, in an interactive
+ * terminal, offer to run the matching global install. npm-like installs read
+ * the npm registry; Homebrew installs refresh local tap metadata before
+ * reading the formula version. Failures are silent so a flaky network never
+ * gets between the user and their session.
  *
  * Disable entirely with `TEXRA_NO_UPDATE_CHECK=1`.
  */
@@ -299,11 +348,21 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   if (!isPackageManagerInstall()) return;
 
   const method = detectInstallMethod();
-  const latest =
-    method === 'brew'
-      ? await fetchLatestHomebrewFormulaVersion()
-      : await fetchLatestCliVersion();
-  if (!latest || !isNewerVersion(latest, context.version)) return;
+  // Runs before `initInteractiveCliPlatform`, so `platform()` isn't up yet —
+  // open the same global `state.json` that `createCliStateStores` opens later
+  // directly (see `cliStateStores.ts`).
+  const globalState = await JsonStore.open(
+    path.join(createNodeStorageProvider().getGlobalStoragePath(), 'state.json'),
+  );
+  const latest = await checkCliUpdateAvailable({
+    currentVersion: context.version,
+    globalState,
+    fetchLatest: () =>
+      method === 'brew'
+        ? fetchLatestHomebrewFormulaVersion()
+        : fetchLatestCliVersion(),
+  });
+  if (!latest) return;
 
   const updateCmd = formatUpdateCommand(method);
   const style = createCliStyle(context.colorEnabled);
