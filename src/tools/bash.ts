@@ -34,7 +34,11 @@ import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/constants/toolDefaults';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
 import { requireRunStream } from '@tools/contextHelpers';
-import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
+import {
+  enqueueChildRunFollowUp,
+  wakeChildRunFollowUp,
+  type ChildRunEnqueueResult,
+} from '@tools/childRunDelivery';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -344,51 +348,75 @@ export class BashTool extends defineTool({
       return childStream.finalize(options);
     };
 
-    const deliverParentFollowUp = async (text: string): Promise<void> => {
-      // Route through the shared wake-aware delivery path — a parent
-      // suspended WAITING on this background job must be resumed, not left
-      // to sit until something else wakes it (see deliverChildRunFollowUp).
-      const delivery = await deliverChildRunFollowUp({
-        targetStreamId: parentStreamId,
-        followUp: { text, origin: 'subagent_result' },
-        session: runSession,
-        wake: true,
-      });
-      if (delivery.kind === 'no_session') {
-        logger.debug(
-          'Background bash follow-up dropped: parent stream has no active session.',
-          {
-            data: {
-              parentStreamId,
-              streamStatus: delivery.streamStatus ?? 'unknown',
-            },
-          },
-        );
-      } else if (delivery.kind === 'dropped') {
-        logger.warn(
-          'Background bash follow-up dropped: parent stream is gone and could not be resumed.',
-          { data: { parentStreamId } },
-        );
-      }
-    };
-
     const logBackgroundFailure = (action: string, err: unknown): void => {
       logger.error(`Failed to ${action} background bash result`, {
         data: err,
       });
     };
 
+    const enqueueParentFollowUp = async (
+      text: string,
+    ): Promise<ChildRunEnqueueResult | undefined> => {
+      try {
+        return await enqueueChildRunFollowUp({
+          targetStreamId: parentStreamId,
+          followUp: { text, origin: 'subagent_result' },
+          session: runSession,
+        });
+      } catch (err: unknown) {
+        logBackgroundFailure('enqueue', err);
+        return undefined;
+      }
+    };
+
+    // Wake the parent only after this child is finalized (see #8093): waking
+    // a WAITING parent can await its entire resumed turn
+    // (`agentResume.tryResumeStream` → … → `resumeToolUseFromSnapshot`), and
+    // that resumed turn may itself wait on this execution — so finalizing
+    // first keeps a self-stall impossible instead of merely unlikely.
+    const wakeParentFollowUp = async (
+      enqueueResult: ChildRunEnqueueResult | undefined,
+    ): Promise<void> => {
+      if (!enqueueResult) return;
+      if (enqueueResult.kind === 'no_session') {
+        logger.debug(
+          'Background bash follow-up dropped: parent stream has no active session.',
+          {
+            data: {
+              parentStreamId,
+              streamStatus: enqueueResult.streamStatus ?? 'unknown',
+            },
+          },
+        );
+        return;
+      }
+      try {
+        const delivery = await wakeChildRunFollowUp(
+          parentStreamId,
+          enqueueResult,
+          runSession,
+        );
+        if (delivery.kind === 'dropped') {
+          logger.warn(
+            'Background bash follow-up dropped: parent stream is gone and could not be resumed.',
+            { data: { parentStreamId } },
+          );
+        }
+      } catch (err: unknown) {
+        logBackgroundFailure('wake', err);
+      }
+    };
+
     const deliverAndFinalize = async (
       text: string,
       finalizeOptions: Parameters<typeof finalizeBackground>[0],
     ): Promise<void> => {
-      try {
-        await deliverParentFollowUp(text);
-      } catch (err: unknown) {
-        logBackgroundFailure('deliver', err);
-      } finally {
-        await finalizeBackground(finalizeOptions);
-      }
+      // Order matters (see #8093): enqueue the result (fast), finalize this
+      // child so its terminal state is visible in the in-memory execution
+      // registry, then wake the parent — never the other way around.
+      const enqueueResult = await enqueueParentFollowUp(text);
+      await finalizeBackground(finalizeOptions);
+      await wakeParentFollowUp(enqueueResult);
     };
 
     void (async () => {
