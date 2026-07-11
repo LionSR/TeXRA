@@ -124,6 +124,16 @@ export class FollowUpInput extends LitElement {
   @property({ type: Boolean, reflect: true }) visible = false;
   @property({ attribute: false }) value = '';
   @property({ attribute: false }) queuedMessages: string[] = [];
+  /**
+   * Identity of the stream this instance is currently bound to (the same
+   * `streamInfo.name` TodoList/PlanView key off of as `collapseKey`). The
+   * progress view reuses a single `<follow-up-input>` instance across the
+   * active-stream context switch, so any pasted-image state pending here
+   * must be reset when the bound stream changes — otherwise an image
+   * attached while viewing one stream can be delivered to whichever stream
+   * is active when the user later hits send.
+   */
+  @property({ type: String }) streamId = '';
 
   @property({ attribute: false }) shouldFocus = false;
   @property({ attribute: false }) polishedText: string | null = null;
@@ -160,6 +170,20 @@ export class FollowUpInput extends LitElement {
   });
 
   protected override willUpdate(changedProperties: PropertyValues): void {
+    // React to streamId property change: this instance is reused across
+    // streams, so any image pasted while bound to the previous stream must
+    // not ride along to whichever stream is active when send eventually
+    // fires. In-flight pastes are invalidated via imagePasteRevision so
+    // their async completion is a no-op (see attachPastedImages).
+    if (
+      changedProperties.has('streamId') &&
+      changedProperties.get('streamId') !== undefined
+    ) {
+      this.imagePasteRevision += 1;
+      this.pendingImages = [];
+      this.sendAfterImagePastes = false;
+    }
+
     // React to shouldFocus property change
     if (changedProperties.has('shouldFocus') && this.shouldFocus) {
       this.focusInput({ scrollIntoView: true }).then(() => {
