@@ -7,6 +7,9 @@
  * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/details/details.js';
+
 // Local imports - Lit utilities
 import type { LogMessageData } from '@shared/schemas';
 import {
@@ -74,7 +77,7 @@ export function formatBannerContentTemplate(
     : html`<div class="banner-content markdown-content log-entry-content ${config.contentClass}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 
   // prettier-ignore
-  return html`<details class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
     iconName: config.iconName,
     label: config.labelText,
     copyButton: {
@@ -82,7 +85,8 @@ export function formatBannerContentTemplate(
       content: trimmedContent,
       contentId: id ? `banner:${id}` : undefined,
     },
-  })}${contentTemplate}</details>`;
+    summarySlot: true,
+  })}${contentTemplate}</wa-details>`;
 }
 
 /** Format a model response as TemplateResult. */
@@ -108,7 +112,7 @@ export function formatModelResponseTemplate(
     : html`<div class="banner-content markdown-content log-entry-content banner-content--model message-${level}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 
   // prettier-ignore
-  return html`<details class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
     iconName: 'sparkle',
     label: 'Assistant',
     timestamp: verbose
@@ -119,5 +123,6 @@ export function formatModelResponseTemplate(
       content: trimmedContent,
       contentId: id ? `model:${id}` : undefined,
     },
-  })}${contentTemplate}</details>`;
+    summarySlot: true,
+  })}${contentTemplate}</wa-details>`;
 }
