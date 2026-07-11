@@ -23,6 +23,7 @@ import {
   isFunctionCallOutputItem,
 } from '@agent/modelHandlers/openai/openAIResponseContent';
 import { isResponseFunctionToolCallItem } from '@agent/modelHandlers/openai/responseStreamEvents';
+import { extractWebFetchResultFields } from '@agent/types/ServerToolTypes';
 import { isObject } from '@utils/core';
 import type { Part } from '@google/genai';
 import type {
@@ -245,13 +246,14 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
       return results.length ? { kind: 'web-search-results', results } : null;
     }
 
-    case 'web_fetch_tool_result':
+    case 'web_fetch_tool_result': {
+      const result = extractWebFetchResultFields(block);
+      if (!result) return null;
       return {
         kind: 'web-fetch',
-        url: block.url,
-        title: block.title,
-        content: block.page_content,
+        ...result,
       };
+    }
 
     default:
       return null;

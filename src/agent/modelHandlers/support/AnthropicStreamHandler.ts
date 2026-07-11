@@ -5,8 +5,7 @@
 // Third-party imports
 import { logWebFetch, type AgentTrace } from '@agent/trace';
 import {
-  capWebFetchContent,
-  extractWebFetchPageText,
+  extractWebFetchResultFields,
   mapAnthropicWebSearchEntries,
   type WebFetchResult,
   type WebSearchResult,
@@ -372,17 +371,16 @@ export class AnthropicStreamHandler {
     // Native discriminated-union narrowing on block.content
     // (WebFetchBlock | WebFetchToolResultErrorBlock) replaces the prior
     // structural casts.
+    const fields = extractWebFetchResultFields(block);
     const result: WebFetchResult =
       block.content.type === 'web_fetch_result'
         ? {
-            url: block.content.url || fetchUrl,
-            title: block.content.content?.title ?? undefined,
+            url: fields?.url || fetchUrl,
+            title: fields?.title,
             provider: 'anthropic',
             callId: block.tool_use_id,
             status: 'completed',
-            content: capWebFetchContent(
-              extractWebFetchPageText(block.content.content),
-            ),
+            content: fields?.content,
           }
         : {
             url: fetchUrl,
