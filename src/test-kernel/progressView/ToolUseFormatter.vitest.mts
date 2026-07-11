@@ -11,6 +11,7 @@ useLitComponentTestDom(() =>
   Promise.all([
     import('@progressView/frontend/formatters/logFormatters/toolFormatters'),
     import('@progressView/frontend/formatters/logFormatters/bannerFormatters'),
+    import('@progressView/frontend/formatters/logFormatters/messageFormatters'),
   ]),
 );
 
@@ -253,6 +254,44 @@ describe('wa-details summary controls: activation does not toggle the panel', ()
 
       const waDetails = container.querySelector(
         'wa-details.banner-details',
+      ) as WaDetailsElement | null;
+      expect(waDetails).not.toBeNull();
+      await waDetails!.updateComplete;
+
+      const copyButton = container.querySelector(
+        'wa-button.banner-content-copy',
+      ) as (HTMLElement & { updateComplete?: Promise<boolean> }) | null;
+      expect(copyButton).not.toBeNull();
+      if (copyButton!.updateComplete) await copyButton!.updateComplete;
+
+      expect(waDetails!.open).toBe(false);
+      dispatchActivationKeydown(copyButton!, key);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(waDetails!.open).toBe(false);
+    },
+  );
+
+  it.each(['Enter', ' '] as const)(
+    'keydown %j on the error banner copy button does not toggle the panel',
+    async (key) => {
+      const { formatErrorTemplate } =
+        await import('@progressView/frontend/formatters/logFormatters/messageFormatters');
+      const { render } = await import('lit');
+      const message: LogMessageData = {
+        id: 'error-1',
+        text: 'something failed',
+        level: LOG_LEVELS.ERROR,
+        timestamp: 1,
+        messageType: 'error',
+        data: { operation: 'test-op' },
+      };
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      render(formatErrorTemplate(message), container);
+
+      const waDetails = container.querySelector(
+        'wa-details.banner-details--error',
       ) as WaDetailsElement | null;
       expect(waDetails).not.toBeNull();
       await waDetails!.updateComplete;
