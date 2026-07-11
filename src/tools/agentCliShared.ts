@@ -106,8 +106,10 @@ function queueAgentCliFollowUp(
  * Atomically choose between queueing onto an owned session id and launching a
  * disk-based fallback. A failed owner releases only its own claim; waiting
  * callers then compete for the released id, so one retries the fallback while
- * the others continue waiting. A started loop promotes and later releases the
- * claim itself.
+ * the others continue waiting. A successful launch transfers the claim to its
+ * loop, which promotes it after the first successful turn or releases it during
+ * cleanup so an acknowledged follow-up can never be stranded behind a failed
+ * initial turn.
  */
 export async function resumeOrLaunchAgentCliSession(
   store: ClaimableAgentCliStore,
@@ -116,7 +118,7 @@ export async function resumeOrLaunchAgentCliSession(
     prompt: string;
     callerStreamId: StreamTabId | undefined;
     labels: AgentCliResumeLabels;
-    launch: () => Promise<ToolResult>;
+    launch: (releaseClaim?: () => void) => Promise<ToolResult>;
   },
 ): Promise<ToolResult> {
   const { id } = params;
@@ -126,7 +128,7 @@ export async function resumeOrLaunchAgentCliSession(
     const releaseClaim = store.claim(id);
     if (releaseClaim) {
       try {
-        return await params.launch();
+        return await params.launch(releaseClaim);
       } catch (error) {
         releaseClaim();
         throw error;
