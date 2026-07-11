@@ -90,7 +90,13 @@ describe('history search prefilter', () => {
       timestamp: '2026-05-15T12:00:00.000Z',
       agentConfig: { agentCategory: 'workflow' },
     };
-    expect(matches(midMonthItem, 'may')).toBe(true);
+    // Derive the expected month token from the same locale-aware
+    // Intl.DateTimeFormat shape rather than hard-coding an English name,
+    // so the assertion holds under any process locale.
+    const expectedMonth = new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+    }).format(new Date(midMonthItem.timestamp));
+    expect(matches(midMonthItem, expectedMonth)).toBe(true);
     expect(matches(midMonthItem, '2026')).toBe(true);
   });
 });

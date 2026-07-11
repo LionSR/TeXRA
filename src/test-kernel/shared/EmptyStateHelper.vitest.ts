@@ -107,6 +107,26 @@ describe('renderEmptyState shared helper', () => {
     expect(runSetup).not.toHaveBeenCalled();
   });
 
+  it('forwards an action size to the underlying wa-button, defaulting to the component default', async () => {
+    const container = await renderEmptyStateInto({
+      icon: 'terminal',
+      title: 'No runs yet',
+      className: 'log-placeholder',
+      actions: [
+        { label: 'Run setup', icon: 'rocket', size: 'small', onClick: vi.fn() },
+        { label: 'Walkthrough', icon: 'book', onClick: vi.fn() },
+      ],
+    });
+
+    const buttons = [
+      ...container.querySelectorAll('.empty-state-actions wa-button'),
+    ];
+    expect(buttons[0]?.getAttribute('size')).toBe('small');
+    // No `size` supplied: falls through to <wa-button>'s own default
+    // (medium), matching ProgressApp's unsized action buttons.
+    expect(buttons[1]?.getAttribute('size')).not.toBe('small');
+  });
+
   it('renders no actions container when actions is omitted', async () => {
     const container = await renderEmptyStateInto({
       icon: 'terminal',
