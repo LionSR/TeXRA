@@ -3,10 +3,6 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 // Local imports - history domain
-import {
-  ChatExportController,
-  type ExportInputStatus,
-} from '@controllers/settingsView/ChatExportController';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import {
   deleteAllExecutions,
@@ -25,6 +21,12 @@ import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 // Local imports - IPC contracts
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
+
+// Local imports - controller types
+import type {
+  ChatExportController,
+  ExportInputStatus,
+} from '@controllers/settingsView/ChatExportController';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
@@ -57,7 +59,7 @@ type HistoryConfigResult =
 export class DesktopHistoryHandlers {
   readonly actions: SettingsViewCommandActions['history'];
 
-  private chatExportController: ChatExportController | undefined;
+  private chatExportControllerLoad: Promise<ChatExportController> | undefined;
 
   constructor(
     private readonly dependencies: DesktopHistoryHandlerDependencies,
@@ -165,15 +167,21 @@ export class DesktopHistoryHandlers {
     return this.dependencies.resourcesPath;
   }
 
-  private getChatExportController(): ChatExportController {
-    if (!this.chatExportController) {
-      const latexPreamble = readFileSync(
-        path.join(this.getResourcesPath(), 'templates', 'chatExport.tex'),
-        'utf8',
-      );
-      this.chatExportController = new ChatExportController({ latexPreamble });
-    }
-    return this.chatExportController;
+  private getChatExportController(): Promise<ChatExportController> {
+    this.chatExportControllerLoad ??=
+      import('@controllers/settingsView/ChatExportController')
+        .then(({ ChatExportController }) => {
+          const latexPreamble = readFileSync(
+            path.join(this.getResourcesPath(), 'templates', 'chatExport.tex'),
+            'utf8',
+          );
+          return new ChatExportController({ latexPreamble });
+        })
+        .catch((error: unknown) => {
+          this.chatExportControllerLoad = undefined;
+          throw error;
+        });
+    return this.chatExportControllerLoad;
   }
 
   private async reportExportInputError(
@@ -207,7 +215,7 @@ export class DesktopHistoryHandlers {
   }
 
   private async exportChatHtml(historyId: string): Promise<void> {
-    const controller = this.getChatExportController();
+    const controller = await this.getChatExportController();
     const outcome = await controller.exportAsHtml(
       historyId,
       path.join(this.getResourcesPath(), 'traceViewerStandalone', 'index.html'),
@@ -232,7 +240,7 @@ export class DesktopHistoryHandlers {
       return;
     }
 
-    const controller = this.getChatExportController();
+    const controller = await this.getChatExportController();
     const result = await controller.buildExportInput(historyId);
     if (result.status !== 'ok') {
       await this.reportExportInputError(result.status);
