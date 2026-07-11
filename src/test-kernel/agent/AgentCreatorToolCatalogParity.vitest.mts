@@ -60,9 +60,7 @@ function parseCatalogGroups(markdown: string): Map<string, Set<string>> {
 }
 
 describe('agent-creator TOOL_GROUPS vs tool_catalog.md', () => {
-  const catalogGroups = parseCatalogGroups(
-    readFileSync(CATALOG_PATH, 'utf8'),
-  );
+  const catalogGroups = parseCatalogGroups(readFileSync(CATALOG_PATH, 'utf8'));
 
   it('lists every TOOL_GROUPS category in the doc', () => {
     for (const label of Object.keys(TOOL_GROUPS)) {
