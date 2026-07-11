@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   lookupApiKey: vi.fn(),
@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   secrets: {},
   setCliApiMode: vi.fn(async () => undefined),
   setCliCodexSubscription: vi.fn(async () => undefined),
-  markApprovalDenied: vi.fn(),
 }));
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
@@ -25,53 +24,6 @@ vi.mock('@cli/runtime/apiAccessMode', async (importActual) => {
 vi.mock('@cli/chat/tui/state/codexSubscription', () => ({
   setCliCodexSubscription: mocks.setCliCodexSubscription,
 }));
-
-vi.mock('@cli/runtime/approvalAdapter', () => {
-  interface RetryPayloadForMock {
-    errorMessage?: string;
-    errorDetails?: {
-      exhaustionReason?:
-        'relay-limit' | 'upstream-credit' | 'chatgpt-subscription';
-      isRelayError?: boolean;
-    };
-  }
-
-  const isChatGptSubscriptionRetry = (payload: RetryPayloadForMock) =>
-    payload.errorDetails?.exhaustionReason === 'chatgpt-subscription';
-  const isRelayMonthlyLimitMessage = (message?: string) =>
-    message?.toLowerCase().includes('monthly spending limit') === true;
-
-  return {
-    approvalPromptAllowed: (context: {
-      approvalPolicy: string;
-      mode: string;
-    }) => context.approvalPolicy === 'ask' && context.mode === 'interactive',
-    humanInputDenialFeedback: () => 'Denied by CLI approval policy.',
-    immediateDecision: (context: { approvalPolicy: string }) => {
-      if (context.approvalPolicy === 'yolo') return { accepted: true };
-      if (context.approvalPolicy === 'ask') return undefined;
-      return { accepted: false, userMessage: 'Denied by CLI approval policy.' };
-    },
-    immediateDecisionForApproval: (
-      _event: string,
-      _payload: unknown,
-      context: { approvalPolicy: string; mode: string },
-    ) => {
-      if (context.approvalPolicy === 'ask' && context.mode === 'interactive') {
-        return undefined;
-      }
-      if (context.approvalPolicy === 'yolo') return { accepted: true };
-      return { accepted: false, userMessage: 'Denied by CLI approval policy.' };
-    },
-    isCliApiSwitchableRetry: (payload: RetryPayloadForMock) =>
-      isChatGptSubscriptionRetry(payload) ||
-      (payload.errorDetails?.exhaustionReason !== undefined &&
-        (payload.errorDetails?.isRelayError === true ||
-          isRelayMonthlyLimitMessage(payload.errorMessage))),
-    isCliChatGptSubscriptionRetry: isChatGptSubscriptionRetry,
-    markApprovalDenied: mocks.markApprovalDenied,
-  };
-});
 
 vi.mock('@model/apiProviders', async (importActual) => {
   const actual = await importActual<typeof import('@model/apiProviders')>();
@@ -93,6 +45,7 @@ import {
 } from '@cli/chat/tui/state/approvalQueue';
 import { resetCliState, streams } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
+import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
@@ -118,17 +71,26 @@ function host(): CliRuntimeHost {
   } as unknown as CliRuntimeHost;
 }
 
-function tui(): {
+function tui(runtimeHost = host()): {
   readonly runtimeHost: CliRuntimeHost;
+  readonly cliContext: CliContext;
   readonly interactions: HostInteractions;
   readonly dispose: () => void;
 } {
-  const runtimeHost = host();
-  const interactions = createTuiHostInteractions(runtimeHost, context());
+  const cliContext = context();
+  const interactions = createTuiHostInteractions(runtimeHost, cliContext);
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    interactions.dispose?.();
+  };
+  onTestFinished(dispose);
   return {
     runtimeHost,
+    cliContext,
     interactions,
-    dispose: () => interactions.dispose?.(),
+    dispose,
   };
 }
 
@@ -172,169 +134,145 @@ afterEach(() => {
   mocks.notify.mockReset();
   mocks.setCliApiMode.mockClear();
   mocks.setCliCodexSubscription.mockClear();
-  mocks.markApprovalDenied.mockClear();
 });
 
 describe('TUI retry approvals', () => {
   it('does not mutate the runtime host emitter', () => {
     const runtimeHost = host();
     const originalEmit = runtimeHost.emit;
-    const interactions = createTuiHostInteractions(runtimeHost, context());
-    try {
-      expect(runtimeHost.emit).toBe(originalEmit);
-    } finally {
-      interactions.dispose?.();
-    }
+    tui(runtimeHost);
+    expect(runtimeHost.emit).toBe(originalEmit);
   });
 
   it('updates TUI bash bypass state at the approval decision site', async () => {
-    const { runtimeHost, interactions, dispose } = tui();
-    try {
-      const result = interactions.requestBashApproval?.({
-        command: 'echo ok',
+    const { runtimeHost, interactions } = tui();
+    const result = interactions.requestBashApproval?.({
+      command: 'echo ok',
+      streamId: 'bash-bypass-stream',
+    });
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'bash',
+        payload: { streamId: 'bash-bypass-stream' },
+      });
+    });
+    currentApproval.get()?.decide({ accepted: true, bypass: 'bash' });
+
+    await expect(result).resolves.toEqual({
+      accepted: true,
+      userMessage: undefined,
+    });
+    expect(streams.get().get('bash-bypass-stream')?.bypass.bash).toBe(true);
+    expect(runtimeHost.emit).toHaveBeenCalledWith(
+      'updateBashApprovalBypassState',
+      {
         streamId: 'bash-bypass-stream',
-      });
-
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'bash',
-          payload: { streamId: 'bash-bypass-stream' },
-        });
-      });
-      currentApproval.get()?.decide({ accepted: true, bypass: 'bash' });
-
-      await expect(result).resolves.toEqual({
-        accepted: true,
-        userMessage: undefined,
-      });
-      expect(streams.get().get('bash-bypass-stream')?.bypass.bash).toBe(true);
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
-        'updateBashApprovalBypassState',
-        {
-          streamId: 'bash-bypass-stream',
-          bypassActive: true,
-        },
-      );
-    } finally {
-      dispose();
-    }
+        bypassActive: true,
+      },
+    );
   });
 
   it('updates TUI bash bypass state when goal auto-approval is enabled and cleared', async () => {
-    const runtimeHost = host();
-    const interactions = createTuiHostInteractions(runtimeHost, context());
+    const { runtimeHost, interactions } = tui();
     const hostWithInteractions = {
       ...runtimeHost,
       interactions,
     } satisfies CliRuntimeHost;
-    try {
-      await setGoalSessionBashAutoApproval(
-        'goal-bypass-stream',
-        true,
-        hostWithInteractions,
-      );
-      expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(true);
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
-        'updateBashApprovalBypassState',
-        {
-          streamId: 'goal-bypass-stream',
-          bypassActive: true,
-        },
-      );
+    await setGoalSessionBashAutoApproval(
+      'goal-bypass-stream',
+      true,
+      hostWithInteractions,
+    );
+    expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(true);
+    expect(runtimeHost.emit).toHaveBeenCalledWith(
+      'updateBashApprovalBypassState',
+      {
+        streamId: 'goal-bypass-stream',
+        bypassActive: true,
+      },
+    );
 
-      await setGoalSessionBashAutoApproval(
-        'goal-bypass-stream',
-        false,
-        hostWithInteractions,
-      );
-      expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(false);
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
-        'updateBashApprovalBypassState',
-        {
-          streamId: 'goal-bypass-stream',
-          bypassActive: false,
-        },
-      );
-    } finally {
-      interactions.dispose?.();
-    }
+    await setGoalSessionBashAutoApproval(
+      'goal-bypass-stream',
+      false,
+      hostWithInteractions,
+    );
+    expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(false);
+    expect(runtimeHost.emit).toHaveBeenCalledWith(
+      'updateBashApprovalBypassState',
+      {
+        streamId: 'goal-bypass-stream',
+        bypassActive: false,
+      },
+    );
   });
 
   it('updates TUI edit bypass state at the approval decision site', async () => {
-    const { runtimeHost, interactions, dispose } = tui();
-    try {
-      const result = interactions.requestToolEditApproval?.({
-        path: '/work/main.tex',
-        originalContent: 'old',
-        proposedContent: 'new',
-        sourceTool: 'edit',
+    const { runtimeHost, interactions } = tui();
+    const result = interactions.requestToolEditApproval?.({
+      path: '/work/main.tex',
+      originalContent: 'old',
+      proposedContent: 'new',
+      sourceTool: 'edit',
+      streamId: 'edit-bypass-stream',
+    });
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'toolEdit',
+        payload: { streamId: 'edit-bypass-stream' },
+      });
+    });
+    currentApproval.get()?.decide({ accepted: true, bypass: 'toolEdit' });
+
+    await expect(result).resolves.toEqual({
+      accepted: true,
+      appliedContent: 'new',
+    });
+    expect(streams.get().get('edit-bypass-stream')?.bypass.toolEdit).toBe(true);
+    expect(runtimeHost.emit).toHaveBeenCalledWith(
+      'updateToolEditApprovalBypassState',
+      {
         streamId: 'edit-bypass-stream',
-      });
-
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'toolEdit',
-          payload: { streamId: 'edit-bypass-stream' },
-        });
-      });
-      currentApproval.get()?.decide({ accepted: true, bypass: 'toolEdit' });
-
-      await expect(result).resolves.toEqual({
-        accepted: true,
-        appliedContent: 'new',
-      });
-      expect(streams.get().get('edit-bypass-stream')?.bypass.toolEdit).toBe(
-        true,
-      );
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
-        'updateToolEditApprovalBypassState',
-        {
-          streamId: 'edit-bypass-stream',
-          bypassActive: true,
-        },
-      );
-    } finally {
-      dispose();
-    }
+        bypassActive: true,
+      },
+    );
   });
 
   it('updates TUI super-yolo bypass state at the proposal decision site', async () => {
-    const { runtimeHost, interactions, dispose } = tui();
-    try {
-      const result = interactions.requestAgentProposal?.({
-        proposalId: 'proposal-bypass',
+    const { runtimeHost, interactions } = tui();
+    const result = interactions.requestAgentProposal?.({
+      proposalId: 'proposal-bypass',
+      streamId: 'proposal-bypass-stream',
+      agent: 'critic',
+      agentSource: null,
+      model: 'kimi26T',
+      instruction: 'Check the local compactness claim.',
+      memories: [],
+      workingDirectory: null,
+      agentCategory: AgentCategory.ToolUse,
+    });
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'proposal',
+        payload: { streamId: 'proposal-bypass-stream' },
+      });
+    });
+    currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
+
+    await expect(result).resolves.toEqual({ action: 'approve' });
+    expect(streams.get().get('proposal-bypass-stream')?.bypass.superYolo).toBe(
+      true,
+    );
+    expect(runtimeHost.emit).toHaveBeenCalledWith(
+      'updateSuperYoloBypassState',
+      {
         streamId: 'proposal-bypass-stream',
-        agent: 'critic',
-        agentSource: null,
-        model: 'kimi26T',
-        instruction: 'Check the local compactness claim.',
-        memories: [],
-        workingDirectory: null,
-        agentCategory: AgentCategory.ToolUse,
-      });
-
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'proposal',
-          payload: { streamId: 'proposal-bypass-stream' },
-        });
-      });
-      currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
-
-      await expect(result).resolves.toEqual({ action: 'approve' });
-      expect(
-        streams.get().get('proposal-bypass-stream')?.bypass.superYolo,
-      ).toBe(true);
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
-        'updateSuperYoloBypassState',
-        {
-          streamId: 'proposal-bypass-stream',
-          bypassActive: true,
-        },
-      );
-    } finally {
-      dispose();
-    }
+        bypassActive: true,
+      },
+    );
   });
 
   it('auto-switches provider-less relay retries when any personal key exists', async () => {
@@ -346,68 +284,54 @@ describe('TUI retry approvals', () => {
         provider === fallbackProvider ? 'sk-test' : undefined,
     );
 
-    const { interactions, dispose } = tui();
-    try {
-      const result = interactions.requestRetry?.(
-        relayRetry({ streamId: 's1' }),
-      );
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(relayRetry({ streamId: 's1' }));
 
-      await vi.waitFor(() => {
-        expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-      });
-      await expect(result).resolves.toEqual({
-        action: 'retry',
-        feedback: undefined,
-      });
-      expect(currentApproval.get()).toBeUndefined();
-      expect(mocks.lookupApiKey.mock.calls.map((call) => call[1])).toContain(
-        fallbackProvider,
-      );
-    } finally {
-      dispose();
-    }
+    await vi.waitFor(() => {
+      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
+    });
+    await expect(result).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(currentApproval.get()).toBeUndefined();
+    expect(mocks.lookupApiKey.mock.calls.map((call) => call[1])).toContain(
+      fallbackProvider,
+    );
   });
 
   it('falls back to the retry modal when API key lookup fails', async () => {
     mocks.lookupApiKey.mockRejectedValue(new Error('keychain unavailable'));
 
-    const { interactions, dispose } = tui();
-    try {
-      const retry = relayRetry({ streamId: 's2', provider: 'openai' });
-      void interactions.requestRetry?.(retry);
+    const { interactions } = tui();
+    const retry = relayRetry({ streamId: 's2', provider: 'openai' });
+    void interactions.requestRetry?.(retry);
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'retry',
-          payload: { streamId: 's2' },
-        });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'retry',
+        payload: { streamId: 's2' },
       });
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('does not auto-switch when a retry provider is not an API provider', async () => {
     mocks.lookupApiKey.mockResolvedValue('sk-test');
 
-    const { interactions, dispose } = tui();
-    try {
-      const retry = relayRetry({
-        streamId: 'unknown-provider',
-        provider: 'custom-provider',
-      });
-      void interactions.requestRetry?.(retry);
+    const { interactions } = tui();
+    const retry = relayRetry({
+      streamId: 'unknown-provider',
+      provider: 'custom-provider',
+    });
+    void interactions.requestRetry?.(retry);
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'retry',
-          payload: { streamId: 'unknown-provider' },
-        });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'retry',
+        payload: { streamId: 'unknown-provider' },
       });
-      expect(mocks.lookupApiKey).not.toHaveBeenCalled();
-    } finally {
-      dispose();
-    }
+    });
+    expect(mocks.lookupApiKey).not.toHaveBeenCalled();
   });
 
   it('auto-switches relay retries detected by monthly-limit message fallback', async () => {
@@ -416,31 +340,27 @@ describe('TUI retry approvals', () => {
         provider === 'openai' ? 'sk-openai' : undefined,
     );
 
-    const { interactions, dispose } = tui();
-    try {
-      const result = interactions.requestRetry?.({
-        streamId: 'message-fallback',
-        operation: 'model request',
-        errorMessage: 'Monthly spending limit reached.',
-        errorDetails: {
-          message: 'Monthly spending limit reached.',
-          exhaustionReason: 'relay-limit',
-          isRelayError: false,
-          provider: 'openai',
-        },
-      } as RuntimeInteractionEventPayloads['showRetryRequest']);
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.({
+      streamId: 'message-fallback',
+      operation: 'model request',
+      errorMessage: 'Monthly spending limit reached.',
+      errorDetails: {
+        message: 'Monthly spending limit reached.',
+        exhaustionReason: 'relay-limit',
+        isRelayError: false,
+        provider: 'openai',
+      },
+    } as RuntimeInteractionEventPayloads['showRetryRequest']);
 
-      await vi.waitFor(() => {
-        expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-      });
-      await expect(result).resolves.toEqual({
-        action: 'retry',
-        feedback: undefined,
-      });
-      expect(currentApproval.get()).toBeUndefined();
-    } finally {
-      dispose();
-    }
+    await vi.waitFor(() => {
+      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
+    });
+    await expect(result).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(currentApproval.get()).toBeUndefined();
   });
 
   it('auto-switches ChatGPT subscription retries to an OpenAI API key', async () => {
@@ -449,27 +369,21 @@ describe('TUI retry approvals', () => {
         provider === 'openai' ? 'sk-openai' : undefined,
     );
 
-    const { interactions, dispose } = tui();
-    try {
-      const result = interactions.requestRetry?.(
-        chatGptSubscriptionRetry('s3'),
-      );
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(chatGptSubscriptionRetry('s3'));
 
-      await vi.waitFor(() => {
-        expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-        expect(mocks.setCliCodexSubscription).toHaveBeenCalledWith(false);
-      });
-      await expect(result).resolves.toEqual({
-        action: 'retry',
-        feedback: undefined,
-      });
-      expect(currentApproval.get()).toBeUndefined();
-      expect(mocks.lookupApiKey.mock.calls.map((call) => call[1])).toEqual([
-        'openai',
-      ]);
-    } finally {
-      dispose();
-    }
+    await vi.waitFor(() => {
+      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
+      expect(mocks.setCliCodexSubscription).toHaveBeenCalledWith(false);
+    });
+    await expect(result).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(currentApproval.get()).toBeUndefined();
+    expect(mocks.lookupApiKey.mock.calls.map((call) => call[1])).toEqual([
+      'openai',
+    ]);
   });
 
   it('invalidates pre-queue retry lookups when approvals are cleared', async () => {
@@ -481,23 +395,19 @@ describe('TUI retry approvals', () => {
         }),
     );
 
-    const { interactions, dispose } = tui();
-    try {
-      const result = interactions.requestRetry?.(
-        relayRetry({ streamId: 'interrupted', provider: 'openai' }),
-      );
-      clearApprovals();
-      await expect(result).resolves.toEqual({ action: 'cancel' });
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(
+      relayRetry({ streamId: 'interrupted', provider: 'openai' }),
+    );
+    clearApprovals();
+    await expect(result).resolves.toEqual({ action: 'cancel' });
 
-      resolveLookup?.('sk-after-interrupt');
-      await Promise.resolve();
-      await Promise.resolve();
+    resolveLookup?.('sk-after-interrupt');
+    await Promise.resolve();
+    await Promise.resolve();
 
-      expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-      expect(currentApproval.get()).toBeUndefined();
-    } finally {
-      dispose();
-    }
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(currentApproval.get()).toBeUndefined();
   });
 
   it('invalidates pre-queue retry lookups when approvals are unbound', async () => {
@@ -527,109 +437,62 @@ describe('TUI retry approvals', () => {
   it('cancels an active retry modal when approvals are cleared', async () => {
     mocks.lookupApiKey.mockResolvedValue(undefined);
 
-    const { interactions, dispose } = tui();
-    try {
-      const result = interactions.requestRetry?.(
-        relayRetry({ streamId: 'modal-interrupt', provider: 'openai' }),
-      );
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(
+      relayRetry({ streamId: 'modal-interrupt', provider: 'openai' }),
+    );
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'retry',
-          payload: { streamId: 'modal-interrupt' },
-        });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'retry',
+        payload: { streamId: 'modal-interrupt' },
       });
+    });
 
-      clearApprovals();
-      await expect(result).resolves.toEqual({ action: 'cancel' });
-      expect(currentApproval.get()).toBeUndefined();
-    } finally {
-      dispose();
-    }
+    clearApprovals();
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+    expect(currentApproval.get()).toBeUndefined();
   });
 
   it('times out an active plan approval modal', async () => {
-    const { interactions, dispose } = tui();
-    try {
-      const result = interactions.requestPlanApproval?.(
-        {
-          approvalId: 'plan-timeout',
-          streamId: 'plan-stream',
-          goalEnabled: false,
-          plan: { objective: 'Check the timeout path.' },
-        },
-        { timeoutMs: 10 },
-      );
+    const { cliContext, interactions } = tui();
+    const result = interactions.requestPlanApproval?.(
+      {
+        approvalId: 'plan-timeout',
+        streamId: 'plan-stream',
+        goalEnabled: false,
+        plan: { objective: 'Check the timeout path.' },
+      },
+      { timeoutMs: 10 },
+    );
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'plan',
-          payload: { approvalId: 'plan-timeout' },
-        });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'plan',
+        payload: { approvalId: 'plan-timeout' },
       });
-      await expect(result).resolves.toEqual({ action: 'timeout' });
-      await Promise.resolve();
-      expect(mocks.markApprovalDenied).not.toHaveBeenCalled();
-      expect(currentApproval.get()).toBeUndefined();
-    } finally {
-      dispose();
-    }
-  });
-
-  it('times out an active proposal approval modal', async () => {
-    const { interactions, dispose } = tui();
-    try {
-      const result = interactions.requestAgentProposal?.(
-        {
-          proposalId: 'proposal-timeout',
-          streamId: 'proposal-stream',
-          agent: 'reviewer',
-          model: 'gpt-test',
-          instruction: 'Review this argument.',
-          memories: [],
-          agentCategory: AgentCategory.ToolUse,
-        },
-        { timeoutMs: 10 },
-      );
-
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'proposal',
-          payload: { proposalId: 'proposal-timeout' },
-        });
-      });
-      await expect(result).resolves.toEqual({ action: 'timeout' });
-      await Promise.resolve();
-      expect(mocks.markApprovalDenied).not.toHaveBeenCalled();
-      expect(currentApproval.get()).toBeUndefined();
-    } finally {
-      dispose();
-    }
+    });
+    await expect(result).resolves.toEqual({ action: 'timeout' });
+    expect(hasCliApprovalDenied(cliContext)).toBe(false);
   });
 
   it('times out an active retry modal', async () => {
     mocks.lookupApiKey.mockResolvedValue(undefined);
 
-    const { interactions, dispose } = tui();
-    try {
-      const result = interactions.requestRetry?.(
-        relayRetry({ streamId: 'retry-timeout', provider: 'openai' }),
-        { timeoutMs: 100 },
-      );
+    const { cliContext, interactions } = tui();
+    const result = interactions.requestRetry?.(
+      relayRetry({ streamId: 'retry-timeout', provider: 'openai' }),
+      { timeoutMs: 100 },
+    );
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'retry',
-          payload: { streamId: 'retry-timeout' },
-        });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'retry',
+        payload: { streamId: 'retry-timeout' },
       });
-      await expect(result).resolves.toEqual({ action: 'timeout' });
-      await Promise.resolve();
-      expect(mocks.markApprovalDenied).not.toHaveBeenCalled();
-      expect(currentApproval.get()).toBeUndefined();
-    } finally {
-      dispose();
-    }
+    });
+    await expect(result).resolves.toEqual({ action: 'timeout' });
+    expect(hasCliApprovalDenied(cliContext)).toBe(false);
   });
 
   it('ignores stale auto-switch lookups after a newer retry replaces them', async () => {
@@ -643,38 +506,34 @@ describe('TUI retry approvals', () => {
       )
       .mockResolvedValueOnce(undefined);
 
-    const { interactions, dispose } = tui();
-    try {
-      void interactions.requestRetry?.(
-        relayRetry({
-          streamId: 'same-stream',
-          provider: 'openai',
-          message: 'first retry',
-        }),
-      );
-      void interactions.requestRetry?.(
-        relayRetry({
-          streamId: 'same-stream',
-          provider: 'openai',
-          message: 'second retry',
-        }),
-      );
+    const { interactions } = tui();
+    void interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'same-stream',
+        provider: 'openai',
+        message: 'first retry',
+      }),
+    );
+    void interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'same-stream',
+        provider: 'openai',
+        message: 'second retry',
+      }),
+    );
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'retry',
-          payload: { errorMessage: 'second retry' },
-        });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'retry',
+        payload: { errorMessage: 'second retry' },
       });
+    });
 
-      resolveFirstLookup?.('sk-stale');
-      await Promise.resolve();
-      await Promise.resolve();
+    resolveFirstLookup?.('sk-stale');
+    await Promise.resolve();
+    await Promise.resolve();
 
-      expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    } finally {
-      dispose();
-    }
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
   });
 
   it('clears an older retry modal when a newer retry auto-switches', async () => {
@@ -682,78 +541,70 @@ describe('TUI retry approvals', () => {
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce('sk-new');
 
-    const { interactions, dispose } = tui();
-    try {
-      void interactions.requestRetry?.(
-        relayRetry({
-          streamId: 'same-stream',
-          provider: 'openai',
-          message: 'first retry',
-        }),
-      );
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'retry',
-          payload: { errorMessage: 'first retry' },
-        });
+    const { interactions } = tui();
+    void interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'same-stream',
+        provider: 'openai',
+        message: 'first retry',
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'retry',
+        payload: { errorMessage: 'first retry' },
       });
+    });
 
-      const second = interactions.requestRetry?.(
-        relayRetry({
-          streamId: 'same-stream',
-          provider: 'openai',
-          message: 'second retry',
-        }),
-      );
+    const second = interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'same-stream',
+        provider: 'openai',
+        message: 'second retry',
+      }),
+    );
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()).toBeUndefined();
-      });
-      await expect(second).resolves.toEqual({
-        action: 'retry',
-        feedback: undefined,
-      });
-    } finally {
-      dispose();
-    }
+    await vi.waitFor(() => {
+      expect(currentApproval.get()).toBeUndefined();
+    });
+    await expect(second).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
   });
 
   it('replaces an older retry modal when a newer retry also needs input', async () => {
     mocks.lookupApiKey.mockResolvedValue(undefined);
 
-    const { interactions, dispose } = tui();
-    try {
-      void interactions.requestRetry?.(
-        relayRetry({
-          streamId: 'same-stream',
-          provider: 'openai',
-          message: 'first retry',
-        }),
-      );
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'retry',
-          payload: { errorMessage: 'first retry' },
-        });
+    const { interactions } = tui();
+    void interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'same-stream',
+        provider: 'openai',
+        message: 'first retry',
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'retry',
+        payload: { errorMessage: 'first retry' },
       });
+    });
 
-      void interactions.requestRetry?.(
-        relayRetry({
-          streamId: 'same-stream',
-          provider: 'openai',
-          message: 'second retry',
-        }),
-      );
+    void interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'same-stream',
+        provider: 'openai',
+        message: 'second retry',
+      }),
+    );
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'retry',
-          payload: { errorMessage: 'second retry' },
-        });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'retry',
+        payload: { errorMessage: 'second retry' },
       });
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('does not let a stale auto-switch failure cancel a newer retry', async () => {
@@ -768,39 +619,35 @@ describe('TUI retry approvals', () => {
       )
       .mockResolvedValueOnce(undefined);
 
-    const { interactions, dispose } = tui();
-    try {
-      void interactions.requestRetry?.(
-        relayRetry({
-          streamId: 'same-stream',
-          provider: 'openai',
-          message: 'first retry',
-        }),
-      );
-      await vi.waitFor(() => {
-        expect(mocks.setCliApiMode).toHaveBeenCalledTimes(1);
-      });
+    const { interactions } = tui();
+    void interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'same-stream',
+        provider: 'openai',
+        message: 'first retry',
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(mocks.setCliApiMode).toHaveBeenCalledTimes(1);
+    });
 
-      const second = interactions.requestRetry?.(
-        relayRetry({
-          streamId: 'same-stream',
-          provider: 'openai',
-          message: 'second retry',
-        }),
-      );
-      await vi.waitFor(() => {
-        expect(mocks.setCliApiMode).toHaveBeenCalledTimes(2);
-      });
-      await expect(second).resolves.toEqual({
-        action: 'retry',
-        feedback: undefined,
-      });
+    const second = interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'same-stream',
+        provider: 'openai',
+        message: 'second retry',
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(mocks.setCliApiMode).toHaveBeenCalledTimes(2);
+    });
+    await expect(second).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
 
-      rejectFirstModeSwitch?.(new Error('stale mode switch failed'));
-      await Promise.resolve();
-      await Promise.resolve();
-    } finally {
-      dispose();
-    }
+    rejectFirstModeSwitch?.(new Error('stale mode switch failed'));
+    await Promise.resolve();
+    await Promise.resolve();
   });
 });
