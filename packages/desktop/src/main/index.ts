@@ -962,6 +962,7 @@ if (protocolLifecycle.shouldContinue) {
               sensitivePaths: [
                 platformInit.workspacePath,
                 app.getPath('userData'),
+                platformInit.dataRoot,
               ],
               log: console,
             });
