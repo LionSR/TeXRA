@@ -192,7 +192,7 @@ describe('LOG_DELTA text deltas', () => {
     );
 
     const group = getState().streamStates.get(streamId)?.taskGroups[0];
-    expect(group?.status).toBe(STREAM_STATUS.RUNNING);
+    expect(group?.status).toBe(STREAM_PHASE.RUNNING);
     expect(group?.kind).toBe('round');
     expect(group?.index).toBe(1);
     expect(group?.total).toBe(3);
@@ -203,7 +203,8 @@ describe('LOG_DELTA text deltas', () => {
 // vocabulary, not the legacy 2-value EndGroupStatus ('stopped'/'error')
 // folded down from it. Every GROUP_END row a live/persisted producer writes
 // carries the literal RunOutcome ('completed'/'cancelled'/'failed') and
-// logSlice.ts's isTaskGroupStatus type guard now recognizes those directly —
+// logSlice.ts's taskGroupEndStatus (a TaskGroupStatusSchema.safeParse
+// narrow, not a hand-rolled type guard) now recognizes those directly —
 // without that retyping, every canonical GROUP_END row (including a
 // failure) would fall through to the STOPPED default, losing the error icon
 // and folding completed/cancelled together. The standalone trace-viewer
