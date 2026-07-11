@@ -1010,14 +1010,7 @@ export async function runChat(
   // session.runPromise, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target session.streamId as usual).
   if (initialResume) {
-    // Guard the void: resumeAgentRun awaits snapshot resolution / ensureLoaded
-    // before installing its own .then/.catch, so an early throw there would
-    // otherwise surface as an unhandled rejection.
-    void chatController
-      .resume(initialResume.id, initialResume.resolution)
-      .catch((error: unknown) => {
-        appendLocalErrorTranscript(toErrorMessage(error));
-      });
+    void chatController.resume(initialResume.id, initialResume.resolution);
   }
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
