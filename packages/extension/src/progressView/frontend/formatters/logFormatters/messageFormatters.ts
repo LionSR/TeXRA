@@ -36,6 +36,7 @@ import { stringifyWithLanguage } from '../parseUtils';
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { ICON_BY_LEVEL } from '../constants';
 import { registerCopyContent } from '../copyContentStore';
+import { stopSummaryToggleKeydown } from '../htmlBuilders';
 
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(
@@ -140,7 +141,7 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   // prettier-ignore
   const labelSpan = html`<span class="label" title=${tooltipTimestamp}>[${timeDisplay}] ${summaryText}</span>`;
   // prettier-ignore
-  const copyButton = html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="small" type="button" title="Copy error details" aria-label="Copy error details" data-default-title="Copy error details" data-success-title="Copied!" data-copy-id=${copyId} data-copy-type="banner" ?hidden=${!hasDetails}>${waIcon('copy')}</wa-button>`;
+  const copyButton = html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="small" type="button" title="Copy error details" aria-label="Copy error details" data-default-title="Copy error details" data-success-title="Copied!" data-copy-id=${copyId} data-copy-type="banner" ?hidden=${!hasDetails} @keydown=${stopSummaryToggleKeydown}>${waIcon('copy')}</wa-button>`;
   // Toggle chevron now comes from <wa-details>'s built-in disclosure icon
   // (::part(icon)); banner-details--no-toggle hides that part when there's
   // nothing to expand, replacing the old inline visibility:hidden style.
