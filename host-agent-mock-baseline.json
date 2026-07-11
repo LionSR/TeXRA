@@ -34,6 +34,11 @@
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
       "form": "mock",
+      "specifier": "@agent/runtime/executeAgent"
+    },
+    {
+      "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
+      "form": "mock",
       "specifier": "@agent/runtime/executionRegistry"
     },
     {
