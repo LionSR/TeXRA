@@ -105,7 +105,8 @@ function compareUrl(slug: GitHubSlug, base: string, branch: string): string {
 }
 
 function refExists(cwd: string, ref: string): boolean {
-  return git(cwd, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`).success;
+  return git(cwd, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`)
+    .success;
 }
 
 function resolveBaseRef(cwd: string, base: string): string | null {
