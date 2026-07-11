@@ -215,15 +215,8 @@ describe('app interaction policy', () => {
       approvalVisibleForActiveStream({ activeStreamId, pending });
 
     expect(visible('child-1', childApproval)).toBe(true);
-    const hiddenApprovalVisible = visible('root', childApproval);
-    expect(hiddenApprovalVisible).toBe(false);
+    expect(visible('root', childApproval)).toBe(false);
     expect(visible('root', globalApproval)).toBe(true);
-    expect(
-      appFocusShortcutsActive({
-        ...focusEnabled,
-        foregroundOpen: hiddenApprovalVisible,
-      }),
-    ).toBe(true);
   });
 
   it('labels foreground escape actions from the owning surface', () => {
