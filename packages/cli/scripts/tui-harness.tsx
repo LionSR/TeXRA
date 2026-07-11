@@ -24,6 +24,7 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
+  streamStatusToPhase,
   TODO_STATUS,
   TOOL_USE_STATUS,
   type ActiveChildInfo,
@@ -32,7 +33,7 @@ import {
   type NormalizedToolUse,
   type PlanApprovalPermission,
   type RetryPermission,
-  type StreamStatus,
+  type StreamPhase,
   type StreamTabId,
   type UserQuestionPermission,
 } from '@shared/schemas';
@@ -960,7 +961,7 @@ async function appendHarnessPlanDecision(
     await GoalStore.start(STREAM_ID, PLAN_APPROVAL_OBJECTIVE);
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
       bypass: { ...slice.bypass, bash: true },
     }));
     appendHarnessAssistantTranscript('PLAN-GOAL');
@@ -978,10 +979,10 @@ const HARNESS_RUN_ACTIVE =
 const HARNESS_RUN_IDLE = SHOW_TODOS && SHOW_IDLE_TODOS;
 
 function harnessInitialStreamStatus(
-  current: StreamStatus | undefined,
-): StreamStatus | undefined {
-  if (HARNESS_RUN_ACTIVE) return STREAM_STATUS.RUNNING;
-  if (HARNESS_RUN_IDLE) return STREAM_STATUS.WAITING;
+  current: StreamPhase | undefined,
+): StreamPhase | undefined {
+  if (HARNESS_RUN_ACTIVE) return STREAM_PHASE.RUNNING;
+  if (HARNESS_RUN_IDLE) return STREAM_PHASE.WAITING;
   return current;
 }
 
@@ -1344,7 +1345,7 @@ if (SHOW_CHILDREN) {
   applySubagentRoster(STREAM_ID, activeSubagents);
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
-    status: STREAM_STATUS.RUNNING,
+    status: STREAM_PHASE.RUNNING,
     runStartedAt: startedAt,
     activeProcesses: [
       {
@@ -1378,7 +1379,7 @@ if (SHOW_CHILDREN) {
     if (addNestedChildren) applySubagentRoster(streamId, [nestedStrategyChild]);
     patchStream(streamId, (slice) => ({
       ...slice,
-      status: child.status,
+      status: streamStatusToPhase(child.status),
       description: `${child.agentName} sub-workflow`,
       activeProcesses: addNestedChildren
         ? [nestedStrategyProcess]
@@ -1409,7 +1410,7 @@ if (SHOW_CHILDREN) {
     );
     patchStream('harness-nested-local-checker-stream', (slice) => ({
       ...slice,
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
       description: 'localChecker nested proof check',
       entries: makeChildEntries('localChecker', 'nested proof check'),
       runStartedAt: nestedStartedAt,
@@ -1586,7 +1587,7 @@ function markHarnessInterrupted(): void {
   applySubagentRoster(STREAM_ID, []);
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
-    status: STREAM_STATUS.STOPPED,
+    status: STREAM_PHASE.CANCELLED,
     runStartedAt: undefined,
     activeProcesses: [],
     entries: [
@@ -1602,7 +1603,7 @@ function markHarnessInterrupted(): void {
   for (const streamId of childStreamIds) {
     patchStream(streamId, (slice) => ({
       ...slice,
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.CANCELLED,
       runStartedAt: undefined,
     }));
   }
@@ -1749,7 +1750,7 @@ function markHarnessExecutionStopped(executionId: string): void {
   if (!executionRow.childStreamId) return;
   patchStream(executionRow.childStreamId, (slice) => ({
     ...slice,
-    status: STREAM_STATUS.STOPPED,
+    status: STREAM_PHASE.CANCELLED,
     runStartedAt: undefined,
     entries: [
       ...slice.entries,
