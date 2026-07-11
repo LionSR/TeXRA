@@ -775,15 +775,19 @@ export async function persistOpenTurnDraft(params: {
   threadId: ExternalInquiryThreadId;
   draft: InquiryDraft | null;
 }): Promise<void> {
-  await withOpenTurnUpdate(params.threadId, (existing, lastTurn, timestamp) => {
+  await withOpenTurnUpdate(params.threadId, (existing, lastTurn) => {
     const nextTurn: OpenInquiryTurn = {
       ...lastTurn,
       draft: params.draft ?? undefined,
     };
 
+    // Deliberately does not bump updatedAt: a draft autosave is not a state
+    // transition (unlike open/answer/drop), and updatedAt drives listing
+    // sort order, the `since` freshness filter, and the "Updated: ..." text
+    // shown to the model — none of which should react to the user still
+    // typing an unsent answer.
     const nextManifest: ExternalInquiryThreadManifest = {
       ...existing,
-      updatedAt: timestamp,
       turns: [...existing.turns.slice(0, -1), nextTurn],
     };
 
