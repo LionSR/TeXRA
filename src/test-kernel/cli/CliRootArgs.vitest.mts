@@ -121,6 +121,18 @@ async function initDefaultFakePlatform(): Promise<void> {
   initPlatform(createFakePlatform());
 }
 
+async function withTempDir<T>(
+  prefix: string,
+  run: (root: string) => Promise<T>,
+): Promise<T> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  try {
+    return await run(root);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+}
+
 describe('CLI root argument routing', () => {
   it('routes top-level --logout to the logout subcommand', () => {
     expect(normalizeRootShortcuts(['--logout'])).toEqual(['logout']);
@@ -514,8 +526,7 @@ describe('CLI root argument routing', () => {
   });
 
   it('expands workflow input directories and globs relative to cwd', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
-    try {
+    await withTempDir('texra-cli-inputs-', async (root) => {
       await fs.mkdir(path.join(root, 'paper', 'sections'), {
         recursive: true,
       });
@@ -539,28 +550,22 @@ describe('CLI root argument routing', () => {
           root,
         ),
       ).resolves.toEqual(['paper/sections/appendix.tex']);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('rejects a literal --input file that does not exist', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
-    try {
+    await withTempDir('texra-cli-inputs-', async (root) => {
       const missing = path.join(root, 'no-such.tex');
       // Pure path (no glob magic, not a directory) — previously this was
       // returned as-is and the workflow ran until the agent ENOENT'd.
       await expect(expandWorkflowInputSpecs([missing], root)).rejects.toThrow(
         /--input: file not found/,
       );
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('materializes stdin when --input - is passed', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
+    await withTempDir('texra-cli-stdin-', async (root) => {
       let readCount = 0;
       const stdinInputFile = createStdinWorkflowInputMaterializer({
         tempDir: root,
@@ -591,14 +596,11 @@ describe('CLI root argument routing', () => {
       await expect(
         fs.stat(path.dirname(path.resolve(root, expanded[0]))),
       ).rejects.toThrow();
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('preserves stdin position when mixed with file inputs', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
+    await withTempDir('texra-cli-stdin-', async (root) => {
       await fs.writeFile(path.join(root, 'paper.tex'), 'paper');
       const stdinInputFile = createStdinWorkflowInputMaterializer({
         tempDir: root,
@@ -618,14 +620,11 @@ describe('CLI root argument routing', () => {
       expect(path.basename(expanded[0])).toBe('stdin.tex');
       expect(isMaterializedStdinWorkflowInputPath(expanded[0])).toBe(true);
       expect(expanded[1]).toBe('paper.tex');
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('rejects empty stdin input', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
+    await withTempDir('texra-cli-stdin-', async (root) => {
       const stdinInputFile = createStdinWorkflowInputMaterializer({
         tempDir: root,
         readStdinText: async () => ' \n\t ',
@@ -634,9 +633,7 @@ describe('CLI root argument routing', () => {
       await expect(
         expandWorkflowInputSpecs(['-'], root, '--input', { stdinInputFile }),
       ).rejects.toThrow(/stdin: no data on stdin/);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('detects stdin mixed with other raw workflow input specs', () => {
@@ -659,8 +656,7 @@ describe('CLI root argument routing', () => {
   });
 
   it('does not read stdin before later --input validation errors', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
+    await withTempDir('texra-cli-stdin-', async (root) => {
       let readCount = 0;
       const stdinInputFile = createStdinWorkflowInputMaterializer({
         tempDir: root,
@@ -676,14 +672,11 @@ describe('CLI root argument routing', () => {
         }),
       ).rejects.toThrow(/--input: file not found: missing\.tex/);
       expect(readCount).toBe(0);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('does not read stdin before --context validation errors', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
+    await withTempDir('texra-cli-stdin-', async (root) => {
       let readCount = 0;
       const stdinInputFile = createStdinWorkflowInputMaterializer({
         tempDir: root,
@@ -699,14 +692,11 @@ describe('CLI root argument routing', () => {
         }),
       ).rejects.toThrow(/--context: file not found: missing-context\.tex/);
       expect(readCount).toBe(0);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('materializes stdin for --context - when input is a normal file', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
+    await withTempDir('texra-cli-stdin-', async (root) => {
       await fs.writeFile(path.join(root, 'main.tex'), 'main');
       const stdinInputFile = createStdinWorkflowInputMaterializer({
         tempDir: root,
@@ -727,14 +717,11 @@ describe('CLI root argument routing', () => {
       await expect(
         fs.readFile(path.resolve(root, contextFiles[0]), 'utf8'),
       ).resolves.toBe('context body');
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('rejects stdin across both input and context with a clear usage error', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
+    await withTempDir('texra-cli-stdin-', async (root) => {
       const stdinInputFile = createStdinWorkflowInputMaterializer({
         tempDir: root,
         readStdinText: async () => 'piped body',
@@ -742,9 +729,7 @@ describe('CLI root argument routing', () => {
       await expect(
         expandRunInputs(['-'], ['-'], root, { stdinInputFile }),
       ).rejects.toThrow(/Use `-` for either --input or --context/);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('rejects external files when tool-use runs require workspace files', async () => {
@@ -807,15 +792,12 @@ describe('CLI root argument routing', () => {
     // The helper is shared between --input (texra run, multi-agent run input)
     // and --context (multi-agent run context). The error must name the flag
     // the user actually passed, not always say --input.
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-flag-'));
-    try {
+    await withTempDir('texra-cli-flag-', async (root) => {
       const missing = path.join(root, 'no-such-context.tex');
       await expect(
         expandWorkflowInputSpecs([missing], root, '--context'),
       ).rejects.toThrow(/--context: file not found/);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('expands a glob --context spec the same way --input does', async () => {
@@ -823,16 +805,13 @@ describe('CLI root argument routing', () => {
     // the AgentConfig and failed late with raw ENOENT (exit 1). Routing
     // through expandWorkflowInputSpecs gives it the same expansion semantics
     // as `--input` (and surfaces missing-path errors as Usage / exit 2).
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-ctx-'));
-    try {
+    await withTempDir('texra-cli-ctx-', async (root) => {
       await fs.writeFile(path.join(root, 'a.bib'), 'a');
       await fs.writeFile(path.join(root, 'b.bib'), 'b');
       await expect(
         expandWorkflowInputSpecs([path.join(root, '*.bib')], root, '--context'),
       ).resolves.toEqual(['a.bib', 'b.bib']);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   // Skip on Windows (no POSIX chmod semantics) and when running as root, where
@@ -1680,8 +1659,7 @@ describe('runCli usage output stream routing', () => {
   });
 
   it('defaults bare history to list while accepting global flags', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-history-'));
-    try {
+    await withTempDir('texra-history-', async (root) => {
       const result = await runCli([
         'history',
         '--cwd',
@@ -1693,9 +1671,7 @@ describe('runCli usage output stream routing', () => {
       expect(result.exitCode).toBe(0);
       expect(JSON.parse(stdout)).toEqual([]);
       expect(stderr).toBe('');
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('forwards history globals before an explicit subcommand', async () => {
