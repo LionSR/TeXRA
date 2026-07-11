@@ -63,13 +63,14 @@ describe('run outcome algebra', () => {
   });
 
   // legacyEndGroupStatusForOutcome is no longer called from any production
-  // GROUP_END write site (#7993 step 2 retypes stage.end()/StreamLogStore's
-  // orphan sweep to write the literal RunOutcome). It survives as a
-  // Tier-4-only read-side derive helper for the frozen CLI headless JSON's
+  // GROUP_END write site (#8087 retypes stage.end()/StreamLogStore's orphan
+  // sweep to write the literal RunOutcome), nor from logSlice.ts's read side
+  // (#7993 step 3 retypes TaskGroup.status to the native StreamPhase/
+  // RunOutcome vocabulary, so that reader no longer needs to fold a
+  // canonical value down to a legacy bucket). It survives as a Tier-4-only
+  // read-side derive helper for the frozen CLI headless JSON's
   // `endGroupStatus` projection (packages/cli/src/runtime/terminalStatus.ts)
-  // and as the fold `logSlice.ts` reuses to keep TaskGroup.status rendering
-  // unchanged until its own reader migration (#7993 goal item 3) — the
-  // algebra itself is unchanged, so it still needs to stay correct.
+  // — the algebra itself is unchanged, so it still needs to stay correct.
   it('derives folded legacy group-end and stream-status projections from one helper', () => {
     expect(groupEndStatusForOutcome(RUN_OUTCOME.COMPLETED)).toBe('ok');
     expect(groupEndStatusForOutcome(RUN_OUTCOME.CANCELLED)).toBe('ok');

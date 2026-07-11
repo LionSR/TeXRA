@@ -2,6 +2,7 @@
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ToolDefinition } from '@model';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
+import { joinReasoningItemsText } from '../utils/reasoningDetailsText';
 
 // Type imports
 import type {
@@ -12,12 +13,11 @@ import type {
 } from 'openai/resources/chat/completions';
 
 /** Extracts text from a MiniMax `reasoning_details` value (array or string). */
-function extractTextFromReasoningDetails(details: unknown): string | undefined {
-  if (typeof details === 'string') return details || undefined;
-  if (!Array.isArray(details)) return undefined;
-  const text = (details as Array<{ text?: string | null }>)
-    .map((item) => item?.text ?? '')
-    .join('');
+function extractMiniMaxReasoningText(details: unknown): string | undefined {
+  const text = joinReasoningItemsText<{ text?: string | null }>(
+    details,
+    (item) => item.text ?? undefined,
+  );
   return text || undefined;
 }
 
@@ -69,16 +69,14 @@ export class ModelHandlerMiniMax extends ReasoningModelHandlerOpenAI {
     const details = (
       chunk.choices[0]?.delta as { reasoning_details?: unknown } | undefined
     )?.reasoning_details;
-    if (details) return extractTextFromReasoningDetails(details) ?? '';
+    if (details) return extractMiniMaxReasoningText(details) ?? '';
     return super.extractReasoningDelta(chunk);
   }
 
   protected override extractReasoningFromMessage(
     message: Record<string, unknown> | undefined,
   ): string | null {
-    const extracted = extractTextFromReasoningDetails(
-      message?.reasoning_details,
-    );
+    const extracted = extractMiniMaxReasoningText(message?.reasoning_details);
     return extracted ?? super.extractReasoningFromMessage(message);
   }
 

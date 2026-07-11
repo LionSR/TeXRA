@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-import { RunOutcomeSchema, TaskGroupStatusSchema } from './stream';
+import { EndGroupStatusSchema } from './log';
+import { TaskGroupStatusSchema } from './stream';
 
 export const StageKindSchema = z.enum(['run', 'round', 'phase', 'session']);
 export type StageKind = z.infer<typeof StageKindSchema>;
@@ -38,17 +39,24 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * were otherwise usable; the old per-field guards had this per-field
  * tolerance and a single `.safeParse()` on a non-catching schema would not.
  *
- * `status` accepts both vocabularies a wire row can carry: the legacy
- * `TaskGroupStatus` a `group-start` row (and a pre-#7993 `group-end` row
- * forwarded raw by the standalone trace-viewer) uses, and the canonical
- * `RunOutcome` every live/persisted `group-end` producer now writes.
- * `logSlice.ts` folds a `RunOutcome` down to the legacy bucket at the point
- * it needs `TaskGroupStatus` (`taskGroupEndStatus`); a value in neither
- * vocabulary still falls back to `undefined` here, same as any other field.
+ * `status` accepts both vocabularies a wire row can still carry post-#7993
+ * step 3: the native `TaskGroupStatus` (the `StreamPhase` running/completed/
+ * cancelled/failed subset) every live/persisted `group-start`/`group-end`
+ * producer writes, and the legacy 2-value `EndGroupStatus` ('stopped'/
+ * 'error') a pre-cutover exported trace file's raw entries still carry —
+ * the standalone trace-viewer's `replayTrace()` forwards `trace.entries`
+ * verbatim into this same `LOG_DELTA` pipeline, a permanent second boundary
+ * (docs/proposals/session-scoped-runtime-architecture.md §8.3). Now that
+ * `TaskGroupStatus` is itself retyped to the native vocabulary, `RunOutcome`
+ * is a strict subset of it and needs no separate union member; only the
+ * still-disjoint legacy `EndGroupStatus` vocabulary does. `logSlice.ts`'s
+ * `taskGroupEndStatus` maps a legacy value UP to the native value it
+ * corresponds to; a value in neither vocabulary still falls back to
+ * `undefined` here, same as any other field.
  */
 export const GroupLogPayloadSchema = z.looseObject({
   status: z
-    .union([TaskGroupStatusSchema, RunOutcomeSchema])
+    .union([TaskGroupStatusSchema, EndGroupStatusSchema])
     .optional()
     .catch(undefined),
   kind: StageKindSchema.optional().catch(undefined),
