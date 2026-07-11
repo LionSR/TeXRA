@@ -42,7 +42,12 @@ import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { seedCliRosterFromDefaultTeam } from '@cli/runtime/defaultTeamRoster';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
+import {
+  handOffCliShutdownSignalHandlers,
+  initInteractiveCliPlatform,
+  runCliPlatformShutdownSequence,
+  setCliHelperModel,
+} from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
@@ -267,7 +272,13 @@ export async function runChat(
     return { exitCode: CliExitCode.Usage };
   }
 
-  await initCliPlatform({ ...context, quietLogs: true });
+  // The platform's own SIGINT/SIGTERM handler stays live through onboarding
+  // and model resolution below — this function does not suppress it. Once
+  // Ink actually mounts (below), handOffCliShutdownSignalHandlers() removes
+  // it immediately before this function installs its own process.on pair, so
+  // exactly one owner is ever registered for a given signal; see
+  // initInteractiveCliPlatform's doc comment for the full handoff design.
+  await initInteractiveCliPlatform({ ...context, quietLogs: true });
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the apiMode + model
   // resolution below then see the freshly-set credentials in the same process.
@@ -870,12 +881,15 @@ export async function runChat(
     ]);
   };
   // These TUI exit paths call process.exit() directly, so bin/texra.ts's
-  // `finally` (which runs platform shutdown) never fires. Run it here too so
-  // shutdown handlers — notably UsageLogService.dispose(), which flushes any
-  // queued usage entries — execute before the process dies. runShutdown is
-  // idempotent, so the normal return path can still rely on bin/texra.ts.
+  // `finally` (which runs platform shutdown) never fires. Run the same
+  // shutdown sequence the (suppressed) platform SIGINT/SIGTERM handlers
+  // would have run — lifecycle shutdown (notably UsageLogService.dispose(),
+  // which flushes any queued usage entries) then the NDJSON flush — so it
+  // still happens once before the process dies. runCliPlatformShutdownSequence
+  // is idempotent-safe to call again, so the normal return path can still
+  // rely on bin/texra.ts's own `finally`.
   const runPlatformShutdown = (): Promise<void> =>
-    tryPlatform()?.lifecycle.runShutdown() ?? Promise.resolve();
+    runCliPlatformShutdownSequence(tryPlatform()?.lifecycle);
   const exitNow = (exitCode: number): void => {
     exiting = true;
     removeProcessHandlers();
@@ -975,6 +989,12 @@ export async function runChat(
     clearPendingExit();
     ink.unmount();
   }
+  // Ownership transfers right here, not any earlier: everything above this
+  // line (initInteractiveCliPlatform, onboarding, model resolution) ran with
+  // the platform's own handler still live, so a signal during that window
+  // still got a graceful shutdown. This removes it and makes the handlers
+  // installed below the sole owner.
+  handOffCliShutdownSignalHandlers();
   process.on('SIGINT', handleSigint);
   process.on('SIGTERM', handleSigterm);
   process.on('SIGHUP', handleSighup);
