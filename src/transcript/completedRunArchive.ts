@@ -11,6 +11,7 @@
 import pMap from 'p-map';
 
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
+import { mediaAttachmentKindToContentBlock } from '@agent/export/normalizeConversation';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
@@ -175,12 +176,13 @@ function toolResultText(tool: ToolUseLog): string | undefined {
 /**
  * `userMessage` rows may carry an attachment-kind/count payload (#7508) —
  * media that was sent to the model but only ever lived in the provider
- * message. When present, render `content` as Anthropic-shaped blocks
- * (`{type:'image'}` / `{type:'document'}`, no bytes) so
- * `normalizeConversationForExport`'s existing attachment-marker rendering
- * (`[image attachment]` / `[document attachment]`) picks them up; otherwise
- * keep the plain-string `content` shape every other conversation consumer
- * already expects.
+ * message. When present, render `content` as Anthropic-shaped blocks (no
+ * bytes) via `mediaAttachmentKindToContentBlock` — the constructor
+ * `normalizeConversationForExport` exports for exactly this shape — so its
+ * existing attachment-marker rendering (`[image attachment]` /
+ * `[document attachment]`) picks them up; otherwise keep the plain-string
+ * `content` shape every other conversation consumer already expects. This
+ * module holds no independent opinion on what those blocks look like.
  */
 function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
   if (!entry.text) return [];
@@ -194,7 +196,7 @@ function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
       role: 'user',
       content: [
         { type: 'text', text: entry.text },
-        ...attachments.map((kind) => ({ type: kind })),
+        ...attachments.map(mediaAttachmentKindToContentBlock),
       ],
     },
   ];
