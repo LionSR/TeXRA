@@ -21,6 +21,7 @@
  * whole-message truncation for the CLI) — only the per-content-block
  * recognition and truncation below is shared.
  */
+import { extractWebFetchResultFields } from '@agent/utils/webFetchResultFields';
 import { isObject } from '@utils/core';
 
 const DEFAULT_TRUNCATION_MARKER = '...';
@@ -171,23 +172,14 @@ function formatWebFetchResultMarker(
   options: ConversationFormatOptions,
 ): string {
   const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
-  const content = block.content;
-  if (isObject(content) && content.type === 'web_fetch_result') {
-    const url = asText(content.url);
-    const title = objectStringField(content.content, 'title');
-    const label = title && url ? `${title} (${url})` : title || url;
-    return `[tool_result: ${truncate(label, options.toolBlockLimit, marker)}]`;
-  }
-  const archivedUrl = asText(block.url);
-  const archivedTitle = asText(block.title);
-  if (archivedUrl || archivedTitle) {
+  const result = extractWebFetchResultFields(block);
+  if (result) {
+    const { title = '', url = '' } = result;
     const label =
-      archivedTitle && archivedUrl
-        ? `${archivedTitle} (${archivedUrl})`
-        : archivedTitle || archivedUrl;
+      title && url ? `${title} (${url})` : title || url || 'web_fetch_result';
     return `[tool_result: ${truncate(label, options.toolBlockLimit, marker)}]`;
   }
-  return formatToolResultMarker(content, options);
+  return formatToolResultMarker(block.content, options);
 }
 
 /**

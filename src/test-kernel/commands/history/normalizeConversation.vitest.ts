@@ -424,28 +424,114 @@ describe('Anthropic-style messages', () => {
     });
   });
 
-  it('handles web_fetch_tool_result blocks', () => {
+  it.each([
+    {
+      shape: 'live Anthropic nested',
+      block: {
+        type: 'web_fetch_tool_result',
+        content: {
+          type: 'web_fetch_result',
+          url: 'https://example.com/live',
+          content: {
+            type: 'document',
+            title: 'Live Page',
+            source: {
+              type: 'text',
+              media_type: 'text/plain',
+              data: 'Live page content',
+            },
+          },
+        },
+      },
+      expected: {
+        kind: 'web-fetch' as const,
+        url: 'https://example.com/live',
+        title: 'Live Page',
+        content: 'Live page content',
+      },
+    },
+    {
+      shape: 'archived flat',
+      block: {
+        type: 'web_fetch_tool_result',
+        url: 'https://example.com/archived',
+        title: 'Archived Page',
+        page_content: 'Archived page content',
+      },
+      expected: {
+        kind: 'web-fetch' as const,
+        url: 'https://example.com/archived',
+        title: 'Archived Page',
+        content: 'Archived page content',
+      },
+    },
+  ])(
+    'normalizes $shape web_fetch_tool_result blocks',
+    ({ block, expected }) => {
+      const nodes = normalize([
+        {
+          role: 'assistant',
+          content: [block],
+        },
+      ]);
+
+      expect(nodesOfKind(nodes, 'web-fetch')).toEqual([expected]);
+    },
+  );
+
+  it('keeps available fields and ignores malformed or absent optional web-fetch fields', () => {
     const nodes = normalize([
       {
         role: 'assistant',
         content: [
           {
             type: 'web_fetch_tool_result',
-            url: 'https://example.com',
-            title: 'Fetched Page',
-            page_content: '<html>...</html>',
+            content: {
+              type: 'web_fetch_result',
+              url: 'https://example.com/live-without-metadata',
+              content: {
+                type: 'document',
+                title: null,
+                source: { type: 'text', data: 42 },
+              },
+            },
+          },
+          {
+            type: 'web_fetch_tool_result',
+            url: 'https://example.com/archived-without-metadata',
+          },
+          {
+            type: 'web_fetch_tool_result',
+            content: {
+              type: 'web_fetch_tool_result_error',
+              error_code: 'url_not_accessible',
+            },
+          },
+          {
+            type: 'web_fetch_tool_result',
+            content: {
+              type: 'web_fetch_result',
+              content: { type: 'document' },
+            },
           },
         ],
       },
     ]);
 
-    const fetches = nodesOfKind(nodes, 'web-fetch');
-    expect(fetches).toHaveLength(1);
-    expect(fetches[0]).toMatchObject({
-      kind: 'web-fetch',
-      url: 'https://example.com',
-      title: 'Fetched Page',
-    });
+    expect(nodesOfKind(nodes, 'web-fetch')).toEqual([
+      {
+        kind: 'web-fetch',
+        url: 'https://example.com/live-without-metadata',
+        title: undefined,
+        content: undefined,
+      },
+      {
+        kind: 'web-fetch',
+        url: 'https://example.com/archived-without-metadata',
+        title: undefined,
+        content: undefined,
+      },
+    ]);
   });
 
   it('handles server_tool_use (web_search)', () => {
