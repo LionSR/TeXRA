@@ -59,7 +59,7 @@ const KEYS = {
   child: (id: string) => `${CHILD_KEY_PREFIX}${id}`,
 } as const;
 
-/** Single-value keys, derived from KEYS so the reserved-name check below never drifts. */
+/** Single-value keys, derived from SINGLE_VALUE_KEYS so the reserved-name check below never drifts. */
 const RESERVED_KEY_NAMES = new Set<string>(Object.values(SINGLE_VALUE_KEYS));
 
 /**
