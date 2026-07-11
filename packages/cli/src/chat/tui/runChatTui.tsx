@@ -13,17 +13,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
-import {
-  flushPendingRunTraces,
-  getDefaultStreamLogStore,
-  StreamSnapshotStore,
-} from '@transcript';
+import { flushPendingRunTraces, StreamSnapshotStore } from '@transcript';
 import { platform, tryPlatform } from '@platform/platform';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   presentFollowUpWakeResult,
@@ -403,7 +398,7 @@ export async function runChat(
   // subscribeStreamLog wires the append→sync bridge below. Best-effort: a load
   // failure leaves persistence off (save() no-ops) rather than breaking chat.
   try {
-    await getDefaultStreamLogStore().load();
+    await defaultSession().transcripts.load();
   } catch {
     // Persistence stays disabled; the session still runs in-memory as before.
   }
@@ -451,7 +446,7 @@ export async function runChat(
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
       session.streamId &&
-      SharedExecutionRegistry.getToolUseFlowContext(session.streamId),
+      defaultSession().executions.getToolUseFlowContext(session.streamId),
     );
   const canSelectCurrentModel = (): boolean =>
     chatTuiCanSelectModel({
@@ -467,7 +462,7 @@ export async function runChat(
       return undefined;
     }
     const activeFlow = session.streamId
-      ? SharedExecutionRegistry.getToolUseFlowContext(session.streamId)
+      ? defaultSession().executions.getToolUseFlowContext(session.streamId)
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
   };
@@ -534,7 +529,7 @@ export async function runChat(
     // StreamLogStore entries outlive resetCliState (which only clears the
     // React/signal view). Drop them so transcript projection can't replay
     // the cleared conversation into the fresh `<Static>` scrollback.
-    const store = getDefaultStreamLogStore();
+    const store = defaultSession().transcripts;
     for (const streamId of streamsSignal.get().keys()) {
       store.delete(streamId).catch(() => {
         // Best-effort: a KV failure leaves the log on disk, but the run
@@ -778,7 +773,7 @@ export async function runChat(
       onSuspend={() => handleSigtstp()}
       onKillExecution={(executionId) => {
         clearApprovals();
-        SharedExecutionRegistry.kill(executionId, {
+        defaultSession().executions.kill(executionId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
       }}
@@ -865,7 +860,7 @@ export async function runChat(
     flushPendingRunTraces();
     detachSnapshotPersistence();
     await Promise.all([
-      getDefaultStreamLogStore().flush(),
+      defaultSession().transcripts.flush(),
       snapshotStore.flush(),
     ]);
   };

@@ -37,12 +37,6 @@ vi.mock('@agent/storage', () => ({
   writeTerminalStatus: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/executionRegistry', () => ({
-  SharedExecutionRegistry: {
-    stopAgentStream: mocks.stopAgentStream,
-  },
-}));
-
 vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
   resolveAndResumeStream: mocks.resolveAndResumeStream,
 }));
@@ -267,6 +261,7 @@ describe('createChatSessionController', () => {
       interactions: {},
       events: {},
       status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
+      executions: { stopAgentStream: mocks.stopAgentStream },
     });
     mocks.resolveAndResumeStream.mockReset();
     mocks.resolveAndResumeStream.mockResolvedValue(true);

@@ -425,9 +425,9 @@ describe('executeCliRequest', () => {
 
   it('loads the stream log store before the run and flushes it after, in order', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const { getDefaultStreamLogStore } = await import('@transcript');
+    const { defaultSession } = await import('@agent/runtime/SessionHandle');
     const request = baseRequest();
-    const store = getDefaultStreamLogStore();
+    const store = defaultSession().transcripts;
     const callOrder: string[] = [];
     vi.spyOn(store, 'load').mockImplementation(async () => {
       callOrder.push('load');
@@ -455,9 +455,9 @@ describe('executeCliRequest', () => {
 
   it('flushes the stream log store even when the run throws', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const { getDefaultStreamLogStore } = await import('@transcript');
+    const { defaultSession } = await import('@agent/runtime/SessionHandle');
     const request = baseRequest();
-    const store = getDefaultStreamLogStore();
+    const store = defaultSession().transcripts;
     const loadSpy = vi.spyOn(store, 'load').mockResolvedValue(undefined);
     const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
     mocks.runAgent.mockRejectedValueOnce(new AgentError('boom'));
@@ -475,9 +475,9 @@ describe('executeCliRequest', () => {
 
   it('rethrows a non-AgentError rejection instead of swallowing it into an exit code', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const { getDefaultStreamLogStore } = await import('@transcript');
+    const { defaultSession } = await import('@agent/runtime/SessionHandle');
     const request = baseRequest();
-    const store = getDefaultStreamLogStore();
+    const store = defaultSession().transcripts;
     const loadSpy = vi.spyOn(store, 'load').mockResolvedValue(undefined);
     const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
     // An unclassified failure (e.g. registerExecution disk I/O,

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import type { StreamTabId } from '@shared/schemas';
 import { cleanupAllApprovals, releaseStreamResources } from '@tools/approval';
@@ -30,7 +30,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   }
 
   isStreamInFlight(stream: StreamTabId): boolean {
-    return isInFlightStatus(StreamStatusService.get(stream));
+    return isInFlightStatus(defaultSession().status.get(stream));
   }
 
   async stopStream(

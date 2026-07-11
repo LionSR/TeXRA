@@ -2,12 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - agent
-import {
-  createRunTrace,
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
-  StreamLogStore,
-} from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { TraceEmitter } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 
@@ -93,12 +88,10 @@ describe('codex progress events', () => {
   });
 
   it('updates in-flight Codex command items in place', async () => {
-    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
     await store.clear();
 
-    const logger = createRunTrace(streamId).trace;
+    const logger = createRunTrace(streamId, store).trace;
     const startedCommand: CommandExecutionItem = {
       id: 'cmd-1',
       type: 'command_execution',
@@ -143,32 +136,28 @@ describe('codex progress events', () => {
       }),
     } as unknown as Thread;
 
-    try {
-      const result = await runStreamedTurn(
-        thread,
-        'Build the project',
-        streamId,
-        logger,
-      );
+    const result = await runStreamedTurn(
+      thread,
+      'Build the project',
+      streamId,
+      logger,
+    );
 
-      expect(result.finalResponse).toBe('Build succeeded.');
+    expect(result.finalResponse).toBe('Build succeeded.');
 
-      const log = store.get(streamId);
-      const entries = log?.getRange(0, log.head) ?? [];
-      const toolEntries = entries.filter(
-        (entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE,
-      );
+    const log = store.get(streamId);
+    const entries = log?.getRange(0, log.head) ?? [];
+    const toolEntries = entries.filter(
+      (entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE,
+    );
 
-      expect(toolEntries).toHaveLength(1);
-      expect(toolEntries[0].data).toMatchObject({
-        toolName: 'bash',
-        summary: 'npm run build',
-        input: { command: 'npm run build' },
-        output: 'building...\ndone',
-        status: 'completed',
-      });
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    expect(toolEntries).toHaveLength(1);
+    expect(toolEntries[0].data).toMatchObject({
+      toolName: 'bash',
+      summary: 'npm run build',
+      input: { command: 'npm run build' },
+      output: 'building...\ndone',
+      status: 'completed',
+    });
   });
 });
