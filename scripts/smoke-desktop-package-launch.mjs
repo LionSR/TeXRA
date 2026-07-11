@@ -16,7 +16,7 @@ import {
   formatExit,
   hasExited,
   stopChild,
-  waitForExit,
+  waitForTermination,
 } from './smoke-process-utils.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -267,7 +267,7 @@ try {
   const child = application.process();
   const runtimeFailure = createRuntimeFailureSignal();
   observeApplication(application, runtimeFailure);
-  exitPromise = waitForExit(child);
+  exitPromise = waitForTermination(child);
   phase = 'waiting for packaged desktop readiness';
 
   const outcome = await Promise.race([
@@ -299,7 +299,7 @@ try {
 } finally {
   if (application) {
     try {
-      exitPromise ??= waitForExit(application.process());
+      exitPromise ??= waitForTermination(application.process());
       await closeApplication(application, exitPromise);
     } catch (error) {
       if (failure) {

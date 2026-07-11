@@ -16,6 +16,11 @@ export interface ExitObservable {
   ): unknown;
 }
 
+export interface ErrorObservable extends ExitObservable {
+  once(event: 'error', listener: (error: Error) => void): unknown;
+  off(event: 'error', listener: (error: Error) => void): unknown;
+}
+
 export interface StoppableChild extends ExitObservable {
   kill(signal: NodeJS.Signals): unknown;
 }
@@ -30,7 +35,9 @@ export function formatExit(exit: ProcessExit): string;
 
 export function hasExited(child: ExitObservable): boolean;
 
-export function waitForExit(child: ExitObservable): Promise<ProcessExit>;
+export function waitForExit(child: ErrorObservable): Promise<ProcessExit>;
+
+export function waitForTermination(child: ExitObservable): Promise<ProcessExit>;
 
 export function delay(ms: number): Promise<void>;
 
