@@ -215,6 +215,12 @@ export class MultiAgentTab extends LitElement {
 
   private handlePresetKey(event: KeyboardEvent, preset: AgentModePreset): void {
     if (event.key === 'Enter' || event.key === ' ') {
+      // Ignore Enter/Space that bubbled up from the nested delete button —
+      // that control owns its own click/keydown activation and must not
+      // also apply the preset it's being deleted from.
+      if ((event.target as HTMLElement | null)?.closest('.preset-delete-btn')) {
+        return;
+      }
       event.preventDefault();
       this.handlePresetClick(preset);
     }
