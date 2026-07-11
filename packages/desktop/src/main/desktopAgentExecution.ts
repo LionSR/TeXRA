@@ -48,6 +48,7 @@ import type {
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import {
+  findActiveAgentExecutionHandle,
   getAllActiveExecutionIds,
   SessionHandle,
 } from '@agent/runtime/SessionHandle';
@@ -744,11 +745,48 @@ export class DesktopProgressBridge {
   } {
     const activeExecutionIds = new Set(getAllActiveExecutionIds());
     const allExecutionIds = this.getRestartRepairExecutionIdMap();
+    // Rebind BEFORE forgetting the ghost: a restored stream's executionId
+    // being "active" only means some live session still owns it -- possibly
+    // a previous window's session, retained post-dispose so headless runs
+    // stay visible to process-wide guards (`keepActiveExecutions`, #6329).
+    // Without this, forgetting the ghost here (below) leaves the run with no
+    // rail entry owner at all: the old window's bridge already stopped
+    // forwarding events (disposed), and nothing else ever subscribed this
+    // window to them. See #8148.
+    this.rebindActiveExecutions(activeExecutionIds, allExecutionIds);
     this.sessionProgress.forgetActiveRestoredStreams(
       activeExecutionIds,
       allExecutionIds,
     );
     return { activeExecutionIds, allExecutionIds };
+  }
+
+  /**
+   * Reattach every still-active execution a restored (ghost) stream points
+   * at to THIS window's session, so window recreation doesn't strand a
+   * headless-continuing run on its previous window's disposed bridge (#8148).
+   * Idempotent (guarded by `this.session.executions.getHandle`), since
+   * startup repair calls `refreshActiveExecutionIds` more than once.
+   */
+  private rebindActiveExecutions(
+    activeExecutionIds: ReadonlySet<string>,
+    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>,
+  ): void {
+    for (const [streamId, snapshot] of this.sessionProgress.restoredStreams) {
+      const executionId = snapshot.executionId ?? allExecutionIds.get(streamId);
+      if (!executionId || !activeExecutionIds.has(executionId)) continue;
+      if (this.session.executions.getHandle(executionId)) continue;
+      const handle = findActiveAgentExecutionHandle(executionId);
+      if (!handle || handle.childStreamId !== streamId) continue;
+      this.session.executions.track(handle);
+      const detachTrace = handle.trace
+        ? this.session.attachRunTrace(handle.trace, streamId)
+        : undefined;
+      void handle.result.finally(() => {
+        detachTrace?.();
+        this.session.executions.untrack(executionId);
+      });
+    }
   }
 
   /**
