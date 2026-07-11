@@ -16,7 +16,7 @@ export interface ExitObservable {
   ): unknown;
 }
 
-export interface ErrorObservable extends ExitObservable {
+export interface ProcessErrorObservable {
   once(event: 'error', listener: (error: Error) => void): unknown;
   off(event: 'error', listener: (error: Error) => void): unknown;
 }
@@ -35,8 +35,12 @@ export function formatExit(exit: ProcessExit): string;
 
 export function hasExited(child: ExitObservable): boolean;
 
-export function waitForExit(child: ErrorObservable): Promise<ProcessExit>;
+/** Wait for process exit, rejecting if the child reports a process error. */
+export function waitForExit(
+  child: ExitObservable & ProcessErrorObservable,
+): Promise<ProcessExit>;
 
+/** Wait for actual process exit without treating an error event as exit. */
 export function waitForTermination(child: ExitObservable): Promise<ProcessExit>;
 
 export function delay(ms: number): Promise<void>;
