@@ -26,7 +26,10 @@ import {
   type RunToolUseFlowInput,
   type ToolUseFlowSetupCallback,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
-import { migrateSharedState } from '@agent/implementations/flows/tooluse/nodes/types';
+import {
+  migrateSharedState,
+  ToolUseRunSharedCanonicalSchema,
+} from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
@@ -93,21 +96,26 @@ function buildToolUseSnapshot(
   };
 }
 
-async function runResumedFlow(
+async function runPersistedFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
-  snapshot: ToolUseSessionSnapshot,
+  snapshot: ToolUseSessionSnapshot | undefined,
   onSetup?: (context: ToolUseSetupContext) => void,
   session: SessionHandle = new SessionHandle(),
 ): Promise<RunToolUseFlowResult> {
+  const config = snapshot?.agentConfig ?? CONFIG;
+  const userVarChannels = snapshot?.user ?? {
+    input: Object.freeze({ MODEL: config.model }),
+    transient: {},
+  };
   const context = createRunContext({
     modelSource: 'live',
-    getModel: () => snapshot.agentConfig.model,
+    getModel: () => config.model,
     runScope: createRunScope({
       runtimeHost: noopAgentRuntimeHost,
       streamId,
       executionId,
-      agentName: snapshot.agentConfig.agent,
+      agentName: config.agent,
       session,
     }),
   });
@@ -117,11 +125,11 @@ async function runResumedFlow(
     return await withRunContext(context, () =>
       runToolUseFlow(
         {
-          config: snapshot.agentConfig,
+          config,
           setting: TOOL_USE_SETTING,
           prompt: TOOL_USE_PROMPT,
           logger: noopTrace,
-          userVarChannels: snapshot.user,
+          userVarChannels,
           modelHandler: createTaggedModelHandler(ACTIVE_COMPATIBILITY_KEY),
           streamStatus: session.status,
           checkInterruption: () => interrupted,
@@ -129,7 +137,7 @@ async function runResumedFlow(
             interrupted = true;
           },
           setAbortController: () => {},
-          resumeSnapshot: snapshot,
+          ...(snapshot !== undefined && { resumeSnapshot: snapshot }),
           isSubagent: true,
           toolInjections: new ToolInjectionRegistry(),
         },
@@ -147,7 +155,7 @@ async function runResumedFlowToWaiting(
   streamId: StreamTabId,
   snapshot: ToolUseSessionSnapshot,
 ): Promise<void> {
-  const result = await runResumedFlow(executionId, streamId, snapshot);
+  const result = await runPersistedFlow(executionId, streamId, snapshot);
   expect(result.outcome).toBe(STREAM_PHASE.WAITING);
 }
 
@@ -518,7 +526,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
-      const result = await runResumedFlow(
+      const result = await runPersistedFlow(
         executionId,
         streamId,
         snapshot,
@@ -563,7 +571,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
-      const result = await runResumedFlow(
+      const result = await runPersistedFlow(
         executionId,
         streamId,
         snapshot,
@@ -614,7 +622,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
 
     try {
-      const result = await runResumedFlow(
+      const result = await runPersistedFlow(
         executionId,
         streamId,
         snapshot,
@@ -778,18 +786,19 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       nodes: [{ action: 'default', nodeId: 'start' }],
     });
 
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      agentConfigToTaskState(CONFIG),
+    const result = await runPersistedFlow(executionId, streamId, undefined);
+    expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+
+    const healedRecord = await getExecutionStore(executionId).read<FlowRecord>(
+      flowKey(executionId),
     );
-    expect(resume?.type).toBe('toolUse');
-    if (resume?.type !== 'toolUse') return;
-
-    await runResumedFlowToWaiting(executionId, streamId, resume.snapshot);
-
+    const healedShared = ToolUseRunSharedCanonicalSchema.parse(
+      healedRecord?.shared,
+    );
+    expect(healedShared.stateSlices).not.toBeNull();
+    if (!healedShared.stateSlices) return;
     const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
-      resume.snapshot.workspace,
+      healedShared.stateSlices.workspaceSnapshot,
     );
     expect(workspaceState.workPlan.todos).toEqual(
       legacyWorkspaceSnapshot.todos,
