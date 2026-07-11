@@ -139,6 +139,42 @@ function mergeRoundPatch<T>(
 }
 
 /**
+ * Overlay shape for {@link StreamSnapshotStore.updateMissingOutputs} /
+ * {@link StreamSnapshotStore.clearMissingOutputs} on an unseeded stream:
+ * `reset` records that a `clearMissingOutputs()` happened somewhere in the
+ * recorded sequence, so replay wipes the disk-read state before layering
+ * `patch` on top, instead of merging onto stale disk rounds a clear was
+ * supposed to erase.
+ */
+interface RoundOverlay<T> {
+  reset: boolean;
+  patch: Map<number, T[] | null>;
+}
+
+/**
+ * Merge {@link RoundOverlay} patches in call order so `clearMissingOutputs`
+ * interleaved with `updateMissingOutputs` on the same unseeded stream
+ * replays correctly regardless of which fired first: a reset (`clear`)
+ * supersedes everything recorded before it — it drops the earlier round
+ * patch outright, matching a disk write of `{}` — while a later update
+ * layers its round patch on top and preserves whichever reset flag is
+ * already recorded. Without this, `clearMissingOutputs` staying on the
+ * plain deferred `mutate()` path let it replay out of order relative to an
+ * eagerly-overlaid `updateMissingOutputs`, silently dropping the newer
+ * update or resurrecting rounds a clear was supposed to erase.
+ */
+function mergeMissingOutputsOverlay(
+  existing: RoundOverlay<string> | undefined,
+  patch: RoundOverlay<string>,
+): RoundOverlay<string> {
+  if (patch.reset) return patch;
+  return {
+    reset: existing?.reset ?? false,
+    patch: mergeRoundPatch(existing?.patch, patch.patch),
+  };
+}
+
+/**
  * Merge a per-run usage delta patch into an existing overlay patch,
  * accumulating (not replacing) each run's totals — mirrors the in-memory
  * sum `applyUsageDeltaMemory` performs, so the overlay replayed after
@@ -230,7 +266,7 @@ export class StreamSnapshotStore {
   >();
   private readonly missingOutputsOverlays = new Map<
     StreamTabId,
-    Map<number, string[] | null>
+    RoundOverlay<string>
   >();
   private readonly compileFailuresOverlays = new Map<
     StreamTabId,
@@ -601,9 +637,9 @@ export class StreamSnapshotStore {
 
     this.mutateWithOverlay(
       stream,
-      patch,
+      { reset: false, patch },
       this.missingOutputsOverlays,
-      mergeRoundPatch,
+      mergeMissingOutputsOverlay,
       () => this.applyRoundPatch(this.missingOutputs, stream, patch),
       () =>
         this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {
@@ -715,12 +751,27 @@ export class StreamSnapshotStore {
     return paths;
   }
 
-  /** Clear the missing-outputs marker for a stream (memory + disk). */
+  /**
+   * Clear the missing-outputs marker for a stream (memory + disk). Goes
+   * through the same `mutateWithOverlay` shape as `updateMissingOutputs` (via
+   * the shared `reset`-aware overlay) rather than the plain deferred
+   * `mutate()` path, so a clear and an update racing on the same unseeded
+   * stream replay in call order instead of the clear always landing last.
+   */
   clearMissingOutputs(stream: StreamTabId): void {
-    this.mutate(stream, () => {
-      if (!this.missingOutputs.delete(stream)) return;
-      this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {});
-    });
+    let existed = false;
+    this.mutateWithOverlay(
+      stream,
+      { reset: true, patch: new Map<number, string[] | null>() },
+      this.missingOutputsOverlays,
+      mergeMissingOutputsOverlay,
+      () => {
+        existed = this.missingOutputs.delete(stream);
+      },
+      () => {
+        if (existed) this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {});
+      },
+    );
   }
 
   // ==========================================================================
@@ -1356,7 +1407,12 @@ export class StreamSnapshotStore {
       this.outputFileOverlays.delete(stream);
     }
     if (missingOutputsOverlay) {
-      this.applyRoundPatch(this.missingOutputs, stream, missingOutputsOverlay);
+      if (missingOutputsOverlay.reset) this.missingOutputs.set(stream, {});
+      this.applyRoundPatch(
+        this.missingOutputs,
+        stream,
+        missingOutputsOverlay.patch,
+      );
       sidecarsToWrite.add(STREAM_DATA_KEYS.MISSING_OUTPUTS);
       this.missingOutputsOverlays.delete(stream);
     }
