@@ -19,6 +19,7 @@ import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
+import { formatShortDateTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -29,9 +30,6 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - history view styles
 import { historyStyles } from '@shared/styles/historyStyles';
-
-// Local imports - utils
-import { formatLocaleTimestamp } from '@utils/text/stringUtils';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
@@ -279,7 +277,7 @@ export class HistoryItemElement extends LitElement {
     }
 
     const config = this.item.agentConfig;
-    const timestamp = formatLocaleTimestamp(this.item.timestamp);
+    const timestamp = formatShortDateTime(this.item.timestamp) ?? 'Unknown';
     const isToolUse = config.agentCategory === AgentCategory.ToolUse;
     const categoryVariant: 'warning' | 'brand' = isToolUse
       ? 'warning'
