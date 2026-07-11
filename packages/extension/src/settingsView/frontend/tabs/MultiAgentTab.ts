@@ -213,6 +213,13 @@ export class MultiAgentTab extends LitElement {
     );
   }
 
+  private handlePresetKey(event: KeyboardEvent, preset: AgentModePreset): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.handlePresetClick(preset);
+    }
+  }
+
   private handleDeletePreset(event: Event, preset: AgentModePreset): void {
     event.stopPropagation();
     this.dispatchEvent(
@@ -245,7 +252,10 @@ export class MultiAgentTab extends LitElement {
     return html`
       <div
         class=${classMap({ 'preset-card': true, active: isActive })}
+        role="button"
+        tabindex="0"
         @click=${() => this.handlePresetClick(preset)}
+        @keydown=${(e: KeyboardEvent) => this.handlePresetKey(e, preset)}
         title="Apply ${preset.name} team"
       >
         <div class="preset-card-header">
