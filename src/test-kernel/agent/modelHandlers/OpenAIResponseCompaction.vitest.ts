@@ -217,6 +217,83 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(result.updatedMessages).toEqual(compactedMessages);
   });
 
+  it('reuses a successful compaction across a same-turn retry instead of re-compacting (chain-anchor/payload commit race)', async () => {
+    // PocketFlow's Node._exec retries a failed exec() with the identical
+    // prepRes, so a same-turn retry resends the exact same `messages` array
+    // reference. Compaction's chain-anchor clear (on ResponseChainState)
+    // commits immediately and survives that retry permanently; its computed
+    // payload (compactionResult) must now survive the same retry too, or the
+    // retry silently redoes the compact() call for no reason.
+    const handler = createHandler();
+    const requests: any[] = [];
+    const compactRequests: any[] = [];
+    const compactedMessages = [
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'compacted state' }],
+      },
+    ] as unknown as ResponseInputItem[];
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => ({ input_tokens: 100 }),
+        },
+        compact: async (params: any) => {
+          compactRequests.push(params);
+          return {
+            output: compactedMessages,
+            usage: { output_tokens: 100 },
+          };
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          if (requests.length === 1) {
+            return createResponse('resp-before-threshold', 800);
+          }
+          if (requests.length === 2) {
+            // The request that follows a successful compaction fails once,
+            // forcing a same-turn retry with the same `messages` reference.
+            throw new Error('transient network failure');
+          }
+          return createResponse('resp-after-compaction', 150);
+        },
+      },
+    };
+    const firstTurnMessages = createMessages(2);
+    const secondTurnMessages = createMessages(3);
+
+    await handler.createResponse({
+      client: client as any,
+      messages: firstTurnMessages,
+      temperature: 0,
+    });
+
+    await expect(
+      handler.createResponse({
+        client: client as any,
+        messages: secondTurnMessages,
+        temperature: 0,
+      }),
+    ).rejects.toThrow('transient network failure');
+
+    // Same-turn retry: identical `messages` reference as the failed attempt.
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: secondTurnMessages,
+      temperature: 0,
+    });
+
+    // The /responses/compact endpoint must be hit only once across both
+    // attempts — the retry reuses the already-computed compaction instead of
+    // silently redoing it.
+    expect(compactRequests).toHaveLength(1);
+    expect(requests).toHaveLength(3);
+    expect(requests[2].previous_response_id).toBeUndefined();
+    expect(requests[2].input).toEqual(compactedMessages);
+    expect(result.updatedMessages).toEqual(compactedMessages);
+  });
+
   it('does not call the Responses compact endpoint when compaction is unsupported', async () => {
     const handler = createUnsupportedCompactionHandler();
     const requests: any[] = [];
