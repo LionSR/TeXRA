@@ -92,17 +92,6 @@ const INTERRUPT: ApprovalDecision = {
   userMessage: 'Session interrupted.',
 };
 
-/**
- * Settle one queue item through the canonical FIFO. Removing the foreground
- * item clears its modal and schedules the next entry for presentation.
- */
-function settleItem(
-  item: ApprovalQueueItem,
-  decision: ApprovalDecision,
-): boolean {
-  return settleItems((candidate) => candidate === item, decision) === 1;
-}
-
 function presentForeground(): void {
   const item = pendingItems[0];
   if (!item || CURRENT.get()) return;
@@ -118,7 +107,7 @@ function presentForeground(): void {
   CURRENT.set({
     payload: item.payload,
     decide: (decision) => {
-      settleItem(item, decision);
+      settleItems((candidate) => candidate === item, decision);
     },
   });
 }
