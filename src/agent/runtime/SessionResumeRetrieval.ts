@@ -21,10 +21,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
-import {
-  migrateSharedState,
-  StateSlicesSchema,
-} from '@agent/implementations/flows/tooluse/nodes/types';
+import { migrateSharedState } from '@agent/implementations/flows/tooluse/nodes/types';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
@@ -65,16 +62,6 @@ export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 export interface SessionResumeRetrievalOptions {
   readonly parentStreamId?: StreamTabId;
 }
-
-const CurrentToolUseFlowRecordStateSchema = z.looseObject({
-  messages: ProviderMessageArraySchema,
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
-  stateSlices: StateSlicesSchema,
-});
-
-type NormalizedToolUseState = z.infer<
-  typeof CurrentToolUseFlowRecordStateSchema
->;
 
 function throwIfResumeStorageUnreadable(
   resumability: ResumabilityDecision,
@@ -179,17 +166,14 @@ async function retrieveToolUseResumeData(
       return null;
     }
 
-    const parseResult = CurrentToolUseFlowRecordStateSchema.safeParse(
-      migrationResult.data,
-    );
-    if (!parseResult.success) {
+    const { messages, stateSlices } = migrationResult.data;
+    if (stateSlices === null) {
       logger.warn(
         `Invalid flow record structure for execution: ${executionId}`,
       );
       return null;
     }
 
-    const { messages, stateSlices } = parseResult.data;
     const currentConfig = {
       ...agentConfig,
       model:
@@ -197,7 +181,7 @@ async function retrieveToolUseResumeData(
         agentConfig.model,
     };
     const modelHandlerCompatibilityKey =
-      parseResult.data.modelHandlerCompatibilityKey ??
+      migrationResult.data.modelHandlerCompatibilityKey ??
       inferPersistedModelHandlerCompatibilityKey(currentConfig.model, messages);
 
     // Construct and validate the complete snapshot.
