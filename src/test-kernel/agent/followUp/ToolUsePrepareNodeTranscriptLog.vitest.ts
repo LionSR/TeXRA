@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentPromptSchema } from '@agent/core/definition/AgentDataclass';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUsePrepareNode } from '@agent/implementations/flows/tooluse/nodes/ToolUsePrepareNode';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 
 function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},
@@ -87,5 +90,45 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
     await expect(node.exec(undefined)).rejects.toThrow('boom');
 
     expect(services.logger.info).not.toHaveBeenCalled();
+  });
+});
+
+function buildSnapshot(
+  overrides: Partial<ToolUseSessionSnapshot> = {},
+): ToolUseSessionSnapshot {
+  return {
+    messages: [
+      { role: 'system', content: [{ type: 'text', text: 'stale system' }] },
+    ],
+    run: AgentRunStateSnapshotSchema.parse({}),
+    workspace: AgentWorkspaceState.create().toSnapshot(),
+    user: { input: {}, transient: {} },
+    ...overrides,
+  } as ToolUseSessionSnapshot;
+}
+
+describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
+  it('keeps the persisted messages byte-identical on resume, never rewriting messages[0]', async () => {
+    // Rewriting the persisted system message on every resume to reflect
+    // current workspace/tool state would change the leading bytes of the
+    // request and invalidate the provider's prefix-based prompt cache. Per
+    // maintainer ruling, resume must use the snapshot's messages verbatim —
+    // a mid-run agent-config edit does not propagate into an
+    // already-suspended run's prefix. This is the regression test for that
+    // contract: no local re-derivation, no port call, no mutation.
+    const snapshot = buildSnapshot();
+    const services = buildServices({ snapshot });
+    const node = new ToolUsePrepareNode().setServices(services);
+
+    const result = await node.exec(undefined);
+
+    expect(result.result.messages).toBe(snapshot.messages);
+    expect(result.result.messages[0]).toEqual({
+      role: 'system',
+      content: [{ type: 'text', text: 'stale system' }],
+    });
+    expect(result.result.shouldSkipCycle).toBe(true);
+    // initializeMessages is the fresh-session path; resume must not call it.
+    expect(services.modelHandler.initializeMessages).not.toHaveBeenCalled();
   });
 });
