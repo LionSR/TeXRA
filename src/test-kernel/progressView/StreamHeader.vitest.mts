@@ -20,9 +20,7 @@ function baseStream(): StreamTabInfo {
   };
 }
 
-async function mount(
-  props: Partial<StreamHeader> = {},
-): Promise<StreamHeader> {
+async function mount(props: Partial<StreamHeader> = {}): Promise<StreamHeader> {
   const element = document.createElement('stream-header') as StreamHeader;
   element.stream = baseStream();
   Object.assign(element, props);
