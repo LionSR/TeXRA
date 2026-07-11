@@ -55,6 +55,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   getSdkErrorMessage,
   isContextWindowError,
+  attachContextWindowError,
 } from '@common/errors/sdkErrorUtils';
 
 // Local imports - platform
@@ -1598,9 +1599,14 @@ export abstract class ModelHandler<
   ): TokenValidationResult {
     // Hard fail if input already exceeds context window
     if (inputTokens > contextWindow) {
-      throw new Error(
+      const error = new Error(
         `Token count of message exceeds context window: ${inputTokens} > ${contextWindow}`,
       );
+      // Tag with a typed marker so isContextWindowError() recognizes this
+      // internal case without depending on the message wording above, which
+      // this method (not a third-party provider) owns and may reword freely.
+      attachContextWindowError(error);
+      throw error;
     }
 
     const utilizationPercent = computeUtilizationPercent(
