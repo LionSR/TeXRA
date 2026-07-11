@@ -5,10 +5,91 @@ import { StreamLogStore } from '@transcript/StreamLogStore';
 import { TraceEmitter } from '@agent/trace';
 import {
   MESSAGE_TYPES,
+  RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
   type StreamTabId,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
+
+describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)', () => {
+  it("writes GROUP_START's data.status as StreamPhase.RUNNING", () => {
+    const trace = new TraceEmitter();
+    const store = new StreamLogStore();
+    const streamId = 'stream:group-start-native' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, streamId, store);
+
+    const stage = trace.openStage('r0', { kind: 'round' });
+
+    const entries = store.get(streamId)?.getRange(0) ?? [];
+    const startEntry = entries.find((e) => e.id === stage.id);
+
+    expect(startEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_START);
+    expect(isObject(startEntry?.data) && startEntry.data.status).toBe(
+      STREAM_PHASE.RUNNING,
+    );
+  });
+
+  it('defaults GROUP_END to the literal RunOutcome.COMPLETED, not a folded EndGroupStatus', () => {
+    const trace = new TraceEmitter();
+    const store = new StreamLogStore();
+    const streamId = 'stream:group-end-default-outcome' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, streamId, store);
+
+    const stage = trace.openStage('r0', { kind: 'round' });
+    stage.end();
+
+    const entries = store.get(streamId)?.getRange(0) ?? [];
+    const endEntry = entries.find((e) => e.id === stage.id);
+
+    expect(endEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
+    expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
+      RUN_OUTCOME.COMPLETED,
+    );
+  });
+
+  it('writes an explicit RunOutcome passed to stage.end() verbatim', () => {
+    const trace = new TraceEmitter();
+    const store = new StreamLogStore();
+    const streamId = 'stream:group-end-explicit-outcome' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, streamId, store);
+
+    const stage = trace.openStage('r0', { kind: 'round' });
+    stage.end(RUN_OUTCOME.CANCELLED);
+
+    const entries = store.get(streamId)?.getRange(0) ?? [];
+    const endEntry = entries.find((e) => e.id === stage.id);
+
+    expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
+      RUN_OUTCOME.CANCELLED,
+    );
+  });
+
+  it('defaults a stage.run() failure to RunOutcome.FAILED', async () => {
+    const trace = new TraceEmitter();
+    const store = new StreamLogStore();
+    const streamId = 'stream:group-end-run-failure' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, streamId, store);
+
+    const stage = trace.openStage('r0', { kind: 'round' });
+    await expect(
+      stage.run(() => {
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
+
+    const entries = store.get(streamId)?.getRange(0) ?? [];
+    const endEntry = entries.find((e) => e.id === stage.id);
+
+    expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
+      RUN_OUTCOME.FAILED,
+    );
+  });
+});
 
 describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
   it("preserves a round stage's kind onto its persisted GROUP_END row", () => {
