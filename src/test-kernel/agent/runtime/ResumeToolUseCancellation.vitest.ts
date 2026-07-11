@@ -126,6 +126,7 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
     } as unknown as ToolUseSessionSnapshot;
 
     const result = await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
+      setupSession: () => order.push('setup'),
       isCancellationRequested: () => {
         order.push('query');
         expect(attachedContext).toBeDefined();
@@ -135,6 +136,6 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
-    expect(order).toEqual(['attach', 'query', 'interrupt', 'detach']);
+    expect(order).toEqual(['attach', 'setup', 'query', 'interrupt', 'detach']);
   });
 });

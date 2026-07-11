@@ -686,6 +686,7 @@ describe('createChatSessionController', () => {
       finalize: true,
     });
     expect(mocks.notify).not.toHaveBeenCalledWith({ kind: 'agentFinished' });
+    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
   });
 
   it('does not finalize the stream transcript when auto-resume returns false', async () => {

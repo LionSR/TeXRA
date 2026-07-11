@@ -150,6 +150,11 @@ describe('resumeToolUseSnapshot', () => {
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
         expect(options.isCancellationRequested).toBe(isCancellationRequested);
+        defaultSession().followUps.enqueue(
+          STREAM,
+          { text: 'queued during resume' },
+          { force: true },
+        );
         options.setupSession({ appendFollowUp });
         seedStreamStatusForTest(
           defaultSession().status,
@@ -167,7 +172,10 @@ describe('resumeToolUseSnapshot', () => {
     ).resolves.toBe(false);
 
     expect(appendFollowUp).not.toHaveBeenCalled();
-    expect(defaultSession().followUps.getAll(STREAM)).toEqual(['queued one']);
+    expect(defaultSession().followUps.getAll(STREAM)).toEqual([
+      'queued one',
+      'queued during resume',
+    ]);
     expect(defaultSession().status.get(STREAM)).toBe(STREAM_STATUS.WAITING);
   });
 

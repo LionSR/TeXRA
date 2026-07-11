@@ -471,6 +471,7 @@ export async function executeAgent(
 }
 
 export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
+  /** Initialize the rebuilt session immediately after its flow is attached. */
   readonly setupSession?: (session: IToolUseSession) => void;
   /** Query caller-owned cancellation once the resumed flow is interruptible. */
   readonly isCancellationRequested?: () => boolean;
@@ -574,10 +575,10 @@ export async function resumeToolUseFromSnapshot(
           undefined,
           (flowContext) => {
             handle.attachToolUseFlow(flowContext);
+            options.setupSession?.(flowContext.session);
             if (options.isCancellationRequested?.()) {
               flowContext.interrupt();
             }
-            options.setupSession?.(flowContext.session);
             return () => handle.detachToolUseFlow(flowContext);
           },
         );
