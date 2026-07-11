@@ -48,7 +48,7 @@ import {
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import {
   EXECUTION_STATUS,
-  STREAM_STATUS,
+  STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
   sumUsageStats,
@@ -529,7 +529,7 @@ export function createChatSessionController(
                 allowWaitingResult: true,
                 isCancellationRequested: () => session.stopRequested,
                 onResult: (result) => {
-                  resumedToWaiting = result.outcome === STREAM_STATUS.WAITING;
+                  resumedToWaiting = result.outcome === STREAM_PHASE.WAITING;
                 },
                 onError: reportRunFailure,
               }),
