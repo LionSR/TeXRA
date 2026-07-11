@@ -1,6 +1,10 @@
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { isTerminalStatus } from '@common/constants/streamStatus';
-import { type StreamLifecycleStatus, type StreamTabId } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
+import {
+  STREAM_PHASE,
+  type StreamPhase,
+  type StreamTabId,
+} from '@shared/schemas';
 
 import {
   activeStreamId,
@@ -17,16 +21,15 @@ import { activeStreamParentOrSelfId } from './streamViews';
 export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
 
 /**
- * Stream statuses at which deferred-finalization entries (assistant text and
- * tool rows) are promoted into `<Static>` scrollback. This is exactly the
- * shared "execution ended" set ({@link isTerminalStatus}): a terminal status
- * means the current cycle is done, so its entries are safe to finalize. Aliased
- * (not re-declared) so the membership stays single-sourced across all hosts.
+ * Stream phases at which deferred-finalization entries (assistant text and
+ * tool rows) are promoted into `<Static>` scrollback. WAITING ends the current
+ * turn without ending the run; terminal outcomes end both. In either case the
+ * current entries are safe to finalize.
  */
 export function isFinalTranscriptStatus(
-  status: StreamLifecycleStatus | undefined,
+  status: StreamPhase | undefined,
 ): boolean {
-  return isTerminalStatus(status);
+  return status === STREAM_PHASE.WAITING || isTerminalOutcomePhase(status);
 }
 
 let localEntrySeq = 0;

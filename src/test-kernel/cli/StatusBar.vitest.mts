@@ -11,7 +11,7 @@ import {
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
-import { STREAM_PHASE, STREAM_STATUS } from '@shared/schemas';
+import { STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
 const COMPLETED_REVIEW_FOLLOWUP =
@@ -24,7 +24,7 @@ function statusInput(
   overrides: Partial<StatusBarDisplayInput> = {},
 ): StatusBarDisplayInput {
   return {
-    status: STREAM_STATUS.WAITING,
+    status: STREAM_PHASE.WAITING,
     pendingExitHint: false,
     pendingExitResumeId: undefined,
     bypass: NO_BYPASS,
@@ -144,7 +144,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps queued follow-up counts in the durable left status segments', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         queuedFollowUpMessages: ['Keep the proof under one page.'],
       }),
     );
@@ -309,7 +309,7 @@ describe('CLI StatusBar display model', () => {
   it('hides task shortcuts when no task rows exist', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         elapsedMs: 12_000,
         taskControlsAvailable: false,
         apiMode: 'relay',
@@ -326,7 +326,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps subagent shortcuts grouped when task shortcuts are hidden', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         elapsedMs: 12_000,
         activeSubagents: 1,
         taskControlsAvailable: false,
@@ -351,7 +351,7 @@ describe('CLI StatusBar display model', () => {
   it('does not advertise in-pane paging for focused child streams', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         activeSubagents: 1,
         taskControlsAvailable: false,
         subagentControlsAvailable: true,
@@ -381,7 +381,7 @@ describe('CLI StatusBar display model', () => {
   it('shows live running signals and approval depth', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         queuedFollowUpMessages: [
           'Keep the proof under one page.',
           'Also mention the finite monoid argument.',
@@ -422,7 +422,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps critical controls visible in narrow subagent sessions', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         elapsedMs: 88_000,
         activeSubagents: 3,
         activeProcesses: 1,
@@ -443,7 +443,7 @@ describe('CLI StatusBar display model', () => {
   it('prefers the task picker when one child-control shortcut fits', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         elapsedMs: 88_000,
         activeSubagents: 3,
         activeProcesses: 1,
@@ -463,7 +463,7 @@ describe('CLI StatusBar display model', () => {
   it('drops low-priority status details before narrow footers lose separators', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         elapsedMs: 75_000,
         activeSubagents: 3,
         activeProcesses: 1,
@@ -490,7 +490,7 @@ describe('CLI StatusBar display model', () => {
   it('drops approval depth before returning an over-wide narrow status', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         elapsedMs: 75_000,
         approvalDepth: 3,
         ctrlCAction: 'stop',
@@ -509,7 +509,7 @@ describe('CLI StatusBar display model', () => {
   it('drops elapsed before returning an over-wide critical-only status', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         elapsedMs: 75_000,
         ctrlCAction: 'stop',
         width: 16,
@@ -526,7 +526,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps queued follow-up previews aligned with visible queued counts', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         elapsedMs: 75_000,
         queuedFollowUpMessages: ['Keep the proof under one page.'],
         approvalDepth: 3,
@@ -547,7 +547,7 @@ describe('CLI StatusBar display model', () => {
   it('can hide queued follow-up previews while keeping the durable count', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         queuedFollowUpMessages: ['Keep the proof under one page.'],
         queuedFollowUpPreview: false,
         ctrlCAction: 'stop',
@@ -602,7 +602,7 @@ describe('CLI StatusBar display model', () => {
 
     const liveChildDisplay = buildStatusBarDisplay({
       ...baseDisplayInput,
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
     });
     expect(liveChildDisplay.left.map(statusBarSegmentText)).not.toContain(
       'root active',
@@ -619,13 +619,13 @@ describe('CLI StatusBar display model', () => {
 
   it('labels a focused WAITING child distinctly from the root idle wording', () => {
     const rootDisplay = buildStatusBarDisplay(
-      statusInput({ status: STREAM_STATUS.WAITING, isChildStream: false }),
+      statusInput({ status: STREAM_PHASE.WAITING, isChildStream: false }),
     );
     expect(rootDisplay.left.map(statusBarSegmentText)).toContain('idle');
 
     const childDisplay = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.WAITING,
+        status: STREAM_PHASE.WAITING,
         isChildStream: true,
         subagentControlsAvailable: true,
         hasMultipleStreams: true,
@@ -643,7 +643,7 @@ describe('CLI StatusBar display model', () => {
     const child = 'child';
     const waitingChildSlice = {
       streamId: child,
-      status: STREAM_STATUS.WAITING,
+      status: STREAM_PHASE.WAITING,
     } as StreamSlice;
     const streams = new Map<StreamSlice['streamId'], StreamSlice>([
       [child, waitingChildSlice],
@@ -680,7 +680,7 @@ describe('CLI StatusBar display model', () => {
     const grandchild = 'grandchild';
     const rootSlice = {
       streamId: root,
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
     } as StreamSlice;
     const childSlice = {
       streamId: child,
@@ -815,7 +815,7 @@ describe('CLI StatusBar display model', () => {
 
     const waitingRootSlice = {
       streamId: root,
-      status: STREAM_STATUS.WAITING,
+      status: STREAM_PHASE.WAITING,
     } as StreamSlice;
     expect(
       statusBarStreamTarget({
@@ -876,25 +876,25 @@ describe('CLI StatusBar display model', () => {
         streams: new Map<StreamSlice['streamId'], StreamSlice>([
           [
             root,
-            { streamId: root, status: STREAM_STATUS.WAITING } as StreamSlice,
+            { streamId: root, status: STREAM_PHASE.WAITING } as StreamSlice,
           ],
         ]),
       }),
     ).toMatchObject({
       ctrlCAction: 'exit',
-      displaySlice: { streamId: root, status: STREAM_STATUS.WAITING },
+      displaySlice: { streamId: root, status: STREAM_PHASE.WAITING },
     });
   });
 
   it('uses focused stream status when a stopped child stream is focused', () => {
     const rootSlice = {
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
     } as StreamSlice;
     const childSlice = {
       status: STREAM_PHASE.CANCELLED,
     } as StreamSlice;
     const waitingChildSlice = {
-      status: STREAM_STATUS.WAITING,
+      status: STREAM_PHASE.WAITING,
     } as StreamSlice;
     const streams = new Map<StreamSlice['streamId'], StreamSlice>([
       ['root', rootSlice],
@@ -939,7 +939,7 @@ describe('CLI StatusBar display model', () => {
   it('hides inactive global bindings while a foreground panel owns input', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         activeSubagents: 2,
         activeProcesses: 1,
         approvalDepth: 1,
@@ -959,7 +959,7 @@ describe('CLI StatusBar display model', () => {
   it('labels foreground user questions as questions instead of approvals', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         approvalDepth: 1,
         approvalKind: 'question',
         foregroundEscapeAction: 'skip',
@@ -975,7 +975,7 @@ describe('CLI StatusBar display model', () => {
   it('shows cancel for non-question approval foregrounds', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         approvalDepth: 1,
         foregroundEscapeAction: 'cancel',
         shortcutsActive: false,
@@ -988,7 +988,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps escape and Ctrl-C actions visible in narrow foreground panels', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
@@ -1005,7 +1005,7 @@ describe('CLI StatusBar display model', () => {
   it('falls back to the bare Ctrl-C action in tiny foreground panels', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
@@ -1021,7 +1021,7 @@ describe('CLI StatusBar display model', () => {
 
   it('shows a live elapsed segment only while running', () => {
     const runningInput = statusInput({
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
       elapsedMs: 110_000,
     });
     const running = buildStatusBarDisplay(runningInput);
@@ -1029,6 +1029,17 @@ describe('CLI StatusBar display model', () => {
     expect(running.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
+      '1m 50s',
+      PERSONAL_API_MODE_LABEL,
+    ]);
+
+    const resuming = buildStatusBarDisplay({
+      ...runningInput,
+      substate: STREAM_SUBSTATE.RESUMING,
+    });
+    expect(resuming.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'resuming',
       '1m 50s',
       PERSONAL_API_MODE_LABEL,
     ]);
@@ -1071,7 +1082,7 @@ describe('CLI StatusBar display model', () => {
   it('preserves distinct YOLO, bash, and edit bypass badges', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         bypass: { bash: true, superYolo: true, toolEdit: true },
       }),
     );
@@ -1101,7 +1112,7 @@ describe('CLI StatusBar display model', () => {
   it('budgets queued follow-up previews with rendered badge padding', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         bypass: { bash: false, superYolo: true, toolEdit: true },
         queuedFollowUpMessages: ['Keep the proof under one page.'],
         width: 65,
@@ -1115,7 +1126,7 @@ describe('CLI StatusBar display model', () => {
   it('shows the resume command while exit confirmation is armed', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         pendingExitHint: true,
         pendingExitResumeId: 'abc123',
       }),
@@ -1134,7 +1145,7 @@ describe('CLI StatusBar display model', () => {
   it('uses the provided command name in the armed-exit resume command', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         pendingExitHint: true,
         pendingExitResumeId: 'abc123',
         commandName: 'texra-local',
@@ -1149,7 +1160,7 @@ describe('CLI StatusBar display model', () => {
   it('warns that queued follow-ups are discarded while exit is armed', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         pendingExitHint: true,
         pendingExitResumeId: 'abc123',
         queuedFollowUpMessages: [
@@ -1173,7 +1184,7 @@ describe('CLI StatusBar display model', () => {
 
   it('compacts token usage to a percentage before dropping it on narrow widths', () => {
     const input = statusInput({
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
       usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
     });
 
@@ -1196,7 +1207,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps the exit confirmation visible in very narrow footers', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_STATUS.RUNNING,
+        status: STREAM_PHASE.RUNNING,
         pendingExitHint: true,
         pendingExitResumeId: 'abc123',
         width: 29,

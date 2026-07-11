@@ -130,7 +130,7 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import {
   RUN_OUTCOME,
-  STREAM_STATUS,
+  STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -500,7 +500,7 @@ describe('createChatSessionController', () => {
     const canInterruptActiveRun = chatTuiCanInterruptActiveRun(session);
     const canStopActiveRun = chatTuiCanStopActiveRun(
       session,
-      STREAM_STATUS.WAITING,
+      STREAM_PHASE.WAITING,
     );
     const resumableIdle = chatTuiIsResumableIdleOnExit({
       canInterruptActiveRun,
@@ -651,7 +651,7 @@ describe('createChatSessionController', () => {
       ) => {
         options.onResult?.({
           category: 'toolUse',
-          outcome: STREAM_STATUS.WAITING,
+          outcome: STREAM_PHASE.WAITING,
           executionId: 'exec-1' as ExecutionId,
           streamId: 'stream-1' as StreamTabId,
         });

@@ -26,7 +26,7 @@ import type { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
-  STREAM_STATUS,
+  STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -248,7 +248,7 @@ describe('handleTuiSlashCommand', () => {
     activeStreamId.set(streamId);
     patchStream(streamId, (slice) => ({
       ...slice,
-      status: STREAM_STATUS.WAITING,
+      status: STREAM_PHASE.WAITING,
     }));
 
     const handled = await handleTuiSlashCommand(
