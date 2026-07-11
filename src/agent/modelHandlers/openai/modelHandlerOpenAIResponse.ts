@@ -675,10 +675,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Result from compactConversation including messages and state updates.
    * State updates are returned but not applied - caller is responsible for
    * applying them only after successful API call to prevent stale state on retry.
+   *
+   * `sourceMessages` is the exact `messages` array reference compaction ran
+   * against — it's how {@link createResponseImpl} recognizes a same-turn retry
+   * (PocketFlow's `Node._exec` reuses the same `prepRes`, hence the same
+   * `messages` reference, across retry attempts) and reuses this result
+   * instead of re-running compaction. That reuse is what keeps this payload's
+   * retry lifetime matched to {@link ResponseChainState.clearChainForCompaction}'s
+   * anchor clear, which already survives retries permanently — without it, the
+   * anchor clear alone would survive while this payload got wiped every
+   * attempt, forcing a redundant re-compaction on each retry.
    */
   private compactionResult?: {
     compactedMessages: ResponseInputItem[];
     tokensAfter: number;
+    sourceMessages: ResponseInputItem[];
   };
 
   /**
@@ -855,7 +866,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Store compacted messages for use in this request.
       // Mark as pending compaction - state will be finalized after successful API call.
       // This prevents stale state if API call fails and needs retry.
-      this.compactionResult = { compactedMessages, tokensAfter };
+      this.compactionResult = { compactedMessages, tokensAfter, sourceMessages: messages };
 
       return compactedMessages;
     } catch (err) {
@@ -1005,6 +1016,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // so an output-token underestimate could let through a request the backend
       // then rejects.
       tokensAfter: this.estimateResentInputTokens(compactedMessages),
+      sourceMessages: messages,
     };
     return compactedMessages;
   }
@@ -1429,9 +1441,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     }
 
-    // Clear any stale compaction result from previous attempts. A retained
-    // pending response is handled above before this state can be discarded.
-    this.compactionResult = undefined;
+    // Clear any stale compaction result from a genuinely different input. A
+    // same-turn retry (PocketFlow's Node._exec reuses the same prepRes, hence
+    // the same `messages` reference, across retry attempts) keeps its cached
+    // result below instead — otherwise the chain anchor that compaction
+    // already cleared on chainState (which survives retries permanently)
+    // would outlive this payload, forcing a redundant re-compaction on every
+    // retry. A retained pending response is handled above before this state
+    // can be discarded.
+    if (this.compactionResult?.sourceMessages !== messages) {
+      this.compactionResult = undefined;
+    }
 
     // Route through isBackgroundModeActive() so provider-profile policy actually
     // gates the request, not just the predicate.
@@ -1471,7 +1491,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let compactedThisCall = false;
     // Store compacted messages for return value (captured when compaction succeeds)
     let compactedMessages: ResponseInputItem[] | undefined;
-    if (this.shouldCompact()) {
+    if (this.compactionResult?.sourceMessages === messages) {
+      // Same-turn retry of an input that already compacted successfully on a
+      // prior attempt (see the cache check above): reuse it instead of
+      // hitting the compact endpoint again. Re-running compaction here would
+      // be a silent no-op from the caller's perspective but a real, wasted
+      // API round trip, since chainState's anchor clear already committed
+      // permanently and doesn't need redoing.
+      effectiveMessages = this.compactionResult.compactedMessages;
+      compactedThisCall = true;
+      compactedMessages = this.compactionResult.compactedMessages;
+    } else if (this.shouldCompact()) {
       // Capture whether this was a manual request before clearing the flag.
       const wasManualRequest = this.compactionRequested;
       // Clear manual compaction flag now that compaction is being attempted.
