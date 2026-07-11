@@ -18,6 +18,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_STATUS,
   createStreamState,
   type ProgressViewOutboundMessage,
   type StreamLogEntry,
@@ -158,5 +159,41 @@ describe('LOG_DELTA text deltas', () => {
     expect(finalized?.text).toBe('hello world');
     expect(finalizedLogs?.updatedMessageIndices).toEqual([0]);
     expect(finalized && isStreamingTextLogMessage(finalized)).toBe(false);
+  });
+
+  it('keeps valid group-start fields when status is unrecognized', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    state.activeStreamId = streamId;
+    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
+    const { ctx, getState } = createContext(state);
+
+    dispatch(
+      logHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+        streamId,
+        entries: [
+          {
+            seqNo: 1,
+            id: 'group-1',
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+            level: LOG_LEVELS.INFO,
+            timestamp: 100,
+            text: 'Round 1',
+            data: { status: 'bogus', kind: 'round', index: 1, total: 3 },
+          },
+        ],
+        updates: [],
+        textDeltas: [],
+      },
+      ctx,
+    );
+
+    const group = getState().streamStates.get(streamId)?.taskGroups[0];
+    expect(group?.status).toBe(STREAM_STATUS.RUNNING);
+    expect(group?.kind).toBe('round');
+    expect(group?.index).toBe(1);
+    expect(group?.total).toBe(3);
   });
 });
