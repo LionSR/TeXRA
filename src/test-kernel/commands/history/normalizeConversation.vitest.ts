@@ -619,25 +619,28 @@ describe('Edge cases', () => {
     });
   });
 
-  it('handles code_execution_tool_result blocks', () => {
+  // code_execution_tool_result / bash_code_execution_tool_result /
+  // text_editor_code_execution_tool_result are not emitted by any model
+  // handler in this codebase (only server_tool_use, web_search_tool_result,
+  // and web_fetch_tool_result are — see AnthropicStreamHandler) and fall
+  // through to the switch's `default: return null`, same as any other
+  // unrecognized block type.
+  it('does not map unused code-execution block types to a node', () => {
     const nodes = normalize([
       {
         role: 'assistant',
         content: [
+          { type: 'code_execution_tool_result', content: 'execution output' },
+          { type: 'bash_code_execution_tool_result', content: 'bash output' },
           {
-            type: 'code_execution_tool_result',
-            content: 'execution output',
+            type: 'text_editor_code_execution_tool_result',
+            content: 'editor output',
           },
         ],
       },
     ]);
 
-    const results = nodesOfKind(nodes, 'tool-result');
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({
-      kind: 'tool-result',
-      text: 'execution output',
-    });
+    expect(nodesOfKind(nodes, 'tool-result')).toHaveLength(0);
   });
 });
 
