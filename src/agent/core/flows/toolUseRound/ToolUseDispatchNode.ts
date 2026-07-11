@@ -254,7 +254,11 @@ export class ToolUseDispatchNode<C> extends Node<
         status: 'error',
         error: UNSAFE_DUPLICATE_CALL_ERROR,
       };
-      results[index] = this.makeSyntheticResult(call, duplicateResult, call.input);
+      results[index] = this.makeSyntheticResult(
+        call,
+        duplicateResult,
+        call.input,
+      );
     }
   }
 
