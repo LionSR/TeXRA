@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { traceFileLineage } from '@agent/output/lineageMapping';
-import { OutputXmlSummarySchema, type ExecutionId } from '@shared/schemas';
+import { createOutputState, ensureRoundData } from '@agent/output/outputState';
+import type { ExecutionId } from '@shared/schemas';
 import { createRunStorageLocation, getComparablePath } from '@utils/files';
 
 describe('workflow output lineage mapping', () => {
@@ -21,42 +22,25 @@ describe('workflow output lineage mapping', () => {
     const chapter1Output = runStorageFile('r0/inputs/chapter1/lemma.tex');
     const chapter2Output = runStorageFile('r0/inputs/chapter2/lemma.tex');
 
-    const mapping = traceFileLineage(
+    const state = createOutputState();
+    ensureRoundData(state, 0).outputs = [
       {
-        rounds: new Map([
-          [
-            0,
-            {
-              round: 0,
-              rawOutput: null,
-              outputs: [
-                {
-                  source: 'inputs/chapter1/lemma.tex',
-                  round: 0,
-                  location: chapter1Output,
-                  lineage: null,
-                  diff: null,
-                },
-                {
-                  source: 'inputs/chapter2/lemma.tex',
-                  round: 0,
-                  location: chapter2Output,
-                  lineage: null,
-                  diff: null,
-                },
-              ],
-              compileFailures: [],
-              xmlSummary: OutputXmlSummarySchema.parse({}),
-            },
-          ],
-        ]),
-        openedOutputs: new Set(),
-        storageKey: null,
-        runPreparation: null,
+        source: 'inputs/chapter1/lemma.tex',
+        round: 0,
+        location: chapter1Output,
+        lineage: null,
+        diff: null,
       },
-      [chapter1, chapter2],
-      0,
-    );
+      {
+        source: 'inputs/chapter2/lemma.tex',
+        round: 0,
+        location: chapter2Output,
+        lineage: null,
+        diff: null,
+      },
+    ];
+
+    const mapping = traceFileLineage(state, [chapter1, chapter2], 0);
 
     expect(mapping.get(getComparablePath(chapter1Output))?.origin).toBe(
       chapter1,

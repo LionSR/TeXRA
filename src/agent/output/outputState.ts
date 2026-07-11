@@ -4,10 +4,9 @@
  * Manages mutable state for output files across rounds, including
  * round data, storage keys, and workspace preparation.
  *
- * `OutputState.rounds` stores mutable `RoundOutput` objects — the same type
- * persisted in `ReflectionFlowShared.roundOutputs`. Each round's entry is
- * built up in-place during processing; `OutputNode.post()` then writes the
- * completed entry to shared state for persistence.
+ * `OutputState.rounds` is the canonical live collection. The reflection flow
+ * hydrates it from persisted `roundOutputs` on startup and projects the same
+ * array shape back before each round is persisted.
  */
 
 import type { AgentTrace, StageHandle } from '@agent/trace';
@@ -31,7 +30,7 @@ import {
 } from '@utils/files';
 
 export interface OutputState {
-  rounds: Map<number, RoundOutput>;
+  rounds: RoundOutput[];
   openedOutputs: Set<string>;
   storageKey: StorageKey | null;
   runPreparation: Promise<void> | null;
@@ -48,9 +47,9 @@ export interface OutputDependencies {
   runtimeHost: AgentRuntimeHost;
 }
 
-export function createOutputState(): OutputState {
+export function createOutputState(rounds: RoundOutput[] = []): OutputState {
   return {
-    rounds: new Map(),
+    rounds,
     openedOutputs: new Set(),
     storageKey: null,
     runPreparation: null,
@@ -78,7 +77,7 @@ export function ensureRoundData(
   state: OutputState,
   round: number,
 ): RoundOutput {
-  let data = state.rounds.get(round);
+  let data = state.rounds[round];
   if (!data) {
     data = {
       round,
@@ -87,24 +86,24 @@ export function ensureRoundData(
       compileFailures: [],
       xmlSummary: OutputXmlSummarySchema.parse({}),
     };
-    state.rounds.set(round, data);
+    state.rounds[round] = data;
   }
   return data;
 }
 
 export function hasRoundOutputs(state: OutputState, round: number): boolean {
-  return (state.rounds.get(round)?.outputs.length ?? 0) > 0;
+  return (state.rounds[round]?.outputs.length ?? 0) > 0;
 }
 
 export function hasCompileFailures(state: OutputState, round: number): boolean {
-  return (state.rounds.get(round)?.compileFailures.length ?? 0) > 0;
+  return (state.rounds[round]?.compileFailures.length ?? 0) > 0;
 }
 
 export function getOutputFilesByRound(
   state: OutputState,
 ): RoundIndexed<OutputFileInfo> {
   return Object.fromEntries(
-    [...state.rounds].map(([round, data]) => [round, data.outputs]),
+    state.rounds.flatMap((data) => [[data.round, data.outputs] as const]),
   );
 }
 
