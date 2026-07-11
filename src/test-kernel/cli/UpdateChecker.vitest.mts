@@ -249,12 +249,14 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
       command: string;
       args: readonly string[];
       timeoutMs: number;
+      cwd?: string;
     }> = [];
     await fetchLatestHomebrewFormulaVersion({
       formula: 'custom',
       timeoutMs: 123,
-      runCommand: async (command, args, timeoutMs) => {
-        calls.push({ command, args, timeoutMs });
+      cwd: '/workspace',
+      runCommand: async (command, args, timeoutMs, cwd) => {
+        calls.push({ command, args, timeoutMs, cwd });
         return JSON.stringify({
           formulae: [{ name: 'custom', versions: { stable: '1.2.3' } }],
         });
@@ -266,11 +268,13 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
         command: 'brew',
         args: ['update', '--quiet'],
         timeoutMs: 123,
+        cwd: '/workspace',
       },
       {
         command: 'brew',
         args: ['info', '--json=v2', 'custom'],
         timeoutMs: 123,
+        cwd: '/workspace',
       },
     ]);
   });
