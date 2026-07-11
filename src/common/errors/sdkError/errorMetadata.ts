@@ -87,6 +87,30 @@ export function requiresFlowAutoRetry(err: unknown): boolean {
   );
 }
 
+const contextWindowErrorMetadata = createErrorMetadata<boolean>(
+  'contextWindowError',
+  (v): v is boolean => v === true,
+);
+
+/**
+ * Marks an error as a TeXRA-internal context-window violation at the throw
+ * site (e.g. `ModelHandler.validateTokenLimits`). Lets `isContextWindowError`
+ * recognize the internal case without string-matching a message whose exact
+ * wording the thrower owns — third-party provider error text is still
+ * matched via `CONTEXT_WINDOW_PATTERNS`.
+ */
+export function attachContextWindowError(err: unknown): void {
+  contextWindowErrorMetadata.attach(err, true);
+}
+
+export function hasContextWindowErrorMarker(err: unknown): boolean {
+  return (
+    findInCauseChain(err, (current) =>
+      contextWindowErrorMetadata.detect(current) === true ? true : undefined,
+    ) ?? false
+  );
+}
+
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');
 
