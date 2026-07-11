@@ -155,12 +155,24 @@ type GitHubPRPrerequisites = Awaited<
   ReturnType<typeof getGitHubPRPrerequisites>
 >;
 
+function isGitHubPRPrerequisites(
+  value: unknown,
+): value is GitHubPRPrerequisites {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { tokenPresent?: unknown }).tokenPresent === 'boolean' &&
+    typeof (value as { inGitRepo?: unknown }).inGitRepo === 'boolean'
+  );
+}
+
 async function resolveGitHubPRPrerequisites(
   probeResult: unknown,
 ): Promise<GitHubPRPrerequisites> {
-  return probeResult === undefined
-    ? getGitHubPRPrerequisites()
-    : (probeResult as GitHubPRPrerequisites);
+  if (probeResult === undefined) return getGitHubPRPrerequisites();
+  return isGitHubPRPrerequisites(probeResult)
+    ? probeResult
+    : getGitHubPRPrerequisites();
 }
 
 async function probeTexraCli(): Promise<boolean> {
@@ -174,20 +186,20 @@ interface Lean4Prerequisites {
   lakeAvailable: boolean;
 }
 
+function isLean4Prerequisites(value: unknown): value is Lean4Prerequisites {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { extensionAvailable?: unknown }).extensionAvailable ===
+      'boolean' &&
+    typeof (value as { lakeAvailable?: unknown }).lakeAvailable === 'boolean'
+  );
+}
+
 function resolveLean4Prerequisites(probeResult: unknown): Lean4Prerequisites {
-  if (
-    probeResult &&
-    typeof probeResult === 'object' &&
-    'extensionAvailable' in probeResult &&
-    'lakeAvailable' in probeResult
-  ) {
-    const r = probeResult as Lean4Prerequisites;
-    return {
-      extensionAvailable: Boolean(r.extensionAvailable),
-      lakeAvailable: Boolean(r.lakeAvailable),
-    };
-  }
-  return { extensionAvailable: false, lakeAvailable: false };
+  return isLean4Prerequisites(probeResult)
+    ? probeResult
+    : { extensionAvailable: false, lakeAvailable: false };
 }
 
 function resolveBooleanProbe(probeResult: unknown): boolean | undefined {
