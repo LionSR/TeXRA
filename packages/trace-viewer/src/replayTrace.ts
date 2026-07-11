@@ -4,7 +4,7 @@ import {
   executionStatusToRunOutcome,
   STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
-  StreamStatusSchema,
+  StreamLifecycleStatusSchema,
   streamStatusToLifecycleStatus,
   type StreamLifecycleStatus,
   type StreamTabInfo,
@@ -90,6 +90,20 @@ function findRootStageId(
  * older snapshot-status escape hatch. Only when neither source records a
  * terminal status does this default to `READY`, same as an unqualified
  * successful finish.
+ *
+ * The terminal group row's `data.status` is parsed with
+ * `StreamLifecycleStatusSchema` (StreamPhase-or-legacy-StreamStatus union,
+ * already shipped — §2), not the narrower legacy-only `StreamStatusSchema`:
+ * `assembleTrace()` (src/transcript/traceAssembler.ts) is a `StreamLogStore`
+ * client, so every `TraceDocument` it builds — including one assembled from
+ * pre-cutover on-disk history — carries the canonical `RunOutcome` values
+ * `StreamLogStore.parsePersistedEntries` normalizes to (#7993 step 2), not
+ * just the legacy 2-value `EndGroupStatus` strings a genuinely
+ * externally-authored, never-reassembled `trace.json` predating this cutover
+ * would still carry. `StreamLifecycleStatusSchema` accepts both, so this one
+ * parse call keeps working for freshly-`assembleTrace()`d documents and for
+ * historical exported files alike — no per-entry rewrite of `trace.entries`,
+ * which stays exactly the future work §8.3 scopes separately.
  */
 function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
   if (trace.terminalStatus !== null) {
@@ -113,8 +127,8 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
       // else sharing the "no parent" shape is a nested round/phase/session.
       continue;
     }
-    const status = StreamStatusSchema.safeParse(entry.data.status);
-    if (status.success) return streamStatusToLifecycleStatus(status.data);
+    const status = StreamLifecycleStatusSchema.safeParse(entry.data.status);
+    if (status.success) return status.data;
   }
   return trace.snapshot.status
     ? streamStatusToLifecycleStatus(trace.snapshot.status)

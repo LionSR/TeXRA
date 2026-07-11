@@ -6,8 +6,9 @@ import * as log from '@logger/logUtils';
 import {
   END_GROUP_STATUS,
   PersistedStreamLogEntrySchema,
+  RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
-  type EndGroupStatus,
+  type RunOutcome,
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
@@ -56,6 +57,49 @@ function summaryOf(logInstance: StreamLog): StreamLogSummary {
     hasRunningGroup: logInstance.hasRunningGroup,
     hasRunningStreamingText: logInstance.hasRunningStreamingText,
   };
+}
+
+/**
+ * The ONE app-side read boundary for legacy `GROUP_START`/`GROUP_END`
+ * `data.status` wire values (see
+ * docs/proposals/session-scoped-runtime-architecture.md §8.3). Every live
+ * producer now writes canonical `StreamPhase`/`RunOutcome` values directly
+ * through `append()` (§8.2), so this only backfills rows that were already
+ * persisted to disk before the cutover — `'running'` (row 1) is
+ * string-identical to `StreamPhase.RUNNING`, so it passes through unchanged;
+ * `'stopped'`/`'error'` (the pre-cutover 2-value `EndGroupStatus`) are
+ * upgraded to the `RunOutcome` they folded. `'stopped'` -> `COMPLETED` is a
+ * documented lossy default: the old 2-value fold already could not
+ * distinguish completed from cancelled, and `COMPLETED` matches today's
+ * neutral "Stopped" rendering, so no historical transcript's displayed label
+ * changes — only its typed value does. `data` stays `z.unknown()` in
+ * `PersistedStreamLogEntrySchema` (Tier 3 — opaque, pattern-matched by
+ * display code), so this is a value transform layered on top of the existing
+ * parse, not a schema change, and needs no persisted format-version bump.
+ * Any other value (already-canonical post-cutover write, or malformed data)
+ * passes through unchanged.
+ */
+function normalizeGroupStatusEntry(entry: StreamLogEntry): StreamLogEntry {
+  if (
+    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
+    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
+  ) {
+    return entry;
+  }
+  if (!isObject(entry.data) || typeof entry.data.status !== 'string') {
+    return entry;
+  }
+  switch (entry.data.status) {
+    case END_GROUP_STATUS.STOPPED:
+      return {
+        ...entry,
+        data: { ...entry.data, status: RUN_OUTCOME.COMPLETED },
+      };
+    case END_GROUP_STATUS.ERROR:
+      return { ...entry, data: { ...entry.data, status: RUN_OUTCOME.FAILED } };
+    default:
+      return entry;
+  }
 }
 
 /**
@@ -393,7 +437,7 @@ export class StreamLogStore {
   async endRunningGroups(
     now: number = Date.now(),
     streamIds: readonly StreamTabId[] = [],
-    status: EndGroupStatus = END_GROUP_STATUS.ERROR,
+    status: RunOutcome = RUN_OUTCOME.FAILED,
   ): Promise<StreamTabId[]> {
     const streamsToLoad = new Set(streamIds);
     for (const [streamId, summary] of this.summaries) {
@@ -419,7 +463,7 @@ export class StreamLogStore {
   async endRunningGroupsForStreams(
     streamIds: readonly StreamTabId[],
     now: number = Date.now(),
-    status: EndGroupStatus = END_GROUP_STATUS.ERROR,
+    status: RunOutcome = RUN_OUTCOME.FAILED,
   ): Promise<StreamTabId[]> {
     if (streamIds.length === 0) return [];
     const streamsToLoad = streamIds.filter(
@@ -446,7 +490,7 @@ export class StreamLogStore {
   private endRunningEntriesInLoadedLogs(
     now: number,
     streamIds?: ReadonlySet<StreamTabId>,
-    status: EndGroupStatus = END_GROUP_STATUS.ERROR,
+    status: RunOutcome = RUN_OUTCOME.FAILED,
   ): StreamTabId[] {
     const affected: StreamTabId[] = [];
     for (const [streamId, logInstance] of this.logs.entries()) {
@@ -822,7 +866,7 @@ export class StreamLogStore {
     for (const raw of rawEntries) {
       const result = PersistedStreamLogEntrySchema.safeParse(raw);
       if (result.success) {
-        parsed.entries.push(result.data);
+        parsed.entries.push(normalizeGroupStatusEntry(result.data));
       } else {
         parsed.preservedRawEntries.push({
           beforeTypedIndex: parsed.entries.length,
