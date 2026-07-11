@@ -25,6 +25,7 @@ const chatExportMocks = vi.hoisted(() => ({
   exportAsLatex: vi.fn(),
   exportAsHtml: vi.fn(),
   constructorDeps: [] as unknown[],
+  constructorError: undefined as Error | undefined,
 }));
 
 vi.mock('@controllers/settingsView/ChatExportController', () => ({
@@ -36,6 +37,9 @@ vi.mock('@controllers/settingsView/ChatExportController', () => ({
 
     constructor(dependencies: unknown) {
       chatExportMocks.constructorDeps.push(dependencies);
+      const error = chatExportMocks.constructorError;
+      chatExportMocks.constructorError = undefined;
+      if (error) throw error;
     }
   },
 }));
@@ -89,6 +93,7 @@ describe('DesktopHistoryHandlers', () => {
   beforeEach(() => {
     clearStoreCache();
     chatExportMocks.constructorDeps.length = 0;
+    chatExportMocks.constructorError = undefined;
     vi.resetAllMocks();
   });
 
@@ -185,6 +190,63 @@ describe('DesktopHistoryHandlers', () => {
     expect(chatExportMocks.constructorDeps.at(-1)).toMatchObject({
       latexPreamble: expect.stringContaining('\\documentclass'),
     });
+  });
+
+  it('shares the controller load across concurrent first exports', async () => {
+    chatExportMocks.buildExportInput.mockResolvedValue({
+      status: 'ok',
+      exportInput: EXPORT_INPUT,
+    });
+    chatExportMocks.exportAsMarkdown.mockResolvedValue({
+      storagePath: 'executions/abc/chat.md',
+      absolutePath: '/tmp/executions/abc/chat.md',
+    });
+    const actions = createHistoryActions();
+
+    await Promise.all([
+      assertSupported(actions.exportChatMd)({
+        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+        historyId: 'abc',
+      }),
+      assertSupported(actions.exportChatMd)({
+        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+        historyId: 'def',
+      }),
+    ]);
+
+    expect(chatExportMocks.constructorDeps).toHaveLength(1);
+    expect(chatExportMocks.buildExportInput).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries controller construction after the first load fails', async () => {
+    chatExportMocks.buildExportInput.mockResolvedValue({
+      status: 'ok',
+      exportInput: EXPORT_INPUT,
+    });
+    chatExportMocks.exportAsMarkdown.mockResolvedValue({
+      storagePath: 'executions/def/chat.md',
+      absolutePath: '/tmp/executions/def/chat.md',
+    });
+    chatExportMocks.constructorError = new Error('controller setup failed');
+    const actions = createHistoryActions();
+    const exportChatMd = assertSupported(actions.exportChatMd);
+
+    await expect(
+      exportChatMd({
+        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+        historyId: 'abc',
+      }),
+    ).rejects.toThrow('controller setup failed');
+    await expect(
+      exportChatMd({
+        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+        historyId: 'def',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(chatExportMocks.constructorDeps).toHaveLength(2);
+    expect(chatExportMocks.buildExportInput).toHaveBeenCalledOnce();
+    expect(chatExportMocks.buildExportInput).toHaveBeenCalledWith('def');
   });
 
   it('falls back to opening the .tex source when LaTeX compilation fails', async () => {
