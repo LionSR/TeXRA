@@ -12,6 +12,7 @@ export {
   type ChildRecord,
   getExecutionStore,
   clearStoreCache,
+  isReservedKvKeyName,
 } from './ExecutionKVStore';
 export {
   buildCliWorkflowResultMeta,

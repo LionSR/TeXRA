@@ -5,6 +5,7 @@ import { getExecutionStore } from '@agent/storage';
 import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
+  FLOW_KEY_PREFIX,
   FLOW_RECORD_SCHEMA_VERSION,
   flowKey,
   PersistedFlow,
@@ -36,6 +37,14 @@ class SuspendNode extends BaseNode<{ count: number }> {
 }
 
 describe('PersistedFlow', () => {
+  // Regression for the executionKvFiles leak fix: consumers that recognize a
+  // flow record's KV filename (e.g. `isKVFile`) now import FLOW_KEY_PREFIX
+  // instead of hard-coding 'flow_', so pin that flowKey() is still built from it.
+  it('builds the flow key from the exported FLOW_KEY_PREFIX', () => {
+    const executionId = 'abc125' as ExecutionId;
+    expect(flowKey(executionId)).toBe(`${FLOW_KEY_PREFIX}${executionId}`);
+  });
+
   it('writes the current schema version into new flow records', async () => {
     const executionId = 'abc126' as ExecutionId;
     const store = getExecutionStore(executionId);
