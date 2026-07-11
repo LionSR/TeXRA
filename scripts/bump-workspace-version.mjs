@@ -2,6 +2,7 @@
 
 import fs from 'node:fs';
 import process from 'node:process';
+import semver from 'semver';
 
 const MANIFEST_PATHS = [
   'package.json',
@@ -13,7 +14,7 @@ const MANIFEST_PATHS = [
 // Accept the canonical extension tag (`v0.38.9`), the CLI tag (`cli-v0.38.9`),
 // and a bare version (`0.38.9`). Release tags are cut in pairs off the same
 // commit, so either tag resolves to the same next version.
-const VERSION_PATTERN = /^(?:cli-v|v)?(\d+)\.(\d+)\.(\d+)$/;
+const RELEASE_TAG_PREFIX = /^(?:cli-v|v)/;
 
 // Release trains use patch values 0 through 10; after .10, development moves
 // to the next minor train.
@@ -76,19 +77,22 @@ function parseArgs(argv) {
 }
 
 function parseVersion(rawVersion, label) {
-  const match = VERSION_PATTERN.exec(rawVersion);
-  if (match == null) {
+  const stripped = rawVersion.replace(RELEASE_TAG_PREFIX, '');
+  const parsed = semver.parse(stripped);
+  // Reject anything beyond a bare MAJOR.MINOR.PATCH — manifests never carry
+  // prerelease or build metadata, and semver.parse would otherwise accept
+  // (and silently drop) suffixes like "-beta" or "+build".
+  const isBareVersion =
+    parsed != null &&
+    parsed.prerelease.length === 0 &&
+    parsed.build.length === 0;
+  if (!isBareVersion) {
     fail(
       `${label} must be MAJOR.MINOR.PATCH, with an optional leading v or cli-v prefix.`,
     );
   }
 
-  const [, major, minor, patch] = match;
-  return {
-    major: Number(major),
-    minor: Number(minor),
-    patch: Number(patch),
-  };
+  return { major: parsed.major, minor: parsed.minor, patch: parsed.patch };
 }
 
 function formatVersion(version) {
