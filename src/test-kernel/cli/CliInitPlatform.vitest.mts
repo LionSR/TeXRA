@@ -7,6 +7,63 @@ import { initCliPlatform } from '@cli/runtime/initPlatform';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
+type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
+
+/** Records every SIGINT/SIGTERM registration without touching the live
+ *  process's real listeners, distinguishing `process.once` (the platform
+ *  handler) from `process.on` (the TUI's own handler, installed once Ink
+ *  mounts) so a test can assert exactly who owns the signal. Restore only
+ *  these two spies (not `vi.restoreAllMocks()`) — this file's shared `mocks.*`
+ *  functions are plain `vi.fn()`s, not `vi.spyOn` spies, so a sweeping
+ *  restore would strip their `vi.hoisted` implementations instead of
+ *  reverting them. */
+function spyOnSignalRegistration(): {
+  registered: Array<{ event: SignalSpyEvent; kind: 'once' | 'on' | 'removed' }>;
+  restore: () => void;
+} {
+  const registered: Array<{
+    event: SignalSpyEvent;
+    kind: 'once' | 'on' | 'removed';
+  }> = [];
+  const onceSpy = vi.spyOn(process, 'once').mockImplementation(((
+    event: string | symbol,
+    _listener: (...args: unknown[]) => void,
+  ) => {
+    if (event === 'SIGINT' || event === 'SIGTERM') {
+      registered.push({ event, kind: 'once' });
+    }
+    return process;
+  }) as typeof process.once);
+  const onSpy = vi.spyOn(process, 'on').mockImplementation(((
+    event: string | symbol,
+    _listener: (...args: unknown[]) => void,
+  ) => {
+    if (event === 'SIGINT' || event === 'SIGTERM') {
+      registered.push({ event, kind: 'on' });
+    }
+    return process;
+  }) as typeof process.on);
+  const removeListenerSpy = vi
+    .spyOn(process, 'removeListener')
+    .mockImplementation(((
+      event: string | symbol,
+      _listener: (...args: unknown[]) => void,
+    ) => {
+      if (event === 'SIGINT' || event === 'SIGTERM') {
+        registered.push({ event, kind: 'removed' });
+      }
+      return process;
+    }) as typeof process.removeListener);
+  return {
+    registered,
+    restore: () => {
+      onceSpy.mockRestore();
+      onSpy.mockRestore();
+      removeListenerSpy.mockRestore();
+    },
+  };
+}
+
 const mocks = vi.hoisted(() => ({
   authProvider: {
     isAuthenticated: vi.fn(),
@@ -373,5 +430,128 @@ describe('CLI platform init', () => {
         additionalPaths: ['vendor/skills'],
       },
     });
+  });
+});
+
+// Regression for the HIGH-severity chat TUI signal race: `texra chat`/
+// `orchestrate`/`setup`/`resume` are the REAL interactive entry points — all
+// four eventually hand control to runChatTui.tsx's `runChat()`, which installs
+// its own SIGINT/SIGTERM handlers once Ink mounts and owns teardown from
+// there (terminal-mode restore, persistence drain, then the same
+// runCliPlatformShutdownSequence the platform handler would have run). Before
+// this fix, every one of those call sites also called plain `initCliPlatform`
+// (default `installSignalHandlers: true`), so the platform's own
+// `process.once('SIGINT'/'SIGTERM', ...)` handler installed too — two
+// independent async shutdown chains reacting to the same signal, racing on
+// whose `process.exit()` wins and leaving teardown order unspecified.
+//
+// `initInteractiveCliPlatform` does NOT suppress the platform handler up
+// front (a signal during onboarding/model-resolution/the orchestration
+// launcher still needs a graceful handler); instead
+// `handOffCliShutdownSignalHandlers()` removes it right at the point the TUI
+// installs its own pair, so the two sets are never simultaneously live. These
+// suites use `installCliShutdownSignalHandlers`'s idempotent, module-level
+// `shutdownHandlersInstalled` flag, so each test needs a freshly-imported
+// module (`vi.resetModules()` + dynamic import) to observe installation from
+// a clean slate.
+describe('CLI platform interactive signal ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.tryPlatform.mockReset();
+    mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
+    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+  });
+
+  it('initInteractiveCliPlatform keeps the platform handler live until an explicit handoff', async () => {
+    vi.resetModules();
+    const { registered, restore } = spyOnSignalRegistration();
+    try {
+      mocks.tryPlatform.mockReturnValueOnce(undefined);
+      mocks.tryPlatform.mockReturnValue({
+        globalState: { get: vi.fn(), update: vi.fn() },
+      });
+
+      const { initInteractiveCliPlatform, handOffCliShutdownSignalHandlers } =
+        await import('@cli/runtime/initPlatform');
+      // The await-suspension point from the finding: runChat() awaits this
+      // init call, then onboarding/model resolution, before Ink ever mounts
+      // and installs its own handlers below. Unlike the pre-handoff-design
+      // fix, the platform handler stays registered for that whole window —
+      // a signal there still gets a graceful shutdown.
+      await initInteractiveCliPlatform(cliContext());
+      expect(registered).toEqual([
+        { event: 'SIGINT', kind: 'once' },
+        { event: 'SIGTERM', kind: 'once' },
+      ]);
+
+      // The TUI is about to mount (runChatTui.tsx) — it hands off ownership
+      // immediately before installing its own handlers.
+      handOffCliShutdownSignalHandlers();
+      expect(registered).toEqual([
+        { event: 'SIGINT', kind: 'once' },
+        { event: 'SIGTERM', kind: 'once' },
+        { event: 'SIGINT', kind: 'removed' },
+        { event: 'SIGTERM', kind: 'removed' },
+      ]);
+
+      process.on('SIGINT', () => undefined);
+      process.on('SIGTERM', () => undefined);
+
+      expect(registered.slice(-2)).toEqual([
+        { event: 'SIGINT', kind: 'on' },
+        { event: 'SIGTERM', kind: 'on' },
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  it('a headless call site (plain initCliPlatform) keeps the platform handler installed', async () => {
+    vi.resetModules();
+    const { registered, restore } = spyOnSignalRegistration();
+    try {
+      mocks.tryPlatform.mockReturnValueOnce(undefined);
+      mocks.tryPlatform.mockReturnValue({
+        globalState: { get: vi.fn(), update: vi.fn() },
+      });
+
+      const { initCliPlatform: freshInitCliPlatform } =
+        await import('@cli/runtime/initPlatform');
+      await freshInitCliPlatform(cliContext());
+
+      expect(registered).toEqual([
+        { event: 'SIGINT', kind: 'once' },
+        { event: 'SIGTERM', kind: 'once' },
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  it('documents the race a forgotten installSignalHandlers:false would reintroduce', async () => {
+    vi.resetModules();
+    const { registered, restore } = spyOnSignalRegistration();
+    try {
+      mocks.tryPlatform.mockReturnValueOnce(undefined);
+      mocks.tryPlatform.mockReturnValue({
+        globalState: { get: vi.fn(), update: vi.fn() },
+      });
+
+      // A call site that used plain initCliPlatform (pre-fix behavior at
+      // every interactive entry point) installs the platform handler...
+      const { initCliPlatform: freshInitCliPlatform } =
+        await import('@cli/runtime/initPlatform');
+      await freshInitCliPlatform(cliContext());
+      // ...and once the TUI mounts and claims the signals too, BOTH owners
+      // are registered for the same signal — the exact race from the
+      // finding, reproduced against real production wiring.
+      process.on('SIGINT', () => undefined);
+      process.on('SIGTERM', () => undefined);
+
+      expect(registered.filter((r) => r.event === 'SIGINT')).toHaveLength(2);
+      expect(registered.filter((r) => r.event === 'SIGTERM')).toHaveLength(2);
+    } finally {
+      restore();
+    }
   });
 });
