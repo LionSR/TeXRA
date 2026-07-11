@@ -360,9 +360,11 @@ function startCodexLoop(params: {
   runtimeHost: AgentRuntimeHost;
   /**
    * The disk-based fallback thread id claimed synchronously in execute(). The
-   * loop promotes that reservation before its first turn starts.
+   * loop promotes that reservation after its first turn succeeds.
    */
   resumeThreadId: string | undefined;
+  /** Release the fallback claim if the loop exits before promoting it. */
+  releaseFallbackClaim: (() => void) | undefined;
 }): void {
   const {
     thread,
@@ -375,8 +377,8 @@ function startCodexLoop(params: {
   const { childStreamId, logger } = childStream;
   const fallbackThreadId = params.resumeThreadId;
 
-  // Fresh threads don't have thread.id yet; they're registered after the first
-  // turn completes. A resumed thread's pre-launch claim is promoted up front.
+  // Fresh and resumed thread IDs are registered after the first successful
+  // turn is persisted, immediately before its result reaches the parent.
   const registerThread = (threadId: string, session: SessionHandle): void => {
     if (CodexThreads.lookup(threadId)) return;
     CodexThreads.register(threadId, {
@@ -409,9 +411,6 @@ function startCodexLoop(params: {
 
   const strategy: ChildRunStrategy<RunResult> = {
     stageLabel: 'Codex session',
-    onSessionStart: fallbackThreadId
-      ? (session) => registerThread(fallbackThreadId, session)
-      : undefined,
     launch: (ports, abortController) =>
       runTurn(
         [{ text: initialPrompt, origin: 'user' }],
@@ -422,6 +421,7 @@ function startCodexLoop(params: {
     isTerminal: () => false,
     getUsage: (turn) => turn.usage,
     onTurnSuccess: (_turn, session) => {
+      if (fallbackThreadId) registerThread(fallbackThreadId, session);
       if (thread.id) registerThread(thread.id, session);
     },
     publishUsage: (turn) => {
@@ -441,7 +441,10 @@ function startCodexLoop(params: {
         { tag: DELIVERY_TAG.codexError, executionId, prompt: lastPrompt },
         { message: toErrorMessage(err) },
       ),
-    onSessionCleanup: () => CodexThreads.releaseByExecutionId(executionId),
+    releaseSessionOwnership: () => {
+      params.releaseFallbackClaim?.();
+      CodexThreads.releaseByExecutionId(executionId);
+    },
   };
 
   startChildRunLoop({
@@ -520,7 +523,7 @@ export class CodexTool extends defineTool({
             summaryLabel: 'Codex',
             queuedLabel: 'Codex thread',
           },
-          launch: () => {
+          launch: (releaseClaim) => {
             // A missing in-memory entry denotes a disk-based SDK fallback.
             const { streamId, runtimeHost } = requireRunStream(
               'codex',
@@ -532,6 +535,7 @@ export class CodexTool extends defineTool({
               getRunContextExecutionId(runContext),
               getRunContextWorkingDirectory(runContext),
               runtimeHost,
+              releaseClaim,
             );
           },
         });
@@ -546,6 +550,7 @@ async function launchCodexSession(
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
   runtimeHost: AgentRuntimeHost,
+  releaseFallbackClaim: (() => void) | undefined,
 ): Promise<ToolResult> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const thread = await createCodexThread(input, workingDir);
@@ -570,6 +575,7 @@ async function launchCodexSession(
         initialPrompt: input.prompt,
         runtimeHost,
         resumeThreadId: input.thread_id ?? undefined,
+        releaseFallbackClaim,
       }),
     summary: `Launched Codex: ${preview}`,
     launchedLine: `Codex agent launched (sandbox: ${input.sandbox_mode}).`,

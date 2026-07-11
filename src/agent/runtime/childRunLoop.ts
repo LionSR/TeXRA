@@ -71,19 +71,15 @@ export interface ChildRunPorts {
  * the resumed flow's persisted WAITING boundary without re-enqueueing it).
  *
  * Per-turn call order: `launch`/`runTurn` → `getUsage` (turn summary) →
- * `isTurnError` → `onTurnError` (if true) → `onTurnSuccess` (only when the
- * turn did not fail) → `publishUsage` → `formatDelivery`/`formatError` →
- * `buildResultMeta`. `onSessionCleanup` runs once in the loop's `finally`.
+ * `isTurnError` → `onTurnError` (if true) → `publishUsage` →
+ * `formatDelivery`/`formatError` → `buildResultMeta` → `onTurnSuccess` (only
+ * while the loop remains active) → route/wake the parent.
+ * Failed turns release session ownership before routing/waking the parent;
+ * interrupted turns release ownership but skip parent delivery entirely.
  */
 export interface ChildRunStrategy<TTurn> {
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   readonly stageLabel: string;
-
-  /**
-   * Called once before the loop starts. Agent-CLI strategies use this to
-   * promote a synchronously claimed fallback id to an active session entry.
-   */
-  onSessionStart?(session: SessionHandle): void;
 
   /** Produce the first turn's outcome. Throws on hard failure. */
   launch(
@@ -158,10 +154,10 @@ export interface ChildRunStrategy<TTurn> {
   resolveDeliveryTarget?(): StreamTabId | undefined;
 
   /**
-   * Called in the finally block to release provider-owned registry entries.
-   * Runs after this loop detaches its interrupt handler and follow-up queue state.
+   * Release provider-owned registry entries. The loop calls this exactly once,
+   * before failed/interrupted parent delivery or during finalization.
    */
-  onSessionCleanup?(): void;
+  releaseSessionOwnership?(): void;
 }
 
 export interface ChildRunLoopParams<TTurn> {
@@ -357,6 +353,7 @@ async function deliverTurn<TTurn>(params: {
   err: unknown;
   wallTimeMs: number;
   isError: boolean;
+  prepareParentDelivery?: () => boolean;
 }): Promise<void> {
   const {
     strategy,
@@ -368,6 +365,7 @@ async function deliverTurn<TTurn>(params: {
     err,
     wallTimeMs,
     isError,
+    prepareParentDelivery,
   } = params;
   const delivered = turn != null && !isError;
   const msg = await (delivered
@@ -399,6 +397,7 @@ async function deliverTurn<TTurn>(params: {
     );
     return;
   }
+  if (prepareParentDelivery?.() === false) return;
   const delivery = await deliverChildRunFollowUp({
     targetStreamId,
     followUp: { text: msg, origin: 'subagent_result' },
@@ -479,6 +478,12 @@ export function startChildRunLoop<TTurn>(
   const sessionStage = childStream
     ? logger.openStage(strategy.stageLabel)
     : undefined;
+  let sessionOwnershipReleased = false;
+  const releaseSessionOwnershipOnce = (): void => {
+    if (sessionOwnershipReleased) return;
+    sessionOwnershipReleased = true;
+    strategy.releaseSessionOwnership?.();
+  };
 
   let latestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
@@ -509,14 +514,6 @@ export function startChildRunLoop<TTurn>(
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
     try {
-      // Runs synchronously before this IIFE's first `await` — i.e. before
-      // `startChildRunLoop` itself returns to its caller — matching
-      // `onSessionStart`'s documented "before the loop starts" contract.
-      // Placed inside this `try` (rather than before the IIFE, as originally
-      // written) so a throw here is covered by the `finally` below and
-      // cannot leak the `activeChildRunLoops` entry or the interrupt/queue
-      // registrations already made above.
-      strategy.onSessionStart?.(runSession);
       while (!loop.isInterrupted()) {
         const startedAt = Date.now();
         const abortController = loop.startTurn();
@@ -538,9 +535,6 @@ export function startChildRunLoop<TTurn>(
         const wallTimeMs = Date.now() - startedAt;
         const turnFailed = err != null || turnIsError;
 
-        if (!turnFailed && turn != null) {
-          strategy.onTurnSuccess?.(turn, runSession);
-        }
         if (turn != null) {
           strategy.publishUsage?.(turn);
         }
@@ -555,6 +549,18 @@ export function startChildRunLoop<TTurn>(
           err,
           wallTimeMs,
           isError: turnFailed,
+          prepareParentDelivery: () => {
+            if (loop.isInterrupted()) {
+              releaseSessionOwnershipOnce();
+              return false;
+            }
+            if (turnFailed) {
+              releaseSessionOwnershipOnce();
+            } else if (turn != null) {
+              strategy.onTurnSuccess?.(turn, runSession);
+            }
+            return true;
+          },
         });
 
         if (turnFailed) {
@@ -595,7 +601,7 @@ export function startChildRunLoop<TTurn>(
       detachLoopInterrupt?.();
       unregisterChildRunLoop();
       runSession.followUps.release(childStreamId);
-      strategy.onSessionCleanup?.();
+      releaseSessionOwnershipOnce();
       params.recordCost?.(latestCostUsd);
       // The shared terminal finalizer owns the single outcome derivation and
       // its projections: persisted terminal status (before untrack notifies

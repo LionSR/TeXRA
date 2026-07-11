@@ -147,6 +147,34 @@ afterEach(() => {
 });
 
 describe('childRunLoop E2E fixtures', () => {
+  it('releases session ownership before delivering a failed turn', async () => {
+    const childStreamId = uniqueStreamId('failed-turn-release');
+    const parentStreamId = 'parent' as StreamTabId;
+    const { strategy, rejectTurn } = createFakeStrategy();
+    const releaseSessionOwnership = vi.fn();
+    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
+      expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+      return { kind: 'delivered' };
+    });
+
+    startChildRunLoop({
+      childStreamId,
+      parentStreamId,
+      executionId: 'exec-failed-turn-release' as ExecutionId,
+      agentName: 'fake-cli',
+      strategy: { ...strategy, releaseSessionOwnership },
+    });
+
+    await vi.waitFor(() =>
+      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+    );
+    await rejectTurn(1, new Error('initial turn failed'));
+    await vi.waitFor(() =>
+      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+    );
+    expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+  });
+
   it('delegate → interrupt mid-run: an interrupt during the first turn ends the run without a terminal delivery for that turn', async () => {
     const childStreamId = uniqueStreamId('interrupt-mid-run');
     const parentStreamId = 'parent' as StreamTabId;
@@ -186,13 +214,19 @@ describe('childRunLoop E2E fixtures', () => {
     const childStreamId = uniqueStreamId('complete-followup');
     const parentStreamId = 'parent' as StreamTabId;
     const { strategy, resolveTurn } = createFakeStrategy();
+    const onTurnSuccess = vi.fn();
+    const parentWake = vi.fn();
+    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
+      parentWake();
+      return { kind: 'delivered' };
+    });
 
     startChildRunLoop({
       childStreamId,
       parentStreamId,
       executionId: 'exec-complete-followup' as ExecutionId,
       agentName: 'fake',
-      strategy,
+      strategy: { ...strategy, onTurnSuccess },
     });
 
     await vi.waitFor(() =>
@@ -209,6 +243,10 @@ describe('childRunLoop E2E fixtures', () => {
         }),
       );
     });
+    expect(onTurnSuccess).toHaveBeenCalledOnce();
+    expect(onTurnSuccess.mock.invocationCallOrder[0]).toBeLessThan(
+      parentWake.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
 
     // Enqueue a follow-up on the same queue the loop is now blocked on.
     session.followUps
@@ -233,24 +271,19 @@ describe('childRunLoop E2E fixtures', () => {
     );
   });
 
-  it('late result after parent stop: a turn that resolves after the loop already interrupted still attempts best-effort delivery and does not throw', async () => {
+  it('late result after parent stop: a turn that resolves after interruption is persisted but not delivered', async () => {
     const childStreamId = uniqueStreamId('late-result');
     const parentStreamId = 'parent' as StreamTabId;
     const executionId = 'exec-late-result' as ExecutionId;
     const { strategy, resolveTurn } = createFakeStrategy();
     const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
-    // The parent stream is gone by the time this late delivery lands.
-    mocks.deliverChildRunFollowUp.mockResolvedValue({
-      kind: 'no_session',
-      streamStatus: 'completed',
-    });
-
+    const releaseSessionOwnership = vi.fn();
     startChildRunLoop({
       childStreamId,
       parentStreamId,
       executionId,
       agentName: 'fake',
-      strategy,
+      strategy: { ...strategy, releaseSessionOwnership },
     });
 
     await vi.waitFor(() =>
@@ -262,16 +295,15 @@ describe('childRunLoop E2E fixtures', () => {
     expect(handle.interrupt()).toBe(true);
     await resolveTurn(1, { kind: 'terminal', value: 'late' });
 
-    await vi.waitFor(() => {
-      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
-        expect.objectContaining({
-          followUp: expect.objectContaining({ text: 'delivered:late' }),
-        }),
-      );
-    });
     await vi.waitFor(() =>
       expect(isChildRunLoopActive(childStreamId)).toBe(false),
     );
+    expect(mocks.persistChildRunReport).toHaveBeenCalledWith(
+      executionId,
+      'delivered:late',
+    );
+    expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
   it('kill during WAITING: interrupting the loop while it is blocked between turns ends the run without a hang', async () => {
