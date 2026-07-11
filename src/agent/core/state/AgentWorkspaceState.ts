@@ -214,10 +214,28 @@ const ReasoningCacheStateSchema = z.object({
 
 type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
+/**
+ * All ServerToolContentBlock union members (Anthropic content blocks, OpenAI
+ * response items) carry a string `type` discriminant, so requiring one here
+ * rejects null/primitive/shapeless garbage without needing to model each SDK
+ * shape in full.
+ */
+const isServerToolContentBlock = (
+  value: unknown,
+): value is ServerToolContentBlock =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { type?: unknown }).type === 'string';
+
 /** Internal schema for server tool content state. */
 const ServerToolContentStateSchema = z.object({
-  // ServerToolContentBlock is internal state from SDK responses, validated upstream by the SDK
-  contentBlocks: z.array(z.custom<ServerToolContentBlock>()).prefault(() => []),
+  contentBlocks: z
+    .array(
+      z.custom<ServerToolContentBlock>(isServerToolContentBlock, {
+        error: 'server tool content blocks must include a string type field',
+      }),
+    )
+    .prefault(() => []),
   lastAssistantContent: z.array(z.unknown()).prefault(() => []),
 });
 

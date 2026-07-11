@@ -3,6 +3,7 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ContextStateDataSchema,
+  GroupLogPayloadSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
@@ -14,32 +15,6 @@ import {
 
 import type { StreamLogs, StreamState } from '../store';
 import type { HandlerRegistry } from '../messageHandlerTypes';
-
-function isTaskGroupStatus(
-  value: unknown,
-): value is
-  | typeof STREAM_STATUS.RUNNING
-  | typeof STREAM_STATUS.ERROR
-  | typeof STREAM_STATUS.STOPPED
-  | typeof STREAM_STATUS.READY {
-  return (
-    value === STREAM_STATUS.RUNNING ||
-    value === STREAM_STATUS.ERROR ||
-    value === STREAM_STATUS.STOPPED ||
-    value === STREAM_STATUS.READY
-  );
-}
-
-function isStageKind(
-  value: unknown,
-): value is 'run' | 'round' | 'phase' | 'session' {
-  return (
-    value === 'run' ||
-    value === 'round' ||
-    value === 'phase' ||
-    value === 'session'
-  );
-}
 
 function asContextStateData(data: unknown): ContextStateData | undefined {
   return ContextStateDataSchema.optional().catch(undefined).parse(data);
@@ -63,10 +38,8 @@ function updateTaskGroups(
   taskGroupIndex: Map<string, number>,
   entry: StreamLogEntry,
 ): boolean {
-  const payload =
-    typeof entry.data === 'object' && entry.data !== null
-      ? (entry.data as Record<string, unknown>)
-      : {};
+  const parsed = GroupLogPayloadSchema.safeParse(entry.data);
+  const payload = parsed.success ? parsed.data : {};
   const cachedIndex = taskGroupIndex.get(entry.id);
   const groupIndex =
     cachedIndex !== undefined &&
@@ -79,18 +52,15 @@ function updateTaskGroups(
   }
 
   if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
-    const status = isTaskGroupStatus(payload.status)
-      ? payload.status
-      : STREAM_STATUS.RUNNING;
     const nextGroup = {
       id: entry.id,
-      name: entry.text ?? String(payload.name ?? entry.id),
+      name: entry.text ?? payload.name ?? entry.id,
       startTime: entry.timestamp,
-      status,
+      status: payload.status ?? STREAM_STATUS.RUNNING,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-      ...(isStageKind(payload.kind) ? { kind: payload.kind } : {}),
-      ...(typeof payload.index === 'number' ? { index: payload.index } : {}),
-      ...(typeof payload.total === 'number' ? { total: payload.total } : {}),
+      ...(payload.kind ? { kind: payload.kind } : {}),
+      ...(payload.index !== undefined ? { index: payload.index } : {}),
+      ...(payload.total !== undefined ? { total: payload.total } : {}),
     };
 
     if (groupIndex === -1) {
@@ -106,11 +76,8 @@ function updateTaskGroups(
     return false;
   }
 
-  const status = isTaskGroupStatus(payload.status)
-    ? payload.status
-    : STREAM_STATUS.STOPPED;
-  const endTime =
-    typeof payload.endTime === 'number' ? payload.endTime : undefined;
+  const status = payload.status ?? STREAM_STATUS.STOPPED;
+  const endTime = payload.endTime;
 
   if (groupIndex === -1) {
     taskGroupIndex.set(entry.id, streamState.taskGroups.length);
@@ -120,9 +87,9 @@ function updateTaskGroups(
       startTime: entry.timestamp,
       status,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-      ...(isStageKind(payload.kind) ? { kind: payload.kind } : {}),
-      ...(typeof payload.index === 'number' ? { index: payload.index } : {}),
-      ...(typeof payload.total === 'number' ? { total: payload.total } : {}),
+      ...(payload.kind ? { kind: payload.kind } : {}),
+      ...(payload.index !== undefined ? { index: payload.index } : {}),
+      ...(payload.total !== undefined ? { total: payload.total } : {}),
       ...(endTime !== undefined ? { endTime } : {}),
     });
   } else {

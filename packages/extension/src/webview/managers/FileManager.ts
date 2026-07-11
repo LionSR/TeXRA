@@ -90,7 +90,8 @@ logger.initialize(CHANNEL);
 
 type FileUpdateOptions = {
   notifyWhenEmpty?: boolean;
-  additionalPayload?: Record<string, unknown>;
+  /** Only meaningful for `fileType: 'Base'` — see `SET_BASE_FILE`. */
+  preserveBaseFile?: boolean;
 };
 
 export class FileManager extends BaseWebviewManager {
@@ -131,9 +132,7 @@ export class FileManager extends BaseWebviewManager {
     const files = await getFileLister().list('input');
     this.postFileUpdate('Base', files, {
       notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
-      additionalPayload: message.preserveBaseFile
-        ? { preserveBaseFile: true }
-        : undefined,
+      preserveBaseFile: message.preserveBaseFile,
     });
     this.postGettingStartedBanner(files.length === 0);
   }
@@ -389,7 +388,7 @@ export class FileManager extends BaseWebviewManager {
     this.postMessage({
       command: `set${fileType}File`,
       files,
-      ...(options.additionalPayload ?? {}),
+      ...(options.preserveBaseFile ? { preserveBaseFile: true } : {}),
     });
   }
 
@@ -405,11 +404,7 @@ export class FileManager extends BaseWebviewManager {
   }
 
   private postBaseFileSelect(baseFiles: string[]): void {
-    this.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
-      files: baseFiles,
-      preserveBaseFile: true,
-    });
+    this.postFileUpdate('Base', baseFiles, { preserveBaseFile: true });
   }
 
   private async getOpenedFiles(): Promise<string[]> {

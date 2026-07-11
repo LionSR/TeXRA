@@ -30,6 +30,18 @@ export type ProgressViewPlacement = z.infer<typeof ProgressViewPlacementSchema>;
  */
 export const StreamScopedBaseSchema = z.object({ stream: StreamTabIdSchema });
 
+/**
+ * Tailed stdout/stderr for a background process/execution. Single source of
+ * truth for the shape carried over IPC (`UpdateProcessOutputMessageSchema`)
+ * and mirrored in frontend state (CLI `ProcessOutputTail`, extension
+ * `ProcessOutputMap` entries) so the three no longer drift independently.
+ */
+export const ProcessOutputTailSchema = z.object({
+  stdout: z.string(),
+  stderr: z.string(),
+});
+export type ProcessOutputTail = z.infer<typeof ProcessOutputTailSchema>;
+
 // ============================================================
 // Progress View Data Schemas
 // ============================================================
