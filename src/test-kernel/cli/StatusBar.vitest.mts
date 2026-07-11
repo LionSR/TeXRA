@@ -954,9 +954,6 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toBe(
       'Use foreground panel shortcuts  [Esc]close  [Ctrl-C]stop',
     );
-    expect(display.bindings).not.toContain('[Tab]streams');
-    expect(display.bindings).not.toContain('[Alt-p]tasks');
-    expect(display.bindings).not.toContain('[/model]models');
   });
 
   it('labels foreground user questions as questions instead of approvals', () => {
