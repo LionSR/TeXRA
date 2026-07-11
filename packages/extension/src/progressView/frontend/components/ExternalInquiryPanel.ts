@@ -24,6 +24,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
@@ -421,13 +422,15 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
         <div class="external-inquiry-request__answer-label">
           Paste the answer from the external model:
         </div>
-        <textarea
+        <wa-textarea
           class="external-inquiry-request__answer-input"
           placeholder="Paste the answer here..."
+          rows="4"
+          resize="vertical"
           .value=${live(this.answerText)}
           @input=${this.handleAnswerInput}
           @keydown=${this.handleKeyDown}
-        ></textarea>
+        ></wa-textarea>
         <div class="external-inquiry-request__answer-hint">
           If the external model returns files, save them into the workspace and
           tell the agent the paths.
@@ -477,12 +480,14 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
               >Gemini Deep Think</a
             >
           </div>
-          <textarea
+          <wa-textarea
             class="external-inquiry-request__session-links-input"
             placeholder="Paste one external session link per line..."
+            rows="2"
+            resize="vertical"
             .value=${live(this.sessionLinksText)}
             @input=${this.handleSessionLinksInput}
-          ></textarea>
+          ></wa-textarea>
           <div class="external-inquiry-request__session-links-hint">
             Add the chat URL you used after pasting the answer.
           </div>
@@ -529,12 +534,14 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   // ── Event Handlers ──
 
   private handleAnswerInput(e: Event): void {
-    this.answerText = (e.target as HTMLTextAreaElement).value;
+    this.answerText =
+      (e.target as HTMLElement & { value?: string }).value ?? '';
     this.scheduleDraftSave();
   }
 
   private handleSessionLinksInput(e: Event): void {
-    this.sessionLinksText = (e.target as HTMLTextAreaElement).value;
+    this.sessionLinksText =
+      (e.target as HTMLElement & { value?: string }).value ?? '';
     this.scheduleDraftSave();
   }
 
