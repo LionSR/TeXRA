@@ -112,13 +112,13 @@ const SAMPLE_TASK_GROUPS: TaskGroup[] = [
     name: 'Analyze manuscript structure',
     startTime: BASE_TIME + 1_000,
     endTime: BASE_TIME + 24_000,
-    status: STREAM_STATUS.STOPPED,
+    status: STREAM_PHASE.COMPLETED,
   },
   {
     id: 'rewrite',
     name: 'Polish abstract and introduction',
     startTime: BASE_TIME + 25_000,
-    status: STREAM_STATUS.RUNNING,
+    status: STREAM_PHASE.RUNNING,
   },
 ];
 
