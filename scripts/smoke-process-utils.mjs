@@ -12,9 +12,23 @@ export function hasExited(child) {
 }
 
 export function waitForExit(child) {
-  return new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('exit', (code, signal) => resolve({ code, signal }));
+  if (hasExited(child)) {
+    return Promise.resolve({
+      code: child.exitCode,
+      signal: child.signalCode,
+    });
+  }
+
+  return new Promise((resolve) => {
+    const onExit = (code, signal) => resolve({ code, signal });
+    child.once('exit', onExit);
+    // Close the check/listener TOCTOU interval: an exit that happened between
+    // the first check and listener registration has updated these fields even
+    // if its event was missed.
+    if (hasExited(child)) {
+      child.off('exit', onExit);
+      resolve({ code: child.exitCode, signal: child.signalCode });
+    }
   });
 }
 

@@ -430,11 +430,14 @@ desktop build artifacts and `.vsix` are present.
 with an isolated temporary profile and workspace. Launch has a 30-second timeout; after launch, the
 smoke asserts that Electron reports `app.isPackaged`, then waits up to 30 seconds for a visible desktop
 shell, a rendered `main-app` shadow root, and the theme state returned by the `WEBVIEW_READY` to
-`desktopViewState` IPC round trip. The desktop package
-workflow runs this readiness gate against Electron Builder's `mac-universal`, `win-unpacked`, and
-`linux-unpacked` outputs on their respective operating systems before uploading installer artifacts.
-This gate validates the unpacked application, not installer mounting, installation, uninstallation,
-or operating-system trust dialogs.
+`desktopViewState` IPC round trip. The packaged child inherits only an explicit allowlist of operating-
+system path, display, and locale variables; signing credentials and future job-level secrets are
+excluded by default. Process errors fail readiness immediately but remain separate from actual process
+exit observation, so teardown still waits for termination and escalates to a forced stop when needed.
+The desktop package workflow runs this readiness gate against Electron Builder's `mac-universal`,
+`win-unpacked`, and `linux-unpacked` outputs on their respective operating systems before uploading
+installer artifacts. This gate validates the unpacked application, not installer mounting,
+installation, uninstallation, or operating-system trust dialogs.
 
 ### Local macOS Desktop Installer
 
