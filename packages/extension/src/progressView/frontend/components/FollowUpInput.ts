@@ -174,7 +174,14 @@ export class FollowUpInput extends LitElement {
     // streams, so any image pasted while bound to the previous stream must
     // not ride along to whichever stream is active when send eventually
     // fires. In-flight pastes are invalidated via imagePasteRevision so
-    // their async completion is a no-op (see attachPastedImages).
+    // their async completion is a no-op (see attachPastedImages). Also drop
+    // any still-in-flight paste promises from the old stream: emitSend()
+    // gates on pendingImagePastes.size, so a stale entry left behind here
+    // would block (or, via flushPendingImagePasteSend, mis-time) a send
+    // issued in the newly-bound stream until the old-stream paste settles.
+    // Clearing the set is safe — attachPastedImages already no-ops on a
+    // revision mismatch, and the promise's own .finally() tolerates
+    // deleting an already-absent entry.
     if (
       changedProperties.has('streamId') &&
       changedProperties.get('streamId') !== undefined
@@ -182,6 +189,7 @@ export class FollowUpInput extends LitElement {
       this.imagePasteRevision += 1;
       this.pendingImages = [];
       this.sendAfterImagePastes = false;
+      this.pendingImagePastes.clear();
     }
 
     // React to shouldFocus property change
