@@ -21,8 +21,7 @@ import {
   type ChildControlMode,
 } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
-import { textDisplayWidth } from '../render/terminalText';
-import { KEY_HINT_SEPARATOR, KeyHints, type KeyHint } from '../ui/KeyHints';
+import { KeyHints } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
 import {
   nextWrappingHighlightIndex,
@@ -33,6 +32,7 @@ import {
   type ChildStreamEntries,
 } from '../state/childExecutions';
 import { TaskDetailView } from './TaskDetailView';
+import { pickerKeyHintsForColumns } from './childControlPickerHints';
 import type { StreamSlice } from '../state/cliState';
 
 interface ChildControlPickerProps {
@@ -71,94 +71,6 @@ export function isUltraCompactPickerRows(
   return (
     availableRows !== undefined &&
     availableRows <= ULTRA_COMPACT_PICKER_MAX_ROWS
-  );
-}
-
-export function pickerKeyHints(
-  mode: ChildControlMode,
-  itemCount: number,
-  canKill = itemCount > 0,
-): readonly KeyHint[] {
-  return pickerKeyHintsForColumns(mode, itemCount, canKill);
-}
-
-function keyHintDisplayText(hint: KeyHint): string {
-  return `${hint.key} ${hint.action}`;
-}
-
-function keyHintsDisplayWidth(hints: readonly KeyHint[]): number {
-  return textDisplayWidth(
-    hints.map(keyHintDisplayText).join(KEY_HINT_SEPARATOR),
-  );
-}
-
-function keyHintsFit(
-  hints: readonly KeyHint[],
-  availableColumns: number | undefined,
-): boolean {
-  return (
-    availableColumns === undefined ||
-    keyHintsDisplayWidth(hints) <= availableColumns
-  );
-}
-
-type PickerOptionalHint = 'focus' | 'jump' | 'kill';
-
-function pickerHintsForOptionals(
-  mode: ChildControlMode,
-  itemCount: number,
-  canKill: boolean,
-  selected: ReadonlySet<PickerOptionalHint>,
-  availableColumns: number | undefined,
-): readonly KeyHint[] {
-  return [
-    {
-      key: '↑/↓',
-      action: availableColumns === undefined ? 'navigate' : 'nav',
-    },
-    ...(selected.has('jump') && itemCount > 1
-      ? [{ key: '1-9', action: 'jump' }]
-      : []),
-    { key: 'Enter', action: 'view' },
-    ...(selected.has('focus') && mode === 'subagents'
-      ? [{ key: 'f', action: 'focus' }]
-      : []),
-    ...(selected.has('kill') && canKill ? [{ key: 'k', action: 'kill' }] : []),
-    { key: 'Esc', action: 'close' },
-  ];
-}
-
-export function pickerKeyHintsForColumns(
-  mode: ChildControlMode,
-  itemCount: number,
-  canKill = itemCount > 0,
-  availableColumns?: number,
-): readonly KeyHint[] {
-  if (itemCount <= 0) return [{ key: 'Esc', action: 'close' }];
-
-  const selected = new Set<PickerOptionalHint>();
-  const priority: readonly PickerOptionalHint[] =
-    mode === 'subagents' ? ['focus', 'jump', 'kill'] : ['kill', 'jump'];
-
-  for (const option of priority) {
-    const nextSelected = new Set(selected);
-    nextSelected.add(option);
-    const nextHints = pickerHintsForOptionals(
-      mode,
-      itemCount,
-      canKill,
-      nextSelected,
-      availableColumns,
-    );
-    if (keyHintsFit(nextHints, availableColumns)) selected.add(option);
-  }
-
-  return pickerHintsForOptionals(
-    mode,
-    itemCount,
-    canKill,
-    selected,
-    availableColumns,
   );
 }
 
