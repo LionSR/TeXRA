@@ -27,6 +27,7 @@ import {
 import { toNewestFirstByTimestamp } from '@utils/core';
 
 import { setsEqual } from './utils';
+import { clearFollowUpInputTransientStateStore } from './followUpInputState';
 import {
   createInitialState,
   EMPTY_PROCESS_OUTPUTS,
@@ -175,6 +176,7 @@ export const pendingApprovalIds$ = new Signal.Computed(() => {
  */
 export function resetProgressState(): void {
   _prevApprovalIds = new Set();
+  clearFollowUpInputTransientStateStore();
   appState.set(createInitialState());
   placement.set('sidebar');
   narrowLayout.set(false);

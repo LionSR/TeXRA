@@ -28,6 +28,10 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { archivedContext } from '../contexts/streamContexts';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
+import {
+  resetFollowUpInputTransientState,
+  type FollowUpInputTransientState,
+} from '../followUpInputState';
 
 // Local imports - progress view components
 import './QueuedFollowUps';
@@ -124,16 +128,11 @@ export class FollowUpInput extends LitElement {
   @property({ type: Boolean, reflect: true }) visible = false;
   @property({ attribute: false }) value = '';
   @property({ attribute: false }) queuedMessages: string[] = [];
-  /**
-   * Identity of the stream this instance is currently bound to (the same
-   * `streamInfo.name` TodoList/PlanView key off of as `collapseKey`). The
-   * progress view reuses a single `<follow-up-input>` instance across the
-   * active-stream context switch, so any pasted-image state pending here
-   * must be reset when the bound stream changes — otherwise an image
-   * attached while viewing one stream can be delivered to whichever stream
-   * is active when the user later hits send.
-   */
+  /** Identity of the stream currently bound to this reused component. */
   @property({ type: String }) streamId = '';
+  /** Image draft selected upstream with the same stream key as `value`. */
+  @property({ attribute: false })
+  transientState: FollowUpInputTransientState | null = null;
 
   @property({ attribute: false }) shouldFocus = false;
   @property({ attribute: false }) polishedText: string | null = null;
@@ -153,12 +152,6 @@ export class FollowUpInput extends LitElement {
 
   @state() private polishing = false;
 
-  /** Images pasted into the follow-up box; attached to the message on send. */
-  private pendingImages: ExtractedClipboardImage[] = [];
-  private readonly pendingImagePastes = new Set<Promise<void>>();
-  private imagePasteRevision = 0;
-  private sendAfterImagePastes = false;
-
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
   declare private textAreaEl: HTMLElement | null;
 
@@ -170,28 +163,6 @@ export class FollowUpInput extends LitElement {
   });
 
   protected override willUpdate(changedProperties: PropertyValues): void {
-    // React to streamId property change: this instance is reused across
-    // streams, so any image pasted while bound to the previous stream must
-    // not ride along to whichever stream is active when send eventually
-    // fires. In-flight pastes are invalidated via imagePasteRevision so
-    // their async completion is a no-op (see attachPastedImages). Also drop
-    // any still-in-flight paste promises from the old stream: emitSend()
-    // gates on pendingImagePastes.size, so a stale entry left behind here
-    // would block (or, via flushPendingImagePasteSend, mis-time) a send
-    // issued in the newly-bound stream until the old-stream paste settles.
-    // Clearing the set is safe — attachPastedImages already no-ops on a
-    // revision mismatch, and the promise's own .finally() tolerates
-    // deleting an already-absent entry.
-    if (
-      changedProperties.has('streamId') &&
-      changedProperties.get('streamId') !== undefined
-    ) {
-      this.imagePasteRevision += 1;
-      this.pendingImages = [];
-      this.sendAfterImagePastes = false;
-      this.pendingImagePastes.clear();
-    }
-
     // React to shouldFocus property change
     if (changedProperties.has('shouldFocus') && this.shouldFocus) {
       this.focusInput({ scrollIntoView: true }).then(() => {
@@ -252,21 +223,28 @@ export class FollowUpInput extends LitElement {
   private handlePaste(event: ClipboardEvent): void {
     const files = clipboardImageFiles(event);
     if (files.length === 0) return;
+    const streamId = this.streamId;
+    const transientState = this.transientState;
+    if (!streamId || !transientState) return;
     // Suppress the default paste synchronously, before the async read below.
     event.preventDefault();
     const paste = this.attachPastedImages(
+      streamId,
+      transientState,
       event,
       files,
-      this.imagePasteRevision,
+      transientState.imagePasteRevision,
     );
-    this.pendingImagePastes.add(paste);
+    transientState.pendingImagePastes.add(paste);
     void paste.finally(() => {
-      this.pendingImagePastes.delete(paste);
-      this.flushPendingImagePasteSend();
+      transientState.pendingImagePastes.delete(paste);
+      this.flushPendingImagePasteSend(streamId, transientState);
     });
   }
 
   private async attachPastedImages(
+    streamId: string,
+    transientState: FollowUpInputTransientState,
     event: ClipboardEvent,
     files: Array<{ file: File; type: string }>,
     pasteRevision: number,
@@ -292,16 +270,27 @@ export class FollowUpInput extends LitElement {
         ),
       )
     ).filter((image): image is ExtractedClipboardImage => image !== undefined);
-    if (pasteRevision !== this.imagePasteRevision) return;
+    if (pasteRevision !== transientState.imagePasteRevision) return;
     if (added.length === 0) return;
     const chipText = added.map(({ fileName }) => `[${fileName}]`).join(' ');
     if (insertText && !insertText.endsWith(' ') && !insertText.endsWith('\n')) {
       insertText += ' ';
     }
     insertText += chipText;
-    this.pendingImages = [...this.pendingImages, ...added];
-    insertTextAtCursor(target, insertText);
-    this.updateValue(getTextareaValue(target));
+    transientState.pendingImages = [...transientState.pendingImages, ...added];
+    if (
+      this.streamId === streamId &&
+      this.transientState === transientState &&
+      this.textAreaEl === target
+    ) {
+      insertTextAtCursor(target, insertText);
+      this.updateValue(getTextareaValue(target), streamId);
+      return;
+    }
+
+    // The shared Lit instance may now display another stream. Preserve the
+    // completed paste in its source stream without touching the active box.
+    this.updateValue(insertText, streamId, 'append');
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -403,26 +392,45 @@ export class FollowUpInput extends LitElement {
   private handleInput(event: InputEvent): void {
     const target = event.currentTarget as HTMLTextAreaElement | null;
     const value = target?.value ?? '';
-    this.dispatchEvent(ProgressEvents.followupChange({ value }));
+    this.updateValue(value);
   }
 
   private emitSend(): void {
-    if (this.pendingImagePastes.size > 0) {
-      this.sendAfterImagePastes = true;
+    const streamId = this.streamId;
+    const transientState = this.transientState;
+    if (!streamId || !transientState) return;
+    this.emitSendForStream(streamId, transientState);
+  }
+
+  private emitSendForStream(
+    streamId: string,
+    transientState: FollowUpInputTransientState,
+  ): void {
+    if (transientState.pendingImagePastes.size > 0) {
+      transientState.sendAfterImagePastes = true;
       return;
     }
     this.dispatchEvent(
-      ProgressEvents.followupSend({ images: this.pendingImages }),
+      ProgressEvents.followupSend({
+        streamId,
+        images: transientState.pendingImages,
+      }),
     );
-    this.pendingImages = [];
-    this.sendAfterImagePastes = false;
+    transientState.pendingImages = [];
+    transientState.sendAfterImagePastes = false;
   }
 
-  private flushPendingImagePasteSend(): void {
-    if (!this.sendAfterImagePastes || this.pendingImagePastes.size > 0) {
+  private flushPendingImagePasteSend(
+    streamId: string,
+    transientState: FollowUpInputTransientState,
+  ): void {
+    if (
+      !transientState.sendAfterImagePastes ||
+      transientState.pendingImagePastes.size > 0
+    ) {
       return;
     }
-    this.emitSend();
+    this.emitSendForStream(streamId, transientState);
   }
 
   private emitPolish(): void {
@@ -434,13 +442,21 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitClear(): void {
-    this.imagePasteRevision += 1;
-    this.pendingImages = [];
-    this.sendAfterImagePastes = false;
-    this.dispatchEvent(ProgressEvents.followupClear());
+    const streamId = this.streamId;
+    const transientState = this.transientState;
+    if (!streamId || !transientState) return;
+    resetFollowUpInputTransientState(transientState);
+    this.dispatchEvent(ProgressEvents.followupClear({ streamId }));
   }
 
-  private updateValue(value: string): void {
-    this.dispatchEvent(ProgressEvents.followupChange({ value }));
+  private updateValue(
+    value: string,
+    streamId = this.streamId,
+    mode: 'replace' | 'append' = 'replace',
+  ): void {
+    if (!streamId) return;
+    this.dispatchEvent(
+      ProgressEvents.followupChange({ streamId, value, mode }),
+    );
   }
 }
