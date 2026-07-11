@@ -180,6 +180,16 @@ function observeApplication(application, runtimeFailure) {
       appendDiagnostic(label, message.text());
     }
   });
+
+  const observedPages = new WeakSet();
+  const observeNewPage = (page) => {
+    if (observedPages.has(page)) return;
+    observedPages.add(page);
+    observePage(page, runtimeFailure);
+  };
+  const context = application.context();
+  context.on('page', observeNewPage);
+  for (const page of context.pages()) observeNewPage(page);
 }
 
 function observePage(page, runtimeFailure) {
@@ -194,14 +204,13 @@ function observePage(page, runtimeFailure) {
   page.on('crash', () => runtimeFailure.report('renderer', 'page crashed'));
 }
 
-async function waitForReadiness(application, runtimeFailure) {
+async function waitForReadiness(application) {
   const isPackaged = await application.evaluate(({ app }) => app.isPackaged);
   if (!isPackaged) {
     throw new Error('Electron main process reported app.isPackaged = false.');
   }
 
   const page = await application.firstWindow({ timeout: 0 });
-  observePage(page, runtimeFailure);
   const handle = await page.waitForFunction(
     () => {
       const shell = document.querySelector('.desktop-shell');
@@ -305,7 +314,7 @@ try {
   phase = 'waiting for packaged desktop readiness';
 
   const outcome = await Promise.race([
-    waitForReadiness(application, runtimeFailure).then(
+    waitForReadiness(application).then(
       (value) => ({ kind: 'ready', value }),
       (error) => ({ kind: 'failure', error }),
     ),
