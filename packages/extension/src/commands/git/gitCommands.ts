@@ -63,7 +63,7 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
  *   Pass a worktree path to check a specific checkout.
  */
 function isGitRepository(rootPath?: string): Promise<boolean> {
-  return probeGitRepository(rootPath ?? WorkspaceFS.getPath());
+  return probeGitRepository(rootPath);
 }
 
 async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
