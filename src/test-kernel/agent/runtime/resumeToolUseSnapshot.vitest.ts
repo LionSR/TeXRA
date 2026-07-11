@@ -14,7 +14,7 @@ import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { recordSessionEvents, sessionFactPayloads } from '../progressTestUtils';
 
 const STREAM = 'stream:tooluse-resume' as StreamTabId;
@@ -151,6 +151,11 @@ describe('resumeToolUseSnapshot', () => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
         expect(options.isCancellationRequested).toBe(isCancellationRequested);
         options.setupSession({ appendFollowUp });
+        seedStreamStatusForTest(
+          defaultSession().status,
+          STREAM,
+          STREAM_PHASE.CANCELLED,
+        );
       },
     );
 
@@ -163,6 +168,42 @@ describe('resumeToolUseSnapshot', () => {
 
     expect(appendFollowUp).not.toHaveBeenCalled();
     expect(defaultSession().followUps.getAll(STREAM)).toEqual(['queued one']);
+    expect(defaultSession().status.get(STREAM)).toBe(STREAM_STATUS.WAITING);
+  });
+
+  it('restores drained follow-ups once when cancellation result handling throws', async () => {
+    const failure = new Error('result callback failed');
+    const reportFailure = vi.fn();
+    defaultSession().followUps.enqueue(
+      STREAM,
+      { text: 'queued one' },
+      { force: true },
+    );
+    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const options = args[2] as ReturnType<typeof capturedResumeOptions>;
+        options.setupSession({ appendFollowUp: vi.fn() });
+      },
+    );
+
+    await expect(
+      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        isCancellationRequested: () => true,
+        onResult: () => {
+          throw failure;
+        },
+        onError: reportFailure,
+      }),
+    ).resolves.toBe(false);
+
+    expect(defaultSession().followUps.getAll(STREAM)).toEqual(['queued one']);
+    expect(reportFailure).toHaveBeenCalledWith(failure);
+    expect(
+      sessionFactPayloads(
+        recordedSession?.events ?? [],
+        'updateQueuedFollowUps',
+      ),
+    ).toHaveLength(2);
   });
 
   it('re-enqueues follow-ups, settles to WAITING, and reports on failure', async () => {
