@@ -76,8 +76,7 @@ function installAnimationPolyfill(window: JSDOM['window']): void {
   // resolve immediately. Returning [] means "no animations" — animateWithClass
   // resolves on the next raf, which matches the visible behavior in tests.
   const proto = window.Element?.prototype as
-    | (Element & { getAnimations?: () => unknown[] })
-    | undefined;
+    (Element & { getAnimations?: () => unknown[] }) | undefined;
   if (!proto) return;
   if (typeof proto.getAnimations !== 'function') {
     proto.getAnimations = () => [];
