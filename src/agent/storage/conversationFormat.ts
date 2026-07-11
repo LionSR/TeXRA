@@ -128,6 +128,53 @@ function formatToolResultMarker(
 }
 
 /**
+ * Anthropic `web_search_tool_result` content is an array of
+ * `{type: 'web_search_result', title, url, ...}` entries (or an error
+ * object) — rendering each entry through the generic block formatter would
+ * JSON-dump its `encrypted_content` field, so this collapses the array to a
+ * compact `title (url)` list instead. Falls back to `formatToolResultMarker`
+ * for the error shape.
+ */
+function formatWebSearchResultMarker(
+  content: unknown,
+  options: ConversationFormatOptions,
+): string {
+  if (!Array.isArray(content)) return formatToolResultMarker(content, options);
+  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
+  const entries = content
+    .filter(isObject)
+    .map((entry) => {
+      const url = asText(entry.url);
+      const title = asText(entry.title) || url;
+      return url ? `${title} (${url})` : title;
+    })
+    .filter(Boolean);
+  return `[tool_result: ${truncate(entries.join(', '), options.toolBlockLimit, marker)}]`;
+}
+
+/**
+ * Anthropic `web_fetch_tool_result` content is a
+ * `{type: 'web_fetch_result', url, content: {title, ...}}` object (or an
+ * error object) — rendering it through the generic block formatter would
+ * JSON-dump the fetched page's full text, so this collapses it to a
+ * `title (url)` marker instead. Falls back to `formatToolResultMarker` for
+ * the error shape.
+ */
+function formatWebFetchResultMarker(
+  content: unknown,
+  options: ConversationFormatOptions,
+): string {
+  if (!isObject(content) || content.type !== 'web_fetch_result') {
+    return formatToolResultMarker(content, options);
+  }
+  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
+  const url = asText(content.url);
+  const title = objectStringField(content.content, 'title');
+  const label = title && url ? `${title} (${url})` : title || url;
+  return `[tool_result: ${truncate(label, options.toolBlockLimit, marker)}]`;
+}
+
+/**
  * Render a single content-block (an element of a message's `content`/`parts`
  * array) to text. Handles Anthropic's `{type: ...}` discriminated blocks,
  * Google's discriminator-less `{text}`/`{functionCall}`/`{functionResponse}`
@@ -214,6 +261,23 @@ function formatConversationBlock(
       );
     case 'tool_result':
       return formatToolResultMarker(block.content, options);
+    // Anthropic server-side tool blocks (the provider executes these, not a
+    // local tool handler). This vocabulary must stay in sync with the
+    // `assistantBlockToNode` switch in `@agent/export/normalizeConversation`
+    // — both classify the same three live Anthropic block types emitted by
+    // `AnthropicStreamHandler` (`server_tool_use`, `web_search_tool_result`,
+    // `web_fetch_tool_result`), just into different output shapes (a
+    // truncated marker string here vs. a structured `ExportNode` there).
+    case 'server_tool_use':
+      return formatToolUseMarker(
+        asText(block.name) || 'unknown',
+        block.input,
+        options,
+      );
+    case 'web_search_tool_result':
+      return formatWebSearchResultMarker(block.content, options);
+    case 'web_fetch_tool_result':
+      return formatWebFetchResultMarker(block.content, options);
     default:
       return truncate(
         stringifyConversationValue(block),
