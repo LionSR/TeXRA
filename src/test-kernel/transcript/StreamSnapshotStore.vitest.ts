@@ -582,6 +582,52 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('replays clearMissingOutputs before a later updateMissingOutputs on an unseeded stream', async () => {
+    // clearMissingOutputs must not stay on the plain deferred mutate() path
+    // while updateMissingOutputs eagerly overlays: on an unseeded stream that
+    // ordering let the seed's overlay replay (update) land, then the clear
+    // (queued behind the same seed) run afterward and wipe it out regardless
+    // of call order. Here the clear fires first, so the later update must
+    // survive.
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'missingOutputs.json'),
+      JSON.stringify({ '0': ['stale.tex'] }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.clearMissingOutputs(OTHER_STREAM);
+    store.updateMissingOutputs(OTHER_STREAM, { 1: ['next.tex'] });
+    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({ 1: ['next.tex'] });
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    expect(raw).toEqual({ '1': ['next.tex'] });
+  });
+
+  it('replays a later clearMissingOutputs over an earlier updateMissingOutputs on an unseeded stream', async () => {
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'missingOutputs.json'),
+      JSON.stringify({ '0': ['stale.tex'] }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.updateMissingOutputs(OTHER_STREAM, { 1: ['next.tex'] });
+    store.clearMissingOutputs(OTHER_STREAM);
+    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({});
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    expect(raw).toEqual({});
+  });
+
   it('returns compile failures immediately for streams outside a partial preload without erasing disk markers', async () => {
     const dir = streamDataDir(OTHER_STREAM);
     await StorageFS.ensureDir(dir);
