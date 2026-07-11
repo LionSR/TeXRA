@@ -1,3 +1,4 @@
+import pDefer from 'p-defer';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -48,20 +49,6 @@ function tokenResponse(
     expires_in: 3600,
     ...overrides,
   };
-}
-
-function deferred<T>(): {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason: unknown) => void;
-} {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
 }
 
 function makeCoordinator(
@@ -115,7 +102,7 @@ describe('CodexSessionCoordinator', () => {
 
   it('single-flights concurrent refreshes', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
-    const { promise: pending, resolve } = deferred<CodexTokenResponse>();
+    const { promise: pending, resolve } = pDefer<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
     const coordinator = makeCoordinator(storage, { refreshTokens });
 
@@ -135,7 +122,7 @@ describe('CodexSessionCoordinator', () => {
 
   it('does not restore a session when sign-out races with refresh', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
-    const { promise: pending, resolve } = deferred<CodexTokenResponse>();
+    const { promise: pending, resolve } = pDefer<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
     const coordinator = makeCoordinator(storage, { refreshTokens });
 
@@ -197,7 +184,7 @@ describe('CodexSessionCoordinator', () => {
 
   it('does not clear a newer login when a stale refresh is rejected', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
-    const { promise: pending, reject } = deferred<CodexTokenResponse>();
+    const { promise: pending, reject } = pDefer<CodexTokenResponse>();
     const refreshTokens = vi.fn(() => pending);
     const exchangeAuthorizationCode = vi.fn(async () =>
       tokenResponse({
