@@ -559,9 +559,10 @@ describe('StreamLogStore load', () => {
     // 'stopped' -> RunOutcome.COMPLETED: a documented lossy default. The
     // pre-cutover 2-value fold already could not distinguish completed from
     // cancelled, and COMPLETED matches today's neutral "Stopped" rendering.
-    expect(entries.find((e) => e.id === 'delta-legacy-stopped')?.data).toEqual(
-      { status: RUN_OUTCOME.COMPLETED, endTime: 150 },
-    );
+    expect(entries.find((e) => e.id === 'delta-legacy-stopped')?.data).toEqual({
+      status: RUN_OUTCOME.COMPLETED,
+      endTime: 150,
+    });
     // 'error' -> RunOutcome.FAILED: lossless 1:1.
     expect(entries.find((e) => e.id === 'delta-legacy-error')?.data).toEqual({
       status: RUN_OUTCOME.FAILED,
@@ -569,9 +570,9 @@ describe('StreamLogStore load', () => {
     });
     // 'running' is string-identical to StreamPhase.RUNNING (row 1, §8.2) —
     // passes through unnormalized, retype-only.
-    expect(
-      entries.find((e) => e.id === 'delta-legacy-running')?.data,
-    ).toEqual({ status: STREAM_PHASE.RUNNING });
+    expect(entries.find((e) => e.id === 'delta-legacy-running')?.data).toEqual({
+      status: STREAM_PHASE.RUNNING,
+    });
   });
 
   it('does not load selected streams whose summaries have no running group', async () => {
