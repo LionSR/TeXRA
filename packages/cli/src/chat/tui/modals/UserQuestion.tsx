@@ -32,6 +32,7 @@ import {
   visibleSelectRange,
 } from '../ui/Select';
 import { KeyHints, type KeyHint } from '../ui/KeyHints';
+import { BorderedPanel } from '../ui/BorderedPanel';
 import { POINTER, TICK } from '../ui/glyphs';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
@@ -291,16 +292,14 @@ function QuestionShell(props: QuestionShellProps): React.JSX.Element {
     [contentWidth, promptRows, props.payload.context, questionText],
   );
   return (
-    <Box
+    <BorderedPanel
       borderStyle="single"
-      borderColor="green"
-      flexDirection="column"
-      paddingX={1}
+      color="green"
       width={columns}
+      title="Agent asks:"
+      footer={<KeyHints hints={props.hints} confirmCancel={false} />}
+      footerMarginTop={compact ? 0 : 1}
     >
-      <Text bold color="green">
-        Agent asks:
-      </Text>
       <Box marginTop={compact ? 0 : 1} flexDirection="column">
         {promptLines.map((line, lineIndex) => (
           <Text
@@ -314,10 +313,7 @@ function QuestionShell(props: QuestionShellProps): React.JSX.Element {
       <Box marginTop={compact ? 0 : 1} flexDirection="column">
         {props.children}
       </Box>
-      <Box marginTop={compact ? 0 : 1}>
-        <KeyHints hints={props.hints} confirmCancel={false} />
-      </Box>
-    </Box>
+    </BorderedPanel>
   );
 }
 

@@ -4,8 +4,10 @@
 // (init/runInitWizard) and the command (commands/init) build on these; keeping
 // the logic here makes it unit-testable without a TTY.
 
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+
+import writeFileAtomic from 'write-file-atomic';
 
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 import { isFileNotFoundError } from '@common/errors';
@@ -59,7 +61,7 @@ export async function writeInitConfig(
   config: InitConfigShape,
 ): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, serializeInitConfig(config), 'utf8');
+  await writeFileAtomic(filePath, serializeInitConfig(config));
 }
 
 /**
@@ -98,6 +100,6 @@ export async function ensureTexraGitignored(
   }
   const next = gitignoreWithTexra(existing);
   if (next === null) return 'present';
-  await writeFile(gitignorePath, next, 'utf8');
+  await writeFileAtomic(gitignorePath, next);
   return existed ? 'added' : 'created';
 }
