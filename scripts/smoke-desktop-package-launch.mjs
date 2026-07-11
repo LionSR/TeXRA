@@ -6,6 +6,9 @@ import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+// Local imports - packaged smoke environment
+import { buildDesktopSmokeEnvironment } from './desktop-package-smoke-environment.mjs';
+
 // Local imports - smoke process helpers
 import {
   appendBoundedLog,
@@ -25,16 +28,6 @@ const { _electron: electron } = desktopRequire('playwright');
 const READINESS_TIMEOUT_MS = 30_000;
 const SHUTDOWN_GRACE_MS = 5_000;
 const MAX_DIAGNOSTIC_CHARS = 32_000;
-const SENSITIVE_ENV_PREFIXES = [
-  'APPLE_',
-  'AZURE_',
-  'CSC_',
-  'DESKTOP_MACOS_',
-  'DESKTOP_WINDOWS_',
-  'TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_',
-  'WIN_CSC_',
-];
-
 let diagnosticOutput = '';
 
 function appendDiagnostic(label, value) {
@@ -129,47 +122,11 @@ async function createIsolation(root) {
   return paths;
 }
 
-function childEnvironment(paths) {
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter((entry) => entry[1] != null),
-  );
-  for (const name of Object.keys(env)) {
-    if (SENSITIVE_ENV_PREFIXES.some((prefix) => name.startsWith(prefix))) {
-      delete env[name];
-    }
-  }
-
-  return {
-    ...env,
-    APPDATA: join(paths.profile, 'AppData', 'Roaming'),
-    ELECTRON_ENABLE_LOGGING: '1',
-    HOME: paths.profile,
-    LOCALAPPDATA: join(paths.profile, 'AppData', 'Local'),
-    NODE_ENV: 'production',
-    TEXRA_DESKTOP_E2E_USER_DATA_PATH: paths.userData,
-    TEXRA_DISABLE_KEYCHAIN: '1',
-    TEXRA_NO_UPDATE_CHECK: '1',
-    USERPROFILE: paths.profile,
-    XDG_CACHE_HOME: join(paths.profile, '.cache'),
-    XDG_CONFIG_HOME: join(paths.profile, '.config'),
-  };
-}
-
-function observeExit(child) {
-  if (hasExited(child)) {
-    return Promise.resolve({
-      code: child.exitCode,
-      signal: child.signalCode,
-    });
-  }
-  return waitForExit(child).catch((error) => {
-    appendDiagnostic('process error', error.message);
-    return { code: child.exitCode, signal: child.signalCode, error };
-  });
-}
-
 function observeApplication(application, runtimeFailure) {
   const child = application.process();
+  child.on('error', (error) => {
+    runtimeFailure.report('process error', errorMessage(error));
+  });
   child.stdout?.on('data', (chunk) => appendDiagnostic('stdout', chunk));
   child.stderr?.on('data', (chunk) => appendDiagnostic('stderr', chunk));
   application.on('console', (message) => {
@@ -264,12 +221,12 @@ async function closeApplication(application, exitPromise) {
     );
   }
 
+  if (hasExited(child)) return;
+
   appendDiagnostic(
     'teardown',
     `graceful close did not complete: ${errorMessage(closeFailure)}`,
   );
-  if (hasExited(child)) return;
-
   appendDiagnostic(
     'teardown',
     'forcing the Electron process to stop after graceful close failed',
@@ -303,14 +260,14 @@ try {
     executablePath,
     args: ['--texra-workspace', paths.workspace],
     cwd: paths.workspace,
-    env: childEnvironment(paths),
+    env: buildDesktopSmokeEnvironment(process.env, paths),
     timeout: READINESS_TIMEOUT_MS,
   });
 
   const child = application.process();
   const runtimeFailure = createRuntimeFailureSignal();
   observeApplication(application, runtimeFailure);
-  exitPromise = observeExit(child);
+  exitPromise = waitForExit(child);
   phase = 'waiting for packaged desktop readiness';
 
   const outcome = await Promise.race([
@@ -324,9 +281,7 @@ try {
   ]);
   if (outcome.kind === 'failure') throw outcome.error;
   if (outcome.kind === 'exit') {
-    const description = outcome.exit.error
-      ? `process error: ${errorMessage(outcome.exit.error)}`
-      : formatExit(outcome.exit);
+    const description = formatExit(outcome.exit);
     throw new Error(`Packaged app exited before readiness (${description}).`);
   }
   if (outcome.kind === 'timeout') {
@@ -344,7 +299,7 @@ try {
 } finally {
   if (application) {
     try {
-      exitPromise ??= observeExit(application.process());
+      exitPromise ??= waitForExit(application.process());
       await closeApplication(application, exitPromise);
     } catch (error) {
       if (failure) {
