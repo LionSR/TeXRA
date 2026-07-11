@@ -30,14 +30,15 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
     key: 'texra.model.retry.maxAttempts',
     label: 'Retry attempts',
     description:
-      'Flow-managed retry attempts (Google, OpenRouter rate limits, background transients). Anthropic/OpenAI retries are managed by their SDKs and unaffected.',
+      'Flow-managed retry attempts (Google, OpenRouter 429/408, background transients). Anthropic/OpenAI/OpenAIResponse retries are provider-managed by their SDKs (default 2); this setting does not affect them.',
     min: 0,
     defaultValue: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
   },
   {
     key: 'texra.model.retry.backoffMs',
     label: 'Retry backoff',
-    description: 'Base delay between retry attempts.',
+    description:
+      'Base backoff delay in milliseconds between retry attempts for model calls',
     min: 0,
     unit: 'ms',
     defaultValue: DEFAULT_CORE_SETTINGS.model.retry.backoffMs,
