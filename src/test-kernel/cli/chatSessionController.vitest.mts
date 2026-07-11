@@ -502,7 +502,6 @@ describe('createChatSessionController', () => {
 
     expect(mocks.resumeToolUseFromSnapshot).not.toHaveBeenCalled();
     expect(session.runCompleted).toBe(true);
-
   });
 
   it('reports a failed persisted-child wake while the CLI root slot is busy', async () => {
