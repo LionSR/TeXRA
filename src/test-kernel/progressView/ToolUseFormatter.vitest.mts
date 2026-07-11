@@ -149,9 +149,8 @@ function dispatchActivationKeydown(target: EventTarget, key: 'Enter' | ' ') {
 
 describe('wa-details summary controls: activation does not toggle the panel', () => {
   it('clicking the proposal-restore-link ("Setup") button does not toggle the panel, and the click still bubbles to an outer delegated handler', async () => {
-    const { formatToolUseTemplate } = await import(
-      '@progressView/frontend/formatters/logFormatters/toolFormatters'
-    );
+    const { formatToolUseTemplate } =
+      await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
     const { render } = await import('lit');
     const message: LogMessageData = {
       id: 'proposal-1',
@@ -197,9 +196,8 @@ describe('wa-details summary controls: activation does not toggle the panel', ()
   it.each(['Enter', ' '] as const)(
     'keydown %j on the proposal-restore-link does not toggle the panel',
     async (key) => {
-      const { formatToolUseTemplate } = await import(
-        '@progressView/frontend/formatters/logFormatters/toolFormatters'
-      );
+      const { formatToolUseTemplate } =
+        await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
       const { render } = await import('lit');
       const message: LogMessageData = {
         id: 'proposal-2',
@@ -237,9 +235,8 @@ describe('wa-details summary controls: activation does not toggle the panel', ()
   it.each(['Enter', ' '] as const)(
     'keydown %j on the copy button does not toggle the panel',
     async (key) => {
-      const { formatBannerContentTemplate } = await import(
-        '@progressView/frontend/formatters/logFormatters/bannerFormatters'
-      );
+      const { formatBannerContentTemplate } =
+        await import('@progressView/frontend/formatters/logFormatters/bannerFormatters');
       const { render } = await import('lit');
       const message: LogMessageData = {
         id: 'thinking-1',
