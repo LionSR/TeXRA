@@ -29,6 +29,7 @@ import {
   type TaskDetailScrollState,
 } from '../state/taskDetailScroll';
 import { KeyHints, type KeyHint } from '../ui/KeyHints';
+import { BorderedPanel } from '../ui/BorderedPanel';
 
 export const TASK_DETAIL_LABEL_WIDTH = 13;
 const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
@@ -382,18 +383,17 @@ export function TaskDetailView({
   }
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
+    <BorderedPanel
+      color="cyan"
       width={availableColumns}
+      title={layout.showTitle ? 'Task details' : undefined}
+      footer={
+        layout.showHints ? (
+          <KeyHints hints={hints} confirmCancel={false} />
+        ) : undefined
+      }
+      footerMarginTop={layout.compact ? 0 : 1}
     >
-      {layout.showTitle ? (
-        <Text bold color="cyan">
-          Task details
-        </Text>
-      ) : null}
       {layout.showExpandedMeta ? (
         <>
           {metaLine('Type', item.kind === 'process' ? 'shell' : 'stream')}
@@ -429,11 +429,6 @@ export function TaskDetailView({
           visibleLineCount={visibleLineCount}
         />
       </Box>
-      {layout.showHints ? (
-        <Box marginTop={layout.compact ? 0 : 1}>
-          <KeyHints hints={hints} confirmCancel={false} />
-        </Box>
-      ) : null}
-    </Box>
+    </BorderedPanel>
   );
 }
