@@ -18,10 +18,13 @@ type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
  *  restore would strip their `vi.hoisted` implementations instead of
  *  reverting them. */
 function spyOnSignalRegistration(): {
-  registered: Array<{ event: SignalSpyEvent; kind: 'once' | 'on' }>;
+  registered: Array<{ event: SignalSpyEvent; kind: 'once' | 'on' | 'removed' }>;
   restore: () => void;
 } {
-  const registered: Array<{ event: SignalSpyEvent; kind: 'once' | 'on' }> = [];
+  const registered: Array<{
+    event: SignalSpyEvent;
+    kind: 'once' | 'on' | 'removed';
+  }> = [];
   const onceSpy = vi.spyOn(process, 'once').mockImplementation(((
     event: string | symbol,
     _listener: (...args: unknown[]) => void,
@@ -40,11 +43,23 @@ function spyOnSignalRegistration(): {
     }
     return process;
   }) as typeof process.on);
+  const removeListenerSpy = vi
+    .spyOn(process, 'removeListener')
+    .mockImplementation(((
+      event: string | symbol,
+      _listener: (...args: unknown[]) => void,
+    ) => {
+      if (event === 'SIGINT' || event === 'SIGTERM') {
+        registered.push({ event, kind: 'removed' });
+      }
+      return process;
+    }) as typeof process.removeListener);
   return {
     registered,
     restore: () => {
       onceSpy.mockRestore();
       onSpy.mockRestore();
+      removeListenerSpy.mockRestore();
     },
   };
 }
@@ -428,7 +443,13 @@ describe('CLI platform init', () => {
 // (default `installSignalHandlers: true`), so the platform's own
 // `process.once('SIGINT'/'SIGTERM', ...)` handler installed too — two
 // independent async shutdown chains reacting to the same signal, racing on
-// whose `process.exit()` wins and leaving teardown order unspecified. These
+// whose `process.exit()` wins and leaving teardown order unspecified.
+//
+// `initInteractiveCliPlatform` does NOT suppress the platform handler up
+// front (a signal during onboarding/model-resolution/the orchestration
+// launcher still needs a graceful handler); instead
+// `handOffCliShutdownSignalHandlers()` removes it right at the point the TUI
+// installs its own pair, so the two sets are never simultaneously live. These
 // suites use `installCliShutdownSignalHandlers`'s idempotent, module-level
 // `shutdownHandlersInstalled` flag, so each test needs a freshly-imported
 // module (`vi.resetModules()` + dynamic import) to observe installation from
@@ -441,7 +462,7 @@ describe('CLI platform interactive signal ownership', () => {
     mocks.authProvider.isAuthenticated.mockResolvedValue(false);
   });
 
-  it('initInteractiveCliPlatform leaves the TUI as the sole SIGINT/SIGTERM owner', async () => {
+  it('initInteractiveCliPlatform keeps the platform handler live until an explicit handoff', async () => {
     vi.resetModules();
     const { registered, restore } = spyOnSignalRegistration();
     try {
@@ -450,20 +471,33 @@ describe('CLI platform interactive signal ownership', () => {
         globalState: { get: vi.fn(), update: vi.fn() },
       });
 
-      const { initInteractiveCliPlatform } =
+      const { initInteractiveCliPlatform, handOffCliShutdownSignalHandlers } =
         await import('@cli/runtime/initPlatform');
       // The await-suspension point from the finding: runChat() awaits this
       // init call, then onboarding/model resolution, before Ink ever mounts
-      // and installs its own handlers below — platform init and TUI mount
-      // are sequential awaits in the same call chain, never simultaneous.
+      // and installs its own handlers below. Unlike the pre-handoff-design
+      // fix, the platform handler stays registered for that whole window —
+      // a signal there still gets a graceful shutdown.
       await initInteractiveCliPlatform(cliContext());
-      expect(registered).toEqual([]); // no platform handler installed
+      expect(registered).toEqual([
+        { event: 'SIGINT', kind: 'once' },
+        { event: 'SIGTERM', kind: 'once' },
+      ]);
 
-      // The TUI mounts (runChatTui.tsx) and claims the signals itself.
+      // The TUI is about to mount (runChatTui.tsx) — it hands off ownership
+      // immediately before installing its own handlers.
+      handOffCliShutdownSignalHandlers();
+      expect(registered).toEqual([
+        { event: 'SIGINT', kind: 'once' },
+        { event: 'SIGTERM', kind: 'once' },
+        { event: 'SIGINT', kind: 'removed' },
+        { event: 'SIGTERM', kind: 'removed' },
+      ]);
+
       process.on('SIGINT', () => undefined);
       process.on('SIGTERM', () => undefined);
 
-      expect(registered).toEqual([
+      expect(registered.slice(-2)).toEqual([
         { event: 'SIGINT', kind: 'on' },
         { event: 'SIGTERM', kind: 'on' },
       ]);

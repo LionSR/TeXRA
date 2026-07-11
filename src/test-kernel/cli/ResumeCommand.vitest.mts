@@ -98,10 +98,10 @@ describe('runResumeExecution', () => {
 
     await runResumeExecution(context, EXECUTION_ID);
 
-    // `texra resume` always reopens the chat TUI, so the TUI must own
-    // SIGINT/SIGTERM exclusively once it mounts —
-    // initInteractiveCliPlatform is what suppresses the platform's own
-    // handler (see initPlatform.ts).
+    // `texra resume` usually reopens the chat TUI, so it must route through
+    // initInteractiveCliPlatform — not plain initCliPlatform — so the TUI can
+    // later hand itself exclusive SIGINT/SIGTERM ownership once it mounts
+    // (see initPlatform.ts).
     expect(mocks.initInteractiveCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ ...context, quietLogs: true }),
     );

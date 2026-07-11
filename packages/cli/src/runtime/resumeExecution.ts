@@ -42,9 +42,10 @@ export async function runResumeExecution(
     return CliExitCode.Usage;
   }
 
-  // Always reopens the chat TUI, so this is a real interactive entry point —
-  // signal ownership must stay with the TUI once it mounts (see
-  // initInteractiveCliPlatform).
+  // Usually reopens the chat TUI (a non-resumable snapshot returns early
+  // instead), so this is a real interactive entry point — the platform's own
+  // handler (still installed here) covers signals either way, until the TUI
+  // mounts and takes over (see initInteractiveCliPlatform).
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
 
   const resolution = await resolveCliResumeSnapshot(id);
