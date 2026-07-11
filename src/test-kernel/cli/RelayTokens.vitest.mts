@@ -8,6 +8,7 @@ import {
   fetchRelayTokenStatus,
   getCachedRelayTokenState,
   getConfiguredRelayToken,
+  markRelayTokenRejected,
   resetRelayTokenTierCacheForTests,
 } from '@auth/relayToken';
 import {
@@ -149,6 +150,38 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
       state: 'invalid',
     });
     expect(calls).toHaveLength(1);
+    expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
+  });
+
+  it('keeps a live 401 rejection sticky against a slower in-flight probe', async () => {
+    // Interleaving: a probe for `token` is already in flight (e.g. kicked
+    // off by an earlier synchronous check) when a *later* relay call gets a
+    // live 401 and calls markRelayTokenRejected — evidence that is fresher
+    // than whatever the in-flight probe will report. The probe then resolves
+    // 'valid' from data fetched before the rejection. The stale 'valid' must
+    // not clobber the fresher 'invalid': invalid is sticky until an explicit
+    // refresh (cache reset).
+    let resolveFetch!: (response: Response) => void;
+    const fetchImpl = (() =>
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      })) as unknown as typeof fetch;
+
+    const pending = fetchRelayTokenStatus(TOKEN, fetchImpl);
+
+    // The live 401 lands and marks the token invalid while the probe above
+    // is still in flight.
+    markRelayTokenRejected(TOKEN);
+    expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
+
+    // The in-flight probe now resolves with a stale 'valid' verdict.
+    resolveFetch(
+      jsonResponse({ userStatus: { tier: 'Ultra', isExpired: false } }),
+    );
+    await pending;
+
+    // The fresher rejection must survive: the cache must not be clobbered
+    // back to 'valid' by the stale probe result.
     expect(getCachedRelayTokenState(TOKEN)).toBe('invalid');
   });
 
