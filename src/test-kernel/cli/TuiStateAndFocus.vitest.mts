@@ -1326,16 +1326,6 @@ describe('CLI TUI row allocation', () => {
           runPromise,
           streamId: root,
         },
-        STREAM_PHASE.RUNNING,
-      ),
-    ).toBe(true);
-    expect(
-      chatTuiCanStopActiveRun(
-        {
-          runCompleted: false,
-          runPromise,
-          streamId: root,
-        },
         STREAM_STATUS.WAITING,
       ),
     ).toBe(false);
@@ -1429,7 +1419,7 @@ describe('CLI TUI row allocation', () => {
       chatTuiSigintAction({
         exitArmed: false,
         canStopActiveRun: false,
-        canInterruptActiveRun: false,
+        resumableIdle: false,
       }),
     ).toBe('clean-exit');
 
@@ -1439,7 +1429,7 @@ describe('CLI TUI row allocation', () => {
       chatTuiSigintAction({
         exitArmed: false,
         canStopActiveRun: false,
-        canInterruptActiveRun: true,
+        resumableIdle: true,
       }),
     ).toBe('preserve-exit');
 
@@ -1447,7 +1437,7 @@ describe('CLI TUI row allocation', () => {
       chatTuiSigintAction({
         exitArmed: false,
         canStopActiveRun: true,
-        canInterruptActiveRun: true,
+        resumableIdle: false,
       }),
     ).toBe('interrupt-and-arm-exit');
 
@@ -1455,7 +1445,7 @@ describe('CLI TUI row allocation', () => {
       chatTuiSigintAction({
         exitArmed: true,
         canStopActiveRun: true,
-        canInterruptActiveRun: true,
+        resumableIdle: false,
       }),
     ).toBe('force-exit');
   });
