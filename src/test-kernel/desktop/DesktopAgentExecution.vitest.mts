@@ -78,6 +78,9 @@ type TestableBridge = Bridge & {
   };
   handleInteractionEvent(event: string, payload: unknown): void;
   syncFullView(): void;
+  completeWebviewReady(
+    onInquiryHydrationError?: (error: unknown) => void,
+  ): Promise<void>;
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
   setActiveStream(streamId: StreamTabId): void;
   revealStream(streamId: StreamTabId): Promise<void>;
@@ -1235,6 +1238,47 @@ describe('DesktopProgressBridge', () => {
       expect(runAgent).toHaveBeenCalledOnce();
     } finally {
       finishRepair(new Set());
+    }
+  });
+
+  it('gates the Progress webview readiness paint on desktop startup repair', async () => {
+    // Regression test: the desktop webviewReady handler used to call
+    // syncFullView() / hydrateProgressViewInquiries() / replayPendingPrompts()
+    // directly, without awaiting `restartRepair` first. Restored streams are
+    // only folded into `streamLogs`/`session.status` once
+    // `repairOrphanedStreamsAfterRestart` (i.e. `restartRepair`) resolves --
+    // it awaits `state.streamLogs.load()` before anything else -- so a
+    // webviewReady race landing in that window paints the rail without the
+    // restored streams, with no guaranteed later repaint. Same race class as
+    // revealStream's #7850 fix. Gate the on-disk stream-log scan and assert
+    // `completeWebviewReady()` defers its entire paint sequence until
+    // `restartRepair` has actually settled.
+    let finishStreamLogsLoad!: () => void;
+    const streamLogsLoadGate = new Promise<void>((resolve) => {
+      finishStreamLogsLoad = resolve;
+    });
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages, { streamLogsLoadGate });
+
+    try {
+      const readyPromise = bridge.completeWebviewReady();
+
+      // streamLogs.load() is still gated, so restartRepair has not settled;
+      // completeWebviewReady() must not have painted anything yet.
+      await settleProgressEvents();
+      expect(messages).toEqual([]);
+
+      finishStreamLogsLoad();
+      await readyPromise;
+
+      // Once restartRepair settles, the deferred paint goes out.
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS)
+          .length,
+      ).toBeGreaterThan(0);
+    } finally {
+      finishStreamLogsLoad();
+      bridge.dispose();
     }
   });
 
