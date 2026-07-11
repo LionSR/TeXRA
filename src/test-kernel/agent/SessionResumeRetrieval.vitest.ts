@@ -103,8 +103,8 @@ async function runResumedFlow(
   streamId: StreamTabId,
   snapshot: ToolUseSessionSnapshot,
   onSetup?: (context: ToolUseSetupContext) => void,
+  session: SessionHandle = new SessionHandle(),
 ): Promise<RunToolUseFlowResult> {
-  const session = new SessionHandle();
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => snapshot.agentConfig.model,
@@ -574,6 +574,58 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       readSpy.mockRestore();
       writeSpy.mockRestore();
       deleteSpy.mockRestore();
+    }
+  });
+
+  it('preserves a follow-up appended during setup when cancellation arrives during the recovery read (issue #8049 P2)', async () => {
+    // Regression: resumeQueuedToolUseSnapshot's setupSession re-appends its
+    // drained follow-up batch into the live session queue *before* the flow
+    // is interruptible. If an external cancellation then lands while the
+    // recovery read is pending -- this same "cancellation during read"
+    // window as the sibling test above -- the early return here reports
+    // CANCELLED with the resume record preserved, but previously
+    // `ToolUseSessionLifecycle.interrupt()` unconditionally disposed the
+    // queue (dropping the just-appended follow-up) and the finally below
+    // unconditionally released it again, so neither the caller
+    // (`resumeQueuedToolUseSnapshot`, which never restores follow-ups on
+    // this success path) nor a later resume could ever recover the user's
+    // queued input. Fixed by routing this window's cancellation through
+    // `ToolUseSessionLifecycle.interruptPreservingQueue()` (cancels the
+    // pending wait without dropping queued items) and by skipping the queue
+    // release in `runToolUseFlow`'s finally whenever the flow record itself
+    // is preserved.
+    const executionId = 'abc-cancel-followup' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-cancel-followup' as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const store = getExecutionStore(executionId);
+    const session = new SessionHandle();
+    let flowContext: ToolUseSetupContext | undefined;
+    const readSpy = vi.spyOn(store, 'read').mockImplementationOnce(async () => {
+      // Cancellation arrives while the recovery read is pending -- after
+      // setupSession already appended the drained follow-up below.
+      flowContext?.interrupt();
+      return null;
+    });
+
+    try {
+      const result = await runResumedFlow(
+        executionId,
+        streamId,
+        snapshot,
+        (context) => {
+          flowContext = context;
+          context.session.appendFollowUp({ text: 'queued during resume' });
+        },
+        session,
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(session.followUps.getAll(streamId)).toEqual([
+        'queued during resume',
+      ]);
+    } finally {
+      readSpy.mockRestore();
+      session.followUps.release(streamId);
     }
   });
 
