@@ -1,7 +1,35 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
+const roundFlowState = vi.hoisted(() => ({
+  shouldStop: false,
+  endTurn: false,
+  lastError: undefined as
+    { message: string; userRetryable: boolean } | undefined,
+}));
+
+vi.mock('@agent/core/flows/ToolUseRoundFlow', () => ({
+  createToolUseRoundFlow: () => ({
+    setServices() {},
+    async run(shared: {
+      shouldStop: boolean;
+      endTurn: boolean;
+      lastError?: { message: string; userRetryable: boolean };
+    }) {
+      shared.shouldStop = roundFlowState.shouldStop;
+      shared.endTurn = roundFlowState.endTurn;
+      shared.lastError = roundFlowState.lastError;
+    },
+  }),
+}));
+
+vi.mock('@agent/core/flows/CycleServices', () => ({
+  withModelClient: async (services: unknown) => services,
+}));
+
 // Local imports
+import { StreamLogStore } from '@transcript/StreamLogStore';
+import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { TraceEmitter } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -14,10 +42,13 @@ import type {
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import {
   MESSAGE_TYPES,
+  RUN_OUTCOME,
+  STREAM_LOG_ENTRY_TYPES,
   type Plan,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import { isObject } from '@utils/core';
 import {
   createRecordingHost,
   recordSessionEvents,
@@ -39,13 +70,14 @@ const plan: Plan = {
 
 function createPrepResult(
   workspaceState: AgentWorkspaceState,
+  shouldSkipCycle = true,
 ): CyclePrepResult {
   return {
-    shouldSkipCycle: true,
+    shouldSkipCycle,
     messages: [],
     runState: { totalRounds: 0 } as CyclePrepResult['runState'],
     workspaceState,
-    userChannels: {} as CyclePrepResult['userChannels'],
+    userChannels: { input: {}, transient: {} },
   };
 }
 
@@ -115,4 +147,88 @@ describe('tool-use progress events', () => {
       messageType: MESSAGE_TYPES.ERROR,
     });
   });
+});
+
+describe('tool-use round outcome persistence (#8023)', () => {
+  it.each([
+    {
+      name: 'completed',
+      shouldStop: false,
+      endTurn: false,
+      lastError: undefined,
+      expectedOutcome: 'completed',
+      expectedStatus: RUN_OUTCOME.COMPLETED,
+    },
+    {
+      name: 'failed',
+      shouldStop: true,
+      endTurn: false,
+      lastError: { message: 'round failed', userRetryable: false },
+      expectedOutcome: 'failed',
+      expectedStatus: RUN_OUTCOME.FAILED,
+    },
+    {
+      name: 'cancelled',
+      shouldStop: true,
+      endTurn: false,
+      lastError: undefined,
+      expectedOutcome: 'cancelled',
+      expectedStatus: RUN_OUTCOME.CANCELLED,
+    },
+  ])(
+    'persists a $name round with its canonical RunOutcome',
+    async ({
+      name,
+      shouldStop,
+      endTurn,
+      lastError,
+      expectedOutcome,
+      expectedStatus,
+    }) => {
+      roundFlowState.shouldStop = shouldStop;
+      roundFlowState.endTurn = endTurn;
+      roundFlowState.lastError = lastError;
+
+      const { host } = createRecordingHost();
+      const logger = new TraceEmitter();
+      const streamId = `stream:tool-use-round-${name}` as StreamTabId;
+      const store = new StreamLogStore();
+      store.ensureStream(streamId);
+      const recorder = attachTranscriptRecorder(logger, streamId, store);
+      const node = new ToolUseCycleNode().setServices({
+        streamId,
+        runtimeHost: host,
+        logger,
+        modelHandler: { getClient: vi.fn() },
+        config: { model: 'test-model', agent: 'test-agent' },
+        setting: { tools: [] },
+        resolvedTools: [],
+      } as unknown as ToolUseServices);
+
+      try {
+        const result = await withTestRunContext(host, streamId, () =>
+          node.exec(createPrepResult(AgentWorkspaceState.create(), false)),
+        );
+
+        expect(result.outcome).toBe(expectedOutcome);
+        const roundEndStatuses =
+          store
+            .get(streamId)
+            ?.getRange(0)
+            .flatMap((entry) => {
+              if (
+                entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
+                isObject(entry.data) &&
+                entry.data.kind === 'round'
+              ) {
+                return [entry.data.status];
+              }
+              return [];
+            }) ?? [];
+        expect(roundEndStatuses).toEqual([expectedStatus]);
+      } finally {
+        recorder.unsubscribe();
+      }
+    },
+  );
 });
