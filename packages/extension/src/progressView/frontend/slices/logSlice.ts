@@ -1,33 +1,54 @@
 import { create } from 'mutative';
 
+import { legacyEndGroupStatusForOutcome } from '@common/constants/streamStatus';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ContextStateDataSchema,
   MESSAGE_TYPES,
+  RunOutcomeSchema,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
   type ContextStateData,
   type LogMessageData,
   type StreamLogEntry,
   type StreamLogTextDelta,
+  type TaskGroupStatus,
 } from '@shared/schemas';
 
 import type { StreamLogs, StreamState } from '../store';
 import type { HandlerRegistry } from '../messageHandlerTypes';
 
-function isTaskGroupStatus(
-  value: unknown,
-): value is
-  | typeof STREAM_STATUS.RUNNING
-  | typeof STREAM_STATUS.ERROR
-  | typeof STREAM_STATUS.STOPPED
-  | typeof STREAM_STATUS.READY {
+function isTaskGroupStatus(value: unknown): value is TaskGroupStatus {
   return (
     value === STREAM_STATUS.RUNNING ||
     value === STREAM_STATUS.ERROR ||
     value === STREAM_STATUS.STOPPED ||
     value === STREAM_STATUS.READY
   );
+}
+
+/**
+ * A `GROUP_END` row's `data.status` now carries either the legacy 2-value
+ * `EndGroupStatus` (rows the standalone trace-viewer forwards raw from an
+ * exported trace file — that replay path stays legacy-capable permanently,
+ * see docs/proposals/session-scoped-runtime-architecture.md §8.3) or the
+ * canonical `RunOutcome` every live/persisted producer now writes (§8.2).
+ * Fold a canonical value down to the same legacy bucket the pre-cutover
+ * writer used so `TaskGroup.status` — not yet retyped to `StreamPhase`/
+ * `RunOutcome` (that reader migration is #7993 goal item 3) — keeps
+ * rendering exactly as it does today; only the transcript row itself gains
+ * the completed/cancelled bit this step. A value that is neither vocabulary
+ * (malformed data) falls back to the caller-supplied default, as before.
+ */
+function taskGroupEndStatus(
+  value: unknown,
+  fallback: TaskGroupStatus,
+): TaskGroupStatus {
+  if (isTaskGroupStatus(value)) return value;
+  const outcome = RunOutcomeSchema.safeParse(value);
+  return outcome.success
+    ? legacyEndGroupStatusForOutcome(outcome.data)
+    : fallback;
 }
 
 function isStageKind(
@@ -106,9 +127,7 @@ function updateTaskGroups(
     return false;
   }
 
-  const status = isTaskGroupStatus(payload.status)
-    ? payload.status
-    : STREAM_STATUS.STOPPED;
+  const status = taskGroupEndStatus(payload.status, STREAM_STATUS.STOPPED);
   const endTime =
     typeof payload.endTime === 'number' ? payload.endTime : undefined;
 

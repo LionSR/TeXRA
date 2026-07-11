@@ -23,12 +23,14 @@ import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 
 // Local imports - common errors
 import {
+  attachContextWindowError,
   attachProviderError,
   attachSdkErrorMetadata,
   attachStreamDiagnostics,
   buildErrorLogData,
   formatProviderHttpError,
   getSdkErrorMessage,
+  isContextWindowError,
   isUserAbort,
   normalizeProviderError,
   sdkErrorKindFromStatusCode,
@@ -510,6 +512,55 @@ describe('formatProviderHttpError', () => {
     const after = normalizeProviderError(error);
     expect(after.streamDiagnostics).toEqual(diagnostics);
     expect(after.statusCode).toBe(500);
+  });
+});
+
+describe('isContextWindowError', () => {
+  it('recognizes a TeXRA-internal throw via its typed marker, independent of wording', () => {
+    // ModelHandler.validateTokenLimits tags its own throw with
+    // attachContextWindowError() instead of relying on isContextWindowError
+    // string-matching the exact message it owns.
+    const err = new Error(
+      'Token count of message exceeds context window: 5 > 3',
+    );
+    attachContextWindowError(err);
+
+    expect(isContextWindowError(err)).toBe(true);
+  });
+
+  it('still recognizes the marker after the internal message wording changes', () => {
+    // The marker decouples classification from message text: even if
+    // ModelHandler reworks its wording entirely, the marker still matches.
+    const err = new Error('Input is too large for this model to process.');
+    attachContextWindowError(err);
+
+    expect(isContextWindowError(err)).toBe(true);
+  });
+
+  it('still matches third-party provider wording without a marker (fenced patterns)', () => {
+    expect(isContextWindowError(new Error('context length exceeded'))).toBe(
+      true,
+    );
+    expect(
+      isContextWindowError(new Error('Maximum context length is 128000.')),
+    ).toBe(true);
+  });
+
+  it('recognizes the marker through a cause chain (rethrown/wrapped error)', () => {
+    // Errors are frequently rewrapped as they propagate (e.g. `new Error(msg,
+    // { cause })`). The marker must still be found via `findInCauseChain`,
+    // not just on the outermost error.
+    const inner = new Error(
+      'Token count of message exceeds context window: 5 > 3',
+    );
+    attachContextWindowError(inner);
+    const outer = new Error('request failed', { cause: inner });
+
+    expect(isContextWindowError(outer)).toBe(true);
+  });
+
+  it('does not misclassify an unrelated error as a context-window violation', () => {
+    expect(isContextWindowError(new Error('rate limit exceeded'))).toBe(false);
   });
 });
 

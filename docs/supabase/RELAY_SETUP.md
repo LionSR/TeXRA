@@ -29,12 +29,12 @@ The API keys are stored as Supabase secrets and the relay forwards requests to t
 ```bash
 cd /path/to/TeXRA
 supabase login
-export SUPABASE_PROJECT_REF="${SUPABASE_PROJECT_REF:-jntubmcgbhwtcktubelv}"
+export SUPABASE_PROJECT_REF="<your-project-ref>"
 node scripts/deploy-relay.mjs
 ```
 
-The exported reference defaults to the production project. Set
-`SUPABASE_PROJECT_REF` before running the block to target another project.
+`scripts/deploy-relay.mjs` refuses to run without `SUPABASE_PROJECT_REF`, so
+the deploy always targets an explicitly chosen project.
 
 ### 2. Set API Key Secrets
 
