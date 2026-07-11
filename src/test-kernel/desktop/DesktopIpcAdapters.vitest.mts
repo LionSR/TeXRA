@@ -14,95 +14,27 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
-interface DesktopRenderer {
-  postToRenderer(message: unknown): void;
-}
-
-interface DesktopShellIpcModule {
-  createDesktopShellIpc(
-    renderer: DesktopRenderer,
-    options?: {
-      getCustomAgentDirectory?: () => Promise<string>;
-      openPath?: (filePath: string) => Promise<void>;
-      signIn?: () => Promise<void>;
-      isWorkspaceGitRepo?: () => boolean;
-      getRecentCommits?: () => Promise<{
-        commits: string[];
-        isGitRepo: boolean;
-      }>;
-      onAsyncError?: (error: unknown) => void;
-    },
-  ): {
-    handleMessage(
-      message: { command: string } & Record<string, unknown>,
-    ): boolean;
-  };
-}
-
-interface DesktopLogIpcModule {
-  createDesktopLogIpc(
-    renderer: DesktopRenderer,
-    options?: {
-      readLog?: () => { text: string; truncated: boolean; path?: string };
-      copyLog?: (text: string) => Promise<void>;
-      exportLog?: (text: string) => Promise<void>;
-      onAsyncError?: (error: unknown) => void;
-    },
-  ): {
-    handleMessage(message: { command: string }): boolean;
-  };
-}
-
-interface DesktopExecutionIpcModule {
-  createDesktopExecutionIpc(options?: {
-    executeAgent?: (message: unknown) => Promise<void>;
-    onAsyncError?: (error: unknown) => void;
-  }): {
-    handleMessage(
-      message: { command: string } & Record<string, unknown>,
-    ): boolean;
-  };
-}
-
-interface DesktopOnboardingIpcModule {
-  DESKTOP_ONBOARDING_DISMISSED_STATE_KEY: string;
-  createDesktopOnboardingIpc(
-    renderer: DesktopRenderer,
-    options?: {
-      state?: {
-        get<T>(key: string, defaultValue?: T): T;
-        update(key: string, value: unknown): PromiseLike<void>;
-      };
-      hasCredential?: () => boolean | Promise<boolean>;
-      readyGate?: Promise<void>;
-      selectSetupAgent?: () => Promise<void>;
-      kickoffSetup?: () => Promise<void>;
-      signInWithChatGpt?: () => Promise<void>;
-      openGettingStarted?: () => Promise<void>;
-      onAsyncError?: (error: unknown) => void;
-    },
-  ): {
-    handleMessage(
-      message: { command: string } & Record<string, unknown>,
-    ): boolean;
-    refreshOnboardingFunnel(): Promise<void>;
-  };
-}
-
-interface DesktopViewStateIpcModule {
-  createDesktopViewStateIpc(
-    renderer: DesktopRenderer,
-    options?: {
-      debugMode?: boolean;
-      getTheme?: () => 'dark' | 'light' | 'high-contrast';
-    },
-  ): {
-    handleMessage(
-      message: { command: string } & Record<string, unknown>,
-    ): boolean;
-    dispose(): void;
-  };
-}
+type DesktopShellIpcModule = typeof import('@desktop/main/desktopShellIpc');
+type DesktopLogIpcModule = typeof import('@desktop/main/desktopLogIpc');
+type DesktopExecutionIpcModule =
+  typeof import('@desktop/main/desktopExecutionIpc');
+type DesktopOnboardingMainModule =
+  typeof import('@desktop/main/desktopOnboardingIpc');
+type DesktopOnboardingMessagesModule =
+  typeof import('@desktop/desktopOnboardingMessages');
+type DesktopOnboardingIpcModule = DesktopOnboardingMainModule &
+  Pick<
+    DesktopOnboardingMessagesModule,
+    'DESKTOP_ONBOARDING_DISMISSED_STATE_KEY'
+  >;
+type DesktopViewStateIpcModule =
+  typeof import('@desktop/main/desktopViewStateIpc');
+type DesktopOnboardingOptions = NonNullable<
+  Parameters<DesktopOnboardingIpcModule['createDesktopOnboardingIpc']>[1]
+>;
+type OnboardingHarnessOptions = Omit<DesktopOnboardingOptions, 'state'> & {
+  seed?: Readonly<Record<string, unknown>>;
+};
 
 // The WEBVIEW_READY / run-setup handlers trigger refreshOnboardingFunnel as a
 // fire-and-forget task whose chain (readyGate → credential probe →
@@ -133,10 +65,10 @@ async function loadDesktopOnboardingIpc(): Promise<DesktopOnboardingIpcModule> {
   const [onboardingIpc, onboardingMessages] = await Promise.all([
     import(
       moduleFileUrl(desktopSourcePath('main', 'desktopOnboardingIpc.ts'))
-    ) as Promise<DesktopOnboardingIpcModule>,
+    ) as Promise<DesktopOnboardingMainModule>,
     import(
       moduleFileUrl(desktopSourcePath('desktopOnboardingMessages.ts'))
-    ) as Promise<{ DESKTOP_ONBOARDING_DISMISSED_STATE_KEY: string }>,
+    ) as Promise<DesktopOnboardingMessagesModule>,
   ]);
   return { ...onboardingIpc, ...onboardingMessages };
 }
@@ -176,13 +108,39 @@ function createMemoryState() {
   return { values, update, state };
 }
 
-// Shared setup for onboarding tests that only need a fresh memory-backed
-// state store and a postToRenderer spy (no seeded values, no update spy).
-async function createOnboardingHarness() {
-  const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-  const { state } = createMemoryState();
+// Own the repeated onboarding boundary setup so each test declares only its
+// initial state and host callbacks.
+async function createOnboardingHarness({
+  seed = {},
+  ...options
+}: OnboardingHarnessOptions = {}) {
+  const { DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, createDesktopOnboardingIpc } =
+    await loadDesktopOnboardingIpc();
+  const memory = createMemoryState();
+  for (const [key, value] of Object.entries(seed)) {
+    memory.values.set(key, value);
+  }
   const postToRenderer = vi.fn();
-  return { createDesktopOnboardingIpc, state, postToRenderer };
+  const onboarding = createDesktopOnboardingIpc(
+    { postToRenderer },
+    { ...options, state: memory.state },
+  );
+  return {
+    ...memory,
+    onboarding,
+    postToRenderer,
+    dismissedStateKey: DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
+  };
+}
+
+function expectLastFunnelState(
+  postToRenderer: ReturnType<typeof vi.fn>,
+  state: 'needs-credential' | 'setup' | 'done',
+): void {
+  expect(postToRenderer).toHaveBeenLastCalledWith({
+    command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+    state,
+  });
 }
 
 describe('desktop IPC adapters', () => {
@@ -453,16 +411,8 @@ describe('desktop IPC adapters', () => {
   });
 
   it('persists first-run walkthrough dismissal in the onboarding adapter', async () => {
-    const {
-      DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
-      createDesktopOnboardingIpc,
-    } = await loadDesktopOnboardingIpc();
-    const { update, state } = createMemoryState();
-    const postToRenderer = vi.fn();
-    const onboarding = createDesktopOnboardingIpc(
-      { postToRenderer },
-      { state },
-    );
+    const { dismissedStateKey, onboarding, postToRenderer, update } =
+      await createOnboardingHarness();
 
     expect(
       onboarding.handleMessage({
@@ -474,10 +424,7 @@ describe('desktop IPC adapters', () => {
     // drain microtasks before asserting the pushed state.
     await flushAsync();
     // Fresh install with no credential → State 0 (welcome card).
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: 'needs-credential',
-    });
+    expectLastFunnelState(postToRenderer, 'needs-credential');
     postToRenderer.mockClear();
 
     expect(
@@ -492,10 +439,7 @@ describe('desktop IPC adapters', () => {
       onboarding.handleMessage({ command: 'desktop:dismissOnboarding' }),
     ).toBe(true);
     await Promise.resolve();
-    expect(update).toHaveBeenCalledWith(
-      DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
-      true,
-    );
+    expect(update).toHaveBeenCalledWith(dismissedStateKey, true);
     expect(postToRenderer).toHaveBeenLastCalledWith({
       command: 'desktop:setOnboarding',
       shouldShow: false,
@@ -524,24 +468,15 @@ describe('desktop IPC adapters', () => {
       GlobalStateKey.ONBOARDING_DECLINED,
       true,
     );
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: 'done',
-    });
+    expectLastFunnelState(postToRenderer, 'done');
   });
 
   it('derives State 1 (setup) when hasCredential is true on fresh install', async () => {
-    const { createDesktopOnboardingIpc, state, postToRenderer } =
-      await createOnboardingHarness();
     const selectSetupAgent = vi.fn(async () => {});
-    const onboarding = createDesktopOnboardingIpc(
-      { postToRenderer },
-      {
-        state,
-        hasCredential: () => true,
-        selectSetupAgent,
-      },
-    );
+    const { onboarding, postToRenderer } = await createOnboardingHarness({
+      hasCredential: () => true,
+      selectSetupAgent,
+    });
 
     expect(
       onboarding.handleMessage({
@@ -551,26 +486,16 @@ describe('desktop IPC adapters', () => {
     ).toBe(false);
     await flushAsync();
     // Credential present, firstRunDone not set → State 1 (setup card).
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: 'setup',
-    });
+    expectLastFunnelState(postToRenderer, 'setup');
     // selectSetupAgent callback fires on State 1 entry.
     expect(selectSetupAgent).toHaveBeenCalled();
   });
 
   it('derives State 2 (done) for backfilled veterans with firstRunDone set', async () => {
-    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const { values, state } = createMemoryState();
-    values.set(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
-    const postToRenderer = vi.fn();
-    const onboarding = createDesktopOnboardingIpc(
-      { postToRenderer },
-      {
-        state,
-        hasCredential: () => true,
-      },
-    );
+    const { onboarding, postToRenderer } = await createOnboardingHarness({
+      seed: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
+      hasCredential: () => true,
+    });
 
     expect(
       onboarding.handleMessage({
@@ -580,23 +505,12 @@ describe('desktop IPC adapters', () => {
     ).toBe(false);
     await flushAsync();
     // Backfilled veteran → State 2 (done), no onboarding UI shown.
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: 'done',
-    });
+    expectLastFunnelState(postToRenderer, 'done');
   });
 
   it('handles ONBOARDING_SKIP_SETUP by setting firstRunDone and pushing done', async () => {
-    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const { update, state } = createMemoryState();
-    const postToRenderer = vi.fn();
-    const onboarding = createDesktopOnboardingIpc(
-      { postToRenderer },
-      {
-        state,
-        hasCredential: () => true,
-      },
-    );
+    const { onboarding, postToRenderer, update } =
+      await createOnboardingHarness({ hasCredential: () => true });
 
     // Enter State 1 first.
     onboarding.handleMessage({
@@ -604,10 +518,7 @@ describe('desktop IPC adapters', () => {
       view: 'main',
     });
     await flushAsync();
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: 'setup',
-    });
+    expectLastFunnelState(postToRenderer, 'setup');
     postToRenderer.mockClear();
     update.mockClear();
 
@@ -622,54 +533,26 @@ describe('desktop IPC adapters', () => {
       GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
       true,
     );
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: 'done',
-    });
+    expectLastFunnelState(postToRenderer, 'done');
   });
 
-  it('calls onboarding run-setup / sign-in-chatgpt callbacks', async () => {
-    const { createDesktopOnboardingIpc, state, postToRenderer } =
-      await createOnboardingHarness();
-    const runSetupCalled = vi.fn(async () => {});
+  it('calls the ChatGPT sign-in callback and refreshes the funnel', async () => {
     const signInCalled = vi.fn(async () => {});
-    const onboarding = createDesktopOnboardingIpc(
-      { postToRenderer },
-      {
-        state,
-        hasCredential: () => true,
-        selectSetupAgent: runSetupCalled, // reused for run_setup path
-        kickoffSetup: runSetupCalled,
-        signInWithChatGpt: signInCalled,
-      },
-    );
+    const { onboarding, postToRenderer } = await createOnboardingHarness({
+      signInWithChatGpt: signInCalled,
+    });
 
-    // ONBOARDING_RUN_SETUP: runSetup selects the setup agent (1) and kicks off
-    // the conversation through the guarded path (1), then the follow-up refresh
-    // re-enters State 1 and selects the setup agent again (1). The shared mock
-    // therefore lands at 3 once the chain fully drains; the guard keeps kickoff
-    // to exactly one call.
-    expect(
-      onboarding.handleMessage({
-        command: MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP,
-      }),
-    ).toBe(true);
-    await flushAsync();
-    expect(runSetupCalled).toHaveBeenCalledTimes(3);
-
-    // ONBOARDING_SIGN_IN_CHATGPT calls signInCallback + refresh.
     expect(
       onboarding.handleMessage({
         command: MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT,
       }),
     ).toBe(true);
     await flushAsync();
-    expect(signInCalled).toHaveBeenCalled();
+    expect(signInCalled).toHaveBeenCalledOnce();
+    expectLastFunnelState(postToRenderer, 'needs-credential');
   });
 
   it('runs the real kickoff path on ONBOARDING_RUN_SETUP and refreshes after', async () => {
-    const { createDesktopOnboardingIpc, state, postToRenderer } =
-      await createOnboardingHarness();
     const callOrder: string[] = [];
     const selectSetupAgent = vi.fn(async () => {
       callOrder.push('select');
@@ -677,15 +560,11 @@ describe('desktop IPC adapters', () => {
     const kickoffSetup = vi.fn(async () => {
       callOrder.push('kickoff');
     });
-    const onboarding = createDesktopOnboardingIpc(
-      { postToRenderer },
-      {
-        state,
-        hasCredential: () => true,
-        selectSetupAgent,
-        kickoffSetup,
-      },
-    );
+    const { onboarding, postToRenderer } = await createOnboardingHarness({
+      hasCredential: () => true,
+      selectSetupAgent,
+      kickoffSetup,
+    });
 
     expect(
       onboarding.handleMessage({
@@ -701,20 +580,14 @@ describe('desktop IPC adapters', () => {
     expect(kickoffSetup).toHaveBeenCalledOnce();
     expect(selectSetupAgent).toHaveBeenCalledTimes(2);
     expect(callOrder).toEqual(['select', 'kickoff', 'select']);
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: 'setup',
-    });
+    expectLastFunnelState(postToRenderer, 'setup');
   });
 
   it('opens the getting-started docs on ONBOARDING_OPEN_GETTING_STARTED', async () => {
-    const { createDesktopOnboardingIpc, state, postToRenderer } =
-      await createOnboardingHarness();
     const openGettingStarted = vi.fn(async () => {});
-    const onboarding = createDesktopOnboardingIpc(
-      { postToRenderer },
-      { state, openGettingStarted },
-    );
+    const { onboarding, postToRenderer } = await createOnboardingHarness({
+      openGettingStarted,
+    });
 
     expect(
       onboarding.handleMessage({
@@ -733,8 +606,6 @@ describe('desktop IPC adapters', () => {
   });
 
   it('serializes overlapping funnel refreshes to one consistent terminal state', async () => {
-    const { createDesktopOnboardingIpc, state, postToRenderer } =
-      await createOnboardingHarness();
     // A credential probe that resolves on the next macrotask, so two refreshes
     // started back-to-back genuinely overlap in flight. `selectSetupAgent`
     // would only fire when `previous !== 'setup'`; if the two refreshes
@@ -749,10 +620,10 @@ describe('desktop IPC adapters', () => {
         }),
     );
     const selectSetupAgent = vi.fn(async () => {});
-    const onboarding = createDesktopOnboardingIpc(
-      { postToRenderer },
-      { state, hasCredential, selectSetupAgent },
-    );
+    const { onboarding, postToRenderer } = await createOnboardingHarness({
+      hasCredential,
+      selectSetupAgent,
+    });
 
     // First refresh: no credential yet → needs-credential. Second refresh: a
     // credential lands → setup. Fire them overlapping (no await between).
@@ -778,9 +649,6 @@ describe('desktop IPC adapters', () => {
   });
 
   it('defers the first funnel derivation until the readyGate resolves', async () => {
-    const { createDesktopOnboardingIpc } = await loadDesktopOnboardingIpc();
-    const { values, state } = createMemoryState();
-    const postToRenderer = vi.fn();
     let openGate: () => void = () => {};
     const readyGate = new Promise<void>((resolve) => {
       openGate = resolve;
@@ -789,10 +657,12 @@ describe('desktop IPC adapters', () => {
     // Before the backfill settles this derives 'setup'; the gate must hold the
     // first derivation so the renderer never sees the transient State 1.
     const selectSetupAgent = vi.fn(async () => {});
-    const onboarding = createDesktopOnboardingIpc(
-      { postToRenderer },
-      { state, readyGate, hasCredential: () => true, selectSetupAgent },
-    );
+    const { onboarding, postToRenderer, values } =
+      await createOnboardingHarness({
+        readyGate,
+        hasCredential: () => true,
+        selectSetupAgent,
+      });
 
     expect(
       onboarding.handleMessage({
@@ -810,10 +680,7 @@ describe('desktop IPC adapters', () => {
     openGate();
     await flushAsync();
 
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: 'done',
-    });
+    expectLastFunnelState(postToRenderer, 'done');
     expect(selectSetupAgent).not.toHaveBeenCalled();
   });
 

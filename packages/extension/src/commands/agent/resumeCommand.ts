@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -64,7 +64,7 @@ export function registerResumeAgentCommand(
         if (!snapshot) {
           return { success: false };
         }
-        if (StreamStatusService.isActiveOrResuming(snapshot.streamId)) {
+        if (defaultSession().status.isActiveOrResuming(snapshot.streamId)) {
           return { success: false };
         }
 

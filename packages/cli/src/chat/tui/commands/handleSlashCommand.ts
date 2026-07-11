@@ -1,4 +1,3 @@
-import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { isCodexSubscriptionActive } from '@auth/codex';
@@ -217,7 +216,7 @@ export async function handleTuiSlashCommand(
       requestCliCompaction({
         streamId: activeStreamIdSignal.get(),
         requestManualCompaction: (streamId) =>
-          SharedExecutionRegistry.requestManualCompaction(streamId),
+          defaultSession().executions.requestManualCompaction(streamId),
         notifyFollowUpSent,
         appendTranscript: appendLocalAssistantTranscript,
       });

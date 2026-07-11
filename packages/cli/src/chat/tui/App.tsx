@@ -1,14 +1,12 @@
-// Ink TUI root: a single vertical column — conversation, optional subagent /
-// todos panels at the bottom, then status, approval modal, and input bar.
-// Tab / Shift-Tab cycles focus across subagent streams.
+// Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
 import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { isActiveStatus } from '@common/constants/streamStatus';
-import { type ActiveChildInfo, type StreamTabId } from '@shared/schemas';
-import { assertNever, clamp } from '@utils/core';
+import { type ActiveChildInfo } from '@shared/schemas';
+import { clamp } from '@utils/core';
 import {
   allocateMiddleRows,
   allocateSidePanelRows,
@@ -18,6 +16,19 @@ import {
   staticScrollbackTarget,
   staticTranscriptRowBudget,
 } from './appLayout';
+import {
+  appEscapeInterruptActive,
+  appFocusShortcutsActive,
+  approvalVisibleForActiveStream,
+  digitFromMetaShortcut,
+  ESC_META_CHORD_INTERRUPT_DELAY_MS,
+  foregroundEscapeAction,
+  foregroundMaxRowsForKind,
+  foregroundSurfaceKind,
+  shouldDeferEscapeInterruptForMetaChord,
+  triggerEscapeInterrupt,
+  type EscapeInterruptState,
+} from './appInteractionPolicy';
 import { clampModalWidth } from './ui/theme';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
@@ -37,11 +48,7 @@ import {
 import { SubagentList, subagentPanelRowCount } from './panes/SubagentList';
 import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './panes/TodosPlanPanel';
-import {
-  approvalPayloadStreamId,
-  currentApproval,
-  type PendingApproval,
-} from './state/approvalQueue';
+import { currentApproval } from './state/approvalQueue';
 import {
   isEscapeInput,
   metaChordInput,
@@ -50,7 +57,6 @@ import {
 import {
   numericFocusTargetForActiveStream,
   resolveChildControlDisplayTargets,
-  type ChildControlMode,
 } from './state/childControls';
 import {
   activeStreamId as activeStreamIdSignal,
@@ -81,227 +87,16 @@ import {
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
 
-// Subset of Ink's internal stdin event emitter (the same channel `useInput`
-// consumes) needed to re-inject a synthesized Enter. Not part of `useStdin`'s
-// public type, so we narrow to just what we touch.
+// Narrow subset of Ink's internal stdin emitter used to synthesize Enter.
 interface InputEventEmitterLike {
   emit(event: 'input', data: string): void;
   on(event: 'input', listener: (data: string) => void): void;
   off(event: 'input', listener: (data: string) => void): void;
 }
 
-const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
-const EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS = 6;
-const FORM_FOREGROUND_MAX_ROWS = 18;
-// Match form sizing for approval modals that already budget or scroll their
-// content. Natural-height approvals stay uncapped until they grow row budgets.
-const APPROVAL_FOREGROUND_MAX_ROWS = 18;
-// Cap the bottom subagent/todos panels so they never crowd out the
-// conversation or push the input bar off-screen.
+// Keep bottom panels from crowding out conversation or input chrome.
 const BOTTOM_PANEL_MAX_ROWS = 10;
 const EMPTY_SUBAGENT_ROWS: readonly ActiveChildInfo[] = [];
-// A bare Esc and the second key of an `Esc s` / `Esc p` chord are two
-// separate keystrokes on terminals without true Meta-key detection (macOS
-// Terminal.app). 125ms was too tight for a deliberate but unhurried chord
-// (issue #7496: a ~400ms pause between Esc and `s` fired the bare-Esc
-// interrupt and stopped a suspended WAITING subagent); widen to a
-// tmux-style chord window so a human-paced chord still resolves before we
-// commit to interrupting.
-const ESC_META_CHORD_INTERRUPT_DELAY_MS = 500;
-
-export function appFocusShortcutsActive({
-  foregroundOpen,
-  reverseSearchOpen,
-  slashPaletteOpen,
-}: {
-  readonly foregroundOpen: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
-}): boolean {
-  return !foregroundOpen && !slashPaletteOpen && !reverseSearchOpen;
-}
-
-export function appEscapeInterruptActive({
-  inputDisabled,
-  reverseSearchOpen,
-  runPending,
-  slashPaletteOpen,
-}: {
-  readonly inputDisabled: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly runPending: boolean;
-  readonly slashPaletteOpen: boolean;
-}): boolean {
-  return (
-    runPending && !inputDisabled && !slashPaletteOpen && !reverseSearchOpen
-  );
-}
-
-// The footer advertises `[Esc s]subagents` / `[Esc p]tasks` any time these
-// controls are available, regardless of which stream is currently focused
-// or whether it's still in-flight (e.g. WAITING). Bare Esc must therefore
-// give a chord a chance to resolve any time that binding is on screen —
-// gating on the focused child's own input-disabled state (as this used to)
-// left the WAITING-child case with no defer window at all, so a slow
-// `Esc s` fired an immediate interrupt instead. `Alt`-chord platforms are
-// unaffected: their Esc+key sequences arrive as one burst, resolved
-// synchronously by `metaChordInput`.
-export function shouldDeferEscapeInterruptForMetaChord({
-  shortcutModifierLabel,
-  subagentControlsAvailable,
-  taskControlsAvailable,
-}: {
-  readonly shortcutModifierLabel: string;
-  readonly subagentControlsAvailable: boolean;
-  readonly taskControlsAvailable: boolean;
-}): boolean {
-  return (
-    shortcutModifierLabel === 'Esc' &&
-    (subagentControlsAvailable || taskControlsAvailable)
-  );
-}
-
-export interface EscapeInterruptState {
-  readonly inputDisabled: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
-  readonly canInterruptActiveRun: () => boolean;
-  readonly onInterruptActive: () => void;
-}
-
-export function triggerEscapeInterrupt(state: EscapeInterruptState): boolean {
-  if (
-    !appEscapeInterruptActive({
-      inputDisabled: state.inputDisabled,
-      reverseSearchOpen: state.reverseSearchOpen,
-      runPending: state.canInterruptActiveRun(),
-      slashPaletteOpen: state.slashPaletteOpen,
-    })
-  ) {
-    return false;
-  }
-
-  state.onInterruptActive();
-  return true;
-}
-
-export function digitFromMetaShortcut(value: string): number | undefined {
-  return /^[1-9]$/.test(value) ? Number.parseInt(value, 10) : undefined;
-}
-
-export type ForegroundSurfaceKind =
-  'transcript' | 'childControls' | 'form' | 'approval';
-
-export function foregroundSurfaceKind({
-  activeFormOpen,
-  childControlMode,
-  pendingApproval,
-  transcriptViewerOpen,
-}: {
-  readonly activeFormOpen: boolean;
-  readonly childControlMode?: ChildControlMode;
-  readonly pendingApproval: boolean;
-  readonly transcriptViewerOpen: boolean;
-}): ForegroundSurfaceKind | undefined {
-  if (transcriptViewerOpen) return 'transcript';
-  if (childControlMode !== undefined) return 'childControls';
-  if (activeFormOpen) return 'form';
-  if (pendingApproval) return 'approval';
-  return undefined;
-}
-
-export function approvalVisibleForActiveStream({
-  activeStreamId,
-  pending,
-}: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly pending: PendingApproval | undefined;
-}): boolean {
-  if (!pending) return false;
-  const streamId = approvalPayloadStreamId(pending.payload);
-  return streamId === undefined || streamId === activeStreamId;
-}
-
-export function foregroundEscapeAction({
-  activeFormEscapeAction,
-  childControlEscapeAction,
-  foregroundKind,
-  pending,
-}: {
-  readonly activeFormEscapeAction?: string;
-  readonly childControlEscapeAction?: string;
-  readonly foregroundKind: ForegroundSurfaceKind | undefined;
-  readonly pending: PendingApproval | undefined;
-}): string | undefined {
-  switch (foregroundKind) {
-    case undefined:
-      return undefined;
-    case 'form':
-      return activeFormEscapeAction ?? 'close';
-    case 'childControls':
-      return childControlEscapeAction ?? 'close';
-    case 'transcript':
-      return 'close';
-    case 'approval': {
-      const kind = pending?.payload.kind;
-      return kind === 'externalInquiry' || kind === 'userQuestion'
-        ? 'skip'
-        : 'cancel';
-    }
-  }
-}
-
-export function childControlForegroundMaxRows({
-  hasItems,
-}: {
-  readonly hasItems: boolean;
-}): number {
-  return hasItems
-    ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
-    : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
-}
-
-export function approvalForegroundMaxRows(
-  pending: PendingApproval | undefined,
-): number | undefined {
-  if (pending === undefined) return undefined;
-
-  switch (pending.payload.kind) {
-    case 'bash':
-    case 'toolEdit':
-    case 'proposal':
-    case 'externalInquiry':
-      return APPROVAL_FOREGROUND_MAX_ROWS;
-    case 'plan':
-    case 'retry':
-    case 'userQuestion':
-      return undefined;
-    default:
-      return assertNever(pending.payload, 'Unhandled approval payload kind');
-  }
-}
-
-function foregroundMaxRowsForKind({
-  childControlHasItems,
-  kind,
-  pending,
-}: {
-  readonly childControlHasItems: boolean;
-  readonly kind: ForegroundSurfaceKind | undefined;
-  readonly pending: PendingApproval | undefined;
-}): number | undefined {
-  switch (kind) {
-    case 'childControls':
-      return childControlForegroundMaxRows({ hasItems: childControlHasItems });
-    case 'form':
-      return FORM_FOREGROUND_MAX_ROWS;
-    case 'approval':
-      return approvalForegroundMaxRows(pending);
-    case 'transcript':
-    case undefined:
-      return undefined;
-  }
-}
 
 export interface AppProps {
   readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;

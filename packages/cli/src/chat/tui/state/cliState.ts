@@ -244,8 +244,9 @@ function streamSliceWithStatus(
 /**
  * Apply a stream-status event once to the CLI state mirror.
  *
- * Runtime status still originates in StreamStatusService, but TUI renderers
- * should read only StreamSlice data. The child `StreamSlice` is the single
+ * Runtime status still originates in the default session's status machine
+ * (`defaultSession().status`), but TUI renderers should read only
+ * StreamSlice data. The child `StreamSlice` is the single
  * status owner for retained/active child rows too: `childExecutions.ts`'s
  * selectors read status from here directly, so no copy into another
  * collection is needed. A status for a stream tombstoned by `removeStream`

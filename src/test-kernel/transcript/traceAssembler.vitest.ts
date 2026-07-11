@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -10,12 +10,7 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import {
-  assembleTrace,
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
-  StreamLogStore,
-} from '@transcript';
+import { assembleTrace, StreamLogStore } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -71,23 +66,9 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 }
 
 describe('assembleTrace', () => {
-  let previousStreamLogStore: StreamLogStore;
-
   setupPlatform(buildStoragePlatform);
 
-  beforeEach(() => {
-    // A fresh store per test, not the process-wide singleton: StreamLogStore's
-    // underlying KVStore caches a "directory already ensured" flag for its own
-    // lifetime, which goes stale once a later test points the platform at a
-    // different temp storage root. Real hosts never switch storage roots
-    // mid-process, so this is a test-only concern — the sanctioned fix used
-    // throughout src/test-kernel is swapping in a fresh store per test.
-    previousStreamLogStore = getDefaultStreamLogStore();
-    setDefaultStreamLogStore(new StreamLogStore());
-  });
-
   afterEach(async () => {
-    setDefaultStreamLogStore(previousStreamLogStore);
     await Promise.all(
       tempDirs
         .splice(0)
@@ -106,7 +87,7 @@ describe('assembleTrace', () => {
     });
 
     const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
-    const store = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
     await store.load();
     store.append(streamId, {
       id: 'entry-1',
@@ -171,7 +152,7 @@ describe('assembleTrace', () => {
     const actualChildStreamId = `bash@tool#${executionId}`;
     expect(actualChildStreamId).not.toBe(derivedId);
 
-    const store = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
     await store.load();
     store.append(actualChildStreamId as ReturnType<typeof getStreamTabId>, {
       id: 'entry-1',
@@ -204,7 +185,7 @@ describe('assembleTrace', () => {
       executionConfig.model,
       { executionId },
     );
-    const store = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
     await store.load();
     store.append(streamId, {
       id: 'entry-1',

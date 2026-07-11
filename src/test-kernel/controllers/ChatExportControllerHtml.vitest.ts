@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
@@ -10,11 +10,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { ChatExportController } from '@controllers/settingsView/ChatExportController';
-import {
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
-  StreamLogStore,
-} from '@transcript';
+import { StreamLogStore } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -85,16 +81,9 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 }
 
 describe('ChatExportController.exportAsHtml', () => {
-  let previousStreamLogStore: StreamLogStore;
   const controller = new ChatExportController({ latexPreamble: '' });
 
-  beforeEach(() => {
-    previousStreamLogStore = getDefaultStreamLogStore();
-    setDefaultStreamLogStore(new StreamLogStore());
-  });
-
   afterEach(async () => {
-    setDefaultStreamLogStore(previousStreamLogStore);
     await Promise.all(
       tempDirs
         .splice(0)
@@ -138,7 +127,7 @@ describe('ChatExportController.exportAsHtml', () => {
     });
 
     const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
-    const store = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
     await store.load();
     store.append(streamId, {
       id: 'entry-1',
@@ -173,7 +162,7 @@ describe('ChatExportController.exportAsHtml', () => {
     await installStoragePlatform();
     const executionId = 'exec-missing-template' as ExecutionId;
     await getExecutionStore(executionId).writeConfig(config());
-    const store = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
     await store.load();
     const streamId = getStreamTabId('orchestrator', 'deepseekT', {
       executionId,

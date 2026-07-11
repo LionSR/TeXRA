@@ -4,11 +4,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
-  StreamLogStore,
-} from '@transcript';
+import type { StreamLogStore } from '@transcript';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { subscribeStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { streams, resetCliState } from '@cli/chat/tui/state/cliState';
 import {
@@ -38,23 +35,22 @@ function appendUserMessage(
 }
 
 describe('subscribeStreamLog batching and dispose', () => {
-  let previousStore: StreamLogStore;
-
-  beforeEach(() => {
-    previousStore = getDefaultStreamLogStore();
-    setDefaultStreamLogStore(new StreamLogStore());
+  beforeEach(async () => {
+    // No separate default-store export to swap in anymore (#7694) —
+    // `subscribeStreamLog()` reads the default session's own `transcripts`
+    // store, so clear it in place instead.
+    await defaultSession().transcripts.clear();
     resetCliState();
     vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    setDefaultStreamLogStore(previousStore);
   });
 
   it('coalesces multiple store changes within the batch window into a single sync pass', () => {
     const dispose = subscribeStreamLog();
-    const store = getDefaultStreamLogStore();
+    const store = defaultSession().transcripts;
 
     appendUserMessage(store, streamA, 'a-1', 'hello');
     // A second change arriving inside the window must NOT restart the timer:
@@ -82,7 +78,7 @@ describe('subscribeStreamLog batching and dispose', () => {
 
   it('dispose cancels a pending batch instead of flushing it', () => {
     const dispose = subscribeStreamLog();
-    const store = getDefaultStreamLogStore();
+    const store = defaultSession().transcripts;
 
     appendUserMessage(store, streamA, 'a-1', 'hello');
     // Dispose before the batch window elapses: the pending sync must be
@@ -98,7 +94,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     firstDispose();
 
     const secondDispose = subscribeStreamLog();
-    const store = getDefaultStreamLogStore();
+    const store = defaultSession().transcripts;
     appendUserMessage(store, streamA, 'a-1', 'hello again');
     vi.advanceTimersByTime(16);
 

@@ -13,10 +13,7 @@ import { attachChannelSubscriber } from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 
 import { attachTranscriptRecorder } from './TexraTranscriptRecorder';
-import {
-  getDefaultStreamLogStore,
-  type StreamLogStore,
-} from './StreamLogStore';
+import type { StreamLogStore } from './StreamLogStore';
 
 export interface RunTrace {
   readonly trace: AgentTrace;
@@ -27,11 +24,14 @@ export interface RunTrace {
  * Produce a trace wired with the standard agent-run subscribers: per-channel
  * channel output AND the transcript recorder.
  *
- * `store` defaults to the global stream-log store — tests can override.
+ * `store` is caller-supplied — production launch paths pass the owning
+ * session's `transcripts` store (`session.transcripts`); there is no
+ * process-wide default to fall back to (`@transcript` never imports
+ * `@agent/runtime`, so it cannot reach `defaultSession()` itself).
  */
 export function createRunTrace(
   streamId: StreamTabId,
-  store: StreamLogStore = getDefaultStreamLogStore(),
+  store: StreamLogStore,
   flushers: Set<() => void> = activeFlushers,
 ): RunTrace {
   const trace = new TraceEmitter();

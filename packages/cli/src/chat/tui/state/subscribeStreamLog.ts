@@ -5,7 +5,8 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
-import { flushPendingRunTraces, getDefaultStreamLogStore } from '@transcript';
+import { flushPendingRunTraces } from '@transcript';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import {
   MESSAGE_TYPES,
@@ -338,7 +339,7 @@ function sortTranscriptCandidatesIfNeeded(
 }
 
 export function subscribeStreamLog(): () => void {
-  const store = getDefaultStreamLogStore();
+  const store = defaultSession().transcripts;
   const pendingStreams = new Set<StreamTabId>();
 
   // One trailing timer shared by every stream: during a multi-subagent burst
@@ -377,7 +378,7 @@ export function syncStreamLog(streamId: StreamTabId): void {
   // an in-memory buffer and never reaches the transcript. Force any
   // pending flushers to materialize before we read.
   flushPendingRunTraces();
-  const store = getDefaultStreamLogStore();
+  const store = defaultSession().transcripts;
   const log = store.get(streamId);
   if (!log) return;
 

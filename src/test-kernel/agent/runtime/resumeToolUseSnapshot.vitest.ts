@@ -13,8 +13,6 @@ import {
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { recordSessionEvents, sessionFactPayloads } from '../progressTestUtils';
@@ -60,12 +58,12 @@ describe('resumeToolUseSnapshot', () => {
   afterEach(() => {
     recordedSession?.detach();
     recordedSession = undefined;
-    ToolUseFollowUpQueue.release(STREAM);
-    clearStreamStatusForTest(StreamStatusService, STREAM);
+    defaultSession().followUps.release(STREAM);
+    clearStreamStatusForTest(defaultSession().status, STREAM);
   });
 
   it('drains queued follow-ups, replays them, and notifies the UI', async () => {
-    ToolUseFollowUpQueue.enqueue(
+    defaultSession().followUps.enqueue(
       STREAM,
       { text: 'queued one' },
       { force: true },
@@ -90,7 +88,7 @@ describe('resumeToolUseSnapshot', () => {
   });
 
   it('seeds an explicit follow-up ahead of the queued items', async () => {
-    ToolUseFollowUpQueue.enqueue(
+    defaultSession().followUps.enqueue(
       STREAM,
       { text: 'queued one' },
       { force: true },
@@ -142,7 +140,7 @@ describe('resumeToolUseSnapshot', () => {
     const failure = new Error('resume blew up');
     resumeToolUseFromSnapshotMock.mockRejectedValue(failure);
     const reportFailure = vi.fn();
-    ToolUseFollowUpQueue.enqueue(
+    defaultSession().followUps.enqueue(
       STREAM,
       { text: 'queued one' },
       { force: true },
@@ -152,8 +150,8 @@ describe('resumeToolUseSnapshot', () => {
       resumeToolUseSnapshot(snapshot(), { runtimeHost, reportFailure }),
     ).resolves.toBe(false);
 
-    expect(ToolUseFollowUpQueue.getAll(STREAM)).toEqual(['queued one']);
-    expect(StreamStatusService.get(STREAM)).toBe(STREAM_STATUS.WAITING);
+    expect(defaultSession().followUps.getAll(STREAM)).toEqual(['queued one']);
+    expect(defaultSession().status.get(STREAM)).toBe(STREAM_STATUS.WAITING);
     expect(reportFailure).toHaveBeenCalledWith(failure);
     // The re-enqueue replays a queue update beyond the initial drain notification.
     expect(
@@ -179,7 +177,7 @@ describe('resumeToolUseSnapshot', () => {
       ).resolves.toBe(false);
 
       expect(session.status.get(STREAM)).toBe(STREAM_STATUS.WAITING);
-      expect(StreamStatusService.get(STREAM)).toBeUndefined();
+      expect(defaultSession().status.get(STREAM)).toBeUndefined();
     } finally {
       session.status.clearStream(STREAM);
       session.dispose();
@@ -207,7 +205,7 @@ describe('resumeToolUseSnapshot', () => {
       ).resolves.toBe(false);
 
       expect(session.followUps.getAll(STREAM)).toEqual(['session queued']);
-      expect(ToolUseFollowUpQueue.getAll(STREAM)).toEqual([]);
+      expect(defaultSession().followUps.getAll(STREAM)).toEqual([]);
     } finally {
       session.followUps.release(STREAM);
       session.status.clearStream(STREAM);
@@ -218,7 +216,7 @@ describe('resumeToolUseSnapshot', () => {
   it('leaves the status alone when the started run has taken it over', async () => {
     resumeToolUseFromSnapshotMock.mockImplementation(async () => {
       seedStreamStatusForTest(
-        StreamStatusService,
+        defaultSession().status,
         STREAM,
         STREAM_STATUS.RUNNING,
       );
@@ -227,6 +225,6 @@ describe('resumeToolUseSnapshot', () => {
     await expect(
       resumeToolUseSnapshot(snapshot(), { runtimeHost }),
     ).resolves.toBe(true);
-    expect(StreamStatusService.get(STREAM)).toBe(STREAM_STATUS.RUNNING);
+    expect(defaultSession().status.get(STREAM)).toBe(STREAM_STATUS.RUNNING);
   });
 });

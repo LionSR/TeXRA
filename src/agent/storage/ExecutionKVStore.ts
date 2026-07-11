@@ -41,7 +41,10 @@ import {
 // Key constants (implementation detail — not exported)
 // ============================================================================
 
-const KEYS = {
+/** Prefix for a per-child execution record's KV key. */
+const CHILD_KEY_PREFIX = 'child-';
+
+const SINGLE_VALUE_KEYS = {
   META: 'meta',
   CONFIG: 'config',
   REPORT: 'report',
@@ -49,8 +52,27 @@ const KEYS = {
   CONVERSATION: 'conversation',
   WORKSPACE_FILES: 'workspace-files',
   RESULT_META: 'result-meta',
-  child: (id: string) => `child-${id}`,
 } as const;
+
+const KEYS = {
+  ...SINGLE_VALUE_KEYS,
+  child: (id: string) => `${CHILD_KEY_PREFIX}${id}`,
+} as const;
+
+/** Single-value keys, derived from SINGLE_VALUE_KEYS so the reserved-name check below never drifts. */
+const RESERVED_KEY_NAMES = new Set<string>(Object.values(SINGLE_VALUE_KEYS));
+
+/**
+ * True when `key` is one of ExecutionKVStore's reserved keys — a single-value
+ * key (meta, config, report, todos, conversation, workspace-files,
+ * result-meta) or a per-child record key (`child-{id}`). Exported so callers
+ * that walk an execution's storage directory (e.g.
+ * `src/tools/executions/executionKvFiles.ts`) can recognize internal KV
+ * entries without re-deriving this vocabulary themselves.
+ */
+export function isReservedKvKeyName(key: string): boolean {
+  return RESERVED_KEY_NAMES.has(key) || key.startsWith(CHILD_KEY_PREFIX);
+}
 
 const CHANNEL = 'ExecutionKVStore';
 export const EXECUTION_META_SCHEMA_VERSION = 1;
@@ -274,13 +296,13 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
   /** Read children: per-child KV keys with schema validation. */
   async readChildren(): Promise<ChildRecord[]> {
-    const childKeys = await this.listKeys('child-');
+    const childKeys = await this.listKeys(CHILD_KEY_PREFIX);
 
     if (childKeys.length === 0) return [];
 
     const entries = await Promise.all(
       childKeys.map(async (key) => {
-        const id = key.replace('child-', '') as ExecutionId;
+        const id = key.replace(CHILD_KEY_PREFIX, '') as ExecutionId;
         const raw = await this.read(key);
         const result = ChildRecordDataSchema.safeParse(raw);
         return result.success ? { id, ...result.data } : null;

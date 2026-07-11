@@ -305,16 +305,15 @@ describe('CLI session status formatter', () => {
   });
 
   it('reads queued follow-ups from the queue manager for status details', () => {
-    const queue = ToolUseFollowUpQueue.acquire(STREAM_ID);
-    ToolUseFollowUpQueue.drain(STREAM_ID);
+    const queueManager = new ToolUseFollowUpQueue();
+    const queue = queueManager.acquire(STREAM_ID);
+    queueManager.drain(STREAM_ID);
     try {
       queue.enqueue({ text: 'Fresh queue message' });
 
-      expect(ToolUseFollowUpQueue.getAll(STREAM_ID)).toEqual([
-        'Fresh queue message',
-      ]);
+      expect(queueManager.getAll(STREAM_ID)).toEqual(['Fresh queue message']);
     } finally {
-      ToolUseFollowUpQueue.drain(STREAM_ID);
+      queueManager.drain(STREAM_ID);
     }
   });
 });
