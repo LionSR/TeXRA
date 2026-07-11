@@ -14,12 +14,14 @@ import {
 } from '@cli/chat/tui/forms/_shared/selectWindow';
 import {
   nextSelectHighlightIndex,
-  selectInlineOverflowText,
   selectInitialHighlightIndex,
   selectItemRenderKey,
-  selectVisibleInlineOverflowText,
   visibleSelectRange,
 } from '@cli/chat/tui/ui/Select';
+import {
+  selectInlineOverflowText,
+  selectVisibleInlineOverflowText,
+} from '@cli/chat/tui/render/overflowText';
 
 describe('CLI ModelListForm empty state', () => {
   it('uses a truthful description for empty and non-empty model lists', () => {

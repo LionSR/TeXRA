@@ -27,6 +27,7 @@ import {
   nextWrappingHighlightIndex,
   SELECT_LABEL_MAX_COLS,
 } from '../ui/Select';
+import { compactPickerOverflowText } from '../render/overflowText';
 import {
   activeSubagentsFor,
   type ChildStreamEntries,
@@ -160,22 +161,6 @@ interface PickerListLayout {
   readonly hiddenBefore: number;
   readonly start: number;
   readonly visibleCount: number;
-}
-
-export function compactPickerOverflowText({
-  itemCount,
-  selectedIndex,
-}: {
-  readonly itemCount: number;
-  readonly selectedIndex: number;
-}): string | undefined {
-  if (itemCount <= 1) return undefined;
-
-  const earlier = Math.max(0, selectedIndex);
-  const more = Math.max(0, itemCount - selectedIndex - 1);
-  if (earlier > 0 && more > 0) return `+${earlier} earlier, +${more} more`;
-  if (earlier > 0) return `+${earlier} earlier`;
-  return `+${more} more`;
 }
 
 export function computePickerListLayout({
