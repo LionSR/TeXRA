@@ -128,7 +128,7 @@ export class UsagePanel extends LitElement {
         position: relative;
         width: 80px;
         height: 6px;
-        background: var(--wa-color-surface-border, rgba(128, 128, 128, 0.3));
+        background: var(--wa-color-surface-border);
         border-radius: var(--border-radius);
         overflow: hidden;
       }
