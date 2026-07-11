@@ -30,33 +30,23 @@ function fillRegistry(
   return full as ProgressViewInboundHandlerRegistry;
 }
 
+interface DesktopProgressIpcBridgeStub {
+  completeWebviewReady(
+    onInquiryHydrationError?: (error: unknown) => void,
+  ): Promise<void>;
+  progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
+}
+
 interface DesktopProgressIpcModule {
   createDesktopProgressIpc(options: {
-    progress?: {
-      syncFullView(): void;
-      hydrateProgressViewInquiries(): Promise<void>;
-      replayPendingPrompts(): void;
-      progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
-    };
-    getProgress?: () =>
-      | {
-          syncFullView(): void;
-          hydrateProgressViewInquiries(): Promise<void>;
-          replayPendingPrompts(): void;
-          progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
-        }
-      | undefined;
+    progress?: DesktopProgressIpcBridgeStub;
+    getProgress?: () => DesktopProgressIpcBridgeStub | undefined;
     onUnsupportedCommand?: (
       message: { command: string },
       reason?: string,
     ) => void;
     onAsyncError?: (error: unknown) => void;
-    ensureProgress?: () => Promise<{
-      syncFullView(): void;
-      hydrateProgressViewInquiries(): Promise<void>;
-      replayPendingPrompts(): void;
-      progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
-    }>;
+    ensureProgress?: () => Promise<DesktopProgressIpcBridgeStub>;
   }): {
     handleMessage(
       message: { command: string } & Record<string, unknown>,
@@ -75,9 +65,7 @@ function createProgress(
   progressViewInboundHandlers: Partial<ProgressViewInboundHandlerRegistry> = {},
 ) {
   return {
-    syncFullView: vi.fn(),
-    hydrateProgressViewInquiries: vi.fn(async () => undefined),
-    replayPendingPrompts: vi.fn(),
+    completeWebviewReady: vi.fn(async () => undefined),
     progressViewInboundHandlers: fillRegistry(progressViewInboundHandlers),
   };
 }
@@ -100,9 +88,7 @@ describe('desktop Progress IPC', () => {
     ).toBe(false);
     await Promise.resolve();
 
-    expect(progress.syncFullView).toHaveBeenCalledTimes(1);
-    expect(progress.hydrateProgressViewInquiries).toHaveBeenCalledTimes(1);
-    expect(progress.replayPendingPrompts).toHaveBeenCalledTimes(1);
+    expect(progress.completeWebviewReady).toHaveBeenCalledTimes(1);
   });
 
   it('ignores main-view readiness broadcasts for Progress prompt replay', async () => {
@@ -116,8 +102,7 @@ describe('desktop Progress IPC', () => {
       }),
     ).toBe(false);
 
-    expect(progress.syncFullView).not.toHaveBeenCalled();
-    expect(progress.replayPendingPrompts).not.toHaveBeenCalled();
+    expect(progress.completeWebviewReady).not.toHaveBeenCalled();
   });
 
   it('replays pending prompts after lazy Progress readiness load', async () => {
@@ -134,9 +119,7 @@ describe('desktop Progress IPC', () => {
     ).toBe(false);
     await Promise.resolve();
 
-    expect(progress.syncFullView).toHaveBeenCalledTimes(1);
-    expect(progress.hydrateProgressViewInquiries).toHaveBeenCalledTimes(1);
-    expect(progress.replayPendingPrompts).toHaveBeenCalledTimes(1);
+    expect(progress.completeWebviewReady).toHaveBeenCalledTimes(1);
   });
 
   it('dispatches recognized Progress commands through the bridge registry', async () => {
@@ -209,6 +192,26 @@ describe('desktop Progress IPC', () => {
         stream: 'run-1',
       }),
     ).toBe(true);
+    await Promise.resolve();
+    expect(onAsyncError).toHaveBeenCalledWith(error);
+  });
+
+  it('reports a failed webviewReady sequence through the desktop error path', async () => {
+    const error = new Error('restart repair failed');
+    const onAsyncError = vi.fn();
+    const progress = {
+      completeWebviewReady: vi.fn(() => Promise.reject(error)),
+      progressViewInboundHandlers: fillRegistry(),
+    };
+    const ipc = createDesktopProgressIpc({ progress, onAsyncError });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'progress',
+      }),
+    ).toBe(false);
+    await Promise.resolve();
     await Promise.resolve();
     expect(onAsyncError).toHaveBeenCalledWith(error);
   });

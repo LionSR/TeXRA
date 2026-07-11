@@ -936,6 +936,43 @@ describe('CLI run progress renderer', () => {
     );
   });
 
+  it('freezes on a failed terminal stream stop, same as completed/cancelled', () => {
+    const output = outputBuffer();
+    const renderer = createRunProgressRenderer(
+      context({ colorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: output.write,
+        minIntervalMs: 0,
+        nowMs: () => 0,
+      },
+    );
+
+    handleRunConfig(
+      renderer,
+      workflowTaskState({
+        streamId: 'root-stream',
+        agent: 'orchestrator',
+        inputFiles: [],
+      }),
+    );
+    handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.FAILED);
+    // Post-terminal activity must not un-freeze the renderer (STREAM_PHASE.FAILED
+    // must be recognized as a terminal outcome phase, same as COMPLETED/CANCELLED).
+    handleConversationProgress(renderer, 'root-stream', { toolCallCount: 9 });
+    handleActiveProcesses(renderer, 'root-stream', [
+      {
+        kind: 'process',
+        executionId: 'tool-2',
+        agentName: 'late-tool',
+        toolName: 'LateTool',
+        status: 'running',
+      },
+    ]);
+
+    expect(output.text).toBe('orchestrator · 0s\norchestrator · error · 0s\n');
+  });
+
   it('uses a separate render flag from platform log suppression', () => {
     expect(
       createRunProgressRenderer(
