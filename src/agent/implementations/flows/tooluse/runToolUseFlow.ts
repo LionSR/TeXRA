@@ -371,6 +371,10 @@ export async function runToolUseFlow<C = unknown>(
 
   try {
     teardownSetup = onSetup?.(flowContext) ?? undefined;
+    // A host can hand off a cancellation synchronously during setup. Observe
+    // it before touching the persisted resume record.
+    if (input.checkInterruption()) return { outcome };
+
     let flowRecord: FlowRecord | null = null;
     try {
       flowRecord = (await kv.read<FlowRecord>(flowKey(executionId))) ?? null;
@@ -382,6 +386,10 @@ export async function runToolUseFlow<C = unknown>(
         data: { executionId, error: toErrorMessage(error) },
       });
     }
+    // Cancellation can also arrive while the recovery read is pending. Do not
+    // start a migration or repair write after that handoff.
+    if (input.checkInterruption()) return { outcome };
+
     if (flowRecord?.shared) {
       logger.debug('Resuming tool-use flow from persistence');
       const migrationResult = migrateSharedState(flowRecord.shared);
