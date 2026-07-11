@@ -620,7 +620,10 @@ describe('createChatSessionController', () => {
       'stream-1',
       { version: 2 },
       expect.any(Object),
-      expect.objectContaining({ allowWaitingResult: true }),
+      expect.objectContaining({
+        allowWaitingResult: true,
+        isCancellationRequested: expect.any(Function),
+      }),
     );
     expect(mocks.projectStreamTranscript).toHaveBeenCalledWith('stream-1', {
       finalize: true,

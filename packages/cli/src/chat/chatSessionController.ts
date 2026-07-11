@@ -519,6 +519,7 @@ export function createChatSessionController(
                 approvalPromptsUnavailable: approvalsUnavailable,
                 runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
                 allowWaitingResult: true,
+                isCancellationRequested: () => session.stopRequested,
                 onError: reportRunFailure,
               }),
             executeWorkflow: async () => {
