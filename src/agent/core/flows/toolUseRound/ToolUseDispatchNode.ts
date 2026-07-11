@@ -254,21 +254,36 @@ export class ToolUseDispatchNode<C> extends Node<
         status: 'error',
         error: UNSAFE_DUPLICATE_CALL_ERROR,
       };
-      results[index] = {
+      results[index] = this.makeSyntheticResult(
         call,
-        result: duplicateResult,
-        parsedInput: call.input,
-        extracted: {
-          sanitizedResult: duplicateResult,
-          attachments: [],
-        },
-        editedFiles: [],
-        logRef: {
-          logId: undefined,
-          groupId: this.services.logger.activeStageId(),
-        },
-      };
+        duplicateResult,
+        call.input,
+      );
     }
+  }
+
+  /**
+   * Build a synthetic ToolExecutionResult for a call that never actually
+   * executed a tool (duplicate fan-out, rejected duplicate, or cancelled
+   * call) — always empty edits/attachments, and a fresh logRef.
+   */
+  private makeSyntheticResult(
+    call: SdkToolCall,
+    result: ToolResult,
+    parsedInput: unknown,
+    sanitizedResult: ToolResult = result,
+  ): ToolExecutionResult {
+    return {
+      call,
+      result,
+      parsedInput,
+      extracted: { sanitizedResult, attachments: [] },
+      editedFiles: [],
+      logRef: {
+        logId: undefined,
+        groupId: this.services.logger.activeStageId(),
+      },
+    };
   }
 
   /** A tool declares itself side-effect-free via ITool.parallelSafe. */
@@ -322,22 +337,14 @@ export class ToolUseDispatchNode<C> extends Node<
         lineChanges: _lineChanges,
         ...sharedResult
       } = primary.result;
-      results[index] = {
+      // The primary already injected any attachments into the follow-up;
+      // repeating them per duplicate would duplicate binary context.
+      results[index] = this.makeSyntheticResult(
         call,
-        result: sharedResult as ToolResult,
-        parsedInput: primary.parsedInput,
-        extracted: {
-          sanitizedResult: primary.extracted.sanitizedResult,
-          // The primary already injected any attachments into the follow-up;
-          // repeating them per duplicate would duplicate binary context.
-          attachments: [],
-        },
-        editedFiles: [],
-        logRef: {
-          logId: undefined,
-          groupId: this.services.logger.activeStageId(),
-        },
-      };
+        sharedResult as ToolResult,
+        primary.parsedInput,
+        primary.extracted.sanitizedResult,
+      );
     }
   }
 
@@ -557,20 +564,7 @@ export class ToolUseDispatchNode<C> extends Node<
       status: 'error',
       error: CANCELLED_CALL_ERROR,
     };
-    return {
-      call,
-      result: cancelledResult,
-      parsedInput: call.input,
-      extracted: {
-        sanitizedResult: cancelledResult,
-        attachments: [],
-      },
-      editedFiles: [],
-      logRef: {
-        logId: undefined,
-        groupId: this.services.logger.activeStageId(),
-      },
-    };
+    return this.makeSyntheticResult(call, cancelledResult, call.input);
   }
 
   private async logAndProcessMediaFiles(

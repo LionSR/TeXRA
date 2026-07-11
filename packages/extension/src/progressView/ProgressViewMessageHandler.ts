@@ -136,6 +136,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return this.streamLifecycleController.deleteStream(streamId);
   }
 
+  /** Execute a VS Code command, routing failures through this view's error channel. */
+  private runViewCommand<T = void>(
+    command: string,
+    args: unknown[] = [],
+  ): Promise<T | undefined> {
+    return safeExecuteCommand<T>(command, args, this.viewName);
+  }
+
   /**
    * Create the typed handler registry.
    * Each handler receives typed data - no casts or validation needed.
@@ -146,7 +154,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     };
     const runCommand = (command: string, ...args: unknown[]) => {
       return async () => {
-        await safeExecuteCommand(command, args, this.viewName);
+        await this.runViewCommand(command, args);
       };
     };
 
@@ -168,11 +176,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       // Shared progress command groups
       ...this.progressHost.commandHandlers,
       [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: async (data) => {
-        await safeExecuteCommand(
-          'texra.compactResponse',
-          [data.stream],
-          this.viewName,
-        );
+        await this.runViewCommand('texra.compactResponse', [data.stream]);
       },
 
       // Actions
@@ -194,11 +198,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           data.stream,
         );
         if (taskState) {
-          await safeExecuteCommand(
-            'texra.restoreState',
-            [taskState],
-            this.viewName,
-          );
+          await this.runViewCommand('texra.restoreState', [taskState]);
         }
       },
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>
@@ -281,28 +281,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof COMMON_COMMANDS.SWITCH_VIEW>,
   ): Promise<void> {
     if (data.view === 'dashboard') {
-      await safeExecuteCommand('texra.showDashboard', [], this.viewName);
+      await this.runViewCommand('texra.showDashboard');
       return;
     }
     if (data.view === 'main') {
-      await safeExecuteCommand('texra.showMainView', [], this.viewName);
+      await this.runViewCommand('texra.showMainView');
       return;
     }
     if (data.openInEditor) {
       await this.provider.popOutToEditor();
       return;
     }
-    await safeExecuteCommand('texra.showProgressView', [], this.viewName);
+    await this.runViewCommand('texra.showProgressView');
   }
 
   private async runGettingStartedAction(
     action: GettingStartedAction,
   ): Promise<void> {
-    await safeExecuteCommand(
-      GETTING_STARTED_COMMANDS[action],
-      [],
-      this.viewName,
-    );
+    await this.runViewCommand(GETTING_STARTED_COMMANDS[action]);
     if (action === 'runSetup') {
       await this.provider.refreshOnboardingFunnel();
     }
@@ -351,18 +347,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           await this.executeValidated(request);
         },
         runDiff: async (request) => {
-          await safeExecuteCommand(
-            'texra.runLatexdiff',
-            [request],
-            this.viewName,
-          );
+          await this.runViewCommand('texra.runLatexdiff', [request]);
         },
         runFileOperation: async (operation, request) => {
-          await safeExecuteCommand(
-            `texra.${operation}`,
-            [request],
-            this.viewName,
-          );
+          await this.runViewCommand(`texra.${operation}`, [request]);
         },
       },
       workflowFileActions: {
@@ -385,56 +373,45 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
         host: {
           compareFiles: async (baseFile, editedFile) => {
-            await safeExecuteCommand(
-              'texra.compare',
-              [
-                pathToLocation(''), // inputFile unused
-                pathToLocation(baseFile),
-                pathToLocation(editedFile),
-              ],
-              this.viewName,
-            );
+            await this.runViewCommand('texra.compare', [
+              pathToLocation(''), // inputFile unused
+              pathToLocation(baseFile),
+              pathToLocation(editedFile),
+            ]);
           },
           acceptEditedFile: async (baseFile, editedFile, copyMeta) => {
-            return safeExecuteCommand<boolean>(
-              'texra.acceptEdited',
-              [
-                pathToLocation(''), // inputFile unused
-                pathToLocation(baseFile),
-                pathToLocation(editedFile),
-                copyMeta,
-              ],
-              this.viewName,
-            );
+            return this.runViewCommand<boolean>('texra.acceptEdited', [
+              pathToLocation(''), // inputFile unused
+              pathToLocation(baseFile),
+              pathToLocation(editedFile),
+              copyMeta,
+            ]);
           },
           mergeFile: async (baseFile, editedFile) => {
-            await safeExecuteCommand(
-              'texra.merge',
-              [undefined, baseFile, editedFile],
-              this.viewName,
-            );
+            await this.runViewCommand('texra.merge', [
+              undefined,
+              baseFile,
+              editedFile,
+            ]);
           },
           latexdiffFile: async (baseFile, editedFile) => {
-            await safeExecuteCommand(
-              'texra.latexdiff',
-              [undefined, baseFile, editedFile],
-              this.viewName,
-            );
+            await this.runViewCommand('texra.latexdiff', [
+              undefined,
+              baseFile,
+              editedFile,
+            ]);
           },
           openDirectory: async (directory) => {
-            await safeExecuteCommand(
-              'revealFileInOS',
-              [vscode.Uri.file(directory)],
-              this.viewName,
-            );
+            await this.runViewCommand('revealFileInOS', [
+              vscode.Uri.file(directory),
+            ]);
           },
           openLabel: async (label) => {
             return (
-              (await safeExecuteCommand<boolean>(
-                'texra.openLabel',
-                [label, { notifyNotFound: false }],
-                this.viewName,
-              )) ?? false
+              (await this.runViewCommand<boolean>('texra.openLabel', [
+                label,
+                { notifyNotFound: false },
+              ])) ?? false
             );
           },
           readFile: (file) => FlexibleFS.read(createExternalLocation(file)),
@@ -451,11 +428,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           },
         },
         sendFollowUp: async (stream, text) => {
-          await safeExecuteCommand(
-            'texra.sendFollowUp',
-            [{ stream, text }],
-            this.viewName,
-          );
+          await this.runViewCommand('texra.sendFollowUp', [{ stream, text }]);
         },
       },
       agentProposal: {
@@ -463,11 +436,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           this.provider.getPendingAgentProposal(proposalId),
         restoreTaskState: async (taskState) => {
           return (
-            (await safeExecuteCommand<boolean>(
-              'texra.restoreState',
-              [taskState],
-              this.viewName,
-            )) === true
+            (await this.runViewCommand<boolean>('texra.restoreState', [
+              taskState,
+            ])) === true
           );
         },
         settleProposal: (proposalId, result) => {
@@ -519,19 +490,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
         followUp: {
           sendFollowUp: async ({ stream, text, mediaFiles }) => {
-            await safeExecuteCommand(
-              'texra.sendFollowUp',
-              [
-                {
-                  stream,
-                  text,
-                  ...(mediaFiles && mediaFiles.length > 0
-                    ? { mediaFiles }
-                    : {}),
-                },
-              ],
-              this.viewName,
-            );
+            await this.runViewCommand('texra.sendFollowUp', [
+              {
+                stream,
+                text,
+                ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
+              },
+            ]);
           },
           reportImageSaveError: (_image, error) => {
             // Best-effort: a failed image save must not block the text, but log
@@ -548,18 +513,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
         file: {
           openFile: async (file, line) => {
-            await safeExecuteCommand(
-              'texra.openFile',
-              [file, line],
-              this.viewName,
-            );
+            await this.runViewCommand('texra.openFile', [file, line]);
           },
           openFileCompile: async (file) => {
-            await safeExecuteCommand(
-              'texra.openFileCompile',
-              [file],
-              this.viewName,
-            );
+            await this.runViewCommand('texra.openFileCompile', [file]);
           },
         },
         approval: {
@@ -589,11 +546,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         SecretManager.get(SecretManager.getApiKeySecretName(provider)),
       hasUsableKey: (provider) => SecretManager.hasUsableApiKey(provider),
       promptForApiKey: async (provider) => {
-        await safeExecuteCommand(
-          apiKeyCommands.setApiKey,
-          [provider],
-          this.viewName,
-        );
+        await this.runViewCommand(apiKeyCommands.setApiKey, [provider]);
       },
       setUseIncludedModelAccess: (enabled) =>
         getServerSideKeyService().setUseIncludedModelAccess(enabled),
@@ -820,15 +773,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       this.logger.error(this.channel, validation.message);
       return false;
     }
-    await safeExecuteCommand(
-      'texra.execute',
-      [
-        options.preferHelperModel
-          ? { ...validation.request, preferHelperModel: true }
-          : validation.request,
-      ],
-      this.viewName,
-    );
+    await this.runViewCommand('texra.execute', [
+      options.preferHelperModel
+        ? { ...validation.request, preferHelperModel: true }
+        : validation.request,
+    ]);
     return true;
   }
 
@@ -874,11 +823,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await this.host.info(plan.message);
         return;
       case 'restoreState':
-        await safeExecuteCommand(
-          'texra.restoreState',
-          [plan.taskState, plan.executeImmediately],
-          this.viewName,
-        );
+        await this.runViewCommand('texra.restoreState', [
+          plan.taskState,
+          plan.executeImmediately,
+        ]);
         return;
       case 'execute':
         // Follow-up 'execute' plans are the compile fixer (latexFixer), so run
