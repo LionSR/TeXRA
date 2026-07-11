@@ -546,6 +546,19 @@ describe('isContextWindowError', () => {
     ).toBe(true);
   });
 
+  it('recognizes the marker through a cause chain (rethrown/wrapped error)', () => {
+    // Errors are frequently rewrapped as they propagate (e.g. `new Error(msg,
+    // { cause })`). The marker must still be found via `findInCauseChain`,
+    // not just on the outermost error.
+    const inner = new Error(
+      'Token count of message exceeds context window: 5 > 3',
+    );
+    attachContextWindowError(inner);
+    const outer = new Error('request failed', { cause: inner });
+
+    expect(isContextWindowError(outer)).toBe(true);
+  });
+
   it('does not misclassify an unrelated error as a context-window violation', () => {
     expect(isContextWindowError(new Error('rate limit exceeded'))).toBe(false);
   });
