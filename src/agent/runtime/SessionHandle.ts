@@ -41,7 +41,7 @@ import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
 import { getRunContextSession, tryUseRunContext } from './RunContext';
-import { ExecutionRegistry } from './executionRegistry';
+import { AgentExecutionHandle, ExecutionRegistry } from './executionRegistry';
 import { ExecutionSubscriptionBinder } from './ExecutionSubscriptionBinder';
 import { StreamStatusMachine } from './StreamStatusService';
 import {
@@ -287,6 +287,24 @@ export function getAllActiveExecutionIds(): string[] {
     for (const id of session.executions.getActiveIds()) ids.add(id);
   }
   return [...ids];
+}
+
+/**
+ * Look up a still-active {@link AgentExecutionHandle} by id across every live
+ * session, not just one. A desktop window's own session is fresh per
+ * `BrowserWindow` (see the class doc), so a run kept alive across window
+ * recreation (`SessionHandle.dispose({ keepActiveExecutions: true })`) lives
+ * on in its *previous* window's retained session — invisible to a newly
+ * created window's session unless explicitly rebound onto it.
+ */
+export function findActiveAgentExecutionHandle(
+  executionId: string,
+): AgentExecutionHandle | undefined {
+  for (const session of liveSessions) {
+    const handle = session.executions.getHandle(executionId);
+    if (handle instanceof AgentExecutionHandle) return handle;
+  }
+  return undefined;
 }
 
 /** Stop background OS processes owned by every live runtime session. */
