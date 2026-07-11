@@ -472,6 +472,8 @@ export async function executeAgent(
 
 export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
   readonly setupSession?: (session: IToolUseSession) => void;
+  /** Query caller-owned cancellation once the resumed flow is interruptible. */
+  readonly isCancellationRequested?: () => boolean;
   /**
    * Follow-ups already drained by an external turn owner. The resumed flow
    * consumes this batch once at its persisted WAITING cursor; it must never
@@ -554,6 +556,9 @@ export async function resumeToolUseFromSnapshot(
           undefined,
           (flowContext) => {
             handle.attachToolUseFlow(flowContext);
+            if (options.isCancellationRequested?.()) {
+              flowContext.interrupt();
+            }
             options.setupSession?.(flowContext.session);
             return () => handle.detachToolUseFlow(flowContext);
           },
