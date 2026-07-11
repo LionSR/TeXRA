@@ -80,8 +80,8 @@ export interface ChildRunStrategy<TTurn> {
   readonly stageLabel: string;
 
   /**
-   * Called once before the loop starts. Used to register a resumed session id
-   * immediately so a concurrent call with the same id can't start a second loop.
+   * Called once before the loop starts. Agent-CLI strategies use this to
+   * promote a synchronously claimed fallback id to an active session entry.
    */
   onSessionStart?(session: SessionHandle): void;
 
