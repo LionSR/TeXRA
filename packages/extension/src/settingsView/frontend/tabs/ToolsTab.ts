@@ -4,11 +4,11 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderLoadingState } from '@shared/wa/loadingState';
-import { renderRingGauge } from '@shared/wa/gauges';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -107,6 +107,33 @@ export class ToolsTab extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--wa-space-xs);
+      }
+
+      .tools-health-ring svg {
+        width: 36px;
+        height: 36px;
+        transform: rotate(-90deg);
+      }
+
+      .tools-health-ring__track {
+        fill: none;
+        stroke: var(--wa-color-surface-border, rgba(128, 128, 128, 0.25));
+        stroke-width: 4;
+      }
+
+      .tools-health-ring__available {
+        fill: none;
+        stroke: var(--color-status-ok);
+        stroke-width: 4;
+        stroke-linecap: round;
+      }
+
+      .tools-health-ring__missing {
+        fill: none;
+        stroke: var(--color-status-error);
+        stroke-width: 4;
+        stroke-linecap: round;
+        transform-origin: 50% 50%;
       }
 
       .tools-health-labels {
@@ -311,21 +338,42 @@ export class ToolsTab extends LitElement {
 
     // Early return above guarantees items.length > 0.
     const total = items.length;
+    const r = 14;
+    const circ = 2 * Math.PI * r;
     const availPct = available / total;
     const missPct = missing / total;
+    const availOffset = circ - circ * availPct;
+    // Missing arc starts after the available arc.
+    const missOffset = circ - circ * missPct;
+    const missRotation = availPct * 360;
 
     return html`
       <div class="tools-summary">
         <div class="tools-health-ring">
-          ${renderRingGauge({
-            segments:
+          <svg viewBox="0 0 36 36">
+            <circle class="tools-health-ring__track" cx="18" cy="18" r="${r}" />
+            <circle
+              class="tools-health-ring__available"
+              cx="18"
+              cy="18"
+              r="${r}"
+              stroke-dasharray="${circ}"
+              stroke-dashoffset="${availOffset}"
+            />
+            ${
               missing > 0
-                ? [
-                    { fraction: availPct, color: 'var(--color-status-ok)' },
-                    { fraction: missPct, color: 'var(--color-status-error)' },
-                  ]
-                : [{ fraction: availPct, color: 'var(--color-status-ok)' }],
-          })}
+                ? html`<circle
+                    class="tools-health-ring__missing"
+                    cx="18"
+                    cy="18"
+                    r="${r}"
+                    stroke-dasharray="${circ}"
+                    stroke-dashoffset="${missOffset}"
+                    style=${styleMap({ transform: `rotate(${missRotation}deg)` })}
+                  />`
+                : nothing
+            }
+          </svg>
           <div class="tools-health-labels">
             <span class="tools-summary-stat tools-stat-available">
               ${waIcon('check')} ${available} available
