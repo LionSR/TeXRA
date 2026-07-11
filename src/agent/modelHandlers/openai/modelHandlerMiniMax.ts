@@ -76,9 +76,7 @@ export class ModelHandlerMiniMax extends ReasoningModelHandlerOpenAI {
   protected override extractReasoningFromMessage(
     message: Record<string, unknown> | undefined,
   ): string | null {
-    const extracted = extractMiniMaxReasoningText(
-      message?.reasoning_details,
-    );
+    const extracted = extractMiniMaxReasoningText(message?.reasoning_details);
     return extracted ?? super.extractReasoningFromMessage(message);
   }
 
