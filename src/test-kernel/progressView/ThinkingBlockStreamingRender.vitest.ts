@@ -49,7 +49,7 @@ describe('thinking block renders as a banner while streaming', () => {
     const container = document.createElement('div');
     render(formatLogEntry(message), container);
 
-    const details = container.querySelector('details.banner-details');
+    const details = container.querySelector('wa-details.banner-details');
     expect(details).not.toBeNull();
     expect(container.querySelector('.log-line')).toBeNull();
     // Auto-expanded while streaming, so the growing text is actually visible.
@@ -101,7 +101,7 @@ describe('thinking block renders as a banner while streaming', () => {
     const container = document.createElement('div');
     render(formatLogEntry(message), container);
 
-    const details = container.querySelector('details.banner-details');
+    const details = container.querySelector('wa-details.banner-details');
     expect(details).not.toBeNull();
     expect(container.querySelector('strong')?.textContent).toBe('bold');
     // No caller-supplied defaultOpen/preservedOpen here, so a finalized
@@ -127,7 +127,7 @@ describe('thinking block renders as a banner while streaming', () => {
     render(formatLogEntry(runningMessage), runningContainer);
 
     const runningDetails = runningContainer.querySelector(
-      'details.banner-details',
+      'wa-details.banner-details',
     );
     expect(runningDetails).not.toBeNull();
     expect(runningContainer.querySelector('.log-line')).toBeNull();
@@ -152,7 +152,7 @@ describe('thinking block renders as a banner while streaming', () => {
     const container = document.createElement('div');
     render(formatLogEntry(message), container);
 
-    const details = container.querySelector('details.banner-details');
+    const details = container.querySelector('wa-details.banner-details');
     expect(details).not.toBeNull();
     expect(details?.hasAttribute('open')).toBe(true);
     expect(container.textContent).toContain('Scratchpad');

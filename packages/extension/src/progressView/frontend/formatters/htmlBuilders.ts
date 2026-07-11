@@ -101,6 +101,33 @@ export function wrapInPre(text: string, className = ''): TemplateResult {
 // Note: Toggle icons now use CSS-only rotation via details[open] selector.
 // Always render the chevron-right icon and CSS will rotate when open.
 
+/**
+ * Stop an Enter/Space keydown on a control slotted into a `<wa-details>`
+ * summary from also toggling the details panel.
+ *
+ * `<wa-details>`'s own `handleSummaryClick` excludes interactive descendants
+ * (`<a>`, `<button>`, form-associated custom elements like `<wa-button>`)
+ * from triggering its toggle, but its `handleSummaryKeyDown` has no such
+ * check — every Enter/Space keydown that bubbles up to the `<summary>` calls
+ * `preventDefault()` and toggles, regardless of where it originated. Left
+ * unhandled, that ancestor `preventDefault()` also suppresses the focused
+ * control's own native keyboard activation (a button's Enter/Space normally
+ * synthesizes a `click`), so the control silently stops responding to the
+ * keyboard entirely — it only toggles the panel.
+ *
+ * Calling `stopPropagation()` here, on a listener bound directly to the
+ * control, runs before the event can reach `<summary>` and prevents both the
+ * unwanted toggle and the swallowed activation. It intentionally does not
+ * call `preventDefault()`, so the control's own native click synthesis for
+ * Enter/Space (and the click event that produces) is unaffected and still
+ * bubbles normally to any delegated click handler further up the tree.
+ */
+export function stopSummaryToggleKeydown(event: Event): void {
+  if (!(event instanceof KeyboardEvent)) return;
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.stopPropagation();
+}
+
 /** Build a copy button for banner content. */
 function buildCopyButton(
   title: string,
@@ -109,7 +136,7 @@ function buildCopyButton(
   const { hidden = false, content, contentId } = options;
   const copyId = content != null ? registerCopyContent(content, contentId) : '';
   // prettier-ignore
-  return html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="small" type="button" title=${title} aria-label=${title} data-default-title=${title} data-success-title="Copied!" data-copy-id=${ifDefined(copyId || undefined)} data-copy-type="banner" ?hidden=${hidden}>${waIcon('copy')}</wa-button>`;
+  return html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="small" type="button" title=${title} aria-label=${title} data-default-title=${title} data-success-title="Copied!" data-copy-id=${ifDefined(copyId || undefined)} data-copy-type="banner" ?hidden=${hidden} @keydown=${stopSummaryToggleKeydown}>${waIcon('copy')}</wa-button>`;
 }
 
 /**

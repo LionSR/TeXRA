@@ -40,7 +40,7 @@ body {
   max-width: clamp(12ch, 24vw, 40ch);
   color: var(--wa-color-text-normal);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--wa-font-weight-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -532,7 +532,7 @@ wa-input.desktop-command-palette-input::part(base) {
   margin: 0 0 var(--wa-space-s);
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-h1);
-  font-weight: 600;
+  font-weight: var(--wa-font-weight-semibold);
 }
 
 .desktop-empty-workspace-panel p {
@@ -579,7 +579,7 @@ wa-input.desktop-command-palette-input::part(base) {
 .desktop-bootstrap-fallback-panel h1 {
   margin: 0 0 var(--wa-space-m);
   font-size: var(--font-size-h1);
-  font-weight: 600;
+  font-weight: var(--wa-font-weight-semibold);
 }
 
 .desktop-bootstrap-fallback-panel p {
@@ -622,7 +622,7 @@ wa-input.desktop-command-palette-input::part(base) {
   margin: 0 0 var(--wa-space-2xs);
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-h2);
-  font-weight: 600;
+  font-weight: var(--wa-font-weight-semibold);
 }
 
 .desktop-log-viewer-header p {
@@ -702,7 +702,7 @@ wa-dialog.desktop-onboarding {
   margin: 0;
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-h1);
-  font-weight: 600;
+  font-weight: var(--wa-font-weight-semibold);
 }
 
 .desktop-onboarding p {
@@ -741,7 +741,7 @@ wa-dialog.desktop-onboarding {
   border-radius: 50%;
   color: var(--wa-color-text-normal);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--wa-font-weight-semibold);
 }
 
 .desktop-onboarding-steps strong,
@@ -753,7 +753,7 @@ wa-dialog.desktop-onboarding {
 .desktop-onboarding-steps strong {
   color: var(--wa-color-text-normal);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--wa-font-weight-semibold);
 }
 
 .desktop-onboarding-steps span {
