@@ -13,9 +13,8 @@ import type { ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  StreamStatusService,
+  StreamStatusMachine,
   type StreamStatusEmitOptions,
-  type StreamStatusMachine,
 } from '@agent/runtime/StreamStatusService';
 import {
   isInFlightStatus,
@@ -159,7 +158,7 @@ export class ExecutionRegistry {
 
   constructor({
     processOutput = new ProcessOutputPoller(),
-    streamStatus = StreamStatusService,
+    streamStatus = new StreamStatusMachine(),
     events = new SessionEventHub(),
     publishResult,
   }: {
@@ -949,5 +948,3 @@ export class ExecutionRegistry {
     }
   }
 }
-
-export const SharedExecutionRegistry = new ExecutionRegistry();

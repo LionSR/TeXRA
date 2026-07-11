@@ -16,14 +16,8 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import {
-  StreamStatusMachine,
-  StreamStatusService,
-} from '@agent/runtime/StreamStatusService';
-import {
-  AgentExecutionHandle,
-  SharedExecutionRegistry,
-} from '@agent/runtime/executionRegistry';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
@@ -396,7 +390,7 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-subagent-error-registered',
     );
     const onError = vi.fn(() => {
-      expect(SharedExecutionRegistry.getHandle(executionId)).toBeDefined();
+      expect(defaultSession().executions.getHandle(executionId)).toBeDefined();
     });
 
     try {
@@ -411,9 +405,11 @@ describe('runFlowWithLifecycle', () => {
       expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
       expect(onError).toHaveBeenCalledOnce();
-      expect(SharedExecutionRegistry.getHandle(executionId)).toBeUndefined();
+      expect(
+        defaultSession().executions.getHandle(executionId),
+      ).toBeUndefined();
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
+      defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -447,9 +443,9 @@ describe('runFlowWithLifecycle', () => {
       expect(storageMocks.writeTerminalStatus).not.toHaveBeenCalled();
       expect(onError).not.toHaveBeenCalled();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-      expect(SharedExecutionRegistry.getHandle(executionId)).toBeDefined();
+      expect(defaultSession().executions.getHandle(executionId)).toBeDefined();
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
+      defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -487,7 +483,7 @@ describe('runFlowWithLifecycle', () => {
       expect(staleCleanup).not.toHaveBeenCalled();
       expect(captured?.runWaitingCleanup()).toBe(false);
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
+      defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -519,7 +515,7 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-      expect(SharedExecutionRegistry.getHandle(executionId)).toBeDefined();
+      expect(defaultSession().executions.getHandle(executionId)).toBeDefined();
       expect(followUpsRelease).not.toHaveBeenCalled();
       expect(storageMocks.deleteFlowRecord).not.toHaveBeenCalled();
       // The fixture's ctx.logger is noopTrace, and the run handle carries it
@@ -532,7 +528,7 @@ describe('runFlowWithLifecycle', () => {
       // fake runner returns the WAITING outcome directly but doesn't drive
       // the real transitionToWaiting() call, so seed it explicitly.
       seedStreamStatusForTest(
-        StreamStatusService,
+        defaultSession().status,
         streamId,
         STREAM_STATUS.WAITING,
       );
@@ -541,12 +537,12 @@ describe('runFlowWithLifecycle', () => {
       // (post #7286) preserves the follow-up queue for WAITING — it does not
       // dispose the session — by the time a native subagent suspends at
       // WAITING (not reproduced by this fake runner, but true in production —
-      // see runToolUseFlow.ts). Before the fix, SharedExecutionRegistry.kill()
+      // see runToolUseFlow.ts). Before the fix, `executions.kill()`
       // found no interrupt target for a suspended handle and silently
       // no-opped, leaving the handle stuck registered forever. It must now
       // fall back to the waiting-cleanup registered above and actually tear
       // the execution down.
-      expect(SharedExecutionRegistry.kill(executionId)).toBe(true);
+      expect(defaultSession().executions.kill(executionId)).toBe(true);
 
       // The bypassed runFlowWithLifecycle can't emit the terminal result, so
       // terminateWaitingHandle must — trace subscribers would otherwise miss
@@ -560,8 +556,12 @@ describe('runFlowWithLifecycle', () => {
       );
       traceEmit.mockRestore();
 
-      expect(SharedExecutionRegistry.getHandle(executionId)).toBeUndefined();
-      expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(
+        defaultSession().executions.getHandle(executionId),
+      ).toBeUndefined();
+      expect(defaultSession().status.get(streamId)).toBe(
+        STREAM_PHASE.CANCELLED,
+      );
       expect(followUpsRelease).toHaveBeenCalledWith(streamId);
       expect(storageMocks.deleteFlowRecord).toHaveBeenCalledWith(
         `flow_${executionId}`,
@@ -581,8 +581,8 @@ describe('runFlowWithLifecycle', () => {
         }),
       );
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
-      clearStreamStatusForTest(StreamStatusService, streamId);
+      defaultSession().executions.untrack(executionId);
+      clearStreamStatusForTest(defaultSession().status, streamId);
     }
   });
 
@@ -740,7 +740,7 @@ describe('runFlowWithLifecycle', () => {
         carriedResult,
       );
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
+      defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
