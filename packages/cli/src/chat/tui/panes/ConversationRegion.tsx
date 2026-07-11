@@ -60,13 +60,12 @@ interface ConversationRegionSnapshot {
   readonly slashPaletteOpen: boolean;
   readonly streamTabsVisible: boolean;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-  readonly subagentPanelTarget: ChildControlStreamTarget;
+  readonly childExecutionPanelTarget: ChildControlStreamTarget;
   readonly transcriptViewerStreamId: StreamTabId | undefined;
 }
 
 interface ConversationRegionProps {
   readonly agentSelectionAvailable: boolean;
-  readonly children: (queuedFollowUpPanelVisible: boolean) => ReactNode;
   readonly colorEnabled?: boolean;
   readonly columns: number;
   readonly onTranscriptViewportChange?: (
@@ -76,16 +75,19 @@ interface ConversationRegionProps {
     availableRows: number,
     transcriptWidth: number,
   ) => ReactNode;
+  readonly renderFooterChrome: (
+    queuedFollowUpPanelVisible: boolean,
+  ) => ReactNode;
   readonly rows: number;
   readonly snapshot: ConversationRegionSnapshot;
 }
 
 export function ConversationRegion({
   agentSelectionAvailable,
-  children,
   colorEnabled,
   columns,
   onTranscriptViewportChange,
+  renderFooterChrome,
   renderForegroundSurface,
   rows,
   snapshot,
@@ -150,15 +152,16 @@ export function ConversationRegion({
         rows,
         tipVisible: tipRowVisible,
       });
-  const subagentPanelTarget = snapshot.subagentPanelTarget;
-  const subagentPanelRows = subagentPanelTarget.streamId
+  const childExecutionPanelTarget = snapshot.childExecutionPanelTarget;
+  const childExecutionPanelRows = childExecutionPanelTarget.streamId
     ? visibleSubagentRows(
-        subagentPanelTarget.streamId,
+        childExecutionPanelTarget.streamId,
         snapshot.childStreamEntries,
         snapshot.streams,
       )
     : EMPTY_SUBAGENT_ROWS;
-  const hasSubagentPanel = !foregroundOpen && subagentPanelTarget.hasItems;
+  const hasChildExecutionPanel =
+    !foregroundOpen && childExecutionPanelTarget.hasItems;
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
     hasPlan: activeSlice?.plan != null,
@@ -183,10 +186,10 @@ export function ConversationRegion({
   // Reserve only as many rows as the panels actually need, capped so they
   // never take more than half the transcript or push the input off-screen.
   const subagentContentRows =
-    hasSubagentPanel && subagentPanelTarget.slice
+    hasChildExecutionPanel && childExecutionPanelTarget.slice
       ? subagentPanelRowCount(
-          subagentPanelRows,
-          subagentPanelTarget.slice.activeProcesses,
+          childExecutionPanelRows,
+          childExecutionPanelTarget.slice.activeProcesses,
         )
       : 0;
   const todosPlanContentRows =
@@ -247,9 +250,9 @@ export function ConversationRegion({
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
               maxRows={subagentRows}
-              subagents={subagentPanelRows}
-              activeProcesses={subagentPanelTarget.slice?.activeProcesses}
-              processOutput={subagentPanelTarget.slice?.processOutput}
+              subagents={childExecutionPanelRows}
+              activeProcesses={childExecutionPanelTarget.slice?.activeProcesses}
+              processOutput={childExecutionPanelTarget.slice?.processOutput}
             />
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>
@@ -268,7 +271,7 @@ export function ConversationRegion({
             width={columns}
           />
         ) : null}
-        {children(queuedFollowUpPanelVisible)}
+        {renderFooterChrome(queuedFollowUpPanelVisible)}
       </Box>
     </>
   );
