@@ -47,10 +47,12 @@ function waitForExitEvent(child, rejectOnError) {
   });
 }
 
+/** Wait for process exit, rejecting if the child reports a process error. */
 export function waitForExit(child) {
   return waitForExitEvent(child, true);
 }
 
+/** Wait for actual process exit without treating an error event as exit. */
 export function waitForTermination(child) {
   return waitForExitEvent(child, false);
 }
