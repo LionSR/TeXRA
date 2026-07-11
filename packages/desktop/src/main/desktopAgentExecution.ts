@@ -1078,7 +1078,7 @@ export class DesktopProgressBridge {
    * a caller.
    */
   async completeWebviewReady(
-    onInquiryHydrationError?: (error: unknown) => void,
+    onInquiryHydrationError: (error: unknown) => void = () => {},
   ): Promise<void> {
     await this.restartRepair;
     this.syncFullView();
