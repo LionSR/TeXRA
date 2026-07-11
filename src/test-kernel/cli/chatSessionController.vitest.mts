@@ -118,10 +118,18 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
 import {
+  chatTuiCanInterruptActiveRun,
+  chatTuiCanStopActiveRun,
   chatTuiCanStartRootRun,
+  chatTuiIsResumableIdleOnExit,
+  chatTuiSigintAction,
   type TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ---------------------------------------------------------------------------
@@ -452,13 +460,11 @@ describe('createChatSessionController', () => {
   });
 
   it('honors a Ctrl-C issued while resume() is still rehydrating and never starts the resumed run', async () => {
-    // The early slot claim makes chatTuiCanStopActiveRun() report this
-    // resume() as stoppable (session.runPromise is set, session.streamId is
-    // still whatever resume() has set so far) well before the resumed agent
-    // actually starts running. If the user hits Ctrl-C during that
-    // rehydration window, resume() must notice `session.stopRequested` and
-    // bail out instead of silently starting `resumeToolUseFromSnapshot()`
-    // once the awaits finish.
+    // The early slot claim makes this resume() interruptible before the resumed
+    // agent actually starts running. If the user hits Ctrl-C during that
+    // rehydration window, resume() must notice `session.stopRequested` and bail
+    // out instead of silently starting `resumeToolUseFromSnapshot()` once the
+    // awaits finish.
     const ensureLoaded = deferred<void>();
     const base = mocks.defaultSession();
     mocks.defaultSession.mockReturnValue({
@@ -492,6 +498,24 @@ describe('createChatSessionController', () => {
     // already set to the resumed stream.
     expect(session.runPromise).toBeDefined();
     expect(session.streamId).toBe('stream-resume');
+
+    const canInterruptActiveRun = chatTuiCanInterruptActiveRun(session);
+    const canStopActiveRun = chatTuiCanStopActiveRun(
+      session,
+      STREAM_STATUS.WAITING,
+    );
+    const resumableIdle = chatTuiIsResumableIdleOnExit({
+      canInterruptActiveRun,
+      canStopActiveRun,
+      hasActiveToolUseFlow: false,
+    });
+    expect(
+      chatTuiSigintAction({
+        exitArmed: false,
+        canStopActiveRun,
+        resumableIdle,
+      }),
+    ).toBe('clean-exit');
 
     // Ctrl-C fires while resume() is still rehydrating.
     ctrl.stop();
