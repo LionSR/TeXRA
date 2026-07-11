@@ -753,56 +753,72 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
   });
 
-  it('migrates a legacy workspace before strict per-step validation', async () => {
-    const executionId = 'abc141' as ExecutionId;
-    const streamId = 'chat@gpt54#abc141' as StreamTabId;
-    const legacyWorkspaceSnapshot = {
-      todos: [
-        {
-          content: 'Ship the fix',
-          status: 'in_progress',
-          activeForm: 'Shipping the fix',
-        },
-      ],
-      plan: { objective: 'Migrate legacy workspace snapshots on resume' },
-    };
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        messages: [{ role: 'user', content: 'Continue.' }],
-        shouldSkipCycle: true,
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: legacyWorkspaceSnapshot,
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gpt54' }),
-            transient: {},
+  it.each([
+    { name: 'direct stored-state recovery', withSnapshot: false },
+    { name: 'unvalidated resume snapshot', withSnapshot: true },
+  ])(
+    'migrates a legacy workspace before strict validation: $name',
+    async ({ withSnapshot }) => {
+      const suffix = withSnapshot ? 'snapshot' : 'stored';
+      const executionId = `abc141-${suffix}` as ExecutionId;
+      const streamId = `chat@gpt54#abc141-${suffix}` as StreamTabId;
+      const legacyWorkspaceSnapshot = {
+        todos: [
+          {
+            content: 'Ship the fix',
+            status: 'in_progress',
+            activeForm: 'Shipping the fix',
+          },
+        ],
+        plan: { objective: 'Migrate legacy workspace snapshots on resume' },
+      };
+      await getExecutionStore(executionId).write(flowKey(executionId), {
+        flowName: 'texra',
+        params: {},
+        shared: {
+          messages: [{ role: 'user', content: 'Continue.' }],
+          shouldSkipCycle: true,
+          stateSlices: {
+            runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+            workspaceSnapshot: legacyWorkspaceSnapshot,
+            userChannels: {
+              input: Object.freeze({ MODEL: 'gpt54' }),
+              transient: {},
+            },
           },
         },
-      },
-      createdAt: new Date().toISOString(),
-      cursor: { nextNodeId: 'start/default' },
-      nodes: [{ action: 'default', nodeId: 'start' }],
-    });
+        createdAt: new Date().toISOString(),
+        cursor: { nextNodeId: 'start/default' },
+        nodes: [{ action: 'default', nodeId: 'start' }],
+      });
 
-    const result = await runPersistedFlow(executionId, streamId, undefined);
-    expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+      const snapshot = withSnapshot
+        ? buildToolUseSnapshot(executionId, streamId)
+        : undefined;
+      if (snapshot) {
+        // Simulate a typed external command payload that bypassed schema parsing.
+        Object.assign(snapshot, { workspace: legacyWorkspaceSnapshot });
+      }
+      const result = await runPersistedFlow(executionId, streamId, snapshot);
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
 
-    const healedRecord = await getExecutionStore(executionId).read<FlowRecord>(
-      flowKey(executionId),
-    );
-    const healedShared = ToolUseRunSharedCanonicalSchema.parse(
-      healedRecord?.shared,
-    );
-    expect(healedShared.stateSlices).not.toBeNull();
-    if (!healedShared.stateSlices) return;
-    const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
-      healedShared.stateSlices.workspaceSnapshot,
-    );
-    expect(workspaceState.workPlan.todos).toEqual(
-      legacyWorkspaceSnapshot.todos,
-    );
-    expect(workspaceState.workPlan.plan).toEqual(legacyWorkspaceSnapshot.plan);
-  });
+      const healedRecord = await getExecutionStore(
+        executionId,
+      ).read<FlowRecord>(flowKey(executionId));
+      const healedShared = ToolUseRunSharedCanonicalSchema.parse(
+        healedRecord?.shared,
+      );
+      expect(healedShared.stateSlices).not.toBeNull();
+      if (!healedShared.stateSlices) return;
+      const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
+        healedShared.stateSlices.workspaceSnapshot,
+      );
+      expect(workspaceState.workPlan.todos).toEqual(
+        legacyWorkspaceSnapshot.todos,
+      );
+      expect(workspaceState.workPlan.plan).toEqual(
+        legacyWorkspaceSnapshot.plan,
+      );
+    },
+  );
 });
