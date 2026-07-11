@@ -20,12 +20,14 @@ import {
 } from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
-import { previousRowsText } from '../render/overflowText';
+import {
+  previousRowsText,
+  selectVisibleInlineOverflowText,
+} from '../render/overflowText';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { clipToWidth, textDisplayWidth } from '../render/terminalText';
 import {
   nextWrappingHighlightIndex,
-  selectVisibleInlineOverflowText,
   Select,
   visibleSelectRange,
 } from '../ui/Select';

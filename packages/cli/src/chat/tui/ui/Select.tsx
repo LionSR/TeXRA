@@ -15,6 +15,7 @@ import { clamp, clampIndex } from '@utils/core';
 import { POINTER, TICK } from './glyphs';
 
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
+import { selectVisibleInlineOverflowText } from '../render/overflowText';
 
 export const SELECT_LABEL_MAX_COLS = 24;
 
@@ -139,40 +140,6 @@ export function visibleSelectRange({
     itemCount - visibleCount,
   );
   return { start, end: start + visibleCount };
-}
-
-export function selectInlineOverflowText({
-  hiddenAfter,
-  hiddenBefore,
-  showOverflow,
-}: {
-  readonly hiddenAfter: number;
-  readonly hiddenBefore: number;
-  readonly showOverflow: boolean | undefined;
-}): string | undefined {
-  if (showOverflow || (hiddenBefore === 0 && hiddenAfter === 0)) {
-    return undefined;
-  }
-  if (hiddenBefore > 0 && hiddenAfter > 0) {
-    return `+${hiddenBefore} earlier, +${hiddenAfter} more`;
-  }
-  if (hiddenBefore > 0) return `+${hiddenBefore} earlier`;
-  return `+${hiddenAfter} more`;
-}
-
-export function selectVisibleInlineOverflowText({
-  hiddenAfter,
-  hiddenBefore,
-  showOverflow,
-  visibleItemCount,
-}: {
-  readonly hiddenAfter: number;
-  readonly hiddenBefore: number;
-  readonly showOverflow: boolean | undefined;
-  readonly visibleItemCount: number;
-}): string | undefined {
-  if (visibleItemCount <= 0) return undefined;
-  return selectInlineOverflowText({ hiddenAfter, hiddenBefore, showOverflow });
 }
 
 export function selectItemRenderKey<T>(
