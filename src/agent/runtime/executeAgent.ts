@@ -471,7 +471,10 @@ export async function executeAgent(
 }
 
 export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
+  /** Initialize the rebuilt session immediately after its flow is attached. */
   readonly setupSession?: (session: IToolUseSession) => void;
+  /** Query caller-owned cancellation once the resumed flow is interruptible. */
+  readonly isCancellationRequested?: () => boolean;
   /**
    * Follow-ups already drained by an external turn owner. The resumed flow
    * consumes this batch once at its persisted WAITING cursor; it must never
@@ -479,6 +482,24 @@ export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
    */
   readonly drainedFollowUps?: readonly FollowUpQueueBatchItem[];
 }
+
+export function resumeToolUseFromSnapshot(
+  snapshot: ToolUseSessionSnapshot,
+  runtimeHost: AgentRuntimeHost,
+  options: ResumeToolUseFromSnapshotOptions & { allowWaitingResult: true },
+): Promise<AgentFlowResult | WaitingToolUseFlowResult>;
+export function resumeToolUseFromSnapshot(
+  snapshot: ToolUseSessionSnapshot,
+  runtimeHost: AgentRuntimeHost,
+  options?: ResumeToolUseFromSnapshotOptions & {
+    allowWaitingResult?: false | undefined;
+  },
+): Promise<AgentFlowResult>;
+export function resumeToolUseFromSnapshot(
+  snapshot: ToolUseSessionSnapshot,
+  runtimeHost: AgentRuntimeHost,
+  options: ResumeToolUseFromSnapshotOptions,
+): Promise<AgentRuntimeFlowResult>;
 
 export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
@@ -555,6 +576,9 @@ export async function resumeToolUseFromSnapshot(
           (flowContext) => {
             handle.attachToolUseFlow(flowContext);
             options.setupSession?.(flowContext.session);
+            if (options.isCancellationRequested?.()) {
+              flowContext.interrupt();
+            }
             return () => handle.detachToolUseFlow(flowContext);
           },
         );
