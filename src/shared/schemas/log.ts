@@ -29,7 +29,7 @@ export const END_GROUP_STATUS = {
   STOPPED: 'stopped',
 } as const;
 
-const EndGroupStatusSchema = z.enum(END_GROUP_STATUS);
+export const EndGroupStatusSchema = z.enum(END_GROUP_STATUS);
 export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
 
 export const MESSAGE_TYPES = {

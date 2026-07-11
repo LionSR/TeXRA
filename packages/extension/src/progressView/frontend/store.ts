@@ -5,6 +5,7 @@ import {
   type AgentCategoryFilter,
   type ContextStateData,
   type LogMessageData,
+  type ProcessOutputTail,
   type StreamState,
   type StreamTabInfo,
   type StreamTabId,
@@ -18,12 +19,7 @@ import {
  * Defined here (not in contexts/streamContexts) so the store stays the single
  * home for state data shapes; the context object lives with the other contexts.
  */
-interface ProcessOutputEntry {
-  stdout: string;
-  stderr: string;
-}
-
-export type ProcessOutputMap = Map<string, ProcessOutputEntry>;
+export type ProcessOutputMap = Map<string, ProcessOutputTail>;
 
 export const EMPTY_PROCESS_OUTPUTS: ProcessOutputMap = new Map();
 

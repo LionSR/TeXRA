@@ -11,6 +11,9 @@
  *   - {@link @controllers/settingsView/ToolDashboardData} — reads everything for the UI
  */
 
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports
 import { platform } from '@platform/platform';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
@@ -142,25 +145,24 @@ async function probeZoteroBbt(port: number): Promise<boolean> {
   }
 }
 
-async function getGitHubPRPrerequisites(): Promise<{
-  tokenPresent: boolean;
-  inGitRepo: boolean;
-}> {
+const GitHubPRPrerequisitesSchema = z.object({
+  tokenPresent: z.boolean(),
+  inGitRepo: z.boolean(),
+});
+type GitHubPRPrerequisites = z.infer<typeof GitHubPRPrerequisitesSchema>;
+
+async function getGitHubPRPrerequisites(): Promise<GitHubPRPrerequisites> {
   const tokenPresent = (await getGitHubToken()) !== undefined;
   const inGitRepo = await isGitRepository();
   return { tokenPresent, inGitRepo };
 }
 
-type GitHubPRPrerequisites = Awaited<
-  ReturnType<typeof getGitHubPRPrerequisites>
->;
-
 async function resolveGitHubPRPrerequisites(
   probeResult: unknown,
 ): Promise<GitHubPRPrerequisites> {
-  return probeResult === undefined
-    ? getGitHubPRPrerequisites()
-    : (probeResult as GitHubPRPrerequisites);
+  if (probeResult === undefined) return getGitHubPRPrerequisites();
+  const parsed = GitHubPRPrerequisitesSchema.safeParse(probeResult);
+  return parsed.success ? parsed.data : getGitHubPRPrerequisites();
 }
 
 async function probeTexraCli(): Promise<boolean> {
@@ -169,25 +171,17 @@ async function probeTexraCli(): Promise<boolean> {
   return checkToolInstalled(TEXRA_LOCAL_CLI_CHECK, false);
 }
 
-interface Lean4Prerequisites {
-  extensionAvailable: boolean;
-  lakeAvailable: boolean;
-}
+const Lean4PrerequisitesSchema = z.object({
+  extensionAvailable: z.boolean(),
+  lakeAvailable: z.boolean(),
+});
+type Lean4Prerequisites = z.infer<typeof Lean4PrerequisitesSchema>;
 
 function resolveLean4Prerequisites(probeResult: unknown): Lean4Prerequisites {
-  if (
-    probeResult &&
-    typeof probeResult === 'object' &&
-    'extensionAvailable' in probeResult &&
-    'lakeAvailable' in probeResult
-  ) {
-    const r = probeResult as Lean4Prerequisites;
-    return {
-      extensionAvailable: Boolean(r.extensionAvailable),
-      lakeAvailable: Boolean(r.lakeAvailable),
-    };
-  }
-  return { extensionAvailable: false, lakeAvailable: false };
+  const parsed = Lean4PrerequisitesSchema.safeParse(probeResult);
+  return parsed.success
+    ? parsed.data
+    : { extensionAvailable: false, lakeAvailable: false };
 }
 
 function resolveBooleanProbe(probeResult: unknown): boolean | undefined {

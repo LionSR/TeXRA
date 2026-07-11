@@ -13,16 +13,32 @@ import {
 
 export { AgentCategory };
 
+/**
+ * Field validators shared between `AgentSettingBaseSchema` (materialised
+ * settings, defaults applied) and `RawAgentSettingInputSchema` below (raw
+ * YAML input, defaults intentionally left unmaterialised so inheritance can
+ * tell "not written" apart from "written as the default value"). Sharing the
+ * validator here keeps constraints like temperature's bounds in one place;
+ * only the prefault-vs-optional wrapper differs per schema, by design.
+ */
+const temperatureField = z.number().min(0).max(1);
+/** Shared by both `requiredFiles` and `requiredFilesInternal` — same shape, distinct fields. */
+const requiredFilesField = z.record(z.string(), z.string());
+const defaultOutputFilesField = z.array(z.string());
+const filePatternsContainEntryFields = {
+  pattern: z.string(),
+  varName: z.string(),
+};
+
 export const AgentSettingBaseSchema = z.strictObject({
-  temperature: z.number().min(0).max(1).prefault(1.0),
-  requiredFiles: z.record(z.string(), z.string()).prefault({}),
-  requiredFilesInternal: z.record(z.string(), z.string()).prefault({}),
-  defaultOutputFiles: z.array(z.string()).prefault([]),
+  temperature: temperatureField.prefault(1.0),
+  requiredFiles: requiredFilesField.prefault({}),
+  requiredFilesInternal: requiredFilesField.prefault({}),
+  defaultOutputFiles: defaultOutputFilesField.prefault([]),
   filePatternsContain: z
     .array(
       z.strictObject({
-        pattern: z.string(),
-        varName: z.string(),
+        ...filePatternsContainEntryFields,
         categories: z.array(z.string()).prefault([]),
       }),
     )
@@ -112,15 +128,14 @@ export type AgentToolUseSetting = Extract<
 /** Partial settings as they appear in YAML before inheritance and defaults. */
 const RawAgentSettingInputSchema = z.strictObject({
   agentCategory: AgentCategorySchema.optional(),
-  temperature: z.number().min(0).max(1).optional(),
-  requiredFiles: z.record(z.string(), z.string()).optional(),
-  requiredFilesInternal: z.record(z.string(), z.string()).optional(),
-  defaultOutputFiles: z.array(z.string()).optional(),
+  temperature: temperatureField.optional(),
+  requiredFiles: requiredFilesField.optional(),
+  requiredFilesInternal: requiredFilesField.optional(),
+  defaultOutputFiles: defaultOutputFilesField.optional(),
   filePatternsContain: z
     .array(
       z.strictObject({
-        pattern: z.string(),
-        varName: z.string(),
+        ...filePatternsContainEntryFields,
         categories: z.array(z.string()).optional(),
       }),
     )

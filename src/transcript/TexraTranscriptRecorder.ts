@@ -68,14 +68,14 @@ function shouldEmit(level: LogLevel, messageType: MessageType): boolean {
  */
 function redactToolInputForLog(toolName: string, input: unknown): unknown {
   if (
-    toolName === 'set_api_key' &&
-    input !== null &&
-    typeof input === 'object' &&
-    'key' in input
+    toolName !== 'set_api_key' ||
+    input === null ||
+    typeof input !== 'object' ||
+    !('key' in input)
   ) {
-    return { ...(input as Record<string, unknown>), key: '[redacted]' };
+    return input;
   }
-  return input;
+  return { ...input, key: '[redacted]' };
 }
 
 interface StreamSinkState {
