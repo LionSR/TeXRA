@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createRunTrace,
   flushPendingRunTraces,
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
 import {
@@ -15,18 +13,12 @@ import {
 } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
-/** Swap in a fresh default store (restored afterwards) around `run`. */
+/** Run against a fresh, test-local store. */
 function withStore(
   run: (store: StreamLogStore, logger: AgentTrace) => void,
 ): void {
-  const previousStore = getDefaultStreamLogStore();
   const store = new StreamLogStore();
-  setDefaultStreamLogStore(store);
-  try {
-    run(store, createRunTrace('stream').trace);
-  } finally {
-    setDefaultStreamLogStore(previousStore);
-  }
+  run(store, createRunTrace('stream', store).trace);
 }
 
 describe('AgentTrace stream output', () => {
@@ -230,64 +222,51 @@ describe('tool-use card groupId resolution', () => {
   });
 
   it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
-    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    const logger = createRunTrace('stream', store).trace;
+    const outer = logger.openStage('outer');
+    const ref = await outer.within(async () =>
+      startToolUseCard(logger, 'demoTool', { arg: 1 }),
+    );
 
-    try {
-      const logger = createRunTrace('stream').trace;
-      const outer = logger.openStage('outer');
-      const ref = await outer.within(async () =>
-        startToolUseCard(logger, 'demoTool', { arg: 1 }),
-      );
+    expect(ref.groupId).toBeDefined();
 
-      expect(ref.groupId).toBeDefined();
+    // Mirrors the deferred-tool path: caller passes the captured ref so
+    // the end event lands under the same stage as the start.
+    endToolUseCard(logger, ref, {
+      toolName: 'demoTool',
+      input: { arg: 1 },
+      output: 'ok',
+    });
 
-      // Mirrors the deferred-tool path: caller passes the captured ref so
-      // the end event lands under the same stage as the start.
-      endToolUseCard(logger, ref, {
-        toolName: 'demoTool',
-        input: { arg: 1 },
-        output: 'ok',
-      });
-
-      const entries = store.get('stream')?.getRange(0) ?? [];
-      const toolEntry = entries.find((e) => e.id === ref.logId);
-      expect(toolEntry?.groupId).toBe(ref.groupId);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = store.get('stream')?.getRange(0) ?? [];
+    const toolEntry = entries.find((e) => e.id === ref.logId);
+    expect(toolEntry?.groupId).toBe(ref.groupId);
   });
 });
 
 describe('per-trace stage scope (cross-trace isolation)', () => {
   it('a run stage opened on its own trace does not inherit an active stage from another trace', async () => {
-    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
 
-    try {
-      // Orchestrator trace with an active "Task:" stage — mirrors a subagent
-      // launched from inside a delegation tool's stage scope.
-      const orchestrator = createRunTrace('orchestrator').trace;
-      const taskStage = orchestrator.openStage('Task: orchestrator');
+    // Orchestrator trace with an active "Task:" stage — mirrors a subagent
+    // launched from inside a delegation tool's stage scope.
+    const orchestrator = createRunTrace('orchestrator', store).trace;
+    const taskStage = orchestrator.openStage('Task: orchestrator');
 
-      // Subagent run on a SEPARATE trace/stream, opened *inside* the
-      // orchestrator's stage scope. With a per-instance stage scope the
-      // orchestrator's active stage cannot leak across traces, so the
-      // subagent's run stage is a root on its own stream with no extra flag.
-      // (A module-level shared scope would orphan it under the cross-trace id.)
-      await taskStage.within(async () => {
-        const subagent = createRunTrace('subagent').trace;
-        subagent.openStage('Run: subagent');
-      });
+    // Subagent run on a SEPARATE trace/stream, opened *inside* the
+    // orchestrator's stage scope. With a per-instance stage scope the
+    // orchestrator's active stage cannot leak across traces, so the
+    // subagent's run stage is a root on its own stream with no extra flag.
+    // (A module-level shared scope would orphan it under the cross-trace id.)
+    await taskStage.within(async () => {
+      const subagent = createRunTrace('subagent', store).trace;
+      subagent.openStage('Run: subagent');
+    });
 
-      const entries = store.get('subagent')?.getRange(0) ?? [];
-      const runStage = entries.find((e) => e.text === 'Run: subagent');
-      expect(runStage).toBeDefined();
-      expect(runStage?.groupId).toBeUndefined();
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    const entries = store.get('subagent')?.getRange(0) ?? [];
+    const runStage = entries.find((e) => e.text === 'Run: subagent');
+    expect(runStage).toBeDefined();
+    expect(runStage?.groupId).toBeUndefined();
   });
 });

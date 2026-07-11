@@ -12,7 +12,7 @@ import { loadAgents } from '@agent/index';
 import { registerExecution } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { showQuickPick } from '@commands/_shared/quickInputUtils';
@@ -198,9 +198,9 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     // installs and config writes. The launcher's manual Execute path is
     // deliberately not gated — an explicit user action wins.
     if (
-      SharedExecutionRegistry.getAgentHandles().some(
-        (handle) => agentName(handle.agentName) === SETUP_AGENT_NAME,
-      )
+      defaultSession()
+        .executions.getAgentHandles()
+        .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
     ) {
       void vscode.window.showInformationMessage(
         'The setup assistant is already running — follow it in the Progress view.',

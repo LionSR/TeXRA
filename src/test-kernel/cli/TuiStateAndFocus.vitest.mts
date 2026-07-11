@@ -4,16 +4,10 @@ import { EventEmitter } from 'node:events';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  createRunTrace,
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
-  StreamLogStore,
-} from '@transcript';
+import { createRunTrace } from '@transcript';
 import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   activeStreamId,
   rootRunStartAvailable,
@@ -126,7 +120,7 @@ const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
 afterEach(() => {
-  clearAllStreamStatusesForTest(StreamStatusService);
+  clearAllStreamStatusesForTest(defaultSession().status);
   resetCliState();
 });
 
@@ -269,7 +263,7 @@ describe('cliState Phase 4 fields', () => {
       // survives and its status is read live from the child's own slice.
       applySubagentRoster(root, []);
 
-      StreamStatusService.transition(
+      defaultSession().status.transition(
         child1,
         STREAM_PHASE.FAILED,
         'restart-repair',
@@ -1626,7 +1620,7 @@ describe('CLI TUI row allocation', () => {
     setParentStream(child1, root);
 
     try {
-      StreamStatusService.transition(
+      defaultSession().status.transition(
         child1,
         STREAM_PHASE.RUNNING,
         'restart-repair',
@@ -1666,7 +1660,7 @@ describe('CLI TUI row allocation', () => {
     setParentStream(child1, root);
 
     try {
-      StreamStatusService.transition(
+      defaultSession().status.transition(
         child1,
         STREAM_PHASE.CANCELLED,
         'restart-repair',
@@ -1797,18 +1791,12 @@ describe('finalizeSettledPrefix', () => {
 
 describe('CLI transcript state', () => {
   // Several tests below log through `createRunTrace`/`syncStreamLog`, which
-  // read and write the *default* stream log store. Give every test in this
-  // block a fresh store up front and restore the original afterward, so
-  // store-backed tests don't need to repeat that swap individually.
-  let previousStore: StreamLogStore;
-
-  beforeEach(() => {
-    previousStore = getDefaultStreamLogStore();
-    setDefaultStreamLogStore(new StreamLogStore());
-  });
-
-  afterEach(() => {
-    setDefaultStreamLogStore(previousStore);
+  // read and write the default session's `transcripts` store. No separate
+  // default-store export to swap in anymore (#7694) — clear it in place
+  // before every test instead, so store-backed tests don't need to repeat
+  // that reset individually.
+  beforeEach(async () => {
+    await defaultSession().transcripts.clear();
   });
 
   it('renders orchestrator follow-ups without protocol tags', () => {
@@ -1823,7 +1811,7 @@ describe('CLI transcript state', () => {
   });
 
   it('summarizes subagent protocol continuations in the visible transcript', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('Please solve the problem.', {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
@@ -1842,7 +1830,7 @@ describe('CLI transcript state', () => {
   });
 
   it('summarizes embedded subagent progress blocks in assistant transcript text', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info(
       [
         'Waiting for the child.',
@@ -1868,7 +1856,7 @@ describe('CLI transcript state', () => {
   });
 
   it('normalizes common HTML before assistant text reaches the live transcript', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info(
       '<h3>Verification Report</h3>The proof is <b>fully verified</b>.',
       { messageType: MESSAGE_TYPES.MODEL_RESPONSE },
@@ -1885,7 +1873,7 @@ describe('CLI transcript state', () => {
   });
 
   it('bounds long subagent result responses in the visible transcript', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     const response = Array.from(
       { length: 20 },
       (_, index) => `proof line ${index + 1}`,
@@ -1916,7 +1904,7 @@ describe('CLI transcript state', () => {
   });
 
   it('mirrors error log entries into the transcript', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.error('Model request failed', {
       messageType: MESSAGE_TYPES.ERROR,
     });
@@ -1933,7 +1921,7 @@ describe('CLI transcript state', () => {
   });
 
   it('tracks hidden thinking activity without rendering thinking text', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
 
     // Opening the stream alone marks the phase — hidden reasoning (e.g.
@@ -1972,7 +1960,7 @@ describe('CLI transcript state', () => {
   });
 
   it('does not project empty assistant responses into transcript rows', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
 
     syncStreamLog(root);
@@ -1993,7 +1981,7 @@ describe('CLI transcript state', () => {
   });
 
   it('trims leading blank assistant rows at turn start', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('Why?', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     logger.info('\n\n  The answer starts here.', {
       messageType: MESSAGE_TYPES.MODEL_RESPONSE,
@@ -2015,7 +2003,7 @@ describe('CLI transcript state', () => {
   // `splitTranscriptEntries` once status flipped to WAITING and silently
   // disappear from the transcript.
   it('preserves the finalized flag through a post-finalize sync tick', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('streaming assistant chunk', {
       messageType: MESSAGE_TYPES.MODEL_RESPONSE,
     });
@@ -2047,7 +2035,7 @@ describe('CLI transcript state', () => {
   // the recorder-level upsert-vs-append unit coverage); these tests confirm
   // the CLI's own state ends up with exactly one entry, never a synthetic one.
   it('reconciles a streamed response to the authoritative post-replacement text', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     // Raw provider text, as it would arrive before replacement rules run.
     output.append('Done ✓');
@@ -2067,7 +2055,7 @@ describe('CLI transcript state', () => {
   });
 
   it('appends the final response when the round produced no live stream', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.responseFinalized('The answer is 2.');
 
     syncStreamLog(root);
@@ -2082,7 +2070,7 @@ describe('CLI transcript state', () => {
   });
 
   it('does not let an earlier round leak its stream id into a later round', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     const round0 = logger.openStage('r0', { kind: 'round', index: 0 });
     const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('Let me check that.');
@@ -2106,7 +2094,7 @@ describe('CLI transcript state', () => {
   });
 
   it('projects a turn boundary from the store alone, with zero synthetic entries', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('What is 1 + 1?', {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
@@ -2241,7 +2229,7 @@ describe('CLI transcript state', () => {
   });
 
   it('flushes pending model-response chunks before transcript sync', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     stream.append('A short final answer.');
 
@@ -2254,7 +2242,7 @@ describe('CLI transcript state', () => {
   });
 
   it('finalizes a delayed first model-response sync after the stream is idle', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('A delayed final answer.', {
       messageType: MESSAGE_TYPES.MODEL_RESPONSE,
     });
@@ -2278,7 +2266,7 @@ describe('CLI transcript state', () => {
   });
 
   it('keeps repeated local slash-command responses after stream-log syncs', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
     activeStreamId.set(root);
@@ -2444,7 +2432,7 @@ describe('CLI transcript state', () => {
   });
 
   it('preserves the finalized response across later log syncs', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('1+1', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
     logger.responseFinalized('The answer is 2.');
@@ -2461,7 +2449,7 @@ describe('CLI transcript state', () => {
   });
 
   it('orders multiple finalized responses relative to the turns around them', () => {
-    const logger = createRunTrace(root).trace;
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
     logger.responseFinalized('first answer');
@@ -3050,7 +3038,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
-    const queue = ToolUseFollowUpQueue.acquire(root);
+    const queue = defaultSession().followUps.acquire(root);
 
     try {
       queue.enqueue({ text: 'Keep the proof under one page.' });
@@ -3082,7 +3070,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       expect(slice?.queuedFollowUpMessages).toEqual([]);
     } finally {
       detach();
-      ToolUseFollowUpQueue.release(root);
+      defaultSession().followUps.release(root);
     }
   });
 

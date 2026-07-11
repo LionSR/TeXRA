@@ -4,14 +4,10 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
-  AgentExecutionHandle,
-  SharedExecutionRegistry,
-} from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { DelegateAgentTool } from '@tools/DelegationTools';
 
@@ -145,11 +141,11 @@ describe('headless delegation', () => {
   });
 
   afterEach(() => {
-    for (const executionId of SharedExecutionRegistry.getActiveIds()) {
-      SharedExecutionRegistry.untrack(executionId);
+    for (const executionId of defaultSession().executions.getActiveIds()) {
+      defaultSession().executions.untrack(executionId);
     }
-    ToolUseFollowUpQueue.release('parent-stream' as StreamTabId);
-    ToolUseFollowUpQueue.release('child-stream' as StreamTabId);
+    defaultSession().followUps.release('parent-stream' as StreamTabId);
+    defaultSession().followUps.release('child-stream' as StreamTabId);
   });
 
   it('awaits child delegation during one-shot tool-use runs', async () => {
@@ -594,7 +590,7 @@ describe('headless delegation', () => {
           'toolUse',
           host,
         );
-        SharedExecutionRegistry.track(handle);
+        defaultSession().executions.track(handle);
         options.onStreamResolved?.(childStreamId);
         options.onRun?.(handle);
         return {
@@ -646,14 +642,14 @@ describe('headless delegation', () => {
           'toolUse',
           host,
         );
-        SharedExecutionRegistry.track(handle);
+        defaultSession().executions.track(handle);
         capturedHandle = handle;
         options.onStreamResolved?.(childStreamId);
         options.onRun?.(handle);
         // Detach happens between the loop capturing the handle (onRun, above)
         // and the loop delivering this turn's result (after this resolves) —
         // the same ordering a real stop-with-detach produces mid-turn.
-        SharedExecutionRegistry.detachActiveChildren(parentStreamId, host);
+        defaultSession().executions.detachActiveChildren(parentStreamId, host);
         return {
           category: 'toolUse',
           outcome: STREAM_PHASE.WAITING,
@@ -681,7 +677,7 @@ describe('headless delegation', () => {
       );
     });
     expect(capturedHandle?.deliveryTargetStreamId).toBeUndefined();
-    expect(ToolUseFollowUpQueue.getAll(parentStreamId)).toEqual([]);
-    expect(ToolUseFollowUpQueue.getAll(childStreamId)).toEqual([]);
+    expect(defaultSession().followUps.getAll(parentStreamId)).toEqual([]);
+    expect(defaultSession().followUps.getAll(childStreamId)).toEqual([]);
   });
 });

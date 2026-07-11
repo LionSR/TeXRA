@@ -15,10 +15,8 @@ import {
   resolveAndResumeStream,
   type ResumeStreamPorts,
 } from '@agent/runtime/resolveAndResumeStream';
-import {
-  StreamStatusMachine,
-  StreamStatusService,
-} from '@agent/runtime/StreamStatusService';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 const STREAM = 'stream:resume' as StreamTabId;
@@ -29,7 +27,7 @@ function basePorts(
 ): ResumeStreamPorts {
   return {
     runtimeHost,
-    streamStatus: StreamStatusService,
+    streamStatus: defaultSession().status,
     resolveResumeState: vi.fn(async () => ({
       runState: { agent: 'a', model: 'm' } as never,
       executionId: 'exec-1' as never,
@@ -49,7 +47,7 @@ describe('resolveAndResumeStream', () => {
   });
 
   afterEach(() => {
-    clearStreamStatusForTest(StreamStatusService, STREAM);
+    clearStreamStatusForTest(defaultSession().status, STREAM);
   });
 
   it('routes a tool-use snapshot to the resume port', async () => {
@@ -102,7 +100,7 @@ describe('resolveAndResumeStream', () => {
     let statusDuringLaunch: string | undefined;
     const ports = basePorts({
       executeWorkflow: vi.fn(async () => {
-        statusDuringLaunch = StreamStatusService.get(STREAM);
+        statusDuringLaunch = defaultSession().status.get(STREAM);
       }),
     });
 
@@ -121,7 +119,7 @@ describe('resolveAndResumeStream', () => {
     // re-check must bail before touching the resume ports.
     retrieveSessionResumeDataMock.mockImplementation(async () => {
       seedStreamStatusForTest(
-        StreamStatusService,
+        defaultSession().status,
         STREAM,
         STREAM_STATUS.RUNNING,
       );
@@ -135,7 +133,11 @@ describe('resolveAndResumeStream', () => {
   });
 
   it('skips resume without resolving when the stream is already active', async () => {
-    seedStreamStatusForTest(StreamStatusService, STREAM, STREAM_STATUS.RUNNING);
+    seedStreamStatusForTest(
+      defaultSession().status,
+      STREAM,
+      STREAM_STATUS.RUNNING,
+    );
     const ports = basePorts();
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
@@ -205,7 +207,11 @@ describe('resolveAndResumeStream', () => {
   it('ignores activity recorded only on a different session machine', async () => {
     // The inverse: activity on the process default must not block a resume in
     // a session whose own machine says the stream is idle.
-    seedStreamStatusForTest(StreamStatusService, STREAM, STREAM_STATUS.RUNNING);
+    seedStreamStatusForTest(
+      defaultSession().status,
+      STREAM,
+      STREAM_STATUS.RUNNING,
+    );
     retrieveSessionResumeDataMock.mockResolvedValue({
       type: 'toolUse',
       snapshot: { streamId: STREAM, executionId: 'exec-1' },

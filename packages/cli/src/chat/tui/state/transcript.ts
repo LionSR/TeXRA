@@ -1,4 +1,4 @@
-import { getDefaultStreamLogStore } from '@transcript';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { isTerminalStatus } from '@common/constants/streamStatus';
 import { type StreamLifecycleStatus, type StreamTabId } from '@shared/schemas';
 
@@ -60,7 +60,8 @@ function appendLocalTranscriptEntry(
 
   const streamId = explicitStreamId ?? defaultLocalTranscriptStreamId();
   if (!activeStreamId.get()) activeStreamId.set(streamId);
-  const syntheticAfterSeq = getDefaultStreamLogStore().get(streamId)?.head ?? 0;
+  const syntheticAfterSeq =
+    defaultSession().transcripts.get(streamId)?.head ?? 0;
 
   patchStream(streamId, (slice) => {
     const entry: ConversationEntry = {

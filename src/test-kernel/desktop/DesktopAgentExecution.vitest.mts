@@ -247,7 +247,6 @@ function mockLoggerModule(loggerErrorSpy?: ReturnType<typeof vi.fn>): void {
       warn: () => {},
       error: loggerErrorSpy ?? (() => {}),
     }),
-    setDefaultStreamLogStore: () => {},
   }));
 }
 
@@ -3468,10 +3467,14 @@ describe('DesktopProgressBridge', () => {
     type WindowPair = {
       windowA: WindowFixture;
       windowB: WindowFixture;
-      /** Same-registry runtime modules (the ones the bridges actually use). */
+      /**
+       * Same-registry `defaultSession` (the one the bridges actually use) —
+       * there is no separate `StreamStatusService`/`getDefaultStreamLogStore`
+       * module export anymore (#7694): the process-wide default session owns
+       * its `status`/`transcripts` members directly.
+       */
       registry: {
-        StreamStatusService: StreamStatusMachine;
-        getDefaultStreamLogStore: typeof import('@transcript').getDefaultStreamLogStore;
+        defaultSession: typeof import('@agent/runtime/SessionHandle').defaultSession;
       };
       dispose(): void;
     };
@@ -3479,12 +3482,9 @@ describe('DesktopProgressBridge', () => {
     async function createWindowPair(): Promise<WindowPair> {
       const { bridgeModule } = await loadBridgeModule();
       // Same registry as the bridge module graph — identity comparisons
-      // against process-wide defaults must use these instances, not the
-      // statically imported copies from the pre-reset registry.
-      const [{ StreamStatusService }, transcript] = await Promise.all([
-        import('@agent/runtime/StreamStatusService'),
-        import('@transcript'),
-      ]);
+      // against process-wide defaults must use this instance, not a
+      // statically imported copy from the pre-reset registry.
+      const { defaultSession } = await import('@agent/runtime/SessionHandle');
       const makeWindow = (): WindowFixture => {
         const messages: unknown[] = [];
         const snapshots = createStreamSnapshotStore([]);
@@ -3516,8 +3516,7 @@ describe('DesktopProgressBridge', () => {
         windowA,
         windowB,
         registry: {
-          StreamStatusService,
-          getDefaultStreamLogStore: transcript.getDefaultStreamLogStore,
+          defaultSession,
         },
         dispose: () => {
           windowA.bridge.dispose();
@@ -3793,10 +3792,10 @@ describe('DesktopProgressBridge', () => {
           windowB.session.transcripts,
         );
         expect(windowA.session.transcripts).not.toBe(
-          registry.getDefaultStreamLogStore(),
+          registry.defaultSession().transcripts,
         );
         expect(windowB.session.transcripts).not.toBe(
-          registry.getDefaultStreamLogStore(),
+          registry.defaultSession().transcripts,
         );
 
         for (const [window, streamId] of [
@@ -3820,8 +3819,8 @@ describe('DesktopProgressBridge', () => {
         expect(windowA.session.transcripts.has(streamB)).toBe(false);
         expect(windowB.bridge.streamLogs.get(streamA)).toBeUndefined();
         expect(windowA.bridge.streamLogs.get(streamB)).toBeUndefined();
-        expect(registry.getDefaultStreamLogStore().has(streamA)).toBe(false);
-        expect(registry.getDefaultStreamLogStore().has(streamB)).toBe(false);
+        expect(registry.defaultSession().transcripts.has(streamA)).toBe(false);
+        expect(registry.defaultSession().transcripts.has(streamB)).toBe(false);
       } finally {
         pair.dispose();
       }
@@ -3832,15 +3831,19 @@ describe('DesktopProgressBridge', () => {
       const { windowA, windowB, registry } = pair;
 
       try {
-        // Desktop windows own fresh status machines. The process-wide default
-        // machine (`StreamStatusService`) survives, but only as the
+        // Desktop windows own fresh status machines. The process-wide
+        // default session's status machine survives, but only as the
         // single-session default-session compatibility path (extension/CLI) —
         // a ledgered residue tracked on #6981 (D1 rows), not a desktop
         // multi-window sharing point. Assert the isolation that IS promised:
         // neither window aliases it, and neither window writes to it.
         expect(windowA.session.status).not.toBe(windowB.session.status);
-        expect(windowA.session.status).not.toBe(registry.StreamStatusService);
-        expect(windowB.session.status).not.toBe(registry.StreamStatusService);
+        expect(windowA.session.status).not.toBe(
+          registry.defaultSession().status,
+        );
+        expect(windowB.session.status).not.toBe(
+          registry.defaultSession().status,
+        );
 
         const changesSeenByB: unknown[] = [];
         windowB.session.status.onDidChange((change) =>
@@ -3878,8 +3881,8 @@ describe('DesktopProgressBridge', () => {
           ),
         ).toEqual([]);
         // Neither window's run leaked into the process-default machine.
-        expect(registry.StreamStatusService.get(streamA)).toBeUndefined();
-        expect(registry.StreamStatusService.get(streamB)).toBeUndefined();
+        expect(registry.defaultSession().status.get(streamA)).toBeUndefined();
+        expect(registry.defaultSession().status.get(streamB)).toBeUndefined();
 
         // One window's delete-all sweep (bridge path AND machine path) cannot
         // reset the sibling's streams — the exact L3 clearAll leak.
