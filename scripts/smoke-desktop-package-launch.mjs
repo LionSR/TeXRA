@@ -234,7 +234,7 @@ async function closeApplication(application, exitPromise) {
   const child = application.process();
   if (hasExited(child)) return;
 
-  const closeFailure = await Promise.race([
+  let closeFailure = await Promise.race([
     application.close().then(
       () => null,
       (error) => error,
@@ -243,7 +243,17 @@ async function closeApplication(application, exitPromise) {
       () => new Error('ElectronApplication.close() timed out.'),
     ),
   ]);
-  if (!closeFailure) return;
+  if (!closeFailure) {
+    if (hasExited(child)) return;
+    const exitObserved = await Promise.race([
+      exitPromise.then(() => true),
+      delay(SHUTDOWN_GRACE_MS).then(() => false),
+    ]);
+    if (exitObserved && hasExited(child)) return;
+    closeFailure = new Error(
+      'ElectronApplication.close() completed before the process exited.',
+    );
+  }
 
   appendDiagnostic(
     'teardown',
