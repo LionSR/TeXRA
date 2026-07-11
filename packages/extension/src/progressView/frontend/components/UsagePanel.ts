@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { styleMap } from 'lit/directives/style-map.js';
 import { when } from 'lit/directives/when.js';
 
 // Side-effect imports - register WA icon component
@@ -12,7 +13,6 @@ import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
-import { linearGaugeStyles, renderLinearGauge } from '@shared/wa/gauges';
 import { clamp, formatCompactTokenCount } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
@@ -75,7 +75,6 @@ function usageCostLabel(cost: number, route: UsageRoute | undefined): string {
 export class UsagePanel extends LitElement {
   static override styles = [
     designTokens,
-    linearGaugeStyles,
     css`
       :host {
         display: block;
@@ -123,6 +122,32 @@ export class UsagePanel extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-2xs);
+      }
+
+      .context-gauge__track {
+        position: relative;
+        width: 80px;
+        height: 6px;
+        background: var(--wa-color-surface-border, rgba(128, 128, 128, 0.3));
+        border-radius: var(--border-radius);
+        overflow: hidden;
+      }
+
+      .context-gauge__fill {
+        display: block;
+        height: 100%;
+        border-radius: var(--border-radius);
+        transition: width var(--transition-slow);
+      }
+
+      /* Compaction threshold tick mark */
+      .context-gauge__tick {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: var(--border-thin);
+        background: var(--wa-color-text-normal);
+        opacity: var(--opacity-separator);
       }
 
       .run-summary {
@@ -292,16 +317,20 @@ export class UsagePanel extends LitElement {
           name="window"
           aria-hidden="true"
         ></wa-icon>
-        ${renderLinearGauge({
-          percent: clamped,
-          color: fillColor(clamped),
-          ticks: [
-            {
-              position: COMPACTION_THRESHOLD,
-              title: `Compaction at ${COMPACTION_THRESHOLD}%`,
-            },
-          ],
-        })}
+        <span class="context-gauge__track">
+          <span
+            class="context-gauge__fill"
+            style=${styleMap({
+              width: `${clamped}%`,
+              backgroundColor: fillColor(clamped),
+            })}
+          ></span>
+          <span
+            class="context-gauge__tick"
+            style=${styleMap({ left: `${COMPACTION_THRESHOLD}%` })}
+            title="Compaction at ${COMPACTION_THRESHOLD}%"
+          ></span>
+        </span>
         <span class="context-state__value">
           ${formatCompactTokenCount(inputTokens)} /
           ${formatCompactTokenCount(contextWindow)}
