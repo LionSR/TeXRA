@@ -22,6 +22,7 @@ import {
   splitCommitLines,
 } from '@utils/git/commitLogFormat';
 import { executeCommandSync } from '@utils/system/execUtils';
+import { extendEnvPath } from '@utils/system/platformPaths';
 import { isGitRepository as probeGitRepository } from '@utils/system/isGitRepository';
 
 const CHANNEL = 'gitCommands';
@@ -332,7 +333,9 @@ export async function cloneOverleafProject(
       () =>
         execa('git', ['clone', remote, '.'], {
           cwd: workspacePath,
-          env: { GIT_TERMINAL_PROMPT: '0' },
+          // Same extended PATH as the executeCommandSync preflight above, so
+          // the probe can't pass while the clone misses git (bot review).
+          env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
         }),
     );
     vscode.window.showInformationMessage(`${label} project cloned.`);
