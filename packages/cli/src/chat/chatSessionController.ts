@@ -445,9 +445,9 @@ export function createChatSessionController(
       // interface contract.
       runChain.then(resolveRunPromise, rejectRunPromise);
     } catch (error: unknown) {
+      reportRunFailure(error);
       markChatTuiRunCompleted(session);
       resolveRunPromise();
-      throw error;
     }
   };
 
