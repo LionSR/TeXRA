@@ -31,9 +31,11 @@ import type {
 } from '@shared/schemas';
 
 import {
-  deliverChildRunFollowUp,
+  enqueueChildRunFollowUp,
+  wakeChildRunFollowUp,
   persistChildRunReport,
   persistChildRunResultMeta,
+  type ChildRunEnqueueResult,
 } from '@tools/childRunDelivery';
 import { formatSubagentProgress } from '@tools/subagentResults';
 import type { ChildStream } from '@tools/childStream';
@@ -339,9 +341,26 @@ async function persistResultMetaBestEffort(
 }
 
 /**
- * Format, persist, and deliver one turn's outcome to the parent's follow-up
+ * A turn's parent-follow-up enqueue, still pending its wake step. Waking can
+ * await the resumed parent's entire turn (`agentResume.tryResumeStream` → …
+ * → `resumeToolUseFromSnapshot`), so callers that are about to finalize this
+ * child (terminal/failed turns) must resolve the wake only AFTER that
+ * finalize completes — otherwise a resumed parent that immediately waits on
+ * this still-RUNNING execution self-stalls (#8093). Callers that continue to
+ * another turn (no finalize pending) may wake immediately.
+ */
+interface PendingChildDelivery {
+  readonly targetStreamId: StreamTabId;
+  readonly enqueueResult: ChildRunEnqueueResult;
+}
+
+/**
+ * Format, persist, and enqueue one turn's outcome on the parent's follow-up
  * queue — the loop's single delivery site, shared by every interim and
- * terminal turn, every strategy.
+ * terminal turn, every strategy. Returns the pending delivery for the caller
+ * to wake via {@link wakePendingDelivery} once its own ordering allows it;
+ * `undefined` when there is nothing to wake (detached child, or delivery
+ * skipped by `prepareParentDelivery`).
  */
 async function deliverTurn<TTurn>(params: {
   strategy: ChildRunStrategy<TTurn>;
@@ -354,7 +373,7 @@ async function deliverTurn<TTurn>(params: {
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
-}): Promise<void> {
+}): Promise<PendingChildDelivery | undefined> {
   const {
     strategy,
     executionId,
@@ -395,30 +414,49 @@ async function deliverTurn<TTurn>(params: {
       'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
       { data: { executionId } },
     );
-    return;
+    return undefined;
   }
-  if (prepareParentDelivery?.() === false) return;
-  const delivery = await deliverChildRunFollowUp({
+  if (prepareParentDelivery?.() === false) return undefined;
+  const enqueueResult = await enqueueChildRunFollowUp({
     targetStreamId,
     followUp: { text: msg, origin: 'subagent_result' },
     session,
-    wake: true,
   });
-  if (delivery.kind === 'no_session') {
+  if (enqueueResult.kind === 'no_session') {
     logger.warn(
       'Turn result not delivered: parent stream has no active session. The result remains in the execution report.',
       {
         data: {
           executionId,
           parentStreamId: targetStreamId,
-          streamStatus: delivery.streamStatus ?? 'unknown',
+          streamStatus: enqueueResult.streamStatus ?? 'unknown',
         },
       },
     );
-  } else if (delivery.kind === 'dropped') {
+  }
+  return { targetStreamId, enqueueResult };
+}
+
+/**
+ * Resolve a pending delivery's wake step (no-op when there is nothing to
+ * wake, or the enqueue itself found no session — already logged above).
+ */
+async function wakePendingDelivery(
+  pending: PendingChildDelivery | undefined,
+  session: SessionHandle,
+  executionId: ExecutionId,
+  logger: AgentTrace,
+): Promise<void> {
+  if (!pending || pending.enqueueResult.kind === 'no_session') return;
+  const delivery = await wakeChildRunFollowUp(
+    pending.targetStreamId,
+    pending.enqueueResult,
+    session,
+  );
+  if (delivery.kind === 'dropped') {
     logger.warn(
       'Turn result dropped: parent stream is gone and could not be resumed. The result remains in the execution report.',
-      { data: { executionId, parentStreamId: targetStreamId } },
+      { data: { executionId, parentStreamId: pending.targetStreamId } },
     );
   }
 }
@@ -493,11 +531,11 @@ export function startChildRunLoop<TTurn>(
         : parentStreamId;
       if (!targetStreamId) return; // Detached — see deliverTurn for the same guard.
       const msg = formatSubagentProgress(executionId, agentName, update);
-      // No `wake: true` — intentional. A live progress notification should
+      // Enqueue-only — intentional. A live progress notification should
       // never wake a WAITING/detached parent stream just to deliver an
       // interim update; only a turn's own delivery (deliverTurn, below)
       // wakes the parent.
-      void deliverChildRunFollowUp({
+      void enqueueChildRunFollowUp({
         targetStreamId,
         followUp: { text: msg, origin: 'subagent_result' },
         session: runSession,
@@ -510,6 +548,13 @@ export function startChildRunLoop<TTurn>(
 
   let sawTurnFailure = false;
   let lastTurnErr: unknown;
+  // A delivery whose wake is still pending. Set right before any `break` out
+  // of the loop below (terminal/failed turn) and resolved AFTER this child's
+  // own finalize in the `finally` block — never before — so a resumed parent
+  // that immediately waits on this execution always finds it terminal
+  // (#8093). Interim (non-terminal) turns wake inline, immediately, since no
+  // finalize is pending for them.
+  let pendingDelivery: PendingChildDelivery | undefined;
   void (async () => {
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
@@ -539,7 +584,7 @@ export function startChildRunLoop<TTurn>(
           strategy.publishUsage?.(turn);
         }
 
-        await deliverTurn({
+        const delivery = await deliverTurn({
           strategy,
           executionId,
           parentStreamId,
@@ -571,6 +616,7 @@ export function startChildRunLoop<TTurn>(
               `${strategy.stageLabel} reported a failed turn without throwing.`,
             );
           childStream?.failTurn();
+          pendingDelivery = delivery;
           break;
         }
 
@@ -580,13 +626,16 @@ export function startChildRunLoop<TTurn>(
           // turn terminal via `isTerminal`; reaching here with one still
           // undeclared-terminal is a strategy bug, not a run outcome — stop
           // rather than call an absent `runTurn`.
+          pendingDelivery = delivery;
           break;
         }
 
-        // Interim turn continuing: the loop's interrupt handler is already
-        // attached (immediately above, the instant this turn settled) —
-        // just drain the next batch. A follow-up already raced into the
-        // queue resumes immediately instead of genuinely waiting.
+        // Interim turn continuing: no finalize is pending, so wake now — the
+        // loop's interrupt handler is already attached (immediately above,
+        // the instant this turn settled) — then just drain the next batch. A
+        // follow-up already raced into the queue resumes immediately instead
+        // of genuinely waiting.
+        await wakePendingDelivery(delivery, runSession, executionId, logger);
         childStream?.waitForInput();
         if (loop.isInterrupted()) break;
 
@@ -662,6 +711,16 @@ export function startChildRunLoop<TTurn>(
           }
         }
       }
+      // Wake the parent only now — after this child's own finalize above —
+      // so a resumed parent turn that immediately waits on this execution
+      // (e.g. `executions` tool with `action=wait`) always observes it
+      // terminal instead of racing its own wake (#8093).
+      await wakePendingDelivery(
+        pendingDelivery,
+        runSession,
+        executionId,
+        logger,
+      );
     }
   })();
 }
