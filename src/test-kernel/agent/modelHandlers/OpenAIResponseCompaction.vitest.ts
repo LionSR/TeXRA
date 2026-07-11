@@ -217,6 +217,181 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(result.updatedMessages).toEqual(compactedMessages);
   });
 
+  it('reuses a successful compaction across a same-turn retry instead of re-compacting (chain-anchor/payload commit race)', async () => {
+    // PocketFlow's Node._exec retries a failed exec() with the identical
+    // prepRes, so a same-turn retry resends the exact same `messages` array
+    // reference. Compaction's chain-anchor clear (on ResponseChainState)
+    // commits immediately and survives that retry permanently; its computed
+    // payload (compactionResult) must now survive the same retry too, or the
+    // retry silently redoes the compact() call for no reason.
+    const handler = createHandler();
+    const requests: any[] = [];
+    const compactRequests: any[] = [];
+    const compactedMessages = [
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'compacted state' }],
+      },
+    ] as unknown as ResponseInputItem[];
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => ({ input_tokens: 100 }),
+        },
+        compact: async (params: any) => {
+          compactRequests.push(params);
+          return {
+            output: compactedMessages,
+            usage: { output_tokens: 100 },
+          };
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          if (requests.length === 1) {
+            return createResponse('resp-before-threshold', 800);
+          }
+          if (requests.length === 2) {
+            // The request that follows a successful compaction fails once,
+            // forcing a same-turn retry with the same `messages` reference.
+            throw new Error('transient network failure');
+          }
+          return createResponse('resp-after-compaction', 150);
+        },
+      },
+    };
+    const firstTurnMessages = createMessages(2);
+    const secondTurnMessages = createMessages(3);
+
+    await handler.createResponse({
+      client: client as any,
+      messages: firstTurnMessages,
+      temperature: 0,
+    });
+
+    await expect(
+      handler.createResponse({
+        client: client as any,
+        messages: secondTurnMessages,
+        temperature: 0,
+      }),
+    ).rejects.toThrow('transient network failure');
+
+    // Same-turn retry: identical `messages` reference as the failed attempt.
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: secondTurnMessages,
+      temperature: 0,
+    });
+
+    // The /responses/compact endpoint must be hit only once across both
+    // attempts — the retry reuses the already-computed compaction instead of
+    // silently redoing it.
+    expect(compactRequests).toHaveLength(1);
+    expect(requests).toHaveLength(3);
+    expect(requests[2].previous_response_id).toBeUndefined();
+    expect(requests[2].input).toEqual(compactedMessages);
+    expect(result.updatedMessages).toEqual(compactedMessages);
+  });
+
+  it('does not reuse a stale compaction across a genuinely new turn that keeps the same messages array reference', async () => {
+    // Unlike the two synthetic test helpers above (which pass a fresh array
+    // per turn), PocketFlow's ModelInvocationNode.post() mutates
+    // `shared.messages` IN PLACE (replaceMessagesInPlace: length=0 + push),
+    // so the array reference is typically IDENTICAL across turns, not just
+    // across retries of one turn. Keying compaction-result reuse on
+    // `sourceMessages === messages` alone would therefore also match the next
+    // turn and resend the stale post-compaction payload, silently dropping
+    // whatever was appended since (see cursor[bot]/codex[bot] review on this
+    // PR). This test drives the handler the way the real flow does: one
+    // array object, mutated across three turns.
+    const handler = createHandler();
+    const requests: any[] = [];
+    const compactRequests: any[] = [];
+    const compactedMessages = [
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'compacted state' }],
+      },
+    ] as unknown as ResponseInputItem[];
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => ({ input_tokens: 100 }),
+        },
+        compact: async (params: any) => {
+          compactRequests.push(params);
+          return {
+            output: compactedMessages,
+            usage: { output_tokens: 100 },
+          };
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          if (requests.length === 1) return createResponse('resp-turn1', 800);
+          if (requests.length === 2)
+            return createResponse('resp-turn2-compacted', 150);
+          return createResponse('resp-turn3', 160);
+        },
+      },
+    };
+
+    // One shared array, exactly as `shared.messages` is across the real
+    // PocketFlow cycle.
+    const sharedMessages = createMessages(2);
+
+    // Turn 1: below threshold, no compaction.
+    await handler.createResponse({
+      client: client as any,
+      messages: sharedMessages,
+      temperature: 0,
+    });
+
+    // Turn 2 begins: a new message arrives, appended onto the SAME array
+    // (mirrors ToolUseDispatchNode / a new user turn `.push()`-ing onto
+    // `shared.messages`).
+    const turn2NewMessage = { role: 'user', content: 'message 3' };
+    sharedMessages.push(turn2NewMessage as ResponseInputItem);
+
+    // Turn 1's response crossed the compaction threshold (800 > 750), so
+    // turn 2 compacts.
+    const turn2Result = await handler.createResponse({
+      client: client as any,
+      messages: sharedMessages,
+      temperature: 0,
+    });
+    expect(compactRequests).toHaveLength(1);
+    expect(turn2Result.updatedMessages).toEqual(compactedMessages);
+
+    // Mirror ModelInvocationNode.post(): replaceMessagesInPlace mutates the
+    // SAME array object to hold the compacted content instead of replacing
+    // the reference.
+    sharedMessages.length = 0;
+    sharedMessages.push(...(turn2Result.updatedMessages ?? []));
+
+    // Turn 3 begins: another message arrives, appended onto the SAME array
+    // object turn 1 and turn 2 both used.
+    const turn3NewMessage = { role: 'user', content: 'message 4' };
+    sharedMessages.push(turn3NewMessage as ResponseInputItem);
+
+    // Turn 2's response (150 tokens) is well under threshold, so turn 3 must
+    // NOT compact again and must send only what's new since the chain
+    // anchor (the single message appended after turn 2), not turn 2's stale
+    // compacted payload.
+    const turn3Result = await handler.createResponse({
+      client: client as any,
+      messages: sharedMessages,
+      temperature: 0,
+    });
+
+    expect(compactRequests).toHaveLength(1);
+    expect(requests).toHaveLength(3);
+    expect(requests[2].previous_response_id).toBe('resp-turn2-compacted');
+    expect(requests[2].input).toEqual([turn3NewMessage]);
+    expect(turn3Result.updatedMessages).toBeUndefined();
+  });
+
   it('does not call the Responses compact endpoint when compaction is unsupported', async () => {
     const handler = createUnsupportedCompactionHandler();
     const requests: any[] = [];
@@ -267,6 +442,12 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const requests: any[] = [];
     const compactRequests: any[] = [];
     const streamRequests: any[] = [];
+    // compactionResult is only populated between the compaction call and this
+    // turn's own finalizeResponse() (which clears it on success so it can
+    // never leak into a later turn - see createResponseImpl). Snapshot it
+    // from inside the outer `create()` mock, the one point still inside that
+    // window, rather than reading it back after `createResponse()` resolves.
+    let tokensAfterDuringCall: number | undefined;
     const client = {
       responses: {
         compact: async (params: any) => {
@@ -291,6 +472,13 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
         },
         create: async (params: any) => {
           requests.push(params);
+          if (requests.length === 2) {
+            tokensAfterDuringCall = (
+              handler as unknown as {
+                compactionResult?: { tokensAfter: number };
+              }
+            ).compactionResult?.tokensAfter;
+          }
           return requests.length === 1
             ? createResponse('resp-before-threshold', 800)
             : createResponse('resp-after-client-side-compaction', 150);
@@ -342,15 +530,15 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     // back to a text-length estimate over exactly what gets resent.
     const resentText =
       '[Previous conversation summary]\n\nconcise summary of the prior turns';
-    const compactionResult = (
-      handler as unknown as {
-        compactionResult?: { tokensAfter: number };
-      }
-    ).compactionResult;
-    expect(compactionResult?.tokensAfter).toBe(
-      estimateTokensFromText(resentText),
-    );
-    expect(compactionResult?.tokensAfter).not.toBe(42);
+    expect(tokensAfterDuringCall).toBe(estimateTokensFromText(resentText));
+    expect(tokensAfterDuringCall).not.toBe(42);
+
+    // And after the successful call, compactionResult must NOT survive into
+    // a later turn (see the same-turn-retry-vs-next-turn regression test
+    // above) - applyCompactionState() clears it unconditionally on success.
+    expect(
+      (handler as unknown as { compactionResult?: unknown }).compactionResult,
+    ).toBeUndefined();
   });
 
   it('bounds the summary on Codex by aborting the stream once the client-side cap is reached (#7213)', async () => {
