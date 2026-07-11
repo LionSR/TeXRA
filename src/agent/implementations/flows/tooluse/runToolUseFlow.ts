@@ -47,6 +47,7 @@ import {
   findLastAssistantText,
   extractTouchedFiles,
   migrateSharedState,
+  ToolUseRunSharedSchema,
   ToolUseRunSharedCanonicalSchema,
   type ToolUseRunShared,
 } from './nodes/types';
@@ -132,7 +133,7 @@ function buildResumedSharedFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   activeCompatibilityKey: ModelHandlerCompatibilityKey | undefined,
 ): ToolUseRunShared {
-  return {
+  return ToolUseRunSharedSchema.parse({
     ...structuralBase,
     messages: snapshot.messages,
     modelHandlerCompatibilityKey:
@@ -142,7 +143,7 @@ function buildResumedSharedFromSnapshot(
       workspaceSnapshot: snapshot.workspace,
       userChannels: snapshot.user,
     },
-  };
+  });
 }
 
 interface ToolUseFlowContext {
