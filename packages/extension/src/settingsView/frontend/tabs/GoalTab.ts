@@ -65,7 +65,7 @@ export class GoalTab extends LitElement {
       /* Native wa-badge (variant per status, quiet 'filled' appearance),
          compacted to the prior 2px chip padding. */
       .status-chip::part(base) {
-        padding: 2px var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
         font-weight: var(--wa-font-weight-semibold);
       }
 
