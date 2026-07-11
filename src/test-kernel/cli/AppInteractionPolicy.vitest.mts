@@ -5,11 +5,10 @@ import { describe, expect, it } from 'vitest';
 import {
   appEscapeInterruptActive,
   appFocusShortcutsActive,
-  approvalForegroundMaxRows,
   approvalVisibleForActiveStream,
-  childControlForegroundMaxRows,
   digitFromMetaShortcut,
   foregroundEscapeAction,
+  foregroundMaxRowsForKind,
   foregroundSurfaceKind,
   shouldDeferEscapeInterruptForMetaChord,
   triggerEscapeInterrupt,
@@ -19,17 +18,16 @@ import {
 import type { PendingApproval } from '@cli/chat/tui/state/approvalQueue';
 import type { StreamTabId } from '@shared/schemas';
 
-type ApprovalKind = PendingApproval['payload']['kind'];
 type EscapeActiveState = Parameters<typeof appEscapeInterruptActive>[0];
 type FocusState = Parameters<typeof appFocusShortcutsActive>[0];
 type ForegroundSurfaceInput = Parameters<typeof foregroundSurfaceKind>[0];
 type ForegroundEscapeInput = Parameters<typeof foregroundEscapeAction>[0];
+type ForegroundRowsInput = Parameters<typeof foregroundMaxRowsForKind>[0];
+type ApprovalKind = NonNullable<ForegroundRowsInput['approvalKind']>;
 type MetaChordState = Parameters<
   typeof shouldDeferEscapeInterruptForMetaChord
 >[0];
 
-const root = 'root' as StreamTabId;
-const child = 'child-1' as StreamTabId;
 const focusEnabled = {
   foregroundOpen: false,
   reverseSearchOpen: false,
@@ -47,12 +45,17 @@ const escChordHidden = {
   taskControlsAvailable: false,
 } satisfies MetaChordState;
 
-function pendingApproval(
-  kind: ApprovalKind,
-  streamId?: StreamTabId,
-): PendingApproval {
+function bashApproval(streamId?: StreamTabId): PendingApproval {
   return {
-    payload: { kind, payload: { streamId } } as PendingApproval['payload'],
+    payload: {
+      kind: 'bash',
+      payload: {
+        requestId: 'bash-1',
+        command: 'echo ok',
+        allowBypass: true,
+        streamId: streamId ?? '',
+      },
+    },
     decide: () => undefined,
   };
 }
@@ -69,18 +72,13 @@ function foregroundInput(
 }
 
 describe('app interaction policy', () => {
-  it('uses a smaller row cap for empty child-control pickers', () => {
-    const cases = [
-      [false, 6],
-      [true, 12],
-    ] satisfies readonly (readonly [boolean, number])[];
-
-    for (const [hasItems, expected] of cases) {
-      expect(childControlForegroundMaxRows({ hasItems })).toBe(expected);
-    }
-  });
-
-  it('applies exhaustive approval row-cap policy', () => {
+  it('resolves exhaustive foreground row caps', () => {
+    const surfaceCases = [
+      [{ childControlHasItems: false, kind: 'childControls' }, 6],
+      [{ childControlHasItems: true, kind: 'childControls' }, 12],
+      [{ childControlHasItems: false, kind: 'form' }, 18],
+      [{ childControlHasItems: false, kind: 'transcript' }, undefined],
+    ] satisfies readonly (readonly [ForegroundRowsInput, number | undefined])[];
     const expectedByKind = {
       plan: undefined,
       retry: undefined,
@@ -91,10 +89,17 @@ describe('app interaction policy', () => {
       externalInquiry: 18,
     } satisfies Record<ApprovalKind, number | undefined>;
 
-    for (const kind of Object.keys(expectedByKind) as ApprovalKind[]) {
-      expect(approvalForegroundMaxRows(pendingApproval(kind))).toBe(
-        expectedByKind[kind],
-      );
+    for (const [input, expected] of surfaceCases) {
+      expect(foregroundMaxRowsForKind(input)).toBe(expected);
+    }
+    for (const approvalKind of Object.keys(expectedByKind) as ApprovalKind[]) {
+      expect(
+        foregroundMaxRowsForKind({
+          approvalKind,
+          childControlHasItems: false,
+          kind: 'approval',
+        }),
+      ).toBe(expectedByKind[approvalKind]);
     }
   });
 
@@ -204,21 +209,14 @@ describe('app interaction policy', () => {
   });
 
   it('shows stream-owned approvals only on their matching tab', () => {
-    const childApproval = pendingApproval('bash', child);
-    const globalApproval = pendingApproval('toolEdit');
+    const childApproval = bashApproval('child-1');
+    const globalApproval = bashApproval();
     const visible = (activeStreamId: StreamTabId, pending: PendingApproval) =>
       approvalVisibleForActiveStream({ activeStreamId, pending });
 
-    expect(visible(child, childApproval)).toBe(true);
-    const hiddenApprovalVisible = visible(root, childApproval);
-    expect(hiddenApprovalVisible).toBe(false);
-    expect(visible(root, globalApproval)).toBe(true);
-    expect(
-      appFocusShortcutsActive({
-        ...focusEnabled,
-        foregroundOpen: hiddenApprovalVisible,
-      }),
-    ).toBe(true);
+    expect(visible('child-1', childApproval)).toBe(true);
+    expect(visible('root', childApproval)).toBe(false);
+    expect(visible('root', globalApproval)).toBe(true);
   });
 
   it('labels foreground escape actions from the owning surface', () => {
@@ -233,25 +231,20 @@ describe('app interaction policy', () => {
       ],
       [{ foregroundKind: 'form' }, 'close'],
       [{ activeFormEscapeAction: 'cancel', foregroundKind: 'form' }, 'cancel'],
-    ] satisfies readonly (readonly [
-      Omit<ForegroundEscapeInput, 'pending'>,
-      string,
-    ])[];
+    ] satisfies readonly (readonly [ForegroundEscapeInput, string])[];
     const approvalCases = [
       ['externalInquiry', 'skip'],
       ['bash', 'cancel'],
     ] satisfies readonly (readonly [ApprovalKind, string])[];
 
     for (const [input, expected] of surfaceCases) {
-      expect(foregroundEscapeAction({ ...input, pending: undefined })).toBe(
-        expected,
-      );
+      expect(foregroundEscapeAction(input)).toBe(expected);
     }
     for (const [kind, expected] of approvalCases) {
       expect(
         foregroundEscapeAction({
+          approvalKind: kind,
           foregroundKind: 'approval',
-          pending: pendingApproval(kind),
         }),
       ).toBe(expected);
     }

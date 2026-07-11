@@ -177,6 +177,47 @@ describe('CLI history runtime', () => {
     expect(mocks.readCliToolUseResumeDataForListing).not.toHaveBeenCalled();
   });
 
+  it('hides internal process-bookkeeping and configless entries from the history list', async () => {
+    const processConfig = {
+      ...config,
+      agent: 'bash',
+      agentCategory: 'toolUse',
+      inputFiles: [],
+      outputFiles: [],
+    } as AgentConfig;
+    mocks.listExecutions.mockResolvedValue([
+      {
+        id: 'visible' as ExecutionId,
+        timestamp: '2026-05-18T08:00:00.000Z',
+        agent: 'correct',
+        model: 'deepseekT',
+        agentConfig: config,
+        terminalStatus: 'completed',
+      },
+      {
+        id: 'bash-process' as ExecutionId,
+        timestamp: '2026-05-18T08:01:00.000Z',
+        agent: 'bash',
+        model: 'deepseekT',
+        agentConfig: processConfig,
+        category: 'process',
+        terminalStatus: 'completed',
+      },
+      {
+        id: 'configless' as ExecutionId,
+        timestamp: '2026-05-18T08:02:00.000Z',
+        agent: 'unknown',
+        model: 'unknown',
+        agentConfig: null,
+        terminalStatus: 'completed',
+      },
+    ]);
+
+    const entries = await listCliHistoryEntries();
+
+    expect(entries.map((entry) => entry.id)).toEqual(['visible']);
+  });
+
   it('labels multi-agent team runs by preset in history lists', async () => {
     const teamConfig = {
       ...config,

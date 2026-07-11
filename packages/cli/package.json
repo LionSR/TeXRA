@@ -42,7 +42,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:architecture": "node scripts/check-host-imports.mjs",
     "bundle": "node scripts/build-bundle.mjs",
-    "bundle:harness": "node scripts/build-harness.mjs",
     "prepare:trace-viewer-assets": "corepack pnpm --filter @texra/trace-viewer run build",
     "copy:resources": "node scripts/copy-resources.mjs",
     "copy:docs": "node scripts/copy-docs.mjs",

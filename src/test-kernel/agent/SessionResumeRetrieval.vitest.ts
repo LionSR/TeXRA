@@ -1,23 +1,42 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
+import { noopTrace } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import {
+  AgentCategory,
+  AgentPromptSchema,
+  AgentToolUseSettingSchema,
+} from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import {
   AgentWorkspaceState,
   type AgentWorkspaceSnapshot,
 } from '@agent/core/state/AgentWorkspaceState';
-import { flowKey } from '@agent/node/persistedFlow';
+import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { createRunScope } from '@agent/runtime/RunScope';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
+import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
   buildResumedSharedFromSnapshot,
   normalizeResumedWorkspaceSnapshot,
+  runToolUseFlow,
+  type RunToolUseFlowInput,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import { migrateSharedState } from '@agent/implementations/flows/tooluse/nodes/types';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const CONFIG: AgentConfig = {
@@ -42,6 +61,65 @@ const GOOGLE_WORKFLOW_CONFIG: AgentConfig = {
   ...GOOGLE_CONFIG,
   agentCategory: AgentCategory.Workflow,
 };
+const TOOL_USE_SETTING = AgentToolUseSettingSchema.parse({});
+const TOOL_USE_PROMPT = AgentPromptSchema.parse({});
+const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
+const WAIT_NODE_CURSOR = 'start/default/default';
+
+function createTaggedModelHandler(
+  compatibilityKey: ModelHandlerCompatibilityKey,
+): RunToolUseFlowInput['modelHandler'] {
+  const handler = { extractAssistantText: () => undefined };
+  // ModelFactory installs this non-enumerable tag on every active handler.
+  Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', {
+    value: compatibilityKey,
+  });
+  return handler as unknown as RunToolUseFlowInput['modelHandler'];
+}
+
+async function runResumedFlowToWaiting(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+  snapshot: ToolUseSessionSnapshot,
+): Promise<void> {
+  const session = new SessionHandle();
+  const context = createRunContext({
+    modelSource: 'live',
+    getModel: () => snapshot.agentConfig.model,
+    runScope: createRunScope({
+      runtimeHost: noopAgentRuntimeHost,
+      streamId,
+      executionId,
+      agentName: snapshot.agentConfig.agent,
+      session,
+    }),
+  });
+
+  try {
+    const result = await withRunContext(context, () =>
+      runToolUseFlow(
+        {
+          config: snapshot.agentConfig,
+          setting: TOOL_USE_SETTING,
+          prompt: TOOL_USE_PROMPT,
+          logger: noopTrace,
+          userVarChannels: snapshot.user,
+          modelHandler: createTaggedModelHandler(ACTIVE_COMPATIBILITY_KEY),
+          streamStatus: session.status,
+          checkInterruption: () => false,
+          setAbortController: () => {},
+          resumeSnapshot: snapshot,
+          isSubagent: true,
+          toolInjections: new ToolInjectionRegistry(),
+        },
+        new MapToolRegistry({}),
+      ),
+    );
+    expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+  } finally {
+    session.dispose();
+  }
+}
 
 describe('retrieveSessionResumeData', () => {
   setupPlatform({ workspacePath: '/workspace' });
@@ -390,12 +468,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   setupPlatform({ workspacePath: '/workspace' });
 
   it('hydrates a legacy-shaped flow record through the single boundary, then self-heals via its canonical fields', async () => {
-    // Regression for the SessionResumeRetrieval.ts / runToolUseFlow.ts
-    // duplicate-parse finding: a legacy nested-`state` record with a
-    // `conversation` key and no compatibility key must migrate/validate
-    // exactly once, at the resume boundary (retrieveSessionResumeData) --
-    // runToolUseFlow.ts's self-heal write must consume that result's fields
-    // rather than independently re-deriving them.
     const executionId = 'abc140' as ExecutionId;
     const streamId = 'chat@gpt54#abc140' as StreamTabId;
     const legacyShared = {
@@ -422,10 +494,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       params: {},
       shared: legacyShared,
       createdAt: new Date().toISOString(),
-      nodes: [],
+      cursor: { nextNodeId: WAIT_NODE_CURSOR },
+      nodes: [
+        { action: 'default', nodeId: 'start' },
+        { action: 'default', nodeId: 'start/default' },
+      ],
     });
 
-    // Single boundary parse: migrate + strictly validate the legacy record.
     const resume = await retrieveSessionResumeData(
       streamId,
       executionId,
@@ -433,33 +508,73 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     );
     expect(resume?.type).toBe('toolUse');
     if (resume?.type !== 'toolUse') return;
+    expect(resume.snapshot.modelHandlerCompatibilityKey).toBeUndefined();
 
-    // runToolUseFlow.ts's own read of the same bytes: only the structural
-    // unwrap from migrateSharedState is still needed there (to recover
-    // pass-through fields the snapshot doesn't carry); the canonical
-    // messages/stateSlices/modelHandlerCompatibilityKey values must come
-    // from the boundary's snapshot, not from re-parsing `legacyShared` here.
-    const structuralBase = migrateSharedState(legacyShared);
-    expect(structuralBase).not.toBeNull();
-    if (!structuralBase) return;
+    await runResumedFlowToWaiting(executionId, streamId, resume.snapshot);
 
-    const healed = buildResumedSharedFromSnapshot(
-      structuralBase.data,
-      resume.snapshot,
+    const healedRecord = await getExecutionStore(executionId).read<FlowRecord>(
+      flowKey(executionId),
     );
 
-    // Canonical fields match the boundary's single validated read.
-    expect(healed.messages).toEqual(resume.snapshot.messages);
-    expect(healed.stateSlices).toEqual({
-      runStateSnapshot: resume.snapshot.run,
-      workspaceSnapshot: resume.snapshot.workspace,
-      userChannels: resume.snapshot.user,
+    expect(healedRecord?.shared).toMatchObject({
+      messages: resume.snapshot.messages,
+      modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
+      stateSlices: {
+        runStateSnapshot: resume.snapshot.run,
+        workspaceSnapshot: resume.snapshot.workspace,
+        userChannels: resume.snapshot.user,
+      },
+      systemPrompt: 'You are a helpful assistant.',
     });
-    expect(healed.modelHandlerCompatibilityKey).toBe(
-      resume.snapshot.modelHandlerCompatibilityKey,
+  });
+
+  it('keeps a persisted snapshot compatibility key authoritative over the active handler', async () => {
+    const executionId = 'abc142' as ExecutionId;
+    const streamId = 'chat@gpt54#abc142' as StreamTabId;
+    const persistedCompatibilityKey = 'ModelHandlerAnthropic';
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        messages: [{ role: 'user', content: 'Continue.' }],
+        modelHandlerCompatibilityKey: persistedCompatibilityKey,
+        shouldSkipCycle: false,
+        stateSlices: {
+          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+          userChannels: {
+            input: Object.freeze({ MODEL: 'gpt54' }),
+            transient: {},
+          },
+        },
+      },
+      createdAt: new Date().toISOString(),
+      cursor: { nextNodeId: WAIT_NODE_CURSOR },
+      nodes: [
+        { action: 'default', nodeId: 'start' },
+        { action: 'default', nodeId: 'start/default' },
+      ],
+    });
+
+    const resume = await retrieveSessionResumeData(
+      streamId,
+      executionId,
+      agentConfigToTaskState(CONFIG),
     );
-    // Pass-through field outside the snapshot's contract survives.
-    expect(healed.systemPrompt).toBe('You are a helpful assistant.');
+    expect(resume?.type).toBe('toolUse');
+    if (resume?.type !== 'toolUse') return;
+    expect(resume.snapshot.modelHandlerCompatibilityKey).toBe(
+      persistedCompatibilityKey,
+    );
+
+    await runResumedFlowToWaiting(executionId, streamId, resume.snapshot);
+
+    const healedRecord = await getExecutionStore(executionId).read<FlowRecord>(
+      flowKey(executionId),
+    );
+    expect(healedRecord?.shared).toMatchObject({
+      modelHandlerCompatibilityKey: persistedCompatibilityKey,
+    });
   });
 
   it('migrates a legacy top-level {todos, plan} workspace snapshot when the persisted cursor is already past ToolUsePrepareNode', async () => {
@@ -530,6 +645,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const healed = buildResumedSharedFromSnapshot(
       structuralBase.data,
       resume.snapshot,
+      undefined,
     );
 
     // This is exactly ToolUseCycleNode.prep()'s canonical-only re-derivation

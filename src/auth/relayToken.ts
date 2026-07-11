@@ -113,6 +113,18 @@ export async function fetchRelayTokenStatus(
   const cached = statusCache.get(token);
   if (cached) return cached;
   const result = await probeRelayTokenStatus(token, fetchImpl);
+  // Re-read immediately before returning/writing: a concurrent live 401
+  // (markRelayTokenRejected) may have landed while this probe was in
+  // flight, and is authoritative evidence fresher than whatever the probe
+  // observed. `invalid` is sticky against a stale probe result — even an
+  // `unknown` one — until an explicit cache reset or TTL expiry clears it.
+  // Checking this ahead of the `result.state !== 'unknown'` cache-write
+  // guard (rather than inside it) keeps the *return value* consistent with
+  // the cache for every probe outcome, not just settled ones.
+  const current = statusCache.get(token);
+  if (current?.state === 'invalid') {
+    return current;
+  }
   if (result.state !== 'unknown') {
     statusCache.set(token, result);
   }

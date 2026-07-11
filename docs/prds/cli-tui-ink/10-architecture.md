@@ -55,7 +55,7 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 | Concern                          | Package                                                                                                                      |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Serial follow-up queue           | `p-queue`                                                                                                                    |
-| Approval modal queue             | `p-queue` (`concurrency: 1`) with Promise-returning launchers — see § Approvals                                              |
+| Approval modal queue             | In-tree single-owner FIFO with Promise-returning launchers — see § Approvals                                                 |
 | Colors (legacy renderer only)    | `picocolors`                                                                                                                 |
 | Clipboard ("copy last response") | `clipboardy` (with OSC 52 fallback; tmux/screen DCS wrapping deferred — R9)                                                  |
 | Terminal notifications           | In-tree dispatcher emitting OSC 9 / OSC 99 / BEL (and OSC 9;4 for progress), capability-gated. See § Terminal notifications. |
@@ -77,10 +77,10 @@ StreamStatusService.onDidChange ┘  (@lit-labs/signals, same           │
                                     primitive as progressState)            ├── <Static> for finalized turns
                                                                             └── live <Box> for in-flight turn
 
-Approval payloads (intercepted in host.emit) ──► approvalQueue (p-queue, concurrency: 1)
-                                                       └──► launcher returns Promise<Decision>
-                                                            head of queue → cliState.currentApproval signal
-                                                            <ApprovalModal> dispatches to today's resolvers
+HostInteractions requests ──► createTuiHostInteractions ──► approvalQueue (single-owner FIFO)
+                                                                    └──► launcher returns Promise<Decision>
+                                                                         head → currentApproval signal
+                                                                         <ApprovalModal> dispatches by payload kind
 ```
 
 Same signal primitive (`@lit-labs/signals`) and same state shape as the webview's `progressState`; event sources differ — CLI subscribes to `runtimeHost`, `StreamLogStore`, `StreamStatusService` directly.
@@ -90,8 +90,10 @@ packages/cli/src/chat/tui/
 ├── App.tsx
 ├── state/
 │   ├── cliState.ts                 (@lit-labs/signals; mirrors progressState shape, activeStreamId: StreamTabId | null)
+│   ├── approvalQueue.ts            (single-owner approval/request FIFO; projects head and status signals)
+│   ├── subscribeApprovals.ts       (implements the TUI HostInteractions port and routes requests into the FIFO)
 │   ├── useSignal.ts                (≈10-line useSyncExternalStore bridge)
-│   ├── subscribeRuntimeHost.ts     (wraps runtimeHost.emit; routes payloads → signal patches and the approval p-queue)
+│   ├── subscribeRuntimeHost.ts     (wraps runtimeHost.emit; routes runtime events → signal patches)
 │   ├── subscribeStreamLog.ts       (StreamLogStore.onChange → signal patch)
 │   ├── subscribeStreamStatus.ts    (StreamStatusService.onDidChange → signal patch)
 │   └── terminalCapabilities.ts     (DA1-sentinel feature discovery; populates signal at startup)
@@ -264,26 +266,26 @@ The state shape (`streamById: Map<StreamTabId, StreamTabInfo>` + `activeStreamId
 - **Detach runtime patch.** `detachActiveChildren` (`executionRegistry.ts:253–269`) today calls `handle.detach()` and re-emits `updateActiveSubagents` only — it does **not** emit `setParentStream` to clear the child's `parentStreamId`. Phase 4 adds that emit so the TUI (and any future host that consumes the parent-link) promotes detached children to top-level streams.
 - **Why not `Ctrl-Shift-*`.** Many terminals collapse Shift on a letter to the unshifted Ctrl chord; Ink cannot distinguish them on the smoke-test matrix. Hence `Ctrl-A` cycles forward and `Ctrl-B` returns to parent (see [30-reference.md § Keymap](./30-reference.md#11-keymap)).
 
-## 9. Approvals: Promise-returning launchers with a concurrency-1 queue
+## 9. Approvals: Promise-returning launchers with a single-owner FIFO
 
-This replaces stderr prompts with a typed React dispatch. The implementation pattern is **Promise-returning launchers backed by a serial queue**, not a hand-rolled FIFO state machine.
+This replaces stderr prompts with a typed React dispatch. The implementation pattern is **Promise-returning launchers backed by one explicit FIFO**. The FIFO is the canonical pending-request store; reactive status and the foreground modal are projections of it.
 
 `CliContext.approvalPrompt` only carries `CliPromptRequest` (`kind`, `summary`, `prompt`) — that's enough for today's free-text approval but loses the typed payload the TUI needs (the bash command string, the tool-edit `originalContent`/`proposedContent`, the plan structure, the proposal's agent metadata).
 
 ### Mechanism
 
-- A new TUI-aware approval installer replaces `installCliApprovalHandlers`. It exposes one entrypoint per approval kind, each of which:
-  1. constructs the typed payload from the runtime-host event;
-  2. enqueues it on a `p-queue` instance with `concurrency: 1` (the approval queue);
+- `createTuiHostInteractions` implements the session-owned approval port. It exposes one entrypoint per request kind, each of which:
+  1. constructs the typed payload from the host-interaction request;
+  2. appends it to the approval queue's module-private FIFO;
   3. returns a `Promise<Decision>` that resolves when the user answers.
-- Inside the queue, the head item is pushed onto the `cliState.currentApproval` signal (a single-item view of the queue head, not a parallel queue). `<ApprovalModal>` reads the signal, dispatches by the payload's discriminant, and calls `resolve(decision)` on action. The p-queue then advances and writes the next head.
+- Inside the queue, the head item is pushed onto the `currentApproval` signal (a single-item view of the queue head, not a parallel queue). `<ApprovalModal>` reads the signal, dispatches by the payload's discriminant, and settles that item on action. Removing the head promotes the next surviving FIFO entry; bulk cancellation partitions the queue before presenting a survivor.
 
-This gives the simplicity of `await launchBashApproval(payload)` at the call site **without** losing the ability to serialize concurrent approvals from different subagent streams — which the original FIFO queue was designed to handle.
+This gives the simplicity of `await launchBashApproval(payload)` at the call site **without** losing the ability to serialize concurrent approvals from different subagent streams.
 
 ### Wiring per event
 
-- Tool-edit: `setToolEditApprovalHandler` still owns dispatch; the typed `ToolEditApprovalRequest` (with `originalContent` + `proposedContent`) is pushed from the handler.
-- Other approval events: interceptor inside the wrapped `runtimeHost.emit` constructs payloads and calls the matching `launchX`.
+- Tool-edit and other interactive requests enter through `createTuiHostInteractions`; policy decisions happen before typed requests reach the FIFO.
+- Stream-scoped cancellation uses the same host port to remove every matching queued request atomically.
 - On resolution, the modal calls today's resolvers — wiring unchanged (see § 10 event map for the per-event resolver list).
 - `--approval-policy never` and `yolo` short-circuit before the queue (unchanged `immediateDecision` logic).
 - `<EditApproval>` renders unified diffs via `diff` + `cli-highlight`. Keys: `y` approve, `n` reject, `e` reject-with-feedback. Long diffs paginate with a summary header and `Ctrl-O` expand — no silent truncation.

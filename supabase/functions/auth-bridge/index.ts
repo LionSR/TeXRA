@@ -32,7 +32,7 @@
  *   The one-time code is scrubbed from history after the deep link is built.
  *
  * Deployment:
- *   supabase functions deploy auth-bridge --no-verify-jwt --project-ref jntubmcgbhwtcktubelv
+ *   supabase functions deploy auth-bridge --no-verify-jwt --project-ref <project-ref>
  * The function URL must be on the Supabase Auth "Redirect URLs" allow-list
  * (Dashboard > Authentication > URL Configuration) as a globstar so it spans the
  * /<ext>/<id> path and the '.' in the id (a single '*' cannot):
