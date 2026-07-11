@@ -1,0 +1,76 @@
+// Third-party imports
+import { describe, expect, it } from 'vitest';
+
+// Local imports - component type
+import type { MultiAgentTab } from '@settingsView/frontend/tabs/MultiAgentTab';
+
+// Local imports - shared schemas
+import { AGENT_MODE_PRESETS } from '@shared/schemas/agentPresets';
+
+// Local imports - test utilities
+import { useLitComponentTestDom } from './litComponentTestUtils';
+
+async function mount(): Promise<MultiAgentTab> {
+  const element = document.createElement('multi-agent-tab') as MultiAgentTab;
+  document.body.append(element);
+  await element.updateComplete;
+  return element;
+}
+
+function dispatchKey(target: Element, key: string): void {
+  target.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key,
+      bubbles: true,
+      composed: true,
+      cancelable: true,
+    }),
+  );
+}
+
+/**
+ * Regression coverage for the a11y-clickables audit: the team-preset card
+ * was a plain `<div @click>` with no role/tabindex/keydown, so keyboard
+ * users could never select a team even though `.preset-card:focus-visible`
+ * already shipped an outline. Mirrors GoalTab.ts's `.goal-row` and
+ * AgentSelectionPanel.ts's `.agent-list-item` keyboard-activation pattern.
+ */
+describe('multi-agent-tab preset card keyboard activation', () => {
+  useLitComponentTestDom(
+    () => import('@settingsView/frontend/tabs/MultiAgentTab'),
+  );
+
+  it('exposes role=button and tabindex=0 on every preset card', async () => {
+    const element = await mount();
+    const cards = element.shadowRoot?.querySelectorAll('.preset-card') ?? [];
+    expect(cards.length).toBe(AGENT_MODE_PRESETS.length);
+    for (const card of cards) {
+      expect(card.getAttribute('role')).toBe('button');
+      expect(card.getAttribute('tabindex')).toBe('0');
+    }
+  });
+
+  it('applies the preset on Enter and Space, not on other keys', async () => {
+    const element = await mount();
+    const applied: string[] = [];
+    element.addEventListener('apply-agent-mode-preset', (event) => {
+      applied.push(
+        (event as CustomEvent<{ presetId: string }>).detail.presetId,
+      );
+    });
+
+    const firstCard = element.shadowRoot?.querySelector('.preset-card');
+    expect(firstCard).toBeInstanceOf(HTMLElement);
+
+    dispatchKey(firstCard!, 'a');
+    expect(applied).toHaveLength(0);
+
+    dispatchKey(firstCard!, 'Enter');
+    dispatchKey(firstCard!, ' ');
+
+    expect(applied).toEqual([
+      AGENT_MODE_PRESETS[0]!.id,
+      AGENT_MODE_PRESETS[0]!.id,
+    ]);
+  });
+});
