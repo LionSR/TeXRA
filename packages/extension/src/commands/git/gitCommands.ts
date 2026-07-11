@@ -1,5 +1,5 @@
 // Third-party imports
-import { execa, execaSync } from 'execa';
+import { execa } from 'execa';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
@@ -21,8 +21,9 @@ import {
   COMMIT_LABEL_FORMAT,
   splitCommitLines,
 } from '@utils/git/commitLogFormat';
-import { isGitRepository as probeGitRepository } from '@utils/system/isGitRepository';
+import { executeCommandSync } from '@utils/system/execUtils';
 import { extendEnvPath } from '@utils/system/platformPaths';
+import { isGitRepository as probeGitRepository } from '@utils/system/isGitRepository';
 
 const CHANNEL = 'gitCommands';
 logger.initialize(CHANNEL);
@@ -83,20 +84,20 @@ async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
     );
   }
 
-  const result = execaSync(
-    'git',
+  const result = executeCommandSync(
     [
+      'git',
       'log',
       '-n',
       String(numberOfCommits),
       `--pretty=format:${COMMIT_LABEL_FORMAT}`,
     ],
-    { cwd: workspacePath, reject: false },
+    { cwd: workspacePath },
   );
-  if (result.exitCode !== 0) {
+  if (!result.success) {
     return [];
   }
-  return splitCommitLines(result.stdout);
+  return splitCommitLines(result.stdout ?? '');
 }
 
 function findCommitInHistory(
@@ -117,28 +118,25 @@ function findCommitInHistory(
     return null;
   }
 
-  const verifyResult = execaSync(
-    'git',
-    ['rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
-    { cwd: workspacePath, reject: false },
+  const verifyResult = executeCommandSync(
+    ['git', 'rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
+    { cwd: workspacePath },
   );
 
-  if (verifyResult.exitCode !== 0) {
+  if (!verifyResult.success) {
     return null;
   }
 
-  const labelResult = execaSync(
-    'git',
-    ['show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
-    { cwd: workspacePath, reject: false },
+  const labelResult = executeCommandSync(
+    ['git', 'show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
+    { cwd: workspacePath },
   );
 
-  if (labelResult.exitCode !== 0) {
+  if (!labelResult.success) {
     return sanitizedCommit;
   }
 
-  const label = labelResult.stdout.trim();
-  return label || sanitizedCommit;
+  return labelResult.stdout ?? sanitizedCommit;
 }
 
 async function promptInput(
@@ -228,12 +226,7 @@ const GIT_INSTALL_OPTIONS: Partial<
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
 function isToolAvailable(tool: string): boolean {
-  return (
-    execaSync(tool, ['--version'], {
-      reject: false,
-      env: { ...process.env, PATH: extendEnvPath() },
-    }).exitCode === 0
-  );
+  return executeCommandSync([tool, '--version']).success;
 }
 
 async function promptGitMissing(): Promise<void> {
@@ -270,7 +263,7 @@ async function promptGitMissing(): Promise<void> {
 async function checkClonePreconditions(
   workspacePath: string,
 ): Promise<boolean> {
-  if (execaSync('git', ['--version'], { reject: false }).exitCode !== 0) {
+  if (!executeCommandSync(['git', '--version']).success) {
     await promptGitMissing();
     return false;
   }
@@ -340,7 +333,9 @@ export async function cloneOverleafProject(
       () =>
         execa('git', ['clone', remote, '.'], {
           cwd: workspacePath,
-          env: { GIT_TERMINAL_PROMPT: '0' },
+          // Same extended PATH as the executeCommandSync preflight above, so
+          // the probe can't pass while the clone misses git (bot review).
+          env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
         }),
     );
     vscode.window.showInformationMessage(`${label} project cloned.`);
