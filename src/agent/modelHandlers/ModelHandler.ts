@@ -170,12 +170,17 @@ function mediaAttachmentKindsFromEntries(
   );
 }
 
+/** Content-block `type` values that carry a `text` field, safe to rewrite in place. */
+const TEXT_BLOCK_TYPES = new Set(['text', 'input_text']);
+
 /**
  * For the o1-style user-role case in {@link ModelHandler.refreshSystemMessage}:
  * replace the text of just the first content block, leaving userPrefix /
  * userRequest blocks alongside it untouched. If the content isn't a shape we
- * recognize (e.g. string content, empty array, non-text first block), leave
- * the message alone.
+ * recognize (e.g. string content, empty array, non-text first block such as
+ * an image/document block that may have been unshifted onto this message by
+ * a later media insertion), leave the message alone rather than injecting a
+ * stray `text` field into a non-text block.
  */
 function refreshFirstContentBlockText(
   existing: Record<string, unknown>,
@@ -186,7 +191,7 @@ function refreshFirstContentBlockText(
   const firstBlock = content[0];
   if (typeof firstBlock !== 'object' || firstBlock === null) return existing;
   const type = (firstBlock as { type?: unknown }).type;
-  if (typeof type !== 'string') return existing;
+  if (typeof type !== 'string' || !TEXT_BLOCK_TYPES.has(type)) return existing;
   const newContent = [
     { ...(firstBlock as Record<string, unknown>), text: systemText },
     ...content.slice(1),
