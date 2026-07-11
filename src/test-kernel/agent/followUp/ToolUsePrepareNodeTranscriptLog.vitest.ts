@@ -107,33 +107,26 @@ function buildSnapshot(
   } as ToolUseSessionSnapshot;
 }
 
-describe('ToolUsePrepareNode resume (system message refresh delegation)', () => {
-  it('delegates the persisted system message rebuild to the model handler port, not a local re-derivation', async () => {
-    // The node must hand the stale persisted messages and the freshly
-    // rebuilt system text straight to the model handler and use whatever
-    // comes back — it has no business knowing provider message shape.
-    const refreshedMessages = [
-      { role: 'system', content: [{ type: 'text', text: 'refreshed' }] },
-    ];
-    const refreshSystemMessage = vi.fn(() => refreshedMessages);
+describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
+  it('keeps the persisted messages byte-identical on resume, never rewriting messages[0]', async () => {
+    // Rewriting the persisted system message on every resume to reflect
+    // current workspace/tool state would change the leading bytes of the
+    // request and invalidate the provider's prefix-based prompt cache. Per
+    // maintainer ruling, resume must use the snapshot's messages verbatim —
+    // a mid-run agent-config edit does not propagate into an
+    // already-suspended run's prefix. This is the regression test for that
+    // contract: no local re-derivation, no port call, no mutation.
     const snapshot = buildSnapshot();
-    const services = buildServices({
-      snapshot,
-      modelHandler: {
-        consumeInsertedAttachmentKinds: vi.fn(() => []),
-        initializeMessages: vi.fn(async () => []),
-        refreshSystemMessage,
-      } as never,
-    });
+    const services = buildServices({ snapshot });
     const node = new ToolUsePrepareNode().setServices(services);
 
     const result = await node.exec(undefined);
 
-    expect(refreshSystemMessage).toHaveBeenCalledWith(
-      snapshot.messages,
-      expect.stringMatching(/^You are careful\.\n/),
-    );
-    expect(result.result.messages).toBe(refreshedMessages);
+    expect(result.result.messages).toBe(snapshot.messages);
+    expect(result.result.messages[0]).toEqual({
+      role: 'system',
+      content: [{ type: 'text', text: 'stale system' }],
+    });
     expect(result.result.shouldSkipCycle).toBe(true);
     // initializeMessages is the fresh-session path; resume must not call it.
     expect(services.modelHandler.initializeMessages).not.toHaveBeenCalled();

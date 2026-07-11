@@ -170,35 +170,6 @@ function mediaAttachmentKindsFromEntries(
   );
 }
 
-/** Content-block `type` values that carry a `text` field, safe to rewrite in place. */
-const TEXT_BLOCK_TYPES = new Set(['text', 'input_text']);
-
-/**
- * For the o1-style user-role case in {@link ModelHandler.refreshSystemMessage}:
- * replace the text of just the first content block, leaving userPrefix /
- * userRequest blocks alongside it untouched. If the content isn't a shape we
- * recognize (e.g. string content, empty array, non-text first block such as
- * an image/document block that may have been unshifted onto this message by
- * a later media insertion), leave the message alone rather than injecting a
- * stray `text` field into a non-text block.
- */
-function refreshFirstContentBlockText(
-  existing: Record<string, unknown>,
-  systemText: string,
-): Record<string, unknown> {
-  const content = existing.content;
-  if (!Array.isArray(content) || content.length === 0) return existing;
-  const firstBlock = content[0];
-  if (typeof firstBlock !== 'object' || firstBlock === null) return existing;
-  const type = (firstBlock as { type?: unknown }).type;
-  if (typeof type !== 'string' || !TEXT_BLOCK_TYPES.has(type)) return existing;
-  const newContent = [
-    { ...(firstBlock as Record<string, unknown>), text: systemText },
-    ...content.slice(1),
-  ];
-  return { ...existing, content: newContent };
-}
-
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  * @template M Provider-specific message type
@@ -1047,60 +1018,6 @@ export abstract class ModelHandler<
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<M[]>;
-
-  /**
-   * Rebuild the persisted system message on tool-use session resume so it
-   * reflects current workspace/tool state rather than whatever text was
-   * frozen at snapshot time. Mirrors the shape `initializeMessages` itself
-   * built, keyed on the same two facts `initializeMessages` used to decide
-   * that shape — {@link requiresPerCallSystemPrompt} and
-   * `capabilities.supportsSystemPrompt` — so no handler needs to override
-   * this.
-   *
-   * No-op when `requiresPerCallSystemPrompt` is true (Anthropic, Google):
-   * those providers never store the prompt in `messages`; the caller gets
-   * the refreshed text back via the returned `systemPrompt` field instead
-   * (see `ToolUsePrepareNode`). Otherwise `messages[0]` holds it, with role
-   * 'system' when `supportsSystemPrompt` is true, or role 'user' with the
-   * prompt as the first content block when false (o1-mini/o1-preview) —
-   * only that first block is replaced, leaving later blocks (userPrefix,
-   * userRequest) and any later role='system' entry (the OpenAI
-   * supportsIntermDevMsgs developer-message slot) untouched. The existing
-   * content-block `type` is preserved (OpenAI Chat uses 'text', Responses
-   * uses 'input_text') so the snapshot stays structurally valid. If
-   * `messages[0]`'s role doesn't match what this handler would have
-   * written, the array is returned unchanged.
-   */
-  refreshSystemMessage(persisted: M[], systemText: string): M[] {
-    if (this.requiresPerCallSystemPrompt) return persisted;
-
-    const first = persisted[0];
-    if (!first || typeof first !== 'object') return persisted;
-
-    const role = (first as { role?: unknown }).role;
-    const expectedRole = this.capabilities.supportsSystemPrompt
-      ? 'system'
-      : 'user';
-    if (role !== expectedRole) return persisted;
-
-    const existing = first as Record<string, unknown>;
-    const updated = [...persisted];
-
-    const prevType = Array.isArray(existing.content)
-      ? (existing.content[0] as { type?: unknown } | undefined)?.type
-      : undefined;
-    const firstBlockType = typeof prevType === 'string' ? prevType : null;
-    const systemContent = firstBlockType
-      ? [{ type: firstBlockType, text: systemText }]
-      : systemText;
-
-    updated[0] = (
-      this.capabilities.supportsSystemPrompt
-        ? { ...existing, content: systemContent }
-        : refreshFirstContentBlockText(existing, systemText)
-    ) as M;
-    return updated;
-  }
 
   /**
    * Creates messages for follow-up conversation rounds with optional images.
