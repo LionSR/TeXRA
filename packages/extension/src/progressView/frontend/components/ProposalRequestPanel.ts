@@ -50,6 +50,7 @@ import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { APPROVE_SUPER_YOLO_ACTION } from '../events';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
+import { getComposedPathElement } from '../utils';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type { PermissionState } from '../permissionState';
 
@@ -272,6 +273,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
       <div
         class="workflow-proposal__${label.toLowerCase()}-files"
         @click=${this.handleFileClick}
+        @keydown=${this.handleFileKey}
       >
         <span class="workflow-proposal__file-label">${label}:</span>
         ${repeat(
@@ -284,6 +286,8 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
                 }"
                 title=${file}
                 data-file=${ifDefined(clickable ? file : undefined)}
+                role=${ifDefined(clickable ? 'button' : undefined)}
+                tabindex=${ifDefined(clickable ? '0' : undefined)}
                 >${getBasename(file)}</span
               >`,
         )}
@@ -297,6 +301,22 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
 
   private handleFileClick = (event: MouseEvent): void => {
     const file = (event.target as HTMLElement).dataset.file;
+    if (file) {
+      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file });
+    }
+  };
+
+  // Keyboard activation parity for the clickable file-name spans (Enter/Space),
+  // mirroring FileList.ts's handleFileKey delegate for the same job.
+  private handleFileKey = (event: KeyboardEvent): void => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const fileEl = getComposedPathElement<HTMLElement>(
+      event,
+      '.workflow-proposal__file-name[data-file]',
+    );
+    if (!fileEl) return;
+    event.preventDefault();
+    const file = fileEl.dataset.file;
     if (file) {
       postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file });
     }

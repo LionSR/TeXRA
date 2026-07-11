@@ -139,7 +139,7 @@ export class AIAgentsTab extends LitElement {
         padding: var(--wa-space-2xs) var(--wa-space-xs);
         margin-bottom: var(--wa-space-2xs);
         border-radius: var(--border-radius);
-        background: var(--wa-color-surface-lowered, rgba(128, 128, 128, 0.08));
+        background: var(--wa-color-surface-lowered);
       }
 
       .setting-row {

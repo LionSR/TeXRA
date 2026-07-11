@@ -9,7 +9,7 @@ export const userQuestionPanelStyles: CSSResult = css`
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-quiet);
     padding: ${sp.small} ${sp.medium};
-    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
+    background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius-small);
     line-height: var(--line-height-normal);
   }
@@ -27,7 +27,7 @@ export const userQuestionPanelStyles: CSSResult = css`
     padding: ${sp.medium};
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius);
-    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.05));
+    background: var(--wa-color-surface-lowered);
   }
 
   .user-question-request__heading {
@@ -52,22 +52,23 @@ export const userQuestionPanelStyles: CSSResult = css`
     gap: ${sp.small};
   }
 
-  .user-question-request__option {
-    display: grid;
-    grid-template-columns: auto 1fr;
+  /* wa-radio-group has no exposed "radios" CSS part in the pinned
+     @awesome.me/webawesome build (only form-control/form-control-label/
+     form-control-input/hint are rendered) — style the host directly, same
+     technique as ApiAccessSection.styles.ts's wa-radio-group.api-access-options. */
+  wa-radio-group {
+    display: flex;
+    flex-direction: column;
     gap: ${sp.small};
-    align-items: start;
+  }
+
+  .user-question-request__option {
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
     color: var(--wa-color-text-normal);
-    cursor: pointer;
   }
 
-  .user-question-request__option input {
-    margin-top: 0.2rem;
-  }
-
-  .user-question-request__option span {
+  .user-question-request__option::part(label) {
     display: flex;
     flex-direction: column;
     gap: ${sp.tiny};

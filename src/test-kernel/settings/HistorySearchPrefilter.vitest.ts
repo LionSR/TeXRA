@@ -78,4 +78,25 @@ describe('history search prefilter', () => {
     expect(matches(toolUseHistoryItem, 'lemma.md')).toBe(true);
     expect(matches(toolUseHistoryItem, 'more details')).toBe(true);
   });
+
+  it('matches the rendered short-month timestamp text (kept in sync with HistoryItemElement)', () => {
+    // HistoryItemElement renders its meta-strip timestamp via
+    // formatShortDateTime (@shared/utils/string) — the search index must
+    // include that same shaped text, not just the raw ISO timestamp, so a
+    // search for what the user actually sees still matches. Midday UTC
+    // keeps the rendered month stable across any real-world timezone.
+    const midMonthItem: HistoryItem = {
+      id: 'execution-4',
+      timestamp: '2026-05-15T12:00:00.000Z',
+      agentConfig: { agentCategory: 'workflow' },
+    };
+    // Derive the expected month token from the same locale-aware
+    // Intl.DateTimeFormat shape rather than hard-coding an English name,
+    // so the assertion holds under any process locale.
+    const expectedMonth = new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+    }).format(new Date(midMonthItem.timestamp));
+    expect(matches(midMonthItem, expectedMonth)).toBe(true);
+    expect(matches(midMonthItem, '2026')).toBe(true);
+  });
 });
