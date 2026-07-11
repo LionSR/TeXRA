@@ -1,13 +1,12 @@
 import { create } from 'mutative';
 
-import { legacyEndGroupStatusForOutcome } from '@common/constants/streamStatus';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ContextStateDataSchema,
+  END_GROUP_STATUS,
   MESSAGE_TYPES,
-  RunOutcomeSchema,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_STATUS,
+  STREAM_PHASE,
   type ContextStateData,
   type LogMessageData,
   type StreamLogEntry,
@@ -20,35 +19,39 @@ import type { HandlerRegistry } from '../messageHandlerTypes';
 
 function isTaskGroupStatus(value: unknown): value is TaskGroupStatus {
   return (
-    value === STREAM_STATUS.RUNNING ||
-    value === STREAM_STATUS.ERROR ||
-    value === STREAM_STATUS.STOPPED ||
-    value === STREAM_STATUS.READY
+    value === STREAM_PHASE.RUNNING ||
+    value === STREAM_PHASE.COMPLETED ||
+    value === STREAM_PHASE.CANCELLED ||
+    value === STREAM_PHASE.FAILED
   );
 }
 
 /**
- * A `GROUP_END` row's `data.status` now carries either the legacy 2-value
- * `EndGroupStatus` (rows the standalone trace-viewer forwards raw from an
- * exported trace file — that replay path stays legacy-capable permanently,
- * see docs/proposals/session-scoped-runtime-architecture.md §8.3) or the
- * canonical `RunOutcome` every live/persisted producer now writes (§8.2).
- * Fold a canonical value down to the same legacy bucket the pre-cutover
- * writer used so `TaskGroup.status` — not yet retyped to `StreamPhase`/
- * `RunOutcome` (that reader migration is #7993 goal item 3) — keeps
- * rendering exactly as it does today; only the transcript row itself gains
- * the completed/cancelled bit this step. A value that is neither vocabulary
- * (malformed data) falls back to the caller-supplied default, as before.
+ * A `GROUP_END` row's `data.status` now carries the canonical `RunOutcome`
+ * every live/persisted producer writes (§8.2) — `TaskGroup.status` is
+ * retyped to that same native vocabulary (#7993 step 3), so the common case
+ * is a straight pass-through via `isTaskGroupStatus`. The one remaining
+ * legacy arm handles entries the standalone trace-viewer forwards raw from
+ * an exported trace file predating this cutover: that replay path stays
+ * legacy-capable permanently (docs/proposals/session-scoped-runtime-
+ * architecture.md §8.3 — the trace-viewer's own per-entry normalization is
+ * separate future work), so a legacy 2-value `EndGroupStatus` string can
+ * still reach this reader. Map it UP to the same native value
+ * `StreamLogStore.parsePersistedEntries` produces for the same on-disk
+ * string (`'stopped'` -> `completed`, the documented lossy default; `'error'`
+ * -> `failed`) so a task group renders identically whether it arrived live,
+ * from a rehydrated stream, or forwarded raw by the trace-viewer. A value
+ * that is neither vocabulary (malformed data) falls back to the
+ * caller-supplied default, as before.
  */
 function taskGroupEndStatus(
   value: unknown,
   fallback: TaskGroupStatus,
 ): TaskGroupStatus {
   if (isTaskGroupStatus(value)) return value;
-  const outcome = RunOutcomeSchema.safeParse(value);
-  return outcome.success
-    ? legacyEndGroupStatusForOutcome(outcome.data)
-    : fallback;
+  if (value === END_GROUP_STATUS.STOPPED) return STREAM_PHASE.COMPLETED;
+  if (value === END_GROUP_STATUS.ERROR) return STREAM_PHASE.FAILED;
+  return fallback;
 }
 
 function isStageKind(
@@ -102,7 +105,7 @@ function updateTaskGroups(
   if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
     const status = isTaskGroupStatus(payload.status)
       ? payload.status
-      : STREAM_STATUS.RUNNING;
+      : STREAM_PHASE.RUNNING;
     const nextGroup = {
       id: entry.id,
       name: entry.text ?? String(payload.name ?? entry.id),
@@ -127,7 +130,7 @@ function updateTaskGroups(
     return false;
   }
 
-  const status = taskGroupEndStatus(payload.status, STREAM_STATUS.STOPPED);
+  const status = taskGroupEndStatus(payload.status, STREAM_PHASE.COMPLETED);
   const endTime =
     typeof payload.endTime === 'number' ? payload.endTime : undefined;
 
