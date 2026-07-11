@@ -33,6 +33,9 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
