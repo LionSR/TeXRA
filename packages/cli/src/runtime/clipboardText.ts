@@ -20,7 +20,10 @@ export async function writeClipboardText(
   text: string,
   options: ClipboardTextWriteOptions = {},
 ): Promise<ClipboardTextWriteResult> {
-  const normalized = normalizeClipboardText(text, options.platform ?? osPlatform());
+  const normalized = normalizeClipboardText(
+    text,
+    options.platform ?? osPlatform(),
+  );
   try {
     await clipboard.write(normalized);
     return { ok: true };
