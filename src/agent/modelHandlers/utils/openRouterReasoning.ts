@@ -1,3 +1,7 @@
+// Local imports
+import { joinReasoningItemsText } from './reasoningDetailsText';
+
+// Third-party imports
 import type { ReasoningDetailUnion } from '@openrouter/sdk/models';
 
 /** Extract text content from a reasoning detail item by type. */
@@ -15,15 +19,8 @@ function getReasoningItemText(item: ReasoningDetailUnion): string | undefined {
 export function extractTextFromReasoningDetails(
   details: ReasoningDetailUnion[] | unknown,
 ): string {
-  if (!Array.isArray(details)) {
-    return typeof details === 'string' ? details : '';
-  }
-  return details
-    .filter(
-      (item): item is ReasoningDetailUnion =>
-        !!item && typeof item === 'object',
-    )
-    .map(getReasoningItemText)
-    .filter((text): text is string => !!text)
-    .join('');
+  return joinReasoningItemsText<ReasoningDetailUnion>(
+    details,
+    getReasoningItemText,
+  );
 }
