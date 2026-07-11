@@ -13,17 +13,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
-import {
-  flushPendingRunTraces,
-  getDefaultStreamLogStore,
-  StreamSnapshotStore,
-} from '@transcript';
+import { flushPendingRunTraces, StreamSnapshotStore } from '@transcript';
 import { platform, tryPlatform } from '@platform/platform';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   presentFollowUpWakeResult,
@@ -42,7 +37,12 @@ import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { seedCliRosterFromDefaultTeam } from '@cli/runtime/defaultTeamRoster';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
+import {
+  handOffCliShutdownSignalHandlers,
+  initInteractiveCliPlatform,
+  runCliPlatformShutdownSequence,
+  setCliHelperModel,
+} from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
@@ -267,7 +267,13 @@ export async function runChat(
     return { exitCode: CliExitCode.Usage };
   }
 
-  await initCliPlatform({ ...context, quietLogs: true });
+  // The platform's own SIGINT/SIGTERM handler stays live through onboarding
+  // and model resolution below — this function does not suppress it. Once
+  // Ink actually mounts (below), handOffCliShutdownSignalHandlers() removes
+  // it immediately before this function installs its own process.on pair, so
+  // exactly one owner is ever registered for a given signal; see
+  // initInteractiveCliPlatform's doc comment for the full handoff design.
+  await initInteractiveCliPlatform({ ...context, quietLogs: true });
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the apiMode + model
   // resolution below then see the freshly-set credentials in the same process.
@@ -403,7 +409,7 @@ export async function runChat(
   // subscribeStreamLog wires the append→sync bridge below. Best-effort: a load
   // failure leaves persistence off (save() no-ops) rather than breaking chat.
   try {
-    await getDefaultStreamLogStore().load();
+    await defaultSession().transcripts.load();
   } catch {
     // Persistence stays disabled; the session still runs in-memory as before.
   }
@@ -451,7 +457,7 @@ export async function runChat(
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
       session.streamId &&
-      SharedExecutionRegistry.getToolUseFlowContext(session.streamId),
+      defaultSession().executions.getToolUseFlowContext(session.streamId),
     );
   const canSelectCurrentModel = (): boolean =>
     chatTuiCanSelectModel({
@@ -467,7 +473,7 @@ export async function runChat(
       return undefined;
     }
     const activeFlow = session.streamId
-      ? SharedExecutionRegistry.getToolUseFlowContext(session.streamId)
+      ? defaultSession().executions.getToolUseFlowContext(session.streamId)
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
   };
@@ -485,6 +491,12 @@ export async function runChat(
     chatTuiCanInterruptActiveRun(session);
   const canStopActiveRun = (): boolean =>
     chatTuiCanStopVisibleRun(session, rootStreamStatus());
+  const isResumableIdle = (): boolean =>
+    chatTuiIsResumableIdleOnExit({
+      canInterruptActiveRun: canInterruptActiveRun(),
+      canStopActiveRun: canStopActiveRun(),
+      hasActiveToolUseFlow: hasActiveToolUseFlow(),
+    });
   const canStopPendingRunWithoutStream = (): boolean =>
     Boolean(session.runPromise && !session.runCompleted && !session.streamId);
   // Chat-session controller: owns run start/resume/stop orchestration.
@@ -534,7 +546,7 @@ export async function runChat(
     // StreamLogStore entries outlive resetCliState (which only clears the
     // React/signal view). Drop them so transcript projection can't replay
     // the cleared conversation into the fresh `<Static>` scrollback.
-    const store = getDefaultStreamLogStore();
+    const store = defaultSession().transcripts;
     for (const streamId of streamsSignal.get().keys()) {
       store.delete(streamId).catch(() => {
         // Best-effort: a KV failure leaves the log on disk, but the run
@@ -778,7 +790,7 @@ export async function runChat(
       onSuspend={() => handleSigtstp()}
       onKillExecution={(executionId) => {
         clearApprovals();
-        SharedExecutionRegistry.kill(executionId, {
+        defaultSession().executions.kill(executionId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
       }}
@@ -865,17 +877,20 @@ export async function runChat(
     flushPendingRunTraces();
     detachSnapshotPersistence();
     await Promise.all([
-      getDefaultStreamLogStore().flush(),
+      defaultSession().transcripts.flush(),
       snapshotStore.flush(),
     ]);
   };
   // These TUI exit paths call process.exit() directly, so bin/texra.ts's
-  // `finally` (which runs platform shutdown) never fires. Run it here too so
-  // shutdown handlers — notably UsageLogService.dispose(), which flushes any
-  // queued usage entries — execute before the process dies. runShutdown is
-  // idempotent, so the normal return path can still rely on bin/texra.ts.
+  // `finally` (which runs platform shutdown) never fires. Run the same
+  // shutdown sequence the (suppressed) platform SIGINT/SIGTERM handlers
+  // would have run — lifecycle shutdown (notably UsageLogService.dispose(),
+  // which flushes any queued usage entries) then the NDJSON flush — so it
+  // still happens once before the process dies. runCliPlatformShutdownSequence
+  // is idempotent-safe to call again, so the normal return path can still
+  // rely on bin/texra.ts's own `finally`.
   const runPlatformShutdown = (): Promise<void> =>
-    tryPlatform()?.lifecycle.runShutdown() ?? Promise.resolve();
+    runCliPlatformShutdownSequence(tryPlatform()?.lifecycle);
   const exitNow = (exitCode: number): void => {
     exiting = true;
     removeProcessHandlers();
@@ -907,7 +922,7 @@ export async function runChat(
     const sigintAction = chatTuiSigintAction({
       exitArmed,
       canStopActiveRun: canStopActiveRun(),
-      canInterruptActiveRun: canInterruptActiveRun(),
+      resumableIdle: isResumableIdle(),
     });
     switch (sigintAction) {
       case 'clean-exit':
@@ -975,6 +990,12 @@ export async function runChat(
     clearPendingExit();
     ink.unmount();
   }
+  // Ownership transfers right here, not any earlier: everything above this
+  // line (initInteractiveCliPlatform, onboarding, model resolution) ran with
+  // the platform's own handler still live, so a signal during that window
+  // still got a graceful shutdown. This removes it and makes the handlers
+  // installed below the sole owner.
+  handOffCliShutdownSignalHandlers();
   process.on('SIGINT', handleSigint);
   process.on('SIGTERM', handleSigterm);
   process.on('SIGHUP', handleSighup);
@@ -1030,12 +1051,9 @@ export async function runChat(
       await followUpQueue.onIdle();
       // A suspended (idle/WAITING) root session is resumable: its flow record
       // survives only if we DON'T interrupt the flow (interrupt clears it). See
-      // chatTuiIsResumableIdleOnExit for why "interruptible but not stoppable"
-      // is exactly the idle-but-suspended case we must leave untouched.
-      const resumableIdle = chatTuiIsResumableIdleOnExit({
-        canInterruptActiveRun: canInterruptActiveRun(),
-        canStopActiveRun: canStopActiveRun(),
-      });
+      // chatTuiIsResumableIdleOnExit for the live-flow check that distinguishes
+      // this state from a resume slot that is still rehydrating.
+      const resumableIdle = isResumableIdle();
       if (session.runPromise && !session.runCompleted && !resumableIdle) {
         session.stopRequested = true;
         interruptActive();

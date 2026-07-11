@@ -3,30 +3,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createRunTrace,
   flushPendingRunTraces,
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('createRunTrace dispose', () => {
-  let previousStore: StreamLogStore;
   let store: StreamLogStore;
 
   beforeEach(() => {
-    previousStore = getDefaultStreamLogStore();
     store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
   });
 
   afterEach(() => {
-    setDefaultStreamLogStore(previousStore);
     vi.useRealTimers();
   });
 
   it('removes the flusher from the global registry on dispose', () => {
     vi.useFakeTimers();
-    const handle = createRunTrace('disposed-stream');
+    const handle = createRunTrace('disposed-stream', store);
     const stream = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
     stream.append('a');
@@ -51,7 +45,7 @@ describe('createRunTrace dispose', () => {
   });
 
   it('returns the same dispose function across the handle', () => {
-    const handle = createRunTrace('idempotent-stream');
+    const handle = createRunTrace('idempotent-stream', store);
     handle.dispose();
     // Calling dispose again should not throw and should be a no-op.
     expect(() => handle.dispose()).not.toThrow();

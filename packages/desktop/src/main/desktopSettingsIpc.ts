@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import * as path from 'node:path';
-
 import { platform, tryPlatform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
@@ -9,11 +6,6 @@ import {
   isAllowedLatexInstallCommand,
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
-import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
-import {
-  ChatExportController,
-  type ExportInputStatus,
-} from '@controllers/settingsView/ChatExportController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
 import {
@@ -22,25 +14,12 @@ import {
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
-  deleteAllExecutions,
-  deleteExecution,
-  getExecutionStore,
-} from '@agent/storage';
-import {
   computeAgentOptionsData,
   getAgentsByCategory,
   getVisibleAgents as getVisibleRegistryAgents,
   loadAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
-import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
-import { type AgentConfig } from '@agent/core/definition/AgentConfig';
-import {
-  validateExecutionRequest,
-  type ValidatedExecutionRequest,
-} from '@agent/core/state/executionRequests';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import type { TaskState } from '@agent/core/state/TaskState';
 import {
   codexCoordinator,
   getChatGptAuthStatus,
@@ -59,7 +38,6 @@ import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
-import type { ExecutionId } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -137,6 +115,10 @@ import {
   type DesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
+import {
+  DesktopHistoryHandlers,
+  type DesktopHistoryOptions,
+} from './desktopHistoryHandlers.js';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -144,7 +126,7 @@ type ToolDashboardBuilder = (
   cachedResults?: ExternalToolCheckResult[],
 ) => Promise<ToolDashboardItem[]>;
 
-export interface DesktopSettingsIpcOptions {
+export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   postToRenderer(message: unknown): void;
   sendStartupCatalogData?: boolean;
   loadAgents?: typeof loadAgents;
@@ -163,27 +145,6 @@ export interface DesktopSettingsIpcOptions {
   /** Route this window to the progress view and select the given stream. */
   revealStream?: (streamId: string) => Promise<void>;
   openExternalUrl?: (url: string) => Promise<void>;
-  /**
-   * Resolved `packages/extension/resources` tree (ElectronPlatformInitResult
-   * .resourcesPath). Used to locate the chat-export LaTeX preamble and the
-   * bundled trace-viewer standalone template — the same assets the
-   * extension's `HistoryHandlers` loads, reached here via `fs` instead of an
-   * esbuild text import.
-   */
-  resourcesPath?: string;
-  /**
-   * Run an agent (history "Rerun"). Delegates to the same host-neutral
-   * `runAgent` the extension's `runExecuteCommand` calls, via the desktop
-   * agent-execution bridge's `DesktopProgressBridge.runExecution`.
-   */
-  runExecution?: (request: ValidatedExecutionRequest) => Promise<void>;
-  /**
-   * Restore a task's setup into the main view (history "Setup"). Delegates to
-   * `DesktopProgressBridge.restoreTaskState`, the desktop equivalent of the
-   * extension's `texra.restoreState` command. Returns `false` when the config
-   * failed to convert to a persisted main-view state.
-   */
-  restoreTaskState?: (taskState: TaskState) => Promise<boolean>;
   /**
    * Offer the ChatGPT sign-in URL as a copyable link. `openExternalUrl` only
    * targets the system default browser; this lets a user whose ChatGPT
@@ -239,6 +200,16 @@ export function createDesktopSettingsIpc(
       void options.showInfoMessage?.(error.reason);
     },
   );
+  const historyHandlers = new DesktopHistoryHandlers({
+    postToRenderer: options.postToRenderer,
+    resourcesPath: options.resourcesPath,
+    runExecution: options.runExecution,
+    restoreTaskState: options.restoreTaskState,
+    openPath: options.openPath,
+    showInfoMessage: options.showInfoMessage,
+    showErrorMessage: options.showErrorMessage,
+    onError,
+  });
   const loadAgentRegistry = options.loadAgents ?? loadAgents;
   const loadAgentOptionsData =
     options.loadAgentOptionsData ?? computeAgentOptionsData;
@@ -511,211 +482,6 @@ export function createDesktopSettingsIpc(
     await options.openPath?.(StorageFS.fullPath(resolveMemoryStoragePath()));
   }
 
-  async function postHistoryData(): Promise<void> {
-    options.postToRenderer(await buildHistoryMessage());
-  }
-
-  async function deleteHistoryItem(historyId: string): Promise<void> {
-    if (getAllActiveExecutionIds().includes(historyId)) {
-      await options.showInfoMessage?.('Cannot delete a running execution');
-      return;
-    }
-
-    const deleted = await deleteExecution(historyId as ExecutionId);
-    if (!deleted) {
-      await options.showInfoMessage?.(`History item not found: ${historyId}`);
-      return;
-    }
-    await postHistoryData();
-  }
-
-  async function clearHistory(): Promise<void> {
-    await deleteAllExecutions(new Set(getAllActiveExecutionIds()));
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
-    });
-  }
-
-  // readConfig() already validates via readValidated and returns null for
-  // BOTH missing and corrupt/legacy configs (the storage layer's silent-null
-  // read — distinguishing the two needs the loud-reads policy at the store,
-  // not a re-parse here, which can never see invalid data).
-  const HISTORY_CONFIG_UNREADABLE_MESSAGE =
-    'History item not found or unreadable (missing, corrupt, or from an incompatible version)';
-
-  type HistoryConfigResult =
-    { status: 'ok'; config: AgentConfig } | { status: 'unreadable' };
-
-  async function readHistoryConfig(
-    historyId: string,
-  ): Promise<HistoryConfigResult> {
-    const config = await getExecutionStore(
-      historyId as ExecutionId,
-    ).readConfig();
-    if (!config) return { status: 'unreadable' };
-    return { status: 'ok', config };
-  }
-
-  async function rerunHistoryAgent(historyId: string): Promise<void> {
-    const result = await readHistoryConfig(historyId);
-    if (result.status === 'unreadable') {
-      await options.showErrorMessage?.(HISTORY_CONFIG_UNREADABLE_MESSAGE);
-      return;
-    }
-    const validated = validateExecutionRequest({ config: result.config });
-    if (!validated.valid) {
-      await options.showErrorMessage?.(validated.message);
-      return;
-    }
-    if (!options.runExecution) {
-      await options.showErrorMessage?.(
-        'Rerunning agents from history is not available in this build',
-      );
-      return;
-    }
-    await options.showInfoMessage?.('Rerunning agent from history');
-    await options.runExecution(validated.request);
-  }
-
-  async function restoreHistoryAgent(historyId: string): Promise<void> {
-    const result = await readHistoryConfig(historyId);
-    if (result.status === 'unreadable') {
-      await options.showErrorMessage?.(HISTORY_CONFIG_UNREADABLE_MESSAGE);
-      return;
-    }
-    const restored =
-      (await options.restoreTaskState?.(
-        agentConfigToTaskState(result.config),
-      )) ?? false;
-    if (!restored) {
-      await options.showErrorMessage?.('Failed to restore configuration');
-    }
-  }
-
-  /**
-   * Resolved `resources/` tree, throwing if the host wired the IPC without
-   * one — export is only reachable when `resourcesPath` is supplied (see
-   * `DesktopSettingsIpcOptions.resourcesPath`).
-   */
-  function getResourcesPath(): string {
-    if (!options.resourcesPath) {
-      throw new Error(
-        'Desktop settings IPC missing resourcesPath; cannot export chat.',
-      );
-    }
-    return options.resourcesPath;
-  }
-
-  let chatExportController: ChatExportController | undefined;
-  function getChatExportController(): ChatExportController {
-    if (!chatExportController) {
-      const latexPreamble = readFileSync(
-        path.join(getResourcesPath(), 'templates', 'chatExport.tex'),
-        'utf8',
-      );
-      chatExportController = new ChatExportController({ latexPreamble });
-    }
-    return chatExportController;
-  }
-
-  async function reportExportInputError(
-    status: Exclude<ExportInputStatus, 'ok'>,
-  ): Promise<void> {
-    switch (status) {
-      case 'config_missing':
-        await options.showInfoMessage?.('History item not found');
-        return;
-      case 'conversation_missing':
-        await options.showInfoMessage?.(
-          'No conversation data available for this execution',
-        );
-        return;
-    }
-  }
-
-  async function reportHtmlExportError(
-    status: 'config_missing' | 'streamLogs_missing',
-  ): Promise<void> {
-    switch (status) {
-      case 'config_missing':
-        await options.showInfoMessage?.('History item not found');
-        return;
-      case 'streamLogs_missing':
-        await options.showInfoMessage?.(
-          'No stored transcript available for this execution — it may predate transcript persistence.',
-        );
-        return;
-    }
-  }
-
-  async function exportHistoryChatHtml(historyId: string): Promise<void> {
-    const controller = getChatExportController();
-    const outcome = await controller.exportAsHtml(
-      historyId,
-      path.join(getResourcesPath(), 'traceViewerStandalone', 'index.html'),
-    );
-    if (outcome.status !== 'ok') {
-      await reportHtmlExportError(outcome.status);
-      return;
-    }
-    const { absolutePath, storagePath } = outcome.result;
-    await options.openPath?.(absolutePath);
-    await options.showInfoMessage?.(
-      `Chat exported: ${path.basename(storagePath)}`,
-    );
-  }
-
-  async function exportHistoryChat(
-    historyId: string,
-    format: 'md' | 'tex' | 'html',
-  ): Promise<void> {
-    if (format === 'html') {
-      await exportHistoryChatHtml(historyId);
-      return;
-    }
-
-    const controller = getChatExportController();
-    const result = await controller.buildExportInput(historyId);
-    if (result.status !== 'ok') {
-      await reportExportInputError(result.status);
-      return;
-    }
-    const { exportInput } = result;
-
-    if (format === 'md') {
-      const { absolutePath, storagePath } = await controller.exportAsMarkdown(
-        historyId,
-        exportInput,
-      );
-      await options.openPath?.(absolutePath);
-      await options.showInfoMessage?.(
-        `Chat exported: ${path.basename(storagePath)}`,
-      );
-      return;
-    }
-
-    const { absolutePath, storagePath, pdfPath, logTail } =
-      await controller.exportAsLatex(historyId, exportInput);
-    if (pdfPath) {
-      await options.openPath?.(pdfPath);
-      await options.showInfoMessage?.(
-        `Chat exported and compiled: ${path.basename(storagePath).replace('.tex', '.pdf')}`,
-      );
-      return;
-    }
-    if (logTail) {
-      onError(
-        new Error(
-          `LaTeX export compilation failed for ${storagePath}:\n${logTail}`,
-        ),
-      );
-    }
-    await options.openPath?.(absolutePath);
-    await options.showInfoMessage?.(
-      'LaTeX compilation failed. The .tex source file has been opened instead.',
-    );
-  }
-
   async function postToolDashboardData(postOptions?: {
     skipChecks?: boolean;
   }): Promise<void> {
@@ -816,7 +582,7 @@ export function createDesktopSettingsIpc(
     await Promise.all([
       memoryEnabledPosted,
       postMemoryData(),
-      postHistoryData(),
+      historyHandlers.postHistoryData(),
       modelSelectionDataPosted,
       postProfileData(),
       postChatGptAuthStatus(),
@@ -1309,15 +1075,7 @@ export function createDesktopSettingsIpc(
       pin: (storagePath) => setMemoryPinned(storagePath, true),
       unpin: (storagePath) => setMemoryPinned(storagePath, false),
     },
-    history: {
-      deleteAgent: (historyId) => deleteHistoryItem(historyId),
-      clear: () => clearHistory(),
-      rerunAgent: (data) => rerunHistoryAgent(data.historyId),
-      restoreAgent: (data) => restoreHistoryAgent(data.historyId),
-      exportChatMd: (data) => exportHistoryChat(data.historyId, 'md'),
-      exportChatTex: (data) => exportHistoryChat(data.historyId, 'tex'),
-      exportChatHtml: (data) => exportHistoryChat(data.historyId, 'html'),
-    },
+    history: historyHandlers.actions,
     profile: {
       signIn: () => signIn(),
       signOut: () => signOut(),

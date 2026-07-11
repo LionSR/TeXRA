@@ -15,14 +15,10 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import {
-  StreamStatusMachine,
-  StreamStatusService,
-} from '@agent/runtime/StreamStatusService';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentExecutionHandle,
-  SharedExecutionRegistry,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import {
@@ -31,7 +27,6 @@ import {
   wakeQueuedFollowUpStream,
   wakeOrReleaseQueuedStream,
 } from '@agent/followUp/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { ToolUseSessionLifecycle } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -58,7 +53,7 @@ function trackChildHandle(
     'toolUse',
     noopAgentRuntimeHost,
   );
-  SharedExecutionRegistry.track(handle);
+  defaultSession().executions.track(handle);
 }
 
 describe('ToolUseFollowUp', () => {
@@ -88,10 +83,10 @@ describe('ToolUseFollowUp', () => {
   };
 
   afterEach(() => {
-    for (const executionId of SharedExecutionRegistry.getActiveIds()) {
-      SharedExecutionRegistry.untrack(executionId);
+    for (const executionId of defaultSession().executions.getActiveIds()) {
+      defaultSession().executions.untrack(executionId);
     }
-    ToolUseFollowUpQueue.release(streamId);
+    defaultSession().followUps.release(streamId);
   });
 
   function trackToolUseFlow(
@@ -116,7 +111,7 @@ describe('ToolUseFollowUp', () => {
       switchModel: async () => {},
       interrupt: () => {},
     });
-    SharedExecutionRegistry.track(handle);
+    defaultSession().executions.track(handle);
     return executionId;
   }
 
@@ -183,7 +178,7 @@ describe('ToolUseFollowUp', () => {
     const waitingStreamId = 'stream-waiting-race-follow-up' as StreamTabId;
     const sessionLifecycle = new ToolUseSessionLifecycle(
       waitingStreamId,
-      ToolUseFollowUpQueue.defaultInstance(),
+      defaultSession().followUps,
     );
     const executionId = trackToolUseFlow(waitingStreamId, (followUp) =>
       sessionLifecycle.appendFollowUp(followUp),
@@ -199,7 +194,7 @@ describe('ToolUseFollowUp', () => {
       // runToolUseFlow's finally, on the WAITING branch, now skips
       // sessionLifecycle.dispose() -- the follow-up survives instead of
       // being dropped when the queue would otherwise have been released.
-      assert.deepEqual(ToolUseFollowUpQueue.getAll(waitingStreamId), [
+      assert.deepEqual(defaultSession().followUps.getAll(waitingStreamId), [
         'keep going',
       ]);
 
@@ -208,11 +203,11 @@ describe('ToolUseFollowUp', () => {
       // back the same live instance with the raced-in follow-up intact.
       const resumedSessionLifecycle = new ToolUseSessionLifecycle(
         waitingStreamId,
-        ToolUseFollowUpQueue.defaultInstance(),
+        defaultSession().followUps,
       );
       assert.equal(resumedSessionLifecycle.hasQueuedFollowUp(), true);
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
+      defaultSession().executions.untrack(executionId);
       sessionLifecycle.dispose();
     }
   });
@@ -245,12 +240,12 @@ describe('ToolUseFollowUp', () => {
         status: 'queued',
         reason: 'children_running',
       });
-      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+      assert.deepEqual(defaultSession().followUps.getAll(parentStreamId), [
         'hello while running',
       ]);
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
-      ToolUseFollowUpQueue.release(parentStreamId);
+      defaultSession().executions.untrack(executionId);
+      defaultSession().followUps.release(parentStreamId);
     }
   });
 
@@ -262,7 +257,7 @@ describe('ToolUseFollowUp', () => {
     const executionId = 'exec-released';
 
     trackChildHandle(executionId, parentStreamId, childStreamId);
-    ToolUseFollowUpQueue.release(parentStreamId);
+    defaultSession().followUps.release(parentStreamId);
 
     try {
       const result = await sendFollowUp(parentStreamId, 'after release');
@@ -271,12 +266,12 @@ describe('ToolUseFollowUp', () => {
         status: 'queued',
         reason: 'children_running',
       });
-      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+      assert.deepEqual(defaultSession().followUps.getAll(parentStreamId), [
         'after release',
       ]);
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
-      ToolUseFollowUpQueue.release(parentStreamId);
+      defaultSession().executions.untrack(executionId);
+      defaultSession().followUps.release(parentStreamId);
     }
   });
 
@@ -286,7 +281,7 @@ describe('ToolUseFollowUp', () => {
     const executionId = 'exec-subagent-result';
 
     trackChildHandle(executionId, parentStreamId, childStreamId);
-    ToolUseFollowUpQueue.release(parentStreamId);
+    defaultSession().followUps.release(parentStreamId);
 
     try {
       const result = await sendFollowUp(parentStreamId, {
@@ -298,7 +293,7 @@ describe('ToolUseFollowUp', () => {
         status: 'queued',
         reason: 'children_running',
       });
-      assert.deepEqual(ToolUseFollowUpQueue.drainItems(parentStreamId), [
+      assert.deepEqual(defaultSession().followUps.drainItems(parentStreamId), [
         {
           text: 'child done',
           origin: 'subagent_result',
@@ -308,8 +303,8 @@ describe('ToolUseFollowUp', () => {
         },
       ]);
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
-      ToolUseFollowUpQueue.release(parentStreamId);
+      defaultSession().executions.untrack(executionId);
+      defaultSession().followUps.release(parentStreamId);
     }
   });
 
@@ -351,13 +346,13 @@ describe('ToolUseFollowUp', () => {
 
       assert.deepEqual(await wakes, [true, true]);
       assert.equal(resumeCalls, 1);
-      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+      assert.deepEqual(defaultSession().followUps.getAll(parentStreamId), [
         'result one',
         'result two',
       ]);
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
-      ToolUseFollowUpQueue.release(parentStreamId);
+      defaultSession().executions.untrack(executionId);
+      defaultSession().followUps.release(parentStreamId);
     }
   });
 
@@ -380,10 +375,10 @@ describe('ToolUseFollowUp', () => {
       assert.deepEqual(await wakeQueuedFollowUpStream(parentStreamId, result), {
         kind: 'dropped',
       });
-      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), []);
+      assert.deepEqual(defaultSession().followUps.getAll(parentStreamId), []);
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
-      ToolUseFollowUpQueue.release(parentStreamId);
+      defaultSession().executions.untrack(executionId);
+      defaultSession().followUps.release(parentStreamId);
     }
   });
 
@@ -392,7 +387,7 @@ describe('ToolUseFollowUp', () => {
 
     await initResumePlatform({ tryResumeStream: async () => false });
     seedStreamStatusForTest(
-      StreamStatusService,
+      defaultSession().status,
       waitingStreamId,
       STREAM_STATUS.WAITING,
     );
@@ -411,12 +406,12 @@ describe('ToolUseFollowUp', () => {
         await wakeQueuedFollowUpStream(waitingStreamId, result),
         { kind: 'queued_resume_failed' },
       );
-      assert.deepEqual(ToolUseFollowUpQueue.getAll(waitingStreamId), [
+      assert.deepEqual(defaultSession().followUps.getAll(waitingStreamId), [
         'queued while waiting',
       ]);
     } finally {
-      clearStreamStatusForTest(StreamStatusService, waitingStreamId);
-      ToolUseFollowUpQueue.release(waitingStreamId);
+      clearStreamStatusForTest(defaultSession().status, waitingStreamId);
+      defaultSession().followUps.release(waitingStreamId);
     }
   });
 
@@ -443,12 +438,12 @@ describe('ToolUseFollowUp', () => {
         await wakeOrReleaseQueuedStream(parentStreamId, result),
         true,
       );
-      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+      assert.deepEqual(defaultSession().followUps.getAll(parentStreamId), [
         'late result',
       ]);
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
-      ToolUseFollowUpQueue.release(parentStreamId);
+      defaultSession().executions.untrack(executionId);
+      defaultSession().followUps.release(parentStreamId);
     }
   });
 
@@ -485,16 +480,15 @@ describe('ToolUseFollowUp', () => {
       );
 
       // Without an explicit session, the decision falls back to
-      // currentSession() (the process default), whose StreamStatusService
-      // has no state for this stream — proving the two sessions are not
-      // conflated and the routed session's state actually drove the result
-      // above.
+      // currentSession() (the process default), whose status machine has no
+      // state for this stream — proving the two sessions are not conflated
+      // and the routed session's state actually drove the result above.
       assert.deepEqual(await wakeQueuedFollowUpStream(parentStreamId, result), {
         kind: 'queued_resume_failed',
       });
     } finally {
       clearStreamStatusForTest(routedSession.status, parentStreamId);
-      ToolUseFollowUpQueue.release(parentStreamId);
+      defaultSession().followUps.release(parentStreamId);
     }
   });
 
