@@ -1,4 +1,7 @@
+// Local imports
 import { joinReasoningItemsText } from './reasoningDetailsText';
+
+// Third-party imports
 import type { ReasoningDetailUnion } from '@openrouter/sdk/models';
 
 /** Extract text content from a reasoning detail item by type. */

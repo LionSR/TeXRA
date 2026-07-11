@@ -228,7 +228,7 @@ async function showCopyCommandDialog(
     type: 'info' | 'warning';
     message: string;
     detail: string;
-    defaultId: number;
+    defaultId: 0 | 1;
   },
 ): Promise<void> {
   const response = await dialog.showMessageBox(window, {
@@ -243,20 +243,6 @@ async function showCopyCommandDialog(
   if (response.response === 0) {
     clipboard.writeText(command);
   }
-}
-
-async function showSetupCommandOpenedInTerminal(
-  window: BrowserWindow,
-  command: string,
-): Promise<void> {
-  await showCopyCommandDialog(window, command, {
-    type: 'info',
-    message: 'Setup command opened in Terminal',
-    detail:
-      `Command:\n${command}\n\n` +
-      'Complete any prompts in the Terminal window, then return to TeXRA and recheck the dependency status.',
-    defaultId: 1,
-  });
 }
 
 async function showManualSetupCommand(
@@ -376,7 +362,14 @@ function createWindow(options: {
     if (process.platform === 'darwin') {
       try {
         await openMacTerminalCommand(command, setupCommandCwd);
-        await showSetupCommandOpenedInTerminal(window, command);
+        await showCopyCommandDialog(window, command, {
+          type: 'info',
+          message: 'Setup command opened in Terminal',
+          detail:
+            `Command:\n${command}\n\n` +
+            'Complete any prompts in the Terminal window, then return to TeXRA and recheck the dependency status.',
+          defaultId: 1,
+        });
       } catch {
         await showManualSetupCommand(window, command);
       }
