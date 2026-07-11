@@ -5,6 +5,7 @@ import {
   RemoteAgentLoader,
 } from '@agent/remote/RemoteAgentLoader';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { SUPABASE_CONFIG } from '@auth/config';
 
 function installRemoteAgentListClient(
   ...results: Array<{
@@ -188,5 +189,36 @@ describe('remote agent schema compatibility', () => {
     expect(selectedColumns).toEqual([
       'id, name, description, visibility, tools, agent_category',
     ]);
+  });
+});
+
+describe('remote agent config parsing', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('rejects with a wrapped error for malformed remote config YAML', async () => {
+    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue(
+      'access-token',
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const urlString = input instanceof Request ? input.url : String(input);
+        if (urlString !== SUPABASE_CONFIG.edgeFunctionUrl) {
+          return new Response('not found', { status: 404 });
+        }
+        return new Response(
+          JSON.stringify({ config: 'name: "unterminated' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }),
+    );
+
+    await expect(
+      RemoteAgentLoader.loadRemoteAgent('broken-agent'),
+    ).rejects.toThrow('Failed to parse YAML for remote agent "broken-agent"');
   });
 });
