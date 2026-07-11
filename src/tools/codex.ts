@@ -377,7 +377,6 @@ function startCodexLoop(params: {
 
   // Fresh threads don't have thread.id yet; they're registered after the first
   // turn completes. A resumed thread's pre-launch claim is promoted up front.
-  const storedThreadIds = new Set<string>();
   const registerThread = (threadId: string, session: SessionHandle): void => {
     if (CodexThreads.lookup(threadId)) return;
     CodexThreads.register(threadId, {
@@ -387,7 +386,6 @@ function startCodexLoop(params: {
       executionId,
       executions: session.executions,
     });
-    storedThreadIds.add(threadId);
   };
 
   // The joined prompt text for whichever turn is currently in flight —
@@ -443,9 +441,7 @@ function startCodexLoop(params: {
         { tag: DELIVERY_TAG.codexError, executionId, prompt: lastPrompt },
         { message: toErrorMessage(err) },
       ),
-    onSessionCleanup: () => {
-      CodexThreads.releaseMany(storedThreadIds);
-    },
+    onSessionCleanup: () => CodexThreads.releaseByExecutionId(executionId),
   };
 
   startChildRunLoop({
