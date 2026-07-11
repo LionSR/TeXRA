@@ -9,7 +9,7 @@ export const userQuestionPanelStyles: CSSResult = css`
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-quiet);
     padding: ${sp.small} ${sp.medium};
-    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
+    background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius-small);
     line-height: var(--line-height-normal);
   }
@@ -27,7 +27,7 @@ export const userQuestionPanelStyles: CSSResult = css`
     padding: ${sp.medium};
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius);
-    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.05));
+    background: var(--wa-color-surface-lowered);
   }
 
   .user-question-request__heading {
