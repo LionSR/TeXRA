@@ -1,47 +1,33 @@
-// Ink TUI root: a single vertical column — conversation, optional subagent /
-// todos panels at the bottom, then status, approval modal, and input bar.
-// Tab / Shift-Tab cycles focus across subagent streams.
+// Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
-import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useApp, useInput, useStdin, useWindowSize } from 'ink';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { isActiveStatus } from '@common/constants/streamStatus';
-import { type ActiveChildInfo, type StreamTabId } from '@shared/schemas';
-import { assertNever, clamp } from '@utils/core';
 import {
-  allocateMiddleRows,
-  allocateSidePanelRows,
-  PINNED_CHROME_ROWS,
-  shouldShowTipRow,
-  shouldShowTodosPlanPanel,
-  staticScrollbackTarget,
-  staticTranscriptRowBudget,
-} from './appLayout';
-import { clampModalWidth } from './ui/theme';
+  appEscapeInterruptActive,
+  appFocusShortcutsActive,
+  approvalVisibleForActiveStream,
+  digitFromMetaShortcut,
+  ESC_META_CHORD_INTERRUPT_DELAY_MS,
+  foregroundEscapeAction,
+  foregroundMaxRowsForKind,
+  foregroundSurfaceKind,
+  shouldDeferEscapeInterruptForMetaChord,
+  triggerEscapeInterrupt,
+  type EscapeInterruptState,
+} from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
 import { TranscriptViewer } from './modals/TranscriptViewer';
-import { ConversationPane } from './panes/ConversationPane';
-import { StaticConversationTranscript } from './panes/StaticConversationTranscript';
 import { InputBar } from './panes/InputBar';
-import {
-  QueuedFollowUpsPanel,
-  queuedFollowUpPanelRowCount,
-} from './panes/QueuedFollowUpsPanel';
+import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
 import {
   StreamTabsStrip,
   streamTabsDisplayItems,
 } from './panes/StreamTabsStrip';
-import { SubagentList, subagentPanelRowCount } from './panes/SubagentList';
-import { TipRow } from './panes/TipRow';
-import { TodosPlanPanel, todosPlanPanelRowCount } from './panes/TodosPlanPanel';
-import {
-  approvalPayloadStreamId,
-  currentApproval,
-  type PendingApproval,
-} from './state/approvalQueue';
+import { currentApproval } from './state/approvalQueue';
 import {
   isEscapeInput,
   metaChordInput,
@@ -50,7 +36,6 @@ import {
 import {
   numericFocusTargetForActiveStream,
   resolveChildControlDisplayTargets,
-  type ChildControlMode,
 } from './state/childControls';
 import {
   activeStreamId as activeStreamIdSignal,
@@ -67,240 +52,19 @@ import {
 import {
   childStreamEntries as childStreamEntriesSignal,
   parentStream as parentStreamSignal,
-  visibleSubagentRows,
 } from './state/childExecutions';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { streamDisplayLabel } from './state/streamViews';
-import {
-  isScopedTranscriptViewport,
-  transcriptViewportChange,
-  transcriptViewportKey,
-  type TranscriptViewportChange,
-} from './state/transcriptViewportMode';
 import { useSignal } from './state/useSignal';
+import type { TranscriptViewportChange } from './state/transcriptViewportMode';
 import type { InputHistory } from './history/inputHistory';
 
-// Subset of Ink's internal stdin event emitter (the same channel `useInput`
-// consumes) needed to re-inject a synthesized Enter. Not part of `useStdin`'s
-// public type, so we narrow to just what we touch.
+// Narrow subset of Ink's internal stdin emitter used to synthesize Enter.
 interface InputEventEmitterLike {
   emit(event: 'input', data: string): void;
   on(event: 'input', listener: (data: string) => void): void;
   off(event: 'input', listener: (data: string) => void): void;
-}
-
-const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
-const EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS = 6;
-const FORM_FOREGROUND_MAX_ROWS = 18;
-// Match form sizing for approval modals that already budget or scroll their
-// content. Natural-height approvals stay uncapped until they grow row budgets.
-const APPROVAL_FOREGROUND_MAX_ROWS = 18;
-// Cap the bottom subagent/todos panels so they never crowd out the
-// conversation or push the input bar off-screen.
-const BOTTOM_PANEL_MAX_ROWS = 10;
-const EMPTY_SUBAGENT_ROWS: readonly ActiveChildInfo[] = [];
-// A bare Esc and the second key of an `Esc s` / `Esc p` chord are two
-// separate keystrokes on terminals without true Meta-key detection (macOS
-// Terminal.app). 125ms was too tight for a deliberate but unhurried chord
-// (issue #7496: a ~400ms pause between Esc and `s` fired the bare-Esc
-// interrupt and stopped a suspended WAITING subagent); widen to a
-// tmux-style chord window so a human-paced chord still resolves before we
-// commit to interrupting.
-const ESC_META_CHORD_INTERRUPT_DELAY_MS = 500;
-
-export function appFocusShortcutsActive({
-  foregroundOpen,
-  reverseSearchOpen,
-  slashPaletteOpen,
-}: {
-  readonly foregroundOpen: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
-}): boolean {
-  return !foregroundOpen && !slashPaletteOpen && !reverseSearchOpen;
-}
-
-export function appEscapeInterruptActive({
-  inputDisabled,
-  reverseSearchOpen,
-  runPending,
-  slashPaletteOpen,
-}: {
-  readonly inputDisabled: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly runPending: boolean;
-  readonly slashPaletteOpen: boolean;
-}): boolean {
-  return (
-    runPending && !inputDisabled && !slashPaletteOpen && !reverseSearchOpen
-  );
-}
-
-// The footer advertises `[Esc s]subagents` / `[Esc p]tasks` any time these
-// controls are available, regardless of which stream is currently focused
-// or whether it's still in-flight (e.g. WAITING). Bare Esc must therefore
-// give a chord a chance to resolve any time that binding is on screen —
-// gating on the focused child's own input-disabled state (as this used to)
-// left the WAITING-child case with no defer window at all, so a slow
-// `Esc s` fired an immediate interrupt instead. `Alt`-chord platforms are
-// unaffected: their Esc+key sequences arrive as one burst, resolved
-// synchronously by `metaChordInput`.
-export function shouldDeferEscapeInterruptForMetaChord({
-  shortcutModifierLabel,
-  subagentControlsAvailable,
-  taskControlsAvailable,
-}: {
-  readonly shortcutModifierLabel: string;
-  readonly subagentControlsAvailable: boolean;
-  readonly taskControlsAvailable: boolean;
-}): boolean {
-  return (
-    shortcutModifierLabel === 'Esc' &&
-    (subagentControlsAvailable || taskControlsAvailable)
-  );
-}
-
-export interface EscapeInterruptState {
-  readonly inputDisabled: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
-  readonly canInterruptActiveRun: () => boolean;
-  readonly onInterruptActive: () => void;
-}
-
-export function triggerEscapeInterrupt(state: EscapeInterruptState): boolean {
-  if (
-    !appEscapeInterruptActive({
-      inputDisabled: state.inputDisabled,
-      reverseSearchOpen: state.reverseSearchOpen,
-      runPending: state.canInterruptActiveRun(),
-      slashPaletteOpen: state.slashPaletteOpen,
-    })
-  ) {
-    return false;
-  }
-
-  state.onInterruptActive();
-  return true;
-}
-
-export function digitFromMetaShortcut(value: string): number | undefined {
-  return /^[1-9]$/.test(value) ? Number.parseInt(value, 10) : undefined;
-}
-
-export type ForegroundSurfaceKind =
-  'transcript' | 'childControls' | 'form' | 'approval';
-
-export function foregroundSurfaceKind({
-  activeFormOpen,
-  childControlMode,
-  pendingApproval,
-  transcriptViewerOpen,
-}: {
-  readonly activeFormOpen: boolean;
-  readonly childControlMode?: ChildControlMode;
-  readonly pendingApproval: boolean;
-  readonly transcriptViewerOpen: boolean;
-}): ForegroundSurfaceKind | undefined {
-  if (transcriptViewerOpen) return 'transcript';
-  if (childControlMode !== undefined) return 'childControls';
-  if (activeFormOpen) return 'form';
-  if (pendingApproval) return 'approval';
-  return undefined;
-}
-
-export function approvalVisibleForActiveStream({
-  activeStreamId,
-  pending,
-}: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly pending: PendingApproval | undefined;
-}): boolean {
-  if (!pending) return false;
-  const streamId = approvalPayloadStreamId(pending.payload);
-  return streamId === undefined || streamId === activeStreamId;
-}
-
-export function foregroundEscapeAction({
-  activeFormEscapeAction,
-  childControlEscapeAction,
-  foregroundKind,
-  pending,
-}: {
-  readonly activeFormEscapeAction?: string;
-  readonly childControlEscapeAction?: string;
-  readonly foregroundKind: ForegroundSurfaceKind | undefined;
-  readonly pending: PendingApproval | undefined;
-}): string | undefined {
-  switch (foregroundKind) {
-    case undefined:
-      return undefined;
-    case 'form':
-      return activeFormEscapeAction ?? 'close';
-    case 'childControls':
-      return childControlEscapeAction ?? 'close';
-    case 'transcript':
-      return 'close';
-    case 'approval': {
-      const kind = pending?.payload.kind;
-      return kind === 'externalInquiry' || kind === 'userQuestion'
-        ? 'skip'
-        : 'cancel';
-    }
-  }
-}
-
-export function childControlForegroundMaxRows({
-  hasItems,
-}: {
-  readonly hasItems: boolean;
-}): number {
-  return hasItems
-    ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
-    : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
-}
-
-export function approvalForegroundMaxRows(
-  pending: PendingApproval | undefined,
-): number | undefined {
-  if (pending === undefined) return undefined;
-
-  switch (pending.payload.kind) {
-    case 'bash':
-    case 'toolEdit':
-    case 'proposal':
-    case 'externalInquiry':
-      return APPROVAL_FOREGROUND_MAX_ROWS;
-    case 'plan':
-    case 'retry':
-    case 'userQuestion':
-      return undefined;
-    default:
-      return assertNever(pending.payload, 'Unhandled approval payload kind');
-  }
-}
-
-function foregroundMaxRowsForKind({
-  childControlHasItems,
-  kind,
-  pending,
-}: {
-  readonly childControlHasItems: boolean;
-  readonly kind: ForegroundSurfaceKind | undefined;
-  readonly pending: PendingApproval | undefined;
-}): number | undefined {
-  switch (kind) {
-    case 'childControls':
-      return childControlForegroundMaxRows({ hasItems: childControlHasItems });
-    case 'form':
-      return FORM_FOREGROUND_MAX_ROWS;
-    case 'approval':
-      return approvalForegroundMaxRows(pending);
-    case 'transcript':
-    case undefined:
-      return undefined;
-  }
 }
 
 export interface AppProps {
@@ -342,7 +106,6 @@ export function App(props: AppProps): React.JSX.Element {
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
-  const [tipHour] = useState(() => new Date().getHours());
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
   const canStopPendingRunWithoutStream =
@@ -400,19 +163,6 @@ export function App(props: AppProps): React.JSX.Element {
     slashPaletteOpen,
   ]);
   const inputBarVisible = !foregroundOpen;
-  const viewportKey = transcriptViewportKey({
-    activeStreamId,
-    parentStream,
-    transcriptViewerStreamId,
-  });
-  const scopedTranscript = isScopedTranscriptViewport(viewportKey);
-  const scrollbackTarget = staticScrollbackTarget({
-    activeStreamId,
-    rootStreamId,
-    scopedTranscript,
-  });
-  const previousViewportKey = useRef<string | undefined>(undefined);
-  const onTranscriptViewportChange = props.onTranscriptViewportChange;
 
   // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
   // some Enter variants arrive as CSI-u sequences that Ink parses incompletely.
@@ -435,21 +185,7 @@ export function App(props: AppProps): React.JSX.Element {
     return () => emitter.off('input', onInput);
   }, [inputDisabled, stdin]);
 
-  useLayoutEffect(() => {
-    const previous = previousViewportKey.current;
-    previousViewportKey.current = viewportKey;
-    const change = transcriptViewportChange({
-      previousViewportKey: previous,
-      nextViewportKey: viewportKey,
-    });
-    if (change) onTranscriptViewportChange?.(change);
-  }, [onTranscriptViewportChange, viewportKey]);
-
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const activeResponseRunning = isActiveStatus(activeSlice?.status);
-  const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
-  const queuedFollowUpPanelWanted =
-    !foregroundOpen && queuedFollowUpMessages.length > 0;
   const streamTabItems = streamTabsDisplayItems({
     activeStreamId,
     childStreamEntries,
@@ -458,54 +194,14 @@ export function App(props: AppProps): React.JSX.Element {
     width: columns,
   });
   const streamTabsVisible = streamTabItems.length > 0;
-  const footerRows =
-    PINNED_CHROME_ROWS.status +
-    (inputBarVisible ? PINNED_CHROME_ROWS.input : 0) +
-    (streamTabsVisible ? PINNED_CHROME_ROWS.streamTabsWorstCase : 0);
-  const requestedQueuedFollowUpPanelRows = queuedFollowUpPanelWanted
-    ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
-    : 0;
-  const queuedFollowUpPanelRows = queuedFollowUpPanelWanted
-    ? clamp(rows - footerRows, 0, requestedQueuedFollowUpPanelRows)
-    : 0;
-  const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
-  const tipRowVisible =
-    !scopedTranscript &&
-    shouldShowTipRow({
-      foregroundOpen,
-      hasQueuedFollowUps: queuedFollowUpPanelWanted,
-    });
-  const staticTranscriptRows = scopedTranscript
-    ? undefined
-    : staticTranscriptRowBudget({
-        footerRows,
-        foregroundOpen,
-        queuedFollowUpPanelRows,
-        rows,
-        tipVisible: tipRowVisible,
-      });
-  const subagentPanelTarget = childControlTargets.tasks;
-  const subagentPanelRows = subagentPanelTarget.streamId
-    ? visibleSubagentRows(
-        subagentPanelTarget.streamId,
-        childStreamEntries,
-        streams,
-      )
-    : EMPTY_SUBAGENT_ROWS;
-  const hasSubagentPanel = !foregroundOpen && subagentPanelTarget.hasItems;
-  const hasTodosPlanPanel = shouldShowTodosPlanPanel({
-    foregroundOpen,
-    hasPlan: activeSlice?.plan != null,
-    status: activeSlice?.status,
-    todos: activeSlice?.todos ?? [],
-  });
-  const transcriptWidth = clampModalWidth(columns);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
     childControlMode,
     pendingApproval: activeApprovalVisible,
     transcriptViewerOpen,
   });
+  const approvalKind =
+    foregroundKind === 'approval' ? pending?.payload.kind : undefined;
   const childControlTarget =
     childControlMode !== undefined
       ? childControlTargets[childControlMode]
@@ -515,53 +211,15 @@ export function App(props: AppProps): React.JSX.Element {
       childControlEscapeActionSignal.set('close');
     }
   }, [childControlMode]);
-  const childControlHasItems = childControlTarget?.hasItems ?? false;
-  const { foregroundRows, transcriptRows } = allocateMiddleRows({
-    foregroundMaxRows: foregroundMaxRowsForKind({
-      childControlHasItems,
-      kind: foregroundKind,
-      pending,
-    }),
-    foregroundOpen,
-    inputVisible: inputBarVisible,
-    queuedFollowUpPanelRows,
-    reverseSearchOpen,
-    reserveTranscriptRows: foregroundKind !== 'transcript',
-    rows,
-    slashPaletteOpen,
-    streamTabsVisible,
-    staticTranscriptRows: staticTranscriptRows ?? 0,
-    tipVisible: tipRowVisible,
+  const foregroundMaxRows = foregroundMaxRowsForKind({
+    approvalKind,
+    childControlHasItems: childControlTarget?.hasItems ?? false,
+    kind: foregroundKind,
   });
-  // The subagent/todos panels live at the bottom of the same vertical column.
-  // Reserve only as many rows as the panels actually need — capped so they
-  // never take more than half the transcript or push the input off-screen —
-  // and let the conversation reclaim whatever the panels don't use. A fixed
-  // reservation would leave a dead gap above the input whenever the lists are
-  // shorter than the cap.
-  const subagentContentRows =
-    hasSubagentPanel && subagentPanelTarget.slice
-      ? subagentPanelRowCount(
-          subagentPanelRows,
-          subagentPanelTarget.slice.activeProcesses,
-        )
-      : 0;
-  const todosPlanContentRows =
-    hasTodosPlanPanel && activeSlice
-      ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
-      : 0;
-  const bottomPanelBudget = Math.min(
-    BOTTOM_PANEL_MAX_ROWS,
-    subagentContentRows + todosPlanContentRows,
-    Math.floor(transcriptRows / 2),
-  );
-  const conversationRows = transcriptRows - bottomPanelBudget;
-  const { subagentRows, todosPlanRows } = allocateSidePanelRows({
-    subagentContentRows,
-    todosPlanContentRows,
-    rows: bottomPanelBudget,
-  });
-  function renderForegroundSurface(): React.ReactNode {
+  function renderForegroundSurface(
+    availableRows: number,
+    transcriptWidth: number,
+  ): React.ReactNode {
     switch (foregroundKind) {
       case 'transcript': {
         // foregroundKind is 'transcript' only while transcriptViewerOpen, so
@@ -569,7 +227,7 @@ export function App(props: AppProps): React.JSX.Element {
         if (!transcriptViewerStreamId) return null;
         return (
           <TranscriptViewer
-            availableRows={foregroundRows}
+            availableRows={availableRows}
             onClose={() => transcriptViewerStreamIdSignal.set(undefined)}
             slice={streams.get(transcriptViewerStreamId)}
             title={streamDisplayLabel({
@@ -591,7 +249,7 @@ export function App(props: AppProps): React.JSX.Element {
             availableColumns={columns}
             streamLabel={target.streamLabel}
             activeStreamId={target.streamId}
-            availableRows={foregroundRows}
+            availableRows={availableRows}
             mode={childControlMode}
             onClose={() => childControlModeSignal.set(undefined)}
             onEscapeActionChange={(action) =>
@@ -612,17 +270,16 @@ export function App(props: AppProps): React.JSX.Element {
       case 'form':
         return activeForm?.render(
           () => activeFormSignal.set(undefined),
-          foregroundRows,
+          availableRows,
         );
       case 'approval':
         return activeApprovalVisible && pending ? (
-          <ApprovalModal pending={pending} availableRows={foregroundRows} />
+          <ApprovalModal pending={pending} availableRows={availableRows} />
         ) : null;
       case undefined:
         return null;
     }
   }
-  const foregroundSurface = renderForegroundSurface();
 
   const focusShortcutsActive = appFocusShortcutsActive({
     foregroundOpen,
@@ -772,93 +429,56 @@ export function App(props: AppProps): React.JSX.Element {
   });
 
   return (
-    <>
-      {transcriptViewerOpen ? null : (
-        <StaticConversationTranscript
-          colorEnabled={props.colorEnabled}
-          maxRows={staticTranscriptRows}
-          ownerKey={scrollbackTarget.ownerKey}
-          scrollbackStreamId={scrollbackTarget.streamId}
-          width={transcriptWidth}
-        />
-      )}
-      <Box flexDirection="column">
-        <Box flexDirection="column" overflowY="hidden">
-          {!transcriptViewerOpen && conversationRows > 0 ? (
-            <ConversationPane
-              colorEnabled={props.colorEnabled}
-              width={transcriptWidth}
-              maxRows={conversationRows}
-            />
-          ) : null}
-          {foregroundSurface ? (
-            // Cap the modal area at its row budget but size to the surface's
-            // actual content: every foreground surface (forms, approvals,
-            // transcript viewer, child controls) already windows itself to the
-            // `foregroundRows` budget it is handed, so a fixed height only ever
-            // leaves dead rows below a short form/approval. maxHeight keeps the
-            // budget as a safety clip without reserving it.
-            <Box
-              flexDirection="column"
-              maxHeight={foregroundRows}
-              alignItems="flex-start"
-              overflowY="hidden"
-            >
-              {foregroundSurface}
-            </Box>
-          ) : null}
-        </Box>
-        {bottomPanelBudget > 0 ? (
-          <Box flexDirection="column" overflowY="hidden">
-            <SubagentList
-              maxRows={subagentRows}
-              subagents={subagentPanelRows}
-              activeProcesses={subagentPanelTarget.slice?.activeProcesses}
-              processOutput={subagentPanelTarget.slice?.processOutput}
-            />
-            <TodosPlanPanel maxRows={todosPlanRows} />
-          </Box>
-        ) : null}
-        {tipRowVisible ? (
-          <TipRow
+    <ConversationRegion
+      agentSelectionAvailable={agentSelectionAvailable}
+      colorEnabled={props.colorEnabled}
+      columns={columns}
+      onTranscriptViewportChange={props.onTranscriptViewportChange}
+      renderFooterChrome={(queuedFollowUpPanelVisible) => (
+        <>
+          <InputBar
+            onSubmit={props.onSubmit}
+            collapseWhenDisabled={!inputBarVisible}
+            disabledMessage={childInputDisabledMessage}
+            disabled={inputDisabled}
+            history={props.history}
+          />
+          <StreamTabsStrip items={streamTabItems} width={columns} />
+          <StatusBar
             agentSelectionAvailable={agentSelectionAvailable}
-            hour={tipHour}
-            responseRunning={activeResponseRunning}
+            canStopActiveRun={canStopActiveRun}
+            canStopPendingRunWithoutStream={canStopPendingRunWithoutStream}
+            commandName={props.commandName}
+            foregroundEscapeAction={foregroundEscapeAction({
+              activeFormEscapeAction: activeForm?.escapeAction,
+              approvalKind,
+              childControlEscapeAction,
+              foregroundKind,
+            })}
+            queuedFollowUpPreview={!queuedFollowUpPanelVisible}
+            shortcutsActive={focusShortcutsActive}
+            subagentControlsAvailable={subagentControlsAvailable}
+            taskControlsAvailable={taskControlsAvailable}
+            transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
           />
-        ) : null}
-        {queuedFollowUpPanelVisible ? (
-          <QueuedFollowUpsPanel
-            maxRows={queuedFollowUpPanelRows}
-            messages={queuedFollowUpMessages}
-            width={columns}
-          />
-        ) : null}
-        <InputBar
-          onSubmit={props.onSubmit}
-          collapseWhenDisabled={!inputBarVisible}
-          disabledMessage={childInputDisabledMessage}
-          disabled={inputDisabled}
-          history={props.history}
-        />
-        <StreamTabsStrip items={streamTabItems} width={columns} />
-        <StatusBar
-          agentSelectionAvailable={agentSelectionAvailable}
-          canStopActiveRun={canStopActiveRun}
-          canStopPendingRunWithoutStream={canStopPendingRunWithoutStream}
-          commandName={props.commandName}
-          foregroundEscapeAction={foregroundEscapeAction({
-            activeFormEscapeAction: activeForm?.escapeAction,
-            childControlEscapeAction,
-            foregroundKind,
-            pending: activeApprovalVisible ? pending : undefined,
-          })}
-          queuedFollowUpPreview={!queuedFollowUpPanelVisible}
-          shortcutsActive={focusShortcutsActive}
-          subagentControlsAvailable={subagentControlsAvailable}
-          taskControlsAvailable={taskControlsAvailable}
-          transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
-        />
-      </Box>
-    </>
+        </>
+      )}
+      renderForegroundSurface={renderForegroundSurface}
+      rows={rows}
+      snapshot={{
+        activeStreamId,
+        childStreamEntries,
+        foregroundMaxRows,
+        foregroundKind,
+        parentStream,
+        reverseSearchOpen,
+        rootStreamId,
+        slashPaletteOpen,
+        streamTabsVisible,
+        streams,
+        childExecutionPanelTarget: childControlTargets.tasks,
+        transcriptViewerStreamId,
+      }}
+    />
   );
 }

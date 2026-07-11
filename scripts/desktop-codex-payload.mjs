@@ -3,8 +3,16 @@ import { join, relative } from 'node:path';
 
 const MEBIBYTE = 1024 * 1024;
 
-const CODEX_SINGLE_PLATFORM_PAYLOAD_BUDGET_BYTES = 325 * MEBIBYTE;
-const CODEX_UNIVERSAL_PAYLOAD_BUDGET_BYTES = 625 * MEBIBYTE;
+const CODEX_PAYLOAD_HEADROOM_BYTES_PER_PLATFORM = 16 * MEBIBYTE;
+// npm dist.unpackedSize values audited for @openai/codex 0.144.1.
+export const codexPayloadBaselineBytesByPlatform = {
+  'darwin-arm64': 311_569_963,
+  'darwin-x64': 337_129_194,
+  'linux-arm64': 308_463_407,
+  'linux-x64': 351_529_018,
+  'win32-arm64': 356_454_041,
+  'win32-x64': 409_157_780,
+};
 
 export const codexPlatformInfoByKey = {
   'linux-x64': {
@@ -76,9 +84,17 @@ export function formatBytes(bytes) {
 }
 
 export function expectedCodexPayloadBudgetBytes(expectedPlatformKeys) {
-  return expectedPlatformKeys.length > 1
-    ? CODEX_UNIVERSAL_PAYLOAD_BUDGET_BYTES
-    : CODEX_SINGLE_PLATFORM_PAYLOAD_BUDGET_BYTES;
+  let budgetBytes = 0;
+  for (const platformKey of expectedPlatformKeys) {
+    const baselineBytes = codexPayloadBaselineBytesByPlatform[platformKey];
+    if (baselineBytes == null) {
+      throw new Error(
+        `Codex payload budget has no audited baseline for ${platformKey}.`,
+      );
+    }
+    budgetBytes += baselineBytes + CODEX_PAYLOAD_HEADROOM_BYTES_PER_PLATFORM;
+  }
+  return budgetBytes;
 }
 
 export function inferCodexPlatformKeys({ platform, arch, appPath } = {}) {

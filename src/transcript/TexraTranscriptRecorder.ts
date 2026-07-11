@@ -23,9 +23,10 @@ import type {
 import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import {
-  END_GROUP_STATUS,
   MESSAGE_TYPES,
+  RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
   type LogLevel,
   type MessageType,
   type StreamTabId,
@@ -232,7 +233,7 @@ export function attachTranscriptRecorder(
           messageType: MESSAGE_TYPES.DEFAULT,
           text: event.label,
           data: {
-            status: 'running',
+            status: STREAM_PHASE.RUNNING,
             ...(event.kind ? { kind: event.kind } : {}),
             ...(event.index !== undefined ? { index: event.index } : {}),
             ...(event.total !== undefined ? { total: event.total } : {}),
@@ -247,7 +248,7 @@ export function attachTranscriptRecorder(
         store.update(streamId, event.id, {
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
           data: {
-            status: event.status ?? END_GROUP_STATUS.STOPPED,
+            status: event.status ?? RUN_OUTCOME.COMPLETED,
             endTime: Date.now(),
             ...(kind ? { kind } : {}),
           },

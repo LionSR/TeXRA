@@ -114,11 +114,11 @@ function UserEntryRow({
   // Mark a user turn with a reverse-video band (theme-adaptive via reverse
   // video), inset one column from each terminal edge — the same gutter the
   // error/tool/process rows get from their padded boxes — with a blank row
-  // above and below so the turn breathes. Static transcript rows are
-  // print-once terminal scrollback: a row keeps the width it had when it was
-  // appended, while later rows render at the latest width. The `› ` chevron
-  // is 2 cols; row estimators add the exported margin constants alongside
-  // their wrapped-line count.
+  // above and below so the turn breathes. Finalized transcript rows are
+  // normally print-once; a width change remounts the enclosing `<Static>` so
+  // patched Ink replaces the accumulated rows at the current width. The `› `
+  // chevron is 2 cols; row estimators add the exported margin constants
+  // alongside their wrapped-line count.
   const cols = entryCols(width, 2);
   return (
     <Box marginTop={marginTopRows} marginBottom={marginBottomRows} paddingX={1}>

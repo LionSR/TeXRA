@@ -19,6 +19,8 @@ export {
   attachFlowAutoRetryRequired,
   requiresFlowAutoRetry,
   attachProviderError,
+  attachContextWindowError,
+  hasContextWindowErrorMarker,
 } from './sdkError/errorMetadata';
 
 export {
