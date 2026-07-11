@@ -1,6 +1,6 @@
 import type { HistoryItem } from '@shared/schemas';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
-import { formatLocaleTimestamp } from '@utils/text/stringUtils';
+import { formatShortDateTime } from '@shared/utils/string';
 
 type ToolConfigEntry = [string, unknown];
 
@@ -79,7 +79,7 @@ export function getHistorySearchText(item: HistoryItem): string {
   const parts: string[] = [
     item.id,
     item.timestamp,
-    formatLocaleTimestamp(item.timestamp),
+    formatShortDateTime(item.timestamp) ?? '',
   ];
   addSearchValue(parts, item.description);
 
