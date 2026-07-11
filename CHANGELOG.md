@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Shared (all surfaces)
+
+#### Breaking Changes
+
+- **Minimum supported VS Code version raised to 1.125** — the extension's
+  `engines.vscode` requirement moved from 1.106 to 1.125; users on older VS
+  Code releases must update before installing this version.
+
 ## [0.39.3] - 2026-07-10
 
 ### Shared (all surfaces)
