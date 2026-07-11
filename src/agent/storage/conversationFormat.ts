@@ -21,7 +21,7 @@
  * whole-message truncation for the CLI) — only the per-content-block
  * recognition and truncation below is shared.
  */
-import { extractWebFetchResultFields } from '@agent/utils/webFetchResultFields';
+import { extractWebFetchResultFields } from '@agent/types/ServerToolTypes';
 import { isObject } from '@utils/core';
 
 const DEFAULT_TRUNCATION_MARKER = '...';
