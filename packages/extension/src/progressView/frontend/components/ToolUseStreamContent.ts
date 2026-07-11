@@ -72,6 +72,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
 
       <follow-up-input
         .visible=${true}
+        .streamId=${streamInfo.name}
         .value=${currentState.ui.followUpText}
         .queuedMessages=${currentState.queuedFollowUps}
         .shouldFocus=${currentState.ui.shouldFocusFollowUp}
