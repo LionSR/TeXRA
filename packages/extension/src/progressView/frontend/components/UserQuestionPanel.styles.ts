@@ -52,11 +52,11 @@ export const userQuestionPanelStyles: CSSResult = css`
     gap: ${sp.small};
   }
 
+  /* wa-radio-group has no exposed "radios" CSS part in the pinned
+     @awesome.me/webawesome build (only form-control/form-control-label/
+     form-control-input/hint are rendered) — style the host directly, same
+     technique as ApiAccessSection.styles.ts's wa-radio-group.api-access-options. */
   wa-radio-group {
-    display: flex;
-  }
-
-  wa-radio-group::part(radios) {
     display: flex;
     flex-direction: column;
     gap: ${sp.small};
