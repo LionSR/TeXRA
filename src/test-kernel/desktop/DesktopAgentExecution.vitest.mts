@@ -22,15 +22,14 @@ import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
 import type { DesktopStreamSnapshotStore } from '@desktop/main/desktopStreamSnapshot';
 import {
   AgentCategory,
-  END_GROUP_STATUS,
   LOG_LEVELS,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
-  type EndGroupStatus,
   type ExecutionId,
   type RestoredStreamSnapshot,
+  type RunOutcome,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
@@ -1241,7 +1240,7 @@ describe('DesktopProgressBridge', () => {
       endRunningGroupsForStreams: (
         streamIds: readonly StreamTabId[],
         now?: number,
-        status?: EndGroupStatus,
+        status?: RunOutcome,
       ) => Promise<StreamTabId[]>;
     };
     const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
@@ -1257,7 +1256,7 @@ describe('DesktopProgressBridge', () => {
       expect(closeSpy).toHaveBeenCalledWith(
         ['snapshot-waiting-stream'],
         expect.any(Number),
-        END_GROUP_STATUS.STOPPED,
+        RUN_OUTCOME.CANCELLED,
       );
     } finally {
       finishDetection(new Set());
@@ -1316,7 +1315,7 @@ describe('DesktopProgressBridge', () => {
       endRunningGroupsForStreams: (
         streamIds: readonly StreamTabId[],
         now?: number,
-        status?: EndGroupStatus,
+        status?: RunOutcome,
       ) => Promise<StreamTabId[]>;
     };
     const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
@@ -1509,7 +1508,7 @@ describe('DesktopProgressBridge', () => {
       endRunningGroupsForStreams: (
         streamIds: readonly StreamTabId[],
         now?: number,
-        status?: EndGroupStatus,
+        status?: RunOutcome,
       ) => Promise<StreamTabId[]>;
     };
     const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
@@ -1522,7 +1521,7 @@ describe('DesktopProgressBridge', () => {
         expect(closeSpy).toHaveBeenCalledWith(
           ['waiting-stream'],
           expect.any(Number),
-          END_GROUP_STATUS.STOPPED,
+          RUN_OUTCOME.CANCELLED,
         );
       });
     } finally {
@@ -1550,7 +1549,7 @@ describe('DesktopProgressBridge', () => {
       endRunningGroupsForStreams: (
         streamIds: readonly StreamTabId[],
         now?: number,
-        status?: EndGroupStatus,
+        status?: RunOutcome,
       ) => Promise<StreamTabId[]>;
     };
     const closeSpy = vi
@@ -1570,7 +1569,7 @@ describe('DesktopProgressBridge', () => {
         expect(closeSpy).toHaveBeenLastCalledWith(
           ['waiting-stream'],
           expect.any(Number),
-          END_GROUP_STATUS.STOPPED,
+          RUN_OUTCOME.CANCELLED,
         );
       });
     } finally {

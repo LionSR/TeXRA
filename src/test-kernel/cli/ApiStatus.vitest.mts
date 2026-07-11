@@ -36,9 +36,9 @@ describe('CLI API status text', () => {
     expect(
       formatCliAuthStatusLine({
         authenticated: true,
-        accountLabel: 'sirui.lu.phys@gmail.com',
+        accountLabel: 'researcher@example.com',
       }),
-    ).toBe('auth: signed in as sirui.lu.phys@gmail.com');
+    ).toBe('auth: signed in as researcher@example.com');
     expect(
       formatCliAuthStatusLine({
         authenticated: true,

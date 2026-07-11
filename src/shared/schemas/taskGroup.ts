@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { TaskGroupStatusSchema } from './stream';
+import { RunOutcomeSchema, TaskGroupStatusSchema } from './stream';
 
 export const StageKindSchema = z.enum(['run', 'round', 'phase', 'session']);
 export type StageKind = z.infer<typeof StageKindSchema>;
@@ -37,9 +37,20 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * producer — doesn't fail the whole payload and drop sibling fields that
  * were otherwise usable; the old per-field guards had this per-field
  * tolerance and a single `.safeParse()` on a non-catching schema would not.
+ *
+ * `status` accepts both vocabularies a wire row can carry: the legacy
+ * `TaskGroupStatus` a `group-start` row (and a pre-#7993 `group-end` row
+ * forwarded raw by the standalone trace-viewer) uses, and the canonical
+ * `RunOutcome` every live/persisted `group-end` producer now writes.
+ * `logSlice.ts` folds a `RunOutcome` down to the legacy bucket at the point
+ * it needs `TaskGroupStatus` (`taskGroupEndStatus`); a value in neither
+ * vocabulary still falls back to `undefined` here, same as any other field.
  */
 export const GroupLogPayloadSchema = z.looseObject({
-  status: TaskGroupStatusSchema.optional().catch(undefined),
+  status: z
+    .union([TaskGroupStatusSchema, RunOutcomeSchema])
+    .optional()
+    .catch(undefined),
   kind: StageKindSchema.optional().catch(undefined),
   index: taskGroupIndexField.optional().catch(undefined),
   total: taskGroupTotalField.optional().catch(undefined),

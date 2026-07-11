@@ -18,10 +18,7 @@ import {
   classifyAgentError,
   normalizeProviderError,
 } from '@common/errors';
-import {
-  legacyEndGroupStatusForOutcome,
-  projectRunOutcome,
-} from '@common/constants/streamStatus';
+import { projectRunOutcome } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   RUN_OUTCOME,
@@ -135,7 +132,7 @@ export async function finalizeRunTerminal(
   }
   if (params.stage) {
     try {
-      params.stage.end(legacyEndGroupStatusForOutcome(outcome));
+      params.stage.end(outcome);
     } catch (stageErr) {
       logger.warn('Failed to end parent stage', {
         data: { agentIdentifier: handle.agentName, error: stageErr },
@@ -366,7 +363,7 @@ export async function runFlowWithLifecycle(
           session.transcripts.update(streamId, parentStageId, {
             type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
             data: {
-              status: legacyEndGroupStatusForOutcome(RUN_OUTCOME.CANCELLED),
+              status: RUN_OUTCOME.CANCELLED,
               endTime: Date.now(),
               kind: 'run',
             },

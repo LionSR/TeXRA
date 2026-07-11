@@ -1,8 +1,8 @@
-// Print-once session header plus transcript entries. The header is the first
+// Session header plus finalized transcript entries. The header is the first
 // static row for the active scrollback owner; finalized entries append after it
-// in ordinary terminal scrollback through Ink `<Static>`. The Static key must
-// stay stable across resize because terminal scrollback is append-only: reflowing
-// old rows by remounting Static reprints the header and finalized history.
+// in ordinary terminal scrollback through Ink `<Static>`. On a width change,
+// the width-qualified Static identity remounts these same items so patched Ink
+// can replace its accumulated static output with the new geometry.
 
 import path from 'node:path';
 
@@ -345,6 +345,7 @@ export function StaticConversationTranscript({
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
 }): React.JSX.Element {
+  const normalizedWidth = Math.max(1, Math.floor(width ?? 80));
   const streams = useSignal(streamsSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const parentStream = useSignal(parentStreamSignal);
@@ -359,7 +360,7 @@ export function StaticConversationTranscript({
       maxRows,
       parentStream,
       scrollbackStreamId,
-      width,
+      width: normalizedWidth,
     }),
   }));
 
@@ -374,7 +375,7 @@ export function StaticConversationTranscript({
           maxRows,
           parentStream,
           scrollbackStreamId,
-          width,
+          width: normalizedWidth,
         });
 
   useEffect(() => {
@@ -394,7 +395,7 @@ export function StaticConversationTranscript({
         maxRows,
         parentStream,
         scrollbackStreamId,
-        width,
+        width: normalizedWidth,
       });
       if (current.ownerKey === ownerKey && current.items === nextItems) {
         return current;
@@ -409,7 +410,7 @@ export function StaticConversationTranscript({
     scrollbackStreamId,
     sessionMeta,
     streams,
-    width,
+    normalizedWidth,
   ]);
 
   // Keep our scrollback state readonly and adapt once at the Ink boundary.
@@ -419,7 +420,10 @@ export function StaticConversationTranscript({
   const staticItems = useMemo(() => [...items], [items]);
 
   return (
-    <Static key={`transcript:${ownerKey}`} items={staticItems}>
+    <Static
+      key={`transcript:${ownerKey}:${normalizedWidth}`}
+      items={staticItems}
+    >
       {(item: StaticTranscriptItem) => (
         <Box key={item.id} flexDirection="column">
           {item.kind === 'header' ? (
@@ -428,14 +432,14 @@ export function StaticConversationTranscript({
                 compact={item.compact}
                 identityLine={item.identityLine}
                 meta={item.meta}
-                width={width}
+                width={normalizedWidth}
               />
             </EntryErrorBoundary>
           ) : (
             <EntryErrorBoundary label={item.entry.role}>
               <TranscriptEntry
                 entry={item.entry}
-                width={width}
+                width={normalizedWidth}
                 colorEnabled={colorEnabled}
                 userBottomMarginRows={item.userBottomMarginRows}
               />

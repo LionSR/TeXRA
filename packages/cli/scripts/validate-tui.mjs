@@ -122,15 +122,8 @@ const CHILD_EVENT_ORDER_CWD = mkdtempSync(
 process.on('exit', () => {
   rmSync(CHILD_EVENT_ORDER_CWD, { recursive: true, force: true });
 });
-// Each ordered fact lands in its own macrotask inside the harness (see
-// `seedChildEventOrderFixture` in tui-harness.tsx). This must clear the boot
-// detector's own 600ms PTY-quiet gate (below) — otherwise a fast-firing
-// fixture keeps resetting that timer and boot detection doesn't settle until
-// the whole sequence has already finished, collapsing every checkpoint into
-// the final frame. Checkpoints themselves wait for their expected text
-// (not a fixed sleep), so this value only needs to clear that gate, not
-// bound total scenario time precisely.
-const HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS = '900';
+const CHILD_EVENT_ORDER_MARKER_OSC = 777;
+const CHILD_EVENT_ORDER_MARKER_PREFIX = 'texra-harness-child-event-order:';
 
 // --- scenarios (verified against the committed harness) ------------------
 const SCENARIOS = [
@@ -1928,30 +1921,27 @@ const SCENARIOS = [
   },
   // PTY ordering tests (issue #7972): the harness drives one child stream's
   // attachment/roster/edge/status/removal facts through the real
-  // `attachTuiRunFactSubscription`/`subscribeStreamStatus` subscription path —
-  // not the CHILD_STREAMS map mutators directly — one macrotask apart, so
-  // Ink actually renders each intermediate state. `checkpoints` (handled in
-  // `runScenarioWithResources`) polls for each ordered fact's expected text in
-  // turn, so a transiently-wrong frame (a stale control, a premature or
-  // missing active count) fails the scenario, not just the final settled one.
+  // `attachTuiRunFactSubscription`/`subscribeStreamStatus` subscription path,
+  // not the CHILD_STREAMS map mutators directly. After each fact, the harness
+  // awaits the Ink render flush and emits an out-of-band marker. The validator
+  // snapshots xterm at that exact byte-stream boundary, so a transiently-wrong
+  // frame fails the scenario even when the next fact has already arrived.
   //
   // `canonical`/`roster-first`/`edge-first`/`status-first` apply the same four
   // facts (attachment, running status, roster, edge) in every order the
   // vitest "child-stream ordered transition matrix" proves order-equivalent
   // (src/test-kernel/cli/TuiStateAndFocus.vitest.mts, scenarios 1-4) and must
-  // converge on a byte-identical settled frame — `compareGroup` drives that
-  // check post-run. The remaining four correct old ambiguous transients
+  // converge on a byte-identical settled frame. `equivalentFrameTo` names the
+  // canonical frame oracle. The remaining four correct old ambiguous transients
   // (promotion, reattachment, parent removal, completion+removal — matrix
   // scenarios 6, 7, 11, and 5-then-8) get their own checkpoint expectations
   // instead of byte-equivalence, per the design doc.
   {
     name: 'child-event-order-canonical',
-    compareGroup: 'child-event-order',
     frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'canonical',
-      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
       HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
     },
     // Steps: A, S(running), R_P+, E_P+.
@@ -1975,12 +1965,11 @@ const SCENARIOS = [
   },
   {
     name: 'child-event-order-roster-first',
-    compareGroup: 'child-event-order',
+    equivalentFrameTo: 'child-event-order-canonical',
     frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'roster-first',
-      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
       HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
     },
     // Steps: R_P+, A, S(running), E_P+.
@@ -2006,25 +1995,30 @@ const SCENARIOS = [
   },
   {
     name: 'child-event-order-edge-first',
-    compareGroup: 'child-event-order',
+    equivalentFrameTo: 'child-event-order-canonical',
     frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'edge-first',
-      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
       HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
     },
     // Steps: E_P+, A, S(running), R_P+.
     checkpoints: [
       {
-        // Reachable via the explicit edge alone (focus-cycle invariant), but
-        // not yet counted active — that needs the roster.
-        expect: ['[Tab]streams', 'harness-child-eve'],
-        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve…*'],
+        // An edge alone cannot be focused until the child's StreamSlice exists.
+        expect: ['◆'],
+        unexpect: [
+          '[Tab]streams',
+          '1 sub',
+          'orderChecker',
+          'harness-child-eve',
+        ],
       },
       {
-        expect: ['harness-child-eve…*'],
-        unexpect: ['1 sub', 'orderChecker'],
+        // Attachment creates the slice and makes the existing edge focusable;
+        // the running marker still waits for the next status fact.
+        expect: ['[Tab]streams', 'harness-child-eve…'],
+        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve…*'],
       },
       {
         expect: ['harness-child-eve…*'],
@@ -2038,12 +2032,11 @@ const SCENARIOS = [
   },
   {
     name: 'child-event-order-status-first',
-    compareGroup: 'child-event-order',
+    equivalentFrameTo: 'child-event-order-canonical',
     frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'status-first',
-      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
       HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
     },
     // Steps: S(running), A, E_P+, R_P+.
@@ -2053,8 +2046,10 @@ const SCENARIOS = [
         unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
       },
       {
-        expect: ['harness-child-eve…*'],
-        unexpect: ['1 sub', 'orderChecker'],
+        // Attachment does not supply a parent edge, so the running slice is
+        // registered but still absent from the root's focus strip.
+        expect: ['[Tab]streams'],
+        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
       },
       {
         expect: ['harness-child-eve…*'],
@@ -2069,14 +2064,13 @@ const SCENARIOS = [
   // The remaining four orderings correct old ambiguous transients (promotion,
   // reattachment, parent removal, completion+removal) instead of being
   // order-equivalent with the four above, so they get their own checkpoint
-  // expectations — no `compareGroup` — per the design doc.
+  // expectations and no frame oracle, per the design doc.
   {
     name: 'child-event-order-promotion-late-roster',
     frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'promotion-late-roster',
-      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
     },
     // Steps: A, S(running), R_P+, E_P+, E0 (promote to top-level), R_P+ (late,
     // stale roster from the former parent).
@@ -2111,7 +2105,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'reattach-late-old-roster',
-      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
     },
     // Steps: A, S(running), R_other+, E_other+, E0, R_other+ (stale), E_P+
     // (root), R_P+ (root), R_other+ (late, stale — from the child's former,
@@ -2151,7 +2144,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'parent-removal',
-      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
     },
     // Steps: S(running) [child], R_other+, E_other+, X(other) [parent
     // removal], R_other+ (late), E_other+ (late) — `other` is never root, so
@@ -2181,7 +2173,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILD_EVENT_ORDER: 'completion-remove',
-      HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS,
     },
     // Steps: A, S(running), R_P+, E_P+, R_P- (roster omission), S(terminal),
     // X(child), R_P+ (late), E_P+ (late), A (late), late resume attempt.
@@ -3353,11 +3344,77 @@ function parseArgs(argv) {
   return { scenarios, snapshotDir, listSelected, noBuild, skipIfMissingDeps };
 }
 
-const args = parseArgs(process.argv.slice(2));
-const only = args.scenarios;
+function frameOracleGraphFailure(allScenarios, byName) {
+  const complete = new Set();
+  const active = new Set();
+  const path = [];
+
+  const visit = (scenario) => {
+    if (complete.has(scenario.name)) return undefined;
+    if (active.has(scenario.name)) {
+      const cycleStart = path.indexOf(scenario.name);
+      const cycle = [...path.slice(cycleStart), scenario.name];
+      return `cyclic frame oracle: ${cycle.join(' -> ')}`;
+    }
+
+    active.add(scenario.name);
+    path.push(scenario.name);
+    const oracleName = scenario.equivalentFrameTo;
+    if (oracleName) {
+      const oracle = byName.get(oracleName);
+      if (!oracle) {
+        return `${scenario.name} names an unknown frame oracle: ${oracleName}`;
+      }
+      const failure = visit(oracle);
+      if (failure) return failure;
+    }
+    path.pop();
+    active.delete(scenario.name);
+    complete.add(scenario.name);
+    return undefined;
+  };
+
+  for (const scenario of allScenarios) {
+    const failure = visit(scenario);
+    if (failure) return failure;
+  }
+  return undefined;
+}
+
+function selectedScenariosWithFrameOracles(names, byName) {
+  const selected = [];
+  const available = new Set();
+
+  const addOracle = (name) => {
+    if (available.has(name)) return;
+    const scenario = byName.get(name);
+    if (scenario.equivalentFrameTo) addOracle(scenario.equivalentFrameTo);
+    selected.push(scenario);
+    available.add(name);
+  };
+
+  for (const name of names) {
+    const scenario = byName.get(name);
+    if (scenario.equivalentFrameTo) addOracle(scenario.equivalentFrameTo);
+    // Explicit arguments retain their order and multiplicity. An oracle added
+    // as a prerequisite is inserted at most once.
+    selected.push(scenario);
+    available.add(name);
+  }
+  return selected;
+}
+
 const scenarioByName = new Map(
   SCENARIOS.map((scenario) => [scenario.name, scenario]),
 );
+const oracleGraphFailure = frameOracleGraphFailure(SCENARIOS, scenarioByName);
+if (oracleGraphFailure) {
+  console.error(`[validate-tui] ${oracleGraphFailure}`);
+  process.exit(1);
+}
+
+const args = parseArgs(process.argv.slice(2));
+const only = args.scenarios;
 const unknownScenarios = [
   ...new Set(only.filter((name) => !scenarioByName.has(name))),
 ];
@@ -3371,7 +3428,7 @@ if (unknownScenarios.length > 0) {
   process.exit(1);
 }
 const scenarios = only.length
-  ? only.map((name) => scenarioByName.get(name))
+  ? selectedScenariosWithFrameOracles(only, scenarioByName)
   : SCENARIOS;
 if (args.listSelected) {
   console.log(scenarios.map((scenario) => scenario.name).join('\n'));
@@ -3505,6 +3562,23 @@ function scenarioFrame(scenario, fullFrame, rows) {
   throw new Error(
     `unknown validate-tui frame mode for ${scenario.name}: ${frameMode}`,
   );
+}
+
+function exactFrameDifference(actualFrame, expectedFrame, oracleName) {
+  const actual = Buffer.from(actualFrame, 'utf8');
+  const expected = Buffer.from(expectedFrame, 'utf8');
+  if (actual.equals(expected)) return undefined;
+
+  const sharedLength = Math.min(actual.length, expected.length);
+  let offset = 0;
+  while (offset < sharedLength && actual[offset] === expected[offset]) {
+    offset += 1;
+  }
+  const byteAt = (bytes) =>
+    offset < bytes.length
+      ? `0x${bytes[offset].toString(16).padStart(2, '0')}`
+      : 'end-of-frame';
+  return `rendered frame is not byte-identical to ${oracleName}: first UTF-8 byte difference at ${offset} (${byteAt(actual)} != ${byteAt(expected)}; ${actual.length} != ${expected.length} bytes)`;
 }
 
 function expectedFrameTextVisible(scenario, frame) {
@@ -3881,7 +3955,16 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
   let lastData = Date.now();
   let exited = null;
   let rawOutput = '';
+  const childEventFrames = new Map();
   let writeQueue = Promise.resolve();
+  if (scenario.env?.HARNESS_CHILD_EVENT_ORDER) {
+    term.parser.registerOscHandler(CHILD_EVENT_ORDER_MARKER_OSC, (data) => {
+      if (!data.startsWith(CHILD_EVENT_ORDER_MARKER_PREFIX)) return false;
+      const label = data.slice(CHILD_EVENT_ORDER_MARKER_PREFIX.length);
+      childEventFrames.set(label, renderFrame(term));
+      return true;
+    });
+  }
   const frameSnapshot = async () => {
     await writeQueue;
     return renderFrame(term);
@@ -3944,50 +4027,45 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     }
   }
 
-  // Ordered render checkpoints (issue #7972): scenarios that drive the
-  // harness's opt-in event-ordering fixture (see
-  // `HARNESS_CHILD_EVENT_ORDER`/`seedChildEventOrderFixture` in
-  // tui-harness.tsx) apply one fact per macrotask after boot instead of
-  // seeding everything up front, so this polls for each checkpoint's
-  // expected text in turn — catching a transiently-wrong frame (a stale
-  // control, a premature or lingering active count) between ordered facts,
-  // not just whatever the fully-settled scrollback happens to look like.
-  // A checkpoint whose expect/unexpect condition is already (trivially)
-  // satisfied by the previous checkpoint's frame — the harness applies
-  // several ordered facts in a row with no new visible text, e.g. a bare
-  // running-status transition before any roster/edge fact — resolves as
-  // soon as the PTY is quiet, in well under the harness's own per-step
-  // delay. Without pacing, that lets the validator race checkpoints ahead
-  // of the harness's real progress: by the time it reaches a later
-  // checkpoint with a genuinely new expectation, the harness may not have
-  // gotten there yet, so it fails as "missing" rather than "not yet true".
-  // Pace evaluation to the harness's own schedule (still poll-based beyond
-  // that, so CI slowness only ever costs time, never correctness).
-  const checkpointStepDelayMs = Number(
-    scenario.env?.HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS ?? 0,
-  );
-  const checkpointsStart = Date.now();
+  // The harness writes one marker only after each event's Ink render has
+  // flushed. The xterm OSC handler snapshots its buffer at the marker's exact
+  // position in the PTY byte stream, so checkpoint identity comes from fixture
+  // progression, not from a second wall-clock schedule in this process.
   const checkpointFailures = [];
+  const waitForChildEventFrame = async (label, timeoutMs) => {
+    const deadline = Date.now() + timeoutMs;
+    let checkpointFrame = childEventFrames.get(label);
+    while (checkpointFrame === undefined && Date.now() < deadline) {
+      if (exited) break;
+      await sleep(40);
+      await frameSnapshot();
+      checkpointFrame = childEventFrames.get(label);
+    }
+    return checkpointFrame;
+  };
+  if ((scenario.checkpoints?.length ?? 0) > 0) {
+    const mountedFrame = await waitForChildEventFrame(
+      'mounted',
+      Number(scenario.checkpointMs ?? 4000),
+    );
+    if (mountedFrame === undefined) {
+      checkpointFailures.push('fixture mount render marker missing');
+    }
+  }
   for (const [checkpointIndex, checkpoint] of (
     scenario.checkpoints ?? []
   ).entries()) {
-    const minReadyAt =
-      checkpointsStart + checkpointStepDelayMs * (checkpointIndex + 1);
-    if (Date.now() < minReadyAt) await sleep(minReadyAt - Date.now());
-    const checkpointDeadline =
-      Date.now() +
-      Number(checkpoint.timeoutMs ?? scenario.checkpointMs ?? 4000);
-    let checkpointFrame = scenarioFrame(scenario, await frameSnapshot(), rows);
-    while (Date.now() < checkpointDeadline) {
-      if (exited) break;
-      const quiet = Date.now() - lastData >= 150;
-      checkpointFrame = scenarioFrame(scenario, await frameSnapshot(), rows);
-      const satisfied =
-        (checkpoint.expect ?? []).every((t) => checkpointFrame.includes(t)) &&
-        (checkpoint.unexpect ?? []).every((t) => !checkpointFrame.includes(t));
-      if (quiet && satisfied) break;
-      await sleep(40);
+    const fullCheckpointFrame = await waitForChildEventFrame(
+      `step-${checkpointIndex + 1}`,
+      Number(checkpoint.timeoutMs ?? scenario.checkpointMs ?? 4000),
+    );
+    if (fullCheckpointFrame === undefined) {
+      checkpointFailures.push(
+        `checkpoint ${checkpointIndex + 1}: fixture render marker missing`,
+      );
+      continue;
     }
+    const checkpointFrame = scenarioFrame(scenario, fullCheckpointFrame, rows);
     for (const t of checkpoint.expect ?? []) {
       if (!checkpointFrame.includes(t)) {
         checkpointFailures.push(
@@ -4152,41 +4230,6 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
   };
 }
 
-// Post-run byte-identity check for scenarios flagged with the same
-// `compareGroup` (issue #7972): asserts their rendered frames are exactly
-// equal, not just similar — the rendered-byte-level counterpart to a
-// vitest-level event-ordering equivalence. Only checked when every group
-// member actually ran (not platform-skipped, not excluded by a `scenario`
-// name filter on the command line).
-function compareGroupFailures(selectedScenarios, results) {
-  const resultByName = new Map(results.map((result) => [result.name, result]));
-  const groups = new Map();
-  for (const scenario of selectedScenarios) {
-    if (!scenario.compareGroup) continue;
-    const names = groups.get(scenario.compareGroup) ?? [];
-    names.push(scenario.name);
-    groups.set(scenario.compareGroup, names);
-  }
-  const failures = [];
-  for (const [group, names] of groups) {
-    if (names.length < 2) continue;
-    const members = names.map((name) => ({
-      name,
-      result: resultByName.get(name),
-    }));
-    if (members.some(({ result }) => !result || result.skipped)) continue;
-    const [first, ...rest] = members;
-    for (const other of rest) {
-      if (other.result.frame !== first.result.frame) {
-        failures.push(
-          `compare group ${JSON.stringify(group)}: ${JSON.stringify(first.name)} and ${JSON.stringify(other.name)} rendered different PTY frames (byte-identical check failed)`,
-        );
-      }
-    }
-  }
-  return failures;
-}
-
 if (snapshotDir) resetSnapshotDir(snapshotDir);
 
 let failed = 0;
@@ -4195,6 +4238,24 @@ const results = [];
 for (const [index, scenario] of scenarios.entries()) {
   // eslint-disable-next-line no-await-in-loop
   const result = await runScenario(scenario, index);
+  if (!result.skipped && scenario.equivalentFrameTo) {
+    const oracle = results.find(
+      (candidate) => candidate.name === scenario.equivalentFrameTo,
+    );
+    if (!oracle || oracle.skipped) {
+      result.failures.push(
+        `byte-equivalence oracle unavailable: ${scenario.equivalentFrameTo}`,
+      );
+    } else {
+      const difference = exactFrameDifference(
+        result.frame,
+        oracle.frame,
+        oracle.name,
+      );
+      if (difference) result.failures.push(difference);
+    }
+    result.ok = result.failures.length === 0;
+  }
   results.push(result);
   writeSnapshot(index, result.name, result.frame);
   if (result.skipped) {
@@ -4216,11 +4277,6 @@ for (const [index, scenario] of scenarios.entries()) {
   }
 }
 writeSnapshotReport(results);
-
-for (const failure of compareGroupFailures(scenarios, results)) {
-  failed += 1;
-  console.log(`✗ ${failure}`);
-}
 
 console.log('');
 console.log(
