@@ -10,9 +10,12 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseNode, Flow, type Action } from '.';
 import type { z } from 'zod';
 
+/** Prefix for a flow record's KV key. Single source of truth for callers deriving it. */
+export const FLOW_KEY_PREFIX = 'flow_';
+
 /** KV key for a flow record. Single source of truth for the prefix. */
 export function flowKey(runId: string): string {
-  return `flow_${runId}`;
+  return `${FLOW_KEY_PREFIX}${runId}`;
 }
 
 const CHANNEL = 'PersistedFlow';
