@@ -15,7 +15,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { nanoid } from 'nanoid';
 
 import * as logger from '@logger/logUtils';
-import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
+import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type {
@@ -209,7 +209,7 @@ export class TraceEmitter implements AgentTrace {
   // ─── Stages ────────────────────────────────────────────────────────
 
   openStage(label: string, options: StageOptions = {}): StageHandle {
-    const defaultStatus = options.defaultStatus ?? END_GROUP_STATUS.STOPPED;
+    const defaultStatus = options.defaultStatus ?? RUN_OUTCOME.COMPLETED;
     const parentId =
       options.parent?.id ?? options.parentId ?? this.activeStageId();
 
@@ -274,10 +274,10 @@ class StageHandleImpl implements StageHandle {
   constructor(
     private readonly trace: TraceEmitter,
     readonly id: string,
-    private readonly defaultStatus: EndGroupStatus,
+    private readonly defaultStatus: RunOutcome,
   ) {}
 
-  end(status?: EndGroupStatus): void {
+  end(status?: RunOutcome): void {
     if (this.ended) return;
     this.ended = true;
     this.trace.emit({
@@ -297,7 +297,7 @@ class StageHandleImpl implements StageHandle {
       this.end(this.defaultStatus);
       return result;
     } catch (err) {
-      this.end(END_GROUP_STATUS.ERROR);
+      this.end(RUN_OUTCOME.FAILED);
       throw err;
     }
   }
@@ -318,7 +318,7 @@ class SkippedStageHandle implements StageHandle {
     this.id = undefined;
   }
 
-  end(_status?: EndGroupStatus): void {
+  end(_status?: RunOutcome): void {
     // Skipped stages never opened a group; nothing to end.
   }
 

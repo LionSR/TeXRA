@@ -149,22 +149,7 @@
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
       "form": "doMock",
-      "specifier": "@agent/runtime/executeAgent"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
-      "form": "doMock",
       "specifier": "@agent/runtime/ProgressViewBridge"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/ProgressViewBridge"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/runAgent"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
@@ -184,12 +169,27 @@
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
       "form": "doMock",
-      "specifier": "@agent/runtime/SessionResumeRetrieval"
+      "specifier": "@agent/storage/detectWaitingStreams"
     },
     {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
+      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.mts",
       "form": "doMock",
-      "specifier": "@agent/storage/detectWaitingStreams"
+      "specifier": "@agent/runtime/executeAgent"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.mts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/ProgressViewBridge"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.mts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/runAgent"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.mts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/SessionResumeRetrieval"
     },
     {
       "file": "src/test-kernel/desktop/DesktopSessionProgressBridge.vitest.mts",

@@ -9,6 +9,7 @@ import {
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
 import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
+import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -144,21 +145,24 @@ export function normalizeResumedWorkspaceSnapshot(
  * Build the canonical self-heal payload for a resumed flow record's `shared`
  * blob from the resume boundary's already-validated snapshot
  * (`SessionResumeRetrieval.retrieveToolUseResumeData` -- the single owner of
- * FlowRecord.shared's legacy-format migration and modelHandlerCompatibilityKey
- * backfill). `structuralBase` is the record's own `migrateSharedState` output
- * (structural unwrap only), which supplies any pass-through fields the
+ * FlowRecord.shared's legacy-format migration and persisted-format
+ * modelHandlerCompatibilityKey inference). The snapshot's key is authoritative
+ * when present; otherwise the active handler's key preserves the legacy
+ * self-heal fallback. `structuralBase` is the record's own `migrateSharedState`
+ * output (structural unwrap only), which supplies any pass-through fields the
  * snapshot's narrower resume contract doesn't carry (e.g. `systemPrompt`,
  * `lastError`) so they survive the write-back untouched.
  */
 export function buildResumedSharedFromSnapshot(
   structuralBase: ToolUseRunShared,
   snapshot: ToolUseSessionSnapshot,
+  activeCompatibilityKey: ModelHandlerCompatibilityKey | undefined,
 ): ToolUseRunShared {
   return {
     ...structuralBase,
     messages: snapshot.messages,
     modelHandlerCompatibilityKey:
-      snapshot.modelHandlerCompatibilityKey ?? undefined,
+      snapshot.modelHandlerCompatibilityKey ?? activeCompatibilityKey,
     stateSlices: {
       runStateSnapshot: snapshot.run,
       workspaceSnapshot: normalizeResumedWorkspaceSnapshot(snapshot.workspace),
@@ -390,16 +394,18 @@ export async function runToolUseFlow<C = unknown>(
         // already migrated this record's legacy shapes and strictly validated
         // the result into `input.resumeSnapshot` before this flow was ever
         // launched -- it is the single owner of FlowRecord.shared's
-        // legacy-format parsing and modelHandlerCompatibilityKey backfill (see
-        // its CurrentToolUseFlowRecordStateSchema). Consume its canonical
-        // fields directly here instead of re-deriving them; `migrateSharedState`
-        // above is only used for its structural unwrap so that pass-through
-        // fields the snapshot's narrower contract doesn't carry (systemPrompt,
-        // lastError, ...) survive this self-heal write of the KV blob that
-        // PersistedFlow.ensureRecord's unchecked raw read (below) depends on.
+        // legacy-format parsing and persisted-format compatibility-key
+        // inference (see its CurrentToolUseFlowRecordStateSchema). Consume its
+        // canonical fields directly here instead of re-deriving them;
+        // `migrateSharedState` above is only used for its structural unwrap so
+        // that pass-through fields the snapshot's narrower contract doesn't
+        // carry (systemPrompt, lastError, ...) survive this self-heal write of
+        // the KV blob that PersistedFlow.ensureRecord's unchecked raw read
+        // (below) depends on.
         flowRecord.shared = buildResumedSharedFromSnapshot(
           migrationResult.data,
           input.resumeSnapshot,
+          compatibilityKey,
         );
         await kv.write(
           flowKey(executionId),

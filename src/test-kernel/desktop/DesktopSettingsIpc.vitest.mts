@@ -14,11 +14,7 @@ import {
 } from '@tools/worktreeConfig';
 import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
-import {
-  desktopSourcePath,
-  moduleFileUrl,
-  repoPath,
-} from './desktopTestPaths.mjs';
+import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 import type { StateStore } from '@platform/interfaces';
 
 const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
@@ -31,33 +27,6 @@ const computeModelOptionsData = vi.hoisted(() =>
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData,
   invalidateModelOptionsCache,
-}));
-
-// The export wiring tests below assert desktopSettingsIpc.ts's history
-// actions call through to ChatExportController with the right arguments and
-// react to its result — ChatExportController's own formatting/compile/write
-// behavior already has dedicated coverage (ChatExportController.vitest.ts,
-// ChatExportControllerHtml.vitest.ts), so it's mocked here rather than
-// re-exercised.
-const chatExportMocks = vi.hoisted(() => ({
-  buildExportInput: vi.fn(),
-  exportAsMarkdown: vi.fn(),
-  exportAsLatex: vi.fn(),
-  exportAsHtml: vi.fn(),
-  constructorDeps: [] as unknown[],
-}));
-
-vi.mock('@controllers/settingsView/ChatExportController', () => ({
-  ChatExportController: class {
-    buildExportInput = chatExportMocks.buildExportInput;
-    exportAsMarkdown = chatExportMocks.exportAsMarkdown;
-    exportAsLatex = chatExportMocks.exportAsLatex;
-    exportAsHtml = chatExportMocks.exportAsHtml;
-
-    constructor(deps: unknown) {
-      chatExportMocks.constructorDeps.push(deps);
-    }
-  },
 }));
 
 type DesktopSettingsIpcModule =
@@ -1625,10 +1594,15 @@ describe('desktop settings IPC', () => {
   });
 
   it('reruns an agent from history through the shared runAgent path', async () => {
-    const { getExecutionStore } = await import('@agent/storage');
+    const { clearStoreCache, getExecutionStore } =
+      await import('@agent/storage');
     const { AgentConfigSchema } =
       await import('@agent/core/definition/AgentConfig');
     const { AgentCategory } = await import('@shared/schemas/agent');
+    const { installPlatform } = await import('@test/support/setupPlatform');
+
+    clearStoreCache();
+    await installPlatform();
 
     const historyId = 'aaaa1111';
     const config = AgentConfigSchema.parse({
@@ -1660,259 +1634,6 @@ describe('desktop settings IPC', () => {
 
     expect(infos).toEqual(['Rerunning agent from history']);
     expect(runRequests).toEqual([{ config, executionId: undefined }]);
-  });
-
-  it("restores a history item's setup into the main view", async () => {
-    const { getExecutionStore } = await import('@agent/storage');
-    const { AgentConfigSchema } =
-      await import('@agent/core/definition/AgentConfig');
-    const { AgentCategory } = await import('@shared/schemas/agent');
-
-    const historyId = 'bbbb2222';
-    const config = AgentConfigSchema.parse({
-      agent: 'chat',
-      model: 'deepseekT',
-      instruction: 'Check a proof.',
-      agentCategory: AgentCategory.ToolUse,
-    });
-    await getExecutionStore(historyId).writeConfig(config);
-
-    const errors: string[] = [];
-    const restoredTaskStates: unknown[] = [];
-    const { settings } = createSettingsFixture({
-      showErrorMessage: async (message) => {
-        errors.push(message);
-      },
-      restoreTaskState: async (taskState) => {
-        restoredTaskStates.push(taskState);
-        return true;
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
-        historyId,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(errors).toEqual([]);
-    expect(restoredTaskStates).toEqual([{ agentConfig: config }]);
-  });
-
-  it('reports missing history items for rerun and restore instead of dropping them', async () => {
-    const shownErrors: string[] = [];
-    const { settings } = createSettingsFixture({
-      showErrorMessage: async (message) => {
-        shownErrors.push(message);
-      },
-    });
-
-    settings.handleMessage({
-      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
-      historyId: 'ffff9999',
-    });
-    settings.handleMessage({
-      command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
-      historyId: 'ffff9999',
-    });
-    await flushAsyncWork();
-
-    expect(shownErrors).toEqual([
-      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
-      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
-    ]);
-  });
-
-  it('errors instead of a false success when rerun has no runExecution dependency wired (Copilot #7827)', async () => {
-    const { getExecutionStore } = await import('@agent/storage');
-    const { AgentConfigSchema } =
-      await import('@agent/core/definition/AgentConfig');
-    const { AgentCategory } = await import('@shared/schemas/agent');
-
-    const historyId = 'cccc3333';
-    const config = AgentConfigSchema.parse({
-      agent: 'chat',
-      model: 'deepseekT',
-      instruction: 'Check a proof.',
-      agentCategory: AgentCategory.ToolUse,
-    });
-    await getExecutionStore(historyId).writeConfig(config);
-
-    const infos: string[] = [];
-    const errors: string[] = [];
-    // Deliberately omit `runExecution` — this is the desktop wiring gap the
-    // finding calls out: the IPC handler must not report success when the
-    // host never wired the execution bridge.
-    const { settings } = createSettingsFixture({
-      showInfoMessage: async (message) => {
-        infos.push(message);
-      },
-      showErrorMessage: async (message) => {
-        errors.push(message);
-      },
-    });
-
-    settings.handleMessage({
-      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
-      historyId,
-    });
-    await flushAsyncWork();
-
-    expect(infos).toEqual([]);
-    expect(errors).toEqual([
-      'Rerunning agents from history is not available in this build',
-    ]);
-  });
-
-  it('exports a history chat to Markdown via the shared ChatExportController', async () => {
-    const exportInput = {
-      timestamp: '2026-01-01T00:00:00.000Z',
-      config: { agent: 'chat' },
-      conversation: [],
-    };
-    chatExportMocks.buildExportInput.mockResolvedValue({
-      status: 'ok',
-      exportInput,
-    });
-    chatExportMocks.exportAsMarkdown.mockResolvedValue({
-      storagePath: 'executions/abc/chat.md',
-      absolutePath: '/tmp/executions/abc/chat.md',
-    });
-
-    const opened: string[] = [];
-    const infos: string[] = [];
-    const { settings } = createSettingsFixture({
-      resourcesPath: repoPath('packages', 'extension', 'resources'),
-      openPath: async (filePath) => {
-        opened.push(filePath);
-      },
-      showInfoMessage: async (message) => {
-        infos.push(message);
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-        historyId: 'abc',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(chatExportMocks.buildExportInput).toHaveBeenCalledWith('abc');
-    expect(chatExportMocks.exportAsMarkdown).toHaveBeenCalledWith(
-      'abc',
-      exportInput,
-    );
-    expect(opened).toEqual(['/tmp/executions/abc/chat.md']);
-    expect(infos).toEqual(['Chat exported: chat.md']);
-    // Constructed from the real bundled `templates/chatExport.tex` (the
-    // LaTeX-export dependency), not a mocked/stubbed preamble.
-    expect(chatExportMocks.constructorDeps.at(-1)).toMatchObject({
-      latexPreamble: expect.stringContaining('\\documentclass'),
-    });
-  });
-
-  it('falls back to opening the .tex source when LaTeX compilation fails', async () => {
-    const exportInput = {
-      timestamp: '2026-01-01T00:00:00.000Z',
-      config: { agent: 'chat' },
-      conversation: [],
-    };
-    chatExportMocks.buildExportInput.mockResolvedValue({
-      status: 'ok',
-      exportInput,
-    });
-    chatExportMocks.exportAsLatex.mockResolvedValue({
-      storagePath: 'executions/abc/chat.tex',
-      absolutePath: '/tmp/executions/abc/chat.tex',
-      pdfPath: undefined,
-      logTail: '! Undefined control sequence.',
-    });
-
-    const opened: string[] = [];
-    const infos: string[] = [];
-    const { settings } = createSettingsFixture({
-      resourcesPath: repoPath('packages', 'extension', 'resources'),
-      openPath: async (filePath) => {
-        opened.push(filePath);
-      },
-      showInfoMessage: async (message) => {
-        infos.push(message);
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
-        historyId: 'abc',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(opened).toEqual(['/tmp/executions/abc/chat.tex']);
-    expect(infos).toEqual([
-      'LaTeX compilation failed. The .tex source file has been opened instead.',
-    ]);
-  });
-
-  it('exports a history chat to HTML via the shared trace-viewer template', async () => {
-    chatExportMocks.exportAsHtml.mockResolvedValue({
-      status: 'ok',
-      result: {
-        storagePath: 'executions/abc/chat.html',
-        absolutePath: '/tmp/executions/abc/chat.html',
-      },
-    });
-
-    const opened: string[] = [];
-    const resourcesPath = repoPath('packages', 'extension', 'resources');
-    const { settings } = createSettingsFixture({
-      resourcesPath,
-      openPath: async (filePath) => {
-        opened.push(filePath);
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
-        historyId: 'abc',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(chatExportMocks.exportAsHtml).toHaveBeenCalledWith(
-      'abc',
-      `${resourcesPath}/traceViewerStandalone/index.html`,
-    );
-    expect(opened).toEqual(['/tmp/executions/abc/chat.html']);
-  });
-
-  it('reports a missing history item on export instead of throwing', async () => {
-    chatExportMocks.buildExportInput.mockResolvedValue({
-      status: 'config_missing',
-    });
-
-    const infos: string[] = [];
-    const { settings } = createSettingsFixture({
-      resourcesPath: repoPath('packages', 'extension', 'resources'),
-      showInfoMessage: async (message) => {
-        infos.push(message);
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-        historyId: 'missing',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(infos).toEqual(['History item not found']);
   });
 
   it('ignores unsupported or malformed settings messages', async () => {

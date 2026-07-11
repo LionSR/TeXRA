@@ -19,7 +19,7 @@ const issues = [
     icon: 'plug',
     title: 'Extension not loading',
     checks: [
-      'VS Code is on 1.106 or newer',
+      'VS Code is on 1.125 or newer',
       'Output panel → "TeXRA" shows no errors',
       'Reinstall the extension',
     ],

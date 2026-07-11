@@ -3,7 +3,11 @@ import { strict as assert } from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
 
 // Local imports - tests
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
 
 // Local imports - agent core
 import {
@@ -46,7 +50,7 @@ import type { SdkToolCall } from '@agent/types/IModelHandler';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import type { StreamTabId } from '@shared/schemas';
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { BashTool } from '@tools/bash';
 import { TaskRunFileService } from '@utils/files';
@@ -469,6 +473,70 @@ describe('BashTool', () => {
       /<output-elided>[\d,]+ characters elided<\/output-elided>/,
       'Delivered follow-up should note how many characters sit between head and tail',
     );
+  });
+
+  it('wakes a WAITING parent stream when a background bash run completes', async () => {
+    // Regression: background bash delivery used a bespoke sendFollowUp call
+    // with no wake step, so a parent suspended WAITING on the job never
+    // resumed — every other child-run type routes through the shared
+    // wake-aware deliverChildRunFollowUp path. Prove the wake actually fires
+    // by asserting the host resume port gets invoked once the run completes.
+    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
+      success: true,
+      stdout: 'done\n',
+      stderr: '',
+      timedOut: false,
+      exitCode: 0,
+    });
+
+    const parentStreamId = 'bash-tool-bg-wake-parent' as StreamTabId;
+    const tryResumeStream = vi.fn().mockResolvedValue(true);
+    await installPlatform(
+      {
+        workspacePath: '/workspace',
+        config: { 'texra.toolUse.requireBashApproval': false },
+      },
+      { agentResume: { tryResumeStream } },
+    );
+    seedStreamStatusForTest(
+      defaultSession().status,
+      parentStreamId,
+      STREAM_STATUS.WAITING,
+    );
+
+    const { host } = createRecordingHost();
+    const bashTool = new BashTool();
+    const recorded = recordSessionEvents(defaultSession().events);
+
+    try {
+      const launchResult = await withToolEnvironment(
+        {
+          run: { runtimeHost: host, streamId: parentStreamId },
+          call: { tracker: new FileInteractionState() },
+        },
+        () =>
+          bashTool.call({
+            command: 'make build',
+            run_in_background: true,
+          }),
+      );
+      assert.equal(launchResult.status, 'executed');
+
+      // The background run's completion must queue the follow-up AND wake
+      // the WAITING parent through the host resume port — not just queue it
+      // for the parent to notice on its own.
+      await vi.waitFor(() => {
+        assert.ok(
+          tryResumeStream.mock.calls.length > 0,
+          'Background bash completion should wake the WAITING parent stream',
+        );
+      });
+      assert.equal(tryResumeStream.mock.calls[0]?.[0], parentStreamId);
+    } finally {
+      recorded.detach();
+      clearStreamStatusForTest(defaultSession().status, parentStreamId);
+      defaultSession().followUps.release(parentStreamId);
+    }
   });
 
   it('accepts optional command descriptions without passing them to the shell', async () => {

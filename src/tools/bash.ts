@@ -23,7 +23,6 @@ import {
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   deriveRunOutcome,
   projectRunOutcome,
@@ -35,6 +34,7 @@ import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/constants/toolDefaults';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
 import { requireRunStream } from '@tools/contextHelpers';
+import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -345,25 +345,29 @@ export class BashTool extends defineTool({
     };
 
     const deliverParentFollowUp = async (text: string): Promise<void> => {
-      const result = await sendFollowUp(
-        parentStreamId,
-        {
-          text,
-          origin: 'subagent_result',
-        },
-        undefined,
-        undefined,
-        runSession,
-      );
-      if (result.status === 'no_session') {
+      // Route through the shared wake-aware delivery path — a parent
+      // suspended WAITING on this background job must be resumed, not left
+      // to sit until something else wakes it (see deliverChildRunFollowUp).
+      const delivery = await deliverChildRunFollowUp({
+        targetStreamId: parentStreamId,
+        followUp: { text, origin: 'subagent_result' },
+        session: runSession,
+        wake: true,
+      });
+      if (delivery.kind === 'no_session') {
         logger.debug(
           'Background bash follow-up dropped: parent stream has no active session.',
           {
             data: {
               parentStreamId,
-              streamStatus: result.streamStatus ?? 'unknown',
+              streamStatus: delivery.streamStatus ?? 'unknown',
             },
           },
+        );
+      } else if (delivery.kind === 'dropped') {
+        logger.warn(
+          'Background bash follow-up dropped: parent stream is gone and could not be resumed.',
+          { data: { parentStreamId } },
         );
       }
     };

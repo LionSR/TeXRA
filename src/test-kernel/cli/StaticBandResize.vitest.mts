@@ -1,32 +1,42 @@
-// Regression test for the patched Ink resize repaint path. Renders a minimal
-// Ink app with a deliberately remounted `<Static>` band to an in-memory fake
-// stdout, simulates a terminal resize by bumping `columns` and emitting
-// `resize`, and asserts the highlighted band reflows to the NEW width instead
-// of staying baked at the original width.
-//
-// This exercises the patched Ink resize full-repaint + the `<Static>` remount
-// (`handleStaticChange` regenerates `fullStaticOutput` at the new width) without
-// a pty (node-pty's posix_spawn is unavailable in sandboxed CI; the existing
-// InkResizePatch test uses a recording stream too). The main transcript does
-// not use this pattern for historical rows, because terminal scrollback is
-// append-only and remounting old rows duplicates finalized output.
+// Regression test for the production transcript's patched Ink resize path.
+// An in-memory stdout exposes the exact clear-and-repaint frame, which is the
+// reliable boundary for proving that Ink replaced its accumulated `<Static>`
+// output. A PTY adds emulator reflow but cannot reveal stale rows that the same
+// repaint subsequently clears.
 
-// Set before Ink/chalk load so reverse-video SGR (`ESC[7m`) is actually emitted
-// to the non-TTY fake stdout; otherwise chalk no-ops `inverse` and the band has
-// no styled fill to measure.
-process.env.FORCE_COLOR ??= '3';
+// Set before Ink/chalk load so reverse-video SGR (`ESC[7m`) is emitted to the
+// in-memory TTY; otherwise chalk no-ops `inverse` and the band has no styled
+// fill to measure.
+const ORIGINAL_COLOR_ENV = {
+  FORCE_COLOR: process.env.FORCE_COLOR,
+  NO_COLOR: process.env.NO_COLOR,
+};
+delete process.env.NO_COLOR;
+process.env.FORCE_COLOR = '3';
 
+// Node.js imports
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 
-import { describe, expect, it } from 'vitest';
+// Third-party imports
+import stripAnsi from 'strip-ansi';
+import { afterAll, describe, expect, it } from 'vitest';
 
-import { fillRows } from '@cli/chat/tui/render/terminalText';
+// Local imports
+import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
+import type { StreamTabId } from '@shared/schemas';
 import { delay } from '@utils/core';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
 );
+
+afterAll(() => {
+  for (const [name, value] of Object.entries(ORIGINAL_COLOR_ENV)) {
+    if (value == null) delete process.env[name];
+    else process.env[name] = value;
+  }
+});
 
 class FakeStdout extends EventEmitter {
   isTTY = true;
@@ -56,9 +66,8 @@ class FakeStdin extends EventEmitter {
   }
 }
 
-/** Widest visible reverse-video (`ESC[7m…ESC[27m`) run that contains the band. */
-function bandWidth(output: string): number {
-  let widest = 0;
+function inverseBandWidths(output: string, text: string): readonly number[] {
+  const widths: number[] = [];
   // eslint-disable-next-line no-control-regex -- matching raw SGR escapes
   const run = /\x1b\[7m([\s\S]*?)\x1b\[(?:27|0)m/g;
   // eslint-disable-next-line no-control-regex -- stripping raw SGR escapes
@@ -66,9 +75,25 @@ function bandWidth(output: string): number {
   let match: RegExpExecArray | null;
   while ((match = run.exec(output))) {
     const visible = match[1].replaceAll(sgr, '');
-    if (visible.includes('hi')) widest = Math.max(widest, visible.length);
+    if (visible.includes(text)) widths.push(visible.length);
   }
-  return widest;
+  return widths;
+}
+
+function horizontalRuleWidths(output: string): readonly number[] {
+  return stripAnsi(output)
+    .split('\n')
+    .filter((line) => /^─+$/u.test(line))
+    .map((line) => line.length);
+}
+
+function latestRepaintFrame(output: string, clearTerminal: string): string {
+  const clearIndex = output.lastIndexOf(clearTerminal);
+  return clearIndex < 0 ? '' : output.slice(clearIndex + clearTerminal.length);
+}
+
+function occurrences(text: string, needle: string): number {
+  return text.split(needle).length - 1;
 }
 
 async function waitFor(
@@ -84,52 +109,103 @@ async function waitFor(
 }
 
 describe('Static band resize', () => {
-  it('reflows the user band to the new width on resize', async () => {
+  it('replaces finalized transcript geometry at the new width', async () => {
     // Dynamic import so FORCE_COLOR is set first and the patched workspace Ink
     // (not a hoisted copy) is loaded.
     const ink = (await import(cliRequire.resolve('ink'))) as any;
     const React = ((await import(cliRequire.resolve('react'))) as any).default;
-    const { useState, useEffect, createElement } = React;
+    const { createElement } = React;
+    const { StaticConversationTranscript } =
+      await import('@cli/chat/tui/panes/StaticConversationTranscript');
+    const { patchStream, resetCliState } =
+      await import('@cli/chat/tui/state/cliState');
+    const inkRequire = createRequire(cliRequire.resolve('ink'));
+    const { clearTerminal } = inkRequire('ansi-escapes') as {
+      readonly clearTerminal: string;
+    };
+    const streamId = 'resize-static-stream' as StreamTabId;
+    const prompt = 'resize geometry prompt';
+    const finalizedUser: ConversationEntry = {
+      id: 'resize-user',
+      role: 'user',
+      text: prompt,
+      finalized: true,
+    };
+    const liveAssistant: ConversationEntry = {
+      id: 'live-assistant',
+      role: 'assistant',
+      text: 'working',
+      finalized: false,
+    };
+
+    resetCliState({
+      agent: 'research',
+      model: 'test-model',
+      modelSource: 'builtin-default',
+      cwd: '/tmp/resize-proof',
+      apiMode: 'personal',
+      approvalPolicy: 'ask',
+      canDelegate: false,
+      version: '0.0.0-test',
+    });
+    patchStream(streamId, (slice) => ({
+      ...slice,
+      entries: [finalizedUser, liveAssistant],
+    }));
 
     function App(): unknown {
-      const { stdout } = ink.useStdout();
-      const [cols, setCols] = useState(stdout.columns || 80);
-      useEffect(() => {
-        const onResize = (): void => setCols(stdout.columns || 80);
-        stdout.on('resize', onResize);
-        return () => stdout.off('resize', onResize);
-      }, [stdout]);
-      return createElement(ink.Static, { key: cols, items: [0] }, () =>
-        createElement(
-          ink.Box,
-          { key: 'band' },
-          createElement(ink.Text, { inverse: true }, fillRows('> hi', cols)),
-        ),
-      );
+      const { columns } = ink.useWindowSize();
+      return createElement(StaticConversationTranscript, {
+        colorEnabled: true,
+        ownerKey: 'resize-owner',
+        scrollbackStreamId: streamId,
+        width: columns,
+      });
     }
 
     const out = new FakeStdout(40);
     const inst = ink.render(createElement(App), {
       stdout: out,
       stdin: new FakeStdin(),
+      interactive: true,
       exitOnCtrlC: false,
       patchConsole: false,
     });
 
     try {
-      expect(await waitFor(() => bandWidth(out.buf) >= 40, 5000)).toBe(true);
-      expect(bandWidth(out.buf)).toBe(40);
+      expect(
+        await waitFor(
+          () =>
+            horizontalRuleWidths(out.buf).includes(40) &&
+            inverseBandWidths(out.buf, prompt).includes(38),
+          5000,
+        ),
+      ).toBe(true);
 
       // Widen: bump columns and fire the resize the patched Ink handler listens
-      // for. Clear the buffer so we measure only the post-resize repaint.
+      // for. Clear the recording so the final frame cannot pass using initial
+      // output.
       out.buf = '';
       out.columns = 80;
       out.emit('resize');
 
-      expect(await waitFor(() => bandWidth(out.buf) >= 80, 5000)).toBe(true);
-      expect(bandWidth(out.buf)).toBe(80);
+      expect(await waitFor(() => out.buf.includes(clearTerminal), 5000)).toBe(
+        true,
+      );
+      const frame = latestRepaintFrame(out.buf, clearTerminal);
+      const ruleWidths = horizontalRuleWidths(frame);
+      const bandWidths = inverseBandWidths(frame, prompt);
+      const visibleFrame = stripAnsi(frame);
+
+      expect(ruleWidths).toEqual([80]);
+      expect(ruleWidths).not.toContain(40);
+      expect(bandWidths).toEqual([78]);
+      expect(bandWidths).not.toContain(38);
+      expect(occurrences(visibleFrame, '{ T } TeXRA')).toBe(1);
+      expect(occurrences(visibleFrame, `› ${prompt}`)).toBe(1);
     } finally {
       inst.unmount();
+      resetCliState();
     }
   });
 });

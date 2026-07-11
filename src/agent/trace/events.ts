@@ -17,7 +17,6 @@ import type {
   AddOutputFilesPayload,
   ConversationProgress,
   GoalPausedPayload,
-  EndGroupStatus,
   ExecutionId,
   RetryErrorInfo,
   RunOutcome,
@@ -109,7 +108,7 @@ export interface RunConfigEvent extends StageStamp {
 export interface StageEndEvent extends StageStamp {
   readonly type: 'stage.end';
   readonly id: string;
-  readonly status: EndGroupStatus;
+  readonly status: RunOutcome;
 }
 
 /** Tool call started. `logId` is the subscriber-correlatable id. */

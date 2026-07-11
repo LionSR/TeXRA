@@ -8,12 +8,17 @@ const mocks = vi.hoisted(() => ({
   readWorkspaceFiles: vi.fn(),
 }));
 
-vi.mock('@agent/storage', () => ({
-  getExecutionStore: vi.fn(() => ({
-    readWorkspaceFiles: mocks.readWorkspaceFiles,
-  })),
-  listExecutions: mocks.listExecutions,
-}));
+vi.mock('@agent/storage', async () => {
+  const actual =
+    await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
+  return {
+    ...actual,
+    getExecutionStore: vi.fn(() => ({
+      readWorkspaceFiles: mocks.readWorkspaceFiles,
+    })),
+    listExecutions: mocks.listExecutions,
+  };
+});
 
 describe('settings history handlers', () => {
   beforeEach(() => {
@@ -53,5 +58,41 @@ describe('settings history handlers', () => {
         description: undefined,
       },
     ]);
+  });
+
+  it('hides internal process-bookkeeping and configless entries', async () => {
+    mocks.listExecutions.mockResolvedValue([
+      {
+        id: 'abc123',
+        timestamp: '2026-05-31T12:00:00.000Z',
+        agentConfig: {
+          agent: 'chat',
+          model: 'deepseekT',
+          instruction: 'Check a proof.',
+          agentCategory: AgentCategory.ToolUse,
+        },
+        category: 'toolUse',
+      },
+      {
+        id: 'bash-process',
+        timestamp: '2026-05-31T12:01:00.000Z',
+        agentConfig: {
+          agent: 'bash',
+          model: 'deepseekT',
+          instruction: 'ls -la',
+          agentCategory: AgentCategory.ToolUse,
+        },
+        category: 'process',
+      },
+      {
+        id: 'configless',
+        timestamp: '2026-05-31T12:02:00.000Z',
+        agentConfig: null,
+      },
+    ]);
+
+    const message = await buildHistoryMessage();
+
+    expect(message.historyItems.map((item) => item.id)).toEqual(['abc123']);
   });
 });

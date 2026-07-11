@@ -35,6 +35,7 @@ export {
   listExecutions,
   deleteExecution,
   deleteAllExecutions,
+  isUserVisibleExecution,
 } from './executionListing';
 export {
   RESUMABILITY_CAUSE,
