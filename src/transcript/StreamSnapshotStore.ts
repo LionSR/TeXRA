@@ -1347,10 +1347,7 @@ export class StreamSnapshotStore {
       metaOverlay !== undefined ? this.runConfigs.get(stream) : undefined;
     const runDescriptorOverlay =
       metaOverlay !== undefined ? this.runDescriptors.get(stream) : undefined;
-    const outputFileOverlay = this.outputFileOverlays.get(stream);
-    const missingOutputsOverlay = this.missingOutputsOverlays.get(stream);
-    const compileFailuresOverlay = this.compileFailuresOverlays.get(stream);
-    const usageOverlay = this.usageOverlays.get(stream);
+    const usageOverlayToReplay = new Map(this.usageOverlays.get(stream));
     const sidecarsToWrite = new Set(data.legacyKeys);
     this.outputFiles.set(stream, data.outputFiles);
     this.missingOutputs.set(stream, data.missingOutputs);
@@ -1401,6 +1398,10 @@ export class StreamSnapshotStore {
       this.runDescriptors.set(stream, runDescriptor);
     }
     this.metaOverlays.delete(stream);
+    const outputFileOverlay = this.outputFileOverlays.get(stream);
+    const missingOutputsOverlay = this.missingOutputsOverlays.get(stream);
+    const compileFailuresOverlay = this.compileFailuresOverlays.get(stream);
+    const usageOverlay = this.usageOverlays.get(stream);
     if (outputFileOverlay) {
       this.applyRoundPatch(this.outputFiles, stream, outputFileOverlay);
       sidecarsToWrite.add(STREAM_DATA_KEYS.OUTPUT_FILES);
@@ -1426,7 +1427,7 @@ export class StreamSnapshotStore {
       this.compileFailuresOverlays.delete(stream);
     }
     if (usageOverlay) {
-      for (const [storageKey, delta] of usageOverlay) {
+      for (const [storageKey, delta] of usageOverlayToReplay) {
         this.applyUsageDeltaMemory(stream, storageKey, delta);
       }
       sidecarsToWrite.add(STREAM_DATA_KEYS.USAGE_STATS);
