@@ -74,6 +74,7 @@ export async function resumeQueuedToolUseSnapshot(
   const seed = options.extraFollowUps ?? [];
   let followUps: readonly FollowUpQueueInput[] = seed;
   let cancelledBeforeSessionSetup = false;
+  let resumeReturned = false;
   let resumeError: { error: unknown } | undefined;
   const restoreFollowUps = (): void => {
     for (const item of followUps) {
@@ -124,13 +125,16 @@ export async function resumeQueuedToolUseSnapshot(
         }
       },
     });
-    options.onResult?.(result);
+    resumeReturned = true;
     if (cancelledBeforeSessionSetup) restoreFollowUps();
+    options.onResult?.(result);
   } catch (error) {
     resumeError = { error };
-    // Re-enqueue the drained follow-ups (explicit seed first) so a later
-    // resume replays them instead of dropping them.
-    restoreFollowUps();
+    // A rejected resume has not committed the drained batch's disposition,
+    // so a later resume must replay it. Once the resume returns, the flow has
+    // either consumed, disposed, or deliberately left the batch live; an
+    // observer failure must not enqueue it again.
+    if (!resumeReturned) restoreFollowUps();
   } finally {
     // Early failures leave the stream RESUMING. Startup cancellation can
     // instead reach lifecycle terminalization before the queue owner regains
