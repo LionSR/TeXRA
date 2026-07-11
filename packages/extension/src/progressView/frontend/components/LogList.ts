@@ -283,20 +283,20 @@ export class LogList extends LitElement {
 
   /**
    * Keyboard activation (Enter/Space) for the focusable transcript link spans
-   * (file-link / latex-ref / proposal-restore-link). Copy buttons are native
-   * <wa-button>s and already keyboard-activatable via the click handler, so
-   * they are intentionally excluded here to avoid double-firing.
+   * (file-link / latex-ref). Copy buttons and the proposal-restore-link
+   * ("Setup") control are real `<wa-button>`/`<button>` elements and are
+   * already keyboard-activatable via native click synthesis (handled by the
+   * click handler below), so they are intentionally excluded here to avoid
+   * double-firing. proposal-restore-link additionally stops its own keydown
+   * from propagating this far — see stopSummaryToggleKeydown — since it sits
+   * inside a `<wa-details>` summary and would otherwise also toggle the
+   * panel.
    */
   private handleKeyEvent(event: Event): void {
     if (!(event instanceof KeyboardEvent)) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     if (event.defaultPrevented) return;
-    if (
-      !getComposedPathElement<Element>(
-        event,
-        '.file-link, .latex-ref, .proposal-restore-link',
-      )
-    ) {
+    if (!getComposedPathElement<Element>(event, '.file-link, .latex-ref')) {
       return;
     }
     event.preventDefault();
@@ -327,7 +327,11 @@ export class LogList extends LitElement {
       return true;
     }
 
-    // Handle proposal restore links (may be inside <summary>, so prevent toggle)
+    // Handle proposal restore links. The wa-details toggle is suppressed
+    // separately: WA's own click handler already excludes this real
+    // <button>, and stopSummaryToggleKeydown stops its keydown from
+    // reaching wa-details' summary at all — this preventDefault only
+    // guards against any other native default action on the click.
     const proposalLink = getComposedPathElement<HTMLElement>(
       event,
       '.proposal-restore-link',

@@ -5,6 +5,9 @@
  * single-line templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/details/details.js';
+
 import {
   html,
   classMap,
@@ -37,7 +40,7 @@ function buildToolUseDetails(opts: {
 }): TemplateResult {
   const bannerContentTemplate = buildBannerContent(opts.message, opts.content);
   // prettier-ignore
-  return html`<details class=${classMap({ 'banner-details': true, 'tool-use-details': true, 'tool-use-error': opts.isError })} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title' })}${bannerContentTemplate}</details>`;
+  return html`<wa-details appearance="plain" class=${classMap({ 'banner-details': true, 'tool-use-details': true, 'tool-use-error': opts.isError })} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', summarySlot: true })}${bannerContentTemplate}</wa-details>`;
 }
 
 // Web search provider display names

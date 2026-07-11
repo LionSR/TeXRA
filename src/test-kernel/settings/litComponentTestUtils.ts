@@ -81,6 +81,19 @@ function installAnimationPolyfill(window: JSDOM['window']): void {
   if (typeof proto.getAnimations !== 'function') {
     proto.getAnimations = () => [];
   }
+  // jsdom also doesn't implement the Web Animations API (Element.animate).
+  // wa-details' internal animate() helper (used to drive its open/close
+  // transition) calls `el.animate(keyframes, options).finished` directly —
+  // without this, toggling a <wa-details> open/closed throws. Resolve
+  // immediately so the open/close state settles synchronously enough for
+  // tests to observe without waiting on a real animation. The stub's shape
+  // intentionally doesn't match the real `Animation` return type — only
+  // `.finished` is ever read by the code under test.
+  if (typeof proto.animate !== 'function') {
+    proto.animate = (() => ({
+      finished: Promise.resolve(),
+    })) as unknown as Element['animate'];
+  }
 }
 
 function installDialogPolyfill(window: JSDOM['window']): void {
