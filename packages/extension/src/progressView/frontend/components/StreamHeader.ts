@@ -520,11 +520,21 @@ export class StreamHeader extends LitElement {
       <span
         class="parent-link"
         title="Go to parent: ${displayName}"
+        role="button"
+        tabindex="0"
         @click=${this.navigateToParent}
+        @keydown=${this.handleParentLinkKey}
       >
         ${waIcon('arrow-left')} ${displayName}
       </span>
     `;
+  }
+
+  private handleParentLinkKey(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.navigateToParent();
+    }
   }
 
   private navigateToParent(): void {
