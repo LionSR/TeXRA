@@ -491,6 +491,12 @@ export async function runChat(
     chatTuiCanInterruptActiveRun(session);
   const canStopActiveRun = (): boolean =>
     chatTuiCanStopVisibleRun(session, rootStreamStatus());
+  const isResumableIdle = (): boolean =>
+    chatTuiIsResumableIdleOnExit({
+      canInterruptActiveRun: canInterruptActiveRun(),
+      canStopActiveRun: canStopActiveRun(),
+      hasActiveToolUseFlow: hasActiveToolUseFlow(),
+    });
   const canStopPendingRunWithoutStream = (): boolean =>
     Boolean(session.runPromise && !session.runCompleted && !session.streamId);
   // Chat-session controller: owns run start/resume/stop orchestration.
@@ -916,7 +922,7 @@ export async function runChat(
     const sigintAction = chatTuiSigintAction({
       exitArmed,
       canStopActiveRun: canStopActiveRun(),
-      canInterruptActiveRun: canInterruptActiveRun(),
+      resumableIdle: isResumableIdle(),
     });
     switch (sigintAction) {
       case 'clean-exit':
@@ -1045,12 +1051,9 @@ export async function runChat(
       await followUpQueue.onIdle();
       // A suspended (idle/WAITING) root session is resumable: its flow record
       // survives only if we DON'T interrupt the flow (interrupt clears it). See
-      // chatTuiIsResumableIdleOnExit for why "interruptible but not stoppable"
-      // is exactly the idle-but-suspended case we must leave untouched.
-      const resumableIdle = chatTuiIsResumableIdleOnExit({
-        canInterruptActiveRun: canInterruptActiveRun(),
-        canStopActiveRun: canStopActiveRun(),
-      });
+      // chatTuiIsResumableIdleOnExit for the live-flow check that distinguishes
+      // this state from a resume slot that is still rehydrating.
+      const resumableIdle = isResumableIdle();
       if (session.runPromise && !session.runCompleted && !resumableIdle) {
         session.stopRequested = true;
         interruptActive();

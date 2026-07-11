@@ -148,24 +148,27 @@ export type ChatTuiSigintAction =
 export function chatTuiSigintAction(input: {
   readonly exitArmed: boolean;
   readonly canStopActiveRun: boolean;
-  readonly canInterruptActiveRun: boolean;
+  readonly resumableIdle: boolean;
 }): ChatTuiSigintAction {
   if (input.exitArmed) return 'force-exit';
   if (input.canStopActiveRun) return 'interrupt-and-arm-exit';
-  // Resumable-idle (interruptible, not actively running): exit WITHOUT
-  // interrupting so the suspended tool-use flow record survives for resume.
-  if (input.canInterruptActiveRun) return 'preserve-exit';
+  if (input.resumableIdle) return 'preserve-exit';
   return 'clean-exit';
 }
 
 /**
- * On exit, a tool-use session suspended at the WAIT node (idle/WAITING) must
- * NOT be interrupted: interrupting clears its per-execution flow record in
- * `runToolUseFlow`'s finally, destroying the only resumable state.
+ * On exit, a tool-use session suspended at the WAIT node (idle/WAITING) with a
+ * live flow must NOT be interrupted: interrupting clears its per-execution flow
+ * record in `runToolUseFlow`'s finally, destroying the only resumable state.
  */
 export function chatTuiIsResumableIdleOnExit(input: {
   readonly canInterruptActiveRun: boolean;
   readonly canStopActiveRun: boolean;
+  readonly hasActiveToolUseFlow: boolean;
 }): boolean {
-  return input.canInterruptActiveRun && !input.canStopActiveRun;
+  return (
+    input.canInterruptActiveRun &&
+    !input.canStopActiveRun &&
+    input.hasActiveToolUseFlow
+  );
 }
