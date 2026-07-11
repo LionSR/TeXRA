@@ -229,7 +229,7 @@ export class FileList extends LitElement {
 
       .compile-warning {
         flex-shrink: 0;
-        color: var(--wa-color-warning-on-quiet, orange);
+        color: var(--color-warning);
       }
 
       .compile-actions {
