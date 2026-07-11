@@ -142,6 +142,28 @@ describe('formatConversation', () => {
     expect(output).not.toContain('"type":"web_fetch_tool_result"');
   });
 
+  it('formats archived (completed-run sidecar) web_fetch_tool_result blocks as a title/url marker', () => {
+    // `src/transcript/completedRunArchive.ts`'s `webFetchEntryToMessages`
+    // reconstructs this block type with top-level url/title/page_content —
+    // no nested `content` — unlike the live Anthropic SDK shape above.
+    const output = formatConversation([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'web_fetch_tool_result',
+            url: 'https://texra.ai',
+            title: 'TeXRA home',
+            page_content: 'the full fetched page text'.repeat(20),
+          },
+        ],
+      },
+    ]);
+
+    expect(output).toContain('[tool_result: TeXRA home (https://texra.ai)]');
+    expect(output).not.toContain('the full fetched page text');
+  });
+
   it('does not throw on an undefined content block', () => {
     expect(() =>
       formatConversation([{ role: 'user', content: [undefined] }]),

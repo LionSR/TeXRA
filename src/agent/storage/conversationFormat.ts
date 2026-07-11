@@ -153,25 +153,41 @@ function formatWebSearchResultMarker(
 }
 
 /**
- * Anthropic `web_fetch_tool_result` content is a
+ * A live Anthropic `web_fetch_tool_result` block's `content` is a
  * `{type: 'web_fetch_result', url, content: {title, ...}}` object (or an
- * error object) — rendering it through the generic block formatter would
- * JSON-dump the fetched page's full text, so this collapses it to a
- * `title (url)` marker instead. Falls back to `formatToolResultMarker` for
- * the error shape.
+ * error object). A completed-run's transcript-sidecar archive
+ * (`webFetchEntryToMessages` in `@transcript/completedRunArchive`)
+ * reconstructs the same block type with no nested `content` at all —
+ * `url`/`title`/`page_content` sit directly on the block instead. Both
+ * `ExecutionsTool`'s `/conversation` endpoint and the CLI's `texra history`
+ * read completed-run conversations through that archive, so this must
+ * recognize both shapes; rendering either through the generic block
+ * formatter would JSON-dump the fetched page's full text, so this collapses
+ * whichever shape is present to a `title (url)` marker instead. Falls back
+ * to `formatToolResultMarker` for the live error shape.
  */
 function formatWebFetchResultMarker(
-  content: unknown,
+  block: Record<string, unknown>,
   options: ConversationFormatOptions,
 ): string {
-  if (!isObject(content) || content.type !== 'web_fetch_result') {
-    return formatToolResultMarker(content, options);
-  }
   const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
-  const url = asText(content.url);
-  const title = objectStringField(content.content, 'title');
-  const label = title && url ? `${title} (${url})` : title || url;
-  return `[tool_result: ${truncate(label, options.toolBlockLimit, marker)}]`;
+  const content = block.content;
+  if (isObject(content) && content.type === 'web_fetch_result') {
+    const url = asText(content.url);
+    const title = objectStringField(content.content, 'title');
+    const label = title && url ? `${title} (${url})` : title || url;
+    return `[tool_result: ${truncate(label, options.toolBlockLimit, marker)}]`;
+  }
+  const archivedUrl = asText(block.url);
+  const archivedTitle = asText(block.title);
+  if (archivedUrl || archivedTitle) {
+    const label =
+      archivedTitle && archivedUrl
+        ? `${archivedTitle} (${archivedUrl})`
+        : archivedTitle || archivedUrl;
+    return `[tool_result: ${truncate(label, options.toolBlockLimit, marker)}]`;
+  }
+  return formatToolResultMarker(content, options);
 }
 
 /**
@@ -277,7 +293,7 @@ function formatConversationBlock(
     case 'web_search_tool_result':
       return formatWebSearchResultMarker(block.content, options);
     case 'web_fetch_tool_result':
-      return formatWebFetchResultMarker(block.content, options);
+      return formatWebFetchResultMarker(block, options);
     default:
       return truncate(
         stringifyConversationValue(block),
