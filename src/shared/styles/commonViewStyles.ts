@@ -376,6 +376,21 @@ export const commonViewStyles: CSSResult = css`
     opacity: var(--opacity-disabled);
   }
 
+  /* Class hooks consumed by the shared renderEmptyState() helper
+     (@shared/wa/emptyState). Neutralizes the UA heading chrome on
+     .empty-state-title (bold weight, larger size, block margins) so it
+     reads like the plain paragraph text these lists used before adopting
+     the helper; color/italic still cascade from .empty-state. */
+  .empty-state .empty-state-title {
+    margin: 0;
+    font-size: var(--font-size);
+    font-weight: var(--wa-font-weight-regular, normal);
+  }
+
+  .empty-state .empty-state-body {
+    margin: 0;
+  }
+
   /* Agent icon indicators (remote, multiple outputs) - fixed width for consistent sizing */
   .agent-icon {
     display: inline-block;
