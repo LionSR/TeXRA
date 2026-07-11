@@ -22,14 +22,12 @@ describe('AgentCliSessionRegistry', () => {
       const releaseInitialClaim = registry.claim('session-a');
       expect(releaseInitialClaim).toBeTypeOf('function');
       expect(registry.claim('session-a')).toBeUndefined();
-      expect(registry.isActive('session-a')).toBe(false);
       expect(registry.lookup('session-a')).toBeUndefined();
 
       const active = registry.waitForActive('session-a');
       registry.register('session-a', entry);
 
       await expect(active).resolves.toBe(entry);
-      expect(registry.isActive('session-a')).toBe(true);
       expect(registry.lookup('session-a')).toBe(entry);
       expect(registry.claim('session-a')).toBeUndefined();
 
@@ -40,7 +38,6 @@ describe('AgentCliSessionRegistry', () => {
       expect(registry.lookup('session-a')).toBe(entry);
 
       registry.release('session-a');
-      expect(registry.isActive('session-a')).toBe(false);
       const releaseNextClaim = registry.claim('session-a');
       expect(releaseNextClaim).toBeTypeOf('function');
       releaseInitialClaim?.();
@@ -62,12 +59,50 @@ describe('AgentCliSessionRegistry', () => {
     releaseClaim?.();
 
     await expect(active).resolves.toBeUndefined();
-    expect(registry.isActive('session-a')).toBe(false);
     const releaseNextClaim = registry.claim('session-a');
     expect(releaseNextClaim).toBeTypeOf('function');
 
     releaseNextClaim?.();
     await expect(registry.waitForActive('session-a')).resolves.toBeUndefined();
+  });
+
+  it('releases every active alias owned by one execution', () => {
+    const registry = new AgentCliSessionRegistry('test_session_id');
+    const executions = new ExecutionRegistry();
+    const executionA = 'execution-a' as ExecutionId;
+    const executionB = 'execution-b' as ExecutionId;
+    const entry = (executionId: ExecutionId, childStreamId: StreamTabId) => ({
+      childStreamId,
+      executionId,
+      executions,
+    });
+    const releasePending = registry.claim('pending-session');
+
+    try {
+      registry.register(
+        'session-a',
+        entry(executionA, 'child-a' as StreamTabId),
+      );
+      registry.register(
+        'session-a-alias',
+        entry(executionA, 'child-a' as StreamTabId),
+      );
+      registry.register(
+        'session-b',
+        entry(executionB, 'child-b' as StreamTabId),
+      );
+
+      registry.releaseByExecutionId(executionA);
+
+      expect(registry.lookup('session-a')).toBeUndefined();
+      expect(registry.lookup('session-a-alias')).toBeUndefined();
+      expect(registry.lookup('session-b')?.executionId).toBe(executionB);
+      expect(registry.claim('pending-session')).toBeUndefined();
+    } finally {
+      releasePending?.();
+      registry.releaseByExecutionId(executionB);
+      executions.dispose();
+    }
   });
 
   it('interrupts each child through the execution registry that owns the session', () => {
