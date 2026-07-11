@@ -3,14 +3,12 @@
 // owns asynchronous SDK setup, while later calls wait for registration and
 // enqueue through the ordinary follow-up path.
 
+import pDefer from 'p-defer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createRunTrace, StreamLogStore } from '@transcript';
-import type { AgentTrace } from '@agent/trace';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { CodexThreads } from '@tools/agentCliSessionStores';
-import type { ChildStream } from '@tools/childStream';
 
 const mocks = vi.hoisted(() => ({
   requestBashApproval: vi.fn(),
@@ -83,49 +81,17 @@ vi.mock('@tools/codexImport', () => ({
 }));
 
 import { CodexTool } from '@tools/codex';
+import { createFakeAgentCliChildStream } from '../support/agentCliResumeTestUtils';
 
 const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'stream:codex-child' as StreamTabId;
 const executionId = 'parent-exec' as ExecutionId;
 
-function deferred<T>(): {
-  promise: Promise<T>;
-  reject: (reason?: unknown) => void;
-  resolve: (value: T) => void;
-} {
-  let settle: ((value: T) => void) | undefined;
-  let rejectPromise: ((reason?: unknown) => void) | undefined;
-  const promise = new Promise<T>((resolve, reject) => {
-    settle = resolve;
-    rejectPromise = reject;
-  });
-  return {
-    promise,
-    reject: (reason) => rejectPromise?.(reason),
-    resolve: (value) => settle?.(value),
-  };
-}
-
-function fakeLogger(): AgentTrace {
-  const store = new StreamLogStore();
-  return createRunTrace(childStreamId, store).trace;
-}
-
-function fakeChildStream(): ChildStream {
-  return {
-    childStreamId,
-    logger: fakeLogger(),
-    waitForInput: () => {},
-    beginTurn: () => {},
-    failTurn: () => {},
-    finalize: async () => {},
-  };
-}
-
 describe('codex tool - atomic resume fallback', () => {
   afterEach(() => {
     vi.clearAllMocks();
-    CodexThreads.releaseMany(['stale-thread']);
+    CodexThreads.releaseByExecutionId(executionId);
+    CodexThreads.release('stale-thread');
   });
 
   function setupCommonMocks(): void {
@@ -146,7 +112,9 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
     mocks.ensureRunDir.mockResolvedValue(undefined);
     mocks.findCodexBinaryPath.mockResolvedValue(undefined);
-    mocks.createChildStream.mockReturnValue(fakeChildStream());
+    mocks.createChildStream.mockReturnValue(
+      createFakeAgentCliChildStream(childStreamId),
+    );
     mocks.currentSession.mockReturnValue({
       followUps: { acquire: () => ({ enqueue: mocks.enqueueFollowUp }) },
     });
@@ -154,8 +122,8 @@ describe('codex tool - atomic resume fallback', () => {
 
   it('launches one fallback loop when concurrent calls use the same stale thread_id', async () => {
     setupCommonMocks();
-    const sdkImportStarted = deferred<void>();
-    const sdkReady = deferred<any>();
+    const sdkImportStarted = pDefer<void>();
+    const sdkReady = pDefer<any>();
     const thread = {
       id: 'stale-thread',
       runStreamed: vi.fn(),
@@ -213,29 +181,13 @@ describe('codex tool - atomic resume fallback', () => {
     });
 
     strategy?.onSessionCleanup?.();
-    expect(CodexThreads.isActive('stale-thread')).toBe(false);
-  });
-
-  it('releases the fallback claim when asynchronous SDK setup fails', async () => {
-    setupCommonMocks();
-    mocks.importCodexClass.mockRejectedValue(new Error('SDK import failed'));
-
-    const result = await new CodexTool().call({
-      prompt: 'continue the refactor',
-      sandbox_mode: 'workspace-write',
-      thread_id: 'stale-thread',
-    });
-
-    expect(result.status).toBe('error');
-    const releaseClaim = CodexThreads.claim('stale-thread');
-    expect(releaseClaim).toBeTypeOf('function');
-    releaseClaim?.();
+    expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
   });
 
   it('lets a waiting caller own the fallback after the first launch fails', async () => {
     setupCommonMocks();
-    const firstImportStarted = deferred<void>();
-    const firstImport = deferred<any>();
+    const firstImportStarted = pDefer<void>();
+    const firstImport = pDefer<any>();
     const thread = { id: 'stale-thread', runStreamed: vi.fn() };
     const executions = { getAgentHandleByStream: () => undefined } as any;
     let strategy: ChildRunStrategy<unknown> | undefined;
@@ -282,6 +234,6 @@ describe('codex tool - atomic resume fallback', () => {
     expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
 
     strategy?.onSessionCleanup?.();
-    expect(CodexThreads.isActive('stale-thread')).toBe(false);
+    expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
   });
 });

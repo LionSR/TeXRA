@@ -5,6 +5,7 @@
 // mutations that are safe to verify without a full agent harness.
 
 import PQueue from 'p-queue';
+import pDefer from 'p-defer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -180,20 +181,6 @@ function makeInit(
     snapshotStore: new StreamSnapshotStore(),
     ...overrides,
   };
-}
-
-function deferred<T = void>(): {
-  promise: Promise<T>;
-  resolve: (value: T | PromiseLike<T>) => void;
-  reject: (reason?: unknown) => void;
-} {
-  let resolve: (value: T | PromiseLike<T>) => void = () => {};
-  let reject: (reason?: unknown) => void = () => {};
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
 }
 
 function makeResumeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -404,7 +391,7 @@ describe('createChatSessionController', () => {
   });
 
   it('reserves the root-run slot before tryResumeStream awaits persisted state', async () => {
-    const preload = deferred();
+    const preload = pDefer<void>();
     const session = makeSession({ runCompleted: true });
     const snapshotStore = makeResumeSnapshotStore({
       preload: () => preload.promise,
@@ -426,7 +413,7 @@ describe('createChatSessionController', () => {
   });
 
   it('reserves the root-run slot before resume() awaits the resolved snapshot', async () => {
-    const snapshot = deferred<{ readonly kind: 'not-found' }>();
+    const snapshot = pDefer<{ readonly kind: 'not-found' }>();
     mocks.resolveCliResumeSnapshot.mockReturnValueOnce(snapshot.promise);
     const session = makeSession({ runCompleted: true });
     const ctrl = createChatSessionController(makeInit({ session }));
@@ -455,7 +442,7 @@ describe('createChatSessionController', () => {
     // and start doing real work — which resume(A) would then clobber when
     // it woke back up and unconditionally overwrote session.runPromise.
     // Post-fix, exactly one caller (A) ever holds the slot.
-    const snapshot = deferred<{ readonly kind: 'not-found' }>();
+    const snapshot = pDefer<{ readonly kind: 'not-found' }>();
     mocks.resolveCliResumeSnapshot.mockReturnValueOnce(snapshot.promise);
     const session = makeSession({ runCompleted: true });
     const snapshotStoreForB = makeResumeSnapshotStore({
@@ -490,7 +477,7 @@ describe('createChatSessionController', () => {
     // rehydration window, resume() must notice `session.stopRequested` and bail
     // out instead of silently starting `resumeToolUseFromSnapshot()` once the
     // awaits finish.
-    const ensureLoaded = deferred<void>();
+    const ensureLoaded = pDefer<void>();
     const base = mocks.defaultSession();
     mocks.defaultSession.mockReturnValue({
       ...base,
@@ -564,7 +551,7 @@ describe('createChatSessionController', () => {
   });
 
   it('forwards a stop issued during manual resume helper-model setup', async () => {
-    const helperModel = deferred();
+    const helperModel = pDefer<void>();
     mocks.setCliHelperModel.mockReturnValueOnce(helperModel.promise);
 
     const session = makeSession({ runCompleted: true });
@@ -711,7 +698,7 @@ describe('createChatSessionController', () => {
   });
 
   it('does not auto-resume after stop during helper-model setup', async () => {
-    const helperModel = deferred();
+    const helperModel = pDefer<void>();
     const session = makeSession({ runCompleted: true });
     const config = makeResumeConfig();
     const snapshotStore = makeResumeSnapshotStore({
