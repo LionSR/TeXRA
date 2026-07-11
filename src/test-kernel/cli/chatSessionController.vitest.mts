@@ -126,6 +126,7 @@ import {
   type TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import {
+  RUN_OUTCOME,
   STREAM_STATUS,
   type ExecutionId,
   type StreamTabId,
@@ -300,7 +301,12 @@ describe('createChatSessionController', () => {
     mocks.moveLocalTranscriptToStream.mockReset();
     mocks.resolveCliResumeSnapshot.mockReset();
     mocks.resumeToolUseFromSnapshot.mockReset();
-    mocks.resumeToolUseFromSnapshot.mockResolvedValue(undefined);
+    mocks.resumeToolUseFromSnapshot.mockResolvedValue({
+      category: 'toolUse',
+      outcome: RUN_OUTCOME.COMPLETED,
+      executionId: 'exec-resume',
+      streamId: 'stream-resume',
+    });
   });
 
   it('returns an object satisfying the ChatSessionController interface', () => {
@@ -551,6 +557,20 @@ describe('createChatSessionController', () => {
       snapshot,
       config: makeResumeConfig(),
     };
+    mocks.resumeToolUseFromSnapshot.mockImplementationOnce(
+      async (
+        _snapshot: unknown,
+        _runtimeHost: unknown,
+        options: { readonly isCancellationRequested?: () => boolean },
+      ) => ({
+        category: 'toolUse',
+        outcome: options.isCancellationRequested?.()
+          ? RUN_OUTCOME.CANCELLED
+          : RUN_OUTCOME.COMPLETED,
+        executionId: 'exec-resume',
+        streamId: 'stream-resume',
+      }),
+    );
 
     const resumeStarted = ctrl.resume('aaaaaa' as ExecutionId, preResolved);
     await vi.waitFor(() =>
@@ -574,6 +594,7 @@ describe('createChatSessionController', () => {
       { readonly isCancellationRequested?: () => boolean } | undefined;
     expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
     await session.runPromise;
+    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
   });
 
   it('reports a failed persisted-child wake while the CLI root slot is busy', async () => {

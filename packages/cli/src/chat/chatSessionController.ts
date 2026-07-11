@@ -424,11 +424,14 @@ export function createChatSessionController(
             isCancellationRequested: () => session.stopRequested,
           }),
         )
-        .then(() => {
+        .then((result) => {
           if (session.streamId) {
             projectStreamTranscript(session.streamId, { finalize: true });
           }
-          session.runExitCode = CliExitCode.Success;
+          session.runExitCode = terminalStatusExitCode(
+            cliTerminalStatus(result),
+            sessionContext,
+          );
           notify({ kind: 'agentFinished' });
         })
         .catch(reportRunFailure)

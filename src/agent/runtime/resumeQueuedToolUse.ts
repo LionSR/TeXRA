@@ -52,7 +52,8 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
  *
  * Hosts stay thin adapters: they supply only what differs (`session`,
  * `runtimeUnavailableTools`, an optional seed follow-up, and the `onError`
- * toast). Returns `true` when the resume completed and `false` when it failed.
+ * toast). Returns `true` when the resume completed and `false` when it failed
+ * or was cancelled before the rebuilt session accepted its follow-ups.
  */
 export async function resumeQueuedToolUseSnapshot(
   streamId: StreamTabId,
@@ -120,19 +121,22 @@ export async function resumeQueuedToolUseSnapshot(
         }
       },
     });
-    if (cancelledBeforeSessionSetup) restoreFollowUps();
     options.onResult?.(result);
+    if (cancelledBeforeSessionSetup) restoreFollowUps();
   } catch (error) {
     resumeError = { error };
     // Re-enqueue the drained follow-ups (explicit seed first) so a later
     // resume replays them instead of dropping them.
     restoreFollowUps();
   } finally {
-    // Only the early-failure path leaves the stream RESUMING (a started run
-    // owns its own status); settle it back to WAITING before surfacing the
-    // error so a blocking host dialog cannot hold the stream in RESUMING.
-    if (streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING) {
-      streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait', {
+    // Early failures leave the stream RESUMING. Startup cancellation can
+    // instead reach lifecycle terminalization before the queue owner regains
+    // control. In both cases, restored input makes WAITING the durable state.
+    if (
+      cancelledBeforeSessionSetup ||
+      streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING
+    ) {
+      streamStatus.transitionToWaiting(streamId, 'wait', {
         events: session.events,
       });
     }
