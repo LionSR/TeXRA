@@ -493,6 +493,41 @@ function normalizeSessionLinks(links?: string[] | null): string[] | undefined {
 // ============================================================================
 
 /**
+ * Read a thread manifest under its lock, require the last turn to be open,
+ * and replace it via `update`. Returns null without calling `update` if the
+ * thread is missing, not open, has no turns, or its last turn isn't open —
+ * the shared guard behind `recordAnswerForOpenTurn` and
+ * `persistOpenTurnDraft`.
+ */
+async function withOpenTurnUpdate<T>(
+  threadId: ExternalInquiryThreadId,
+  update: (
+    existing: ExternalInquiryThreadManifest,
+    lastTurn: OpenInquiryTurn,
+    timestamp: string,
+  ) =>
+    | Promise<{ manifest: ExternalInquiryThreadManifest; result: T } | null>
+    | { manifest: ExternalInquiryThreadManifest; result: T }
+    | null,
+): Promise<{ manifest: ExternalInquiryThreadManifest; result: T } | null> {
+  return withThreadLock(threadId, async () => {
+    const existing = await readThreadManifest(threadId);
+    if (!existing || existing.status !== 'open' || existing.turns.length === 0)
+      return null;
+
+    const lastTurn = existing.turns.at(-1)!;
+    if (lastTurn.kind !== 'open') return null;
+
+    const timestamp = new Date().toISOString();
+    const outcome = await update(existing, lastTurn, timestamp);
+    if (!outcome) return null;
+
+    await writeThreadManifest(outcome.manifest);
+    return outcome;
+  });
+}
+
+/**
  * Append a new open question to a thread. Creates the thread when no
  * thread_id is passed (or the existing thread is unknown). Updates the
  * thread's `parentStreamId` to the caller — continuations always flow
@@ -618,66 +653,64 @@ export async function recordAnswerForOpenTurn(params: {
   sessionLinks?: string[] | null;
   executionId?: ExecutionId;
 }): Promise<PersistedAnsweredTurn | null> {
-  return withThreadLock(params.threadId, async () => {
-    const existing = await readThreadManifest(params.threadId);
-    if (!existing) return null;
-    if (existing.status !== 'open') return null;
-    if (existing.turns.length === 0) return null;
+  const outcome = await withOpenTurnUpdate(
+    params.threadId,
+    async (existing, lastTurn, timestamp) => {
+      const turnPath = threadTurnDir(params.threadId, lastTurn.turnIndex);
+      const td = turnDir(lastTurn.turnIndex);
+      const answerRelativePath = normalizeFilePath(
+        path.join(td, 'answer.txt'),
+      );
+      const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 
-    const lastTurn = existing.turns.at(-1)!;
-    if (lastTurn.kind !== 'open') return null;
+      await GlobalStorageFS.write(
+        path.join(turnPath, 'answer.txt'),
+        params.answer,
+      );
 
-    const timestamp = new Date().toISOString();
-    const turnPath = threadTurnDir(params.threadId, lastTurn.turnIndex);
-    const td = turnDir(lastTurn.turnIndex);
-    const answerRelativePath = normalizeFilePath(path.join(td, 'answer.txt'));
-    const sessionLinks = normalizeSessionLinks(params.sessionLinks);
+      const answeredTurn: AnsweredInquiryTurn = {
+        turnIndex: lastTurn.turnIndex,
+        timestamp: lastTurn.timestamp,
+        question: lastTurn.question,
+        context: lastTurn.context,
+        questionRelativePath: lastTurn.questionRelativePath,
+        contextRelativePath: lastTurn.contextRelativePath,
+        suggestSearch: lastTurn.suggestSearch,
+        attachFiles: lastTurn.attachFiles,
+        kind: 'answered',
+        answer: params.answer,
+        answeredAt: timestamp,
+        answerRelativePath,
+        sessionLinks,
+      };
 
-    await GlobalStorageFS.write(
-      path.join(turnPath, 'answer.txt'),
-      params.answer,
-    );
+      const nextManifest: ExternalInquiryThreadManifest = {
+        ...existing,
+        status: 'answered',
+        updatedAt: timestamp,
+        turns: [...existing.turns.slice(0, -1), answeredTurn],
+      };
 
-    const answeredTurn: AnsweredInquiryTurn = {
-      turnIndex: lastTurn.turnIndex,
-      timestamp: lastTurn.timestamp,
-      question: lastTurn.question,
-      context: lastTurn.context,
-      questionRelativePath: lastTurn.questionRelativePath,
-      contextRelativePath: lastTurn.contextRelativePath,
-      suggestSearch: lastTurn.suggestSearch,
-      attachFiles: lastTurn.attachFiles,
-      kind: 'answered',
-      answer: params.answer,
-      answeredAt: timestamp,
-      answerRelativePath,
-      sessionLinks,
-    };
+      return { manifest: nextManifest, result: answeredTurn };
+    },
+  );
 
-    const nextManifest: ExternalInquiryThreadManifest = {
-      ...existing,
-      status: 'answered',
-      updatedAt: timestamp,
-      turns: [...existing.turns.slice(0, -1), answeredTurn],
-    };
+  if (!outcome) return null;
 
-    await writeThreadManifest(nextManifest);
+  const executionMirrorPaths = params.executionId
+    ? await mirrorThreadToExecution({
+        executionId: params.executionId,
+        threadId: params.threadId,
+        turn: outcome.result,
+      })
+    : undefined;
 
-    const executionMirrorPaths = params.executionId
-      ? await mirrorThreadToExecution({
-          executionId: params.executionId,
-          threadId: params.threadId,
-          turn: answeredTurn,
-        })
-      : undefined;
-
-    return {
-      threadId: params.threadId,
-      manifest: nextManifest,
-      turn: answeredTurn,
-      executionMirrorPaths,
-    };
-  });
+  return {
+    threadId: params.threadId,
+    manifest: outcome.manifest,
+    turn: outcome.result,
+    executionMirrorPaths,
+  };
 }
 
 /**
@@ -720,14 +753,7 @@ export async function persistOpenTurnDraft(params: {
   threadId: ExternalInquiryThreadId;
   draft: InquiryDraft | null;
 }): Promise<void> {
-  await withThreadLock(params.threadId, async () => {
-    const existing = await readThreadManifest(params.threadId);
-    if (!existing || existing.status !== 'open' || existing.turns.length === 0)
-      return;
-
-    const lastTurn = existing.turns.at(-1)!;
-    if (lastTurn.kind !== 'open') return;
-
+  await withOpenTurnUpdate(params.threadId, (existing, lastTurn) => {
     const nextTurn: OpenInquiryTurn = {
       ...lastTurn,
       draft: params.draft ?? undefined,
@@ -738,7 +764,7 @@ export async function persistOpenTurnDraft(params: {
       turns: [...existing.turns.slice(0, -1), nextTurn],
     };
 
-    await writeThreadManifest(nextManifest);
+    return { manifest: nextManifest, result: undefined };
   });
 }
 
