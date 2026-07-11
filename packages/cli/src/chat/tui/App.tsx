@@ -94,6 +94,7 @@ interface InputEventEmitterLike {
   off(event: 'input', listener: (data: string) => void): void;
 }
 
+// Keep bottom panels from crowding out conversation or input chrome.
 const BOTTOM_PANEL_MAX_ROWS = 10;
 const EMPTY_SUBAGENT_ROWS: readonly ActiveChildInfo[] = [];
 
@@ -300,6 +301,8 @@ export function App(props: AppProps): React.JSX.Element {
     pendingApproval: activeApprovalVisible,
     transcriptViewerOpen,
   });
+  const approvalKind =
+    foregroundKind === 'approval' ? pending?.payload.kind : undefined;
   const childControlTarget =
     childControlMode !== undefined
       ? childControlTargets[childControlMode]
@@ -312,7 +315,7 @@ export function App(props: AppProps): React.JSX.Element {
   const childControlHasItems = childControlTarget?.hasItems ?? false;
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
     foregroundMaxRows: foregroundMaxRowsForKind({
-      approvalKind: activeApprovalVisible ? pending?.payload.kind : undefined,
+      approvalKind,
       childControlHasItems,
       kind: foregroundKind,
     }),
@@ -642,9 +645,7 @@ export function App(props: AppProps): React.JSX.Element {
           commandName={props.commandName}
           foregroundEscapeAction={foregroundEscapeAction({
             activeFormEscapeAction: activeForm?.escapeAction,
-            approvalKind: activeApprovalVisible
-              ? pending?.payload.kind
-              : undefined,
+            approvalKind,
             childControlEscapeAction,
             foregroundKind,
           })}
