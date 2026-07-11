@@ -39,9 +39,7 @@ async function renderAgentSelectionPanel(): Promise<AgentSelectionPanelElement> 
 describe('AgentSelectionPanel enabled toggle', () => {
   useLitComponentTestDom(
     () =>
-      import(
-        '@settingsView/frontend/components/profile/AgentSelectionPanel'
-      ),
+      import('@settingsView/frontend/components/profile/AgentSelectionPanel'),
   );
 
   it('renders the per-agent enabled toggle as wa-switch, not wa-checkbox', async () => {

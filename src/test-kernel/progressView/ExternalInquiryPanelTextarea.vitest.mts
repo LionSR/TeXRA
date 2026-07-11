@@ -63,18 +63,18 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
     const element = await mountPanel();
 
     expect(element.shadowRoot!.querySelector('textarea')).toBeNull();
+    expect(element.shadowRoot!.querySelectorAll('wa-textarea').length).toBe(2);
     expect(
-      element.shadowRoot!.querySelectorAll('wa-textarea').length,
-    ).toBe(2);
-    expect(
-      element.shadowRoot!.querySelector(
-        '.external-inquiry-request__answer-input',
-      )?.tagName.toLowerCase(),
+      element
+        .shadowRoot!.querySelector('.external-inquiry-request__answer-input')
+        ?.tagName.toLowerCase(),
     ).toBe('wa-textarea');
     expect(
-      element.shadowRoot!.querySelector(
-        '.external-inquiry-request__session-links-input',
-      )?.tagName.toLowerCase(),
+      element
+        .shadowRoot!.querySelector(
+          '.external-inquiry-request__session-links-input',
+        )
+        ?.tagName.toLowerCase(),
     ).toBe('wa-textarea');
   });
 
