@@ -70,7 +70,7 @@ import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   STREAM_PHASE,
-  type EndGroupStatus,
+  type RunOutcome,
   type AgentCategoryFilter,
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
@@ -811,7 +811,7 @@ export class DesktopProgressBridge {
 
   private async closeRunningTaskGroupsForStreams(
     streamIds: readonly StreamTabId[],
-    status: EndGroupStatus,
+    status: RunOutcome,
     now: number = Date.now(),
   ): Promise<StreamTabId[]> {
     if (streamIds.length === 0) return [];

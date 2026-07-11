@@ -8,8 +8,7 @@
     "sync-content": "npm run sync-legal && npm run sync-changelog",
     "dev": "npm run sync-content && vitepress dev .",
     "docs:build": "npm run sync-content && vitepress build .",
-    "docs:serve": "vitepress serve .",
-    "docs:deploy": "npm run docs:build && gh-pages --cname texra.ai -d .vitepress/dist -m \"Deploy docs [ci skip]\""
+    "docs:serve": "vitepress serve ."
   },
   "keywords": [
     "texra",

@@ -1,14 +1,12 @@
 // Typed approval pipeline per docs/prds/cli-tui-ink/10-architecture.md §9.
 //
-// Each enqueued approval or human-input prompt becomes a `p-queue` task.
-// When its turn comes up it publishes itself on the `currentApproval` signal
-// and waits for the modal to call `decide(decision)`. Both pending outer
-// Promises returned to callers and the currently-running task's `advance` are
-// settled by `clearApprovals` so a session interrupt never leaves the queue
-// blocked or the caller hanging.
+// One explicit FIFO owns every pending approval or human-input prompt. The
+// head is projected onto `currentApproval`; settling or removing it promotes
+// the next entry. `clearApprovals` resolves every caller promise directly, so
+// a session interrupt cannot leave a hidden scheduler task or queue slot
+// blocked.
 
 import { signal, type Signal } from '@lit-labs/signals';
-import PQueue from 'p-queue';
 
 import type { ApprovalBypassKind as HostApprovalBypassKind } from '@agent/runtime/HostInteractions';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
@@ -79,44 +77,65 @@ export const currentApproval = CURRENT as Signal.State<
 >;
 export const approvalQueueStatus = STATUS as Signal.State<ApprovalQueueStatus>;
 
-const queue = new PQueue({ concurrency: 1 });
 const clearListeners = new Set<() => void>();
 
 interface ApprovalQueueItem {
   readonly payload: ApprovalPayload;
   readonly resolve: (decision: ApprovalDecision) => void;
-  advance: (() => void) | undefined;
+  readonly onPresent?: () => void;
 }
 
-const pendingItems = new Set<ApprovalQueueItem>();
-let currentItem: ApprovalQueueItem | undefined;
+const pendingItems: ApprovalQueueItem[] = [];
 
 const INTERRUPT: ApprovalDecision = {
   accepted: false,
   userMessage: 'Session interrupted.',
 };
 
-/**
- * Settle one queue item out of band (interrupt/timeout/stream-scoped cancel)
- * rather than through the modal's own `decide()` callback: remove it from
- * `pendingItems`, clear the foreground modal if it was the one showing, and
- * resume the queue's blocked task so the single concurrency slot is freed.
- * Returns false if the item was already settled.
- */
-function settleItem(
-  item: ApprovalQueueItem,
-  decision: ApprovalDecision,
-): boolean {
-  if (!pendingItems.delete(item)) return false;
-  if (currentItem === item) {
-    currentItem = undefined;
-    CURRENT.set(undefined);
+function presentForeground(): void {
+  const item = pendingItems[0];
+  if (!item || CURRENT.get()) return;
+
+  try {
+    item.onPresent?.();
+  } catch {
+    // Presentation hooks update surrounding TUI state only; approval
+    // resolution must remain available even if focus activation fails.
   }
-  const advance = item.advance;
-  item.advance = undefined;
-  item.resolve(decision);
-  advance?.();
-  return true;
+  if (pendingItems[0] !== item) return;
+
+  CURRENT.set({
+    payload: item.payload,
+    decide: (decision) => {
+      settleItems((candidate) => candidate === item, decision);
+    },
+  });
+}
+
+/**
+ * Atomically remove and settle every matching item. The queue is partitioned
+ * before any promise resolves or survivor is presented, so a bulk cancellation
+ * cannot briefly foreground another item that the same operation removes.
+ */
+function settleItems(
+  predicate: (item: ApprovalQueueItem) => boolean,
+  decision: ApprovalDecision,
+): number {
+  const previousForeground = pendingItems[0];
+  const removed: ApprovalQueueItem[] = [];
+  const retained: ApprovalQueueItem[] = [];
+  for (const item of pendingItems) {
+    (predicate(item) ? removed : retained).push(item);
+  }
+  if (removed.length === 0) return 0;
+
+  pendingItems.splice(0, pendingItems.length, ...retained);
+  const foregroundChanged = previousForeground !== pendingItems[0];
+  if (foregroundChanged) CURRENT.set(undefined);
+  syncApprovalStatus();
+  for (const item of removed) item.resolve(decision);
+  if (foregroundChanged) presentForeground();
+  return removed.length;
 }
 
 export function onApprovalsCleared(listener: () => void): () => void {
@@ -180,7 +199,7 @@ export function approvalPayloadStreamId(
 }
 
 function syncApprovalStatus(): void {
-  const depth = pendingItems.size;
+  const depth = pendingItems.length;
   STATUS.set({
     depth,
     kind:
@@ -194,53 +213,18 @@ export function enqueueApproval(
   payload: ApprovalPayload,
   options: EnqueueApprovalOptions = {},
 ): Promise<ApprovalDecision> {
-  let item!: ApprovalQueueItem;
-  const outer = new Promise<ApprovalDecision>((resolve) => {
-    item = { payload, resolve, advance: undefined };
+  return new Promise<ApprovalDecision>((resolve) => {
+    const wasEmpty = pendingItems.length === 0;
+    pendingItems.push({ payload, resolve, onPresent: options.onPresent });
+    syncApprovalStatus();
+    if (wasEmpty) presentForeground();
   });
-  pendingItems.add(item);
-  syncApprovalStatus();
-
-  void queue
-    .add(async () => {
-      // Already cleared before scheduling: clearApprovals settled the caller.
-      if (!pendingItems.has(item)) return;
-      await new Promise<void>((advance) => {
-        item.advance = advance;
-        currentItem = item;
-        try {
-          options.onPresent?.();
-        } catch {
-          // Presentation hooks update the surrounding TUI only; approval
-          // resolution must remain available even if focus activation fails.
-        }
-        CURRENT.set({
-          payload,
-          decide: (decision) => {
-            // settleItem resolves item.advance (== this closure's `advance`),
-            // resuming the queue's blocked task; no separate call needed.
-            if (settleItem(item, decision)) syncApprovalStatus();
-          },
-        });
-      });
-    })
-    .catch(() => {
-      // p-queue rejects when `queue.clear()` drops the task. Settle the
-      // outer promise so the requester (e.g. ToolEditApprovalHandler)
-      // doesn't hang forever.
-      if (settleItem(item, INTERRUPT)) syncApprovalStatus();
-    });
-
-  return outer;
 }
 
 /**
- * Hard-cancel: settle every pending resolver AND unblock the
- * currently-running task so the queue's single concurrency slot doesn't
- * stay permanently occupied.
+ * Hard-cancel every pending resolver and clear the foreground projection.
  */
 export function clearApprovals(): void {
-  queue.clear();
   CURRENT.set(undefined);
   for (const listener of clearListeners) {
     try {
@@ -250,16 +234,10 @@ export function clearApprovals(): void {
       // interruption must continue even if a hook fails.
     }
   }
-  const items = [...pendingItems];
-  pendingItems.clear();
+  const items = pendingItems.splice(0);
   syncApprovalStatus();
-  const activeItem = currentItem;
-  currentItem = undefined;
   for (const item of items) {
-    const advance = item.advance;
-    item.advance = undefined;
     item.resolve(INTERRUPT);
-    if (item === activeItem) advance?.();
   }
 }
 
@@ -275,13 +253,7 @@ export function clearApprovalsWhere(
   predicate: (payload: ApprovalPayload) => boolean,
   decision: ApprovalDecision = INTERRUPT,
 ): number {
-  let cleared = 0;
-  for (const item of [...pendingItems]) {
-    if (!predicate(item.payload)) continue;
-    if (settleItem(item, decision)) cleared += 1;
-  }
-  if (cleared > 0) syncApprovalStatus();
-  return cleared;
+  return settleItems((item) => predicate(item.payload), decision);
 }
 
 /**

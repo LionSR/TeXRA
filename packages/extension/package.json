@@ -5,7 +5,7 @@
   "version": "0.39.4",
   "publisher": "texra-ai",
   "engines": {
-    "vscode": "^1.106.0"
+    "vscode": "^1.125.0"
   },
   "categories": [
     "Programming Languages",
@@ -2036,7 +2036,7 @@
     "@types/shell-quote": "^1.7.5",
     "@types/sortablejs": "^1.15.9",
     "@types/turndown": "^5.0.6",
-    "@types/vscode": "^1.105.0",
+    "@types/vscode": "^1.125.0",
     "@typescript-eslint/eslint-plugin": "^8.63.0",
     "@typescript-eslint/parser": "^8.63.0",
     "@vscode/vsce": "^3.9.2",

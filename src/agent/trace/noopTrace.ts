@@ -4,7 +4,7 @@
  */
 import { nanoid } from 'nanoid';
 
-import type { EndGroupStatus } from '@shared/schemas';
+import type { RunOutcome } from '@shared/schemas';
 
 import type {
   AgentTrace,
@@ -17,7 +17,7 @@ const NOOP: () => void = () => undefined;
 
 class NoopStageHandle implements StageHandle {
   constructor(readonly id: string | undefined) {}
-  end(_status?: EndGroupStatus): void {}
+  end(_status?: RunOutcome): void {}
   async within<T>(fn: () => Promise<T> | T): Promise<T> {
     return Promise.resolve(fn());
   }

@@ -6,12 +6,11 @@ import { getExecutionStore } from '@agent/storage';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 import {
-  END_GROUP_STATUS,
   EXECUTION_STATUS,
   RUN_OUTCOME,
   STREAM_PHASE,
-  type EndGroupStatus,
   type ExecutionId,
+  type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -47,8 +46,8 @@ describe('repairRestartedStreams', () => {
     const streamStatus = new StreamStatusMachine();
     seedRunning(streamStatus, streamId);
     const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: EndGroupStatus) =>
-        status === END_GROUP_STATUS.STOPPED ? [...streamIds] : [],
+      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
+        status === RUN_OUTCOME.CANCELLED ? [...streamIds] : [],
     );
     const writeTerminalStatus = vi.fn();
 
@@ -71,7 +70,7 @@ describe('repairRestartedStreams', () => {
     });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
-      END_GROUP_STATUS.STOPPED,
+      RUN_OUTCOME.CANCELLED,
       123,
     );
     expect(writeTerminalStatus).not.toHaveBeenCalled();
@@ -82,8 +81,8 @@ describe('repairRestartedStreams', () => {
     const executionId = 'execution-waiting-without-phase' as ExecutionId;
     const streamStatus = new StreamStatusMachine();
     const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: EndGroupStatus) =>
-        status === END_GROUP_STATUS.STOPPED ? [...streamIds] : [],
+      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
+        status === RUN_OUTCOME.CANCELLED ? [...streamIds] : [],
     );
     const writeTerminalStatus = vi.fn();
 
@@ -101,7 +100,7 @@ describe('repairRestartedStreams', () => {
     expect(result.closedWaitingGroups).toEqual([streamId]);
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
-      END_GROUP_STATUS.STOPPED,
+      RUN_OUTCOME.CANCELLED,
       234,
     );
     expect(writeTerminalStatus).not.toHaveBeenCalled();
@@ -112,8 +111,8 @@ describe('repairRestartedStreams', () => {
     const executionId = 'execution-without-phase' as ExecutionId;
     const streamStatus = new StreamStatusMachine();
     const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: EndGroupStatus) =>
-        status === END_GROUP_STATUS.ERROR ? [...streamIds] : [],
+      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
+        status === RUN_OUTCOME.FAILED ? [...streamIds] : [],
     );
     const writeTerminalStatus = vi.fn(async () => undefined);
 
@@ -137,7 +136,7 @@ describe('repairRestartedStreams', () => {
     });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
-      END_GROUP_STATUS.ERROR,
+      RUN_OUTCOME.FAILED,
       345,
     );
     expect(writeTerminalStatus).not.toHaveBeenCalled();
@@ -154,8 +153,8 @@ describe('repairRestartedStreams', () => {
       STREAM_TRANSITION_CAUSE.LIFECYCLE,
     );
     const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: EndGroupStatus) =>
-        status === END_GROUP_STATUS.STOPPED ? [...streamIds] : [],
+      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
+        status === RUN_OUTCOME.CANCELLED ? [...streamIds] : [],
     );
     const writeTerminalStatus = vi.fn(async () => undefined);
 
@@ -179,7 +178,7 @@ describe('repairRestartedStreams', () => {
     });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
-      END_GROUP_STATUS.STOPPED,
+      RUN_OUTCOME.CANCELLED,
       456,
     );
     expect(writeTerminalStatus).not.toHaveBeenCalled();
@@ -191,8 +190,8 @@ describe('repairRestartedStreams', () => {
     const streamStatus = new StreamStatusMachine();
     seedRunning(streamStatus, streamId);
     const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: EndGroupStatus) =>
-        status === END_GROUP_STATUS.ERROR ? [...streamIds] : [],
+      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
+        status === RUN_OUTCOME.FAILED ? [...streamIds] : [],
     );
     const writeTerminalStatus = vi.fn(async () => undefined);
     const synchronizeResultOutcome = vi.fn(async () => undefined);
@@ -217,7 +216,7 @@ describe('repairRestartedStreams', () => {
     });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
-      END_GROUP_STATUS.ERROR,
+      RUN_OUTCOME.FAILED,
       456,
     );
     expect(writeTerminalStatus).toHaveBeenCalledWith(
@@ -275,8 +274,8 @@ describe('repairRestartedStreams', () => {
     expect(writeTerminalStatus).not.toHaveBeenCalled();
 
     const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: EndGroupStatus) =>
-        status === END_GROUP_STATUS.ERROR ? [...streamIds] : [],
+      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
+        status === RUN_OUTCOME.FAILED ? [...streamIds] : [],
     );
 
     const result = await repairRestartedStreams({
@@ -297,7 +296,7 @@ describe('repairRestartedStreams', () => {
     });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
-      END_GROUP_STATUS.ERROR,
+      RUN_OUTCOME.FAILED,
       567,
     );
     expect(writeTerminalStatus).toHaveBeenCalledWith(
