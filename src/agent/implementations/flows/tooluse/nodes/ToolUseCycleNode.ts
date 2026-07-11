@@ -10,8 +10,13 @@ import {
 import { withModelClient } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { buildFailedRetryInfo } from '@common/errors';
-import { MESSAGE_TYPES } from '@shared/schemas';
-import type { RetryErrorInfo } from '@shared/schemas';
+import { deriveRunOutcome } from '@common/constants/streamStatus';
+import {
+  MESSAGE_TYPES,
+  RUN_OUTCOME,
+  type RetryErrorInfo,
+  type RunOutcome,
+} from '@shared/schemas';
 
 import {
   type ToolUseRunShared,
@@ -128,22 +133,32 @@ export class ToolUseCycleNode<C> extends Node<
       },
     );
 
+    let roundOutcome: RunOutcome = RUN_OUTCOME.FAILED;
     try {
-      await roundStage.run(() => flow.run(roundShared));
+      await roundStage.within(() => flow.run(roundShared));
 
-      if (roundShared.shouldStop && roundShared.lastError) {
+      const lastError = roundShared.shouldStop
+        ? roundShared.lastError
+        : undefined;
+      roundOutcome = deriveRunOutcome({
+        failed: lastError !== undefined,
+        cancelled: roundShared.shouldStop && !roundShared.endTurn,
+      });
+
+      if (lastError) {
         return {
           outcome: 'failed',
-          message: roundShared.lastError.message,
-          userRetryable: roundShared.lastError.userRetryable,
-          lastError: roundShared.lastError,
+          message: lastError.message,
+          userRetryable: lastError.userRetryable,
+          lastError,
         };
       }
-      if (roundShared.shouldStop && !roundShared.endTurn) {
+      if (roundOutcome === RUN_OUTCOME.CANCELLED) {
         return { outcome: 'cancelled' };
       }
       return { outcome: 'completed', messages: roundShared.messages };
     } finally {
+      roundStage.end(roundOutcome);
       if (roundShared.currentUserInstruction !== undefined) {
         prepRes.userChannels.transient.INSTRUCTION =
           roundShared.currentUserInstruction;
