@@ -143,7 +143,7 @@ export class RoundPersistedFlow<
    * Returns the canonical run outcome directly.
    */
   async run(shared: S): Promise<RunOutcome> {
-    let outcome: RunOutcome = RUN_OUTCOME.COMPLETED;
+    let outcome: RunOutcome = RUN_OUTCOME.FAILED;
 
     await this.ensureRecord(shared);
     let currentShared = shared;
@@ -164,7 +164,7 @@ export class RoundPersistedFlow<
       // Determine final outcome
       outcome = this.resolveOutcome(currentShared);
     } finally {
-      this.currentRoundStage?.end();
+      this.currentRoundStage?.end(outcome);
       this.currentRoundStage = null;
     }
 
@@ -211,7 +211,7 @@ export class RoundPersistedFlow<
     return this.callbacks.grantExtraRound?.(shared) ?? false;
   }
 
-  /** Derive the canonical RunOutcome from shared state after the round loop exits. */
+  /** Derive the canonical RunOutcome from the current round state. */
   private resolveOutcome(shared: S): RunOutcome {
     return deriveRunOutcome({
       failed: Boolean(shared.lastError),
@@ -225,7 +225,7 @@ export class RoundPersistedFlow<
    */
   private async transitionToNextRound(shared: S): Promise<void> {
     // End previous round stage
-    this.currentRoundStage?.end();
+    this.currentRoundStage?.end(this.resolveOutcome(shared));
     this.currentRoundStage = null;
 
     // Increment round (single source of truth)
