@@ -11,7 +11,7 @@ import {
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
-import { createRunTrace } from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import type { AgentEvent } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type {
@@ -242,7 +242,7 @@ describe('BashTool', () => {
 
     const options = roundServices({
       toolName: 'bash',
-      logger: createRunTrace('BashToolTest').trace,
+      logger: createRunTrace('BashToolTest', new StreamLogStore()).trace,
       streamId: 'bash-tool' as StreamTabId,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
     });
@@ -274,7 +274,10 @@ describe('BashTool', () => {
   });
 
   it('keeps result status out of visible tool log output', async () => {
-    const runTrace = createRunTrace('ToolStatusLogTest' as StreamTabId);
+    const runTrace = createRunTrace(
+      'ToolStatusLogTest' as StreamTabId,
+      new StreamLogStore(),
+    );
     const events: AgentEvent[] = [];
     const unsubscribe = runTrace.trace.subscribe((event) => {
       events.push(event);
@@ -508,7 +511,10 @@ describe('BashTool', () => {
       },
     );
 
-    const runTrace = createRunTrace('BashToolAbortTest' as StreamTabId);
+    const runTrace = createRunTrace(
+      'BashToolAbortTest' as StreamTabId,
+      new StreamLogStore(),
+    );
     const events: AgentEvent[] = [];
     const unsubscribe = runTrace.trace.subscribe((event) => {
       events.push(event);

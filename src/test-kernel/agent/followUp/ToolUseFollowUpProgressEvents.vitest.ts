@@ -13,17 +13,14 @@ import {
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import {
   AgentExecutionHandle,
-  SharedExecutionRegistry,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   notifyFollowUpSent,
   onFollowUpSent,
   sendFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { createRecordingHost } from '../progressTestUtils';
 
@@ -43,7 +40,7 @@ describe('tool-use follow-up progress events', () => {
       unsubscribe();
     }
     for (const executionId of trackedExecutionIds) {
-      SharedExecutionRegistry.untrack(executionId);
+      defaultSession().executions.untrack(executionId);
     }
     trackedExecutionIds.clear();
     for (const { session, executionId } of sessionTrackedExecutions.splice(0)) {
@@ -53,7 +50,7 @@ describe('tool-use follow-up progress events', () => {
       session.dispose({ keepActiveExecutions: true });
     }
     sessions.clear();
-    clearAllStreamStatusesForTest(StreamStatusService);
+    clearAllStreamStatusesForTest(defaultSession().status);
   });
 
   function trackToolUseFlow({
@@ -91,7 +88,7 @@ describe('tool-use follow-up progress events', () => {
       session.executions.track(handle);
       sessionTrackedExecutions.push({ session, executionId });
     } else {
-      SharedExecutionRegistry.track(handle);
+      defaultSession().executions.track(handle);
       trackedExecutionIds.add(executionId);
     }
   }
@@ -305,7 +302,7 @@ describe('tool-use follow-up progress events', () => {
     const appendFollowUp = vi.fn();
 
     seedStreamStatusForTest(
-      StreamStatusService,
+      defaultSession().status,
       streamId,
       STREAM_PHASE.COMPLETED,
     );
@@ -351,7 +348,7 @@ describe('tool-use follow-up progress events', () => {
     const resumingStreamId = 'stream:resuming-follow-up' as StreamTabId;
 
     seedStreamStatusForTest(
-      StreamStatusService,
+      defaultSession().status,
       resumingStreamId,
       STREAM_STATUS.RESUMING,
     );
@@ -366,11 +363,11 @@ describe('tool-use follow-up progress events', () => {
         status: 'queued',
         reason: 'resuming',
       });
-      expect(ToolUseFollowUpQueue.getAll(resumingStreamId)).toEqual([
+      expect(defaultSession().followUps.getAll(resumingStreamId)).toEqual([
         'queued while resuming',
       ]);
     } finally {
-      ToolUseFollowUpQueue.release(resumingStreamId);
+      defaultSession().followUps.release(resumingStreamId);
     }
   });
 
@@ -388,11 +385,11 @@ describe('tool-use follow-up progress events', () => {
     );
 
     seedStreamStatusForTest(
-      StreamStatusService,
+      defaultSession().status,
       parentStreamId,
       STREAM_STATUS.STOPPED,
     );
-    SharedExecutionRegistry.track(handle);
+    defaultSession().executions.track(handle);
 
     try {
       const result = await sendFollowUp(parentStreamId, 'continue child');
@@ -401,12 +398,12 @@ describe('tool-use follow-up progress events', () => {
         status: 'queued',
         reason: 'children_running',
       });
-      expect(ToolUseFollowUpQueue.getAll(parentStreamId)).toEqual([
+      expect(defaultSession().followUps.getAll(parentStreamId)).toEqual([
         'continue child',
       ]);
     } finally {
-      SharedExecutionRegistry.untrack(executionId);
-      ToolUseFollowUpQueue.release(parentStreamId);
+      defaultSession().executions.untrack(executionId);
+      defaultSession().followUps.release(parentStreamId);
     }
   });
 });
