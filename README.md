@@ -118,7 +118,7 @@ In the CLI, export the same variables in your shell and run with
 
 ## Requirements
 
-- **VS Code 1.106+** (also runs in Cursor, Windsurf, Antigravity), or
+- **VS Code 1.125+** (also runs in Cursor, Windsurf, Antigravity), or
   **Node.js >=22.9.0** for the CLI
 - **LaTeX distribution** (TeX Live, MiKTeX, or MacTeX)
 - **Perl** (for `latexindent` and `latexdiff`)
