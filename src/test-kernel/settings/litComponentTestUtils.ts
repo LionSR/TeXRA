@@ -53,6 +53,7 @@ const domGlobalKeys = [
   'requestAnimationFrame',
   'cancelAnimationFrame',
   'ResizeObserver',
+  'MutationObserver',
 ] as const;
 
 const DEFAULT_VALIDITY = {
@@ -272,6 +273,11 @@ export function useLitComponentTestDom(
       ) => void,
       // jsdom lacks ResizeObserver; Web Awesome's wa-textarea constructs one.
       ResizeObserver: ResizeObserverStub,
+      // jsdom implements MutationObserver on its own `window`, but the plain
+      // Node globalThis used in this Vitest environment doesn't have one;
+      // Web Awesome's wa-details (used by the "Followup"/panel-collapsible
+      // wrapper) constructs one in firstUpdated().
+      MutationObserver: dom.window.MutationObserver,
     } satisfies Record<(typeof domGlobalKeys)[number], unknown>;
 
     for (const key of domGlobalKeys) {

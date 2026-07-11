@@ -23,8 +23,6 @@ import {
   isFunctionCallOutputItem,
 } from '@agent/modelHandlers/openai/openAIResponseContent';
 import { isResponseFunctionToolCallItem } from '@agent/modelHandlers/openai/responseStreamEvents';
-import type { MediaAttachmentKind } from '@shared/schemas';
-import { assertNever } from '@utils/core';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
@@ -156,38 +154,6 @@ function googlePartToBlocks(part: Part): ContentBlock[] {
   return [];
 }
 
-/**
- * Anthropic-shaped content block for a media-attachment marker (no bytes) —
- * the two-member vocabulary `blocksToUserParts` below recognizes as
- * `'image'` / `'document'`. This is the ONE place that vocabulary is
- * spelled out; callers that need to synthesize an attachment marker block
- * (e.g. reconstructing a conversation from transcript rows that only
- * recorded the attachment kind, never the bytes) call this constructor
- * instead of writing `{ type: kind }` themselves, so they carry no
- * independent knowledge of the literal strings.
- *
- * The switch is exhaustive over {@link MediaAttachmentKind}
- * (`src/shared/schemas/progressView/data.ts`): adding or renaming a kind
- * there fails to compile here via `assertNever` until this function (and
- * `blocksToUserParts`'s recognition of the same two literals) is updated —
- * the vocabulary can't drift silently out of sync again.
- */
-export function mediaAttachmentKindToContentBlock(
-  kind: MediaAttachmentKind,
-): ContentBlock {
-  switch (kind) {
-    case 'image':
-      return { type: 'image' };
-    case 'document':
-      return { type: 'document' };
-    default:
-      return assertNever(
-        kind,
-        `Unmapped media attachment kind: ${String(kind)}`,
-      );
-  }
-}
-
 function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
   const parts: UserPart[] = [];
   for (const b of blocks) {
@@ -244,11 +210,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
         input: prettyJson(block.input ?? {}),
       };
 
-    // Tool result blocks: Anthropic tool_result + server-side code execution results
     case 'tool_result':
-    case 'code_execution_tool_result':
-    case 'bash_code_execution_tool_result':
-    case 'text_editor_code_execution_tool_result':
       return {
         kind: 'tool-result',
         text:
@@ -257,6 +219,13 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
             : prettyJson(block.content ?? ''),
       };
 
+    // Anthropic server-side tool blocks (the provider executes these, not a
+    // local tool handler). This vocabulary must stay in sync with the
+    // `formatConversationBlock` switch in `@agent/storage/conversationFormat`
+    // — both classify the same three live Anthropic block types emitted by
+    // `AnthropicStreamHandler` (`server_tool_use`, `web_search_tool_result`,
+    // `web_fetch_tool_result`), just into different output shapes (a
+    // structured `ExportNode` here vs. a truncated marker string there).
     case 'server_tool_use':
       if (block.name === 'web_search') {
         const query =

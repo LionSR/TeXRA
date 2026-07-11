@@ -5,6 +5,8 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
+  truncateSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -46,9 +48,25 @@ const codexPlatforms = {
     triple: 'x86_64-apple-darwin',
     binaryName: 'codex',
   },
+  'linux-x64': {
+    packageName: '@openai/codex-linux-x64',
+    triple: 'x86_64-unknown-linux-musl',
+    binaryName: 'codex',
+  },
+  'win32-x64': {
+    packageName: '@openai/codex-win32-x64',
+    triple: 'x86_64-pc-windows-msvc',
+    binaryName: 'codex.exe',
+  },
 } as const;
 
+type CodexPlatform = keyof typeof codexPlatforms;
+type DesktopPackageTarget = CodexPlatform | 'darwin-universal';
+
+const MEBIBYTE = 1024 * 1024;
+
 interface CodexPayloadModule {
+  codexPayloadBaselineBytesByPlatform: Readonly<Record<CodexPlatform, number>>;
   inferCodexPlatformKeys(input: {
     appPath: string;
     arch?: number;
@@ -60,6 +78,9 @@ interface CodexPayloadModule {
 async function loadCodexPayload(): Promise<CodexPayloadModule> {
   return (await import(payloadUrl)) as CodexPayloadModule;
 }
+
+const { codexPayloadBaselineBytesByPlatform: auditedCodexPayloadSizeBytes } =
+  await loadCodexPayload();
 
 let tempRoots: string[] = [];
 
@@ -117,6 +138,61 @@ describe('desktop Codex package payload', () => {
     const output = runVerifier(packageRoot);
     expect(output).toContain('@openai/codex-darwin-arm64');
     expect(output).toContain('Codex CLI payload size');
+  });
+
+  it.each([
+    {
+      platform: 'linux-x64' as const,
+      payloadSize: '335.2 MiB',
+      budgetSize: '351.2 MiB',
+    },
+    {
+      platform: 'win32-x64' as const,
+      payloadSize: '390.2 MiB',
+      budgetSize: '406.2 MiB',
+    },
+  ])(
+    'accepts the audited Codex 0.144.1 $platform payload with bounded headroom',
+    ({ platform, payloadSize, budgetSize }) => {
+      const { packageRoot } = createFakeDesktopPackage([platform], {
+        codexPayloadSizeBytes: {
+          [platform]: auditedCodexPayloadSizeBytes[platform],
+        },
+        target: platform,
+      });
+
+      const output = runVerifier(packageRoot);
+      expect(output).toContain(
+        `Codex CLI payload size: ${payloadSize} / ${budgetSize}`,
+      );
+    },
+  );
+
+  it('sums platform-indexed payload budgets for universal packages', () => {
+    const { packageRoot } = createFakeDesktopPackage(
+      ['darwin-arm64', 'darwin-x64'],
+      {
+        codexPayloadSizeBytes: auditedCodexPayloadSizeBytes,
+        target: 'darwin-universal',
+      },
+    );
+
+    const output = runVerifier(packageRoot);
+    expect(output).toContain('Codex CLI payload size: 618.6 MiB / 650.6 MiB');
+  });
+
+  it('rejects payload growth beyond the audited platform headroom', () => {
+    const platform = 'linux-x64';
+    const { packageRoot } = createFakeDesktopPackage([platform], {
+      codexPayloadSizeBytes: {
+        [platform]: auditedCodexPayloadSizeBytes[platform] + 17 * MEBIBYTE,
+      },
+      target: platform,
+    });
+
+    const result = runVerifierResult(packageRoot);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('above the 351.2 MiB budget for linux-x64');
   });
 
   it('does not infer Windows from a darwin path segment', async () => {
@@ -182,6 +258,14 @@ describe('desktop Codex package payload', () => {
     );
 
     expect(universalBudget).toBeGreaterThan(singlePlatformBudget);
+  });
+
+  it('rejects a platform without an audited payload baseline', async () => {
+    const { expectedCodexPayloadBudgetBytes } = await loadCodexPayload();
+
+    expect(() => expectedCodexPayloadBudgetBytes(['linux-riscv64'])).toThrow(
+      'no audited baseline for linux-riscv64',
+    );
   });
 
   it('keeps both Darwin Codex packages during universal temp packaging', async () => {
@@ -251,10 +335,12 @@ describe('desktop Codex package payload', () => {
 });
 
 function createFakeDesktopPackage(
-  platforms: Array<keyof typeof codexPlatforms>,
+  platforms: CodexPlatform[],
   options: {
     bootstrapInputs?: Record<string, { bytesInOutput: number }>;
+    codexPayloadSizeBytes?: Partial<Record<CodexPlatform, number>>;
     startupImportPath?: string;
+    target?: DesktopPackageTarget;
   } = {},
 ): {
   appOutDir: string;
@@ -265,8 +351,21 @@ function createFakeDesktopPackage(
   tempRoots.push(tempRoot);
 
   const packageRoot = join(tempRoot, 'dist-packaged');
-  const appOutDir = join(packageRoot, 'mac-arm64');
-  const resourcesDir = join(appOutDir, 'TeXRA.app', 'Contents', 'Resources');
+  const target = options.target ?? 'darwin-arm64';
+  let targetDirName: string;
+  if (target === 'darwin-universal') {
+    targetDirName = 'mac-universal';
+  } else if (target.startsWith('darwin')) {
+    targetDirName = `mac-${target.slice('darwin-'.length)}`;
+  } else if (target.startsWith('linux')) {
+    targetDirName = 'linux-unpacked';
+  } else {
+    targetDirName = 'win-unpacked';
+  }
+  const appOutDir = join(packageRoot, targetDirName);
+  const resourcesDir = target.startsWith('darwin')
+    ? join(appOutDir, 'TeXRA.app', 'Contents', 'Resources')
+    : join(appOutDir, 'resources');
   const appRoot = join(resourcesDir, 'app');
 
   writeJson(join(appRoot, 'package.json'), {
@@ -333,7 +432,11 @@ function createFakeDesktopPackage(
   }
 
   for (const platform of platforms) {
-    writeCodexPlatformPackage(appRoot, platform);
+    writeCodexPlatformPackage(
+      appRoot,
+      platform,
+      options.codexPayloadSizeBytes?.[platform],
+    );
   }
 
   return { appOutDir, packageRoot, resourcesDir: appRoot };
@@ -341,7 +444,8 @@ function createFakeDesktopPackage(
 
 function writeCodexPlatformPackage(
   appRoot: string,
-  platform: keyof typeof codexPlatforms,
+  platform: CodexPlatform,
+  payloadSizeBytes?: number,
 ): void {
   const info = codexPlatforms[platform];
   const packageRoot = join(
@@ -351,19 +455,28 @@ function writeCodexPlatformPackage(
     ...info.packageName.split('/'),
   );
 
-  writeJson(join(packageRoot, 'package.json'), {
+  const packageJsonPath = join(packageRoot, 'package.json');
+  writeJson(packageJsonPath, {
     name: '@openai/codex',
     version: `0.128.0-${platform}`,
   });
-  writeText(
-    join(packageRoot, 'vendor', info.triple, 'codex', info.binaryName),
-    'fake codex binary\n',
+  const binaryPath = join(
+    packageRoot,
+    'vendor',
+    info.triple,
+    'codex',
+    info.binaryName,
   );
+  writeText(binaryPath, 'fake codex binary\n');
+
+  if (payloadSizeBytes != null) {
+    truncateSync(binaryPath, payloadSizeBytes - statSync(packageJsonPath).size);
+  }
 }
 
 function writePnpmCodexPlatformPackage(
   appRoot: string,
-  platform: keyof typeof codexPlatforms,
+  platform: CodexPlatform,
 ): void {
   const info = codexPlatforms[platform];
   const packageRoot = join(

@@ -7,11 +7,13 @@ out/
 releases/
 artifacts/
 
+# TeXRA CLI workspace runtime state (`texra init --gitignore` adds this same entry in user repos)
+.texra/
+
 .DS_Store
 .cursor
 .cursor/rules
 **/.claude/settings.local.json
-webview-common/
 .vscode-test/
 
 # VitePress
@@ -30,8 +32,6 @@ supabase/.temp
 slides/
 .texpadtmp
 
-scripts/Heap-20260221T154935.heapsnapshot
-scripts/analyze_heap.py
 .claude/projects
 .claude/worktrees
 .claude/scheduled_tasks.lock

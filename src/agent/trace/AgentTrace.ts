@@ -11,7 +11,7 @@
  * `toolUseHelpers.ts` that operate on this interface — there is no host
  * subtype. SDK consumers program directly against `AgentTrace`.
  */
-import type { EndGroupStatus } from '@shared/schemas';
+import type { RunOutcome } from '@shared/schemas';
 
 import type {
   AgentEvent,
@@ -39,10 +39,10 @@ export interface StageOptions {
   /** Planned total count, when known, currently used for workflow rounds. */
   readonly total?: number;
   /**
-   * Status to emit at stage.end when no explicit status is supplied.
-   * Defaults to `stopped`.
+   * Outcome to emit at stage.end when no explicit status is supplied.
+   * Defaults to `completed`.
    */
-  readonly defaultStatus?: EndGroupStatus;
+  readonly defaultStatus?: RunOutcome;
   /**
    * Skip stage creation but propagate parent context to nested calls.
    * `handle.id` is undefined; `handle.within(fn)` runs `fn` in the parent
@@ -57,8 +57,8 @@ export interface StageOptions {
 export interface StageHandle {
   /** Stage id; undefined for skipped (passthrough) stages. */
   readonly id: string | undefined;
-  /** Emit `stage.end` with the given status. Idempotent. */
-  end(status?: EndGroupStatus): void;
+  /** Emit `stage.end` with the given outcome. Idempotent. */
+  end(status?: RunOutcome): void;
   /** Run `fn` with this stage as the active stamp. */
   within<T>(fn: () => Promise<T> | T): Promise<T>;
   /** `within(fn)` + auto-end on success/failure with success/error status. */

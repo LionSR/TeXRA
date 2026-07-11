@@ -1,6 +1,9 @@
 import { isObject } from '@utils/core';
 
-import { detectSdkErrorMetadata } from './errorMetadata';
+import {
+  detectSdkErrorMetadata,
+  hasContextWindowErrorMarker,
+} from './errorMetadata';
 import { getErrorClassNames } from './errorInspection';
 
 /** Max tail size (chars) for partial text attached to streaming errors.
@@ -21,8 +24,12 @@ export function isUserAbort(err: unknown): boolean {
   return isObject(err) && (err as { name?: unknown }).name === 'AbortError';
 }
 
+// Third-party provider wordings only — do not add TeXRA-internal messages
+// here. Internal throws (e.g. ModelHandler.validateTokenLimits) are tagged
+// with attachContextWindowError() at the throw site instead, so this
+// function doesn't need to string-match a message it doesn't own.
 const CONTEXT_WINDOW_PATTERNS = [
-  'exceeds context window', // TeXRA internal, Anthropic
+  'exceeds context window', // Anthropic
   'exceeds the context window', // OpenAI Responses API
   'context length exceeded', // Google
   'maximum context length', // OpenAI
@@ -31,8 +38,14 @@ const CONTEXT_WINDOW_PATTERNS = [
   'input too long', // Google
 ] as const;
 
-/** Checks if an error is a context window violation (should not be retried). */
+/** Checks if an error is a context window violation (should not be retried).
+ *  Recognizes TeXRA-internal throws via their typed marker (attached with
+ *  `attachContextWindowError`) and third-party provider errors via message
+ *  pattern matching. */
 export function isContextWindowError(err: unknown): boolean {
+  if (hasContextWindowErrorMarker(err)) {
+    return true;
+  }
   if (!(err instanceof Error)) {
     return false;
   }

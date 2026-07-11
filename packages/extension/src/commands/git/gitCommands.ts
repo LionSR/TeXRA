@@ -21,6 +21,7 @@ import {
   COMMIT_LABEL_FORMAT,
   splitCommitLines,
 } from '@utils/git/commitLogFormat';
+import { isGitRepository as probeGitRepository } from '@utils/system/isGitRepository';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'gitCommands';
@@ -40,7 +41,7 @@ export const gitCommands = {
 
 export function registerGitCommands(context: vscode.ExtensionContext): void {
   // `isGitRepository`, `getRecentCommits`, and `findCommitInHistory`
-  // return values to `executeCommand` callers (sync `boolean`,
+  // return values to `executeCommand` callers (`boolean`,
   // `string[] | null`, `string | null` respectively) and accept
   // optional positional arguments — they keep their per-command
   // registration. `texra.cloneOverleafProject` migrated through the
@@ -55,25 +56,19 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
 
 /**
  * Check if the workspace (or a given path) is inside a git repository.
+ * Delegates to the host-neutral probe shared with the desktop host so both
+ * hosts can't drift apart on worktree/submodule handling.
  *
  * @param rootPath - Optional root path override. Defaults to VS Code workspace.
  *   Pass a worktree path to check a specific checkout.
  */
-function isGitRepository(rootPath?: string): boolean {
-  const workspacePath = rootPath ?? WorkspaceFS.getPath();
-  if (!workspacePath) {
-    return false;
-  }
-  const result = execaSync('git', ['rev-parse', '--is-inside-work-tree'], {
-    cwd: workspacePath,
-    reject: false,
-  });
-  return result.exitCode === 0;
+function isGitRepository(rootPath?: string): Promise<boolean> {
+  return probeGitRepository(rootPath);
 }
 
-function getRecentCommits(rootPath?: string): string[] | null {
+async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
   const workspacePath = rootPath ?? WorkspaceFS.getPath();
-  if (!workspacePath || !isGitRepository(workspacePath)) {
+  if (!workspacePath || !(await isGitRepository(workspacePath))) {
     return null;
   }
 

@@ -17,7 +17,9 @@ import {
   END_GROUP_STATUS,
   LOG_LEVELS,
   MESSAGE_TYPES,
+  RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
   type StreamLogEntry,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
@@ -377,7 +379,10 @@ describe('StreamLogStore load', () => {
     expect(affected).toEqual(['alpha']);
     expect(storage.fullLogReads()).toBe(1);
     expect(entry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
-    expect(entry?.data).toEqual({ status: 'error', endTime: 300 });
+    // endRunningGroups() defaults to RUN_OUTCOME.FAILED (#7993 step 2) — the
+    // orphan sweep's caller-classified default, not the folded 'error'
+    // EndGroupStatus string.
+    expect(entry?.data).toEqual({ status: RUN_OUTCOME.FAILED, endTime: 300 });
     expect(
       storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
     ).toEqual({
@@ -473,7 +478,7 @@ describe('StreamLogStore load', () => {
     });
   });
 
-  it('can close selected running groups with a neutral stopped status', async () => {
+  it('can close selected running groups with a caller-supplied RunOutcome', async () => {
     const storage = mockStorage({
       logs: {
         alpha: [runningGroupEntry('alpha', 1, 100)],
@@ -490,19 +495,84 @@ describe('StreamLogStore load', () => {
     const store = new StreamLogStore();
     await store.load();
 
+    // A caller-supplied RunOutcome (e.g. restart repair's graceful-interrupt
+    // classification, #7993 step 2) reaches the row directly — no fold to
+    // the legacy 2-value EndGroupStatus.
     const affected = await store.endRunningGroupsForStreams(
       ['alpha'],
       300,
-      END_GROUP_STATUS.STOPPED,
+      RUN_OUTCOME.CANCELLED,
     );
     await store.flush();
 
     expect(affected).toEqual(['alpha']);
     expect(store.get('alpha')?.getRange(0).at(0)?.data).toEqual({
-      status: END_GROUP_STATUS.STOPPED,
+      status: RUN_OUTCOME.CANCELLED,
       endTime: 300,
     });
     expect(storage.fullLogReads()).toBe(1);
+  });
+
+  // §8.3 boundary normalization: the ONE app-side read boundary for legacy
+  // GROUP_START/GROUP_END `data.status` wire values a pre-cutover writer left
+  // on disk. Every live producer now writes canonical StreamPhase/RunOutcome
+  // values directly (#7993 step 2), so this is the backfill path for rows
+  // that were already persisted before the cutover.
+  it('normalizes legacy persisted GROUP_END status at the read boundary (#7993 step 2)', async () => {
+    const legacyStoppedEntry: StreamLogEntry = {
+      seqNo: 1,
+      id: 'delta-legacy-stopped',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      data: { status: END_GROUP_STATUS.STOPPED, endTime: 150 },
+    };
+    const legacyErrorEntry: StreamLogEntry = {
+      seqNo: 2,
+      id: 'delta-legacy-error',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      level: LOG_LEVELS.INFO,
+      timestamp: 200,
+      data: { status: END_GROUP_STATUS.ERROR, endTime: 250 },
+    };
+    const legacyRunningStartEntry: StreamLogEntry = {
+      seqNo: 3,
+      id: 'delta-legacy-running',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 300,
+      data: { status: 'running' },
+    };
+    mockStorage({
+      logs: {
+        delta: [legacyStoppedEntry, legacyErrorEntry, legacyRunningStartEntry],
+      },
+      summaries: {},
+    });
+
+    const store = new StreamLogStore();
+    await store.load();
+    await store.ensureLoaded('delta');
+
+    const entries = store.get('delta')?.getRange(0) ?? [];
+
+    // 'stopped' -> RunOutcome.COMPLETED: a documented lossy default. The
+    // pre-cutover 2-value fold already could not distinguish completed from
+    // cancelled, and COMPLETED matches today's neutral "Stopped" rendering.
+    expect(entries.find((e) => e.id === 'delta-legacy-stopped')?.data).toEqual({
+      status: RUN_OUTCOME.COMPLETED,
+      endTime: 150,
+    });
+    // 'error' -> RunOutcome.FAILED: lossless 1:1.
+    expect(entries.find((e) => e.id === 'delta-legacy-error')?.data).toEqual({
+      status: RUN_OUTCOME.FAILED,
+      endTime: 250,
+    });
+    // 'running' is string-identical to StreamPhase.RUNNING (row 1, §8.2) —
+    // passes through unnormalized, retype-only.
+    expect(entries.find((e) => e.id === 'delta-legacy-running')?.data).toEqual({
+      status: STREAM_PHASE.RUNNING,
+    });
   });
 
   it('does not load selected streams whose summaries have no running group', async () => {

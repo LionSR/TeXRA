@@ -197,3 +197,83 @@ describe('LOG_DELTA text deltas', () => {
     expect(group?.total).toBe(3);
   });
 });
+
+// #7993 step 2: every GROUP_END row a live/persisted producer writes now
+// carries the literal RunOutcome ('completed'/'cancelled'/'failed'), not the
+// folded 2-value EndGroupStatus ('stopped'/'error') logSlice.ts's
+// isTaskGroupStatus type guard alone recognizes. Without the read-side fold
+// this suite pins, every GROUP_END row — including a failure — would fall
+// through to isTaskGroupStatus's STOPPED default, losing the error icon.
+// The standalone trace-viewer forwards raw legacy entries into this same
+// LOG_DELTA handler (replayTrace.ts, §8.3's second, permanent boundary), so
+// the legacy wire values must keep working identically alongside the new
+// canonical ones — logSlice.ts stays a tolerant reader of both, it does not
+// go canonical-only.
+describe('LOG_DELTA GROUP_END task-group status (#7993 step 2)', () => {
+  function groupStartEntry(id: string): StreamLogEntry {
+    return {
+      seqNo: 1,
+      id,
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      text: 'Run: agent',
+      data: { status: 'running' },
+    };
+  }
+
+  function groupEndEntry(id: string, status: unknown): StreamLogEntry {
+    return {
+      seqNo: 2,
+      id,
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      level: LOG_LEVELS.INFO,
+      timestamp: 200,
+      text: 'Run: agent',
+      data: { status, endTime: 200 },
+    };
+  }
+
+  it.each([
+    // Canonical values every StreamLogStore-sourced GROUP_END row now
+    // carries directly (live producers write RunOutcome; persisted legacy
+    // rows are normalized to it at StreamLogStore.parsePersistedEntries).
+    ['completed', STREAM_STATUS.STOPPED],
+    ['cancelled', STREAM_STATUS.STOPPED],
+    ['failed', STREAM_STATUS.ERROR],
+    // Legacy values the standalone trace-viewer still forwards raw from a
+    // pre-cutover exported trace file — never normalized, permanently.
+    ['stopped', STREAM_STATUS.STOPPED],
+    ['error', STREAM_STATUS.ERROR],
+  ] as const)(
+    'maps GROUP_END data.status %s to task-group status %s',
+    (wireStatus, expectedStatus) => {
+      const streamId = 'stream-a' as StreamTabId;
+      const state = createInitialState();
+      state.activeStreamId = streamId;
+      state.streamStates.set(
+        streamId,
+        createStreamState(AgentCategory.Workflow),
+      );
+      const { ctx, getState } = createContext(state);
+
+      dispatch(
+        logHandlers,
+        {
+          command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+          streamId,
+          entries: [
+            groupStartEntry('run-0'),
+            groupEndEntry('run-0', wireStatus),
+          ],
+          updates: [],
+          textDeltas: [],
+        },
+        ctx,
+      );
+
+      const taskGroups = getState().streamStates.get(streamId)?.taskGroups;
+      expect(taskGroups?.[0]?.status).toBe(expectedStatus);
+    },
+  );
+});
