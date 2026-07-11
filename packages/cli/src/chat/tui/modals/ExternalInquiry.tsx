@@ -22,6 +22,7 @@ import {
   scrollBoundedRows,
 } from '../render/scrollBounds';
 import { KEY_HINT_SEPARATOR, KeyHints, type KeyHint } from '../ui/KeyHints';
+import { BorderedPanel } from '../ui/BorderedPanel';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface ExternalInquiryProps {
@@ -317,24 +318,25 @@ export function ExternalInquiry(
   });
 
   return (
-    <Box
+    <BorderedPanel
       borderStyle="single"
-      borderColor="green"
-      flexDirection="column"
-      paddingX={1}
+      color="green"
       width={columns}
+      title={
+        <>
+          Agent asks:
+          {copyStatus !== 'idle' ? (
+            <Text
+              color={copyStatus === 'failed' ? 'yellow' : 'green'}
+              dimColor={copyStatus === 'copying'}
+            >
+              {copyStatusLabel(copyStatus)}
+            </Text>
+          ) : null}
+        </>
+      }
+      footer={<KeyHints hints={keyHints} confirmCancel={false} />}
     >
-      <Text bold color="green">
-        Agent asks:
-        {copyStatus !== 'idle' ? (
-          <Text
-            color={copyStatus === 'failed' ? 'yellow' : 'green'}
-            dimColor={copyStatus === 'copying'}
-          >
-            {copyStatusLabel(copyStatus)}
-          </Text>
-        ) : null}
-      </Text>
       <Box flexDirection="column">
         {questionDisplayLines.map((line, index) => (
           <Text key={index} dimColor={line.kind === 'overflow'}>
@@ -361,9 +363,6 @@ export function ExternalInquiry(
           />
         </Box>
       </Box>
-      <Box marginTop={1}>
-        <KeyHints hints={keyHints} confirmCancel={false} />
-      </Box>
-    </Box>
+    </BorderedPanel>
   );
 }
