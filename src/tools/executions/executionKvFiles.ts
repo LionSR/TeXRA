@@ -8,12 +8,20 @@
  * owned by `ExecutionKVStore`; the `flow_*` prefix is owned by
  * `persistedFlow`. This module only strips the on-disk `.json` suffix and
  * defers to those owners rather than re-deriving the vocabulary.
+ *
+ * Every real KV entry is written through `KVStore.keyToPath`, which always
+ * appends `.json` — so a name without that suffix can never be an internal
+ * KV file. Requiring the suffix here (before checking the reserved-name
+ * vocabulary) keeps a generated file that happens to be named exactly
+ * `meta`, `config`, etc. from being wrongly hidden.
  */
 
 import { isReservedKvKeyName } from '@agent/storage';
 import { FLOW_KEY_PREFIX } from '@agent/node/persistedFlow';
 
 export function isKVFile(name: string): boolean {
-  const key = name.replace(/\.json$/, '');
+  const match = /^(.+)\.json$/.exec(name);
+  if (!match) return false;
+  const key = match[1];
   return isReservedKvKeyName(key) || key.startsWith(FLOW_KEY_PREFIX);
 }

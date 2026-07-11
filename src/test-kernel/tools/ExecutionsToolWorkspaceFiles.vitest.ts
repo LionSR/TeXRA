@@ -572,6 +572,31 @@ describe('ExecutionsTool', () => {
     });
   });
 
+  // Regression for a bug caught in review of the leak fix above: every real
+  // KV entry is written as `{key}.json` (KVStore.keyToPath always appends
+  // the suffix), so a generated file whose *basename* happens to collide
+  // with a reserved key name — but has no `.json` extension — must not be
+  // swept up by isKVFile.
+  it('keeps extensionless generated files named like reserved KV keys', async () => {
+    await withTempStorage(async () => {
+      const executionId = 'abc123' as ExecutionId;
+      const runDir = resolveRunStoragePath(executionId);
+      await StorageFS.ensureDir(runDir);
+      const bareNames = ['meta', 'config', 'report', 'child-def456'];
+      for (const name of bareNames) {
+        await StorageFS.write(path.join(runDir, name), 'generated');
+      }
+
+      const result = await new ExecutionsTool().call({
+        path: `/executions/${executionId}/files`,
+      });
+
+      for (const name of bareNames) {
+        expect(result.output).toContain(name);
+      }
+    });
+  });
+
   it('reads recorded files inside a top-level workspace directory', async () => {
     await withTempWorkspace(async (workspace) => {
       await mkdir(path.join(workspace, 'workspace'));
