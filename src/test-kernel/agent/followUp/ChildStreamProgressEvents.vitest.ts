@@ -10,7 +10,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_PHASE,
   STREAM_STATUS,
@@ -91,7 +90,7 @@ describe('child stream progress events', () => {
       normalizedErrorChildStreamId,
       noProjectionAutoCloseChildStreamId,
     ]) {
-      clearStreamStatusForTest(StreamStatusService, streamId);
+      clearStreamStatusForTest(defaultSession().status, streamId);
     }
   });
 
@@ -377,7 +376,7 @@ describe('child stream progress events', () => {
       STREAM_STATUS.RUNNING,
       STREAM_PHASE.FAILED,
     ]);
-    expect(StreamStatusService.get(loopChildStreamId)).toBe(
+    expect(defaultSession().status.get(loopChildStreamId)).toBe(
       STREAM_PHASE.FAILED,
     );
     expect(
@@ -409,7 +408,7 @@ describe('child stream progress events', () => {
       defaultSession().executions.getAgentHandleByStream(stoppedChildStreamId);
     expect(handle).toBeDefined();
     seedStreamStatusForTest(
-      StreamStatusService,
+      defaultSession().status,
       stoppedChildStreamId,
       STREAM_PHASE.CANCELLED,
     );
@@ -421,7 +420,7 @@ describe('child stream progress events', () => {
       childStream.failTurn();
       await childStream.finalize({ failed: true });
 
-      expect(StreamStatusService.get(stoppedChildStreamId)).toBe(
+      expect(defaultSession().status.get(stoppedChildStreamId)).toBe(
         STREAM_PHASE.CANCELLED,
       );
       expect(runEventsOfType(recorded.events, 'status')).toHaveLength(0);
@@ -516,7 +515,7 @@ describe('child stream progress events', () => {
       }),
     );
 
-    expect(StreamStatusService.get(normalizedErrorChildStreamId)).toBe(
+    expect(defaultSession().status.get(normalizedErrorChildStreamId)).toBe(
       STREAM_PHASE.FAILED,
     );
     await expect(handle?.result).resolves.toMatchObject({

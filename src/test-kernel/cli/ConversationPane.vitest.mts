@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   LIVE_TAIL_ROWS,
   boundedAssistantDisplayLines,
@@ -192,7 +192,7 @@ describe('CLI conversation transcript splitting', () => {
     const dispose = subscribeStreamStatus();
 
     try {
-      StreamStatusService.transition(
+      defaultSession().status.transition(
         STREAM_ID,
         STREAM_PHASE.COMPLETED,
         'restart-repair',
@@ -225,7 +225,11 @@ describe('CLI conversation transcript splitting', () => {
     const dispose = subscribeStreamStatus();
 
     try {
-      StreamStatusService.transition(STREAM_ID, STREAM_PHASE.RUNNING, 'resume');
+      defaultSession().status.transition(
+        STREAM_ID,
+        STREAM_PHASE.RUNNING,
+        'resume',
+      );
 
       expect(streams.get().get(STREAM_ID)?.status).toBe(STREAM_STATUS.RUNNING);
     } finally {

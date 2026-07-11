@@ -85,10 +85,18 @@ vi.mock('@frontend/secretManager', () => ({
   },
 }));
 
-vi.mock('@agent/runtime/executionRegistry', () => ({
-  SharedExecutionRegistry: {
-    getAgentHandles: () => agentHandles(),
-  },
+// The guard's sole touchpoint is `defaultSession().executions.getAgentHandles()`
+// — a full stub replacement (not `importOriginal`) keeps this suite's
+// isolation: the real module eagerly constructs a `createChannelTrace`
+// logger at import time (`ToolUseFollowUpQueueManager.ts`), which needs more
+// of `@logger/logUtils` than this suite's minimal mock provides. No other
+// module in this test's import graph (all deps otherwise mocked away, and
+// `apiKeyCommands`/`codexSubscriptionSignIn` don't import SessionHandle)
+// touches this module's other exports.
+vi.mock('@agent/runtime/SessionHandle', () => ({
+  defaultSession: () => ({
+    executions: { getAgentHandles: () => agentHandles() },
+  }),
 }));
 
 vi.mock('@controllers/onboarding/setupLaunch', () => ({
@@ -235,7 +243,7 @@ vi.mock('@logger/logUtils', () => ({
 await import('vscode');
 await import('@utils/config/providerConfig');
 await import('@frontend/secretManager');
-await import('@agent/runtime/executionRegistry');
+await import('@agent/runtime/SessionHandle');
 await import('@controllers/onboarding/setupLaunch');
 await import('@auth/codex');
 await import('@auth/serverKeys');

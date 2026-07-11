@@ -215,57 +215,54 @@ describe('FollowUpQueue', () => {
   });
 
   it('does not create ghost queues for unknown streams', () => {
+    const queue = new ToolUseFollowUpQueue();
     const streamId = 'stream:unknown-followup' as StreamTabId;
 
     try {
-      expect(
-        ToolUseFollowUpQueue.enqueue(streamId, { text: 'late result' }),
-      ).toBe(false);
-      expect(ToolUseFollowUpQueue.getAll(streamId)).toEqual([]);
+      expect(queue.enqueue(streamId, { text: 'late result' })).toBe(false);
+      expect(queue.getAll(streamId)).toEqual([]);
     } finally {
-      ToolUseFollowUpQueue.release(streamId);
+      queue.release(streamId);
     }
   });
 
   it('creates queues only for explicitly admitted follow-ups', () => {
+    const queue = new ToolUseFollowUpQueue();
     const streamId = 'stream:admitted-followup' as StreamTabId;
 
     try {
       expect(
-        ToolUseFollowUpQueue.enqueue(
+        queue.enqueue(
           streamId,
           { text: 'admitted result' },
           { createIfMissing: true },
         ),
       ).toBe(true);
-      expect(ToolUseFollowUpQueue.getAll(streamId)).toEqual([
-        'admitted result',
-      ]);
+      expect(queue.getAll(streamId)).toEqual(['admitted result']);
     } finally {
-      ToolUseFollowUpQueue.release(streamId);
+      queue.release(streamId);
     }
   });
 
   it('does not forget every released stream when the release cap is exceeded', () => {
+    const queue = new ToolUseFollowUpQueue();
     const firstStream = 'stream:released-first' as StreamTabId;
     const retainedStream = 'stream:released-retained' as StreamTabId;
 
-    ToolUseFollowUpQueue.acquire(firstStream);
-    ToolUseFollowUpQueue.release(firstStream);
-    ToolUseFollowUpQueue.acquire(retainedStream);
-    ToolUseFollowUpQueue.release(retainedStream);
+    queue.acquire(firstStream);
+    queue.release(firstStream);
+    queue.acquire(retainedStream);
+    queue.release(retainedStream);
 
     for (let i = 0; i < ToolUseFollowUpQueue.RELEASED_CAP - 1; i += 1) {
-      ToolUseFollowUpQueue.release(`stream:released-extra-${i}` as StreamTabId);
+      queue.release(`stream:released-extra-${i}` as StreamTabId);
     }
 
     try {
+      expect(queue.enqueue(firstStream, { text: 'late first' })).toBe(false);
+      expect(queue.getAll(firstStream)).toEqual([]);
       expect(
-        ToolUseFollowUpQueue.enqueue(firstStream, { text: 'late first' }),
-      ).toBe(false);
-      expect(ToolUseFollowUpQueue.getAll(firstStream)).toEqual([]);
-      expect(
-        ToolUseFollowUpQueue.enqueue(
+        queue.enqueue(
           retainedStream,
           {
             text: 'late retained',
@@ -273,10 +270,10 @@ describe('FollowUpQueue', () => {
           { createIfMissing: true },
         ),
       ).toBe(false);
-      expect(ToolUseFollowUpQueue.getAll(retainedStream)).toEqual([]);
+      expect(queue.getAll(retainedStream)).toEqual([]);
     } finally {
-      ToolUseFollowUpQueue.release(firstStream);
-      ToolUseFollowUpQueue.release(retainedStream);
+      queue.release(firstStream);
+      queue.release(retainedStream);
     }
   });
 });

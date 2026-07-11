@@ -1,12 +1,7 @@
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { tryPlatform } from '@platform/platform';
-import {
-  flushPendingRunTraces,
-  getDefaultStreamLogStore,
-  StreamSnapshotStore,
-} from '@transcript';
+import { flushPendingRunTraces, StreamSnapshotStore } from '@transcript';
 import { writeTerminalStatus } from '@agent/storage';
-import { AgentError } from '@common/errors';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -16,6 +11,7 @@ import {
 import { runAgent } from '@agent/runtime/runAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import { AgentError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 
@@ -239,7 +235,7 @@ export async function executeCliRequest(
   // when the process exits. Mirrors runChatTui.tsx's best-effort load. Done
   // last (right before the run starts) so it can't delay the synchronous
   // shutdown-hook registration above.
-  const streamLogStore = getDefaultStreamLogStore();
+  const streamLogStore = defaultSession().transcripts;
   try {
     await streamLogStore.load();
   } catch {

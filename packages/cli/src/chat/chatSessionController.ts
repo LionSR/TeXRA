@@ -7,7 +7,7 @@
 
 import PQueue from 'p-queue';
 
-import { getDefaultStreamLogStore, StreamSnapshotStore } from '@transcript';
+import { StreamSnapshotStore } from '@transcript';
 import {
   getExecutionStore,
   registerExecution,
@@ -20,7 +20,6 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { SharedExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
   executeAgent,
   resumeToolUseFromSnapshot,
@@ -211,7 +210,7 @@ export function createChatSessionController(
   const interruptActiveRun = (): void => {
     clearApprovals();
     if (!session.streamId) return;
-    SharedExecutionRegistry.stopAgentStream(session.streamId, {
+    defaultSession().executions.stopAgentStream(session.streamId, {
       detachActiveChildren: detachSubagentsOnStop(),
       runtimeHost: session.runtimeHost,
     });
@@ -373,7 +372,7 @@ export function createChatSessionController(
       canDelegate: chatAgentSupportsDelegation(resolution.config.agent),
     });
 
-    await getDefaultStreamLogStore().ensureLoaded(resolution.streamId);
+    await defaultSession().transcripts.ensureLoaded(resolution.streamId);
     await snapshotStore.load([resolution.streamId]);
     const restored = await snapshotStore.read(resolution.streamId);
     patchStream(resolution.streamId, (slice) => {

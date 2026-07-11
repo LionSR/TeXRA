@@ -11,7 +11,6 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResumeDetection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -35,7 +34,7 @@ function emitQueuedFollowUpsChanged(streamId: StreamTabId): void {
 async function lazyDetectWaitingStatus(
   streamId: StreamTabId,
 ): Promise<boolean> {
-  const currentStatus = StreamStatusService.get(streamId);
+  const currentStatus = defaultSession().status.get(streamId);
   if (currentStatus === STREAM_PHASE.WAITING) {
     return true;
   }
@@ -58,7 +57,7 @@ async function lazyDetectWaitingStatus(
   try {
     const resumability = await deriveResumability(executionId);
     if (resumability.resumable) {
-      const repaired = StreamStatusService.transitionToWaiting(
+      const repaired = defaultSession().status.transitionToWaiting(
         streamId,
         'restart-repair',
         {

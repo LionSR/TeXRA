@@ -6,12 +6,11 @@ import {
   createRunTrace,
   flushPendingRunTraces,
   getActiveFlushers,
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
 import {
   SessionHandle,
+  defaultSession,
   getAllActiveExecutionIds,
 } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
@@ -63,9 +62,7 @@ describe('cross-session active executions (SDK Step 7d PR 4)', () => {
 
 describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
   it('registers the flush in the run session set, not the default set', () => {
-    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
     const sessionB = new SessionHandle();
     try {
       const defaultBefore = getActiveFlushers().size;
@@ -84,42 +81,35 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
       handle.dispose();
       expect(sessionB.flushers.size).toBe(0);
     } finally {
-      setDefaultStreamLogStore(previousStore);
       sessionB.dispose();
     }
   });
 
   it("drops the disposed session's flusher set from the process-wide drain", () => {
-    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
     const sessionB = new SessionHandle();
     let drained = 0;
 
-    try {
-      // Registers sessionB.flushers in the process-wide drain registry.
-      createRunTrace(
-        'stream:flusher-dispose' as StreamTabId,
-        store,
-        sessionB.flushers,
-      );
-      sessionB.flushers.add(() => {
-        drained += 1;
-      });
+    // Registers sessionB.flushers in the process-wide drain registry.
+    createRunTrace(
+      'stream:flusher-dispose' as StreamTabId,
+      store,
+      sessionB.flushers,
+    );
+    sessionB.flushers.add(() => {
+      drained += 1;
+    });
 
-      flushPendingRunTraces();
-      // While live, the session's set is reached by the process-wide drain.
-      expect(drained).toBeGreaterThan(0);
+    flushPendingRunTraces();
+    // While live, the session's set is reached by the process-wide drain.
+    expect(drained).toBeGreaterThan(0);
 
-      sessionB.dispose();
+    sessionB.dispose();
 
-      drained = 0;
-      flushPendingRunTraces();
-      // After dispose the set is unregistered — no longer iterated forever.
-      expect(drained).toBe(0);
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
+    drained = 0;
+    flushPendingRunTraces();
+    // After dispose the set is unregistered — no longer iterated forever.
+    expect(drained).toBe(0);
   });
 });
 
@@ -146,7 +136,7 @@ describe('session-owned transcripts and follow-up queues (Stage 3a)', () => {
             .map((entry) => entry.text),
         ).toEqual(['owned by launching session']);
         expect(sibling.transcripts.get(streamId)).toBeUndefined();
-        expect(getDefaultStreamLogStore().get(streamId)).toBeUndefined();
+        expect(defaultSession().transcripts.get(streamId)).toBeUndefined();
       } finally {
         handle.dispose();
       }
