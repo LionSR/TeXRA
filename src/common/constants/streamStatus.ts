@@ -117,7 +117,10 @@ export const STREAM_TRANSITION_CAUSE = {
 export type StreamTransitionCause =
   (typeof STREAM_TRANSITION_CAUSE)[keyof typeof STREAM_TRANSITION_CAUSE];
 
-function isTerminalOutcomePhase(
+/** Whether a `StreamPhase` is one of the three terminal outcome phases
+ *  (COMPLETED | CANCELLED | FAILED). This is the single enumeration of that
+ *  set — hosts must consume it rather than hand-rolling their own. */
+export function isTerminalOutcomePhase(
   phase: StreamPhase | undefined,
 ): phase is RunOutcome {
   return (

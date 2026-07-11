@@ -2,7 +2,10 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import {
+  AgentWorkspaceState,
+  type AgentWorkspaceSnapshot,
+} from '@agent/core/state/AgentWorkspaceState';
 import type { TodoItem } from '@shared/schemas';
 import { formatPostCompactionContext } from '@tools/subagentResults';
 
@@ -147,5 +150,63 @@ describe('agent workspace work-plan state', () => {
     expect(
       formatPostCompactionContext([], [], state.workPlan.toSnapshot()) ?? '',
     ).not.toContain('<current-plan');
+  });
+
+  it('confines legacy todo/plan migration to the boundary hydration path', () => {
+    const legacySnapshot = {
+      todos: { todos: [todo] },
+      plan: { plan: legacyPlan },
+    };
+
+    // Regression: the single hydration boundary (session-init resume in
+    // ToolUsePrepareNode, reflection resume in runReflectionFlow) must keep
+    // migrating a persisted legacy record.
+    const hydrated = AgentWorkspaceState.fromSnapshot(legacySnapshot);
+    expect(hydrated.workPlan.todos).toEqual([todo]);
+    expect(hydrated.workPlan.plan).toBeNull();
+
+    // Per-round node prep (ToolUseCycleNode, ResponseCycleNode,
+    // MediaExtractionNode) only ever rehydrates this run's own canonical
+    // toSnapshot() output via fromCanonicalSnapshot, which takes the
+    // canonical type and must never fall back to the legacy shape — a
+    // legacy-shaped record reaching it is corruption, not a format to
+    // silently migrate.
+    expect(() =>
+      AgentWorkspaceState.fromCanonicalSnapshot(
+        legacySnapshot as unknown as AgentWorkspaceSnapshot,
+      ),
+    ).toThrow();
+
+    // The canonical round-trip (toSnapshot -> fromCanonicalSnapshot) that
+    // every subsequent round actually exercises keeps working.
+    const canonicalSnapshot = hydrated.toSnapshot();
+    const rehydrated =
+      AgentWorkspaceState.fromCanonicalSnapshot(canonicalSnapshot);
+    expect(rehydrated.workPlan.todos).toEqual([todo]);
+    expect(rehydrated.workPlan.plan).toBeNull();
+  });
+
+  it('normalizes a legacy top-level {todos, plan} snapshot for the tool-use resume boundary', () => {
+    // Regression for the codex P1 on #8005: when a persisted tool-use flow's
+    // cursor is already past ToolUsePrepareNode, that node's own one-time
+    // hydration never runs on resume (PersistedFlow.ensureRecord just reuses
+    // the existing record). runToolUseFlow's resume boundary is the only
+    // place left to migrate a legacy top-level {todos, plan} workspace
+    // snapshot -- it does so via this exact fromSnapshot(...).toSnapshot()
+    // round trip (see normalizeResumedWorkspaceSnapshot in
+    // runToolUseFlow.ts) before per-cycle code's canonical-only
+    // fromCanonicalSnapshot (ToolUseCycleNode.prep()) ever sees it.
+    const legacyWorkspaceSnapshot = {
+      todos: [todo],
+      plan: objectivePlan,
+    };
+
+    const normalized = AgentWorkspaceState.fromSnapshot(
+      legacyWorkspaceSnapshot,
+    ).toSnapshot();
+
+    const rehydrated = AgentWorkspaceState.fromCanonicalSnapshot(normalized);
+    expect(rehydrated.workPlan.todos).toEqual([todo]);
+    expect(rehydrated.workPlan.plan).toEqual(objectivePlan);
   });
 });

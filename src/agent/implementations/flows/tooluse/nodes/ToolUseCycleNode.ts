@@ -42,7 +42,11 @@ export class ToolUseCycleNode<C> extends Node<
       shouldSkipCycle: shared.shouldSkipCycle,
       messages: shared.messages,
       runState: shared.stateSlices.runStateSnapshot,
-      workspaceState: AgentWorkspaceState.fromSnapshot(
+      // stateSlices.workspaceSnapshot was produced by this same node's own
+      // toSnapshot() last round (or by ToolUsePrepareNode's one-time
+      // hydration) — never raw persisted/legacy data — so re-deriving it
+      // here uses the canonical-only path (see AgentWorkspaceState.fromCanonicalSnapshot).
+      workspaceState: AgentWorkspaceState.fromCanonicalSnapshot(
         shared.stateSlices.workspaceSnapshot,
       ),
       userChannels: shared.stateSlices.userChannels,
