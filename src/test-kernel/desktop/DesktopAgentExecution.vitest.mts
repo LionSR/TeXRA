@@ -17,8 +17,9 @@ import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 
-// Local imports - progress schemas
+// Local imports - desktop and progress schemas
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
+import type { DesktopStreamSnapshotStore } from '@desktop/main/desktopStreamSnapshot';
 import {
   AgentCategory,
   END_GROUP_STATUS,
@@ -171,26 +172,8 @@ type RunExecutionRequest = (
   },
 ) => Promise<void>;
 
-interface DesktopAgentExecutionModule {
-  DesktopProgressBridge: new (
-    postToRenderer: (message: unknown) => void,
-    options?: {
-      streamSnapshotStore?: TestDesktopStreamSnapshotStore;
-      progressSnapshotStore?: ProgressSnapshotStore;
-      showErrorMessage?: (message: string) => Promise<void> | void;
-      openPath?: (filePath: string, line?: number) => Promise<void>;
-    },
-  ) => Bridge;
-  createDesktopAgentExecution(options: {
-    postToRenderer(message: unknown): void;
-    opener?: {
-      openPath(filePath: string): Promise<void>;
-      openBuildDisplay?(location: { absolutePath: string }): Promise<void>;
-    };
-    showErrorMessage?: (message: string) => Promise<void> | void;
-    onRunCompleted?: () => void;
-  }): DesktopExecution;
-}
+type DesktopAgentExecutionModule =
+  typeof import('@desktop/main/desktopAgentExecution');
 
 type CreateBridgeOptions = {
   kvStoreBacking?: Map<string, unknown>;
@@ -202,7 +185,7 @@ type CreateBridgeOptions = {
   retrieveSessionResumeData?: ReturnType<typeof vi.fn>;
   resumeToolUseFromSnapshot?: ReturnType<typeof vi.fn>;
   runAgent?: RunExecutionRequest;
-  streamSnapshotStore?: TestDesktopStreamSnapshotStore;
+  streamSnapshotStore?: DesktopStreamSnapshotStore;
   configureProgressSnapshotStore?: (store: ProgressSnapshotStore) => void;
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
   activeExecutionIds?: readonly string[] | (() => readonly string[]);
@@ -210,15 +193,6 @@ type CreateBridgeOptions = {
   openPath?: (filePath: string, line?: number) => Promise<void>;
   /** Captures `this.logger.error(...)` calls made by the bridge under test. */
   loggerErrorSpy?: ReturnType<typeof vi.fn>;
-};
-
-type TestDesktopStreamSnapshotStore = {
-  readonly hydrated: readonly RestoredStreamSnapshot[];
-  upsert(snapshot: RestoredStreamSnapshot): Promise<void>;
-  remove(streamId: StreamTabId): Promise<void>;
-  replaceAll(snapshots: RestoredStreamSnapshot[]): Promise<void>;
-  flush(): Promise<void>;
-  getAll(): RestoredStreamSnapshot[];
 };
 
 type ProgressMessage = {
@@ -445,14 +419,16 @@ async function createBridge(
     await loadBridgeModule(options);
   return disposeAfterTest(
     new bridgeModule.DesktopProgressBridge(
-      (message) => messages.push(message),
+      (message) => {
+        messages.push(message);
+      },
       {
         streamSnapshotStore: options.streamSnapshotStore,
         progressSnapshotStore,
         showErrorMessage: options.showErrorMessage,
         openPath: options.openPath,
       },
-    ) as TestableBridge,
+    ) as unknown as TestableBridge,
   );
 }
 
@@ -551,7 +527,7 @@ function restoredSnapshot(
 
 function createStreamSnapshotStore(
   hydrated: readonly RestoredStreamSnapshot[],
-): TestDesktopStreamSnapshotStore {
+): DesktopStreamSnapshotStore {
   const live = new Map(
     hydrated.map((snapshot) => [snapshot.streamId, snapshot]),
   );
@@ -3288,7 +3264,7 @@ describe('DesktopProgressBridge', () => {
       /** Loosely-typed runtime-host emit, as runs use it (`runtimeHost.emit`). */
       emit: (event: string, payload: unknown) => void;
       messages: unknown[];
-      snapshots: TestDesktopStreamSnapshotStore;
+      snapshots: DesktopStreamSnapshotStore;
     };
 
     type WindowPair = {
@@ -3316,9 +3292,11 @@ describe('DesktopProgressBridge', () => {
         const messages: unknown[] = [];
         const snapshots = createStreamSnapshotStore([]);
         const bridge = new bridgeModule.DesktopProgressBridge(
-          (message) => messages.push(message),
+          (message) => {
+            messages.push(message);
+          },
           { streamSnapshotStore: snapshots },
-        ) as TestableBridge;
+        ) as unknown as TestableBridge;
         const session = (bridge as unknown as { session: SessionHandle })
           .session;
         const { hostChannel } =
