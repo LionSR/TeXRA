@@ -98,9 +98,6 @@ function defaultAvailability(opt: ModelOptionData): {
 
 function renderModelOption(opt: ModelOptionData): TemplateResult {
   const decorator = getModelProviderDecorator(opt.provider ?? '');
-  const display = decorator.unicode
-    ? `${decorator.unicode} ${opt.label}`
-    : opt.label;
   const fallback = defaultAvailability(opt);
   const availability = opt.availability ?? fallback.value;
   const availabilityLabel = opt.availabilityLabel ?? fallback.label;
@@ -125,7 +122,7 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
         availabilityLabel ? `${opt.label} (${availabilityLabel})` : opt.label
       }
     >
-      ${display}
+      <span class="agent-icon">${waIcon(decorator.icon)} </span>${opt.label}
       ${
         opt.disabled
           ? html`<span class="model-option-status">
