@@ -10,9 +10,7 @@ import { render } from 'ink';
 import React from 'react';
 
 import { getAgentsByCategory, loadAgents } from '@agent/index';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
@@ -40,7 +38,6 @@ import {
 } from '@shared/schemas';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { GoalStore } from '@tools/goal';
-import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
@@ -273,7 +270,7 @@ const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
-const HARNESS_FOLLOW_UP_QUEUE = ToolUseFollowUpQueue.acquire(STREAM_ID);
+const HARNESS_FOLLOW_UP_QUEUE = defaultSession().followUps.acquire(STREAM_ID);
 const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 // Keep platform state writes out of the repository unless a scenario opts in.
 const HARNESS_CWD =
@@ -617,7 +614,7 @@ function makeAssistantToolPreambleEntries(): ConversationEntry[] {
 }
 
 function seedLiveToolOnlyTranscript(): void {
-  const store = getDefaultStreamLogStore();
+  const store = defaultSession().transcripts;
   const timestamp = Date.now();
   store.append(STREAM_ID, {
     id: 'live-tool-user',
@@ -696,7 +693,7 @@ function makeRejectedBashToolEntries(): ConversationEntry[] {
 }
 
 function seedSubagentFollowupTranscript(): void {
-  const store = getDefaultStreamLogStore();
+  const store = defaultSession().transcripts;
   const timestamp = Date.now();
   const followups = [
     '<subagent-progress id="child-a" agent="strategy" type="round" current="2" total="3" />',
@@ -1121,11 +1118,12 @@ function emitChildEventOrderAttachment(streamId: StreamTabId): void {
   });
 }
 
-// Real `StreamStatusService` transitions — `subscribeStreamStatus()` is what
-// projects these into `cliState` (see `seedChildEventOrderFixture`), exactly
-// as `runChatTui.tsx` wires it for a real session.
+// Real status-machine transitions on the default session —
+// `subscribeStreamStatus()` is what projects these into `cliState` (see
+// `seedChildEventOrderFixture`), exactly as `runChatTui.tsx` wires it for a
+// real session.
 function transitionChildEventOrderRunning(streamId: StreamTabId): void {
-  StreamStatusService.transition(
+  defaultSession().status.transition(
     streamId,
     STREAM_PHASE.RUNNING,
     STREAM_TRANSITION_CAUSE.LIFECYCLE,
@@ -1134,9 +1132,13 @@ function transitionChildEventOrderRunning(streamId: StreamTabId): void {
 }
 
 function transitionChildEventOrderTerminal(streamId: StreamTabId): void {
-  StreamStatusService.transitionToTerminal(streamId, STREAM_PHASE.COMPLETED, {
-    events: defaultSession().events,
-  });
+  defaultSession().status.transitionToTerminal(
+    streamId,
+    STREAM_PHASE.COMPLETED,
+    {
+      events: defaultSession().events,
+    },
+  );
 }
 
 // Late resume-transition attempt for an already-removed stream: unlike a
@@ -1146,7 +1148,7 @@ function transitionChildEventOrderTerminal(streamId: StreamTabId): void {
 // `setStreamStatusInCliState` and actually exercises that function's
 // `isChildStreamRemoved` tombstone guard (see `completion-remove` below).
 function attemptChildEventOrderLateResume(streamId: StreamTabId): void {
-  StreamStatusService.transition(
+  defaultSession().status.transition(
     streamId,
     STREAM_PHASE.RUNNING,
     STREAM_TRANSITION_CAUSE.RESUME,
@@ -1809,7 +1811,7 @@ function appendHarnessStatus(): void {
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       goal: GoalStore.getForStream(streamId),
-      queuedFollowUpMessages: ToolUseFollowUpQueue.getAll(streamId),
+      queuedFollowUpMessages: defaultSession().followUps.getAll(streamId),
     }),
   );
 }
@@ -1817,9 +1819,9 @@ function appendHarnessStatus(): void {
 function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   clearApprovals();
-  ToolUseFollowUpQueue.drain(STREAM_ID);
+  defaultSession().followUps.drain(STREAM_ID);
   void GoalStore.forget(STREAM_ID);
-  const store = getDefaultStreamLogStore();
+  const store = defaultSession().transcripts;
   for (const streamId of streams.get().keys()) {
     store.delete(streamId).catch(() => {
       // The harness reset is best-effort; visible cliState is reset below.

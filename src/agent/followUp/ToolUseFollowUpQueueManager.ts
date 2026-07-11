@@ -12,12 +12,12 @@ const logger = createChannelTrace('ToolUseFollowUpQueue');
 /**
  * Follow-up queue owner indexed by stream ID.
  *
- * Fresh instances are session-owned. Static methods proxy to the process
- * default instance so unmigrated default-session callers stay byte-identical.
+ * Every instance is session-owned — the process default lives at
+ * `defaultSession().followUps` (#7694); there is no separate static/module
+ * singleton to reach it through.
  */
 export class ToolUseFollowUpQueue {
   static readonly RELEASED_CAP = 500;
-  private static readonly defaultQueue = new ToolUseFollowUpQueue();
   private readonly queues = new Map<StreamTabId, FollowUpQueue>();
   /** Streams whose queues were explicitly released (orchestrator disposed). */
   private readonly released = new LRUCache<StreamTabId, true>({
@@ -121,41 +121,5 @@ export class ToolUseFollowUpQueue {
 
   private rememberReleased(streamId: StreamTabId): void {
     this.released.set(streamId, true);
-  }
-
-  static onRelease(observer: (streamId: StreamTabId) => void): () => void {
-    return this.defaultQueue.onRelease(observer);
-  }
-
-  static acquire(streamId: StreamTabId): FollowUpQueue {
-    return this.defaultQueue.acquire(streamId);
-  }
-
-  static release(streamId: StreamTabId): void {
-    this.defaultQueue.release(streamId);
-  }
-
-  static enqueue(
-    streamId: StreamTabId,
-    followUp: FollowUpQueueInput,
-    options?: { createIfMissing?: boolean; force?: boolean },
-  ): boolean {
-    return this.defaultQueue.enqueue(streamId, followUp, options);
-  }
-
-  static drain(streamId: StreamTabId): string[] {
-    return this.defaultQueue.drain(streamId);
-  }
-
-  static drainItems(streamId: StreamTabId): DrainedFollowUpItem[] {
-    return this.defaultQueue.drainItems(streamId);
-  }
-
-  static getAll(streamId: StreamTabId): string[] {
-    return this.defaultQueue.getAll(streamId);
-  }
-
-  static defaultInstance(): ToolUseFollowUpQueue {
-    return this.defaultQueue;
   }
 }

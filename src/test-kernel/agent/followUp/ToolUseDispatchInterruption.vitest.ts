@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent core
-import { createRunTrace } from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
@@ -84,7 +84,10 @@ describe('ToolUseDispatchNode interruption', () => {
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
-      logger: createRunTrace('ToolUseDispatchInterruption').trace,
+      logger: createRunTrace(
+        'ToolUseDispatchInterruption',
+        new StreamLogStore(),
+      ).trace,
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
@@ -254,7 +257,10 @@ describe('ToolUseDispatchNode interruption', () => {
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
-      logger: createRunTrace('ToolUseDispatchInterruption').trace,
+      logger: createRunTrace(
+        'ToolUseDispatchInterruption',
+        new StreamLogStore(),
+      ).trace,
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },

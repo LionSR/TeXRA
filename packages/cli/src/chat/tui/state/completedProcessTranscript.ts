@@ -1,4 +1,4 @@
-import { getDefaultStreamLogStore } from '@transcript';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 import {
@@ -73,7 +73,7 @@ function buildCompletedProcessEntry(params: {
     synthetic: true,
     syntheticKind: 'process',
     syntheticAfterSeq:
-      getDefaultStreamLogStore().get(params.streamId)?.head ?? 0,
+      defaultSession().transcripts.get(params.streamId)?.head ?? 0,
   };
 }
 

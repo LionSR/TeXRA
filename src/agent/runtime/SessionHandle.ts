@@ -11,9 +11,12 @@
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop `BrowserWindow`. The default instance,
- * {@link defaultSession}, wraps the existing process-global singletons
- * **by identity**, so every unmigrated call site keeps hitting the same objects
- * byte-for-byte while the 7d train migrates call sites incrementally.
+ * {@link defaultSession}, is the sanctioned single-session entry point —
+ * it lazily constructs its owners on first use (module-private, process-wide)
+ * exactly like any other fresh session. There is no other way to reach
+ * these owners: the invariant is "no session-scoped mutable module export"
+ * (#7694) — a run-scoped caller resolves through {@link currentSession} /
+ * {@link defaultSession}, never a standalone singleton import.
  *
  * Fresh construction is in FORCED dependency order with every cross-reference
  * explicit: no member is ever allowed to default to a neighboring module
@@ -29,7 +32,6 @@
 
 import {
   getActiveFlushers,
-  getDefaultStreamLogStore,
   StreamLogStore,
   unregisterFlushers,
 } from '@transcript';
@@ -39,18 +41,9 @@ import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
 import { getRunContextSession, tryUseRunContext } from './RunContext';
-import {
-  ExecutionRegistry,
-  SharedExecutionRegistry,
-} from './executionRegistry';
-import {
-  ExecutionSubscriptionBinder,
-  SharedExecutionSubscriptionBinder,
-} from './ExecutionSubscriptionBinder';
-import {
-  StreamStatusMachine,
-  StreamStatusService,
-} from './StreamStatusService';
+import { ExecutionRegistry } from './executionRegistry';
+import { ExecutionSubscriptionBinder } from './ExecutionSubscriptionBinder';
+import { StreamStatusMachine } from './StreamStatusService';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -91,7 +84,7 @@ export class SessionHandle {
   readonly subscriptions: ExecutionSubscriptionBinder;
   /** Session-scoped one-way fact plane. */
   readonly events: SessionEventHub;
-  /** Session-scoped status plane; wraps shared status data during migration. */
+  /** Session-scoped status plane. */
   readonly status: StreamStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
   readonly transcripts: StreamLogStore;
@@ -117,9 +110,9 @@ export class SessionHandle {
     const executions =
       init.executions ??
       new ExecutionRegistry({ streamStatus: status, events });
-    // Re-attaching on every `SessionHandle` construction — including for the
-    // shared/default-session `ExecutionRegistry` singleton, which predates any
-    // session — rebinds `publishResult` to *this* session's listeners.
+    // Re-attaching on every `SessionHandle` construction — even when
+    // `executions` is caller-injected rather than fresh-built here — rebinds
+    // `publishResult` to *this* session's listeners.
     executions.attachSessionEvents(events, (event, streamId) =>
       this.publishRunEvent(streamId, event),
     );
@@ -138,8 +131,9 @@ export class SessionHandle {
     this.transcripts = transcripts;
     this.followUps = followUps;
     this.interactions = init.interactions ?? new SessionHostInteractions();
-    // A fresh session owns its own flusher set; the default session aliases the
-    // process-module set so `createRunTrace`'s default writes still drain.
+    // A fresh session owns its own flusher set; the default session aliases
+    // the process-module set (`getActiveFlushers()`) so the process-wide
+    // shutdown drain (`flushPendingRunTraces()`) still reaches it.
     this.flushers = init.flushers ?? new Set<() => void>();
     this.hostChannel = init.hostChannel;
     liveSessions.add(this);
@@ -298,25 +292,20 @@ export function getAllActiveExecutionIds(): string[] {
 let cachedDefaultSession: SessionHandle | undefined;
 
 /**
- * The process-default session. Its members ARE the existing exported singletons
- * — identity is the behavior-neutral compatibility mechanism for the 7d train:
- * unmigrated call sites keep hitting the same objects, and per-call-site
- * migration is `SharedExecutionRegistry.x(...)` → `session.executions.x(...)`
- * against the identical instance.
+ * The process-default session — the sole owner of the process-wide runtime
+ * singletons (#7694). Every member the constructor doesn't receive is
+ * fresh-built in the same FORCED dependency order any other `SessionHandle`
+ * uses; there is no separate `Shared*`/`*Service` module export to alias
+ * anymore, so this construction *is* where those singletons now live.
  *
  * Constructed lazily on first use rather than at module evaluation: many
  * run-scoped modules import `currentSession`, which pulls this module into
- * their import cycle, and an eager construction here would read the
- * `SharedExecutionSubscriptionBinder` singleton before its own module finished
- * initializing (TDZ). Deferring to first call sidesteps that entirely.
+ * their import cycle, and an eager construction here would risk reading a
+ * cross-module singleton before its own module finished initializing (TDZ).
+ * Deferring to first call sidesteps that entirely.
  */
 export function defaultSession(): SessionHandle {
   return (cachedDefaultSession ??= new SessionHandle({
-    executions: SharedExecutionRegistry,
-    subscriptions: SharedExecutionSubscriptionBinder,
-    status: StreamStatusService,
-    transcripts: getDefaultStreamLogStore(),
-    followUps: ToolUseFollowUpQueue.defaultInstance(),
     flushers: getActiveFlushers(),
   }));
 }
@@ -325,9 +314,8 @@ export function defaultSession(): SessionHandle {
  * Resolve the session for the calling context: the active run's session when
  * called inside a run, otherwise the process {@link defaultSession}. This is
  * the single resolution point run-scoped code (flows, tools, formatters) uses
- * instead of touching the process singletons directly — behavior-neutral while
- * the default session aliases those singletons, and the seam that lets a host
- * inject an isolated session per run.
+ * to reach session-owned state — there is no other way to reach it (#7694) —
+ * and the seam that lets a host inject an isolated session per run.
  */
 export function currentSession(): SessionHandle {
   return getRunContextSession(tryUseRunContext()) ?? defaultSession();
