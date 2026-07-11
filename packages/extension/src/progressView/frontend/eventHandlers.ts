@@ -171,7 +171,7 @@ export function handleFollowUpChange(
         return;
       }
       if (!value) return;
-      const current = prev.ui.followUpText;
+      const current = prev.ui.followUpText ?? '';
       const separator =
         current && !/\s$/.test(current) && !/^\s/.test(value) ? ' ' : '';
       draft.ui.followUpText = `${current}${separator}${value}`;
@@ -192,14 +192,6 @@ function getFollowUpText(
   if (!text) return null;
 
   return { streamId, text };
-}
-
-/** Resolve the active tool-use stream's trimmed follow-up text. */
-function getActiveFollowUpText(
-  ctx: FrontendEventHandlerContext,
-): { streamId: StreamTabId; text: string } | null {
-  const streamId = ctx.getState().activeStreamId;
-  return streamId ? getFollowUpText(ctx, streamId) : null;
 }
 
 export function handleFollowUpSend(
@@ -228,7 +220,8 @@ export function handleFollowUpSend(
 }
 
 export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
-  const result = getActiveFollowUpText(ctx);
+  const streamId = ctx.getState().activeStreamId;
+  const result = streamId ? getFollowUpText(ctx, streamId) : null;
   if (!result) return;
 
   postMessage(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP, {
