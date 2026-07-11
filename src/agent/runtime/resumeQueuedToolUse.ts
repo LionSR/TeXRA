@@ -15,6 +15,8 @@ import { defaultSession } from './SessionHandle';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
+  /** Query a caller-owned stop request at the resumed flow attachment boundary. */
+  readonly isCancellationRequested?: () => boolean;
   /**
    * Fires with the resumed run's raw outcome — terminal or WAITING — right
    * after the call returns successfully. Additive to `onRunError`, which only
@@ -50,7 +52,8 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
  *
  * Hosts stay thin adapters: they supply only what differs (`session`,
  * `runtimeUnavailableTools`, an optional seed follow-up, and the `onError`
- * toast). Returns `true` when the resume completed and `false` when it failed.
+ * toast). Returns `true` when the resume completed and `false` when it failed
+ * or was cancelled before the rebuilt session accepted its follow-ups.
  */
 export async function resumeQueuedToolUseSnapshot(
   streamId: StreamTabId,
@@ -70,7 +73,22 @@ export async function resumeQueuedToolUseSnapshot(
 
   const seed = options.extraFollowUps ?? [];
   let followUps: readonly FollowUpQueueInput[] = seed;
+  let cancelledBeforeSessionSetup = false;
   let resumeError: { error: unknown } | undefined;
+  const restoreFollowUps = (): void => {
+    for (const item of followUps) {
+      followUpsQueue.enqueue(streamId, item, { force: true });
+    }
+    if (followUps.length > 0) {
+      session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateQueuedFollowUps',
+          payload: { streamId },
+        },
+      });
+    }
+  };
   try {
     followUps = [...seed, ...followUpsQueue.drainItems(streamId)];
     session.events.emit({
@@ -92,42 +110,43 @@ export async function resumeQueuedToolUseSnapshot(
       onProgress: options.onProgress,
       onRunError: options.onRunError,
       onRun: options.onRun,
+      isCancellationRequested: options.isCancellationRequested,
       setupSession: (session) => {
+        if (options.isCancellationRequested?.()) {
+          cancelledBeforeSessionSetup = true;
+          // Capture messages accepted after the initial drain before the
+          // cancellation handoff disposes the shared stream queue.
+          followUps = [...followUps, ...followUpsQueue.drainItems(streamId)];
+          return;
+        }
         for (const item of followUps) {
           session.appendFollowUp(item);
         }
       },
     });
     options.onResult?.(result);
+    if (cancelledBeforeSessionSetup) restoreFollowUps();
   } catch (error) {
     resumeError = { error };
     // Re-enqueue the drained follow-ups (explicit seed first) so a later
     // resume replays them instead of dropping them.
-    for (const item of followUps) {
-      followUpsQueue.enqueue(streamId, item, { force: true });
-    }
-    if (followUps.length > 0) {
-      session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'updateQueuedFollowUps',
-          payload: { streamId },
-        },
-      });
-    }
+    restoreFollowUps();
   } finally {
-    // Only the early-failure path leaves the stream RESUMING (a started run
-    // owns its own status); settle it back to WAITING before surfacing the
-    // error so a blocking host dialog cannot hold the stream in RESUMING.
-    if (streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING) {
-      streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait', {
+    // Early failures leave the stream RESUMING. Startup cancellation can
+    // instead reach lifecycle terminalization before the queue owner regains
+    // control. In both cases, restored input makes WAITING the durable state.
+    if (
+      cancelledBeforeSessionSetup ||
+      streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING
+    ) {
+      streamStatus.transitionToWaiting(streamId, 'wait', {
         events: session.events,
       });
     }
   }
 
   if (!resumeError) {
-    return true;
+    return !cancelledBeforeSessionSetup;
   }
   try {
     await options.onError(resumeError.error);

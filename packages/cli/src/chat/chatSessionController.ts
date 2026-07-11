@@ -421,13 +421,17 @@ export function createChatSessionController(
           resumeToolUseFromSnapshot(resolution.snapshot, runtimeHost, {
             approvalPromptsUnavailable: approvalsUnavailable,
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+            isCancellationRequested: () => session.stopRequested,
           }),
         )
-        .then(() => {
+        .then((result) => {
           if (session.streamId) {
             projectStreamTranscript(session.streamId, { finalize: true });
           }
-          session.runExitCode = CliExitCode.Success;
+          session.runExitCode = terminalStatusExitCode(
+            cliTerminalStatus(result),
+            sessionContext,
+          );
           notify({ kind: 'agentFinished' });
         })
         .catch(reportRunFailure)
@@ -518,6 +522,7 @@ export function createChatSessionController(
                 approvalPromptsUnavailable: approvalsUnavailable,
                 runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
                 allowWaitingResult: true,
+                isCancellationRequested: () => session.stopRequested,
                 onError: reportRunFailure,
               }),
             executeWorkflow: async () => {
@@ -541,6 +546,8 @@ export function createChatSessionController(
           }
           session.runExitCode = CliExitCode.Success;
           notify({ kind: 'agentFinished' });
+        } else if (session.stopRequested) {
+          session.runExitCode = CliExitCode.Interrupted;
         }
         return resumed;
       } catch (error: unknown) {

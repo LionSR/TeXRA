@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - progressView frontend
+import { GROUP_DOM_IDS } from '@progressView/frontend/constants';
 import type {
   GroupTree,
   MessageIndex,
@@ -11,7 +12,7 @@ import type {
 // Local imports - shared schemas
 import {
   LOG_LEVELS,
-  STREAM_STATUS,
+  STREAM_PHASE,
   type LogMessageData,
   type TaskGroup,
 } from '@shared/schemas';
@@ -98,10 +99,10 @@ async function renderList(
 describe('task-group-list ungrouped message indexes', () => {
   it('plays round-completion sound for workflow rounds only', () => {
     const list = createList([]);
-    const running = createGroup('round-1', STREAM_STATUS.RUNNING, {
+    const running = createGroup('round-1', STREAM_PHASE.RUNNING, {
       kind: 'round',
     });
-    const stopped = createGroup('round-1', STREAM_STATUS.STOPPED, {
+    const stopped = createGroup('round-1', STREAM_PHASE.COMPLETED, {
       kind: 'round',
     });
 
@@ -125,10 +126,10 @@ describe('task-group-list ungrouped message indexes', () => {
 
   it('keeps legacy workflow r<N> groups eligible for completion sound', () => {
     const list = createList([]);
-    const running = createGroup('legacy-round', STREAM_STATUS.RUNNING, {
+    const running = createGroup('legacy-round', STREAM_PHASE.RUNNING, {
       name: 'r2',
     });
-    const stopped = createGroup('legacy-round', STREAM_STATUS.STOPPED, {
+    const stopped = createGroup('legacy-round', STREAM_PHASE.COMPLETED, {
       name: 'r2',
     });
 
@@ -168,7 +169,7 @@ describe('task-group-list ungrouped message indexes', () => {
   });
 
   it('patches stable group metadata without rebuilding the message tree', () => {
-    const group = createGroup('g1', STREAM_STATUS.RUNNING);
+    const group = createGroup('g1', STREAM_PHASE.RUNNING);
     const message = createMessage('m1', 'grouped', 2, group.id);
     const list = createList([message]);
     list.groups = [group];
@@ -178,7 +179,7 @@ describe('task-group-list ungrouped message indexes', () => {
     const originalTree: GroupTree | undefined = list.index.tree[0];
     const stoppedGroup = {
       ...group,
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.COMPLETED,
       endTime: 3,
     };
     list.groups = [stoppedGroup];
@@ -225,7 +226,7 @@ describe('task-group-list ungrouped message indexes', () => {
   });
 
   it('bounds rendered message DOM inside large groups', async () => {
-    const group = createGroup('g1', STREAM_STATUS.RUNNING);
+    const group = createGroup('g1', STREAM_PHASE.RUNNING);
     const messages = Array.from({ length: 450 }, (_, index) =>
       createMessage(`m${index}`, `group entry ${index}`, index, group.id),
     );
@@ -253,7 +254,7 @@ describe('task-group-list ungrouped message indexes', () => {
   });
 
   it('resets expanded render windows when leaving terminal mode', async () => {
-    const group = createGroup('g1', STREAM_STATUS.RUNNING);
+    const group = createGroup('g1', STREAM_PHASE.RUNNING);
     const messages = Array.from({ length: 450 }, (_, index) =>
       createMessage(`m${index}`, `group entry ${index}`, index, group.id),
     );
@@ -288,14 +289,14 @@ describe('task-group-list orphan re-rooting', () => {
       id: 'run',
       name: 'Run: subagent',
       startTime: 1,
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
       parentGroupId: 'phantom-orchestrator-stage',
     };
     const init: TaskGroup = {
       id: 'init',
       name: 'Init',
       startTime: 2,
-      status: STREAM_STATUS.STOPPED,
+      status: STREAM_PHASE.COMPLETED,
       parentGroupId: 'run',
     };
     const scratchpad = createMessage('m1', 'scratchpad', 3, 'init');
@@ -322,7 +323,7 @@ describe('task-group-list orphan re-rooting', () => {
       id: 'run',
       name: 'Run: subagent',
       startTime: 1,
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
       parentGroupId: 'phantom-orchestrator-stage',
     };
     const list = await renderList([run], []);
@@ -332,5 +333,59 @@ describe('task-group-list orphan re-rooting', () => {
     const rootEl = list.shadowRoot?.querySelector('[data-run-id="run"]');
     expect(rootEl).not.toBeNull();
     expect(rootEl?.classList.contains('log-run')).toBe(true);
+  });
+});
+
+// #7993 step 3: TaskGroup.status carries the native StreamPhase/RunOutcome
+// vocabulary end to end. Renders a canonical GROUP_END-derived group of each
+// terminal status and checks the icon distinguishes them — proving the
+// legacy-bucket-fold deletion in logSlice.ts (LogDeltaTextDeltas.vitest.ts
+// pins the mapping into TaskGroup.status) is safe all the way to the DOM:
+// a failed group keeps its own error icon instead of losing it to the old
+// STOPPED default, and a cancelled group no longer renders identically to a
+// completed one.
+describe('task-group-list status icon (#7993 step 3)', () => {
+  it('renders a distinct icon for completed, cancelled, and failed groups', async () => {
+    const parent: TaskGroup = {
+      id: 'run',
+      name: 'Run: workflow',
+      startTime: 1,
+      status: STREAM_PHASE.RUNNING,
+    };
+    const groups: TaskGroup[] = [
+      parent,
+      {
+        id: 'completed-phase',
+        name: 'Completed phase',
+        startTime: 2,
+        status: STREAM_PHASE.COMPLETED,
+        parentGroupId: 'run',
+      },
+      {
+        id: 'cancelled-phase',
+        name: 'Cancelled phase',
+        startTime: 3,
+        status: STREAM_PHASE.CANCELLED,
+        parentGroupId: 'run',
+      },
+      {
+        id: 'failed-phase',
+        name: 'Failed phase',
+        startTime: 4,
+        status: STREAM_PHASE.FAILED,
+        parentGroupId: 'run',
+      },
+    ];
+
+    const list = await renderList(groups, []);
+
+    const iconFor = (groupId: string): string | null =>
+      list.shadowRoot
+        ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}${groupId} wa-icon`)
+        ?.getAttribute('name') ?? null;
+
+    expect(iconFor('completed-phase')).toBe('check');
+    expect(iconFor('cancelled-phase')).toBe('circle-stop');
+    expect(iconFor('failed-phase')).toBe('error');
   });
 });
