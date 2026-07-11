@@ -163,7 +163,7 @@ describe('RoundPersistedFlow bounded compile-repair round (#7077)', () => {
 type OutcomeShared = RoundAwareState;
 
 interface OutcomeControl {
-  readonly terminalOutcome: RunOutcome;
+  readonly terminalOutcome: RunOutcome | 'throws';
   interrupted: boolean;
 }
 
@@ -175,7 +175,9 @@ class OutcomeRoundNode extends BaseNode<OutcomeShared> {
   async post(shared: OutcomeShared): Promise<undefined> {
     if (shared.currentRound + 1 !== shared.totalRounds) return undefined;
 
-    if (this.control.terminalOutcome === RUN_OUTCOME.FAILED) {
+    if (this.control.terminalOutcome === 'throws') {
+      throw new Error('reflection round threw');
+    } else if (this.control.terminalOutcome === RUN_OUTCOME.FAILED) {
       shared.lastError = {
         message: 'reflection round failed',
         userRetryable: false,
@@ -194,18 +196,26 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
     {
       name: 'completed',
       terminalOutcome: RUN_OUTCOME.COMPLETED,
+      persistedOutcome: RUN_OUTCOME.COMPLETED,
     },
     {
       name: 'failed',
       terminalOutcome: RUN_OUTCOME.FAILED,
+      persistedOutcome: RUN_OUTCOME.FAILED,
     },
     {
       name: 'cancelled',
       terminalOutcome: RUN_OUTCOME.CANCELLED,
+      persistedOutcome: RUN_OUTCOME.CANCELLED,
+    },
+    {
+      name: 'thrown failure',
+      terminalOutcome: 'throws' as const,
+      persistedOutcome: RUN_OUTCOME.FAILED,
     },
   ])(
     'persists completed transition and $name final-round GROUP_END outcomes',
-    async ({ name, terminalOutcome }) => {
+    async ({ name, terminalOutcome, persistedOutcome }) => {
       const kv = createFakeKv();
       const logger = new TraceEmitter();
       const streamId = `stream:reflection-round-${name}` as StreamTabId;
@@ -240,7 +250,12 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
       const recorder = attachTranscriptRecorder(logger, streamId, store);
 
       try {
-        await expect(flow.run(shared)).resolves.toBe(terminalOutcome);
+        const run = flow.run(shared);
+        if (terminalOutcome === 'throws') {
+          await expect(run).rejects.toThrow('reflection round threw');
+        } else {
+          await expect(run).resolves.toBe(terminalOutcome);
+        }
 
         const roundEndStatuses =
           store
@@ -259,7 +274,7 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
 
         expect(roundEndStatuses).toEqual([
           RUN_OUTCOME.COMPLETED,
-          terminalOutcome,
+          persistedOutcome,
         ]);
       } finally {
         recorder.unsubscribe();
