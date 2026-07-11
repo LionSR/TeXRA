@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent core
-import { createRunTrace } from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
@@ -34,7 +34,8 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
-      logger: createRunTrace('ToolUseRoundFollowUpMedia').trace,
+      logger: createRunTrace('ToolUseRoundFollowUpMedia', new StreamLogStore())
+        .trace,
       modelHandler: {
         addMediaToUserMessage,
         capabilities: { supportsVision: true },
@@ -161,7 +162,10 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
-      logger: createRunTrace('ToolUseRoundBlankToolResult').trace,
+      logger: createRunTrace(
+        'ToolUseRoundBlankToolResult',
+        new StreamLogStore(),
+      ).trace,
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
@@ -347,7 +351,8 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
-      logger: createRunTrace('ToolUseRoundSystemPrompt').trace,
+      logger: createRunTrace('ToolUseRoundSystemPrompt', new StreamLogStore())
+        .trace,
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
