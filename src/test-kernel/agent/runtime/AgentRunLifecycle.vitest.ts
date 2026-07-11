@@ -571,13 +571,18 @@ describe('runFlowWithLifecycle', () => {
       // is already desubscribed by this point (disposeTrace ran in the
       // WAITING branch's own finally), so the fix writes the stage's
       // GROUP_END entry directly to the transcript store instead of calling
-      // the now-inert `ctx.parentStage.end()`.
+      // the now-inert `ctx.parentStage.end()`. The written status is the
+      // literal `RunOutcome.CANCELLED` (#7993 step 2) — no
+      // legacyEndGroupStatusForOutcome fold at this direct-write call site.
       expect(transcriptsUpdate).toHaveBeenCalledWith(
         streamId,
         expect.any(String),
         expect.objectContaining({
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          data: expect.objectContaining({ kind: 'run' }),
+          data: expect.objectContaining({
+            status: RUN_OUTCOME.CANCELLED,
+            kind: 'run',
+          }),
         }),
       );
     } finally {
@@ -589,25 +594,25 @@ describe('runFlowWithLifecycle', () => {
   // The canonical outcome is decided once and projected three ways. This
   // matrix pins the projections for every terminal path — in particular that
   // a user stop (the no-throw `cancelled` exit, the dominant stop path)
-  // persists `interrupted` and ends the stage neutral, never as an error.
+  // persists `interrupted` and ends the stage with the literal `cancelled`
+  // outcome, distinct from `completed` (#7993 step 2: `stage.end()` writes
+  // the native `RunOutcome`, not the folded 2-value `EndGroupStatus` string —
+  // completed/cancelled/failed all end up distinct on the transcript row).
   it('projects returned outcomes to terminal status, stage end, and stream status', async () => {
     const cases = [
       {
         outcome: RUN_OUTCOME.COMPLETED,
         terminal: EXECUTION_STATUS.COMPLETED,
-        stageEnd: 'stopped',
         stream: STREAM_PHASE.COMPLETED,
       },
       {
         outcome: RUN_OUTCOME.CANCELLED,
         terminal: EXECUTION_STATUS.INTERRUPTED,
-        stageEnd: 'stopped',
         stream: STREAM_PHASE.CANCELLED,
       },
       {
         outcome: RUN_OUTCOME.FAILED,
         terminal: EXECUTION_STATUS.ERROR,
-        stageEnd: 'error',
         stream: STREAM_PHASE.FAILED,
       },
     ] as const;
@@ -632,7 +637,9 @@ describe('runFlowWithLifecycle', () => {
           executionId,
           expected.terminal,
         );
-        expect(stageEnd).toHaveBeenCalledWith(expected.stageEnd);
+        // The stage closes with the literal outcome — no
+        // legacyEndGroupStatusForOutcome fold at this production call site.
+        expect(stageEnd).toHaveBeenCalledWith(expected.outcome);
         expect(streamStatus.get(streamId)).toBe(expected.stream);
       } finally {
         clearStreamStatusForTest(streamStatus, streamId);
@@ -640,7 +647,7 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('projects a thrown abort as cancelled (interrupted, neutral stage)', async () => {
+  it('projects a thrown abort as cancelled (distinct stage outcome, not folded to stopped)', async () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'outcome-thrown-abort',
     );
@@ -657,7 +664,7 @@ describe('runFlowWithLifecycle', () => {
         executionId,
         EXECUTION_STATUS.INTERRUPTED,
       );
-      expect(stageEnd).toHaveBeenCalledWith('stopped');
+      expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
@@ -682,7 +689,7 @@ describe('runFlowWithLifecycle', () => {
         executionId,
         EXECUTION_STATUS.ERROR,
       );
-      expect(stageEnd).toHaveBeenCalledWith('error');
+      expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
