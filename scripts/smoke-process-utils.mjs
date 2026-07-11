@@ -3,10 +3,6 @@ export function appendBoundedLog(current, chunk, maxLogChars) {
   return next.length > maxLogChars ? next.slice(-maxLogChars) : next;
 }
 
-export function formatOutput(output) {
-  return output.trim().length > 0 ? output.trim() : '(no output)';
-}
-
 export function formatExit(exit) {
   return exit.signal ?? `code ${exit.code}`;
 }
@@ -15,17 +11,50 @@ export function hasExited(child) {
   return child.exitCode !== null || child.signalCode !== null;
 }
 
-export function waitForExit(child) {
+function waitForExitEvent(child, rejectOnError) {
+  if (hasExited(child)) {
+    return Promise.resolve({
+      code: child.exitCode,
+      signal: child.signalCode,
+    });
+  }
+
   return new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('exit', (code, signal) => resolve({ code, signal }));
+    const cleanup = () => {
+      child.off('exit', onExit);
+      if (onError) child.off('error', onError);
+    };
+    const onExit = (code, signal) => {
+      cleanup();
+      resolve({ code, signal });
+    };
+    const onError = rejectOnError
+      ? (error) => {
+          cleanup();
+          reject(error);
+        }
+      : undefined;
+
+    child.once('exit', onExit);
+    if (onError) child.once('error', onError);
+    // Close the check/listener TOCTOU interval: an exit that happened between
+    // the first check and listener registration has updated these fields even
+    // if its event was missed.
+    if (hasExited(child)) {
+      cleanup();
+      resolve({ code: child.exitCode, signal: child.signalCode });
+    }
   });
 }
 
-export function waitForClose(child) {
-  return new Promise((resolve) => {
-    child.once('close', (code, signal) => resolve({ code, signal }));
-  });
+/** Wait for process exit, rejecting if the child reports a process error. */
+export function waitForExit(child) {
+  return waitForExitEvent(child, true);
+}
+
+/** Wait for actual process exit without treating an error event as exit. */
+export function waitForTermination(child) {
+  return waitForExitEvent(child, false);
 }
 
 export function delay(ms) {
@@ -35,26 +64,11 @@ export function delay(ms) {
   });
 }
 
-export async function waitForExitOrTimeout(exitPromise, timeoutMs) {
+async function waitForExitOrTimeout(exitPromise, timeoutMs) {
   return Promise.race([
     exitPromise.then((exit) => ({ exit })),
     delay(timeoutMs).then(() => ({ timeout: true })),
   ]);
-}
-
-export function readPositiveNumber(value, fallback) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-export async function readPendingExit(exitPromise) {
-  const result = await Promise.race([
-    exitPromise.then((exit) => ({ exit })),
-    new Promise((resolve) => {
-      setImmediate(() => resolve({}));
-    }),
-  ]);
-  return result.exit;
 }
 
 export async function stopChild(
