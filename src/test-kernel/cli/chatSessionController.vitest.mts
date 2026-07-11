@@ -205,6 +205,7 @@ function makeResumeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
 
 function makeResumeSnapshotStore(options: {
   readonly preload?: () => Promise<void>;
+  readonly load?: () => Promise<void>;
   readonly executionId?: string | undefined;
   readonly persistedExecutionId?: string | undefined;
   readonly config?: AgentConfig | undefined;
@@ -212,11 +213,26 @@ function makeResumeSnapshotStore(options: {
 }): StreamSnapshotStore {
   return {
     preload: vi.fn(options.preload ?? (async () => undefined)),
+    load: vi.fn(options.load ?? (async () => undefined)),
+    read: vi.fn(async () => ({
+      runUsage: {},
+      todos: [],
+      plan: undefined,
+    })),
     getExecutionId: vi.fn(() => options.executionId),
     readPersistedExecutionId: vi.fn(async () => options.persistedExecutionId),
     getRunConfig: vi.fn(() => options.config),
     getParentStreamId: vi.fn(() => options.parentStreamId),
   } as unknown as StreamSnapshotStore;
+}
+
+function makeResolvedResume() {
+  return {
+    kind: 'toolUse' as const,
+    streamId: 'stream-resume' as StreamTabId,
+    snapshot: { executionId: 'exec-resume' } as never,
+    config: makeResumeConfig(),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -479,26 +495,12 @@ describe('createChatSessionController', () => {
     });
 
     const session = makeSession({ runCompleted: true });
-    const snapshotStore = {
-      load: vi.fn(async () => undefined),
-      read: vi.fn(async () => ({
-        runUsage: {},
-        todos: [],
-        plan: undefined,
-      })),
-    } as unknown as StreamSnapshotStore;
+    const snapshotStore = makeResumeSnapshotStore({});
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );
 
-    const preResolved = {
-      kind: 'toolUse' as const,
-      streamId: 'stream-resume' as StreamTabId,
-      snapshot: { executionId: 'exec-resume' } as never,
-      config: makeResumeConfig(),
-    };
-
-    const resumed = ctrl.resume('aaaaaa' as ExecutionId, preResolved);
+    const resumed = ctrl.resume('aaaaaa' as ExecutionId, makeResolvedResume());
     // resume() has claimed the slot and is suspended inside
     // defaultSession().transcripts.ensureLoaded(); session.streamId is
     // already set to the resumed stream.
@@ -534,6 +536,30 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
   });
 
+  it('reports resume rehydration failures without rejecting the TUI submit path', async () => {
+    const session = makeSession({ runCompleted: true });
+    const snapshotStore = makeResumeSnapshotStore({
+      load: async () => {
+        throw new Error('snapshot load failed');
+      },
+    });
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    await expect(
+      ctrl.resume('aaaaaa' as ExecutionId, makeResolvedResume()),
+    ).resolves.toBeUndefined();
+
+    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
+      'snapshot load failed',
+    );
+    expect(mocks.resumeToolUseFromSnapshot).not.toHaveBeenCalled();
+    expect(session.runExitCode).toBe(CliExitCode.AgentError);
+    expect(session.runCompleted).toBe(true);
+    expect(ctrl.canStartRootRun()).toBe(true);
+  });
+
   it('forwards a stop issued during manual resume helper-model setup', async () => {
     const helperModel = deferred();
     mocks.setCliHelperModel.mockReturnValueOnce(helperModel.promise);
@@ -550,13 +576,8 @@ describe('createChatSessionController', () => {
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );
-    const snapshot = { executionId: 'exec-resume' } as never;
-    const preResolved = {
-      kind: 'toolUse' as const,
-      streamId: 'stream-resume' as StreamTabId,
-      snapshot,
-      config: makeResumeConfig(),
-    };
+    const preResolved = makeResolvedResume();
+    const { snapshot } = preResolved;
     mocks.resumeToolUseFromSnapshot.mockImplementationOnce(
       async (
         _snapshot: unknown,
