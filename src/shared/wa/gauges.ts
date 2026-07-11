@@ -34,7 +34,7 @@ export function renderLinearGauge(options: LinearGaugeOptions): TemplateResult {
 
   return html`
     <span
-      class="linear-gauge-track ${ifDefined(options.className)}"
+      class=${['linear-gauge-track', options.className].filter(Boolean).join(' ')}
       style=${styleMap({ width: `${width}px`, height: `${height}px` })}
       title=${ifDefined(options.title)}
     >
