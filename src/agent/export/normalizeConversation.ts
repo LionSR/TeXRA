@@ -24,7 +24,7 @@ import {
 } from '@agent/modelHandlers/openai/openAIResponseContent';
 import { isResponseFunctionToolCallItem } from '@agent/modelHandlers/openai/responseStreamEvents';
 import type { MediaAttachmentKind } from '@shared/schemas';
-import { assertNever } from '@utils/core';
+import { assertNever, isObject } from '@utils/core';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
@@ -306,7 +306,7 @@ export function normalizeConversationForExport(
   let lastAssistantHadToolUse = false;
 
   for (const raw of messages) {
-    const item = asObject(raw);
+    const item = isObject(raw) ? raw : undefined;
     if (!item) {
       continue;
     }
@@ -406,12 +406,6 @@ export function normalizeConversationForExport(
   }
 
   return nodes;
-}
-
-function asObject(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
 }
 
 /**

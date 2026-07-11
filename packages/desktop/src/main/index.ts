@@ -221,18 +221,17 @@ async function showSetupCommandResult(
   }
 }
 
-async function showSetupCommandOpenedInTerminal(
+async function showCopyCommandDialog(
   window: BrowserWindow,
   command: string,
+  options: { type: 'info' | 'warning'; message: string; detail: string; defaultId: number },
 ): Promise<void> {
   const response = await dialog.showMessageBox(window, {
-    type: 'info',
-    message: 'Setup command opened in Terminal',
-    detail:
-      `Command:\n${command}\n\n` +
-      'Complete any prompts in the Terminal window, then return to TeXRA and recheck the dependency status.',
+    type: options.type,
+    message: options.message,
+    detail: options.detail,
     buttons: ['Copy Command', 'Close'],
-    defaultId: 1,
+    defaultId: options.defaultId,
     cancelId: 1,
   });
 
@@ -241,24 +240,32 @@ async function showSetupCommandOpenedInTerminal(
   }
 }
 
+async function showSetupCommandOpenedInTerminal(
+  window: BrowserWindow,
+  command: string,
+): Promise<void> {
+  await showCopyCommandDialog(window, command, {
+    type: 'info',
+    message: 'Setup command opened in Terminal',
+    detail:
+      `Command:\n${command}\n\n` +
+      'Complete any prompts in the Terminal window, then return to TeXRA and recheck the dependency status.',
+    defaultId: 1,
+  });
+}
+
 async function showManualSetupCommand(
   window: BrowserWindow,
   command: string,
 ): Promise<void> {
-  const response = await dialog.showMessageBox(window, {
+  await showCopyCommandDialog(window, command, {
     type: 'warning',
     message: 'Setup command needs an interactive terminal',
     detail:
       `Command:\n${command}\n\n` +
       'This command may ask for a password or confirmation. TeXRA will not run it in a hidden process. Copy it into a terminal, then return to TeXRA and recheck the dependency status.',
-    buttons: ['Copy Command', 'Close'],
     defaultId: 0,
-    cancelId: 1,
   });
-
-  if (response.response === 0) {
-    clipboard.writeText(command);
-  }
 }
 
 function createWindow(options: {
