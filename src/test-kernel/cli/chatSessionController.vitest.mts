@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   createTuiHostInteractions: vi.fn(),
   resolveAndResumeStream: vi.fn(),
   resumeQueuedToolUseSnapshot: vi.fn(),
+  resumeToolUseFromSnapshot: vi.fn(),
   projectStreamTranscript: vi.fn(),
   notify: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
@@ -50,6 +51,11 @@ vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
 
 vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
   resumeQueuedToolUseSnapshot: mocks.resumeQueuedToolUseSnapshot,
+}));
+
+vi.mock('@agent/runtime/executeAgent', () => ({
+  executeAgent: vi.fn(),
+  resumeToolUseFromSnapshot: mocks.resumeToolUseFromSnapshot,
 }));
 
 vi.mock('@agent/runtime/SessionHandle', () => ({
@@ -109,7 +115,7 @@ vi.mock('@cli/runtime/sessionResume', () => ({
   ): string => `not resumable (${resolution.kind}): ${id}`,
 }));
 
-import { StreamSnapshotStore } from '@transcript';
+import { setDefaultStreamLogStore, StreamSnapshotStore } from '@transcript';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { wakeQueuedFollowUpStream } from '@agent/followUp/ToolUseFollowUp';
 import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
@@ -123,6 +129,7 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import type { StreamLogStore } from '@transcript';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -289,6 +296,8 @@ describe('createChatSessionController', () => {
     mocks.clearLocalTranscript.mockReset();
     mocks.moveLocalTranscriptToStream.mockReset();
     mocks.resolveCliResumeSnapshot.mockReset();
+    mocks.resumeToolUseFromSnapshot.mockReset();
+    mocks.resumeToolUseFromSnapshot.mockResolvedValue(undefined);
   });
 
   it('returns an object satisfying the ChatSessionController interface', () => {
@@ -445,6 +454,59 @@ describe('createChatSessionController', () => {
     snapshot.resolve({ kind: 'not-found' });
     await resumeA;
     expect(session.runCompleted).toBe(true);
+  });
+
+  it('honors a Ctrl-C issued while resume() is still rehydrating and never starts the resumed run', async () => {
+    // The early slot claim makes chatTuiCanStopActiveRun() report this
+    // resume() as stoppable (session.runPromise is set, session.streamId is
+    // still whatever resume() has set so far) well before the resumed agent
+    // actually starts running. If the user hits Ctrl-C during that
+    // rehydration window, resume() must notice `session.stopRequested` and
+    // bail out instead of silently starting `resumeToolUseFromSnapshot()`
+    // once the awaits finish.
+    const ensureLoaded = deferred<void>();
+    setDefaultStreamLogStore({
+      ensureLoaded: () => ensureLoaded.promise,
+    } as unknown as StreamLogStore);
+
+    const session = makeSession({ runCompleted: true });
+    const snapshotStore = {
+      load: vi.fn(async () => undefined),
+      read: vi.fn(async () => ({
+        runUsage: {},
+        todos: [],
+        plan: undefined,
+      })),
+    } as unknown as StreamSnapshotStore;
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+
+    const preResolved = {
+      kind: 'toolUse' as const,
+      streamId: 'stream-resume' as StreamTabId,
+      snapshot: { executionId: 'exec-resume' } as never,
+      config: makeResumeConfig(),
+    };
+
+    const resumed = ctrl.resume('aaaaaa' as ExecutionId, preResolved);
+    // resume() has claimed the slot and is suspended inside
+    // getDefaultStreamLogStore().ensureLoaded(); session.streamId is
+    // already set to the resumed stream.
+    expect(session.runPromise).toBeDefined();
+    expect(session.streamId).toBe('stream-resume');
+
+    // Ctrl-C fires while resume() is still rehydrating.
+    ctrl.stop();
+    expect(session.stopRequested).toBe(true);
+
+    ensureLoaded.resolve();
+    await resumed;
+
+    expect(mocks.resumeToolUseFromSnapshot).not.toHaveBeenCalled();
+    expect(session.runCompleted).toBe(true);
+
+    setDefaultStreamLogStore(undefined as unknown as StreamLogStore);
   });
 
   it('reports a failed persisted-child wake while the CLI root slot is busy', async () => {

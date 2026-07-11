@@ -406,6 +406,19 @@ export function createChatSessionController(
         setupRunHost(sessionContext);
       session.runtimeHost = runtimeHost;
 
+      // A Ctrl-C during the rehydration awaits above (`resolveCliResumeSnapshot`,
+      // `ensureLoaded`, `snapshotStore.load`/`read`) lands here as
+      // `session.stopRequested`, since the early claim above already makes
+      // this run look stoppable to `chatTuiCanStopActiveRun`. Honor it before
+      // starting the real run chain — matching `tryResumeStream()`'s
+      // stop-check after its own preparatory awaits — instead of starting an
+      // agent the user already cancelled.
+      if (session.stopRequested) {
+        finalize();
+        resolveRunPromise();
+        return;
+      }
+
       const runChain = setCliHelperModel(currentModel)
         .then(() =>
           resumeToolUseFromSnapshot(resolution.snapshot, runtimeHost, {
