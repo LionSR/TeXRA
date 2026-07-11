@@ -50,14 +50,18 @@ export function publishAgentCliStreamUsage(
   });
 }
 
+interface ResumableAgentCliSession {
+  parentStreamId: StreamTabId;
+  childStreamId: StreamTabId;
+  executionId: ExecutionId;
+}
+
 interface ResumableAgentCliStore {
-  lookup(id: string):
-    | {
-        parentStreamId: StreamTabId;
-        childStreamId: StreamTabId;
-        executionId: ExecutionId;
-      }
-    | undefined;
+  waitForActive(id: string): Promise<ResumableAgentCliSession | undefined>;
+}
+
+interface ClaimableAgentCliStore extends ResumableAgentCliStore {
+  claim(id: string): (() => void) | undefined;
 }
 
 export interface AgentCliResumeLabels {
@@ -67,13 +71,8 @@ export interface AgentCliResumeLabels {
   queuedLabel: string;
 }
 
-/**
- * Enqueue a follow-up prompt onto an already-running agent-CLI session.
- * Refuse callers from a different parent stream because the turn result is
- * delivered back to the stored parent stream.
- */
-export function resumeAgentCliSession(
-  store: ResumableAgentCliStore,
+function queueAgentCliFollowUp(
+  stored: ResumableAgentCliSession,
   params: {
     id: string;
     prompt: string;
@@ -82,12 +81,6 @@ export function resumeAgentCliSession(
   },
 ): ToolResult {
   const { id, prompt, callerStreamId, labels } = params;
-  const stored = store.lookup(id);
-  if (!stored) {
-    throw new ToolError(
-      `${labels.notActiveLabel} '${id}' is not active. It may have completed or been stopped; start a new session without ${labels.idParamName}.`,
-    );
-  }
   if (callerStreamId && stored.parentStreamId !== callerStreamId) {
     throw new ToolError(
       `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
@@ -107,6 +100,48 @@ export function resumeAgentCliSession(
       `Execution ID: ${stored.executionId}`,
     ].join('\n'),
   };
+}
+
+/**
+ * Atomically choose between queueing onto an owned session id and launching a
+ * disk-based fallback. A failed owner releases only its own claim; waiting
+ * callers then compete for the released id, so one retries the fallback while
+ * the others continue waiting. A started loop promotes and later releases the
+ * claim itself.
+ */
+export async function resumeOrLaunchAgentCliSession(
+  store: ClaimableAgentCliStore,
+  params: {
+    id: string | undefined;
+    prompt: string;
+    callerStreamId: StreamTabId | undefined;
+    labels: AgentCliResumeLabels;
+    launch: () => Promise<ToolResult>;
+  },
+): Promise<ToolResult> {
+  const { id } = params;
+  if (!id) return params.launch();
+
+  while (true) {
+    const releaseClaim = store.claim(id);
+    if (releaseClaim) {
+      try {
+        return await params.launch();
+      } catch (error) {
+        releaseClaim();
+        throw error;
+      }
+    }
+
+    const stored = await store.waitForActive(id);
+    if (!stored) continue;
+    return queueAgentCliFollowUp(stored, {
+      id,
+      prompt: params.prompt,
+      callerStreamId: params.callerStreamId,
+      labels: params.labels,
+    });
+  }
 }
 
 export interface AgentCliLaunchParams {
