@@ -118,6 +118,24 @@ function toolUseTaskState(agent = 'search', model = 'deepseekproT'): TaskState {
   });
 }
 
+function injectDuringExecutionConfigHydration(
+  executionId: ExecutionId,
+  inject: () => void,
+) {
+  const originalRead = StorageFS.read.bind(StorageFS);
+  const configPath = path.join(
+    resolveRunStoragePath(executionId),
+    'config.json',
+  );
+  const injected = vi.fn(inject);
+  vi.spyOn(StorageFS, 'read').mockImplementation(async (target: string) => {
+    const raw = await originalRead(target);
+    if (target === configPath && injected.mock.calls.length === 0) injected();
+    return raw;
+  });
+  return injected;
+}
+
 describe('StreamSnapshotStore', () => {
   setupPlatform(buildSnapshotPlatform);
 
@@ -788,23 +806,13 @@ describe('StreamSnapshotStore', () => {
     );
 
     const store = new StreamSnapshotStore();
-    const originalRead = StorageFS.read.bind(StorageFS);
-    const configPath = path.join(
-      resolveRunStoragePath(oldExecutionId),
-      'config.json',
+    const wasRuntimeUpdateInjected = injectDuringExecutionConfigHydration(
+      oldExecutionId,
+      () => store.setTaskState(STREAM, newTaskState, newExecutionId),
     );
-    let injectedRuntimeUpdate = false;
-    vi.spyOn(StorageFS, 'read').mockImplementation(async (target: string) => {
-      const raw = await originalRead(target);
-      if (!injectedRuntimeUpdate && target === configPath) {
-        injectedRuntimeUpdate = true;
-        store.setTaskState(STREAM, newTaskState, newExecutionId);
-      }
-      return raw;
-    });
 
     await store.load([STREAM]);
-    expect(injectedRuntimeUpdate).toBe(true);
+    expect(wasRuntimeUpdateInjected).toHaveBeenCalledOnce();
     expect(store.getTaskState(STREAM)).toEqual(newTaskState);
     expect(store.getExecutionId(STREAM)).toBe(newExecutionId);
 
@@ -818,6 +826,52 @@ describe('StreamSnapshotStore', () => {
       executionId: newExecutionId,
       agent: 'new-search',
     });
+  });
+
+  it('persists a late reset and round patch that arrive during async hydration', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    const executionId = 'c0ffee' as ExecutionId;
+    await StorageFS.ensureDir(dir);
+    await Promise.all([
+      StorageFS.write(
+        path.join(dir, 'meta.json'),
+        JSON.stringify({
+          schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+          executionId,
+        }),
+      ),
+      StorageFS.write(
+        path.join(dir, 'missingOutputs.json'),
+        JSON.stringify({ '0': ['stale.tex'] }),
+      ),
+      getExecutionStore(executionId).writeConfig(
+        toolUseTaskState().agentConfig,
+      ),
+    ]);
+
+    const store = new StreamSnapshotStore();
+    const wereLateOverlaysInjected = injectDuringExecutionConfigHydration(
+      executionId,
+      () => {
+        store.clearMissingOutputs(STREAM);
+        store.updateMissingOutputs(STREAM, { 1: ['late.tex'] });
+        void store.addUsage(STREAM, RUN, usage(10, 2, 0.1));
+      },
+    );
+
+    await store.load([STREAM]);
+    expect(wereLateOverlaysInjected).toHaveBeenCalledOnce();
+    expect(store.getMissingOutputs(STREAM)).toEqual({ 1: ['late.tex'] });
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject(usage(10, 2, 0.1));
+    await store.flush();
+
+    const [missingOutputs, usageStats] = await Promise.all([
+      StorageFS.readJson(path.join(dir, 'missingOutputs.json')),
+      StorageFS.readJson(path.join(dir, 'usageStats.json')),
+    ]);
+    expect(missingOutputs).toEqual({ '1': ['late.tex'] });
+    expect(usageStats).toMatchObject({ [RUN]: usage(10, 2, 0.1) });
   });
 
   it('load refreshes already-seeded streams from disk instead of keeping stale memory', async () => {
