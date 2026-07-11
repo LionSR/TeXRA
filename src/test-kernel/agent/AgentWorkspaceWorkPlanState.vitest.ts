@@ -190,12 +190,10 @@ describe('agent workspace work-plan state', () => {
     // Regression for the codex P1 on #8005: when a persisted tool-use flow's
     // cursor is already past ToolUsePrepareNode, that node's own one-time
     // hydration never runs on resume (PersistedFlow.ensureRecord just reuses
-    // the existing record). runToolUseFlow's resume boundary is the only
-    // place left to migrate a legacy top-level {todos, plan} workspace
-    // snapshot -- it does so via this exact fromSnapshot(...).toSnapshot()
-    // round trip (see normalizeResumedWorkspaceSnapshot in
-    // runToolUseFlow.ts) before per-cycle code's canonical-only
-    // fromCanonicalSnapshot (ToolUseCycleNode.prep()) ever sees it.
+    // the existing record). ToolUseRunSharedSchema's one-time persistence
+    // boundary delegates to this legacy-capable workspace schema before
+    // per-cycle code's canonical-only fromCanonicalSnapshot
+    // (ToolUseCycleNode.prep()) ever sees it.
     const legacyWorkspaceSnapshot = {
       todos: [todo],
       plan: objectivePlan,

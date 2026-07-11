@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import { z } from 'zod';
 
 import {
@@ -5,6 +7,7 @@ import {
   type AgentRunStateSnapshot,
 } from '@agent/core/state/AgentState';
 import {
+  AgentWorkspaceCurrentSnapshotSchema,
   AgentWorkspaceStateSnapshotSchema,
   type AgentWorkspaceState,
 } from '@agent/core/state/AgentWorkspaceState';
@@ -16,9 +19,9 @@ import {
   ProviderMessageArraySchema,
   type ProviderMessage,
 } from '@agent/types/ProviderMessage';
-import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
+import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import type { RetryErrorInfo } from '@shared/schemas';
+import { RetryErrorInfoSchema } from '@shared/schemas';
 
 export const StateSlicesSchema = z.object({
   runStateSnapshot: AgentRunStateSnapshotSchema,
@@ -26,7 +29,35 @@ export const StateSlicesSchema = z.object({
   userChannels: UserVariableChannelsSchema,
 });
 
-export type StateSlicesSnapshot = z.infer<typeof StateSlicesSchema>;
+const StateSlicesCanonicalSchema = StateSlicesSchema.extend({
+  workspaceSnapshot: AgentWorkspaceCurrentSnapshotSchema,
+});
+
+export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
+
+/** Full persisted and live shared state for one tool-use flow. */
+export const ToolUseRunSharedSchema = z.looseObject({
+  messages: ProviderMessageArraySchema,
+  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable()
+    .transform((key) => key ?? undefined)
+    .optional(),
+  shouldSkipCycle: z.boolean(),
+  stateSlices: StateSlicesSchema.nullable(),
+  /** Per-call system text for providers that do not embed it in messages. */
+  systemPrompt: z.string().optional(),
+  userCancelledRetry: z.boolean().optional(),
+  /** Distinguishes failure from cancellation during resume. */
+  lastError: RetryErrorInfoSchema.optional(),
+  /** Last assistant response without the full assembly buffers. */
+  lastResponse: z.string().optional(),
+});
+
+/** Per-step schema after the one-time legacy workspace migration. */
+export const ToolUseRunSharedCanonicalSchema = ToolUseRunSharedSchema.extend({
+  stateSlices: StateSlicesCanonicalSchema.nullable(),
+});
+
+export type ToolUseRunShared = z.output<typeof ToolUseRunSharedSchema>;
 
 /** Extract edited file paths from a workspace state snapshot. */
 export function extractTouchedFiles(
@@ -36,25 +67,6 @@ export function extractTouchedFiles(
     stateSlices?.workspaceSnapshot?.interactions?.edits?.map((e) => e.path) ??
     []
   );
-}
-
-export interface ToolUseRunShared {
-  messages: ProviderMessage[];
-  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey;
-  shouldSkipCycle: boolean;
-  stateSlices: StateSlicesSnapshot | null;
-  /**
-   * System prompt for providers that pass `system` per-call (Anthropic,
-   * Google) instead of embedding it into `messages`. Set once by
-   * `ToolUsePrepareNode`; threaded into every `ToolUseRoundShared` by
-   * `ToolUseCycleNode` so it reaches `createResponse` on every round.
-   */
-  systemPrompt?: string;
-  userCancelledRetry?: boolean;
-  /** Distinguishes failure from cancellation during resume. */
-  lastError?: RetryErrorInfo;
-  /** Last assembled assistant response, retained without persisting full assembly strings. */
-  lastResponse?: string;
 }
 
 export type WaitExecResult =
@@ -110,15 +122,9 @@ export function assertPreparedShared(
   }
 }
 
-const MessagesSchema = z.looseObject({ messages: ProviderMessageArraySchema });
-const LegacyConversationSchema = z.looseObject({
-  conversation: ProviderMessageArraySchema,
-});
-
 /**
- * Migrate legacy shared state formats to current ToolUseRunShared.
- * Handles: flat with `messages`, flat with `conversation`, and nested `{ state: {...} }`.
- * Returns null if unparseable.
+ * Parse persisted shared state once, normalizing the legacy conversation key,
+ * outer state wrapper, and workspace snapshot before live flow code sees it.
  */
 export function migrateSharedState(
   shared: unknown,
@@ -131,15 +137,27 @@ export function migrateSharedState(
   const obj = nested ? (shared as Record<string, unknown>).state : shared;
   if (!obj || typeof obj !== 'object') return null;
 
-  if (MessagesSchema.safeParse(obj).success) {
-    return { data: obj as ToolUseRunShared, migrated: nested };
+  const record = obj as Record<string, unknown>;
+  const messages = ProviderMessageArraySchema.safeParse(record.messages);
+  const conversation = ProviderMessageArraySchema.safeParse(
+    record.conversation,
+  );
+  if (!messages.success && !conversation.success) return null;
+
+  const { conversation: _legacyConversation, ...candidate } = record;
+  let migrated = nested;
+  if (!messages.success) {
+    candidate.messages = conversation.data;
   }
-  if (LegacyConversationSchema.safeParse(obj).success) {
-    const { conversation, ...rest } = obj as Record<string, unknown>;
-    return {
-      data: { ...rest, messages: conversation } as ToolUseRunShared,
-      migrated: true,
-    };
+  if (Object.hasOwn(record, 'conversation')) {
+    migrated = true;
   }
-  return null;
+
+  const parsed = ToolUseRunSharedSchema.safeParse(candidate);
+  if (!parsed.success) return null;
+
+  return {
+    data: parsed.data,
+    migrated: migrated || !isDeepStrictEqual(candidate, parsed.data),
+  };
 }
