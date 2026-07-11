@@ -482,6 +482,24 @@ export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
   readonly drainedFollowUps?: readonly FollowUpQueueBatchItem[];
 }
 
+export function resumeToolUseFromSnapshot(
+  snapshot: ToolUseSessionSnapshot,
+  runtimeHost: AgentRuntimeHost,
+  options: ResumeToolUseFromSnapshotOptions & { allowWaitingResult: true },
+): Promise<AgentFlowResult | WaitingToolUseFlowResult>;
+export function resumeToolUseFromSnapshot(
+  snapshot: ToolUseSessionSnapshot,
+  runtimeHost: AgentRuntimeHost,
+  options?: ResumeToolUseFromSnapshotOptions & {
+    allowWaitingResult?: false | undefined;
+  },
+): Promise<AgentFlowResult>;
+export function resumeToolUseFromSnapshot(
+  snapshot: ToolUseSessionSnapshot,
+  runtimeHost: AgentRuntimeHost,
+  options: ResumeToolUseFromSnapshotOptions,
+): Promise<AgentRuntimeFlowResult>;
+
 export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   runtimeHost: AgentRuntimeHost,
