@@ -41,12 +41,20 @@ export class ToolUsePrepareNode<C> extends Node<
 
     if (snapshot) {
       logger.debug('Resuming tool-use session from saved state.');
-      // Rebuild the current system text and let the model handler decide
-      // whether/how to swap it into the persisted first-message slot: for
-      // providers that embed it into `messages` (OpenAI, OpenRouter) it's
-      // rewritten there; for providers that pass `system` per-call instead
-      // (Anthropic, Google) it's a no-op and the round flow resupplies the
-      // returned `systemPrompt` on every subsequent model call.
+      // The persisted messages are used verbatim -- including `messages[0]`
+      // for providers that embed the system prompt into `messages` (OpenAI,
+      // OpenRouter). Rewriting that text on every resume to reflect current
+      // workspace/tool state would change the leading bytes of the request
+      // and invalidate the provider's prefix-based prompt cache; per
+      // maintainer ruling, staleness is preferable to that cache miss. A
+      // system-prompt edit made between suspend and resume therefore does
+      // not propagate into an already-suspended run.
+      //
+      // `systemPrompt` below is still rebuilt fresh: for providers that pass
+      // `system` per-call instead of storing it in `messages` (Anthropic,
+      // Google), it isn't part of the cached prefix at all -- the round flow
+      // resupplies it on every model call regardless of resume, so rebuilding
+      // it here is orthogonal to the caching concern above.
       const rebuiltPrompts = await buildInitialToolUsePrompts(
         this.services.prompt,
         userVarChannels.transient,
@@ -57,14 +65,10 @@ export class ToolUsePrepareNode<C> extends Node<
         rebuiltPrompts.systemPrompt,
         rebuiltPrompts.instructionSuffix,
       );
-      const messages = this.services.modelHandler.refreshSystemMessage(
-        snapshot.messages,
-        systemMessage,
-      );
       return {
         kind: 'success',
         result: {
-          messages,
+          messages: snapshot.messages,
           runState: snapshot.run,
           workspaceState: AgentWorkspaceState.fromSnapshot(snapshot.workspace),
           userChannels: {
