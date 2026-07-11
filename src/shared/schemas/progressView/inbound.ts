@@ -14,9 +14,10 @@ import {
 import { SwitchViewMessageSchema } from '../commonViewMessages';
 import { commandOnly } from '../messageFactories';
 import {
-  ExternalInquirySessionLinksSchema,
   ExternalInquiryThreadIdSchema,
   InquiryDraftSchema,
+  InquiryDropActionSchema,
+  InquirySubmitActionSchema,
 } from '../inquiry';
 import {
   AgentProposalSchema,
@@ -150,32 +151,20 @@ const PlanApprovalActionMessageSchema = z.object({
   feedback: z.string().optional(),
 });
 
-const ExternalInquiryActionMessageSchema = z
-  .object({
+const ExternalInquiryActionMessageSchema = z.discriminatedUnion('action', [
+  InquirySubmitActionSchema.extend({
     command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
-    action: z.enum(['submit', 'drop', 'draft']),
+  }),
+  InquiryDropActionSchema.extend({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
+  }),
+  z.object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
+    action: z.literal('draft'),
     threadId: ExternalInquiryThreadIdSchema,
-    answer: z.string().min(1).optional(),
-    sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
-    feedback: z.string().optional(),
-    draft: InquiryDraftSchema.nullish(),
-  })
-  .superRefine((message, ctx) => {
-    if (message.action === 'submit' && !message.answer) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['answer'],
-        message: 'Submit actions require an answer.',
-      });
-    }
-    if (message.action === 'draft' && message.draft === undefined) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['draft'],
-        message: 'Draft actions require a draft value.',
-      });
-    }
-  });
+    draft: InquiryDraftSchema.nullable(),
+  }),
+]);
 
 const UserQuestionActionMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION),

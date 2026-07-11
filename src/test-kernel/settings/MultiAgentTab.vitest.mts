@@ -5,17 +5,32 @@ import { describe, expect, it } from 'vitest';
 import type { MultiAgentTab } from '@settingsView/frontend/tabs/MultiAgentTab';
 
 // Local imports - shared schemas
-import { AGENT_MODE_PRESETS } from '@shared/schemas/agentPresets';
+import {
+  AGENT_MODE_PRESETS,
+  type AgentModePreset,
+} from '@shared/schemas/agentPresets';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
-async function mount(): Promise<MultiAgentTab> {
+async function mount(
+  props: Partial<MultiAgentTab> = {},
+): Promise<MultiAgentTab> {
   const element = document.createElement('multi-agent-tab') as MultiAgentTab;
+  Object.assign(element, props);
   document.body.append(element);
   await element.updateComplete;
   return element;
 }
+
+const CUSTOM_PRESET: AgentModePreset = {
+  id: 'custom-team',
+  name: 'Custom Team',
+  description: 'A user-authored team.',
+  icon: 'rocket',
+  workflowAgents: ['polish'],
+  toolUseAgents: ['assistant'],
+};
 
 function dispatchKey(target: Element, key: string): void {
   target.dispatchEvent(
@@ -72,5 +87,30 @@ describe('multi-agent-tab preset card keyboard activation', () => {
       AGENT_MODE_PRESETS[0]!.id,
       AGENT_MODE_PRESETS[0]!.id,
     ]);
+  });
+
+  it('does not apply the preset when Enter/Space bubbles from the delete button', async () => {
+    const element = await mount({ customPresets: [CUSTOM_PRESET] });
+    const applied: string[] = [];
+    const deleted: string[] = [];
+    element.addEventListener('apply-agent-mode-preset', (event) => {
+      applied.push(
+        (event as CustomEvent<{ presetId: string }>).detail.presetId,
+      );
+    });
+    element.addEventListener('delete-agent-mode-preset', (event) => {
+      deleted.push(
+        (event as CustomEvent<{ presetId: string }>).detail.presetId,
+      );
+    });
+
+    const deleteButton = element.shadowRoot?.querySelector(
+      '.preset-delete-btn',
+    );
+    expect(deleteButton).toBeInstanceOf(HTMLElement);
+
+    dispatchKey(deleteButton!, 'Enter');
+
+    expect(applied).toHaveLength(0);
   });
 });
