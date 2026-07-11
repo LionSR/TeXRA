@@ -570,9 +570,7 @@ export class DesktopProgressBridge {
           },
         },
         externalInquiry: {
-          logWarn: (message, context) =>
-            this.logger.warn(message, { data: context }),
-          sessionContext: { session: this.session },
+          session: this.session,
         },
       },
     });
