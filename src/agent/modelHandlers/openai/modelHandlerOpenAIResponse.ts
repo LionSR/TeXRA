@@ -685,6 +685,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * anchor clear, which already survives retries permanently — without it, the
    * anchor clear alone would survive while this payload got wiped every
    * attempt, forcing a redundant re-compaction on each retry.
+   *
+   * Reference equality alone cannot distinguish a same-turn retry from the
+   * next turn, since `ModelInvocationNode.post()` mutates the shared messages
+   * array in place (same reference survives across turns too). The field is
+   * therefore also cleared unconditionally by {@link applyCompactionState} on
+   * every successful call, so it can never outlive the turn it was computed
+   * for; the `sourceMessages` check only ever matters while an attempt from
+   * this same turn is still retrying after a failure.
    */
   private compactionResult?: {
     compactedMessages: ResponseInputItem[];
@@ -1054,8 +1062,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Apply compaction state updates after successful API call.
-   * Updates conversation state flags. Does NOT clear compactionResult -
-   * it's needed for the return value and gets cleared on next createResponse() call.
+   * Updates conversation state flags.
    *
    * Note: cumulativeInputTokens is NOT updated here - it will be set from
    * response.usage.input_tokens after the API call to reflect actual usage.
@@ -1070,8 +1077,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Note: the chain anchor is already cleared immediately after compaction
     // (before API call) to avoid "No tool output found" errors.
 
-    // Note: compactionResult is NOT cleared here - it's read for the return value.
-    // It gets cleared at the start of the next createResponse() call.
+    // Clear compactionResult now that this successful call has consumed it.
+    // This runs only on success (finalizeResponse's success paths), never on
+    // a failed attempt that will be retried, so it can't be confused with the
+    // same-turn-retry cache check in createResponseImpl(). Clearing here
+    // (rather than relying on `sourceMessages !== messages` reference
+    // (in)equality) matters because PocketFlow's ModelInvocationNode.post()
+    // mutates `shared.messages` in place via replaceMessagesInPlace
+    // (length=0 + push), so the array reference is often IDENTICAL across
+    // turns, not just across retries of the same turn. Leaving compactionResult
+    // set here would make the next turn's genuinely different input look like
+    // a same-turn retry, resend this turn's stale compactedMessages, and
+    // silently drop everything appended since (tool outputs, new user turns).
+    this.compactionResult = undefined;
   }
 
   /** Creates a configured OpenAI client instance. */
@@ -1453,6 +1471,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // would outlive this payload, forcing a redundant re-compaction on every
     // retry. A retained pending response is handled above before this state
     // can be discarded.
+    //
+    // This reference check alone is NOT sufficient to distinguish a same-turn
+    // retry from the next turn, because PocketFlow's ModelInvocationNode.post()
+    // mutates `shared.messages` in place, so the reference is often identical
+    // across turns too. The primary guard against cross-turn reuse is
+    // applyCompactionState() clearing compactionResult on every successful
+    // call; this line only ever matters while a compaction from a still-in-
+    // flight (unsuccessful) attempt is pending.
     if (this.compactionResult?.sourceMessages !== messages) {
       this.compactionResult = undefined;
     }
