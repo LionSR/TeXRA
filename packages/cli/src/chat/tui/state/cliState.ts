@@ -13,6 +13,7 @@ import {
   type ConversationProgress,
   type NormalizedToolUse,
   type Plan,
+  type ProcessOutputTail,
   type RoundStage,
   STREAM_STATUS,
   type StreamLifecycleStatus,
@@ -21,6 +22,8 @@ import {
   type TodoItem,
   type TokenUsageStats,
 } from '@shared/schemas';
+
+export type { ProcessOutputTail } from '@shared/schemas';
 import {
   applyChildStreamRemoval,
   isChildStreamRemoved,
@@ -91,11 +94,6 @@ export interface SessionMeta {
   readonly canDelegate: boolean;
   readonly teamName?: string;
   readonly version: string;
-}
-
-export interface ProcessOutputTail {
-  readonly stdout: string;
-  readonly stderr: string;
 }
 
 export interface BypassState {
