@@ -1,3 +1,4 @@
+// Node.js imports
 import { access, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -5,6 +6,7 @@ import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+// Local imports - smoke process helpers
 import {
   appendBoundedLog,
   delay,
@@ -45,6 +47,27 @@ function appendDiagnostic(label, value) {
   );
 }
 
+function createRuntimeFailureSignal() {
+  let firstError;
+  let resolveFirstError;
+  const promise = new Promise((resolvePromise) => {
+    resolveFirstError = resolvePromise;
+  });
+  return {
+    get error() {
+      return firstError;
+    },
+    promise,
+    report(label, value) {
+      const message = String(value).trim() || label;
+      appendDiagnostic(label, message);
+      if (firstError) return;
+      firstError = new Error(`${label}: ${message}`);
+      resolveFirstError(firstError);
+    },
+  };
+}
+
 function defaultPackagedExecutables() {
   if (process.platform === 'darwin') {
     const appExecutable = ['TeXRA.app', 'Contents', 'MacOS', 'TeXRA'];
@@ -77,7 +100,8 @@ async function resolvePackagedExecutable(argv) {
     try {
       await access(candidate);
       return candidate;
-    } catch {
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
       // Try the local architecture fallback on macOS.
     }
   }
@@ -98,7 +122,6 @@ async function createIsolation(root) {
     profile,
     userData: join(profile, 'user-data'),
     workspace: join(root, 'workspace'),
-    artifacts: join(root, 'playwright-artifacts'),
   };
   await Promise.all(
     Object.values(paths).map((path) => mkdir(path, { recursive: true })),
@@ -145,35 +168,40 @@ function observeExit(child) {
   });
 }
 
-function observeApplication(application) {
+function observeApplication(application, runtimeFailure) {
   const child = application.process();
   child.stdout?.on('data', (chunk) => appendDiagnostic('stdout', chunk));
   child.stderr?.on('data', (chunk) => appendDiagnostic('stderr', chunk));
   application.on('console', (message) => {
-    appendDiagnostic(`main ${message.type()}`, message.text());
+    const label = `main ${message.type()}`;
+    if (message.type() === 'error') {
+      runtimeFailure.report(label, message.text());
+    } else {
+      appendDiagnostic(label, message.text());
+    }
   });
 }
 
-function observePage(page) {
+function observePage(page, runtimeFailure) {
   page.on('console', (message) => {
     if (message.type() === 'error' || message.type() === 'warning') {
       appendDiagnostic(`renderer ${message.type()}`, message.text());
     }
   });
   page.on('pageerror', (error) => {
-    appendDiagnostic('renderer exception', error.message);
+    runtimeFailure.report('renderer exception', error.message);
   });
-  page.on('crash', () => appendDiagnostic('renderer', 'page crashed'));
+  page.on('crash', () => runtimeFailure.report('renderer', 'page crashed'));
 }
 
-async function waitForReadiness(application) {
+async function waitForReadiness(application, runtimeFailure) {
   const isPackaged = await application.evaluate(({ app }) => app.isPackaged);
   if (!isPackaged) {
     throw new Error('Electron main process reported app.isPackaged = false.');
   }
 
   const page = await application.firstWindow({ timeout: 0 });
-  observePage(page);
+  observePage(page, runtimeFailure);
   const handle = await page.waitForFunction(
     () => {
       const shell = document.querySelector('.desktop-shell');
@@ -217,17 +245,20 @@ async function closeApplication(application, exitPromise) {
   ]);
   if (!closeFailure) return;
 
-  if (!hasExited(child)) {
-    appendDiagnostic(
-      'teardown',
-      'graceful close failed; forcing the Electron process to stop',
-    );
-    await stopChild(child, exitPromise, {
-      graceMs: SHUTDOWN_GRACE_MS,
-      label: 'Packaged app',
-    });
-  }
-  throw closeFailure;
+  appendDiagnostic(
+    'teardown',
+    `graceful close did not complete: ${errorMessage(closeFailure)}`,
+  );
+  if (hasExited(child)) return;
+
+  appendDiagnostic(
+    'teardown',
+    'forcing the Electron process to stop after graceful close failed',
+  );
+  await stopChild(child, exitPromise, {
+    graceMs: SHUTDOWN_GRACE_MS,
+    label: 'Packaged app',
+  });
 }
 
 function errorMessage(error) {
@@ -252,31 +283,40 @@ try {
   application = await electron.launch({
     executablePath,
     args: ['--texra-workspace', paths.workspace],
-    artifactsDir: paths.artifacts,
     cwd: paths.workspace,
     env: childEnvironment(paths),
     timeout: READINESS_TIMEOUT_MS,
   });
 
   const child = application.process();
-  observeApplication(application);
+  const runtimeFailure = createRuntimeFailureSignal();
+  observeApplication(application, runtimeFailure);
   exitPromise = observeExit(child);
   phase = 'waiting for packaged desktop readiness';
 
-  readiness = await Promise.race([
-    waitForReadiness(application),
-    exitPromise.then((exit) => {
-      const description = exit.error
-        ? `process error: ${errorMessage(exit.error)}`
-        : formatExit(exit);
-      throw new Error(`Packaged app exited before readiness (${description}).`);
-    }),
-    delay(READINESS_TIMEOUT_MS).then(() => {
-      throw new Error(
-        `TeXRA readiness was not reached within ${READINESS_TIMEOUT_MS}ms.`,
-      );
-    }),
+  const outcome = await Promise.race([
+    waitForReadiness(application, runtimeFailure).then(
+      (value) => ({ kind: 'ready', value }),
+      (error) => ({ kind: 'failure', error }),
+    ),
+    exitPromise.then((exit) => ({ kind: 'exit', exit })),
+    runtimeFailure.promise.then((error) => ({ kind: 'failure', error })),
+    delay(READINESS_TIMEOUT_MS).then(() => ({ kind: 'timeout' })),
   ]);
+  if (outcome.kind === 'failure') throw outcome.error;
+  if (outcome.kind === 'exit') {
+    const description = outcome.exit.error
+      ? `process error: ${errorMessage(outcome.exit.error)}`
+      : formatExit(outcome.exit);
+    throw new Error(`Packaged app exited before readiness (${description}).`);
+  }
+  if (outcome.kind === 'timeout') {
+    throw new Error(
+      `TeXRA readiness was not reached within ${READINESS_TIMEOUT_MS}ms.`,
+    );
+  }
+  readiness = outcome.value;
+  if (runtimeFailure.error) throw runtimeFailure.error;
   if (hasExited(child)) {
     throw new Error('Packaged app exited while reporting readiness.');
   }

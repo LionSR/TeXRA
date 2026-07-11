@@ -427,9 +427,10 @@ That command builds the Electron desktop app and the VS Code extension package, 
 desktop build artifacts and `.vsix` are present.
 
 `npm run desktop:package:smoke` uses Playwright's Electron support to launch an unpacked packaged app
-with an isolated temporary profile and workspace. It asserts that Electron reports `app.isPackaged`,
-then waits up to 30 seconds for a visible desktop shell, a rendered `main-app` shadow root, and the
-theme state returned by the `WEBVIEW_READY` to `desktopViewState` IPC round trip. The desktop package
+with an isolated temporary profile and workspace. Launch has a 30-second timeout; after launch, the
+smoke asserts that Electron reports `app.isPackaged`, then waits up to 30 seconds for a visible desktop
+shell, a rendered `main-app` shadow root, and the theme state returned by the `WEBVIEW_READY` to
+`desktopViewState` IPC round trip. The desktop package
 workflow runs this readiness gate against Electron Builder's `mac-universal`, `win-unpacked`, and
 `linux-unpacked` outputs on their respective operating systems before uploading installer artifacts.
 This gate validates the unpacked application, not installer mounting, installation, uninstallation,

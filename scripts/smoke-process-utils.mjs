@@ -3,10 +3,6 @@ export function appendBoundedLog(current, chunk, maxLogChars) {
   return next.length > maxLogChars ? next.slice(-maxLogChars) : next;
 }
 
-export function formatOutput(output) {
-  return output.trim().length > 0 ? output.trim() : '(no output)';
-}
-
 export function formatExit(exit) {
   return exit.signal ?? `code ${exit.code}`;
 }
@@ -22,12 +18,6 @@ export function waitForExit(child) {
   });
 }
 
-export function waitForClose(child) {
-  return new Promise((resolve) => {
-    child.once('close', (code, signal) => resolve({ code, signal }));
-  });
-}
-
 export function delay(ms) {
   return new Promise((resolve) => {
     const timeout = setTimeout(resolve, ms);
@@ -35,26 +25,11 @@ export function delay(ms) {
   });
 }
 
-export async function waitForExitOrTimeout(exitPromise, timeoutMs) {
+async function waitForExitOrTimeout(exitPromise, timeoutMs) {
   return Promise.race([
     exitPromise.then((exit) => ({ exit })),
     delay(timeoutMs).then(() => ({ timeout: true })),
   ]);
-}
-
-export function readPositiveNumber(value, fallback) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-export async function readPendingExit(exitPromise) {
-  const result = await Promise.race([
-    exitPromise.then((exit) => ({ exit })),
-    new Promise((resolve) => {
-      setImmediate(() => resolve({}));
-    }),
-  ]);
-  return result.exit;
 }
 
 export async function stopChild(
