@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ResultEvent } from '@agent/trace';
+import { terminalResultToast } from '@agent/runtime/terminalResultToast';
 import { INSTRUCTION_ACTION } from '@shared/schemas';
-import { terminalResultToast } from '@shared/agent/terminalResultPresentation';
 
 function result(over: Partial<ResultEvent>): ResultEvent {
   return {
