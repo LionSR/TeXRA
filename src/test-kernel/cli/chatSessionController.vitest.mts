@@ -113,6 +113,7 @@ import { StreamSnapshotStore } from '@transcript';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { wakeQueuedFollowUpStream } from '@agent/followUp/ToolUseFollowUp';
 import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
+import type { ResumeQueuedToolUseOptions } from '@agent/runtime/resumeQueuedToolUse';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
@@ -654,6 +655,22 @@ describe('createChatSessionController', () => {
         ports: { resumeToolUseSnapshot(snapshot: unknown): Promise<boolean> },
       ) => ports.resumeToolUseSnapshot({ version: 2 }),
     );
+    mocks.resumeQueuedToolUseSnapshot.mockImplementationOnce(
+      async (
+        _streamId: StreamTabId,
+        _snapshot: unknown,
+        _runtimeHost: unknown,
+        options: ResumeQueuedToolUseOptions,
+      ) => {
+        options.onResult?.({
+          category: 'toolUse',
+          outcome: STREAM_STATUS.WAITING,
+          executionId: 'exec-1' as ExecutionId,
+          streamId: 'stream-1' as StreamTabId,
+        });
+        return true;
+      },
+    );
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );
@@ -673,6 +690,7 @@ describe('createChatSessionController', () => {
       finalize: true,
     });
     expect(rootStreamId.get()).toBe('stream-1');
+    expect(mocks.notify).not.toHaveBeenCalledWith({ kind: 'agentFinished' });
   });
 
   it('preserves root ownership when auto-resuming a child stream', async () => {
