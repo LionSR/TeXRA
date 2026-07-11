@@ -53,12 +53,13 @@ export interface ExecutionListingEntry {
 
 /**
  * True for executions a user should see in a history list — excludes
- * internal bookkeeping entries (e.g. the `category: 'process'` rows
- * `registerExecution` writes for background bash/process invocations, see
- * `src/tools/bash.ts`) that have no real agent config to show. Every host's
- * history listing must apply this filter; `listExecutions()` itself stays
- * unfiltered because tool-facing callers like `ExecutionsTool` need the raw
- * listing to manage background processes.
+ * internal bookkeeping entries: the `category: 'process'` rows
+ * `registerExecution` writes for background bash/process invocations (see
+ * `src/tools/bash.ts` — these do carry a synthetic `AgentConfig`, but don't
+ * represent a user-visible run or conversation), and entries with no
+ * `agentConfig` at all. Every host's history listing must apply this filter;
+ * `listExecutions()` itself stays unfiltered because tool-facing callers
+ * like `ExecutionsTool` need the raw listing to manage background processes.
  */
 export function isUserVisibleExecution(
   entry: Pick<ExecutionListingEntry, 'agentConfig' | 'category'>,
