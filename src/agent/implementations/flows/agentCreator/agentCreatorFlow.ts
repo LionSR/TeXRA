@@ -169,6 +169,19 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
 };
 
 /**
+ * Tool groups whose keywords match `description`. `File Operations` is
+ * always included as a safe baseline for any tool-use agent.
+ */
+export function suggestToolGroups(description: string): string[] {
+  const lower = description.toLowerCase();
+  const suggested = new Set<string>(['File Operations']);
+  for (const [name, group] of Object.entries(TOOL_GROUPS)) {
+    if (group.keywords.some((kw) => lower.includes(kw))) suggested.add(name);
+  }
+  return [...suggested];
+}
+
+/**
  * All host-specific operations injected by the VS Code command layer.
  * Allows the flow and nodes to run without importing vscode.
  */
@@ -178,6 +191,7 @@ export interface AgentCreatorUI {
   pickTools(
     agentName: string,
     description: string,
+    suggestedGroups: string[],
   ): Promise<{ tools: string[]; groups: string[] } | undefined>;
   getCustomAgentDir(): Promise<string>;
   showCreatedInfo(filePath: string): void;
@@ -304,7 +318,11 @@ class BlueprintNode extends Node<AgentCreatorShared> {
     const base = { AGENT_NAME: agentName, DESCRIPTION: description };
 
     if (category === 'toolUse') {
-      const picked = await this.ui.pickTools(agentName, description);
+      const picked = await this.ui.pickTools(
+        agentName,
+        description,
+        suggestToolGroups(description),
+      );
       if (!picked) return undefined;
       const targetDir = await this.ui.getCustomAgentDir();
       return {
