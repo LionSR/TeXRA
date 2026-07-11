@@ -138,8 +138,12 @@ curl -X POST \
 To update the relay function after changes:
 
 ```bash
+export SUPABASE_PROJECT_REF="<your-project-ref>"
 node scripts/deploy-relay.mjs
 ```
+
+`scripts/deploy-relay.mjs` refuses to run without `SUPABASE_PROJECT_REF` (see
+step 1 above), so it must be exported in this shell too.
 
 Always pass `--no-verify-jwt` — the relay validates the JWT (and CI tokens)
 itself, so omitting the flag flips the gateway to `verify_jwt=true` and breaks
