@@ -474,27 +474,36 @@ export class StreamHeader extends LitElement {
       ? `${label}: ${this.goalObjective}`
       : label;
     return html`<wa-badge
-      class="goal-chip"
-      variant=${isPaused ? 'warning' : 'brand'}
-      appearance="filled"
-      title=${tooltip}
-      aria-label=${tooltip}
-    >
-      ${waIcon('compass')} ${label}
-    </wa-badge>`;
+        id=${ELEMENT_IDS.GOAL_CHIP}
+        class="goal-chip"
+        variant=${isPaused ? 'warning' : 'brand'}
+        appearance="filled"
+        aria-label=${tooltip}
+      >
+        ${waIcon('compass')} ${label}
+      </wa-badge>
+      <wa-tooltip for=${ELEMENT_IDS.GOAL_CHIP}>${tooltip}</wa-tooltip>`;
   }
 
   private renderProgressBadge(): TemplateResult | typeof nothing {
     if (!this.roundStage && !this.progress?.toolCallCount) return nothing;
+    const progressTitle = getProgressBadgeTitle(this.progress, this.roundStage);
     return html`<wa-tag
-      class="progress-badge"
-      variant="neutral"
-      size="small"
-      title=${ifDefined(getProgressBadgeTitle(this.progress, this.roundStage))}
-    >
-      ${waIcon('pulse')}
-      ${renderProgressBadgeContent(this.progress, this.roundStage)}
-    </wa-tag>`;
+        id=${ELEMENT_IDS.PROGRESS_BADGE}
+        class="progress-badge"
+        variant="neutral"
+        size="small"
+      >
+        ${waIcon('pulse')}
+        ${renderProgressBadgeContent(this.progress, this.roundStage)}
+      </wa-tag>
+      ${
+        progressTitle
+          ? html`<wa-tooltip for=${ELEMENT_IDS.PROGRESS_BADGE}
+              >${progressTitle}</wa-tooltip
+            >`
+          : nothing
+      }`;
   }
 
   private renderParentLink(): TemplateResult | typeof nothing {
