@@ -176,9 +176,7 @@ describe('user-question-panel', () => {
     red.checked = true;
     red.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     blue.checked = true;
-    blue.dispatchEvent(
-      new Event('change', { bubbles: true, composed: true }),
-    );
+    blue.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     await element.updateComplete;
 
     const button = element.shadowRoot?.querySelector(
@@ -202,13 +200,9 @@ describe('user-question-panel', () => {
       ]),
     );
 
-    expect(element.shadowRoot?.querySelector('wa-radio-group')).not.toBe(
-      null,
-    );
+    expect(element.shadowRoot?.querySelector('wa-radio-group')).not.toBe(null);
     expect(element.shadowRoot?.querySelectorAll('wa-radio').length).toBe(2);
-    expect(element.shadowRoot?.querySelector('input[type="radio"]')).toBe(
-      null,
-    );
+    expect(element.shadowRoot?.querySelector('input[type="radio"]')).toBe(null);
 
     const radioGroup = element.shadowRoot?.querySelector(
       'wa-radio-group',

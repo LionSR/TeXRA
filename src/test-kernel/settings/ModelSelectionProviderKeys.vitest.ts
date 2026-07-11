@@ -89,9 +89,7 @@ describe('ModelSelectionList provider key status', () => {
     providerToggle?.click();
     await list.updateComplete;
 
-    expect(list.shadowRoot!.querySelector('.model-row wa-checkbox')).toBe(
-      null,
-    );
+    expect(list.shadowRoot!.querySelector('.model-row wa-checkbox')).toBe(null);
     const modelSwitch = list.shadowRoot!.querySelector(
       '.model-row wa-switch',
     ) as HTMLElement & { checked?: boolean };

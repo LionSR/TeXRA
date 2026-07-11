@@ -534,7 +534,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   // ── Event Handlers ──
 
   private handleAnswerInput(e: Event): void {
-    this.answerText = (e.target as HTMLElement & { value?: string }).value ?? '';
+    this.answerText =
+      (e.target as HTMLElement & { value?: string }).value ?? '';
     this.scheduleDraftSave();
   }
 
