@@ -45,9 +45,8 @@ function captureSentImages(
 ): () => ExtractedClipboardImage[] | undefined {
   let sentImages: ExtractedClipboardImage[] | undefined;
   element.addEventListener('followup-send', (event) => {
-    sentImages = (
-      event as CustomEvent<{ images: ExtractedClipboardImage[] }>
-    ).detail.images;
+    sentImages = (event as CustomEvent<{ images: ExtractedClipboardImage[] }>)
+      .detail.images;
   });
   return () => sentImages;
 }
