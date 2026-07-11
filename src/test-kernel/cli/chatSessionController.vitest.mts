@@ -528,6 +528,54 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
   });
 
+  it('forwards a stop issued during manual resume helper-model setup', async () => {
+    const helperModel = deferred();
+    mocks.setCliHelperModel.mockReturnValueOnce(helperModel.promise);
+
+    const session = makeSession({ runCompleted: true });
+    const snapshotStore = {
+      load: vi.fn(async () => undefined),
+      read: vi.fn(async () => ({
+        runUsage: {},
+        todos: [],
+        plan: undefined,
+      })),
+    } as unknown as StreamSnapshotStore;
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+    const snapshot = { executionId: 'exec-resume' } as never;
+    const preResolved = {
+      kind: 'toolUse' as const,
+      streamId: 'stream-resume' as StreamTabId,
+      snapshot,
+      config: makeResumeConfig(),
+    };
+
+    const resumeStarted = ctrl.resume('aaaaaa' as ExecutionId, preResolved);
+    await vi.waitFor(() =>
+      expect(mocks.setCliHelperModel).toHaveBeenCalledWith('demo-model'),
+    );
+
+    ctrl.stop();
+    helperModel.resolve(undefined);
+
+    await resumeStarted;
+    await vi.waitFor(() =>
+      expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledWith(
+        snapshot,
+        expect.any(Object),
+        expect.objectContaining({
+          isCancellationRequested: expect.any(Function),
+        }),
+      ),
+    );
+    const resumeOptions = mocks.resumeToolUseFromSnapshot.mock.calls[0]?.[2] as
+      { readonly isCancellationRequested?: () => boolean } | undefined;
+    expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
+    await session.runPromise;
+  });
+
   it('reports a failed persisted-child wake while the CLI root slot is busy', async () => {
     const session = makeSession({
       runPromise: new Promise(() => {}),

@@ -421,6 +421,7 @@ export function createChatSessionController(
           resumeToolUseFromSnapshot(resolution.snapshot, runtimeHost, {
             approvalPromptsUnavailable: approvalsUnavailable,
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+            isCancellationRequested: () => session.stopRequested,
           }),
         )
         .then(() => {
