@@ -183,10 +183,7 @@ describe('agent YAML scanner', () => {
 
   it('skips a file with malformed YAML instead of throwing', async () => {
     const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
-    await writeFile(
-      resolve(agentDir, 'broken.yaml'),
-      'name: "unterminated\n',
-    );
+    await writeFile(resolve(agentDir, 'broken.yaml'), 'name: "unterminated\n');
     await writeFile(
       resolve(agentDir, 'valid.yaml'),
       [

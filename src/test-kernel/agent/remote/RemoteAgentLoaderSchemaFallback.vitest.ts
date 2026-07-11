@@ -210,10 +210,10 @@ describe('remote agent config parsing', () => {
         if (urlString !== SUPABASE_CONFIG.edgeFunctionUrl) {
           return new Response('not found', { status: 404 });
         }
-        return new Response(
-          JSON.stringify({ config: 'name: "unterminated' }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        );
+        return new Response(JSON.stringify({ config: 'name: "unterminated' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }),
     );
 
