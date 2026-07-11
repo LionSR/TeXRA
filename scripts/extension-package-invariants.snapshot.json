@@ -5,7 +5,7 @@
     "description": "TeXRA: Your 24/7 AI Theorist.",
     "publisher": "texra-ai",
     "engines": {
-      "vscode": "^1.106.0"
+      "vscode": "^1.125.0"
     },
     "categories": [
       "Programming Languages",

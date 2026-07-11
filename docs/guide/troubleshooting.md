@@ -25,7 +25,7 @@ to confirm available models, and `texra tools status` to check tool availability
 **Solutions**:
 
 1. **Check VS Code compatibility**:
-   - Ensure you're running VS Code version 1.106 or newer
+   - Ensure you're running VS Code version 1.125 or newer
    - Update VS Code if needed
 
 2. **Verify installation**:
