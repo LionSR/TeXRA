@@ -9,6 +9,9 @@
  * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/details/details.js';
+
 // Local imports - shared schemas
 import {
   ErrorLogDataSchema,
@@ -25,7 +28,6 @@ import {
   when,
   classMap,
   ifDefined,
-  styleMap,
   type FormatResult,
 } from '../litTemplates';
 
@@ -136,19 +138,21 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   // prettier-ignore
   const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error">${detailTemplate}</div>`;
   // prettier-ignore
-  const toggleIcon = html`<wa-icon library=${TEXRA_ICON_LIBRARY} name="chevron-right" class="toggle-icon" aria-hidden="true" style=${styleMap({ visibility: hasDetails ? '' : 'hidden' })}></wa-icon>`;
-  // prettier-ignore
   const labelSpan = html`<span class="label" title=${tooltipTimestamp}>[${timeDisplay}] ${summaryText}</span>`;
   // prettier-ignore
   const copyButton = html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="small" type="button" title="Copy error details" aria-label="Copy error details" data-default-title="Copy error details" data-success-title="Copied!" data-copy-id=${copyId} data-copy-type="banner" ?hidden=${!hasDetails}>${waIcon('copy')}</wa-button>`;
+  // Toggle chevron now comes from <wa-details>'s built-in disclosure icon
+  // (::part(icon)); banner-details--no-toggle hides that part when there's
+  // nothing to expand, replacing the old inline visibility:hidden style.
   // prettier-ignore
-  const summaryTemplate = html`<summary class="details-summary">${toggleIcon}<wa-icon library=${TEXRA_ICON_LIBRARY} name="error" class="icon" aria-hidden="true"></wa-icon>${labelSpan}${copyButton}</summary>`;
+  const summaryTemplate = html`<div slot="summary" class="details-summary"><wa-icon library=${TEXRA_ICON_LIBRARY} name="error" class="icon" aria-hidden="true"></wa-icon>${labelSpan}${copyButton}</div>`;
   // prettier-ignore
-  return html`<details class=${classMap({
+  return html`<wa-details appearance="plain" class=${classMap({
     'banner-details': true,
     'banner-details--error': true,
     'banner-details--relay-error': isRelayError,
-  })} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${summaryTemplate}${contentTemplate}</details>`;
+    'banner-details--no-toggle': !hasDetails,
+  })} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
 /** Format default log message as TemplateResult. */

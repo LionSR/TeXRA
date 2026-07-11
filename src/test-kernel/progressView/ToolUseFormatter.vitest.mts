@@ -47,6 +47,14 @@ describe('tool-use formatter', () => {
     );
     expect(title?.textContent).not.toContain('Built Mathlib');
     expect(body?.textContent).toContain('Built Mathlib.Example.Module19');
+
+    // Element-name pin (#8156): tool-use banners render through <wa-details>,
+    // matching the wa-details convention used elsewhere on this surface —
+    // never the native <details> element.
+    expect(
+      container.querySelector('wa-details.tool-use-details'),
+    ).not.toBeNull();
+    expect(container.querySelector('details')).toBeNull();
   });
 
   it('renders write_file cards even when compact logs omit content', async () => {
