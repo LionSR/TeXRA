@@ -468,7 +468,6 @@ export function App(props: AppProps): React.JSX.Element {
       snapshot={{
         activeStreamId,
         childStreamEntries,
-        childExecutionPanelTarget: childControlTargets.tasks,
         foregroundMaxRows,
         foregroundKind,
         parentStream,
@@ -477,6 +476,7 @@ export function App(props: AppProps): React.JSX.Element {
         slashPaletteOpen,
         streamTabsVisible,
         streams,
+        childExecutionPanelTarget: childControlTargets.tasks,
         transcriptViewerStreamId,
       }}
     />
