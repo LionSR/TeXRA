@@ -12,6 +12,7 @@ import type {
 } from '@agent/runtime/SessionEventHub';
 
 // Local imports - shared schemas
+import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
 import {
   STREAM_PHASE,
   STREAM_STATUS,
@@ -302,7 +303,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
     this.rootStreamStatus = status;
     this.state.phase = formatRunProgressStatus(status);
-    this.rootStreamTerminal = isTerminalStreamStatus(status);
+    this.rootStreamTerminal = isTerminalOutcomePhase(status);
     if (this.rootStreamTerminal) {
       this.state.activeProcesses = undefined;
       this.state.activeSubagents = undefined;
@@ -397,14 +398,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     parts.push(formatElapsed(now - this.startedAt));
     return parts.join(' · ');
   }
-}
-
-function isTerminalStreamStatus(status: StreamPhase): boolean {
-  return (
-    status === STREAM_PHASE.COMPLETED ||
-    status === STREAM_PHASE.CANCELLED ||
-    status === STREAM_PHASE.FAILED
-  );
 }
 
 function formatRunProgressStatus(status: StreamPhase): string {
