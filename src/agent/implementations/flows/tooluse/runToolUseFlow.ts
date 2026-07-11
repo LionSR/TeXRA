@@ -358,6 +358,7 @@ export async function runToolUseFlow<C = unknown>(
   let touchedFiles: string[] | undefined;
   let totalCostUsd: number | undefined;
   let teardownSetup: (() => void) | undefined;
+  let preserveResumeRecord = false;
   const compatibilityKey = activeModelHandlerCompatibilityKey(
     services.modelHandler,
   );
@@ -373,7 +374,10 @@ export async function runToolUseFlow<C = unknown>(
     teardownSetup = onSetup?.(flowContext) ?? undefined;
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
-    if (input.checkInterruption()) return { outcome };
+    if (input.checkInterruption()) {
+      preserveResumeRecord = input.resumeSnapshot !== undefined;
+      return { outcome };
+    }
 
     let flowRecord: FlowRecord | null = null;
     try {
@@ -388,7 +392,10 @@ export async function runToolUseFlow<C = unknown>(
     }
     // Cancellation can also arrive while the recovery read is pending. Do not
     // start a migration or repair write after that handoff.
-    if (input.checkInterruption()) return { outcome };
+    if (input.checkInterruption()) {
+      preserveResumeRecord = input.resumeSnapshot !== undefined;
+      return { outcome };
+    }
 
     if (flowRecord?.shared) {
       logger.debug('Resuming tool-use flow from persistence');
@@ -558,7 +565,9 @@ export async function runToolUseFlow<C = unknown>(
     activePersistedFlow = undefined;
     teardownSetup?.();
     teardownSetup = undefined;
-    if (outcome === STREAM_PHASE.WAITING) {
+    if (preserveResumeRecord) {
+      logger.debug('Flow record preserved after resume startup cancellation');
+    } else if (outcome === STREAM_PHASE.WAITING) {
       logger.debug('Flow record preserved for native subagent WAITING');
     } else if (shared.userCancelledRetry) {
       logger.debug('Flow record preserved for resume after retry cancellation');
