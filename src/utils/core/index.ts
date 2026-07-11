@@ -346,8 +346,19 @@ export interface Semaphore {
  * batches, workflow-script agent() calls). A released slot is handed
  * directly to the next waiter (active count unchanged) so a synchronous
  * newcomer cannot steal it and overshoot the limit. Kept hand-rolled
- * deliberately: p-queue (the in-repo alternative) types `add()` as
- * `Promise<T | void>`, which would force assertions at every call site.
+ * deliberately:
+ *  - p-queue types `add()` as `Promise<T | void>`, which would force
+ *    assertions at every call site.
+ *  - p-limit's typing matches, but it always defers task launch by a
+ *    microtask (its `enqueue` routes even a free slot through
+ *    `new Promise().then(run)`) instead of calling `task()` synchronously
+ *    when one is available. Workflow-script call-cap abort
+ *    (`runWorkflowScript.ts`) relies on the synchronous fast path: sibling
+ *    agents already in flight must have registered their AbortSignal
+ *    listener before the cap-trip synchronously calls `runAbort.abort()`,
+ *    or they never observe the abort. Confirmed by reproducing the swap:
+ *    it broke "aborts in-flight agents when the call cap trips" in
+ *    WorkflowScriptEngine.vitest.ts.
  */
 export function createSemaphore(limit: number): Semaphore {
   if (!Number.isInteger(limit) || limit < 1) {
