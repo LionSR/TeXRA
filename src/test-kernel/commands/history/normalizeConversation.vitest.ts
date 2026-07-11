@@ -11,12 +11,18 @@
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  mediaAttachmentKindToContentBlock,
-  normalizeConversationForExport,
-} from '@agent/export/normalizeConversation';
+import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
+import { normalizeConversationForExport } from '@agent/export/normalizeConversation';
 import type { ExportNode } from '@agent/export/schemas';
 import type { MediaAttachmentKind } from '@shared/schemas';
+
+const MEDIA_ATTACHMENT_KIND_COVERAGE: Record<MediaAttachmentKind, true> = {
+  image: true,
+  document: true,
+};
+const MEDIA_ATTACHMENT_KINDS = Object.keys(
+  MEDIA_ATTACHMENT_KIND_COVERAGE,
+) as MediaAttachmentKind[];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -646,25 +652,22 @@ describe('Edge cases', () => {
 // ---------------------------------------------------------------------------
 
 describe('mediaAttachmentKindToContentBlock', () => {
+  it('defines the marker block for every media attachment kind', () => {
+    for (const kind of MEDIA_ATTACHMENT_KINDS) {
+      expect(mediaAttachmentKindToContentBlock(kind)).toEqual({ type: kind });
+    }
+  });
+
   it('round-trips every MediaAttachmentKind through normalizeConversationForExport', () => {
     // Callers that only recorded the attachment *kind* (never the bytes —
     // see completedRunArchive's userMessageEntryToMessages) synthesize the
     // marker block via this constructor rather than writing `{ type: kind }`
     // themselves. Prove the round trip for every kind the schema defines, so
-    // the two stay in sync: this module's own switch (not the caller's) is
-    // what breaks the build if a kind is added or renamed.
+    // the two stay in sync: the vocabulary map and this coverage record both
+    // require an explicit update if a kind is added or renamed.
     //
-    // The `Record<MediaAttachmentKind, true>` (not a plain array literal)
-    // is what makes this exhaustive: adding a member to `MediaAttachmentKind`
-    // without adding it here fails to compile, so this test can't silently
-    // stop covering a kind the way a hand-maintained array could.
-    const KIND_COVERAGE: Record<MediaAttachmentKind, true> = {
-      image: true,
-      document: true,
-    };
-    const kinds = Object.keys(KIND_COVERAGE) as MediaAttachmentKind[];
-
-    for (const kind of kinds) {
+    // The coverage record above makes this exhaustive at typecheck time.
+    for (const kind of MEDIA_ATTACHMENT_KINDS) {
       const nodes = normalize([
         {
           role: 'user',
