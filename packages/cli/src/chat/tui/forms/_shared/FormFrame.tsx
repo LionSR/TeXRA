@@ -2,10 +2,11 @@
 // empty). Replaces the per-form `XFrame` wrappers that all rendered the same
 // bordered column with a colored title and an `Esc close` footer.
 
-import { Box, Text, useWindowSize } from 'ink';
+import { Text, useWindowSize } from 'ink';
 import { Spinner } from '@inkjs/ui';
 
 import { KeyHints, type KeyHint } from '@cli/chat/tui/ui/KeyHints';
+import { BorderedPanel } from '@cli/chat/tui/ui/BorderedPanel';
 import { FORM_FRAME_MAX_WIDTH } from '@cli/chat/tui/ui/theme';
 import { clamp } from '@utils/core';
 
@@ -32,26 +33,21 @@ export function FormFrame(props: FormFrameProps): React.JSX.Element {
   const { columns } = useWindowSize();
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor={props.color}
-      flexDirection="column"
-      paddingX={1}
+    <BorderedPanel
+      color={props.color}
+      title={props.title}
       width={formFrameWidth(columns)}
-    >
-      <Text bold color={props.color}>
-        {props.title}
-      </Text>
-      {props.children}
-      {props.showCloseHint === false ? null : (
-        <Box marginTop={1}>
+      footer={
+        props.showCloseHint === false ? undefined : (
           <KeyHints
             hints={[{ key: 'Esc', action: 'close' }]}
             confirmCancel={false}
           />
-        </Box>
-      )}
-    </Box>
+        )
+      }
+    >
+      {props.children}
+    </BorderedPanel>
   );
 }
 
