@@ -5,7 +5,6 @@
 
 import type {
   GettingStartedActionDetail,
-  StringValueDetail,
   UserQuestionAnswers,
 } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
@@ -30,12 +29,21 @@ export interface ToolbarCommandDetail {
   command: string;
 }
 
-/** Alias for semantic clarity - uses shared StringValueDetail */
-export type FollowUpChangeDetail = StringValueDetail;
+export interface FollowUpChangeDetail {
+  readonly streamId: string;
+  readonly value: string;
+  /** Append is used when an async paste finishes after its stream is hidden. */
+  readonly mode?: 'replace' | 'append';
+}
 
 /** Images pasted into the follow-up box, carried with the send event. */
 export interface FollowUpSendDetail {
+  readonly streamId: string;
   readonly images: readonly ExtractedClipboardImage[];
+}
+
+export interface FollowUpClearDetail {
+  readonly streamId: string;
 }
 
 export interface FollowupCommandDetail {
@@ -121,7 +129,8 @@ export const ProgressEvents = {
 
   followupPolish: () => createEvent('followup-polish', undefined),
 
-  followupClear: () => createEvent('followup-clear', undefined),
+  followupClear: (detail: FollowUpClearDetail) =>
+    createEvent('followup-clear', detail),
 
   followupRequestOptions: () =>
     createEvent('followup-request-options', undefined),

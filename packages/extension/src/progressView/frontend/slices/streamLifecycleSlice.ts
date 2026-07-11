@@ -26,6 +26,10 @@ import {
 import { clearCopyContentStore } from '../formatters/copyContentStore';
 import { clearProposalInputStore } from '../formatters/proposalInputStore';
 import {
+  clearFollowUpInputTransientStateStore,
+  deleteFollowUpInputTransientState,
+} from '../followUpInputState';
+import {
   removePermissionsForStream,
   updateParentStreamId,
 } from '../stateUtils';
@@ -77,7 +81,10 @@ function updateStreamInfo(
   // mutative draft callback so the side effect doesn't run if the draft
   // later throws.
   for (const key of state.streamStates.keys()) {
-    if (!newStreamById.has(key)) pendingDescriptions.delete(key);
+    if (!newStreamById.has(key)) {
+      pendingDescriptions.delete(key);
+      deleteFollowUpInputTransientState(key);
+    }
   }
 
   return create(state, (draft) => {
@@ -162,6 +169,7 @@ export const streamLifecycleHandlers = {
     clearResolvedProposalIds();
     clearCopyContentStore();
     clearProposalInputStore();
+    deleteFollowUpInputTransientState(streamId);
 
     // Remove permissions for the deleted stream to prevent orphaned entries
     const cleaned = removePermissionsForStream(ctx.getPermissions(), streamId);
@@ -186,6 +194,7 @@ export const streamLifecycleHandlers = {
     clearResolvedProposalIds();
     clearCopyContentStore();
     clearProposalInputStore();
+    clearFollowUpInputTransientStateStore();
     pendingDescriptions.clear();
 
     // Clear all permissions — no streams means no valid permissions
