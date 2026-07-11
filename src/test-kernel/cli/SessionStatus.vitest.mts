@@ -5,7 +5,7 @@ import {
   formatCliStatusLabel,
   formatCliSessionStatus,
 } from '@cli/chat/tui/sessionStatus';
-import { STREAM_STATUS } from '@shared/schemas';
+import { STREAM_PHASE } from '@shared/schemas';
 
 const STREAM_ID = 'status-queued-followups-test-stream';
 
@@ -291,14 +291,14 @@ describe('CLI session status formatter', () => {
   });
 
   it('uses the footer label for an idle waiting stream', () => {
-    expect(formatCliStatusLabel(STREAM_STATUS.WAITING)).toBe('idle');
+    expect(formatCliStatusLabel(STREAM_PHASE.WAITING)).toBe('idle');
     expect(
       formatCliSessionStatus({
         agent: 'research',
         model: 'deepseekT',
         api: 'included relay',
         approval: 'ask before privileged actions',
-        status: STREAM_STATUS.WAITING,
+        status: STREAM_PHASE.WAITING,
         queuedFollowUpMessages: [],
       }),
     ).toContain('status: idle');

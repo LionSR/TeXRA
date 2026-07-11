@@ -18,7 +18,7 @@ import {
   streamTabsDisplayItems,
 } from '@cli/chat/tui/panes/StreamTabsStrip';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
-import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 
 function streamId(value: string): StreamTabId {
   return value as StreamTabId;
@@ -192,9 +192,9 @@ describe('CLI stream tabs strip', () => {
     const child1 = streamId('child-1');
     const child2 = streamId('child-2');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [root, slice('root', { status: STREAM_STATUS.RUNNING })],
-      [child1, slice('child-1', { status: STREAM_STATUS.WAITING })],
-      [child2, slice('child-2', { status: STREAM_STATUS.RUNNING })],
+      [root, slice('root', { status: STREAM_PHASE.RUNNING })],
+      [child1, slice('child-1', { status: STREAM_PHASE.WAITING })],
+      [child2, slice('child-2', { status: STREAM_PHASE.RUNNING })],
     ]);
     const childStreamEntries = buildChildStreamEntries({
       parentStreamId: root,
@@ -261,8 +261,8 @@ describe('CLI stream tabs strip', () => {
     const child1 = streamId('child-1');
     const child2 = streamId('child-2');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [child1, slice('child-1', { status: STREAM_STATUS.WAITING })],
-      [child2, slice('child-2', { status: STREAM_STATUS.WAITING })],
+      [child1, slice('child-1', { status: STREAM_PHASE.WAITING })],
+      [child2, slice('child-2', { status: STREAM_PHASE.WAITING })],
     ]);
     const childStreamEntries = buildChildStreamEntries({
       parentStreamId: root,
@@ -290,8 +290,8 @@ describe('CLI stream tabs strip', () => {
     const root = streamId('root');
     const child1 = streamId('child-1');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [root, slice('root', { status: STREAM_STATUS.WAITING })],
-      [child1, slice('child-1', { status: STREAM_STATUS.WAITING })],
+      [root, slice('root', { status: STREAM_PHASE.WAITING })],
+      [child1, slice('child-1', { status: STREAM_PHASE.WAITING })],
     ]);
     const childStreamEntries = buildChildStreamEntries({
       parentStreamId: root,
@@ -352,11 +352,11 @@ describe('CLI stream tabs strip', () => {
     ]);
   });
 
-  it('labels a focused error or ready stream like a focused stopped one', () => {
+  it('labels focused failed and completed streams as ended', () => {
     const root = streamId('root');
     const child1 = streamId('child-1');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [root, slice('root', { status: STREAM_STATUS.READY })],
+      [root, slice('root', { status: STREAM_PHASE.COMPLETED })],
       [child1, slice('child-1', { status: STREAM_PHASE.FAILED })],
     ]);
     const childStreamEntries = buildChildStreamEntries({
@@ -379,10 +379,10 @@ describe('CLI stream tabs strip', () => {
       width: 80,
     });
 
-    // The focused (active) error tab surfaces its status, matching stopped;
-    // previously only 'stopped' was special-cased and error/ready showed bare.
+    // The focused failed tab surfaces its status, as every terminal outcome
+    // does; completed roots retain their canonical label too.
     expect(items.map(streamTabSegmentText)).toEqual([
-      'main(ready)',
+      'main(completed)',
       '[1:strategy](error)',
     ]);
   });
@@ -393,8 +393,8 @@ describe('CLI stream tabs strip', () => {
     const grandchild1 = streamId('grandchild-1');
     const streams = new Map<StreamTabId, StreamSlice>([
       [root, slice('root')],
-      [child1, slice('child-1', { status: STREAM_STATUS.RUNNING })],
-      [grandchild1, slice('grandchild-1', { status: STREAM_STATUS.RUNNING })],
+      [child1, slice('child-1', { status: STREAM_PHASE.RUNNING })],
+      [grandchild1, slice('grandchild-1', { status: STREAM_PHASE.RUNNING })],
     ]);
     const childStreamEntries = new Map([
       ...buildChildStreamEntries({
@@ -480,10 +480,10 @@ describe('CLI stream tabs strip', () => {
     const leanSolver = streamId('lean-stream');
     const reviewer = streamId('reviewer-stream');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [root, slice('root', { status: STREAM_STATUS.RUNNING })],
-      [strategy, slice('strategy-stream', { status: STREAM_STATUS.RUNNING })],
-      [leanSolver, slice('lean-stream', { status: STREAM_STATUS.WAITING })],
-      [reviewer, slice('reviewer-stream', { status: STREAM_STATUS.RUNNING })],
+      [root, slice('root', { status: STREAM_PHASE.RUNNING })],
+      [strategy, slice('strategy-stream', { status: STREAM_PHASE.RUNNING })],
+      [leanSolver, slice('lean-stream', { status: STREAM_PHASE.WAITING })],
+      [reviewer, slice('reviewer-stream', { status: STREAM_PHASE.RUNNING })],
     ]);
     const childStreamEntries = buildChildStreamEntries({
       parentStreamId: root,
@@ -492,19 +492,19 @@ describe('CLI stream tabs strip', () => {
           executionId: 'strategy',
           childStreamId: strategy,
           agentName: 'strategy',
-          status: STREAM_STATUS.RUNNING,
+          status: STREAM_PHASE.RUNNING,
         }),
         child({
           executionId: 'lean',
           childStreamId: leanSolver,
           agentName: 'leanSolver',
-          status: STREAM_STATUS.WAITING,
+          status: STREAM_PHASE.WAITING,
         }),
         child({
           executionId: 'review',
           childStreamId: reviewer,
           agentName: 'reviewer',
-          status: STREAM_STATUS.RUNNING,
+          status: STREAM_PHASE.RUNNING,
         }),
       ],
     });
@@ -645,9 +645,9 @@ describe('CLI stream tabs strip', () => {
     const middle = streamId('middle-stream');
     const active = streamId('active-stream');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [root, slice('root', { status: STREAM_STATUS.RUNNING })],
-      [middle, slice('middle-stream', { status: STREAM_STATUS.RUNNING })],
-      [active, slice('active-stream', { status: STREAM_STATUS.RUNNING })],
+      [root, slice('root', { status: STREAM_PHASE.RUNNING })],
+      [middle, slice('middle-stream', { status: STREAM_PHASE.RUNNING })],
+      [active, slice('active-stream', { status: STREAM_PHASE.RUNNING })],
     ]);
     const childStreamEntries = buildChildStreamEntries({
       parentStreamId: root,
@@ -656,13 +656,13 @@ describe('CLI stream tabs strip', () => {
           executionId: 'middle',
           childStreamId: middle,
           agentName: 'veryLongMiddleAgent',
-          status: STREAM_STATUS.RUNNING,
+          status: STREAM_PHASE.RUNNING,
         }),
         child({
           executionId: 'active',
           childStreamId: active,
           agentName: 'activeTarget',
-          status: STREAM_STATUS.RUNNING,
+          status: STREAM_PHASE.RUNNING,
         }),
       ],
     });

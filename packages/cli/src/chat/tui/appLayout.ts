@@ -1,9 +1,9 @@
 /** Pure row allocation and visibility policy for the root CLI TUI layout. */
 
-import { isLiveElapsedStatus } from '@common/constants/streamStatus';
+import { isActivePhase } from '@common/constants/streamStatus';
 import {
   TODO_STATUS,
-  type StreamLifecycleStatus,
+  type StreamPhase,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
@@ -236,7 +236,7 @@ export function shouldShowTodosPlanPanel({
 }: {
   readonly foregroundOpen: boolean;
   readonly hasPlan: boolean;
-  readonly status: StreamLifecycleStatus | undefined;
+  readonly status: StreamPhase | undefined;
   readonly todos: readonly TodoItem[];
 }): boolean {
   if (foregroundOpen) return false;
@@ -248,5 +248,5 @@ export function shouldShowTodosPlanPanel({
   ) {
     return false;
   }
-  return isLiveElapsedStatus(status);
+  return isActivePhase(status);
 }
