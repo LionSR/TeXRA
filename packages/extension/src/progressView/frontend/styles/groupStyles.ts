@@ -19,11 +19,12 @@ export const groupStyles = css`
       border-left-color: var(--wa-color-status-warning-bg);
     }
 
-    &.is-error {
+    &.is-failed {
       border-left-color: var(--wa-color-danger-on-quiet);
     }
 
-    &.is-stopped {
+    &.is-completed,
+    &.is-cancelled {
       border-left-color: var(--wa-color-success-fill-loud);
     }
   }

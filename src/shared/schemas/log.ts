@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import type { TaskGroupStatus } from './stream';
-
 export const LOG_LEVELS = {
   ERROR: 'error',
   WARN: 'warn',
@@ -12,7 +10,20 @@ export const LOG_LEVELS = {
 export const LogLevelSchema = z.enum(LOG_LEVELS);
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
-/** Terminal states for finalizing log groups (subset of TaskGroupStatus) */
+/**
+ * Legacy 2-value terminal vocabulary a `GROUP_END` row's `data.status` used
+ * to carry (retired as a *production* type by #8087/§8.2 — every live writer
+ * now emits the literal `RunOutcome`). Kept as a read-side/derive type: the
+ * frozen Tier-4 CLI JSON projection
+ * (`packages/cli/src/runtime/terminalStatus.ts`) still derives it from
+ * `RunOutcome` via `legacyEndGroupStatusForOutcome`, and `StreamLogStore`'s
+ * `parsePersistedEntries` boundary (§8.3) still matches these two literals
+ * to normalize on-disk rows written before the cutover — this stays as the
+ * permanent legacy-transcript reader, not a temporary shim, since released
+ * transcripts are never rewritten. No longer asserted as a subset of
+ * `TaskGroupStatus`: that type is retyped to the native `StreamPhase`/
+ * `RunOutcome` vocabulary (#7993 step 3) and shares no values with this one.
+ */
 export const END_GROUP_STATUS = {
   ERROR: 'error',
   STOPPED: 'stopped',
@@ -20,10 +31,6 @@ export const END_GROUP_STATUS = {
 
 const EndGroupStatusSchema = z.enum(END_GROUP_STATUS);
 export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
-
-type _AssertEndGroupStatusSubset = EndGroupStatus extends TaskGroupStatus
-  ? true
-  : never;
 
 export const MESSAGE_TYPES = {
   THINKING: 'thinking',
