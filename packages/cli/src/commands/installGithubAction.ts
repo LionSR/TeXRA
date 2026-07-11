@@ -105,7 +105,7 @@ function compareUrl(slug: GitHubSlug, base: string, branch: string): string {
 }
 
 function refExists(cwd: string, ref: string): boolean {
-  return git(cwd, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`).ok;
+  return git(cwd, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`).success;
 }
 
 function resolveBaseRef(cwd: string, base: string): string | null {
@@ -179,9 +179,9 @@ async function runInstallGithubAction(
   const checkout = branchExists
     ? git(root, 'checkout', branch)
     : git(root, 'checkout', '-b', branch, baseRef ?? base);
-  if (!checkout.ok) {
+  if (!checkout.success) {
     writeTextStderr(
-      `Failed to check out branch "${branch}": ${checkout.stderr}`,
+      `Failed to check out branch "${branch}": ${checkout.stderr ?? ''}`,
     );
     return CliExitCode.AgentError;
   }
@@ -198,8 +198,8 @@ async function runInstallGithubAction(
   }
 
   const add = git(root, 'add', '--', WORKFLOW_RELATIVE_PATH);
-  if (!add.ok) {
-    writeTextStderr(`Failed to stage the workflow: ${add.stderr}`);
+  if (!add.success) {
+    writeTextStderr(`Failed to stage the workflow: ${add.stderr ?? ''}`);
     restoreBranch(root, startBranch);
     return CliExitCode.AgentError;
   }
@@ -212,15 +212,15 @@ async function runInstallGithubAction(
     '--',
     WORKFLOW_RELATIVE_PATH,
   );
-  if (diff.status !== 0 && diff.status !== 1) {
+  if (diff.exitCode !== 0 && diff.exitCode !== 1) {
     writeTextStderr(
-      `Failed to inspect staged workflow changes: ${diff.stderr}`,
+      `Failed to inspect staged workflow changes: ${diff.stderr ?? ''}`,
     );
     restoreBranch(root, startBranch);
     return CliExitCode.AgentError;
   }
 
-  const hasWorkflowChanges = diff.status === 1;
+  const hasWorkflowChanges = diff.exitCode === 1;
   if (hasWorkflowChanges) {
     const commit = git(
       root,
@@ -230,8 +230,8 @@ async function runInstallGithubAction(
       '--',
       WORKFLOW_RELATIVE_PATH,
     );
-    if (!commit.ok) {
-      writeTextStderr(`Failed to commit the workflow: ${commit.stderr}`);
+    if (!commit.success) {
+      writeTextStderr(`Failed to commit the workflow: ${commit.stderr ?? ''}`);
       restoreBranch(root, startBranch);
       return CliExitCode.AgentError;
     }
@@ -267,8 +267,8 @@ async function runInstallGithubAction(
   }
 
   const push = git(root, 'push', '-u', 'origin', branch);
-  if (!push.ok) {
-    writeTextStderr(`Failed to push "${branch}": ${push.stderr}`);
+  if (!push.success) {
+    writeTextStderr(`Failed to push "${branch}": ${push.stderr ?? ''}`);
     writeTextStdout(
       `Once pushed, open ${compareUrl(slug, base, branch)} to propose the PR.`,
     );
@@ -297,9 +297,9 @@ async function runInstallGithubAction(
       '--body',
       PR_BODY,
     );
-    opened = pr.ok;
-    if (!pr.ok) {
-      const diagnostic = (pr.stderr || pr.stdout).trim();
+    opened = pr.success;
+    if (!pr.success) {
+      const diagnostic = pr.stderr ?? pr.stdout ?? '';
       writeTextStderr(
         diagnostic
           ? `gh pr create --web failed: ${diagnostic}`

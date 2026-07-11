@@ -1,65 +1,36 @@
 // Thin wrappers over `git` and `gh` for the `install-github-action` command.
-// Every call captures output and never throws — callers branch on `ok`.
-import { spawnSync } from 'node:child_process';
+// Every call captures output and never throws — callers branch on `success`.
+import { executeCommandSync } from '@utils/system/execUtils';
 
-export interface CommandResult {
-  readonly ok: boolean;
-  readonly status: number | null;
-  readonly stdout: string;
-  readonly stderr: string;
+import type { ExecResult } from '@shared/schemas/opResults';
+
+export function git(cwd: string, ...args: readonly string[]): ExecResult {
+  return executeCommandSync(['git', ...args], { cwd });
 }
 
-function run(
-  command: string,
-  args: readonly string[],
-  cwd: string,
-): CommandResult {
-  const result = spawnSync(command, [...args], {
-    cwd,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  if (result.error) {
-    return {
-      ok: false,
-      status: null,
-      stdout: '',
-      stderr: result.error.message,
-    };
-  }
-  return {
-    ok: result.status === 0,
-    status: result.status,
-    stdout: (result.stdout ?? '').trim(),
-    stderr: (result.stderr ?? '').trim(),
-  };
-}
-
-export function git(cwd: string, ...args: readonly string[]): CommandResult {
-  return run('git', args, cwd);
-}
-
-export function gh(cwd: string, ...args: readonly string[]): CommandResult {
-  return run('gh', args, cwd);
+export function gh(cwd: string, ...args: readonly string[]): ExecResult {
+  return executeCommandSync(['gh', ...args], { cwd });
 }
 
 export function isGitRepo(cwd: string): boolean {
-  return git(cwd, 'rev-parse', '--is-inside-work-tree').ok;
+  return git(cwd, 'rev-parse', '--is-inside-work-tree').success;
 }
 
 export function repoRoot(cwd: string): string | null {
   const result = git(cwd, 'rev-parse', '--show-toplevel');
-  return result.ok && result.stdout ? result.stdout : null;
+  return result.success && result.stdout ? result.stdout : null;
 }
 
 export function remoteUrl(cwd: string, remote = 'origin'): string | null {
   const result = git(cwd, 'remote', 'get-url', remote);
-  return result.ok && result.stdout ? result.stdout : null;
+  return result.success && result.stdout ? result.stdout : null;
 }
 
 export function currentBranch(cwd: string): string | null {
   const result = git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD');
-  if (!result.ok || !result.stdout || result.stdout === 'HEAD') return null;
+  if (!result.success || !result.stdout || result.stdout === 'HEAD') {
+    return null;
+  }
   return result.stdout;
 }
 
@@ -71,7 +42,7 @@ export function defaultBranch(cwd: string): string | null {
     '--short',
     'refs/remotes/origin/HEAD',
   );
-  if (!result.ok || !result.stdout) return null;
+  if (!result.success || !result.stdout) return null;
   return result.stdout.startsWith('origin/')
     ? result.stdout.slice('origin/'.length)
     : result.stdout;
@@ -79,11 +50,11 @@ export function defaultBranch(cwd: string): string | null {
 
 export function localBranchExists(cwd: string, branch: string): boolean {
   return git(cwd, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`)
-    .ok;
+    .success;
 }
 
 export function ghAvailable(cwd: string): boolean {
-  return gh(cwd, '--version').ok;
+  return gh(cwd, '--version').success;
 }
 
 export interface GitHubSlug {
