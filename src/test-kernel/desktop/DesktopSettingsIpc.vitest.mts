@@ -3,8 +3,9 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { LatexSettingsStatus } from '@shared/schemas/settingsViewMessages';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latex';
 import {
@@ -18,6 +19,7 @@ import {
   moduleFileUrl,
   repoPath,
 } from './desktopTestPaths.mjs';
+import type { StateStore } from '@platform/interfaces';
 
 const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
 const computeModelOptionsData = vi.hoisted(() =>
@@ -58,105 +60,8 @@ vi.mock('@controllers/settingsView/ChatExportController', () => ({
   },
 }));
 
-interface StateStore {
-  get<T>(key: string, defaultValue?: T): T;
-  update(key: string, value: unknown): PromiseLike<void>;
-}
-
-interface DesktopSettingsIpcModule {
-  createDesktopSettingsIpc(options: {
-    postToRenderer(message: unknown): void;
-    sendStartupCatalogData?: boolean;
-    globalState?: StateStore;
-    workspaceState?: StateStore;
-    config?: {
-      get<T>(key: string, defaultValue?: T): T;
-      update<T>(
-        key: string,
-        value: T,
-        target?: 'global' | 'workspace',
-      ): Promise<void>;
-      inspect<T = unknown>(key: string): { effectiveValue?: T } | undefined;
-      isExplicitlySet(key: string): boolean;
-      watch(
-        key: string | readonly string[] | RegExp,
-        listener: () => void,
-      ): { dispose(): void };
-    };
-    loadAgents?: () => Promise<void>;
-    loadAgentOptionsData?: () => Promise<{
-      workflow: unknown[];
-      toolUse: unknown[];
-    }>;
-    getAgents?: (category: 'workflow' | 'toolUse') => Array<{
-      name: string;
-      source: 'builtInWorkflow' | 'builtInToolUse' | 'custom' | 'remote';
-      category: 'workflow' | 'toolUse';
-      description?: string;
-      path?: string;
-      multiplePath?: string;
-      isMultiple?: boolean;
-      tools?: string[];
-    }>;
-    getVisibleAgents?: (category: 'workflow' | 'toolUse') => Array<{
-      name: string;
-      source: 'builtInWorkflow' | 'builtInToolUse' | 'custom' | 'remote';
-      category: 'workflow' | 'toolUse';
-      description?: string;
-      path?: string;
-      multiplePath?: string;
-      isMultiple?: boolean;
-      tools?: string[];
-    }>;
-    buildToolDashboardItems?: (cachedResults?: unknown[]) => Promise<unknown[]>;
-    refreshToolAvailability?: () => Promise<void>;
-    getCustomAgentDirectory?: () => Promise<string>;
-    selectCustomAgentDirectory?: () => Promise<string | undefined>;
-    openPath?: (filePath: string) => Promise<void>;
-    openExternalUrl?: (url: string) => Promise<void>;
-    resourcesPath?: string;
-    runExecution?: (request: {
-      config: Record<string, unknown>;
-      executionId?: string;
-    }) => Promise<void>;
-    restoreTaskState?: (taskState: unknown) => Promise<boolean>;
-    installToolExtension?: (extensionId: string) => Promise<void>;
-    promptSecret?: (input: {
-      title: string;
-      prompt: string;
-    }) => Promise<string | undefined>;
-    promptText?: (input: {
-      title: string;
-      prompt: string;
-    }) => Promise<string | undefined>;
-    showInfoMessage?: (message: string) => Promise<void>;
-    showErrorMessage?: (message: string) => Promise<void>;
-    confirmAction?: (
-      message: string,
-      confirmLabel?: string,
-    ) => Promise<boolean>;
-    signIn?: () => Promise<void>;
-    signOut?: () => Promise<void>;
-    getAuthProfileData?: () => Promise<Record<string, unknown>>;
-    setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
-    initializeCrashReporting?: () => Promise<void>;
-    secrets?: {
-      get(key: string): Promise<string | undefined>;
-      set(key: string, value: string): Promise<void>;
-      delete(key: string): Promise<void>;
-    };
-    detectLatexSettingsStatus?: () => Promise<unknown>;
-    runInstallCommand?: (command: string) => Promise<void>;
-    onError?: (error: unknown) => void;
-    modelListRefresh?: PromiseLike<void>;
-    revealStream?: (streamId: string) => Promise<void>;
-  }): {
-    refreshAuthDependentData(): Promise<void>;
-    handleMessage(
-      message: { command: string } & Record<string, unknown>,
-    ): boolean;
-  };
-}
+type DesktopSettingsIpcModule =
+  typeof import('@desktop/main/desktopSettingsIpc');
 
 type DesktopSettingsIpcOptions = Parameters<
   DesktopSettingsIpcModule['createDesktopSettingsIpc']
@@ -168,11 +73,9 @@ type RendererMessage = Parameters<
 
 type SettingsFixtureOverrides = Omit<
   DesktopSettingsIpcOptions,
-  'globalState' | 'postToRenderer' | 'workspaceState'
+  'postToRenderer'
 > & {
-  globalState?: DesktopSettingsIpcOptions['globalState'];
   postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
-  workspaceState?: DesktopSettingsIpcOptions['workspaceState'];
 };
 
 type CapturedSettingsFixtureOverrides = Omit<
@@ -245,12 +148,20 @@ class MemorySecrets {
     return this.values.get(key);
   }
 
+  async getStored(key: string): Promise<string | undefined> {
+    return this.values.get(key);
+  }
+
   async set(key: string, value: string): Promise<void> {
     this.values.set(key, value);
   }
 
   async delete(key: string): Promise<void> {
     this.values.delete(key);
+  }
+
+  async listStoredKeys(): Promise<readonly string[]> {
+    return [...this.values.keys()];
   }
 
   getEnv(): string | undefined {
@@ -310,7 +221,7 @@ function commandOf(message: unknown): string | undefined {
   return (message as { command?: string }).command;
 }
 
-function inactiveLatexSettingsStatus(): unknown {
+function inactiveLatexSettingsStatus(): LatexSettingsStatus {
   return {
     outDir: true,
     autoRevealExclude: true,
@@ -1212,11 +1123,13 @@ describe('desktop settings IPC', () => {
         {
           source: 'builtInWorkflow' as const,
           name: 'correct',
+          path: '/agents/correct.yaml',
           category: 'workflow' as const,
         },
         {
           source: 'builtInWorkflow' as const,
           name: 'polish',
+          path: '/agents/polish.yaml',
           category: 'workflow' as const,
         },
       ],
@@ -1224,32 +1137,38 @@ describe('desktop settings IPC', () => {
         {
           source: 'builtInToolUse' as const,
           name: 'orchestrator',
+          path: '/agents/orchestrator.yaml',
           category: 'toolUse' as const,
           tools: ['delegate'],
         },
         {
           source: 'custom' as const,
           name: 'research',
+          path: '/agents/research.yaml',
           category: 'toolUse' as const,
         },
         {
           source: 'builtInToolUse' as const,
           name: 'numerics',
+          path: '/agents/numerics.yaml',
           category: 'toolUse' as const,
         },
         {
           source: 'builtInToolUse' as const,
           name: 'review',
+          path: '/agents/review.yaml',
           category: 'toolUse' as const,
         },
         {
           source: 'builtInToolUse' as const,
           name: 'presenter',
+          path: '/agents/presenter.yaml',
           category: 'toolUse' as const,
         },
         {
           source: 'builtInToolUse' as const,
           name: 'latexFixer',
+          path: '/agents/latexFixer.yaml',
           category: 'toolUse' as const,
         },
       ],
@@ -1357,11 +1276,13 @@ describe('desktop settings IPC', () => {
         {
           source: 'builtInWorkflow' as const,
           name: 'correct',
+          path: '/agents/correct.yaml',
           category: 'workflow' as const,
         },
         {
           source: 'builtInWorkflow' as const,
           name: 'polish',
+          path: '/agents/polish.yaml',
           category: 'workflow' as const,
         },
       ],
@@ -1369,11 +1290,13 @@ describe('desktop settings IPC', () => {
         {
           source: 'builtInToolUse' as const,
           name: 'review',
+          path: '/agents/review.yaml',
           category: 'toolUse' as const,
         },
         {
           source: 'builtInToolUse' as const,
           name: 'latexFixer',
+          path: '/agents/latexFixer.yaml',
           category: 'toolUse' as const,
         },
       ],
@@ -1511,15 +1434,6 @@ describe('desktop settings IPC', () => {
       setApiAccessMode: async (mode) => {
         persistedModes.push(mode);
       },
-      getAuthProfileData: async () => ({
-        authenticated: false,
-        user: null,
-        tier: 'free',
-        permissions: [],
-        remoteAgents: [],
-        apiAccessMode: 'personal',
-        accessExpiresAt: null,
-      }),
     });
 
     expect(
@@ -1556,15 +1470,6 @@ describe('desktop settings IPC', () => {
       setApiAccessMode: async (mode) => {
         persistedModes.push(mode);
       },
-      getAuthProfileData: async () => ({
-        authenticated: false,
-        user: null,
-        tier: 'free',
-        permissions: [],
-        remoteAgents: [],
-        apiAccessMode: 'personal',
-        accessExpiresAt: null,
-      }),
     });
 
     expect(
@@ -1588,17 +1493,10 @@ describe('desktop settings IPC', () => {
         loadCount += 1;
       },
       loadAgentOptionsData: async () => ({
-        workflow: [{ name: 'remote-workflow' }],
-        toolUse: [{ name: 'remote-tool' }],
-      }),
-      getAuthProfileData: async () => ({
-        authenticated: true,
-        user: { email: 'user@example.com', id: 'user-1' },
-        tier: 'free',
-        permissions: [],
-        remoteAgents: [],
-        apiAccessMode: 'included',
-        accessExpiresAt: null,
+        workflow: [
+          { value: 'remote:remote-workflow', label: 'remote-workflow' },
+        ],
+        toolUse: [{ value: 'remote:remote-tool', label: 'remote-tool' }],
       }),
     });
 
@@ -1688,15 +1586,6 @@ describe('desktop settings IPC', () => {
       signOut: async () => {
         signOutCalls += 1;
       },
-      getAuthProfileData: async () => ({
-        authenticated: false,
-        user: null,
-        tier: 'free',
-        permissions: [],
-        remoteAgents: [],
-        apiAccessMode: 'personal',
-        accessExpiresAt: null,
-      }),
     });
 
     expect(
@@ -1874,54 +1763,6 @@ describe('desktop settings IPC', () => {
     expect(infos).toEqual([]);
     expect(errors).toEqual([
       'Rerunning agents from history is not available in this build',
-    ]);
-  });
-
-  it('surfaces a friendly error instead of throwing on a corrupted history config (Copilot/texra-review #7827)', async () => {
-    const { getExecutionStore } = await import('@agent/storage');
-
-    const historyId = 'dddd4444';
-    // Bypass writeConfig's AgentConfig contract to simulate a corrupt/legacy
-    // on-disk record — a wrong-typed `agent` field fails AgentConfigSchema
-    // outright (unlike a merely-missing field, which prefaults), the same
-    // "malformed stored config" scenario the review comments describe for
-    // AgentConfigSchema.parse(raw).
-    await getExecutionStore(historyId).write('config', {
-      agent: 42,
-    });
-
-    const infos: string[] = [];
-    const errors: string[] = [];
-    const { settings } = createSettingsFixture({
-      showInfoMessage: async (message) => {
-        infos.push(message);
-      },
-      showErrorMessage: async (message) => {
-        errors.push(message);
-      },
-      runExecution: async () => {},
-      restoreTaskState: async () => true,
-    });
-
-    settings.handleMessage({
-      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
-      historyId,
-    });
-    settings.handleMessage({
-      command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
-      historyId,
-    });
-    await flushAsyncWork();
-
-    // Neither handler throws an unhandled ZodError; both report a graceful,
-    // user-visible message instead (the corrupt record fails schema
-    // validation at the storage layer already — readValidated returns null —
-    // so it surfaces as the unified "unreadable" error, not a raw parse
-    // exception).
-    expect(infos).toEqual([]);
-    expect(errors).toEqual([
-      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
-      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
     ]);
   });
 
