@@ -12,6 +12,8 @@ export const ELEMENT_IDS = {
   STREAM_TABS: 'streamTabs',
   ACTIVE_STREAM_NAME: 'activeStreamName',
   STATUS_INDICATOR: 'statusIndicator',
+  GOAL_CHIP: 'goalChip',
+  PROGRESS_BADGE: 'progressBadge',
   RUN_SUMMARY: 'runSummary',
   CONTEXT_STATE: 'contextState',
   TODO_LIST_CONTAINER: 'todoListContainer',
