@@ -95,6 +95,15 @@ export interface DesktopCommandMenuEntry {
   unavailableReason?: string;
 }
 
+/** Menu template shape produced before Electron materializes native menus. */
+export interface DesktopMenuTemplateItem extends Omit<
+  MenuItemConstructorOptions,
+  'click' | 'submenu'
+> {
+  click?: () => void;
+  submenu?: DesktopMenuTemplateItem[];
+}
+
 export interface DesktopCommandActions {
   showRoute(route: DesktopRoute): void;
   showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
@@ -368,14 +377,14 @@ export function buildDesktopMainViewResetMessage(): DesktopMainViewResetMessage 
 export function buildDesktopMenuTemplate(
   actions: DesktopCommandActions,
   platform: NodeJS.Platform = process.platform,
-): MenuItemConstructorOptions[] {
+): DesktopMenuTemplateItem[] {
   const entriesById = new Map(
     getDesktopCommandMenuEntries(DESKTOP_COMMAND_IDS, platform).map((entry) => [
       entry.id,
       entry,
     ]),
   );
-  const commandItem = (id: DesktopCommandId): MenuItemConstructorOptions => {
+  const commandItem = (id: DesktopCommandId): DesktopMenuTemplateItem => {
     const entry = entriesById.get(id);
     if (!entry) throw new Error(`Missing desktop menu entry: ${id}`);
     return {
@@ -389,7 +398,7 @@ export function buildDesktopMenuTemplate(
       },
     };
   };
-  const customMenu: MenuItemConstructorOptions = {
+  const customMenu: DesktopMenuTemplateItem = {
     label: 'TeXRA',
     submenu: [
       ...DESKTOP_MENU_GROUPS[0].map(commandItem),
@@ -397,7 +406,7 @@ export function buildDesktopMenuTemplate(
       ...DESKTOP_MENU_GROUPS[1].map(commandItem),
     ],
   };
-  const fileMenu: MenuItemConstructorOptions = {
+  const fileMenu: DesktopMenuTemplateItem = {
     label: 'File',
     submenu: [
       ...DESKTOP_FILE_COMMANDS.map(commandItem),
@@ -406,7 +415,7 @@ export function buildDesktopMenuTemplate(
     ],
   };
 
-  const leadingMenus: MenuItemConstructorOptions[] =
+  const leadingMenus: DesktopMenuTemplateItem[] =
     platform === 'darwin' ? [{ role: 'appMenu' }, fileMenu] : [fileMenu];
 
   return [
