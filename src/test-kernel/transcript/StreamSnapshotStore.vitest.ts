@@ -23,6 +23,7 @@ import type {
   ExecutionId,
   OutputFileInfo,
   Plan,
+  RoundIndexed,
   StorageKey,
   StreamTabId,
   TodoItem,
@@ -595,6 +596,40 @@ describe('StreamSnapshotStore', () => {
 
     const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
     expect(raw).toMatchObject({
+      '0': ['prior.tex'],
+      '1': ['next.tex'],
+    });
+  });
+
+  it('rejects malformed missing-output patches before mutating memory or persisted state', async () => {
+    const dir = streamDataDir(STREAM);
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+
+    store.updateMissingOutputs(STREAM, { 0: ['prior.tex'] });
+    await store.flush();
+
+    const malformedPatch = {
+      0: ['replacement.tex'],
+      1: ['invalid.tex', 42],
+    } as unknown as RoundIndexed<string>;
+    expect(() => store.updateMissingOutputs(STREAM, malformedPatch)).toThrow();
+
+    expect(store.getMissingOutputs(STREAM)).toEqual({ 0: ['prior.tex'] });
+    await store.flush();
+    expect(
+      await StorageFS.readJson(path.join(dir, 'missingOutputs.json')),
+    ).toEqual({ '0': ['prior.tex'] });
+
+    store.updateMissingOutputs(STREAM, { 1: ['next.tex'] });
+    expect(store.getMissingOutputs(STREAM)).toEqual({
+      0: ['prior.tex'],
+      1: ['next.tex'],
+    });
+    await store.flush();
+    expect(
+      await StorageFS.readJson(path.join(dir, 'missingOutputs.json')),
+    ).toEqual({
       '0': ['prior.tex'],
       '1': ['next.tex'],
     });
