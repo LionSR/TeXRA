@@ -108,15 +108,6 @@ export function streamStatusesWithTrait(
 export const LIVE_ELAPSED_STREAM_STATUSES: ReadonlySet<string> =
   streamStatusesWithTrait('liveElapsed');
 
-/** Subset of StreamStatus used for task groups */
-export const TaskGroupStatusSchema = z.enum([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.ERROR,
-  STREAM_STATUS.STOPPED,
-  STREAM_STATUS.READY,
-]);
-export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
-
 export const EXECUTION_STATUS = {
   COMPLETED: 'completed',
   INTERRUPTED: 'interrupted',
@@ -155,6 +146,25 @@ export const STREAM_PHASE = {
 
 export const StreamPhaseSchema = z.enum(STREAM_PHASE);
 export type StreamPhase = z.infer<typeof StreamPhaseSchema>;
+
+/**
+ * Subset of `StreamPhase` used for task groups (`TaskGroupSchema.status`,
+ * populated from `GROUP_START`/`GROUP_END` transcript rows — #7993 step 3).
+ * No `WAITING`: task groups have no waiting concept, only running and the
+ * three terminal `RunOutcome` values (§8.2's group-end mapping table,
+ * docs/proposals/session-scoped-runtime-architecture.md). Previously a
+ * 4-value subset of the legacy `StreamStatus` (`running`/`error`/`stopped`/
+ * `ready`); retyped to the native vocabulary in lockstep with its readers
+ * (`logSlice.ts`, `TaskGroupList.ts`) so the completed/cancelled distinction
+ * §8.2 already writes to the transcript row reaches the rendered value too.
+ */
+export const TaskGroupStatusSchema = z.enum([
+  STREAM_PHASE.RUNNING,
+  STREAM_PHASE.COMPLETED,
+  STREAM_PHASE.CANCELLED,
+  STREAM_PHASE.FAILED,
+]);
+export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
 
 export const STREAM_SUBSTATE = {
   STARTING: 'starting',
