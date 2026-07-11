@@ -1,6 +1,4 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -9,6 +7,7 @@ import type { GettingStartedAction } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { bannerStyles } from '../styles/bannerStyles';
+import { renderBannerFrame } from './bannerFrame';
 import { MainViewEvents } from '../events';
 
 /** Slim project-bootstrap row shown when the workspace has no LaTeX files. */
@@ -83,78 +82,73 @@ export class GettingStartedBanner extends LitElement {
   }
 
   override render(): TemplateResult {
-    return html`
-      <div class="banner-frame">
-        <wa-callout
-          id="gettingStartedBanner"
-          class="getting-started-banner"
-          variant="brand"
-        >
-          <div class="getting-started-row">
-            <div class="getting-started-body">
-              <div class="getting-started-title">
-                <strong>No LaTeX files yet</strong>
-                <span>Start from a sample or import an existing paper.</span>
-              </div>
-              <p class="getting-started-copy">
-                Then run setup to connect TeXRA, check LaTeX, and choose a
-                starter agent team.
-              </p>
-              <div class="getting-started-actions">
-                <wa-button
-                  variant="brand"
-                  appearance="filled"
-                  size="small"
-                  @click=${() => this.handleAction('runSetup')}
-                >
-                  ${waIcon('rocket', { slot: 'start' })} Run setup assistant
-                </wa-button>
-                <wa-button
-                  appearance="outlined"
-                  size="small"
-                  @click=${() => this.handleAction('createSampleProject')}
-                >
-                  ${waIcon('file-circle-plus', { slot: 'start' })} Sample
-                  project
-                </wa-button>
-                <wa-button
-                  appearance="outlined"
-                  size="small"
-                  @click=${() => this.handleAction('cloneOverleaf')}
-                >
-                  ${waIcon('cloud-arrow-down', { slot: 'start' })} Import
-                  Overleaf
-                </wa-button>
-                <wa-button
-                  appearance="outlined"
-                  size="small"
-                  @click=${() => this.handleAction('downloadArxiv')}
-                >
-                  ${waIcon('download', { slot: 'start' })} Import arXiv
-                </wa-button>
-                <wa-button
-                  appearance="outlined"
-                  size="small"
-                  @click=${() => this.handleAction('openWalkthrough')}
-                >
-                  ${waIcon('book', { slot: 'start' })} Walkthrough
-                </wa-button>
-              </div>
+    return renderBannerFrame({
+      id: 'gettingStartedBanner',
+      variant: 'brand',
+      calloutClassName: 'getting-started-banner',
+      body: html`
+        <div class="getting-started-row">
+          <div class="getting-started-body">
+            <div class="getting-started-title">
+              <strong>No LaTeX files yet</strong>
+              <span>Start from a sample or import an existing paper.</span>
             </div>
-            <wa-button
-              class="dismiss-button"
-              appearance="plain"
-              size="small"
-              title="Dismiss for this session"
-              aria-label="Dismiss getting started row"
-              @click=${this.handleDismiss}
-            >
-              ${waIcon('xmark')}
-            </wa-button>
+            <p class="getting-started-copy">
+              Then run setup to connect TeXRA, check LaTeX, and choose a starter
+              agent team.
+            </p>
+            <div class="getting-started-actions">
+              <wa-button
+                variant="brand"
+                appearance="filled"
+                size="small"
+                @click=${() => this.handleAction('runSetup')}
+              >
+                ${waIcon('rocket', { slot: 'start' })} Run setup assistant
+              </wa-button>
+              <wa-button
+                appearance="outlined"
+                size="small"
+                @click=${() => this.handleAction('createSampleProject')}
+              >
+                ${waIcon('file-circle-plus', { slot: 'start' })} Sample project
+              </wa-button>
+              <wa-button
+                appearance="outlined"
+                size="small"
+                @click=${() => this.handleAction('cloneOverleaf')}
+              >
+                ${waIcon('cloud-arrow-down', { slot: 'start' })} Import Overleaf
+              </wa-button>
+              <wa-button
+                appearance="outlined"
+                size="small"
+                @click=${() => this.handleAction('downloadArxiv')}
+              >
+                ${waIcon('download', { slot: 'start' })} Import arXiv
+              </wa-button>
+              <wa-button
+                appearance="outlined"
+                size="small"
+                @click=${() => this.handleAction('openWalkthrough')}
+              >
+                ${waIcon('book', { slot: 'start' })} Walkthrough
+              </wa-button>
+            </div>
           </div>
-        </wa-callout>
-      </div>
-    `;
+          <wa-button
+            class="dismiss-button"
+            appearance="plain"
+            size="small"
+            title="Dismiss for this session"
+            aria-label="Dismiss getting started row"
+            @click=${this.handleDismiss}
+          >
+            ${waIcon('xmark')}
+          </wa-button>
+        </div>
+      `,
+    });
   }
 }
 
