@@ -404,9 +404,12 @@ function startClaudeAgentLoop(params: {
    * Set when this launch is the disk-based fallback for a session_id the
    * in-memory registry no longer knows about (extension reload, crash):
    * seeds the first turn's `resume` option so the SDK continues the prior
-   * conversation, and is registered up front (onSessionStart) so a
-   * concurrent call with the same session_id during the first turn can't
-   * bypass the in-memory guard and start a second fallback loop.
+   * conversation, and is registered up front (onSessionStart) so the
+   * in-memory guard picks the id back up as soon as possible. This narrows,
+   * but does not fully close, the window for a concurrent call with the same
+   * stale session_id to also observe an inactive registry and start its own
+   * fallback loop before either one's onSessionStart runs — the same
+   * await-before-registration gap codex.ts's registerThread already has.
    */
   resumeSessionId: string | undefined;
 }): void {
@@ -423,6 +426,7 @@ function startClaudeAgentLoop(params: {
   // turns; it's threaded forward from each turn's result. Seeded from
   // params.resumeSessionId when this launch is a disk-based fallback resume.
   let resumeSessionId: string | undefined = params.resumeSessionId;
+  const fallbackSessionId = params.resumeSessionId;
   const storedSessionIds = new Set<string>();
 
   const registerSession = (sessionId: string, session: SessionHandle): void => {
@@ -471,8 +475,8 @@ function startClaudeAgentLoop(params: {
 
   const strategy: ChildRunStrategy<TurnResult> = {
     stageLabel: 'Claude Code session',
-    onSessionStart: params.resumeSessionId
-      ? (session) => registerSession(params.resumeSessionId!, session)
+    onSessionStart: fallbackSessionId
+      ? (session) => registerSession(fallbackSessionId, session)
       : undefined,
     launch: (ports, abortController) =>
       runTurn(
