@@ -320,5 +320,3 @@ export class StreamStatusMachine {
     }
   }
 }
-
-export const StreamStatusService = new StreamStatusMachine();

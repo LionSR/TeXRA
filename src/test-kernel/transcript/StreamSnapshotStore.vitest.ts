@@ -118,6 +118,24 @@ function toolUseTaskState(agent = 'search', model = 'deepseekproT'): TaskState {
   });
 }
 
+function injectDuringExecutionConfigHydration(
+  executionId: ExecutionId,
+  inject: () => void,
+) {
+  const originalRead = StorageFS.read.bind(StorageFS);
+  const configPath = path.join(
+    resolveRunStoragePath(executionId),
+    'config.json',
+  );
+  const injected = vi.fn(inject);
+  vi.spyOn(StorageFS, 'read').mockImplementation(async (target: string) => {
+    const raw = await originalRead(target);
+    if (target === configPath && injected.mock.calls.length === 0) injected();
+    return raw;
+  });
+  return injected;
+}
+
 describe('StreamSnapshotStore', () => {
   setupPlatform(buildSnapshotPlatform);
 
@@ -552,6 +570,109 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('returns missing outputs immediately for streams outside a partial preload without erasing disk markers', async () => {
+    // Same race as the output-files case above, replayed for
+    // updateMissingOutputs: a stream outside the preloaded set is still
+    // unseeded when the mutation lands, so the seed's disk read is racing
+    // the caller's read of its own write. Regression for the "half-fixed"
+    // eager-apply overlay gap (missingOutputs/compileFailures lacked the
+    // guarantee addOutputFiles/addUsage already had).
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'missingOutputs.json'),
+      JSON.stringify({ '0': ['prior.tex'] }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.updateMissingOutputs(OTHER_STREAM, { 1: ['next.tex'] });
+    // Fails pre-fix: the plain mutate() path defers the whole apply behind
+    // the in-flight seed, so this synchronous read-back still sees nothing.
+    expect(store.getMissingOutputs(OTHER_STREAM)[1]).toEqual(['next.tex']);
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    expect(raw).toMatchObject({
+      '0': ['prior.tex'],
+      '1': ['next.tex'],
+    });
+  });
+
+  it('replays clearMissingOutputs before a later updateMissingOutputs on an unseeded stream', async () => {
+    // clearMissingOutputs must not stay on the plain deferred mutate() path
+    // while updateMissingOutputs eagerly overlays: on an unseeded stream that
+    // ordering let the seed's overlay replay (update) land, then the clear
+    // (queued behind the same seed) run afterward and wipe it out regardless
+    // of call order. Here the clear fires first, so the later update must
+    // survive.
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'missingOutputs.json'),
+      JSON.stringify({ '0': ['stale.tex'] }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.clearMissingOutputs(OTHER_STREAM);
+    store.updateMissingOutputs(OTHER_STREAM, { 1: ['next.tex'] });
+    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({ 1: ['next.tex'] });
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    expect(raw).toEqual({ '1': ['next.tex'] });
+  });
+
+  it('replays a later clearMissingOutputs over an earlier updateMissingOutputs on an unseeded stream', async () => {
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'missingOutputs.json'),
+      JSON.stringify({ '0': ['stale.tex'] }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.updateMissingOutputs(OTHER_STREAM, { 1: ['next.tex'] });
+    store.clearMissingOutputs(OTHER_STREAM);
+    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({});
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    expect(raw).toEqual({});
+  });
+
+  it('returns compile failures immediately for streams outside a partial preload without erasing disk markers', async () => {
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    const prior = compileFailure('prior.tex', 0);
+    const next = compileFailure('next.tex', 1);
+    await StorageFS.write(
+      path.join(dir, 'compileFailures.json'),
+      JSON.stringify({ '0': [prior] }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.updateCompileFailures(OTHER_STREAM, { 1: [next] });
+    // Fails pre-fix for the same reason as the missing-outputs case above.
+    expect(store.getCompileFailures(OTHER_STREAM)[1]).toEqual([next]);
+    await store.flush();
+
+    const raw = await StorageFS.readJson(
+      path.join(dir, 'compileFailures.json'),
+    );
+    expect(raw).toMatchObject({
+      '0': [prior],
+      '1': [next],
+    });
+  });
+
   it('makes task state readable immediately while preserving later seeded sidecars', async () => {
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
@@ -685,23 +806,13 @@ describe('StreamSnapshotStore', () => {
     );
 
     const store = new StreamSnapshotStore();
-    const originalRead = StorageFS.read.bind(StorageFS);
-    const configPath = path.join(
-      resolveRunStoragePath(oldExecutionId),
-      'config.json',
+    const wasRuntimeUpdateInjected = injectDuringExecutionConfigHydration(
+      oldExecutionId,
+      () => store.setTaskState(STREAM, newTaskState, newExecutionId),
     );
-    let injectedRuntimeUpdate = false;
-    vi.spyOn(StorageFS, 'read').mockImplementation(async (target: string) => {
-      const raw = await originalRead(target);
-      if (!injectedRuntimeUpdate && target === configPath) {
-        injectedRuntimeUpdate = true;
-        store.setTaskState(STREAM, newTaskState, newExecutionId);
-      }
-      return raw;
-    });
 
     await store.load([STREAM]);
-    expect(injectedRuntimeUpdate).toBe(true);
+    expect(wasRuntimeUpdateInjected).toHaveBeenCalledOnce();
     expect(store.getTaskState(STREAM)).toEqual(newTaskState);
     expect(store.getExecutionId(STREAM)).toBe(newExecutionId);
 
@@ -715,6 +826,52 @@ describe('StreamSnapshotStore', () => {
       executionId: newExecutionId,
       agent: 'new-search',
     });
+  });
+
+  it('persists a late reset and round patch that arrive during async hydration', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    const executionId = 'c0ffee' as ExecutionId;
+    await StorageFS.ensureDir(dir);
+    await Promise.all([
+      StorageFS.write(
+        path.join(dir, 'meta.json'),
+        JSON.stringify({
+          schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+          executionId,
+        }),
+      ),
+      StorageFS.write(
+        path.join(dir, 'missingOutputs.json'),
+        JSON.stringify({ '0': ['stale.tex'] }),
+      ),
+      getExecutionStore(executionId).writeConfig(
+        toolUseTaskState().agentConfig,
+      ),
+    ]);
+
+    const store = new StreamSnapshotStore();
+    const wereLateOverlaysInjected = injectDuringExecutionConfigHydration(
+      executionId,
+      () => {
+        store.clearMissingOutputs(STREAM);
+        store.updateMissingOutputs(STREAM, { 1: ['late.tex'] });
+        void store.addUsage(STREAM, RUN, usage(10, 2, 0.1));
+      },
+    );
+
+    await store.load([STREAM]);
+    expect(wereLateOverlaysInjected).toHaveBeenCalledOnce();
+    expect(store.getMissingOutputs(STREAM)).toEqual({ 1: ['late.tex'] });
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject(usage(10, 2, 0.1));
+    await store.flush();
+
+    const [missingOutputs, usageStats] = await Promise.all([
+      StorageFS.readJson(path.join(dir, 'missingOutputs.json')),
+      StorageFS.readJson(path.join(dir, 'usageStats.json')),
+    ]);
+    expect(missingOutputs).toEqual({ '1': ['late.tex'] });
+    expect(usageStats).toMatchObject({ [RUN]: usage(10, 2, 0.1) });
   });
 
   it('load refreshes already-seeded streams from disk instead of keeping stale memory', async () => {

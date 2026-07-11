@@ -10,9 +10,7 @@ import { render } from 'ink';
 import React from 'react';
 
 import { getAgentsByCategory, loadAgents } from '@agent/index';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
@@ -40,7 +38,6 @@ import {
 } from '@shared/schemas';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { GoalStore } from '@tools/goal';
-import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
@@ -233,7 +230,7 @@ const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 // stream through the real event-subscription path
 // (attachTuiRunFactSubscription + subscribeStreamStatus, exactly as
 // runChatTui.tsx/chatSessionController.ts wire a real run — see
-// `seedChildEventOrderFixture` below) in each of the eight orderings the
+// `runChildEventOrderFixture` below) in each of the eight orderings the
 // design names, so validate-tui.mjs can assert both intermediate render
 // checkpoints and (for the four order-equivalent cases) a byte-identical
 // settled frame no matter which order the attachment/roster/edge/status
@@ -273,7 +270,7 @@ const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
-const HARNESS_FOLLOW_UP_QUEUE = ToolUseFollowUpQueue.acquire(STREAM_ID);
+const HARNESS_FOLLOW_UP_QUEUE = defaultSession().followUps.acquire(STREAM_ID);
 const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 // Keep platform state writes out of the repository unless a scenario opts in.
 const HARNESS_CWD =
@@ -617,7 +614,7 @@ function makeAssistantToolPreambleEntries(): ConversationEntry[] {
 }
 
 function seedLiveToolOnlyTranscript(): void {
-  const store = getDefaultStreamLogStore();
+  const store = defaultSession().transcripts;
   const timestamp = Date.now();
   store.append(STREAM_ID, {
     id: 'live-tool-user',
@@ -696,7 +693,7 @@ function makeRejectedBashToolEntries(): ConversationEntry[] {
 }
 
 function seedSubagentFollowupTranscript(): void {
-  const store = getDefaultStreamLogStore();
+  const store = defaultSession().transcripts;
   const timestamp = Date.now();
   const followups = [
     '<subagent-progress id="child-a" agent="strategy" type="round" current="2" total="3" />',
@@ -1048,14 +1045,10 @@ const CHILD_EVENT_ORDER_AGENT_NAME = 'orderChecker';
 // as a *removable* parent would tear down the harness's own active session.
 const CHILD_EVENT_ORDER_OTHER_PARENT_ID =
   'harness-child-event-order-other-parent' as StreamTabId;
-// Small but non-zero: each step must land in its own macrotask so Ink
-// commits (and the PTY validator can observe) a render between ordered
-// facts, per the "deterministic harness checkpoint" requirement in the
-// design doc. The validator polls for each checkpoint's expected text
-// rather than relying on this delay's exact value.
-const CHILD_EVENT_ORDER_STEP_DELAY_MS = Number(
-  process.env.HARNESS_CHILD_EVENT_ORDER_STEP_DELAY_MS ?? '60',
-);
+const CHILD_EVENT_ORDER_MARKER_PREFIX =
+  '\u001b]777;texra-harness-child-event-order:';
+const CHILD_EVENT_ORDER_MARKER_SUFFIX = '\u0007';
+const CHILD_EVENT_ORDER_DISPOSERS: Array<() => void> = [];
 
 function childEventOrderRosterRow(): ActiveChildInfo {
   return {
@@ -1121,11 +1114,12 @@ function emitChildEventOrderAttachment(streamId: StreamTabId): void {
   });
 }
 
-// Real `StreamStatusService` transitions — `subscribeStreamStatus()` is what
-// projects these into `cliState` (see `seedChildEventOrderFixture`), exactly
-// as `runChatTui.tsx` wires it for a real session.
+// Real status-machine transitions on the default session —
+// `subscribeStreamStatus()` projects these into `cliState` (see
+// `runChildEventOrderFixture`), exactly as `runChatTui.tsx` wires it for a
+// real session.
 function transitionChildEventOrderRunning(streamId: StreamTabId): void {
-  StreamStatusService.transition(
+  defaultSession().status.transition(
     streamId,
     STREAM_PHASE.RUNNING,
     STREAM_TRANSITION_CAUSE.LIFECYCLE,
@@ -1134,9 +1128,13 @@ function transitionChildEventOrderRunning(streamId: StreamTabId): void {
 }
 
 function transitionChildEventOrderTerminal(streamId: StreamTabId): void {
-  StreamStatusService.transitionToTerminal(streamId, STREAM_PHASE.COMPLETED, {
-    events: defaultSession().events,
-  });
+  defaultSession().status.transitionToTerminal(
+    streamId,
+    STREAM_PHASE.COMPLETED,
+    {
+      events: defaultSession().events,
+    },
+  );
 }
 
 // Late resume-transition attempt for an already-removed stream: unlike a
@@ -1146,7 +1144,7 @@ function transitionChildEventOrderTerminal(streamId: StreamTabId): void {
 // `setStreamStatusInCliState` and actually exercises that function's
 // `isChildStreamRemoved` tombstone guard (see `completion-remove` below).
 function attemptChildEventOrderLateResume(streamId: StreamTabId): void {
-  StreamStatusService.transition(
+  defaultSession().status.transition(
     streamId,
     STREAM_PHASE.RUNNING,
     STREAM_TRANSITION_CAUSE.RESUME,
@@ -1156,10 +1154,10 @@ function attemptChildEventOrderLateResume(streamId: StreamTabId): void {
 
 /**
  * The eight orderings named by the design doc's "PTY ordering tests"
- * section, expressed as the ordered real-fact steps
- * `seedChildEventOrderFixture` schedules one macrotask apart. `canonical`
- * through `status-first` are byte-identical settled orderings of the same
- * four facts (attachment, running status, roster, edge) — see the vitest
+ * section, expressed as ordered real-fact steps with a flushed-render marker
+ * after each boundary. `canonical` through `status-first` are byte-identical
+ * settled orderings of the same four facts (attachment, running status,
+ * roster, edge) — see the vitest
  * "child-stream ordered transition matrix" (scenarios 1-4,
  * src/test-kernel/cli/TuiStateAndFocus.vitest.mts) this mirrors at the PTY
  * layer. The remaining four correct old ambiguous transients (promotion,
@@ -1251,31 +1249,32 @@ function childEventOrderSteps(order: ChildEventOrder): readonly (() => void)[] {
   }
 }
 
-function seedChildEventOrderFixture(order: ChildEventOrder): void {
-  // Mirror real CLI startup: `runChatTui.tsx` installs `subscribeStreamStatus()`
-  // once per session, and `chatSessionController.ts`'s `setupRunHost` attaches
-  // `attachTuiRunFactSubscription(defaultSession().events)` per run. Attaching
-  // both here — instead of calling `applySubagentRoster`/`setParentStream`
-  // directly — means a regression in either subscription would leave these
-  // scenarios failing instead of silently green.
-  subscribeStreamStatus();
-  attachTuiRunFactSubscription(defaultSession().events);
+async function writeChildEventOrderMarker(label: string): Promise<void> {
+  const marker = `${CHILD_EVENT_ORDER_MARKER_PREFIX}${label}${CHILD_EVENT_ORDER_MARKER_SUFFIX}`;
+  await new Promise<void>((resolve, reject) => {
+    HARNESS_STDOUT.write(marker, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
 
+async function runChildEventOrderFixture(
+  ink: ReturnType<typeof render>,
+  order: ChildEventOrder,
+): Promise<void> {
   const steps = childEventOrderSteps(order);
-  let stepIndex = 0;
-  const runNextStep = (): void => {
-    if (stepIndex >= steps.length) return;
-    const step = steps[stepIndex];
-    stepIndex += 1;
+  // `render()` mounts synchronously, and this first flush establishes the
+  // single origin for the fixture protocol. No event may precede it.
+  await ink.waitUntilRenderFlush();
+  await writeChildEventOrderMarker('mounted');
+
+  for (const [stepIndex, step] of steps.entries()) {
     step();
-    setTimeout(runNextStep, CHILD_EVENT_ORDER_STEP_DELAY_MS);
-  };
-  // Deferred, not called inline: `seedChildEventOrderFixture` itself still
-  // runs before `render()` in source order (like every other opt-in harness
-  // fixture below), but every step above must run after `<App>` has mounted
-  // so Ink actually renders each intermediate state instead of only the
-  // fully-seeded final one.
-  setTimeout(runNextStep, CHILD_EVENT_ORDER_STEP_DELAY_MS);
+    ink.rerender(renderHarnessApp());
+    await ink.waitUntilRenderFlush();
+    await writeChildEventOrderMarker(`step-${stepIndex + 1}`);
+  }
 }
 
 if (SHOW_CHILDREN) {
@@ -1416,10 +1415,6 @@ if (SHOW_CHILDREN) {
       runStartedAt: nestedStartedAt,
     }));
   }
-}
-
-if (CHILD_EVENT_ORDER) {
-  seedChildEventOrderFixture(CHILD_EVENT_ORDER);
 }
 
 if (SHOW_TODOS) {
@@ -1809,7 +1804,7 @@ function appendHarnessStatus(): void {
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       goal: GoalStore.getForStream(streamId),
-      queuedFollowUpMessages: ToolUseFollowUpQueue.getAll(streamId),
+      queuedFollowUpMessages: defaultSession().followUps.getAll(streamId),
     }),
   );
 }
@@ -1817,9 +1812,9 @@ function appendHarnessStatus(): void {
 function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   clearApprovals();
-  ToolUseFollowUpQueue.drain(STREAM_ID);
+  defaultSession().followUps.drain(STREAM_ID);
   void GoalStore.forget(STREAM_ID);
-  const store = getDefaultStreamLogStore();
+  const store = defaultSession().transcripts;
   for (const streamId of streams.get().keys()) {
     store.delete(streamId).catch(() => {
       // The harness reset is best-effort; visible cliState is reset below.
@@ -1935,32 +1930,54 @@ function handleHarnessCtrlC(): void {
 const restoreStdoutListenerLimit = installTuiStdoutListenerLimit(
   process.stdout,
 );
-const ink = render(
-  <App
-    onSubmit={handleHarnessSubmit}
-    onKillExecution={markHarnessExecutionStopped}
-    canInterruptActiveRun={() => canInterrupt}
-    canStopActiveRun={() => canInterrupt}
-    colorEnabled={HARNESS_COLOR_ENABLED}
-    onInterruptActive={markHarnessInterrupted}
-    onTranscriptViewportChange={
-      viewportController.handleTranscriptViewportChange
-    }
-    onCtrlC={handleHarnessCtrlC}
-  />,
-  {
-    stdout: HARNESS_STDOUT,
-    stderr: process.stderr,
-    stdin: process.stdin,
-    exitOnCtrlC: false,
-  },
-);
+function renderHarnessApp(): React.JSX.Element {
+  return (
+    <App
+      onSubmit={handleHarnessSubmit}
+      onKillExecution={markHarnessExecutionStopped}
+      canInterruptActiveRun={() => canInterrupt}
+      canStopActiveRun={() => canInterrupt}
+      colorEnabled={HARNESS_COLOR_ENABLED}
+      onInterruptActive={markHarnessInterrupted}
+      onTranscriptViewportChange={
+        viewportController.handleTranscriptViewportChange
+      }
+      onCtrlC={handleHarnessCtrlC}
+    />
+  );
+}
+
+const ink = render(renderHarnessApp(), {
+  stdout: HARNESS_STDOUT,
+  stderr: process.stderr,
+  stdin: process.stdin,
+  exitOnCtrlC: false,
+});
 inkRef.current = ink;
+
+if (CHILD_EVENT_ORDER) {
+  // Mirror real CLI startup: `runChatTui.tsx` installs
+  // `subscribeStreamStatus()` once per session, and
+  // `chatSessionController.ts` attaches the run-fact subscription per run.
+  CHILD_EVENT_ORDER_DISPOSERS.push(
+    subscribeStreamStatus(),
+    attachTuiRunFactSubscription(defaultSession().events),
+  );
+  void runChildEventOrderFixture(ink, CHILD_EVENT_ORDER).catch((error) => {
+    process.stderr.write(
+      `[tui-harness] HARNESS_CHILD_EVENT_ORDER failed: ${toErrorMessage(error)}\n`,
+    );
+    void exitHarness(1);
+  });
+}
 
 let harnessExiting = false;
 async function exitHarness(exitCode: number): Promise<void> {
   if (harnessExiting) return;
   harnessExiting = true;
+  for (const dispose of CHILD_EVENT_ORDER_DISPOSERS.splice(0).toReversed()) {
+    dispose();
+  }
   ink.unmount();
   try {
     await tryPlatform()?.lifecycle.runShutdown();

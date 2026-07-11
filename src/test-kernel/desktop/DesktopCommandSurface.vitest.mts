@@ -1,76 +1,15 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - webview commands
-import type { DesktopCommandActions } from '@desktop/desktopCommandSurface';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-
 // Local imports - command catalog and shared schemas
 import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
-import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
-interface DesktopCommandSurfaceModule {
-  DESKTOP_LOCAL_COMMANDS: {
-    OPEN_DESKTOP_DOCS: string;
-    SHOW_LOGS: string;
-    OPEN_LOG_FOLDER: string;
-    OPEN_WORKSPACE_FOLDER: string;
-    OPEN_WORKSPACE_IN_NEW_WINDOW: string;
-    SHOW_FIRST_RUN_WALKTHROUGH: string;
-  };
-  DESKTOP_COMMAND_IDS: readonly string[];
-  buildDesktopMenuTemplate(
-    actions: DesktopCommandActions,
-    platform?: NodeJS.Platform,
-  ): Array<{
-    label?: string;
-    role?: string;
-    submenu?: DesktopMenuItem[];
-  }>;
-  dispatchDesktopCommand(id: string, actions: DesktopCommandActions): boolean;
-  getDesktopCommandMenuEntries(
-    ids?: readonly string[],
-    platform?: NodeJS.Platform,
-  ): Array<{
-    id: string;
-    label: string;
-    category: string;
-    accelerator?: string;
-    enabled: boolean;
-    unavailableReason?: string;
-  }>;
-  toElectronAccelerator(
-    keybinding: { key: string; mac?: string },
-    platform?: NodeJS.Platform,
-  ): string;
-  formatDesktopAccelerator(
-    accelerator: string | undefined,
-    platform?: NodeJS.Platform,
-  ): string | undefined;
-  buildDesktopSettingsTabMessage(
-    tabIndex: number,
-    agentSubTab?: string,
-  ): {
-    command: string;
-    tabIndex: number;
-    agentSubTab?: string;
-  };
-}
-
-interface DesktopMenuItem {
-  label?: string;
-  role?: string;
-  accelerator?: string;
-  enabled?: boolean;
-  toolTip?: string;
-  submenu?: DesktopMenuItem[];
-  type?: 'separator';
-  click?: () => void;
-}
+type DesktopCommandSurfaceModule =
+  typeof import('@desktop/desktopCommandSurface');
 
 async function loadDesktopCommandSurface(): Promise<DesktopCommandSurfaceModule> {
   return import(
@@ -98,9 +37,8 @@ describe('desktop command surface', () => {
         expect(['File', 'TeXRA', 'Help']).toContain(entry.category);
         continue;
       }
-      expect(catalogEntry).toBeDefined();
-      expect(entry.label).toBe(catalogEntry?.shortTitle ?? catalogEntry?.title);
-      expect(entry.category).toBe(catalogEntry?.category);
+      expect(entry.label).toBe(catalogEntry.shortTitle ?? catalogEntry.title);
+      expect(entry.category).toBe(catalogEntry.category);
     }
     expect(entries).toContainEqual({
       id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
@@ -279,32 +217,8 @@ describe('desktop command surface', () => {
     expect(actions.showSettings).not.toHaveBeenCalled();
   });
 
-  it('builds settings-tab messages from one shared helper', async () => {
-    const { buildDesktopSettingsTabMessage } =
-      await loadDesktopCommandSurface();
-
-    expect(buildDesktopSettingsTabMessage(SETTINGS_TAB.MODELS)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-      tabIndex: SETTINGS_TAB.MODELS,
-    });
-    expect(
-      buildDesktopSettingsTabMessage(
-        SETTINGS_TAB.AGENTS,
-        AgentCategory.ToolUse,
-      ),
-    ).toEqual({
-      agentSubTab: AgentCategory.ToolUse,
-      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-      tabIndex: SETTINGS_TAB.AGENTS,
-    });
-  });
-
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
-    const {
-      DESKTOP_LOCAL_COMMANDS,
-      buildDesktopMenuTemplate,
-      getDesktopCommandMenuEntries,
-    } = await loadDesktopCommandSurface();
+    const { buildDesktopMenuTemplate } = await loadDesktopCommandSurface();
     const actions = {
       openDesktopDocs: vi.fn(),
       openWorkspaceFolder: vi.fn(),
@@ -359,21 +273,6 @@ describe('desktop command surface', () => {
       'Clean LLM Outputs',
       'Clean Build Files',
     ]);
-    expect(
-      submenu
-        .filter((item) => item.type !== 'separator')
-        .map((item) => item.label),
-    ).toEqual(
-      getDesktopCommandMenuEntries(undefined, 'darwin')
-        .filter(
-          (entry) =>
-            entry.category !== 'Help' &&
-            entry.id !== DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER &&
-            entry.id !== DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
-        )
-        .map((entry) => entry.label),
-    );
-
     const launcherItem = submenu.find((item) => item.label === 'Show Launcher');
     const executeItem = submenu.find((item) => item.label === 'Execute Agent');
     const modelsItem = submenu.find((item) => item.label === 'Show Models');
@@ -389,11 +288,11 @@ describe('desktop command surface', () => {
     });
 
     const helpMenu = menu.find((item) => item.label === 'Help');
-    expect(helpMenu?.submenu?.map((item) => item.label)).toEqual([
+    const helpSubmenu = helpMenu?.submenu ?? [];
+    expect(helpSubmenu.map((item) => item.label)).toEqual([
       'Show First-Run Walkthrough',
       'Desktop Documentation',
     ]);
-    const helpSubmenu = helpMenu?.submenu ?? [];
     helpSubmenu[0].click?.();
     expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
     helpSubmenu[1].click?.();

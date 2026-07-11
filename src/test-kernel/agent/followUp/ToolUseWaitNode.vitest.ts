@@ -17,10 +17,8 @@ import {
   type ToolUseRunShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import {
-  StreamStatusMachine,
-  StreamStatusService,
-} from '@agent/runtime/StreamStatusService';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import {
@@ -797,7 +795,7 @@ describe('ToolUseWaitNode', () => {
     try {
       seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
       seedStreamStatusForTest(
-        StreamStatusService,
+        defaultSession().status,
         streamId,
         STREAM_PHASE.CANCELLED,
       );
@@ -807,17 +805,21 @@ describe('ToolUseWaitNode', () => {
         node.exec(prep),
       );
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.WAITING);
-      expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(defaultSession().status.get(streamId)).toBe(
+        STREAM_PHASE.CANCELLED,
+      );
 
       await withTestRunContext(runtimeHost, streamId, () =>
         node.post(shared, prep, exec),
       );
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
-      expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(defaultSession().status.get(streamId)).toBe(
+        STREAM_PHASE.CANCELLED,
+      );
       expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
-      clearStreamStatusForTest(StreamStatusService, streamId);
+      clearStreamStatusForTest(defaultSession().status, streamId);
     }
   });
 

@@ -2,37 +2,35 @@
 // suspended tool-use session is left untouched (so its flow record survives
 // for `texra resume`) or interrupted on shutdown. See the rationale on
 // chatTuiIsResumableIdleOnExit: interrupting clears the resumable state, so an
-// idle/WAITING session ("interruptible but not stoppable") must be preserved.
+// idle/WAITING session with a live flow must be preserved, while a claimed
+// resume slot that is still rehydrating must be interrupted.
 
 import { describe, expect, it } from 'vitest';
 
 import { chatTuiIsResumableIdleOnExit } from '@cli/chat/tui/state/sessionRunState';
 
 describe('chatTuiIsResumableIdleOnExit', () => {
-  it('preserves an idle/WAITING session (interruptible, not stoppable)', () => {
-    expect(
-      chatTuiIsResumableIdleOnExit({
-        canInterruptActiveRun: true,
-        canStopActiveRun: false,
-      }),
-    ).toBe(true);
-  });
-
-  it('does not preserve an actively-running turn (interrupt it on exit)', () => {
-    expect(
-      chatTuiIsResumableIdleOnExit({
-        canInterruptActiveRun: true,
-        canStopActiveRun: true,
-      }),
-    ).toBe(false);
-  });
-
-  it('does not preserve when there is no pending run at all', () => {
-    expect(
-      chatTuiIsResumableIdleOnExit({
-        canInterruptActiveRun: false,
-        canStopActiveRun: false,
-      }),
-    ).toBe(false);
-  });
+  it.each([
+    ['live idle flow', true, false, true, true],
+    ['pre-live rehydration', true, false, false, false],
+    ['actively running turn', true, true, true, false],
+    ['no pending run', false, false, false, false],
+  ] as const)(
+    '%s',
+    (
+      _name,
+      canInterruptActiveRun,
+      canStopActiveRun,
+      hasActiveToolUseFlow,
+      expected,
+    ) => {
+      expect(
+        chatTuiIsResumableIdleOnExit({
+          canInterruptActiveRun,
+          canStopActiveRun,
+          hasActiveToolUseFlow,
+        }),
+      ).toBe(expected);
+    },
+  );
 });

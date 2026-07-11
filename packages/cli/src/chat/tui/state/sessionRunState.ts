@@ -65,6 +65,28 @@ export function markChatTuiRunCompleted(
   publishChatTuiRootRunStartAvailability(session);
 }
 
+/**
+ * Atomically check-and-claim the root-run slot: fuses
+ * {@link chatTuiCanStartRootRun} and {@link markChatTuiRunPending} into one
+ * synchronous call so no caller can observe — or race on — a window between
+ * the check and the claim. Every root-run entry point that awaits *before*
+ * it would otherwise claim (resume, follow-up-wake resume) MUST call this as
+ * its first statement, before any `await`, so the claim happens before the
+ * caller can be suspended and a concurrent entry point can slip in and claim
+ * the same slot. `startRootRun` claims via `markChatTuiRunPending` directly
+ * instead — it never suspends before claiming, so it has no check-then-await
+ * window for this primitive to close.
+ */
+export function tryClaimRootRunSlot(
+  session: ClearableTuiSessionState,
+  runPromise: Promise<void>,
+  runtimeHost?: AgentRuntimeHost,
+): boolean {
+  if (!chatTuiCanStartRootRun(session)) return false;
+  markChatTuiRunPending(session, runPromise, runtimeHost);
+  return true;
+}
+
 export function chatTuiCanInterruptActiveRun(
   session: InterruptibleTuiSessionState,
 ): boolean {
@@ -126,24 +148,27 @@ export type ChatTuiSigintAction =
 export function chatTuiSigintAction(input: {
   readonly exitArmed: boolean;
   readonly canStopActiveRun: boolean;
-  readonly canInterruptActiveRun: boolean;
+  readonly resumableIdle: boolean;
 }): ChatTuiSigintAction {
   if (input.exitArmed) return 'force-exit';
   if (input.canStopActiveRun) return 'interrupt-and-arm-exit';
-  // Resumable-idle (interruptible, not actively running): exit WITHOUT
-  // interrupting so the suspended tool-use flow record survives for resume.
-  if (input.canInterruptActiveRun) return 'preserve-exit';
+  if (input.resumableIdle) return 'preserve-exit';
   return 'clean-exit';
 }
 
 /**
- * On exit, a tool-use session suspended at the WAIT node (idle/WAITING) must
- * NOT be interrupted: interrupting clears its per-execution flow record in
- * `runToolUseFlow`'s finally, destroying the only resumable state.
+ * On exit, a tool-use session suspended at the WAIT node (idle/WAITING) with a
+ * live flow must NOT be interrupted: interrupting clears its per-execution flow
+ * record in `runToolUseFlow`'s finally, destroying the only resumable state.
  */
 export function chatTuiIsResumableIdleOnExit(input: {
   readonly canInterruptActiveRun: boolean;
   readonly canStopActiveRun: boolean;
+  readonly hasActiveToolUseFlow: boolean;
 }): boolean {
-  return input.canInterruptActiveRun && !input.canStopActiveRun;
+  return (
+    input.canInterruptActiveRun &&
+    !input.canStopActiveRun &&
+    input.hasActiveToolUseFlow
+  );
 }
