@@ -27,6 +27,7 @@ type FollowUpInputInternals = HTMLElement & {
   streamId: string;
   updateComplete: Promise<boolean>;
   pendingImages: ExtractedClipboardImage[];
+  pendingImagePastes: Set<Promise<void>>;
   emitSend: () => void;
 };
 
@@ -71,6 +72,30 @@ describe('follow-up-input pasted-image state across stream switches', () => {
 
     // The progress view rebinds this SAME instance to stream B instead of
     // mounting a fresh one.
+    element.streamId = 'stream-b';
+    await element.updateComplete;
+
+    const getSentImages = captureSentImages(element);
+    element.emitSend();
+
+    expect(getSentImages()).toEqual([]);
+  });
+
+  it('drops a stale in-flight paste promise from the previous stream so send is not blocked', async () => {
+    // Regression coverage for the codex/Copilot review finding on this PR:
+    // emitSend() gates on pendingImagePastes.size > 0, so a paste promise
+    // still in flight from the previously-bound stream must not survive a
+    // streamId change — otherwise a send issued in the newly-bound stream
+    // silently queues behind (and its timing/target depends on) an
+    // unrelated old-stream paste completing.
+    const element = createFollowUpInput('stream-a');
+    await element.updateComplete;
+
+    // Stand in for a paste whose async base64 read hasn't resolved yet
+    // (attachPastedImages adds its own promise to this set in handlePaste,
+    // before the read completes).
+    element.pendingImagePastes.add(new Promise<void>(() => {}));
+
     element.streamId = 'stream-b';
     await element.updateComplete;
 
