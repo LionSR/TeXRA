@@ -23,8 +23,6 @@ import {
   isFunctionCallOutputItem,
 } from '@agent/modelHandlers/openai/openAIResponseContent';
 import { isResponseFunctionToolCallItem } from '@agent/modelHandlers/openai/responseStreamEvents';
-import type { MediaAttachmentKind } from '@shared/schemas';
-import { assertNever } from '@utils/core';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
@@ -154,38 +152,6 @@ function googlePartToBlocks(part: Part): ContentBlock[] {
     return [{ type: mimeType?.startsWith('image/') ? 'image' : 'document' }];
   }
   return [];
-}
-
-/**
- * Anthropic-shaped content block for a media-attachment marker (no bytes) —
- * the two-member vocabulary `blocksToUserParts` below recognizes as
- * `'image'` / `'document'`. This is the ONE place that vocabulary is
- * spelled out; callers that need to synthesize an attachment marker block
- * (e.g. reconstructing a conversation from transcript rows that only
- * recorded the attachment kind, never the bytes) call this constructor
- * instead of writing `{ type: kind }` themselves, so they carry no
- * independent knowledge of the literal strings.
- *
- * The switch is exhaustive over {@link MediaAttachmentKind}
- * (`src/shared/schemas/progressView/data.ts`): adding or renaming a kind
- * there fails to compile here via `assertNever` until this function (and
- * `blocksToUserParts`'s recognition of the same two literals) is updated —
- * the vocabulary can't drift silently out of sync again.
- */
-export function mediaAttachmentKindToContentBlock(
-  kind: MediaAttachmentKind,
-): ContentBlock {
-  switch (kind) {
-    case 'image':
-      return { type: 'image' };
-    case 'document':
-      return { type: 'document' };
-    default:
-      return assertNever(
-        kind,
-        `Unmapped media attachment kind: ${String(kind)}`,
-      );
-  }
 }
 
 function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
