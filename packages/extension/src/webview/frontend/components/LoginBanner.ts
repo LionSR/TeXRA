@@ -1,6 +1,4 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -9,6 +7,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { PROMO_NOTICE_SHORT } from '@shared/copy/promoNotice';
 
 import { bannerStyles } from '../styles/bannerStyles';
+import { renderBannerFrame } from './bannerFrame';
 import { MainViewEvents } from '../events';
 
 @customElement('login-banner')
@@ -80,39 +79,39 @@ export class LoginBanner extends LitElement {
   }
 
   override render(): TemplateResult {
-    return html`
-      <div class="banner-frame">
-        <wa-callout id="loginBanner" variant="brand">
-          ${waIcon('wand-magic-sparkles', { slot: 'icon' })}
-          <div class="banner-header">
-            <span class="banner-title">Researcher Access Program</span>
-            <div class="actions">
-              <wa-button
-                id="loginBannerButton"
-                appearance="filled"
-                variant="brand"
-                size="small"
-                @click=${this.handleSignIn}
-              >
-                Sign In
-              </wa-button>
-              <wa-button
-                id="loginBannerDismissButton"
-                appearance="plain"
-                size="small"
-                title="Dismiss (can be re-enabled in settings)"
-                aria-label="Dismiss login banner"
-                @click=${this.handleDismiss}
-              >
-                ${waIcon('xmark')}
-              </wa-button>
-            </div>
+    return renderBannerFrame({
+      id: 'loginBanner',
+      variant: 'brand',
+      icon: 'wand-magic-sparkles',
+      body: html`
+        <div class="banner-header">
+          <span class="banner-title">Researcher Access Program</span>
+          <div class="actions">
+            <wa-button
+              id="loginBannerButton"
+              appearance="filled"
+              variant="brand"
+              size="small"
+              @click=${this.handleSignIn}
+            >
+              Sign In
+            </wa-button>
+            <wa-button
+              id="loginBannerDismissButton"
+              appearance="plain"
+              size="small"
+              title="Dismiss (can be re-enabled in settings)"
+              aria-label="Dismiss login banner"
+              @click=${this.handleDismiss}
+            >
+              ${waIcon('xmark')}
+            </wa-button>
           </div>
-          <span class="banner-lead">${PROMO_NOTICE_SHORT.lead}</span>
-          <span class="banner-fineprint">${PROMO_NOTICE_SHORT.fineprint}</span>
-        </wa-callout>
-      </div>
-    `;
+        </div>
+        <span class="banner-lead">${PROMO_NOTICE_SHORT.lead}</span>
+        <span class="banner-fineprint">${PROMO_NOTICE_SHORT.fineprint}</span>
+      `,
+    });
   }
 }
 
