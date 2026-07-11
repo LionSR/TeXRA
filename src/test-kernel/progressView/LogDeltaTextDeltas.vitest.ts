@@ -161,13 +161,50 @@ describe('LOG_DELTA text deltas', () => {
     expect(finalizedLogs?.updatedMessageIndices).toEqual([0]);
     expect(finalized && isStreamingTextLogMessage(finalized)).toBe(false);
   });
+
+  it('keeps valid group-start fields when status is unrecognized', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    state.activeStreamId = streamId;
+    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
+    const { ctx, getState } = createContext(state);
+
+    dispatch(
+      logHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+        streamId,
+        entries: [
+          {
+            seqNo: 1,
+            id: 'group-1',
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+            level: LOG_LEVELS.INFO,
+            timestamp: 100,
+            text: 'Round 1',
+            data: { status: 'bogus', kind: 'round', index: 1, total: 3 },
+          },
+        ],
+        updates: [],
+        textDeltas: [],
+      },
+      ctx,
+    );
+
+    const group = getState().streamStates.get(streamId)?.taskGroups[0];
+    expect(group?.status).toBe(STREAM_PHASE.RUNNING);
+    expect(group?.kind).toBe('round');
+    expect(group?.index).toBe(1);
+    expect(group?.total).toBe(3);
+  });
 });
 
 // #7993 step 3: TaskGroup.status is now the native StreamPhase/RunOutcome
 // vocabulary, not the legacy 2-value EndGroupStatus ('stopped'/'error')
 // folded down from it. Every GROUP_END row a live/persisted producer writes
 // carries the literal RunOutcome ('completed'/'cancelled'/'failed') and
-// logSlice.ts's isTaskGroupStatus type guard now recognizes those directly —
+// logSlice.ts's taskGroupEndStatus (a TaskGroupStatusSchema.safeParse
+// narrow, not a hand-rolled type guard) now recognizes those directly —
 // without that retyping, every canonical GROUP_END row (including a
 // failure) would fall through to the STOPPED default, losing the error icon
 // and folding completed/cancelled together. The standalone trace-viewer
