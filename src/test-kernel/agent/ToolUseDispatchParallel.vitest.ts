@@ -6,7 +6,7 @@ import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { createRunTrace } from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -73,7 +73,10 @@ interface HarnessOptions {
 }
 
 function dispatchHarness(opts: HarnessOptions) {
-  const runTrace = createRunTrace('DispatchParallelTest' as StreamTabId);
+  const runTrace = createRunTrace(
+    'DispatchParallelTest' as StreamTabId,
+    new StreamLogStore(),
+  );
   const services = {
     config: AgentConfigSchema.parse({
       rootUserInstruction: opts.rootUserInstruction,

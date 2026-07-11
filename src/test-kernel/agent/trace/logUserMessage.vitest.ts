@@ -3,12 +3,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports
-import {
-  createRunTrace,
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
-  StreamLogStore,
-} from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { logUserMessage, type AgentTrace } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
@@ -19,12 +14,12 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 describe('logUserMessage', () => {
   let logger: AgentTrace;
   let disposeTrace: () => void;
+  let store: StreamLogStore;
 
   beforeEach(async () => {
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    store = new StreamLogStore();
     await store.clear();
-    const runTrace = createRunTrace('TestUserMessageLogger');
+    const runTrace = createRunTrace('TestUserMessageLogger', store);
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
   });
@@ -34,7 +29,7 @@ describe('logUserMessage', () => {
   });
 
   const capturedEntries = () => {
-    const log = getDefaultStreamLogStore().get('TestUserMessageLogger');
+    const log = store.get('TestUserMessageLogger');
     return log?.getRange(0, log.head) ?? [];
   };
 

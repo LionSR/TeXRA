@@ -943,14 +943,3 @@ export class StreamLogStore {
     }
   }
 }
-
-let defaultStore: StreamLogStore | undefined;
-
-export function getDefaultStreamLogStore(): StreamLogStore {
-  defaultStore ??= new StreamLogStore();
-  return defaultStore;
-}
-
-export function setDefaultStreamLogStore(store: StreamLogStore): void {
-  defaultStore = store;
-}

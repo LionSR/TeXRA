@@ -1,12 +1,7 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  createRunTrace,
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
-  StreamLogStore,
-} from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 
 // Local imports - shared
@@ -36,16 +31,10 @@ async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
 async function runWithLoggerStore<T>(
   fn: (store: StreamLogStore, logger: AgentTrace) => Promise<T>,
 ): Promise<T> {
-  const previousStore = getDefaultStreamLogStore();
   const store = new StreamLogStore();
-  setDefaultStreamLogStore(store);
   await store.clear();
 
-  try {
-    return await fn(store, createRunTrace(streamId).trace);
-  } finally {
-    setDefaultStreamLogStore(previousStore);
-  }
+  return await fn(store, createRunTrace(streamId, store).trace);
 }
 
 function collectToolLogs(store: StreamLogStore): unknown[] {

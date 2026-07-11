@@ -2,20 +2,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import { getActiveFlushers, getDefaultStreamLogStore } from '@transcript';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import { getActiveFlushers } from '@transcript';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   SessionHandle,
   defaultSession,
   getAllActiveExecutionIds,
 } from '@agent/runtime/SessionHandle';
-import {
-  AgentExecutionHandle,
-  SharedExecutionRegistry,
-} from '@agent/runtime/executionRegistry';
-import { SharedExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -41,28 +35,34 @@ function trackAgent(
 }
 
 describe('SessionHandle', () => {
-  it('defaultSession wraps the process singletons by identity', () => {
-    expect(defaultSession().executions).toBe(SharedExecutionRegistry);
-    expect(defaultSession().subscriptions).toBe(
-      SharedExecutionSubscriptionBinder,
-    );
-    expect(defaultSession().status).toBe(StreamStatusService);
-    expect(defaultSession().events).toBeDefined();
-    expect(defaultSession().transcripts).toBe(getDefaultStreamLogStore());
-    expect(defaultSession().followUps).toBe(
-      ToolUseFollowUpQueue.defaultInstance(),
-    );
+  it('defaultSession is a stable process-wide singleton (#7694: no separate module export to alias)', () => {
+    // No `Shared*`/`*Service` module export exists anymore — the process
+    // default's owners are constructed inside `defaultSession()` itself.
+    // What's left to verify is that repeated calls return the identical
+    // session (and therefore identical members), and that the flushers
+    // member still aliases the process-wide flush registry by identity
+    // (that accessor is intentionally NOT one of the deleted aliases — see
+    // `runTrace.ts`'s `getActiveFlushers`).
+    const first = defaultSession();
+    const second = defaultSession();
+    expect(second).toBe(first);
+    expect(second.executions).toBe(first.executions);
+    expect(second.subscriptions).toBe(first.subscriptions);
+    expect(second.status).toBe(first.status);
+    expect(second.events).toBe(first.events);
+    expect(second.transcripts).toBe(first.transcripts);
+    expect(second.followUps).toBe(first.followUps);
     expect(defaultSession().flushers).toBe(getActiveFlushers());
     expect(defaultSession().hostChannel).toBeUndefined();
   });
 
-  it('a fresh session shares no member with the module singletons', () => {
+  it('a fresh session shares no member with the default session', () => {
     const fresh = new SessionHandle();
     try {
-      expect(fresh.executions).not.toBe(SharedExecutionRegistry);
-      expect(fresh.subscriptions).not.toBe(SharedExecutionSubscriptionBinder);
+      expect(fresh.executions).not.toBe(defaultSession().executions);
+      expect(fresh.subscriptions).not.toBe(defaultSession().subscriptions);
       expect(fresh.interactions).not.toBe(defaultSession().interactions);
-      expect(fresh.status).not.toBe(StreamStatusService);
+      expect(fresh.status).not.toBe(defaultSession().status);
       expect(fresh.events).not.toBe(defaultSession().events);
       expect(fresh.transcripts).not.toBe(defaultSession().transcripts);
       expect(fresh.followUps).not.toBe(defaultSession().followUps);
@@ -78,7 +78,7 @@ describe('SessionHandle', () => {
     const session = new SessionHandle({ hostChannel: host });
     try {
       expect(session.hostChannel).toBe(host);
-      expect(session.executions).not.toBe(SharedExecutionRegistry);
+      expect(session.executions).not.toBe(defaultSession().executions);
     } finally {
       session.dispose();
     }

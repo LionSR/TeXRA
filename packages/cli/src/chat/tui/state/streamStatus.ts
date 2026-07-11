@@ -1,7 +1,5 @@
-import {
-  StreamStatusService,
-  type StreamStatusChange,
-} from '@agent/runtime/StreamStatusService';
+import type { StreamStatusChange } from '@agent/runtime/StreamStatusService';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { setStreamStatusInCliState } from './cliState';
 
 export function applyStreamStatusChange(change: StreamStatusChange): void {
@@ -15,5 +13,5 @@ export function applyStreamStatusChange(change: StreamStatusChange): void {
 export function onStreamStatusChange(
   listener: (change: StreamStatusChange) => void,
 ): () => void {
-  return StreamStatusService.onDidChange(listener);
+  return defaultSession().status.onDidChange(listener);
 }

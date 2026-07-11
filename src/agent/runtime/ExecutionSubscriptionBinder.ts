@@ -11,14 +11,12 @@
  * from the registry) and when the subscriber stream's queue is released.
  */
 
-import {
-  SharedExecutionRegistry,
-  type ExecutionHandle,
-  type ExecutionRegistry,
+import type {
+  ExecutionHandle,
+  ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { createChannelTrace } from '@logger';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { StreamTabId } from '@shared/schemas';
@@ -194,8 +192,13 @@ export class ExecutionSubscriptionBinder {
   private releaseHook: (() => void) | undefined;
 
   constructor(options: ExecutionSubscriptionBinderOptions = {}) {
-    this.registry = options.registry ?? SharedExecutionRegistry;
-    this.releaseSource = options.releaseSource ?? ToolUseFollowUpQueue;
+    // Unreachable in production: `SessionHandle` always passes both `registry`
+    // and `releaseSource` explicitly (its own owned `executions`/`followUps`).
+    // These fall back through `currentSession()` — never a standalone
+    // singleton import — so a bare `new ExecutionSubscriptionBinder()` still
+    // resolves to the caller's session instead of a hidden module export.
+    this.registry = options.registry ?? currentSession().executions;
+    this.releaseSource = options.releaseSource ?? currentSession().followUps;
     this.logger = options.logger ?? logger;
     this.session = options.session;
   }
@@ -297,6 +300,3 @@ export class ExecutionSubscriptionBinder {
     if (bound.size === 0) this.perStream.delete(streamId);
   }
 }
-
-export const SharedExecutionSubscriptionBinder =
-  new ExecutionSubscriptionBinder();

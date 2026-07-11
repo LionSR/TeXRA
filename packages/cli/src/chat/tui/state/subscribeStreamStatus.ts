@@ -1,4 +1,5 @@
-// Mirror `StreamStatusService.onDidChange` into the per-stream status signal.
+// Mirror the default session's status machine `onDidChange` into the
+// per-stream status signal.
 
 import { projectStreamTranscriptForStatus } from './transcriptProjection';
 import { applyStreamStatusChange, onStreamStatusChange } from './streamStatus';

@@ -128,14 +128,6 @@ async function loadBridgeModule(): Promise<
   vi.resetModules();
   vi.doMock('@logger', () => ({
     createChannelTrace: () => makeLogger(),
-    setDefaultStreamLogStore: () => {},
-  }));
-  vi.doMock('@agent/runtime/StreamStatusService', () => ({
-    StreamStatusService: {
-      transition: vi.fn(),
-      get: vi.fn(() => STREAM_PHASE.CANCELLED),
-      isActiveOrResuming: vi.fn(() => false),
-    },
   }));
   vi.doMock('@tools/goal', () => ({
     GoalStore: {
