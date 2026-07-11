@@ -323,11 +323,6 @@ export class InstructionPanel extends LitElement {
         <div class="instruction-header">
           <div class="instruction-header-leading">
             <div class="instruction-session-toggle">
-              <input
-                type="hidden"
-                id="sessionType"
-                .value=${session.sessionType}
-              />
               <wa-radio-group
                 id="sessionTypeToggle"
                 aria-label="Choose the session type"
