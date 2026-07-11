@@ -37,9 +37,10 @@ export async function runSetup(context: CliContext): Promise<number> {
     return CliExitCode.Usage;
   }
 
-  // Always ends in the chat TUI (setup agent), so this is a real interactive
-  // entry point — signal ownership must stay with the TUI once it mounts
-  // (see initInteractiveCliPlatform).
+  // Always ends in the chat TUI (setup agent) or returns cleanly before it —
+  // either way the platform's own handler (still installed here) covers
+  // signals until the TUI mounts and takes over (see
+  // initInteractiveCliPlatform).
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
   // State 0 first (docs/prds/2026-06-11-agent-native-onboarding.md): a credential is the
   // one step no agent can do for the user. With a credential already in place
