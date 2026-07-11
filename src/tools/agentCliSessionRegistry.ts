@@ -61,10 +61,6 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
       .catch(() => {});
   }
 
-  isActive(sessionId: string): boolean {
-    return this.sessions.get(sessionId)?.kind === 'active';
-  }
-
   lookup(sessionId: string): T | undefined {
     const state = this.sessions.get(sessionId);
     return state?.kind === 'active' ? state.entry : undefined;
@@ -83,9 +79,12 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
     if (state?.kind === 'reserved') state.resolve(undefined);
   }
 
-  releaseMany(sessionIds: Iterable<string>): void {
-    for (const sessionId of sessionIds) {
-      this.release(sessionId);
+  /** Release active aliases owned by one child execution without touching claims. */
+  releaseByExecutionId(executionId: ExecutionId): void {
+    for (const [sessionId, state] of this.sessions) {
+      if (state.kind === 'active' && state.entry.executionId === executionId) {
+        this.sessions.delete(sessionId);
+      }
     }
   }
 

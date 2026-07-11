@@ -422,7 +422,6 @@ function startClaudeAgentLoop(params: {
   // params.resumeSessionId when this launch is a disk-based fallback resume.
   let resumeSessionId: string | undefined = params.resumeSessionId;
   const fallbackSessionId = params.resumeSessionId;
-  const storedSessionIds = new Set<string>();
 
   const registerSession = (sessionId: string, session: SessionHandle): void => {
     if (ClaudeAgentSessions.lookup(sessionId)) return;
@@ -437,7 +436,6 @@ function startClaudeAgentLoop(params: {
       cwd: params.cwd,
       additionalDirectories: params.additionalDirectories,
     });
-    storedSessionIds.add(sessionId);
   };
   // The joined prompt text for whichever turn is currently in flight —
   // captured here (rather than threaded through the loop contract) since
@@ -510,9 +508,8 @@ function startClaudeAgentLoop(params: {
           ),
         },
       ),
-    onSessionCleanup: () => {
-      ClaudeAgentSessions.releaseMany(storedSessionIds);
-    },
+    onSessionCleanup: () =>
+      ClaudeAgentSessions.releaseByExecutionId(executionId),
   };
 
   startChildRunLoop({
