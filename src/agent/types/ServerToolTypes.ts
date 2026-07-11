@@ -11,7 +11,7 @@
 import { z } from 'zod';
 
 import * as logger from '@logger/logUtils';
-import { tryParseUrl } from '@utils/core';
+import { isObject, tryParseUrl } from '@utils/core';
 
 // SDK type imports - using native types for better type safety
 // Consumers should import SDK types directly from the respective SDKs:
@@ -302,9 +302,7 @@ export function extractAnthropicWebSearchResults(
  * Type guard for WebFetchBlock (successful fetch) content.
  * The SDK's WebFetchToolResultBlock.content is a union of error or fetch result.
  */
-function isWebFetchBlock(
-  content: WebFetchToolResultBlock['content'],
-): content is WebFetchBlock {
+function isWebFetchBlock(content: unknown): content is WebFetchBlock {
   return hasBlockType(content, 'web_fetch_result');
 }
 
@@ -318,9 +316,7 @@ function isWebFetchBlock(
 const MAX_WEB_FETCH_CONTENT_CHARS = 20_000;
 
 /** Truncate fetched page text to {@link MAX_WEB_FETCH_CONTENT_CHARS}. */
-export function capWebFetchContent(
-  text: string | undefined,
-): string | undefined {
+function capWebFetchContent(text: string | undefined): string | undefined {
   if (!text) return undefined;
   const marker = '...';
   return text.length > MAX_WEB_FETCH_CONTENT_CHARS
@@ -335,10 +331,55 @@ export function capWebFetchContent(
  * Shared by the batch ({@link extractAnthropicWebFetchResults}) and streaming
  * (`AnthropicStreamHandler`) extraction paths.
  */
-export function extractWebFetchPageText(
+function extractWebFetchPageText(
   content: WebFetchBlock['content'] | undefined,
 ): string | undefined {
   return content?.source?.type === 'text' ? content.source.data : undefined;
+}
+
+/** Fields used by conversation formatting and structured chat export. */
+interface WebFetchResultFields {
+  readonly url?: string;
+  readonly title?: string;
+  readonly content?: string;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function webFetchBlockFields(result: WebFetchBlock): WebFetchResultFields {
+  return {
+    url: optionalString(result.url),
+    title: optionalString(result.content?.title),
+    content: capWebFetchContent(
+      optionalString(extractWebFetchPageText(result.content)),
+    ),
+  };
+}
+
+/**
+ * Read a web-fetch result from either Anthropic's live nested block or the
+ * flat block reconstructed by the completed-run archive.
+ */
+export function extractWebFetchResultFields(
+  block: unknown,
+): WebFetchResultFields | undefined {
+  if (!isObject(block)) return undefined;
+
+  const fields = isWebFetchBlock(block.content)
+    ? webFetchBlockFields(block.content)
+    : {
+        url: optionalString(block.url),
+        title: optionalString(block.title),
+        content: capWebFetchContent(optionalString(block.page_content)),
+      };
+
+  return fields.url !== undefined ||
+    fields.title !== undefined ||
+    fields.content !== undefined
+    ? fields
+    : undefined;
 }
 
 /**
@@ -373,15 +414,14 @@ export function extractAnthropicWebFetchResults(
 
     if (isWebFetchBlock(block.content)) {
       // Successful fetch
+      const fields = extractWebFetchResultFields(block);
       results.push({
-        url: block.content.url || fetchUrl,
-        title: block.content.content?.title ?? undefined,
+        url: fields?.url || fetchUrl,
+        title: fields?.title,
         provider: 'anthropic',
         callId: block.tool_use_id,
         status: 'completed',
-        content: capWebFetchContent(
-          extractWebFetchPageText(block.content.content),
-        ),
+        content: fields?.content,
       });
     } else {
       // Error result — block.content is narrowed to WebFetchToolResultErrorBlock
