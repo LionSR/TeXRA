@@ -23,7 +23,7 @@ import {
   isFunctionCallOutputItem,
 } from '@agent/modelHandlers/openai/openAIResponseContent';
 import { isResponseFunctionToolCallItem } from '@agent/modelHandlers/openai/responseStreamEvents';
-import { extractWebFetchResultFields } from '@agent/utils/webFetchResultFields';
+import { extractWebFetchResultFields } from '@agent/types/ServerToolTypes';
 import { isObject } from '@utils/core';
 import type { Part } from '@google/genai';
 import type {
