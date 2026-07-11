@@ -27,12 +27,15 @@ import {
   buildResumedSharedFromSnapshot,
   normalizeResumedWorkspaceSnapshot,
   runToolUseFlow,
+  type RunToolUseFlowResult,
   type RunToolUseFlowInput,
+  type ToolUseFlowSetupCallback,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import { migrateSharedState } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
+  RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
@@ -65,6 +68,7 @@ const TOOL_USE_SETTING = AgentToolUseSettingSchema.parse({});
 const TOOL_USE_PROMPT = AgentPromptSchema.parse({});
 const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
 const WAIT_NODE_CURSOR = 'start/default/default';
+type ToolUseSetupContext = Parameters<ToolUseFlowSetupCallback>[0];
 
 function createTaggedModelHandler(
   compatibilityKey: ModelHandlerCompatibilityKey,
@@ -77,11 +81,29 @@ function createTaggedModelHandler(
   return handler as unknown as RunToolUseFlowInput['modelHandler'];
 }
 
-async function runResumedFlowToWaiting(
+function buildToolUseSnapshot(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): ToolUseSessionSnapshot {
+  return {
+    version: 2,
+    executionId,
+    streamId,
+    agentConfig: CONFIG,
+    messages: [],
+    run: AgentRunStateSnapshotSchema.parse({}),
+    workspace: AgentWorkspaceState.create().toSnapshot(),
+    user: { input: {}, transient: {} },
+    lastUpdated: 0,
+  };
+}
+
+async function runResumedFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
   snapshot: ToolUseSessionSnapshot,
-): Promise<void> {
+  onSetup?: (context: ToolUseSetupContext) => void,
+): Promise<RunToolUseFlowResult> {
   const session = new SessionHandle();
   const context = createRunContext({
     modelSource: 'live',
@@ -94,9 +116,10 @@ async function runResumedFlowToWaiting(
       session,
     }),
   });
+  let interrupted = false;
 
   try {
-    const result = await withRunContext(context, () =>
+    return await withRunContext(context, () =>
       runToolUseFlow(
         {
           config: snapshot.agentConfig,
@@ -106,19 +129,31 @@ async function runResumedFlowToWaiting(
           userVarChannels: snapshot.user,
           modelHandler: createTaggedModelHandler(ACTIVE_COMPATIBILITY_KEY),
           streamStatus: session.status,
-          checkInterruption: () => false,
+          checkInterruption: () => interrupted,
+          onInterrupt: () => {
+            interrupted = true;
+          },
           setAbortController: () => {},
           resumeSnapshot: snapshot,
           isSubagent: true,
           toolInjections: new ToolInjectionRegistry(),
         },
         new MapToolRegistry({}),
+        onSetup,
       ),
     );
-    expect(result.outcome).toBe(STREAM_PHASE.WAITING);
   } finally {
     session.dispose();
   }
+}
+
+async function runResumedFlowToWaiting(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+  snapshot: ToolUseSessionSnapshot,
+): Promise<void> {
+  const result = await runResumedFlow(executionId, streamId, snapshot);
+  expect(result.outcome).toBe(STREAM_PHASE.WAITING);
 }
 
 describe('retrieveSessionResumeData', () => {
@@ -466,6 +501,81 @@ describe('retrieveSessionResumeData', () => {
 
 describe('runToolUseFlow consumes the resume boundary instead of re-parsing', () => {
   setupPlatform({ workspacePath: '/workspace' });
+
+  it('skips persistence recovery when setup hands off a cancellation', async () => {
+    const executionId = 'abc-cancel-setup' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-cancel-setup' as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const store = getExecutionStore(executionId);
+    const readSpy = vi.spyOn(store, 'read');
+    const writeSpy = vi.spyOn(store, 'write');
+    const deleteSpy = vi.spyOn(store, 'delete');
+
+    try {
+      const result = await runResumedFlow(
+        executionId,
+        streamId,
+        snapshot,
+        (flowContext) => flowContext.interrupt(),
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(readSpy).not.toHaveBeenCalled();
+      expect(writeSpy).not.toHaveBeenCalled();
+      expect(deleteSpy).not.toHaveBeenCalled();
+    } finally {
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+      deleteSpy.mockRestore();
+    }
+  });
+
+  it('skips repair writes when cancellation arrives during the recovery read', async () => {
+    const executionId = 'abc-cancel-read' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-cancel-read' as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const store = getExecutionStore(executionId);
+    let flowContext: ToolUseSetupContext | undefined;
+    const readSpy = vi.spyOn(store, 'read').mockImplementationOnce(async () => {
+      flowContext?.interrupt();
+      return {
+        flowName: 'texra',
+        params: {},
+        shared: {
+          messages: [],
+          shouldSkipCycle: true,
+          stateSlices: {
+            runStateSnapshot: snapshot.run,
+            workspaceSnapshot: snapshot.workspace,
+            userChannels: snapshot.user,
+          },
+        },
+        createdAt: new Date().toISOString(),
+      };
+    });
+    const writeSpy = vi.spyOn(store, 'write');
+    const deleteSpy = vi.spyOn(store, 'delete');
+
+    try {
+      const result = await runResumedFlow(
+        executionId,
+        streamId,
+        snapshot,
+        (context) => {
+          flowContext = context;
+        },
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(readSpy).toHaveBeenCalledWith(flowKey(executionId));
+      expect(writeSpy).not.toHaveBeenCalled();
+      expect(deleteSpy).not.toHaveBeenCalled();
+    } finally {
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+      deleteSpy.mockRestore();
+    }
+  });
 
   it('hydrates a legacy-shaped flow record through the single boundary, then self-heals via its canonical fields', async () => {
     const executionId = 'abc140' as ExecutionId;
