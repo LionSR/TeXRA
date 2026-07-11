@@ -23,7 +23,11 @@ export class MediaExtractionNode<C = unknown> extends Node<
     const { config, fileService, modelHandler } = this.services;
     const { currentRound, roundOutputs } = shared;
 
-    const workspaceState = AgentWorkspaceState.fromSnapshot(
+    // shared.workspaceSnapshot was produced by this same flow's own
+    // toSnapshot() last round (or by the one-time resume hydration in
+    // runReflectionFlow) — never raw persisted/legacy data — so re-deriving
+    // it here uses the canonical-only path (see AgentWorkspaceState.fromCanonicalSnapshot).
+    const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
       shared.workspaceSnapshot,
     );
 
