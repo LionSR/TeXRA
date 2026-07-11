@@ -193,6 +193,40 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     expect(callArgs.options.resume).toBe('stale-session');
   });
 
+  it('registers the fallback session_id up front via onSessionStart, ahead of the first turn completing', async () => {
+    setupCommonMocks();
+    mocks.query.mockReturnValue(
+      streamMessages([
+        {
+          type: 'result',
+          subtype: 'success',
+          session_id: 'stale-session',
+          result: 'Resumed and continued.',
+        },
+      ]),
+    );
+
+    const tool = new ClaudeAgentTool();
+    await tool.call({
+      prompt: 'continue the refactor',
+      session_id: 'stale-session',
+    });
+
+    expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
+    const [loopParams] = mocks.startChildRunLoop.mock.calls[0] as [
+      { strategy: ChildRunStrategy<unknown> },
+    ];
+
+    // Pins the eager-registration mechanism itself: onSessionStart must make
+    // the stale session_id observably active synchronously, independent of
+    // whether the first turn has resolved yet.
+    expect(ClaudeAgentSessions.isActive('stale-session')).toBe(false);
+    loopParams.strategy.onSessionStart?.({
+      executions: { getAgentHandleByStream: () => undefined } as any,
+    } as any);
+    expect(ClaudeAgentSessions.isActive('stale-session')).toBe(true);
+  });
+
   it('still enqueues a follow-up (no fresh launch) when session_id IS active in the registry', async () => {
     setupCommonMocks();
     ClaudeAgentSessions.register('sess-resumed', {
