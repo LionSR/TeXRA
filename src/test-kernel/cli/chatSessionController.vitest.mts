@@ -126,6 +126,7 @@ import {
   type TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import {
+  RUN_OUTCOME,
   STREAM_STATUS,
   type ExecutionId,
   type StreamTabId,
@@ -300,7 +301,12 @@ describe('createChatSessionController', () => {
     mocks.moveLocalTranscriptToStream.mockReset();
     mocks.resolveCliResumeSnapshot.mockReset();
     mocks.resumeToolUseFromSnapshot.mockReset();
-    mocks.resumeToolUseFromSnapshot.mockResolvedValue(undefined);
+    mocks.resumeToolUseFromSnapshot.mockResolvedValue({
+      category: 'toolUse',
+      outcome: RUN_OUTCOME.COMPLETED,
+      executionId: 'exec-resume',
+      streamId: 'stream-resume',
+    });
   });
 
   it('returns an object satisfying the ChatSessionController interface', () => {
@@ -528,6 +534,69 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
   });
 
+  it('forwards a stop issued during manual resume helper-model setup', async () => {
+    const helperModel = deferred();
+    mocks.setCliHelperModel.mockReturnValueOnce(helperModel.promise);
+
+    const session = makeSession({ runCompleted: true });
+    const snapshotStore = {
+      load: vi.fn(async () => undefined),
+      read: vi.fn(async () => ({
+        runUsage: {},
+        todos: [],
+        plan: undefined,
+      })),
+    } as unknown as StreamSnapshotStore;
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore }),
+    );
+    const snapshot = { executionId: 'exec-resume' } as never;
+    const preResolved = {
+      kind: 'toolUse' as const,
+      streamId: 'stream-resume' as StreamTabId,
+      snapshot,
+      config: makeResumeConfig(),
+    };
+    mocks.resumeToolUseFromSnapshot.mockImplementationOnce(
+      async (
+        _snapshot: unknown,
+        _runtimeHost: unknown,
+        options: { readonly isCancellationRequested?: () => boolean },
+      ) => ({
+        category: 'toolUse',
+        outcome: options.isCancellationRequested?.()
+          ? RUN_OUTCOME.CANCELLED
+          : RUN_OUTCOME.COMPLETED,
+        executionId: 'exec-resume',
+        streamId: 'stream-resume',
+      }),
+    );
+
+    const resumeStarted = ctrl.resume('aaaaaa' as ExecutionId, preResolved);
+    await vi.waitFor(() =>
+      expect(mocks.setCliHelperModel).toHaveBeenCalledWith('demo-model'),
+    );
+
+    ctrl.stop();
+    helperModel.resolve(undefined);
+
+    await resumeStarted;
+    await vi.waitFor(() =>
+      expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledWith(
+        snapshot,
+        expect.any(Object),
+        expect.objectContaining({
+          isCancellationRequested: expect.any(Function),
+        }),
+      ),
+    );
+    const resumeOptions = mocks.resumeToolUseFromSnapshot.mock.calls[0]?.[2] as
+      { readonly isCancellationRequested?: () => boolean } | undefined;
+    expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
+    await session.runPromise;
+    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
+  });
+
   it('reports a failed persisted-child wake while the CLI root slot is busy', async () => {
     const session = makeSession({
       runPromise: new Promise(() => {}),
@@ -572,7 +641,10 @@ describe('createChatSessionController', () => {
       'stream-1',
       { version: 2 },
       expect.any(Object),
-      expect.objectContaining({ allowWaitingResult: true }),
+      expect.objectContaining({
+        allowWaitingResult: true,
+        isCancellationRequested: expect.any(Function),
+      }),
     );
     expect(mocks.projectStreamTranscript).toHaveBeenCalledWith('stream-1', {
       finalize: true,
@@ -614,6 +686,7 @@ describe('createChatSessionController', () => {
       finalize: true,
     });
     expect(mocks.notify).not.toHaveBeenCalledWith({ kind: 'agentFinished' });
+    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
   });
 
   it('does not finalize the stream transcript when auto-resume returns false', async () => {
