@@ -484,6 +484,7 @@ export function createChatSessionController(
           (await getExecutionStore(executionId).readConfig());
         if (!config) return false;
         if (session.stopRequested) return false;
+        const parentStreamId = snapshotStore.getParentStreamId(streamId);
 
         const currentModel = config.model;
         const sessionContext = getSessionContext(currentModel);
@@ -500,7 +501,9 @@ export function createChatSessionController(
         session.runtimeHost = runtimeHost;
         session.streamId = streamId;
         session.executionId = executionId;
-        rootStreamId.set(streamId);
+        if (!parentStreamId) {
+          rootStreamId.set(streamId);
+        }
         activeStreamId.set(streamId);
         session.runCompleted = false;
         session.runExitCode = CliExitCode.Success;
@@ -514,7 +517,7 @@ export function createChatSessionController(
             resolveResumeState: async () => ({
               runState: config,
               executionId,
-              parentStreamId: snapshotStore.getParentStreamId(streamId),
+              parentStreamId,
             }),
             resumeToolUseSnapshot: (snapshot) =>
               resumeQueuedToolUseSnapshot(streamId, snapshot, runtimeHost, {

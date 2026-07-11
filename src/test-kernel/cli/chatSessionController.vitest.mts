@@ -117,6 +117,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
+import { rootStreamId } from '@cli/chat/tui/state/cliState';
 import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanStopActiveRun,
@@ -323,6 +324,7 @@ describe('createChatSessionController', () => {
       executionId: 'exec-resume',
       streamId: 'stream-resume',
     });
+    rootStreamId.set(undefined);
   });
 
   it('returns an object satisfying the ChatSessionController interface', () => {
@@ -670,6 +672,23 @@ describe('createChatSessionController', () => {
     expect(mocks.projectStreamTranscript).toHaveBeenCalledWith('stream-1', {
       finalize: true,
     });
+    expect(rootStreamId.get()).toBe('stream-1');
+  });
+
+  it('preserves root ownership when auto-resuming a child stream', async () => {
+    const root = 'root-stream' as StreamTabId;
+    const child = 'child-stream' as StreamTabId;
+    rootStreamId.set(root);
+    const snapshotStore = makeResumeSnapshotStore({
+      executionId: 'exec-1',
+      config: makeResumeConfig(),
+      parentStreamId: root,
+    });
+    const ctrl = createChatSessionController(makeInit({ snapshotStore }));
+
+    await expect(ctrl.tryResumeStream(child)).resolves.toBe(true);
+
+    expect(rootStreamId.get()).toBe(root);
   });
 
   it('does not auto-resume after stop during helper-model setup', async () => {
