@@ -6,6 +6,7 @@
 import { signal, type Signal } from '@lit-labs/signals';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import { isActivePhase } from '@common/constants/streamStatus';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   type ActiveChildInfo,
@@ -15,8 +16,7 @@ import {
   type Plan,
   type ProcessOutputTail,
   type RoundStage,
-  STREAM_STATUS,
-  type StreamLifecycleStatus,
+  type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
   type TodoItem,
@@ -110,7 +110,7 @@ export interface StreamSlice {
    *  from `setTaskState` or `setActiveStream`. Lets the exit hint list only
    *  resumable tool-use subagents (workflows don't resume). */
   readonly category: AgentCategory | undefined;
-  readonly status: StreamLifecycleStatus | undefined;
+  readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
    *  status. Drives the StatusBar's live elapsed-time segment so a long
@@ -153,12 +153,13 @@ export interface StreamSlice {
  */
 export function thinkingIndicatorVisible(
   slice:
-    | { readonly status: string | undefined; readonly thinkingActive: boolean }
+    | {
+        readonly status: StreamPhase | undefined;
+        readonly thinkingActive: boolean;
+      }
     | undefined,
 ): boolean {
-  return (
-    slice?.thinkingActive === true && slice.status === STREAM_STATUS.RUNNING
-  );
+  return slice?.thinkingActive === true && isActivePhase(slice.status);
 }
 
 export const NO_BYPASS: BypassState = {
@@ -221,14 +222,13 @@ export function patchStream(
 
 function streamSliceWithStatus(
   slice: StreamSlice,
-  status: StreamLifecycleStatus,
+  status: StreamPhase,
   substate: StreamSubstate | undefined,
   nowMs: number,
 ): StreamSlice {
-  const runStartedAt =
-    status === STREAM_STATUS.RUNNING
-      ? (slice.runStartedAt ?? nowMs)
-      : undefined;
+  const runStartedAt = isActivePhase(status)
+    ? (slice.runStartedAt ?? nowMs)
+    : undefined;
   if (
     slice.status === status &&
     slice.substate === substate &&
@@ -257,7 +257,7 @@ export function setStreamStatusInCliState({
   streamId,
 }: {
   readonly nowMs?: number;
-  readonly status: StreamLifecycleStatus;
+  readonly status: StreamPhase;
   readonly substate?: StreamSubstate;
   readonly streamId: StreamTabId;
 }): void {

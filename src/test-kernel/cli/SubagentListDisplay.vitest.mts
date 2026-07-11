@@ -8,7 +8,7 @@ import {
   compactChildRowText,
   compactRows,
 } from '@cli/chat/tui/panes/SubagentList';
-import { STREAM_STATUS } from '@shared/schemas';
+import { STREAM_PHASE } from '@shared/schemas';
 import type { ActiveChildInfo } from '@shared/schemas';
 
 describe('CLI SubagentList display model', () => {
@@ -161,7 +161,7 @@ describe('CLI SubagentList display model', () => {
           kind: 'process',
           executionId: 'review',
           agentName: 'review',
-          status: STREAM_STATUS.WAITING,
+          status: STREAM_PHASE.WAITING,
         },
         nowMs: Date.now(),
       }),

@@ -57,11 +57,11 @@ import {
 } from '@cli/runtime/terminalRequirements';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
-import { isLiveElapsedStatus } from '@common/constants/streamStatus';
+import { isActivePhase } from '@common/constants/streamStatus';
 import {
-  STREAM_STATUS,
+  STREAM_PHASE,
   type ExecutionId,
-  type StreamLifecycleStatus,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
@@ -450,7 +450,7 @@ export async function runChat(
   const followUpQueue = new PQueue({ concurrency: 1 });
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
-  const rootStreamStatus = (): StreamLifecycleStatus | undefined =>
+  const rootStreamStatus = (): StreamPhase | undefined =>
     session.streamId
       ? streamsSignal.get().get(session.streamId)?.status
       : undefined;
@@ -527,8 +527,8 @@ export async function runChat(
     const isRunPending = Boolean(session.runPromise && !session.runCompleted);
 
     if (
-      (isRunPending && activeStatus !== STREAM_STATUS.WAITING) ||
-      isLiveElapsedStatus(activeStatus)
+      (isRunPending && activeStatus !== STREAM_PHASE.WAITING) ||
+      isActivePhase(activeStatus)
     ) {
       appendLocalAssistantTranscript(
         'Wait for the active response to finish, or press Ctrl-C before /clear.',
@@ -1020,7 +1020,7 @@ export async function runChat(
     onStreamStatusChange((change) => {
       if (
         change.streamId === session.streamId &&
-        change.status === STREAM_STATUS.WAITING &&
+        change.status === STREAM_PHASE.WAITING &&
         !session.stopRequested
       ) {
         notify({ kind: 'agentFinished' });

@@ -1,10 +1,10 @@
 import { Box, Text } from 'ink';
 
 import {
-  isInFlightStatus,
-  isTerminalStatus,
+  isActivePhase,
+  isTerminalOutcomePhase,
 } from '@common/constants/streamStatus';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
 import { textDisplayWidth, truncateToWidth } from '../render/terminalText';
@@ -29,9 +29,9 @@ export interface StreamTabDisplayItem {
   readonly shortcutIndex?: number;
   readonly status?: string;
   /**
-   * Whether the run has ENDED (stopped/error/ready) — terminal but not
-   * in-flight. WAITING is terminal-but-in-flight and is intentionally excluded
-   * so an active waiting tab stays unsuffixed.
+   * Whether the run has ended with a canonical outcome. WAITING remains
+   * in-flight and is intentionally excluded so an active waiting tab stays
+   * unsuffixed.
    */
   readonly ended?: boolean;
 }
@@ -47,8 +47,8 @@ export function streamTabSegmentText(item: StreamTabDisplayItem): string {
   const label = item.active ? `[${labeled}]` : labeled;
   const running = item.running ? '*' : '';
   // Inactive tabs surface any non-running status; the active tab additionally
-  // surfaces an ended state (stopped/error/ready) so an active stream that
-  // errors or finishes isn't visually indistinguishable from one still running.
+  // surfaces a terminal outcome so a stream that ends is not visually
+  // indistinguishable from one still running.
   const status =
     item.status && item.status !== 'running' && (!item.active || item.ended)
       ? `(${item.status})`
@@ -210,11 +210,10 @@ export function streamTabsDisplayItems(init: {
       id: view.id,
       label: truncateToWidth(view.label, MAX_LABEL_WIDTH),
       active: view.active,
-      running: slice?.status === STREAM_STATUS.RUNNING,
+      running: isActivePhase(slice?.status),
       shortcutIndex: view.shortcutIndex,
       status,
-      ended:
-        isTerminalStatus(slice?.status) && !isInFlightStatus(slice?.status),
+      ended: isTerminalOutcomePhase(slice?.status),
     };
   });
   return collapseMiddle(items, init.width);

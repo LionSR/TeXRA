@@ -6,7 +6,7 @@ import { Box } from 'ink';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
-import { isActiveStatus } from '@common/constants/streamStatus';
+import { isActivePhase } from '@common/constants/streamStatus';
 import { type ActiveChildInfo, type StreamTabId } from '@shared/schemas';
 import { clamp } from '@utils/core';
 
@@ -122,7 +122,7 @@ export function ConversationRegion({
   const activeSlice = snapshot.activeStreamId
     ? snapshot.streams.get(snapshot.activeStreamId)
     : undefined;
-  const activeResponseRunning = isActiveStatus(activeSlice?.status);
+  const activeResponseRunning = isActivePhase(activeSlice?.status);
   const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
