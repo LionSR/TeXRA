@@ -289,6 +289,13 @@ export function getAllActiveExecutionIds(): string[] {
   return [...ids];
 }
 
+/** Stop background OS processes owned by every live runtime session. */
+export function killAllSessionBackgroundProcesses(): void {
+  for (const session of liveSessions) {
+    session.executions.killBackgroundProcesses();
+  }
+}
+
 let cachedDefaultSession: SessionHandle | undefined;
 
 /**
