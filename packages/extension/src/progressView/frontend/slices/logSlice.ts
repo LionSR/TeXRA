@@ -38,8 +38,7 @@ function updateTaskGroups(
   taskGroupIndex: Map<string, number>,
   entry: StreamLogEntry,
 ): boolean {
-  const parsed = GroupLogPayloadSchema.safeParse(entry.data);
-  const payload = parsed.success ? parsed.data : {};
+  const payload = GroupLogPayloadSchema.catch({}).parse(entry.data);
   const cachedIndex = taskGroupIndex.get(entry.id);
   const groupIndex =
     cachedIndex !== undefined &&
