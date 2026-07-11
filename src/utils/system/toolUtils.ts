@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { execa, execaSync } from 'execa';
+import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 // Local imports
@@ -29,7 +29,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { IS_WINDOWS, extendEnvPath } from './platformPaths';
 import { BinaryResolver } from './binaryResolver';
-import { executeCommand } from './execUtils';
+import { executeCommand, executeCommandSync } from './execUtils';
 
 const CHANNEL = 'toolUtils';
 logger.initialize(CHANNEL);
@@ -435,12 +435,6 @@ let cachedPackageManager: 'brew' | 'apt' | 'scoop' | undefined;
 export function detectPackageManager(): 'brew' | 'apt' | 'scoop' | null {
   if (cachedPackageManager !== undefined) return cachedPackageManager;
 
-  const extendedPath = extendEnvPath();
-  const execOptions = {
-    env: { ...process.env, PATH: extendedPath },
-    reject: false,
-  };
-
   // Platform-aware order: check the platform's native PM first so that
   // cross-platform installs (e.g. Linuxbrew on Linux) don't shadow the
   // PM that DEPENDENCY_INSTALL_COMMANDS actually uses for that platform.
@@ -464,15 +458,10 @@ export function detectPackageManager(): 'brew' | 'apt' | 'scoop' | null {
     : allManagers;
 
   for (const { name, args } of managers) {
-    try {
-      const result = execaSync(name, args, execOptions);
-      if (result.exitCode === 0) {
-        logger.debug(CHANNEL, `Package manager detected: ${name}`);
-        cachedPackageManager = name;
-        return name;
-      }
-    } catch {
-      // Not available, try next
+    if (executeCommandSync([name, ...args]).success) {
+      logger.debug(CHANNEL, `Package manager detected: ${name}`);
+      cachedPackageManager = name;
+      return name;
     }
   }
 

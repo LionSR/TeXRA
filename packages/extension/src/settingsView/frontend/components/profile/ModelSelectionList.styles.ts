@@ -157,7 +157,7 @@ export const modelSelectionListStyles: CSSResult = css`
     gap: var(--wa-space-xs);
   }
 
-  .model-row wa-checkbox {
+  .model-row wa-switch {
     flex: 1;
     min-width: 0;
     font-size: var(--font-size-sm);

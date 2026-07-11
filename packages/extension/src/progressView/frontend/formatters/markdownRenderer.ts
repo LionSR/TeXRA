@@ -14,7 +14,7 @@ let cachedProcess: ((content: string) => string) | null = null;
 /** Process markdown content with LaTeX reference protection. */
 export const processMarkdownContent = (content: string): string => {
   cachedProcess ??= createKatexHtmlProcessor({
-    errorColor: 'var(--color-error, #cc0000)',
+    errorColor: 'var(--color-error)',
   });
   return cachedProcess(content);
 };
