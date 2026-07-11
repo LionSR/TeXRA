@@ -1,7 +1,7 @@
 /** Master-detail panel of agents for a single category (workflow or tool-use). */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import {
   LitElement,
@@ -264,8 +264,8 @@ export class AgentSelectionPanel extends LitElement {
         }}
         title=${agent.description ?? agent.name}
       >
-        <wa-checkbox
-          class="agent-list-item-checkbox"
+        <wa-switch
+          class="agent-list-item-toggle"
           ?checked=${agent.enabled}
           @click=${(e: Event) => {
             e.stopPropagation();
@@ -276,7 +276,7 @@ export class AgentSelectionPanel extends LitElement {
               ? 'Hide from agent selector'
               : 'Show in agent selector'
           }
-        ></wa-checkbox>
+        ></wa-switch>
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
           ${
