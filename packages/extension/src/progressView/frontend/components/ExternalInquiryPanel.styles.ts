@@ -9,13 +9,13 @@ export const externalInquiryPanelStyles: CSSResult = css`
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-quiet);
     padding: ${sp.small} ${sp.medium};
-    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
+    background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius-small);
     line-height: var(--line-height-normal);
   }
 
   .external-inquiry-request__question {
-    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.05));
+    background: var(--wa-color-surface-lowered);
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius);
     padding: ${sp.medium};
@@ -44,7 +44,7 @@ export const externalInquiryPanelStyles: CSSResult = css`
   .external-inquiry-request__transcript {
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius);
-    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.05));
+    background: var(--wa-color-surface-lowered);
   }
 
   .external-inquiry-request__transcript::part(base) {
@@ -152,7 +152,7 @@ export const externalInquiryPanelStyles: CSSResult = css`
     flex-direction: column;
     gap: ${sp.tiny};
     padding: ${sp.small};
-    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
+    background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius-small);
   }
 
@@ -195,7 +195,7 @@ export const externalInquiryPanelStyles: CSSResult = css`
     flex-direction: column;
     gap: ${sp.tiny};
     padding: ${sp.small};
-    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
+    background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius-small);
   }
 

@@ -45,8 +45,7 @@ export class ModelsTab extends LitElement {
       .chatgpt-subscription {
         margin-top: var(--wa-space-l, 1rem);
         padding-top: var(--wa-space-m, 0.75rem);
-        border-top: 1px solid
-          var(--wa-color-surface-border, rgba(127, 127, 127, 0.2));
+        border-top: 1px solid var(--wa-color-surface-border);
       }
       .chatgpt-subscription__header {
         display: flex;
@@ -54,10 +53,10 @@ export class ModelsTab extends LitElement {
         gap: 0.5rem;
       }
       .chatgpt-subscription__title {
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
       }
       .chatgpt-subscription__badge {
-        font-size: 0.72em;
+        font-size: var(--font-size-xs);
         text-transform: uppercase;
         letter-spacing: 0.04em;
         opacity: 0.65;
@@ -66,21 +65,21 @@ export class ModelsTab extends LitElement {
         padding: 0 0.4em;
       }
       .chatgpt-subscription__hint {
-        margin: 0.35rem 0 0.6rem;
+        margin: var(--wa-space-2xs) 0 var(--wa-space-xs);
         opacity: 0.8;
-        font-size: 0.9em;
+        font-size: var(--font-size-sm);
       }
       .chatgpt-subscription__limit {
         display: flex;
         align-items: flex-start;
         gap: 0.4rem;
-        margin: 0 0 0.6rem;
+        margin: 0 0 var(--wa-space-xs);
         opacity: 0.85;
-        font-size: 0.9em;
+        font-size: var(--font-size-sm);
       }
       .chatgpt-subscription__limit wa-icon {
         flex: 0 0 auto;
-        margin-top: 0.1rem;
+        margin-top: var(--wa-space-3xs);
       }
       .chatgpt-subscription__row {
         display: flex;
@@ -89,7 +88,7 @@ export class ModelsTab extends LitElement {
         flex-wrap: wrap;
       }
       .chatgpt-subscription__setting {
-        margin-bottom: 0.6rem;
+        margin-bottom: var(--wa-space-xs);
       }
       .chatgpt-subscription__account {
         display: inline-flex;
