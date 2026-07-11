@@ -6,7 +6,7 @@ import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
 import { OutputNode } from '@agent/implementations/flows/reflection/nodes/OutputNode';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
-import { createOutputState } from '@agent/output/outputState';
+import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import {
   OutputFileProcessor,
   type ProcessingContext,
@@ -64,13 +64,6 @@ function createCompileFailureFixture() {
     failures: [compileFailure],
     logExcerpt: '! Missing $ inserted.',
   };
-  const roundOutput: RoundOutput = {
-    round: 0,
-    rawOutput: outputLocation,
-    outputs: [],
-    compileFailures: [compileFailure],
-    xmlSummary: emptyXmlSummary,
-  };
   const summary = {
     storageKey: normalizeRunId('run:compile-context'),
     currRound: 0,
@@ -84,7 +77,6 @@ function createCompileFailureFixture() {
     outputLocation,
     compileFailure,
     compileResult,
-    roundOutput,
     summary,
   };
 }
@@ -121,11 +113,12 @@ function createOutputNode(
   host: ReturnType<typeof createRecordingHost>['host'],
   workflowOutputPolicy: typeof defaultWorkflowOutputPolicy = defaultWorkflowOutputPolicy,
   logger: AgentTrace = noopTrace,
+  outputState = createOutputState(),
 ): OutputNode {
   return new OutputNode().setServices({
     streamId,
     logger,
-    outputState: createOutputState(),
+    outputState,
     runtimeHost: host,
     workflowOutputPolicy,
   } as unknown as ReflectionServices);
@@ -153,15 +146,9 @@ function createRecordedRuntime(streamId: string) {
 }
 
 describe('output progress events', () => {
-  it('publishes reflection output-node events through the runtime host', async () => {
+  it('publishes output events and projects restored rounds', async () => {
     const projected = createRecordedRuntime('stream:output-node');
     const { events, host, hostEvents, logger } = projected;
-    const outputNode = createOutputNode(
-      'stream:output-node',
-      host,
-      defaultWorkflowOutputPolicy,
-      logger,
-    );
     const outputLocation = createAgentLocation('/tmp/output.xml');
     const openedLocation = createLocation('/tmp/rendered.tex');
     const fileInfo: OutputFileInfo = {
@@ -171,28 +158,31 @@ describe('output progress events', () => {
       lineage: null,
       diff: null,
     };
-    const roundOutput: RoundOutput = {
-      round: 2,
-      rawOutput: outputLocation,
-      outputs: [fileInfo],
-      compileFailures: [],
-      xmlSummary: emptyXmlSummary,
-    };
-
+    const restoredFileInfo = { ...fileInfo, round: 1 };
+    const persisted = createOutputState();
+    ensureRoundData(persisted, 1).outputs = [restoredFileInfo];
+    const outputState = createOutputState(persisted.rounds);
+    const outputNode = createOutputNode(
+      'stream:output-node',
+      host,
+      defaultWorkflowOutputPolicy,
+      logger,
+      outputState,
+    );
+    const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
     try {
       const transition = await withTestRunContext(
         host,
         'stream:output-node',
         () =>
           outputNode.post(
-            { roundOutputs: [] } as never,
+            shared,
             {
               outputLocation,
               currentRound: 2,
               endTurn: false,
             },
             {
-              roundOutput,
               summary: {
                 storageKey: normalizeRunId('run:output-node'),
                 currRound: 2,
@@ -221,6 +211,8 @@ describe('output progress events', () => {
           payload: { location: openedLocation, preserveFocus: true },
         },
       ]);
+      expect(shared.roundOutputs).toBe(outputState.rounds);
+      expect(shared.roundOutputs[1]?.outputs).toEqual([restoredFileInfo]);
     } finally {
       projected.dispose();
     }
@@ -229,13 +221,8 @@ describe('output progress events', () => {
   it('stores compile failure context for the next reflection round', async () => {
     const { host } = createRecordingHost();
     const outputNode = createOutputNode('stream:compile-context', host);
-    const {
-      outputLocation,
-      compileFailure,
-      compileResult,
-      roundOutput,
-      summary,
-    } = createCompileFailureFixture();
+    const { outputLocation, compileFailure, compileResult, summary } =
+      createCompileFailureFixture();
     const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
 
     await withTestRunContext(host, 'stream:compile-context', () =>
@@ -247,7 +234,6 @@ describe('output progress events', () => {
           endTurn: false,
         },
         {
-          roundOutput,
           summary,
           compileFailures: [compileFailure],
           compileResult,
@@ -274,13 +260,8 @@ describe('output progress events', () => {
         shouldRejectOnCompileFailure: () => false,
       },
     );
-    const {
-      outputLocation,
-      compileFailure,
-      compileResult,
-      roundOutput,
-      summary,
-    } = createCompileFailureFixture();
+    const { outputLocation, compileFailure, compileResult, summary } =
+      createCompileFailureFixture();
     const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
 
     await withTestRunContext(host, 'stream:compile-context-disabled', () =>
@@ -292,7 +273,6 @@ describe('output progress events', () => {
           endTurn: false,
         },
         {
-          roundOutput,
           summary,
           compileFailures: [compileFailure],
           compileResult,
@@ -309,8 +289,7 @@ describe('output progress events', () => {
   it('clears stale compile failure context after a successful compile result', async () => {
     const { host } = createRecordingHost();
     const outputNode = createOutputNode('stream:compile-context-ok', host);
-    const { outputLocation, roundOutput, summary } =
-      createCompileFailureFixture();
+    const { outputLocation, summary } = createCompileFailureFixture();
     const compileResult: CompileResult = { status: 'ok', round: 1 };
     const shared = {
       roundOutputs: [],
@@ -332,7 +311,6 @@ describe('output progress events', () => {
           endTurn: false,
         },
         {
-          roundOutput: { ...roundOutput, round: 1, compileFailures: [] },
           summary: { ...summary, currRound: 1 },
           compileFailures: [],
           compileResult,
