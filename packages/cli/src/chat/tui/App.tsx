@@ -94,7 +94,6 @@ interface InputEventEmitterLike {
   off(event: 'input', listener: (data: string) => void): void;
 }
 
-// Keep bottom panels from crowding out conversation or input chrome.
 const BOTTOM_PANEL_MAX_ROWS = 10;
 const EMPTY_SUBAGENT_ROWS: readonly ActiveChildInfo[] = [];
 
@@ -313,9 +312,9 @@ export function App(props: AppProps): React.JSX.Element {
   const childControlHasItems = childControlTarget?.hasItems ?? false;
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
     foregroundMaxRows: foregroundMaxRowsForKind({
+      approvalKind: activeApprovalVisible ? pending?.payload.kind : undefined,
       childControlHasItems,
       kind: foregroundKind,
-      pending,
     }),
     foregroundOpen,
     inputVisible: inputBarVisible,
@@ -643,9 +642,11 @@ export function App(props: AppProps): React.JSX.Element {
           commandName={props.commandName}
           foregroundEscapeAction={foregroundEscapeAction({
             activeFormEscapeAction: activeForm?.escapeAction,
+            approvalKind: activeApprovalVisible
+              ? pending?.payload.kind
+              : undefined,
             childControlEscapeAction,
             foregroundKind,
-            pending: activeApprovalVisible ? pending : undefined,
           })}
           queuedFollowUpPreview={!queuedFollowUpPanelVisible}
           shortcutsActive={focusShortcutsActive}
