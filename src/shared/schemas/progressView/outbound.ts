@@ -97,8 +97,8 @@ export const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   finishedProcessCount: z.number(),
 });
 
-export const UpdateProcessOutputMessageSchema = StreamScopedBaseSchema.merge(
-  ProcessOutputTailSchema,
+export const UpdateProcessOutputMessageSchema = StreamScopedBaseSchema.extend(
+  ProcessOutputTailSchema.shape,
 ).extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT),
   executionId: z.string(),
