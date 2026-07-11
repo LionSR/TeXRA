@@ -180,6 +180,10 @@ export function renderIconActionButtonParts(
   return renderActionButtonParts(options);
 }
 
+// Exported for API symmetry with `renderIconActionButtonParts` (which has
+// multiple callers) and type-safety parity with `renderLabeledActionButton`
+// (`LabeledActionButtonOptions` vs `IconActionButtonOptions` at the public
+// boundary) — not because this has multiple callers today.
 export function renderLabeledActionButtonParts(
   options: LabeledActionButtonOptions,
 ): ActionButtonParts {
