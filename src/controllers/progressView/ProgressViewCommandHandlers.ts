@@ -2,11 +2,7 @@
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  AgentCategoryFilter,
-  ExternalInquiryThreadId,
-  StreamTabId,
-} from '@shared/schemas';
+import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
@@ -116,19 +112,10 @@ export interface ProgressViewApprovalCommandActions {
 
 export interface ProgressViewExternalInquiryCommandActions {
   /**
-   * Host log sink for the empty-answer guard. The guard policy and message
-   * live in the shared handler; hosts differ only in whether their logger
-   * carries a channel, so they pass just the transport here.
-   */
-  logWarn(
-    message: string,
-    context: { threadId: ExternalInquiryThreadId },
-  ): void;
-  /**
    * Forwarded to the inquiry submit/drop settle path. Desktop scopes it to its
    * window session; the extension omits it so the module default applies.
    */
-  sessionContext?: { session?: SessionHandle };
+  session?: SessionHandle;
 }
 
 export interface ProgressViewCommandActions {
@@ -311,44 +298,16 @@ export function createProgressViewCommandHandlers(
       await approval.handleAgentProposalAction(data);
     },
 
-    // External inquiry settle path: draft persists the open turn, submit/drop
-    // settle the durable thread. The empty-answer guard and warning message are
-    // shared; hosts supply only the log transport and (desktop) the session.
+    // Draft persists the open turn; the canonical submit/drop union settles it.
     [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: async (data) => {
       if (data.action === 'draft') {
         await persistOpenTurnDraft({
           threadId: data.threadId,
-          draft: data.draft ?? null,
+          draft: data.draft,
         });
         return;
       }
-      if (data.action === 'submit') {
-        if (data.answer == null || data.answer.length === 0) {
-          externalInquiry.logWarn(
-            'Ignoring external inquiry submit without an answer',
-            { threadId: data.threadId },
-          );
-          return;
-        }
-        await handleExternalInquiryAction(
-          {
-            action: 'submit',
-            threadId: data.threadId,
-            answer: data.answer,
-            sessionLinks: data.sessionLinks,
-          },
-          externalInquiry.sessionContext,
-        );
-        return;
-      }
-      await handleExternalInquiryAction(
-        {
-          action: 'drop',
-          threadId: data.threadId,
-          feedback: data.feedback,
-        },
-        externalInquiry.sessionContext,
-      );
+      await handleExternalInquiryAction(data, externalInquiry);
     },
   } satisfies Partial<ProgressViewInboundHandlerRegistry>;
 }

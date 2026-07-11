@@ -92,9 +92,7 @@ function createActions(
       handleUserQuestionAction: vi.fn(),
       handleAgentProposalAction: vi.fn(),
     },
-    externalInquiry: {
-      logWarn: vi.fn(),
-    },
+    externalInquiry: {},
     ...overrides,
   };
 }
@@ -709,5 +707,24 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     expect(
       actions.approval.onUnsupportedToolEditApproval,
     ).not.toHaveBeenCalled();
+  });
+});
+
+describe('external inquiry action schema', () => {
+  const command = PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION;
+  const threadId = 'ei_123456789abc';
+
+  it("requires each action variant's own fields", () => {
+    const results = [
+      { command, action: 'submit', threadId, answer: 'Confirmed' },
+      { command, action: 'drop', threadId },
+      { command, action: 'draft', threadId, draft: null },
+      { command, action: 'submit', threadId },
+      { command, action: 'draft', threadId },
+    ].map(
+      (message) => ProgressViewInboundMessageSchema.safeParse(message).success,
+    );
+
+    expect(results).toEqual([true, true, true, false, false]);
   });
 });

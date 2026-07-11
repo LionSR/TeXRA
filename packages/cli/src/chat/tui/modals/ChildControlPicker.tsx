@@ -22,6 +22,7 @@ import {
 } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { KeyHints } from '../ui/KeyHints';
+import { BorderedPanel } from '../ui/BorderedPanel';
 import { POINTER } from '../ui/glyphs';
 import {
   nextWrappingHighlightIndex,
@@ -423,16 +424,23 @@ export function ChildControlPicker({
   }
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
+    <BorderedPanel
+      color="cyan"
       width={availableColumns}
+      title={pickerTitle(mode)}
+      footer={
+        <KeyHints
+          hints={pickerKeyHintsForColumns(
+            mode,
+            items.length,
+            selectedItem?.killable ?? false,
+            hintColumns,
+          )}
+          confirmCancel={false}
+        />
+      }
+      footerMarginTop={stackSelectedSubagent || compactEmptyPicker ? 0 : 1}
     >
-      <Text bold color="cyan">
-        {pickerTitle(mode)}
-      </Text>
       {streamScopeText ? (
         <Text dimColor wrap="truncate-end">
           {streamScopeText}
@@ -464,17 +472,6 @@ export function ChildControlPicker({
           <Text dimColor>{emptyPickerText(mode)}</Text>
         )}
       </Box>
-      <Box marginTop={stackSelectedSubagent || compactEmptyPicker ? 0 : 1}>
-        <KeyHints
-          hints={pickerKeyHintsForColumns(
-            mode,
-            items.length,
-            selectedItem?.killable ?? false,
-            hintColumns,
-          )}
-          confirmCancel={false}
-        />
-      </Box>
-    </Box>
+    </BorderedPanel>
   );
 }
