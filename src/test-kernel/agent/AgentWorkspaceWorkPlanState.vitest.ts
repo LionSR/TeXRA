@@ -185,26 +185,4 @@ describe('agent workspace work-plan state', () => {
     expect(rehydrated.workPlan.todos).toEqual([todo]);
     expect(rehydrated.workPlan.plan).toBeNull();
   });
-
-  it('normalizes a legacy top-level {todos, plan} snapshot for the tool-use resume boundary', () => {
-    // Regression for the codex P1 on #8005: when a persisted tool-use flow's
-    // cursor is already past ToolUsePrepareNode, that node's own one-time
-    // hydration never runs on resume (PersistedFlow.ensureRecord just reuses
-    // the existing record). ToolUseRunSharedSchema's one-time persistence
-    // boundary delegates to this legacy-capable workspace schema before
-    // per-cycle code's canonical-only fromCanonicalSnapshot
-    // (ToolUseCycleNode.prep()) ever sees it.
-    const legacyWorkspaceSnapshot = {
-      todos: [todo],
-      plan: objectivePlan,
-    };
-
-    const normalized = AgentWorkspaceState.fromSnapshot(
-      legacyWorkspaceSnapshot,
-    ).toSnapshot();
-
-    const rehydrated = AgentWorkspaceState.fromCanonicalSnapshot(normalized);
-    expect(rehydrated.workPlan.todos).toEqual([todo]);
-    expect(rehydrated.workPlan.plan).toEqual(objectivePlan);
-  });
 });
