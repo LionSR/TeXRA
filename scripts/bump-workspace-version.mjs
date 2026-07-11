@@ -83,7 +83,9 @@ function parseVersion(rawVersion, label) {
   // prerelease or build metadata, and semver.parse would otherwise accept
   // (and silently drop) suffixes like "-beta" or "+build".
   const isBareVersion =
-    parsed != null && parsed.prerelease.length === 0 && parsed.build.length === 0;
+    parsed != null &&
+    parsed.prerelease.length === 0 &&
+    parsed.build.length === 0;
   if (!isBareVersion) {
     fail(
       `${label} must be MAJOR.MINOR.PATCH, with an optional leading v or cli-v prefix.`,
