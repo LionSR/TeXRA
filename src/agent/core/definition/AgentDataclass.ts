@@ -22,8 +22,8 @@ export { AgentCategory };
  * only the prefault-vs-optional wrapper differs per schema, by design.
  */
 const temperatureField = z.number().min(0).max(1);
+/** Shared by both `requiredFiles` and `requiredFilesInternal` — same shape, distinct fields. */
 const requiredFilesField = z.record(z.string(), z.string());
-const requiredFilesInternalField = z.record(z.string(), z.string());
 const defaultOutputFilesField = z.array(z.string());
 const filePatternsContainEntryFields = {
   pattern: z.string(),
@@ -33,7 +33,7 @@ const filePatternsContainEntryFields = {
 export const AgentSettingBaseSchema = z.strictObject({
   temperature: temperatureField.prefault(1.0),
   requiredFiles: requiredFilesField.prefault({}),
-  requiredFilesInternal: requiredFilesInternalField.prefault({}),
+  requiredFilesInternal: requiredFilesField.prefault({}),
   defaultOutputFiles: defaultOutputFilesField.prefault([]),
   filePatternsContain: z
     .array(
@@ -130,7 +130,7 @@ const RawAgentSettingInputSchema = z.strictObject({
   agentCategory: AgentCategorySchema.optional(),
   temperature: temperatureField.optional(),
   requiredFiles: requiredFilesField.optional(),
-  requiredFilesInternal: requiredFilesInternalField.optional(),
+  requiredFilesInternal: requiredFilesField.optional(),
   defaultOutputFiles: defaultOutputFilesField.optional(),
   filePatternsContain: z
     .array(

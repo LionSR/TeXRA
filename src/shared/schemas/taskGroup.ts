@@ -5,16 +5,21 @@ import { TaskGroupStatusSchema } from './stream';
 export const StageKindSchema = z.enum(['run', 'round', 'phase', 'session']);
 export type StageKind = z.infer<typeof StageKindSchema>;
 
+/** Shared by `TaskGroupSchema` and `GroupLogPayloadSchema` below. */
+const taskGroupIndexField = z.int().nonnegative();
+const taskGroupTotalField = z.int().positive();
+const taskGroupEndTimeField = z.number();
+
 export const TaskGroupSchema = z.strictObject({
   id: z.string().min(1),
   name: z.string(),
   startTime: z.number(),
-  endTime: z.number().optional(),
+  endTime: taskGroupEndTimeField.optional(),
   status: TaskGroupStatusSchema,
   parentGroupId: z.string().optional(),
   kind: StageKindSchema.optional(),
-  index: z.int().nonnegative().optional(),
-  total: z.int().positive().optional(),
+  index: taskGroupIndexField.optional(),
+  total: taskGroupTotalField.optional(),
 });
 
 export type TaskGroup = z.infer<typeof TaskGroupSchema>;
@@ -26,13 +31,19 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * (`logSlice.ts`), which previously re-derived `status`/`kind` membership
  * with hand-rolled type guards duplicating `TaskGroupStatusSchema`/
  * `StageKindSchema`.
+ *
+ * Each field validates (and recovers via `.catch(undefined)`) independently
+ * so one invalid field — e.g. an unrecognized `status` from an older/newer
+ * producer — doesn't fail the whole payload and drop sibling fields that
+ * were otherwise usable; the old per-field guards had this per-field
+ * tolerance and a single `.safeParse()` on a non-catching schema would not.
  */
 export const GroupLogPayloadSchema = z.looseObject({
-  status: TaskGroupStatusSchema.optional(),
-  kind: StageKindSchema.optional(),
-  index: z.number().optional(),
-  total: z.number().optional(),
-  name: z.string().optional(),
-  endTime: z.number().optional(),
+  status: TaskGroupStatusSchema.optional().catch(undefined),
+  kind: StageKindSchema.optional().catch(undefined),
+  index: taskGroupIndexField.optional().catch(undefined),
+  total: taskGroupTotalField.optional().catch(undefined),
+  name: z.string().optional().catch(undefined),
+  endTime: taskGroupEndTimeField.optional().catch(undefined),
 });
 export type GroupLogPayload = z.infer<typeof GroupLogPayloadSchema>;

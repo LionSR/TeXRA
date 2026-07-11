@@ -22,14 +22,14 @@ import {
   type TodoItem,
   type TokenUsageStats,
 } from '@shared/schemas';
-
-export type { ProcessOutputTail } from '@shared/schemas';
 import {
   applyChildStreamRemoval,
   isChildStreamRemoved,
   resetChildStreamEntries,
 } from './childExecutions';
 import type { ChildControlMode } from './childControls';
+
+export type { ProcessOutputTail };
 
 // ---------------------------------------------------------------------------
 // types
