@@ -46,11 +46,12 @@ import {
   finalizeAssistantTranscriptEntries,
 } from '@cli/chat/tui/state/transcript';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
-import { STREAM_PHASE } from '@shared/schemas';
 import {
-  STREAM_STATUS,
+  RUN_OUTCOME,
+  STREAM_PHASE,
   TOOL_USE_STATUS,
   type NormalizedToolUse,
+  type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -148,14 +149,14 @@ describe('CLI conversation transcript splitting', () => {
 
     const running = splitTranscriptEntries(
       [user, assistant],
-      STREAM_STATUS.RUNNING,
+      STREAM_PHASE.RUNNING,
     );
     expect(running.finalized).toEqual([user]);
     expect(running.pending).toEqual([assistant]);
 
     const waitingBeforeFinalize = splitTranscriptEntries(
       [user, assistant],
-      STREAM_STATUS.WAITING,
+      STREAM_PHASE.WAITING,
     );
     expect(waitingBeforeFinalize.finalized).toEqual([user]);
     expect(waitingBeforeFinalize.pending).toEqual([]);
@@ -177,40 +178,45 @@ describe('CLI conversation transcript splitting', () => {
     expect(slice?.entries.map((item) => item.finalized)).toEqual([true, true]);
     const split = splitTranscriptEntries(
       slice?.entries ?? [],
-      STREAM_STATUS.WAITING,
+      STREAM_PHASE.WAITING,
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1', 'a1']);
     expect(split.pending).toEqual([]);
   });
 
-  it('freezes assistant entries when a stream returns to ready', () => {
-    resetCliState();
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
-      entries: [entry('a1', 'assistant', 'A final answer.', false)],
-    }));
-    const dispose = subscribeStreamStatus();
+  it.each(Object.values(RUN_OUTCOME) as RunOutcome[])(
+    'freezes assistant entries on the %s outcome',
+    (outcome) => {
+      defaultSession().status.clearStream(STREAM_ID);
+      resetCliState();
+      patchStream(STREAM_ID, (slice) => ({
+        ...slice,
+        entries: [entry('a1', 'assistant', 'A final answer.', false)],
+      }));
+      const dispose = subscribeStreamStatus();
 
-    try {
-      defaultSession().status.transition(
-        STREAM_ID,
-        STREAM_PHASE.COMPLETED,
-        'restart-repair',
-      );
+      try {
+        defaultSession().status.transition(
+          STREAM_ID,
+          outcome,
+          'restart-repair',
+        );
 
-      expect(
-        streams
-          .get()
-          .get(STREAM_ID)
-          ?.entries.map((item) => ({
-            id: item.id,
-            finalized: item.finalized,
-          })),
-      ).toEqual([{ id: 'a1', finalized: true }]);
-    } finally {
-      dispose();
-    }
-  });
+        expect(
+          streams
+            .get()
+            .get(STREAM_ID)
+            ?.entries.map((item) => ({
+              id: item.id,
+              finalized: item.finalized,
+            })),
+        ).toEqual([{ id: 'a1', finalized: true }]);
+      } finally {
+        dispose();
+        defaultSession().status.clearStream(STREAM_ID);
+      }
+    },
+  );
 
   // Regression: a stream reused for a new run still carries WAITING from
   // the prior turn. The status must flip to a non-final value before
@@ -220,7 +226,7 @@ describe('CLI conversation transcript splitting', () => {
     resetCliState();
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
-      status: STREAM_STATUS.WAITING,
+      status: STREAM_PHASE.WAITING,
     }));
     const dispose = subscribeStreamStatus();
 
@@ -231,7 +237,7 @@ describe('CLI conversation transcript splitting', () => {
         'resume',
       );
 
-      expect(streams.get().get(STREAM_ID)?.status).toBe(STREAM_STATUS.RUNNING);
+      expect(streams.get().get(STREAM_ID)?.status).toBe(STREAM_PHASE.RUNNING);
     } finally {
       dispose();
     }
@@ -249,7 +255,7 @@ describe('CLI conversation transcript splitting', () => {
 
     const split = splitTranscriptEntries(
       [user, assistant, tool],
-      STREAM_STATUS.RUNNING,
+      STREAM_PHASE.RUNNING,
     );
 
     expect(split.finalized.map((e) => e.id)).toEqual(['u1']);
@@ -272,7 +278,7 @@ describe('CLI conversation transcript splitting', () => {
 
     let split = splitTranscriptEntries(
       streams.get().get(STREAM_ID)?.entries ?? [],
-      STREAM_STATUS.RUNNING,
+      STREAM_PHASE.RUNNING,
     );
     expect(split.finalized).toHaveLength(0);
     expect(split.pending.map((e) => e.id)).toEqual(['a1', 't1']);
@@ -281,7 +287,7 @@ describe('CLI conversation transcript splitting', () => {
 
     split = splitTranscriptEntries(
       streams.get().get(STREAM_ID)?.entries ?? [],
-      STREAM_STATUS.WAITING,
+      STREAM_PHASE.WAITING,
     );
     expect(split.finalized.map((e) => e.id)).toEqual(['a1', 't1']);
     expect(split.pending).toHaveLength(0);
@@ -422,7 +428,7 @@ describe('CLI conversation transcript splitting', () => {
 
     const split = splitTranscriptEntries(
       [user, emptyAssistant, tool],
-      STREAM_STATUS.RUNNING,
+      STREAM_PHASE.RUNNING,
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
     expect(split.pending.map((item) => item.id)).toEqual(['t1']);
@@ -465,12 +471,12 @@ describe('CLI conversation transcript splitting', () => {
       [
         STREAM_ID,
         sliceWithEntries(STREAM_ID, [user], {
-          status: STREAM_STATUS.RUNNING,
+          status: STREAM_PHASE.RUNNING,
         }),
       ],
     ]);
 
-    const split = splitTranscriptEntries([user], STREAM_STATUS.RUNNING);
+    const split = splitTranscriptEntries([user], STREAM_PHASE.RUNNING);
     expect(split.finalized).toEqual([]);
     expect(split.pending.map((item) => item.id)).toEqual(['u1']);
 
@@ -490,12 +496,12 @@ describe('CLI conversation transcript splitting', () => {
       [
         STREAM_ID,
         sliceWithEntries(STREAM_ID, [user, tool], {
-          status: STREAM_STATUS.RUNNING,
+          status: STREAM_PHASE.RUNNING,
         }),
       ],
     ]);
 
-    const split = splitTranscriptEntries([user, tool], STREAM_STATUS.RUNNING);
+    const split = splitTranscriptEntries([user, tool], STREAM_PHASE.RUNNING);
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
     expect(split.pending.map((item) => item.id)).toEqual(['t1']);
 
@@ -526,7 +532,7 @@ describe('CLI conversation transcript splitting', () => {
 
     const split = splitTranscriptEntries(
       [continuation, assistant],
-      STREAM_STATUS.RUNNING,
+      STREAM_PHASE.RUNNING,
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
     expect(split.pending.map((item) => item.id)).toEqual(['a1']);
@@ -553,7 +559,7 @@ describe('CLI conversation transcript splitting', () => {
     expect(
       splitTranscriptEntries(
         [user, invisibleAssistant, tool],
-        STREAM_STATUS.RUNNING,
+        STREAM_PHASE.RUNNING,
       ).pending.map((item) => item.id),
     ).toEqual(['t1']);
     expect(
@@ -917,7 +923,7 @@ describe('CLI conversation transcript splitting', () => {
           executionId: 'ei_search',
           agentName: 'search',
           childStreamId: CHILD,
-          status: STREAM_STATUS.RUNNING,
+          status: STREAM_PHASE.RUNNING,
         },
       ],
     });
@@ -1163,7 +1169,7 @@ describe('CLI conversation transcript splitting', () => {
       thinkingIndicatorVisible(
         sliceWithEntries(STREAM_ID, [], {
           thinkingActive: true,
-          status: STREAM_STATUS.RUNNING,
+          status: STREAM_PHASE.RUNNING,
         }),
       ),
     ).toBe(true);
@@ -1173,7 +1179,7 @@ describe('CLI conversation transcript splitting', () => {
       thinkingIndicatorVisible(
         sliceWithEntries(STREAM_ID, [], {
           thinkingActive: false,
-          status: STREAM_STATUS.RUNNING,
+          status: STREAM_PHASE.RUNNING,
         }),
       ),
     ).toBe(false);
@@ -1181,7 +1187,7 @@ describe('CLI conversation transcript splitting', () => {
       thinkingIndicatorVisible(
         sliceWithEntries(STREAM_ID, [], {
           thinkingActive: true,
-          status: STREAM_STATUS.WAITING,
+          status: STREAM_PHASE.WAITING,
         }),
       ),
     ).toBe(false);

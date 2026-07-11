@@ -1,9 +1,9 @@
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { isLiveElapsedStatus } from '@common/constants/streamStatus';
+import { isActivePhase } from '@common/constants/streamStatus';
 import {
-  STREAM_STATUS,
-  type StreamLifecycleStatus,
+  STREAM_PHASE,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -97,20 +97,20 @@ export function chatTuiCanInterruptActiveRun(
 
 export function chatTuiCanStopActiveRun(
   session: InterruptibleTuiSessionState,
-  status: StreamLifecycleStatus | undefined,
+  status: StreamPhase | undefined,
 ): boolean {
   if (!session.runPromise || session.runCompleted) return false;
   if (!session.streamId) return true;
-  return status === undefined || isLiveElapsedStatus(status);
+  return status === undefined || isActivePhase(status);
 }
 
 export function chatTuiCanStopVisibleRun(
   session: InterruptibleTuiSessionState,
-  status: StreamLifecycleStatus | undefined,
+  status: StreamPhase | undefined,
 ): boolean {
   return (
     chatTuiCanStopActiveRun(session, status) ||
-    Boolean(session.streamId && isLiveElapsedStatus(status))
+    Boolean(session.streamId && isActivePhase(status))
   );
 }
 
@@ -129,14 +129,14 @@ export function publishChatTuiRootRunStartAvailability(
 export function chatTuiCanSelectModel(input: {
   readonly canStartRootRun: boolean;
   readonly streamId: StreamTabId | undefined;
-  readonly status: StreamLifecycleStatus | undefined;
+  readonly status: StreamPhase | undefined;
   readonly hasActiveToolUseFlow: boolean;
 }): boolean {
   return (
     input.canStartRootRun ||
     Boolean(
       input.streamId &&
-      input.status === STREAM_STATUS.WAITING &&
+      input.status === STREAM_PHASE.WAITING &&
       input.hasActiveToolUseFlow,
     )
   );

@@ -6,11 +6,10 @@ import {
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import { isLiveElapsedStatus } from '@common/constants/streamStatus';
+import { isActivePhase } from '@common/constants/streamStatus';
 import {
-  STREAM_STATUS,
   type RoundStage,
-  type StreamLifecycleStatus,
+  type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
   type TokenUsageStats,
@@ -63,7 +62,7 @@ interface StatusBarSegment {
 }
 
 export interface StatusBarDisplayInput {
-  readonly status: string | undefined;
+  readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   /** Milliseconds since the running turn began. When set and `status` is
    *  `running`, the bar shows a live `Ns` segment so a long token-less
@@ -549,7 +548,7 @@ function hasPendingOrLiveStream(
   streams: ReadonlyMap<StreamTabId, StatusBarVisibleStream>,
 ): boolean {
   for (const stream of streams.values()) {
-    if (stream.status === undefined || isLiveElapsedStatus(stream.status)) {
+    if (stream.status === undefined || isActivePhase(stream.status)) {
       return true;
     }
   }
@@ -559,7 +558,7 @@ function hasPendingOrLiveStream(
 function rootActiveSegment(
   input: StatusBarDisplayInput,
 ): StatusBarSegment | undefined {
-  return input.ctrlCAction === 'stop root' && !isLiveElapsedStatus(input.status)
+  return input.ctrlCAction === 'stop root' && !isActivePhase(input.status)
     ? {
         text: 'root active',
         color: 'yellow',
@@ -593,7 +592,7 @@ function approvalPolicySegment(
 }
 
 interface StatusBarVisibleStream {
-  readonly status: StreamLifecycleStatus | undefined;
+  readonly status: StreamPhase | undefined;
 }
 
 interface StatusBarStreamTarget {
@@ -628,7 +627,7 @@ export function statusBarStreamTarget({
     activeStreamId,
     parentStream,
     values: streams,
-    canUseValue: (stream) => isLiveElapsedStatus(stream.status),
+    canUseValue: (stream) => isActivePhase(stream.status),
   });
   const canStopVisibleRun =
     canStopActiveRun &&
@@ -688,10 +687,7 @@ export function buildStatusBarDisplay(
       ),
       color: 'dim',
     });
-    if (
-      input.status === STREAM_STATUS.RUNNING &&
-      input.elapsedMs !== undefined
-    ) {
+    if (isActivePhase(input.status) && input.elapsedMs !== undefined) {
       left.push({
         text: formatCompactDuration(input.elapsedMs),
         color: 'dim',
