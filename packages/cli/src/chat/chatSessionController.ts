@@ -546,6 +546,8 @@ export function createChatSessionController(
           }
           session.runExitCode = CliExitCode.Success;
           notify({ kind: 'agentFinished' });
+        } else if (session.stopRequested) {
+          session.runExitCode = CliExitCode.Interrupted;
         }
         return resumed;
       } catch (error: unknown) {
