@@ -58,4 +58,4 @@ The agent has produced a bash command and the approval policy isn't `yolo`. Moda
 1. Should the **reason** row appear at all? It's the model speaking from inside the approval payload — useful but extra height.
 2. Color: amber for read-ish commands, red for destructive — is that detectable enough, or should we add an explicit "destructive" badge?
 3. `ctrl-y yolo (this turn)` is risky as a hidden key. Should it require typing the full word `yolo` like dangerous CLI confirmations?
-4. When multiple approvals queue up (per the p-queue serializer), should the modal show `(1 of 3)` so users know more are pending?
+4. When multiple approvals queue up (through the approval FIFO), should the modal show `(1 of 3)` so users know more are pending?
