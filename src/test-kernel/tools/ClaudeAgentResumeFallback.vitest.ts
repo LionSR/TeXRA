@@ -2,10 +2,9 @@
 // caller passes a session_id whose in-memory ClaudeAgentSessions registry
 // entry is gone (extension reload, host crash, or a stale id from an older
 // run), the tool must NOT throw a "not active" ToolError like a raw
-// resumeAgentCliSession() call would. It must mirror codex.ts's pattern —
-// fall through to launching a fresh session that resumes the SDK session
-// from disk via the `resume` option, rather than silently starting a blind
-// new conversation or surfacing an error to the caller.
+// resumeAgentCliSession() call would. The first fallback must claim the id
+// before asynchronous setup, while concurrent calls wait for that loop and
+// then enqueue through the ordinary follow-up path.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
   currentSession: vi.fn(),
   query: vi.fn(),
+  buildClaudeAgentEnv: vi.fn(),
+  enqueueFollowUp: vi.fn(),
 }));
 
 vi.mock('@tools/approval/bashApproval', () => ({
@@ -72,7 +73,7 @@ vi.mock('@tools/claudeAgentConfig', () => ({
   getClaudeAgentPermissionMode: () => 'acceptEdits',
   getClaudeAgentModel: () => 'claude-sonnet-4-6',
   getClaudeAgentEffort: () => 'high',
-  buildClaudeAgentEnv: async () => ({}),
+  buildClaudeAgentEnv: mocks.buildClaudeAgentEnv,
   buildClaudeAgentConfig: () => ({
     agent: 'claude_agent',
     model: 'Claude Code CLI',
@@ -96,6 +97,24 @@ async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
   for (const message of messages) {
     yield message;
   }
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  reject: (reason?: unknown) => void;
+  resolve: (value: T) => void;
+} {
+  let settle: ((value: T) => void) | undefined;
+  let rejectPromise: ((reason?: unknown) => void) | undefined;
+  const promise = new Promise<T>((resolve, reject) => {
+    settle = resolve;
+    rejectPromise = reject;
+  });
+  return {
+    promise,
+    reject: (reason) => rejectPromise?.(reason),
+    resolve: (value) => settle?.(value),
+  };
 }
 
 function fakeLogger(): AgentTrace {
@@ -122,6 +141,8 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
   });
 
   function setupCommonMocks(): void {
+    mocks.startChildRunLoop.mockReset();
+    mocks.buildClaudeAgentEnv.mockReset();
     mocks.requestBashApproval.mockResolvedValue({ accepted: true });
     mocks.getCurrentToolContexts.mockReturnValue({
       runContext: {
@@ -135,9 +156,10 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
     mocks.ensureRunDir.mockResolvedValue(undefined);
+    mocks.buildClaudeAgentEnv.mockResolvedValue({});
     mocks.createChildStream.mockReturnValue(fakeChildStream());
     mocks.currentSession.mockReturnValue({
-      followUps: { acquire: () => ({ enqueue: vi.fn() }) },
+      followUps: { acquire: () => ({ enqueue: mocks.enqueueFollowUp }) },
     });
   }
 
@@ -217,14 +239,121 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
       { strategy: ChildRunStrategy<unknown> },
     ];
 
-    // Pins the eager-registration mechanism itself: onSessionStart must make
-    // the stale session_id observably active synchronously, independent of
-    // whether the first turn has resolved yet.
+    // Pins reservation promotion itself: onSessionStart must make the stale
+    // session_id observably active synchronously, independent of whether the
+    // first turn has resolved yet.
     expect(ClaudeAgentSessions.isActive('stale-session')).toBe(false);
     loopParams.strategy.onSessionStart?.({
       executions: { getAgentHandleByStream: () => undefined } as any,
     } as any);
     expect(ClaudeAgentSessions.isActive('stale-session')).toBe(true);
+  });
+
+  it('launches one fallback loop when concurrent calls use the same stale session_id', async () => {
+    setupCommonMocks();
+    const envStarted = deferred<void>();
+    const envReady = deferred<NodeJS.ProcessEnv>();
+    const executions = { getAgentHandleByStream: () => undefined } as any;
+    let strategy: ChildRunStrategy<unknown> | undefined;
+    mocks.buildClaudeAgentEnv.mockImplementation(() => {
+      envStarted.resolve(undefined);
+      return envReady.promise;
+    });
+    mocks.startChildRunLoop.mockImplementation(
+      (params: { strategy: ChildRunStrategy<unknown> }) => {
+        strategy = params.strategy;
+        params.strategy.onSessionStart?.({ executions } as any);
+      },
+    );
+
+    const tool = new ClaudeAgentTool();
+    const first = tool.call({
+      prompt: 'continue the refactor',
+      session_id: 'stale-session',
+    });
+    await envStarted.promise;
+
+    const second = tool.call({
+      prompt: 'also update the tests',
+      session_id: 'stale-session',
+    });
+    await Promise.resolve();
+
+    expect(mocks.buildClaudeAgentEnv).toHaveBeenCalledTimes(1);
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+
+    envReady.resolve({});
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult.status).toBe('executed');
+    expect(secondResult.summary).toMatch(/Follow-up queued/);
+    expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
+    expect(mocks.enqueueFollowUp).toHaveBeenCalledOnce();
+    expect(mocks.enqueueFollowUp).toHaveBeenCalledWith({
+      text: 'also update the tests',
+    });
+
+    strategy?.onSessionCleanup?.();
+    expect(ClaudeAgentSessions.isActive('stale-session')).toBe(false);
+  });
+
+  it('releases the fallback claim when asynchronous launch setup fails', async () => {
+    setupCommonMocks();
+    mocks.buildClaudeAgentEnv.mockRejectedValue(new Error('env failed'));
+
+    const result = await new ClaudeAgentTool().call({
+      prompt: 'continue the refactor',
+      session_id: 'stale-session',
+    });
+
+    expect(result.status).toBe('error');
+    const releaseClaim = ClaudeAgentSessions.claim('stale-session');
+    expect(releaseClaim).toBeTypeOf('function');
+    releaseClaim?.();
+  });
+
+  it('lets a waiting caller own the fallback after the first launch fails', async () => {
+    setupCommonMocks();
+    const firstEnvStarted = deferred<void>();
+    const firstEnv = deferred<NodeJS.ProcessEnv>();
+    const executions = { getAgentHandleByStream: () => undefined } as any;
+    let strategy: ChildRunStrategy<unknown> | undefined;
+    mocks.buildClaudeAgentEnv
+      .mockImplementationOnce(() => {
+        firstEnvStarted.resolve(undefined);
+        return firstEnv.promise;
+      })
+      .mockResolvedValueOnce({});
+    mocks.startChildRunLoop.mockImplementation(
+      (params: { strategy: ChildRunStrategy<unknown> }) => {
+        strategy = params.strategy;
+        params.strategy.onSessionStart?.({ executions } as any);
+      },
+    );
+
+    const tool = new ClaudeAgentTool();
+    const first = tool.call({
+      prompt: 'first attempt',
+      session_id: 'stale-session',
+    });
+    await firstEnvStarted.promise;
+    const second = tool.call({
+      prompt: 'retry from the waiter',
+      session_id: 'stale-session',
+    });
+    await Promise.resolve();
+
+    firstEnv.reject(new Error('first environment failed'));
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult.status).toBe('error');
+    expect(secondResult.status).toBe('executed');
+    expect(secondResult.summary).toMatch(/Launched Claude Code CLI/);
+    expect(mocks.buildClaudeAgentEnv).toHaveBeenCalledTimes(2);
+    expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
+
+    strategy?.onSessionCleanup?.();
+    expect(ClaudeAgentSessions.isActive('stale-session')).toBe(false);
   });
 
   it('still enqueues a follow-up (no fresh launch) when session_id IS active in the registry', async () => {

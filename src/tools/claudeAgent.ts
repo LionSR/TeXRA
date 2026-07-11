@@ -66,7 +66,7 @@ import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   publishAgentCliStreamUsage,
   launchAgentCliSession,
-  resumeAgentCliSession,
+  resumeOrLaunchAgentCliSession,
   withAgentCliApproval,
 } from './agentCliShared';
 import {
@@ -402,14 +402,9 @@ function startClaudeAgentLoop(params: {
   runtimeHost: AgentRuntimeHost;
   /**
    * Set when this launch is the disk-based fallback for a session_id the
-   * in-memory registry no longer knows about (extension reload, crash):
-   * seeds the first turn's `resume` option so the SDK continues the prior
-   * conversation, and is registered up front (onSessionStart) so the
-   * in-memory guard picks the id back up as soon as possible. This narrows,
-   * but does not fully close, the window for a concurrent call with the same
-   * stale session_id to also observe an inactive registry and start its own
-   * fallback loop before either one's onSessionStart runs — the same
-   * await-before-registration gap codex.ts's registerThread already has.
+   * in-memory registry no longer knows about (extension reload or crash). The
+   * id is claimed synchronously before fallback setup begins, seeds the first
+   * turn's `resume` option, and is promoted to an active entry onSessionStart.
    */
   resumeSessionId: string | undefined;
 }): void {
@@ -430,7 +425,7 @@ function startClaudeAgentLoop(params: {
   const storedSessionIds = new Set<string>();
 
   const registerSession = (sessionId: string, session: SessionHandle): void => {
-    if (ClaudeAgentSessions.isActive(sessionId)) return;
+    if (ClaudeAgentSessions.lookup(sessionId)) return;
     ClaudeAgentSessions.register(sessionId, {
       childStreamId,
       parentStreamId,
@@ -555,39 +550,34 @@ export class ClaudeAgentTool extends defineTool({
     return withAgentCliApproval(
       `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
       (runContext) => {
-        if (
-          input.session_id &&
-          ClaudeAgentSessions.isActive(input.session_id)
-        ) {
-          return resumeAgentCliSession(ClaudeAgentSessions, {
-            id: input.session_id,
-            prompt: input.prompt,
-            callerStreamId: getRunContextStreamId(runContext),
-            labels: {
-              notActiveLabel: 'Claude Code CLI session',
-              idParamName: 'session_id',
-              summaryLabel: 'Claude Code CLI',
-              queuedLabel: 'Claude Code session',
-            },
-          });
-        }
-        // Fall through when the session's in-memory loop is gone (extension
-        // reload, crash): launchClaudeAgentSession resumes via the SDK's
-        // `resume` option from disk.
-        const { streamId, runtimeHost } = requireRunStream(
-          CLAUDE_AGENT_NAME,
-          runContext,
-        );
-        return launchClaudeAgentSession(
-          input,
-          permissionMode,
-          model,
-          effort,
-          streamId,
-          getRunContextExecutionId(runContext),
-          getRunContextWorkingDirectory(runContext),
-          runtimeHost,
-        );
+        return resumeOrLaunchAgentCliSession(ClaudeAgentSessions, {
+          id: input.session_id ?? undefined,
+          prompt: input.prompt,
+          callerStreamId: getRunContextStreamId(runContext),
+          labels: {
+            notActiveLabel: 'Claude Code CLI session',
+            idParamName: 'session_id',
+            summaryLabel: 'Claude Code CLI',
+            queuedLabel: 'Claude Code session',
+          },
+          launch: () => {
+            // A missing in-memory entry denotes a disk-based SDK fallback.
+            const { streamId, runtimeHost } = requireRunStream(
+              CLAUDE_AGENT_NAME,
+              runContext,
+            );
+            return launchClaudeAgentSession(
+              input,
+              permissionMode,
+              model,
+              effort,
+              streamId,
+              getRunContextExecutionId(runContext),
+              getRunContextWorkingDirectory(runContext),
+              runtimeHost,
+            );
+          },
+        });
       },
     );
   }
