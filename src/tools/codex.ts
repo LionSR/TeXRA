@@ -67,7 +67,7 @@ import { CodexThreads } from './agentCliSessionStores';
 import {
   publishAgentCliStreamUsage,
   launchAgentCliSession,
-  resumeAgentCliSession,
+  resumeOrLaunchAgentCliSession,
   withAgentCliApproval,
 } from './agentCliShared';
 import {
@@ -358,6 +358,11 @@ function startCodexLoop(params: {
   executionId: ExecutionId;
   initialPrompt: string;
   runtimeHost: AgentRuntimeHost;
+  /**
+   * The disk-based fallback thread id claimed synchronously in execute(). The
+   * loop promotes that reservation before its first turn starts.
+   */
+  resumeThreadId: string | undefined;
 }): void {
   const {
     thread,
@@ -368,22 +373,21 @@ function startCodexLoop(params: {
     runtimeHost,
   } = params;
   const { childStreamId, logger } = childStream;
+  const fallbackThreadId = params.resumeThreadId;
 
   // Fresh threads don't have thread.id yet; they're registered after the first
-  // turn completes. Resumed threads are registered up front (onSessionStart) so
-  // a second codex call with the same thread_id during the first turn can't
-  // bypass the in-memory guard and start a concurrent loop.
-  const registerThread = (session: SessionHandle): void => {
-    const threadId = thread.id;
-    if (threadId && !CodexThreads.isActive(threadId)) {
-      CodexThreads.register(threadId, {
-        thread,
-        childStreamId,
-        parentStreamId,
-        executionId,
-        executions: session.executions,
-      });
-    }
+  // turn completes. A resumed thread's pre-launch claim is promoted up front.
+  const storedThreadIds = new Set<string>();
+  const registerThread = (threadId: string, session: SessionHandle): void => {
+    if (CodexThreads.lookup(threadId)) return;
+    CodexThreads.register(threadId, {
+      thread,
+      childStreamId,
+      parentStreamId,
+      executionId,
+      executions: session.executions,
+    });
+    storedThreadIds.add(threadId);
   };
 
   // The joined prompt text for whichever turn is currently in flight —
@@ -407,7 +411,9 @@ function startCodexLoop(params: {
 
   const strategy: ChildRunStrategy<RunResult> = {
     stageLabel: 'Codex session',
-    onSessionStart: registerThread,
+    onSessionStart: fallbackThreadId
+      ? (session) => registerThread(fallbackThreadId, session)
+      : undefined,
     launch: (ports, abortController) =>
       runTurn(
         [{ text: initialPrompt, origin: 'user' }],
@@ -417,7 +423,9 @@ function startCodexLoop(params: {
     runTurn,
     isTerminal: () => false,
     getUsage: (turn) => turn.usage,
-    onTurnSuccess: (_turn, session) => registerThread(session),
+    onTurnSuccess: (_turn, session) => {
+      if (thread.id) registerThread(thread.id, session);
+    },
     publishUsage: (turn) => {
       if (turn.usage) {
         publishAgentCliStreamUsage(
@@ -436,8 +444,7 @@ function startCodexLoop(params: {
         { message: toErrorMessage(err) },
       ),
     onSessionCleanup: () => {
-      const threadId = thread.id;
-      if (threadId) CodexThreads.release(threadId);
+      CodexThreads.releaseMany(storedThreadIds);
     },
   };
 
@@ -507,29 +514,31 @@ export class CodexTool extends defineTool({
     return withAgentCliApproval(
       `[codex ${input.sandbox_mode}] ${input.prompt}`,
       (runContext) => {
-        if (input.thread_id && CodexThreads.isActive(input.thread_id)) {
-          return resumeAgentCliSession(CodexThreads, {
-            id: input.thread_id,
-            prompt: input.prompt,
-            callerStreamId: getRunContextStreamId(runContext),
-            labels: {
-              notActiveLabel: 'Codex thread',
-              idParamName: 'thread_id',
-              summaryLabel: 'Codex',
-              queuedLabel: 'Codex thread',
-            },
-          });
-        }
-        // Fall through when the thread's in-memory loop is gone (extension
-        // reload, crash): createCodexThread resumes via the SDK from disk.
-        const { streamId, runtimeHost } = requireRunStream('codex', runContext);
-        return launchCodexSession(
-          input,
-          streamId,
-          getRunContextExecutionId(runContext),
-          getRunContextWorkingDirectory(runContext),
-          runtimeHost,
-        );
+        return resumeOrLaunchAgentCliSession(CodexThreads, {
+          id: input.thread_id ?? undefined,
+          prompt: input.prompt,
+          callerStreamId: getRunContextStreamId(runContext),
+          labels: {
+            notActiveLabel: 'Codex thread',
+            idParamName: 'thread_id',
+            summaryLabel: 'Codex',
+            queuedLabel: 'Codex thread',
+          },
+          launch: () => {
+            // A missing in-memory entry denotes a disk-based SDK fallback.
+            const { streamId, runtimeHost } = requireRunStream(
+              'codex',
+              runContext,
+            );
+            return launchCodexSession(
+              input,
+              streamId,
+              getRunContextExecutionId(runContext),
+              getRunContextWorkingDirectory(runContext),
+              runtimeHost,
+            );
+          },
+        });
       },
     );
   }
@@ -564,6 +573,7 @@ async function launchCodexSession(
         executionId,
         initialPrompt: input.prompt,
         runtimeHost,
+        resumeThreadId: input.thread_id ?? undefined,
       }),
     summary: `Launched Codex: ${preview}`,
     launchedLine: `Codex agent launched (sandbox: ${input.sandbox_mode}).`,
