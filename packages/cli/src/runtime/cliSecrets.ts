@@ -1,6 +1,9 @@
 // Standard library imports
-import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+
+// Third-party imports
+import writeFileAtomic from 'write-file-atomic';
 
 // Local imports - platform
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
@@ -101,12 +104,11 @@ export class CliSecrets implements PlatformSecrets {
     const secretsDir = path.dirname(this.filePath);
     await mkdir(secretsDir, { recursive: true, mode: 0o700 });
     await chmod(secretsDir, 0o700);
-    const tempPath = `${this.filePath}.${process.pid}.tmp`;
-    await writeFile(tempPath, `${JSON.stringify(data, null, 2)}\n`, {
+    // write-file-atomic stages to a sibling temp, fsyncs, and renames over
+    // the target, so a crash mid-write can't leave a truncated secrets file.
+    await writeFileAtomic(this.filePath, `${JSON.stringify(data, null, 2)}\n`, {
       mode: 0o600,
     });
-    await rename(tempPath, this.filePath);
-    await chmod(this.filePath, 0o600);
   }
 }
 
