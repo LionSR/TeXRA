@@ -926,9 +926,14 @@ transcript row:**
 3. **`TraceEmitter.ts:212` and `:300`** — `openStage()`'s
    `defaultStatus = options.defaultStatus ?? END_GROUP_STATUS.STOPPED` and
    `StageHandleImpl.run()`'s catch branch `this.end(END_GROUP_STATUS.ERROR)`.
-   These cover every **non-run** stage (tool groupings, sub-phases) that
-   never carries a `RunOutcome` — success/failure only, no cancellation
-   concept.
+   These defaults are correct for genuinely generic stages (tool groupings
+   and sub-phases), whose local execution is binary: success or failure.
+   They are not an outcome source for cancellable round stages. At the audit
+   baseline, `ToolUseCycleNode.ts` called `roundStage.run()` and only then
+   classified the returned round as completed, failed, or cancelled. Since
+   `run()` closed the stage before that classification, a returned failure or
+   cancellation was mislabelled as `STOPPED` there (and as `completed` after
+   the native-vocabulary cutover).
 
 **A fourth, previously uncatalogued producer** (found in this recount, not in
 the #6982 pins — the two-pin list in the issue body undercounts the surface):
@@ -1025,10 +1030,16 @@ Every real call site already has (or can trivially be given) the actual
   `legacyEndGroupStatusForOutcome` call entirely, no behavior decision needed.
 - `AgentRunLifecycle.ts:369` passes `RUN_OUTCOME.CANCELLED` directly — same
   deletion.
-- `TraceEmitter.ts`'s generic (non-run) stage default becomes
+- `TraceEmitter.ts`'s genuinely generic stage default becomes
   `RunOutcome.COMPLETED` on success, `RunOutcome.FAILED` on the `run()` catch
-  branch. Generic stages have no cancellation concept, so they only ever use
-  2 of the 3 `RunOutcome` members — that is a narrowing, not a new value.
+  branch. These stages have no local cancellation concept, so they only ever
+  use 2 of the 3 `RunOutcome` members — that is a narrowing, not a new value.
+- Cancellable round stages use the existing outcome-aware path: run their
+  body under `StageHandle.within()`, derive the round's `RunOutcome`, and pass
+  it explicitly to `StageHandle.end()` in a `finally` block. In particular,
+  `ToolUseCycleNode` preserves completed, failed, and cancelled as three
+  distinct `GROUP_END` values. `TraceEmitter` remains generic; it does not
+  gain a round-specific callback or a second `run()` interface.
 - `StreamLogStore`'s orphan-sweep default flips from unconditional `ERROR` to
   a caller-supplied `RunOutcome`; `ProgressViewState.endRunningTaskGroups`
   and desktop's `closeRunningTaskGroupsForStreams` already classify
@@ -1298,6 +1309,10 @@ parent issue's own estimate.
 Existing suites already pin group-end/transcript-boundary behavior and are
 the ones step 1 extends (R7 — no new suites):
 
+- `src/test-kernel/agent/followUp/ToolUseProgressEvents.vitest.ts` — pins
+  `ToolUseCycleNode`'s round-stage closure for completed, failed, and
+  cancelled classifications, including the corresponding literal
+  `RunOutcome` in each persisted `GROUP_END` row.
 - `src/test-kernel/agent/runtime/AgentRunLifecycle.vitest.ts` — pins the two
   `stage.end`/direct-transcript-write call sites (§8.1 items 1-2); extend
   with cases asserting the `GROUP_END` row's `data.status` is the literal
