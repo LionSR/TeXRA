@@ -109,7 +109,7 @@ export const agentSelectionPanelStyles: CSSResult = css`
     opacity: var(--opacity-full);
   }
 
-  .agent-list-item-checkbox {
+  .agent-list-item-toggle {
     flex-shrink: 0;
   }
 

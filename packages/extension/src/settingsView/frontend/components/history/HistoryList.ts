@@ -16,7 +16,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import { historyStyles } from '@shared/styles/historyStyles';
 
 // Side-effect imports - register WA icon component
@@ -262,14 +262,13 @@ export class HistoryList extends LitElement {
 
   override render(): TemplateResult {
     if (!this.items.length) {
-      return html`<div class="empty-state">
-        ${waIcon('history')}
-        <p>No history items found.</p>
-        <p class="text-secondary">
-          History is recorded when you run agent commands. Past results will
-          appear here.
-        </p>
-      </div>`;
+      return renderEmptyState({
+        icon: 'history',
+        title: 'No history items found.',
+        body: 'History is recorded when you run agent commands. Past results will appear here.',
+        headingTag: 'h3',
+        className: 'empty-state',
+      });
     }
 
     const hasMatches = (this.state?.totalMatches ?? 0) > 0;
@@ -283,10 +282,12 @@ export class HistoryList extends LitElement {
     // A search that excludes every entry would otherwise render an empty
     // container with no count or message — show explicit no-results feedback.
     if (this.searchTerm && displayItems.length === 0) {
-      return html`<div class="empty-state">
-        ${waIcon('history')}
-        <p>No history items match your search.</p>
-      </div>`;
+      return renderEmptyState({
+        icon: 'history',
+        title: 'No history items match your search.',
+        headingTag: 'h3',
+        className: 'empty-state',
+      });
     }
 
     return html`

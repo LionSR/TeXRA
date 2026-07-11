@@ -136,11 +136,11 @@ export class WorktreeChip extends LitElement {
       }
 
       .diff-added {
-        color: var(--color-success, #1f883d);
+        color: var(--color-success);
       }
 
       .diff-removed {
-        color: var(--color-error, #cf222e);
+        color: var(--color-error);
       }
 
       .ci-icon {

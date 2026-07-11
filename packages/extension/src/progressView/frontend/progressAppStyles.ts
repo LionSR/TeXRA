@@ -76,10 +76,9 @@ export const progressAppStyles = css`
     box-sizing: border-box;
     width: min(720px, 100%);
     padding: var(--wa-space-l, 24px);
-    border: var(--border-thin, 1px) solid
-      var(--color-border, var(--wa-color-surface-border, #d0d7de));
+    border: var(--border-thin, 1px) solid var(--color-border);
     border-radius: var(--border-radius, 6px);
-    background: var(--wa-color-surface-default, #fff);
+    background: var(--wa-color-surface-default);
   }
 
   .progress-empty-panel .empty-state-kicker {
@@ -87,14 +86,14 @@ export const progressAppStyles = css`
     align-items: center;
     gap: var(--wa-space-2xs, 8px);
     margin-bottom: var(--wa-space-xs, 12px);
-    color: var(--color-text-secondary, #57606a);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm, 13px);
     font-weight: var(--font-weight-semibold, 600);
   }
 
   .progress-empty-panel .empty-state-title {
     margin: 0 0 var(--wa-space-2xs, 8px);
-    color: var(--wa-color-text-normal, #24292f);
+    color: var(--wa-color-text-normal);
     font-size: var(--font-size-h2, 1.25em);
     font-weight: var(--font-weight-semibold, 600);
     line-height: var(--line-height-heading, 1.25);
@@ -102,7 +101,7 @@ export const progressAppStyles = css`
 
   .progress-empty-panel .empty-state-body {
     margin: 0;
-    color: var(--color-text-secondary, #57606a);
+    color: var(--color-text-secondary);
     line-height: var(--line-height-normal, 1.5);
   }
 
