@@ -25,6 +25,7 @@ import {
   splitCommitLines,
 } from '@utils/git/commitLogFormat';
 import { isGitRepository } from '@utils/system/isGitRepository';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 const execFileAsync = promisify(execFile);
 
@@ -125,6 +126,9 @@ export function createDesktopGitHost(
             cwd: workspace,
             timeout: GIT_TIMEOUT_MS,
             maxBuffer: MAX_BUFFER_BYTES,
+            // Same extended PATH as the shared isGitRepository probe, so the
+            // gate can't report a repo the log call then fails to read.
+            env: { ...process.env, PATH: extendEnvPath() },
           },
         );
         return {
