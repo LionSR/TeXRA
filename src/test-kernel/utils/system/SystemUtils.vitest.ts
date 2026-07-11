@@ -43,6 +43,14 @@ async function waitForProcessExit(pid: number): Promise<void> {
   throw new Error(`Process ${pid} was still running after abort`);
 }
 
+async function waitForCondition(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (condition()) return;
+    await sleep(20);
+  }
+  throw new Error('Timed out waiting for condition');
+}
+
 describe('executeCommand', () => {
   const tempDirs: string[] = [];
 
@@ -101,6 +109,34 @@ describe('executeCommand', () => {
     assert.equal(result.timedOut, false);
     assert.equal(result.stderr, 'Command aborted by user');
     await waitForProcessExit(childPid);
+  });
+
+  it('aborts array-form commands via execa native cancelSignal', async () => {
+    if (process.platform === 'win32') return;
+
+    const controller = new AbortController();
+    let childPid: number | undefined;
+    const promise = executeCommand(
+      [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
+      {
+        signal: controller.signal,
+        timeout: 60_000,
+        onPid: (pid) => {
+          childPid = pid;
+        },
+      },
+    );
+
+    await waitForCondition(() => childPid !== undefined);
+    assert.ok(childPid && childPid > 0);
+
+    controller.abort();
+    const result = await promise;
+
+    assert.equal(result.success, false);
+    assert.equal(result.timedOut, false);
+    assert.equal(result.stderr, 'Command aborted by user');
+    await waitForProcessExit(childPid!);
   });
 });
 
