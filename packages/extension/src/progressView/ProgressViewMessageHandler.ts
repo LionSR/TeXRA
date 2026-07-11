@@ -531,10 +531,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           handleUserQuestionAction: (message) =>
             this.handleUserQuestionAction(message),
         },
-        externalInquiry: {
-          logWarn: (message, context) =>
-            this.logger.warn(this.channel, message, { data: context }),
-        },
+        externalInquiry: {},
       },
     });
   }
