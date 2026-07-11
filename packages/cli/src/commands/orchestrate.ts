@@ -90,11 +90,14 @@ async function runOrchestration(context: CliContext): Promise<number> {
 
   await notifyCliUpdate(context);
 
-  // Every branch below either mounts the chat TUI directly (chat/preset/
-  // setupAgentOverride) or hands off to runResumeExecution (which also
-  // mounts it) — this is one of the real interactive entry points, so signal
-  // ownership must stay with the TUI once it mounts (see
-  // initInteractiveCliPlatform).
+  // This is one of the real interactive entry points (see
+  // initInteractiveCliPlatform): most branches below mount the chat TUI
+  // directly (chat/preset/setupAgentOverride) or hand off to
+  // runResumeExecution (which also mounts it), at which point the TUI takes
+  // over signal ownership. The `help` and `exit` launcher actions below mount
+  // nothing and return instead — the platform's own handler, still installed
+  // by initInteractiveCliPlatform, covers those the same way it would a
+  // headless command.
   await initInteractiveCliPlatform({
     ...context,
     quietLogs: true,
