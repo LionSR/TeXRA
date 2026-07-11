@@ -1,4 +1,5 @@
 // Third-party imports
+import { DEFAULT_MODEL_CAPABILITIES } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -7,7 +8,7 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
-import { TraceEmitter } from '@agent/trace';
+import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -20,7 +21,7 @@ import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolU
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import {
   MESSAGE_TYPES,
   STREAM_PHASE,
@@ -35,6 +36,60 @@ import {
   withTestRunContext,
 } from '../progressTestUtils';
 
+type WaitNodeModelHandlerOverrides = Omit<
+  Partial<ToolUseServices['modelHandler']>,
+  'capabilities'
+> & {
+  capabilities?: Partial<ToolUseServices['modelHandler']['capabilities']>;
+};
+
+type WaitNodeServiceOverrides = Partial<
+  Pick<
+    ToolUseServices,
+    | 'checkInterruption'
+    | 'isSubagent'
+    | 'onFollowUpConsumed'
+    | 'onIdle'
+    | 'streamStatus'
+  >
+> & {
+  fileService?: Partial<ToolUseServices['fileService']>;
+  logger?: AgentTrace;
+  modelHandler?: WaitNodeModelHandlerOverrides;
+  session?: Partial<ToolUseServices['session']>;
+};
+
+function createWaitNodeServices(
+  overrides: WaitNodeServiceOverrides = {},
+): ToolUseServices {
+  const { fileService, modelHandler, session, ...topLevel } = overrides;
+  const { capabilities, ...modelHandlerOverrides } = modelHandler ?? {};
+  return {
+    checkInterruption: () => false,
+    fileService: {
+      createLocation: (filePath: string) => ({ absolutePath: filePath }),
+      ...fileService,
+    },
+    logger: new TraceEmitter(),
+    modelHandler: {
+      capabilities: {
+        ...DEFAULT_MODEL_CAPABILITIES,
+        ...capabilities,
+      },
+      createUserFollowUpMessages: vi.fn(async () => []),
+      extractAssistantText: () => undefined,
+      ...modelHandlerOverrides,
+    },
+    session: {
+      hasQueuedFollowUp: () => false,
+      waitForFollowUp: vi.fn(async () => null),
+      ...session,
+    },
+    streamStatus: new StreamStatusMachine(),
+    ...topLevel,
+  } as unknown as ToolUseServices;
+}
+
 describe('ToolUseWaitNode', () => {
   it('always suspends a subagent cycle at WAITING, carrying its turn facts', async () => {
     const shared: ToolUseRunShared = {
@@ -42,26 +97,15 @@ describe('ToolUseWaitNode', () => {
       shouldSkipCycle: false,
       stateSlices: null,
     };
-    const memoryMisses: AttachedMemoryMiss[] = [
-      { path: '/memories/missing.md', reason: 'not found' },
-    ];
     const runtimeHost = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
 
-    const services = {
-      attachedMemoryMisses: memoryMisses,
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       isSubagent: true,
-      logger: { emit: vi.fn(), error: vi.fn() },
-      modelHandler: { extractAssistantText: () => undefined },
-      runtimeHost,
       session: {
-        hasQueuedFollowUp: () => false,
         waitForFollowUp,
       },
-      streamStatus: new StreamStatusMachine(),
-      streamId: 'test-stream',
-    } as unknown as ToolUseServices;
+    });
 
     const node = new ToolUseWaitNode().setServices(services);
 
@@ -101,19 +145,13 @@ describe('ToolUseWaitNode', () => {
     const runtimeHost = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
 
-    const services = {
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       isSubagent: true,
-      logger: { emit: vi.fn(), error: vi.fn() },
-      modelHandler: { extractAssistantText: () => undefined },
-      runtimeHost,
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp,
       },
-      streamStatus: new StreamStatusMachine(),
-      streamId: 'test-stream',
-    } as unknown as ToolUseServices;
+    });
 
     const node = new ToolUseWaitNode().setServices(services);
     const prep = await node.prep(shared);
@@ -134,9 +172,10 @@ describe('ToolUseWaitNode', () => {
     const runtimeHost = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
     const createUserFollowUpMessages = vi.fn(
-      async (_messages: unknown[], text: string) => [
-        { role: 'user', content: text },
-      ],
+      async (
+        _messages: ProviderMessage[],
+        text: string,
+      ): Promise<ProviderMessage[]> => [{ role: 'user', content: text }],
     );
     const onFollowUpConsumed = vi.fn();
     const batch = [
@@ -146,23 +185,16 @@ describe('ToolUseWaitNode', () => {
         origin: 'user' as const,
       },
     ];
-    const services = {
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       isSubagent: true,
-      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
       modelHandler: {
         createUserFollowUpMessages,
-        extractAssistantText: () => undefined,
       },
       onFollowUpConsumed,
-      runtimeHost,
       session: {
-        hasQueuedFollowUp: () => false,
         waitForFollowUp,
       },
-      streamStatus: new StreamStatusMachine(),
-      streamId: 'test-stream',
-    } as unknown as ToolUseServices;
+    });
     const node = new ToolUseWaitNode(batch).setServices(services);
     const prep = await node.prep(shared);
 
@@ -208,17 +240,9 @@ describe('ToolUseWaitNode', () => {
     };
     const runtimeHost = { emit: vi.fn() };
 
-    const services = {
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       isSubagent: true,
-      logger: { emit: vi.fn(), error: vi.fn() },
-      modelHandler: { extractAssistantText: () => undefined },
-      runtimeHost,
-      session: { hasQueuedFollowUp: () => false, waitForFollowUp: vi.fn() },
-      stopAfterCycle: true,
-      streamStatus: new StreamStatusMachine(),
-      streamId: 'test-stream',
-    } as unknown as ToolUseServices;
+    });
 
     const node = new ToolUseWaitNode().setServices(services);
     const prep = await node.prep(shared);
@@ -244,16 +268,10 @@ describe('ToolUseWaitNode', () => {
     };
     const runtimeHost = { emit: vi.fn() };
 
-    const services = {
+    const services = createWaitNodeServices({
       checkInterruption: () => true,
       isSubagent: true,
-      logger: { emit: vi.fn(), error: vi.fn() },
-      modelHandler: { extractAssistantText: () => undefined },
-      runtimeHost,
-      session: { hasQueuedFollowUp: () => false, waitForFollowUp: vi.fn() },
-      streamStatus: new StreamStatusMachine(),
-      streamId: 'test-stream',
-    } as unknown as ToolUseServices;
+    });
 
     const node = new ToolUseWaitNode().setServices(services);
 
@@ -280,23 +298,17 @@ describe('ToolUseWaitNode', () => {
     const runtimeHost = { emit: vi.fn() };
     let waitCalls = 0;
 
-    const services = {
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       isSubagent: false,
-      logger: { emit: vi.fn(), error: vi.fn() },
       modelHandler: { extractAssistantText: () => 'partial response' },
       onIdle,
-      runtimeHost,
       session: {
-        hasQueuedFollowUp: () => false,
         waitForFollowUp: async () => {
           waitCalls += 1;
           return null;
         },
       },
-      streamStatus: new StreamStatusMachine(),
-      streamId: 'test-stream',
-    } as unknown as ToolUseServices;
+    });
 
     const node = new ToolUseWaitNode().setServices(services);
     const prep = await node.prep(shared);
@@ -317,13 +329,10 @@ describe('ToolUseWaitNode', () => {
     const warn = vi.fn();
     const addMediaToUserMessage = vi.fn(async () => []);
     const runtimeHost = { emit: vi.fn() };
+    const logger = Object.assign(new TraceEmitter(), { info, warn });
 
-    const services = {
-      checkInterruption: () => false,
-      fileService: {
-        createLocation: (filePath: string) => ({ absolutePath: filePath }),
-      },
-      logger: { emit: vi.fn(), info, warn },
+    const services = createWaitNodeServices({
+      logger,
       modelHandler: {
         addMediaToUserMessage,
         capabilities: {
@@ -332,10 +341,7 @@ describe('ToolUseWaitNode', () => {
         },
         createUserFollowUpMessages: vi.fn(async () => []),
       },
-      runtimeHost,
-      streamStatus: new StreamStatusMachine(),
-      streamId: 'test-stream',
-    } as unknown as ToolUseServices;
+    });
 
     const node = new ToolUseWaitNode().setServices(services);
     const transition = await withTestRunContext(
@@ -383,25 +389,22 @@ describe('ToolUseWaitNode', () => {
     };
     const info = vi.fn();
     const runtimeHost = { emit: vi.fn() };
+    const logger = Object.assign(new TraceEmitter(), {
+      info,
+      warn: vi.fn(),
+    });
 
-    const services = {
-      checkInterruption: () => false,
-      fileService: {
-        createLocation: (filePath: string) => ({ absolutePath: filePath }),
-      },
-      logger: { emit: vi.fn(), info, warn: vi.fn() },
+    const services = createWaitNodeServices({
+      logger,
       modelHandler: {
-        addMediaToUserMessage: vi.fn(async () => ['image']),
+        addMediaToUserMessage: vi.fn(async () => ['image' as const]),
         capabilities: {
           supportsNativeAudio: false,
           supportsVision: true,
         },
         createUserFollowUpMessages: vi.fn(async () => []),
       },
-      runtimeHost,
-      streamStatus: new StreamStatusMachine(),
-      streamId: 'test-stream',
-    } as unknown as ToolUseServices;
+    });
 
     const node = new ToolUseWaitNode().setServices(services);
     await withTestRunContext(runtimeHost, 'test-stream', () =>
@@ -451,20 +454,13 @@ describe('ToolUseWaitNode', () => {
       hub.emit({ scope: 'run', streamId, event }),
     );
     const waitForFollowUp = vi.fn();
-    const services = {
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       isSubagent: false,
       logger,
-      modelHandler: { extractAssistantText: () => undefined },
-      runtimeHost,
       session: {
-        hasQueuedFollowUp: () => false,
         waitForFollowUp,
       },
-      stopAfterCycle: true,
-      streamId,
-      streamStatus: new StreamStatusMachine(),
-    } as unknown as ToolUseServices;
+    });
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
@@ -517,7 +513,10 @@ describe('ToolUseWaitNode', () => {
       stateSlices: null,
     };
     const createUserFollowUpMessages = vi.fn(
-      async (messages: unknown[], userMessage: string) => [
+      async (
+        messages: ProviderMessage[],
+        userMessage: string,
+      ): Promise<ProviderMessage[]> => [
         ...messages,
         { role: 'user', content: userMessage },
       ],
@@ -526,23 +525,17 @@ describe('ToolUseWaitNode', () => {
     const waitForFollowUp = vi.fn();
     const streamStatus = new StreamStatusMachine();
     const runtimeHost = { emit: vi.fn() };
-    const services = {
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       isSubagent: false,
-      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
       modelHandler: {
         createUserFollowUpMessages,
-        extractAssistantText: () => undefined,
       },
       onFollowUpConsumed,
-      runtimeHost,
       session: {
-        hasQueuedFollowUp: () => false,
         waitForFollowUp,
       },
-      streamId,
       streamStatus,
-    } as unknown as ToolUseServices;
+    });
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
@@ -604,29 +597,25 @@ describe('ToolUseWaitNode', () => {
       stateSlices: null,
     };
     const createUserFollowUpMessages = vi.fn(
-      async (messages: unknown[], userMessage: string) => [
+      async (
+        messages: ProviderMessage[],
+        userMessage: string,
+      ): Promise<ProviderMessage[]> => [
         ...messages,
         { role: 'user', content: userMessage },
       ],
     );
     const waitForFollowUp = vi.fn(async () => null);
     const runtimeHost = { emit: vi.fn() };
-    const services = {
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       isSubagent: false,
-      logger: { emit: vi.fn(), error: vi.fn(), info: vi.fn() },
       modelHandler: {
         createUserFollowUpMessages,
-        extractAssistantText: () => undefined,
       },
-      runtimeHost,
       session: {
-        hasQueuedFollowUp: () => false,
         waitForFollowUp,
       },
-      streamId,
-      streamStatus: new StreamStatusMachine(),
-    } as unknown as ToolUseServices;
+    });
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
@@ -678,22 +667,16 @@ describe('ToolUseWaitNode', () => {
     await GoalStore.start(streamId, 'Keep going autonomously.');
 
     const waitForFollowUp = vi.fn(async () => ({
-      items: [{ text: 'user correction', origin: 'user' }],
+      items: [{ text: 'user correction', origin: 'user' as const }],
       synthetic: false,
     }));
     const runtimeHost = { emit: vi.fn() };
-    const services = {
-      checkInterruption: () => false,
-      logger: { emit: vi.fn(), error: vi.fn() },
-      modelHandler: { extractAssistantText: () => undefined },
-      runtimeHost,
+    const services = createWaitNodeServices({
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp,
       },
-      streamId,
-      streamStatus: new StreamStatusMachine(),
-    } as unknown as ToolUseServices;
+    });
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
@@ -730,19 +713,12 @@ describe('ToolUseWaitNode', () => {
 
     const waitForFollowUp = vi.fn(async () => null);
     const runtimeHost = { emit: vi.fn() };
-    const services = {
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       isSubagent: true,
-      logger: { emit: vi.fn(), error: vi.fn() },
-      modelHandler: { extractAssistantText: () => undefined },
-      runtimeHost,
       session: {
-        hasQueuedFollowUp: () => false,
         waitForFollowUp,
       },
-      streamId,
-      streamStatus: new StreamStatusMachine(),
-    } as unknown as ToolUseServices;
+    });
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
@@ -772,24 +748,18 @@ describe('ToolUseWaitNode', () => {
     };
     const createUserFollowUpMessages = vi.fn(async () => []);
     const runtimeHost = { emit: vi.fn() };
-    const services = {
-      checkInterruption: () => false,
-      logger: { emit: vi.fn(), error: vi.fn() },
+    const services = createWaitNodeServices({
       modelHandler: {
         createUserFollowUpMessages,
-        extractAssistantText: () => undefined,
       },
-      runtimeHost,
       session: {
-        hasQueuedFollowUp: () => false,
         waitForFollowUp: async () => ({
           items: [{ text: 'continue', origin: 'synthetic' }],
           synthetic: true,
         }),
       },
-      streamId,
       streamStatus,
-    } as unknown as ToolUseServices;
+    });
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
@@ -837,19 +807,14 @@ describe('ToolUseWaitNode', () => {
       events.emit({ scope: 'run', streamId, event });
     });
     const waitForFollowUp = vi.fn(async () => null);
-    const services = {
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       isSubagent: false,
       logger,
-      modelHandler: { extractAssistantText: () => undefined },
-      runtimeHost,
       session: {
-        hasQueuedFollowUp: () => false,
         waitForFollowUp,
       },
-      streamId,
       streamStatus,
-    } as unknown as ToolUseServices;
+    });
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
@@ -899,7 +864,10 @@ describe('ToolUseWaitNode', () => {
       },
     };
     const createUserFollowUpMessages = vi.fn(
-      async (messages: unknown[], userMessage: string) => [
+      async (
+        messages: ProviderMessage[],
+        userMessage: string,
+      ): Promise<ProviderMessage[]> => [
         ...messages,
         { role: 'user', content: userMessage },
       ],
@@ -919,15 +887,12 @@ describe('ToolUseWaitNode', () => {
       events.emit({ scope: 'run', streamId, event });
     });
     const streamStatus = new StreamStatusMachine();
-    const services = {
-      checkInterruption: () => false,
+    const services = createWaitNodeServices({
       logger,
       modelHandler: {
         capabilities: { supportsVision: true },
         createUserFollowUpMessages,
-        extractAssistantText: () => undefined,
       },
-      runtimeHost,
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp: async () => ({
@@ -945,8 +910,7 @@ describe('ToolUseWaitNode', () => {
         }),
       },
       streamStatus,
-      streamId,
-    } as unknown as ToolUseServices;
+    });
     const node = new ToolUseWaitNode().setServices(services);
     seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.WAITING);
 
