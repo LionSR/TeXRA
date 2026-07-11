@@ -86,8 +86,8 @@ Implements components per 10-architecture §§ Input component, Terminal capabil
 ### Phase 2 — Tool & approval rendering (3 d)
 
 - `<ToolUseCard>`.
-- Replace `installCliApprovalHandlers` with the typed TUI installer per [10-architecture § Approvals](./10-architecture.md#9-approvals-promise-returning-launchers-with-a-concurrency-1-queue). Each `launchX(payload)` returns `Promise<Decision>`; the approval `p-queue` (`concurrency: 1`) serializes them.
-- All six approval modals dispatched off the typed queue.
+- Replace `installCliApprovalHandlers` with the typed TUI installer per [10-architecture § Approvals](./10-architecture.md#9-approvals-promise-returning-launchers-with-a-single-owner-fifo). Each `launchX(payload)` returns `Promise<Decision>`; one explicit FIFO serializes them and projects its head into the modal signal.
+- All seven approval/request modals dispatched off the typed queue.
 - `<DiffView>` using `diff` + `cli-highlight`.
 - Resolver wiring unchanged.
 - **Audit** (prerequisite for closing the phase): confirm whether subagent and main-stream approvals can interleave; document the finding in the PR description. Either outcome leaves the API identical.
