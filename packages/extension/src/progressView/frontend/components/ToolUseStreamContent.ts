@@ -6,6 +6,7 @@ import { customElement } from 'lit/decorators.js';
 
 // Local imports - progress view
 import { ProgressEvents } from '../events';
+import { getFollowUpInputTransientState } from '../followUpInputState';
 import { BaseStreamContent } from './BaseStreamContent';
 import { renderStreamHeader } from './streamHeaderView';
 import type { ToolUseStreamState } from '../store';
@@ -73,6 +74,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
       <follow-up-input
         .visible=${true}
         .streamId=${streamInfo.name}
+        .transientState=${getFollowUpInputTransientState(streamInfo.name)}
         .value=${currentState.ui.followUpText}
         .queuedMessages=${currentState.queuedFollowUps}
         .shouldFocus=${currentState.ui.shouldFocusFollowUp}

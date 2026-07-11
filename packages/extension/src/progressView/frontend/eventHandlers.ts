@@ -10,10 +10,10 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
 // Local imports - progress view
-import { firstStreamId, getStreamState, isToolUseState } from './store';
+import { firstStreamId, isToolUseState } from './store';
+import { deleteFollowUpInputTransientState } from './followUpInputState';
 import { addResolvedProposalId, removePrompt } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './components/ExternalInquiryPanel';
@@ -21,8 +21,10 @@ import {
   APPROVE_SESSION_ACTION,
   APPROVE_SUPER_YOLO_ACTION,
   type FilterEventDetail,
+  type FollowUpClearDetail,
   type FollowupCommandDetail,
   type FollowUpChangeDetail,
+  type FollowUpSendDetail,
   type PermissionActionDetail,
   type ProgressFileActionDetail,
   type StreamEventDetail,
@@ -89,6 +91,7 @@ export function handleStreamDelete(
   ctx: FrontendEventHandlerContext,
 ): void {
   const streamId = event.detail.streamId;
+  deleteFollowUpInputTransientState(streamId);
 
   // Optimistic removal: apply delete locally before notifying backend
   ctx.setState((prev) =>
@@ -159,30 +162,31 @@ export function handleFollowUpChange(
   event: CustomEvent<FollowUpChangeDetail>,
   ctx: FrontendEventHandlerContext,
 ): void {
-  const streamId = ctx.getState().activeStreamId;
-  if (!streamId) return;
+  const { mode = 'replace', streamId, value } = event.detail;
+  if (!ctx.getState().streamStates.has(streamId)) return;
   updateToolUseState(ctx, streamId, (prev) =>
     create(prev, (draft) => {
-      draft.ui.followUpText = event.detail.value;
+      if (mode === 'replace') {
+        draft.ui.followUpText = value;
+        return;
+      }
+      if (!value) return;
+      const current = prev.ui.followUpText;
+      const separator =
+        current && !/\s$/.test(current) && !/^\s/.test(value) ? ' ' : '';
+      draft.ui.followUpText = `${current}${separator}${value}`;
     }),
   );
 }
 
-/** Resolve the active tool-use stream's trimmed follow-up text, or null if unavailable. */
-function getActiveFollowUpText(
+/** Resolve one tool-use stream's trimmed follow-up text, or null if unavailable. */
+function getFollowUpText(
   ctx: FrontendEventHandlerContext,
+  streamId: StreamTabId,
 ): { streamId: StreamTabId; text: string } | null {
   const state = ctx.getState();
-  const streamId = state.activeStreamId;
-  if (!streamId) return null;
-
-  const streamInfo = state.streamById.get(streamId);
-  const streamState = getStreamState(
-    state,
-    streamId,
-    streamInfo?.agentCategory,
-  );
-  if (!isToolUseState(streamState)) return null;
+  const streamState = state.streamStates.get(streamId);
+  if (!streamState || !isToolUseState(streamState)) return null;
 
   const text = streamState.ui.followUpText?.trim() ?? '';
   if (!text) return null;
@@ -190,16 +194,24 @@ function getActiveFollowUpText(
   return { streamId, text };
 }
 
-export function handleFollowUpSend(
+/** Resolve the active tool-use stream's trimmed follow-up text. */
+function getActiveFollowUpText(
   ctx: FrontendEventHandlerContext,
-  images: readonly ExtractedClipboardImage[] = [],
+): { streamId: StreamTabId; text: string } | null {
+  const streamId = ctx.getState().activeStreamId;
+  return streamId ? getFollowUpText(ctx, streamId) : null;
+}
+
+export function handleFollowUpSend(
+  event: CustomEvent<FollowUpSendDetail>,
+  ctx: FrontendEventHandlerContext,
 ): void {
-  const result = getActiveFollowUpText(ctx);
+  const result = getFollowUpText(ctx, event.detail.streamId);
   if (!result) return;
 
   // Orphan gate: only attach images whose [fileName] token survives in the
   // submitted text (the user may have deleted a pasted chip before sending).
-  const attached = images.filter((img) =>
+  const attached = event.detail.images.filter((img) =>
     result.text.includes(`[${img.fileName}]`),
   );
 
@@ -225,9 +237,12 @@ export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
   });
 }
 
-export function handleFollowUpClear(ctx: FrontendEventHandlerContext): void {
-  const streamId = ctx.getState().activeStreamId;
-  if (!streamId) return;
+export function handleFollowUpClear(
+  event: CustomEvent<FollowUpClearDetail>,
+  ctx: FrontendEventHandlerContext,
+): void {
+  const streamId = event.detail.streamId;
+  if (!ctx.getState().streamStates.has(streamId)) return;
   updateToolUseState(ctx, streamId, (prev) =>
     create(prev, (draft) => {
       draft.ui.followUpText = '';
