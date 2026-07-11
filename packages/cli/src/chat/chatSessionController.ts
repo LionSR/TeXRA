@@ -48,6 +48,7 @@ import {
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import {
   EXECUTION_STATUS,
+  STREAM_STATUS,
   type ExecutionId,
   type StreamTabId,
   sumUsageStats,
@@ -509,6 +510,7 @@ export function createChatSessionController(
         session.runExitCode = CliExitCode.Success;
         publishChatTuiRootRunStartAvailability(session);
 
+        let resumedToWaiting = false;
         const resumed = await setCliHelperModel(currentModel).then(() =>
           resolveAndResumeStream(streamId, {
             runtimeHost,
@@ -526,6 +528,9 @@ export function createChatSessionController(
                 runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
                 allowWaitingResult: true,
                 isCancellationRequested: () => session.stopRequested,
+                onResult: (result) => {
+                  resumedToWaiting = result.outcome === STREAM_STATUS.WAITING;
+                },
                 onError: reportRunFailure,
               }),
             executeWorkflow: async () => {
@@ -548,7 +553,9 @@ export function createChatSessionController(
             projectStreamTranscript(session.streamId, { finalize: true });
           }
           session.runExitCode = CliExitCode.Success;
-          notify({ kind: 'agentFinished' });
+          if (!resumedToWaiting) {
+            notify({ kind: 'agentFinished' });
+          }
         } else if (session.stopRequested) {
           session.runExitCode = CliExitCode.Interrupted;
         }
