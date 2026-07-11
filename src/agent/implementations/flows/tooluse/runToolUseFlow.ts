@@ -326,6 +326,17 @@ export async function runToolUseFlow<C = unknown>(
     input.onModelChanged?.(nextHandler, model);
   };
 
+  // A resume's setupSession (see `resumeQueuedToolUseSnapshot`) re-appends
+  // its drained follow-up batch into `sessionLifecycle` from inside
+  // `onSetup` below, before the flow is interruptible. An async
+  // cancellation racing in during that window (through the recovery read,
+  // see the `checkInterruption()` guards below) must not erase that batch
+  // -- `flowContext.interrupt()` uses the queue-preserving variant for
+  // exactly this window, matching `preserveResumeRecord`'s finally guard.
+  // Cleared once the flow has passed both guards and moved into real work,
+  // so a later mid-run cancellation keeps the normal destructive clear.
+  let inResumeStartupWindow = input.resumeSnapshot !== undefined;
+
   const flowContext: ToolUseFlowContext = {
     ownerSession: runSession,
     session: sessionLifecycle,
@@ -339,7 +350,11 @@ export async function runToolUseFlow<C = unknown>(
     interrupt(): void {
       onInterrupt?.();
       runSession.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-      sessionLifecycle.interrupt();
+      if (inResumeStartupWindow) {
+        sessionLifecycle.interruptPreservingQueue();
+      } else {
+        sessionLifecycle.interrupt();
+      }
     },
     requestImmediateCompaction(): void {
       services.modelHandler.requestCompaction();
@@ -396,6 +411,10 @@ export async function runToolUseFlow<C = unknown>(
       preserveResumeRecord = input.resumeSnapshot !== undefined;
       return { outcome };
     }
+    // Past both startup cancellation guards: any later interrupt() is a
+    // genuine mid-run cancellation, so go back to the normal destructive
+    // queue clear instead of the resume-startup rescue above.
+    inResumeStartupWindow = false;
 
     if (flowRecord?.shared) {
       logger.debug('Resuming tool-use flow from persistence');
@@ -587,7 +606,18 @@ export async function runToolUseFlow<C = unknown>(
     // live queue instance is what a genuine kill (see ExecutionRegistry.
     // terminate's waiting-cleanup path) or resume drains instead of a
     // `dispose()` here silently discarding it.
-    if (outcome !== STREAM_PHASE.WAITING) {
+    //
+    // Resume-startup cancellation (preserveResumeRecord): a resume's
+    // setupSession re-appends its drained follow-up batch into this same
+    // live queue before the flow is interruptible. `flowContext.interrupt()`
+    // uses `sessionLifecycle.interruptPreservingQueue()` instead of
+    // `interrupt()` for exactly this window (see its call site above), so
+    // that batch survives a cancellation landing while the recovery read is
+    // pending. Skipping `dispose()`/release here too keeps it intact for the
+    // next `resumeQueuedToolUseSnapshot` call's `drainItems()` instead of
+    // discarding the user's queued input alongside the preserved flow
+    // record.
+    if (outcome !== STREAM_PHASE.WAITING && !preserveResumeRecord) {
       sessionLifecycle.dispose();
     }
     runSession.interactions.cancel({ streamId, cause: 'Run ended.' });
