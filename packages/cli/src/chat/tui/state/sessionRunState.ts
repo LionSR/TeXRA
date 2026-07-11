@@ -65,6 +65,28 @@ export function markChatTuiRunCompleted(
   publishChatTuiRootRunStartAvailability(session);
 }
 
+/**
+ * Atomically check-and-claim the root-run slot: fuses
+ * {@link chatTuiCanStartRootRun} and {@link markChatTuiRunPending} into one
+ * synchronous call so no caller can observe — or race on — a window between
+ * the check and the claim. Every root-run entry point that awaits *before*
+ * it would otherwise claim (resume, follow-up-wake resume) MUST call this as
+ * its first statement, before any `await`, so the claim happens before the
+ * caller can be suspended and a concurrent entry point can slip in and claim
+ * the same slot. `startRootRun` claims via `markChatTuiRunPending` directly
+ * instead — it never suspends before claiming, so it has no check-then-await
+ * window for this primitive to close.
+ */
+export function tryClaimRootRunSlot(
+  session: ClearableTuiSessionState,
+  runPromise: Promise<void>,
+  runtimeHost?: AgentRuntimeHost,
+): boolean {
+  if (!chatTuiCanStartRootRun(session)) return false;
+  markChatTuiRunPending(session, runPromise, runtimeHost);
+  return true;
+}
+
 export function chatTuiCanInterruptActiveRun(
   session: InterruptibleTuiSessionState,
 ): boolean {
