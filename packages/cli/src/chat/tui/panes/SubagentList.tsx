@@ -206,7 +206,7 @@ export function SubagentList(
             tail={processOutput?.get(child.executionId)}
           />
         ))}
-        {hiddenCount > 0 ? (
+        {hiddenCount > 0 && rows.length < props.maxRows ? (
           <Text
             dimColor
             wrap="truncate-end"
