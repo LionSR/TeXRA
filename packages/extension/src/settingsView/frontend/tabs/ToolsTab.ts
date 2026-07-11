@@ -117,7 +117,7 @@ export class ToolsTab extends LitElement {
 
       .tools-health-ring__track {
         fill: none;
-        stroke: var(--wa-color-surface-border, rgba(128, 128, 128, 0.25));
+        stroke: var(--wa-color-surface-border);
         stroke-width: 4;
       }
 
