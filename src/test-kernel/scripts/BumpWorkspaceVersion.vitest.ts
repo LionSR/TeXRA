@@ -1,12 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { parse as parseYaml } from 'yaml';
 
 const repoRoot = process.cwd();
 const scriptPath = path.join(repoRoot, 'scripts/bump-workspace-version.mjs');
+const workflowPath = path.join(repoRoot, '.github/workflows/version-bump.yml');
 const manifestPaths = [
   'package.json',
   'packages/cli/package.json',
@@ -66,5 +68,25 @@ describe('bump-workspace-version script', () => {
     expect(result.stderr).toContain(
       'Release tag must be MAJOR.MINOR.PATCH, with an optional leading v or cli-v prefix.',
     );
+  });
+});
+
+describe('version-bump workflow', () => {
+  it('installs frozen dependencies before running the version bump script', async () => {
+    const workflow = parseYaml(await readFile(workflowPath, 'utf8')) as {
+      jobs?: Record<string, { steps?: Array<{ name?: string; run?: string }> }>;
+    };
+    const steps = workflow.jobs?.['bump-version']?.steps ?? [];
+    const installIndex = steps.findIndex(
+      (step) =>
+        step.name === 'Install dependencies' &&
+        step.run?.trim() === 'pnpm install --frozen-lockfile',
+    );
+    const bumpIndex = steps.findIndex((step) =>
+      step.run?.includes('node scripts/bump-workspace-version.mjs'),
+    );
+
+    expect(installIndex).toBeGreaterThanOrEqual(0);
+    expect(bumpIndex).toBeGreaterThan(installIndex);
   });
 });
