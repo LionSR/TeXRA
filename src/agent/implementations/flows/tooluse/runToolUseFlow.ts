@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 // Third-party imports
 import { MODEL_CONFIGS } from 'llm-zoo';
 
@@ -408,15 +410,26 @@ export async function runToolUseFlow<C = unknown>(
         // re-deriving them; `migrateSharedState` preserves pass-through fields
         // the snapshot's narrower contract doesn't carry (systemPrompt,
         // lastError, ...) so they survive this self-heal write.
-        flowRecord.shared = buildResumedSharedFromSnapshot(
+        const resumedShared = buildResumedSharedFromSnapshot(
           migrationResult.data,
           input.resumeSnapshot,
           compatibilityKey,
         );
-        await kv.write(
-          flowKey(executionId),
-          stampFlowRecordSchemaVersion(flowRecord),
-        );
+        // `resumeToolUseFromSnapshot` passes `resumeSnapshot` on every
+        // native-subagent turn, so this self-heal write must skip whenever
+        // the record was already canonical: no legacy shape to migrate, and
+        // the snapshot-derived fields match what is already persisted.
+        // Otherwise this becomes a `StorageFSKVStore` disk write per turn.
+        const writeNeeded =
+          migrationResult.migrated ||
+          !isDeepStrictEqual(migrationResult.data, resumedShared);
+        flowRecord.shared = resumedShared;
+        if (writeNeeded) {
+          await kv.write(
+            flowKey(executionId),
+            stampFlowRecordSchemaVersion(flowRecord),
+          );
+        }
       } else {
         // Defensive fallback only: no resumeSnapshot means the resume
         // boundary above was never consulted for this call (e.g. a fresh
