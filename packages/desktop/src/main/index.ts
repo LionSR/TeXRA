@@ -224,7 +224,12 @@ async function showSetupCommandResult(
 async function showCopyCommandDialog(
   window: BrowserWindow,
   command: string,
-  options: { type: 'info' | 'warning'; message: string; detail: string; defaultId: number },
+  options: {
+    type: 'info' | 'warning';
+    message: string;
+    detail: string;
+    defaultId: number;
+  },
 ): Promise<void> {
   const response = await dialog.showMessageBox(window, {
     type: options.type,
