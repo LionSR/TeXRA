@@ -1,56 +1,67 @@
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+
 /**
  * Model provider decorator configuration - single source of truth for provider indicators.
  * Used in model dropdowns to visually distinguish different AI providers.
+ *
+ * Icon choices (FA-solid, via the texra wa-icon resolver — see #8157): free-solid
+ * ships no brand marks, so providers with a name-adjacent glyph get one
+ * (DeepSeek's mascot is a whale -> closest free-solid analog `fish`; Moonshot ->
+ * `moon`; OpenAI's mark is a hexagonal knot -> `hexagon`; Google's model line is
+ * "Gemini" -> `gem`; GitHub Copilot flies alongside you -> `plane`; Alibaba's
+ * prior glyph was a comet -> `meteor`). Everyone else (Anthropic, xAI, and the
+ * "other" fallback) gets a neutral glyph from the same set instead of a forced,
+ * unrelated metaphor.
  */
 export interface ProviderDecorator {
-  unicode: string;
+  icon: TeXRAIconName;
   label: string;
   hint: string;
 }
 
 const MODEL_PROVIDER_DECORATORS: Record<string, ProviderDecorator> = {
   anthropic: {
-    unicode: '\u{1D538}', // 𝔸 - Double-struck A
+    icon: 'brain',
     label: 'Anthropic',
     hint: 'Anthropic Claude models',
   },
   openai: {
-    unicode: '\u2B21', // ⬡ - Hexagon
+    icon: 'hexagon',
     label: 'OpenAI',
     hint: 'OpenAI GPT models',
   },
   google: {
-    unicode: '\u{1D53E}', // 𝔾 - Double-struck G
+    icon: 'gem',
     label: 'Google',
     hint: 'Google Gemini models',
   },
   xai: {
-    unicode: '\u{1D54F}', // 𝕏 - Double-struck X
+    icon: 'satellite',
     label: 'xAI',
     hint: 'xAI Grok models',
   },
   deepseek: {
-    unicode: '\u{1F433}', // 🐳 - Whale
+    icon: 'fish',
     label: 'DeepSeek',
     hint: 'DeepSeek models',
   },
   moonshot: {
-    unicode: '\u{1D542}', // 𝕂 - Double-struck K (for Kimi)
+    icon: 'moon',
     label: 'Moonshot',
     hint: 'Moonshot AI Kimi models',
   },
   dashscope: {
-    unicode: '\u2604', // ☄ - Comet (Alibaba Cloud)
+    icon: 'meteor',
     label: 'Qwen',
     hint: 'Alibaba Cloud Qwen models',
   },
   copilot: {
-    unicode: '\u2387', // ⎇ - Alternative key (GitHub)
+    icon: 'plane',
     label: 'Copilot',
     hint: 'GitHub Copilot models',
   },
   others: {
-    unicode: '\u25C7', // ◇ - Diamond
+    icon: 'robot',
     label: 'Other',
     hint: 'Other model providers',
   },
