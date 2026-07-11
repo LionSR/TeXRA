@@ -64,21 +64,18 @@ export async function loadInputHistory(): Promise<InputHistory> {
   }
   // Cap on load; older entries fall off when the ring is full.
   if (records.length > MAX_LINES) records = records.slice(-MAX_LINES);
-  const entries = records.map((r) => r.v);
 
   return {
     async push(line: string) {
       const trimmed = line.trim();
       if (!trimmed) return;
       const stored = trimmed.slice(0, MAX_LINE_CHARS);
-      if (entries.at(-1) === stored) return;
+      if (records.at(-1)?.v === stored) return;
       const record: HistoryRecord = { t: Date.now(), v: stored };
-      entries.push(stored);
       records.push(record);
       await GlobalStorageFS.ensureDir(HISTORY_DIR);
-      if (entries.length > MAX_LINES) {
-        const drop = entries.length - MAX_LINES;
-        entries.splice(0, drop);
+      if (records.length > MAX_LINES) {
+        const drop = records.length - MAX_LINES;
         records.splice(0, drop);
         await GlobalStorageFS.write(HISTORY_PATH, serializeRecords(records));
         return;
@@ -90,20 +87,20 @@ export async function loadInputHistory(): Promise<InputHistory> {
     },
     reverseFind(needle, from) {
       if (!needle) return undefined;
-      const start = from === undefined ? entries.length - 1 : from - 1;
+      const start = from === undefined ? records.length - 1 : from - 1;
       for (let i = start; i >= 0; i--) {
-        const value = entries[i];
-        if (value !== undefined && value.includes(needle)) {
-          return { value, index: i };
+        const record = records[i];
+        if (record?.v.includes(needle)) {
+          return { value: record.v, index: i };
         }
       }
       return undefined;
     },
     at(index) {
-      return entries[index];
+      return records[index]?.v;
     },
     length() {
-      return entries.length;
+      return records.length;
     },
   };
 }
