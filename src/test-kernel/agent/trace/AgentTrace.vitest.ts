@@ -1,7 +1,9 @@
 // Suites for src/agent/trace emit helpers (stage metadata, tool-use cards,
 // log-file categorization). RunTraceStream keeps its own suite.
 
+import { strict as assert } from 'node:assert';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import {
   type AgentEvent,
   type AgentTrace,
@@ -10,13 +12,6 @@ import {
   type StageStartEvent,
   TraceEmitter,
 } from '@agent/trace';
-import { strict as assert } from 'node:assert';
-import {
-  createRunTrace,
-  getDefaultStreamLogStore,
-  setDefaultStreamLogStore,
-  StreamLogStore,
-} from '@transcript';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
@@ -167,12 +162,12 @@ describe('logFileCategory', () => {
   let logger: AgentTrace;
   let disposeTrace: () => void;
   let capturedMessages: any[];
+  let store: StreamLogStore;
 
   beforeEach(async () => {
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
+    store = new StreamLogStore();
     await store.clear();
-    const runTrace = createRunTrace('TestFileListLogger');
+    const runTrace = createRunTrace('TestFileListLogger', store);
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
     capturedMessages = [];
@@ -185,7 +180,7 @@ describe('logFileCategory', () => {
   });
 
   const refreshCaptured = (): void => {
-    const log = getDefaultStreamLogStore().get('TestFileListLogger');
+    const log = store.get('TestFileListLogger');
     capturedMessages = (log?.getRange(0, log.head) ?? []).map((entry) => ({
       id: entry.id,
       text: entry.text ?? '',

@@ -16,11 +16,8 @@ import type {
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  StreamStatusMachine,
-  StreamStatusService,
-} from '@agent/runtime/StreamStatusService';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   noopAgentRuntimeHost,
   type AgentRuntimeHost,
@@ -198,7 +195,7 @@ describe('RetryState', () => {
     try {
       seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
       seedStreamStatusForTest(
-        StreamStatusService,
+        defaultSession().status,
         streamId,
         STREAM_PHASE.CANCELLED,
       );
@@ -208,7 +205,9 @@ describe('RetryState', () => {
       );
 
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
-      expect(StreamStatusService.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(defaultSession().status.get(streamId)).toBe(
+        STREAM_PHASE.CANCELLED,
+      );
       expect(requestRetry).toHaveBeenCalledWith(
         expect.objectContaining({
           streamId,
@@ -217,7 +216,7 @@ describe('RetryState', () => {
       );
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
-      clearStreamStatusForTest(StreamStatusService, streamId);
+      clearStreamStatusForTest(defaultSession().status, streamId);
     }
   });
 

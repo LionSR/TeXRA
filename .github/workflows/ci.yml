@@ -107,7 +107,7 @@ jobs:
         run: pnpm run check:tsconfig-paths
 
       - name: Kernel tests
-        run: pnpm run test
+        run: pnpm run test --maxWorkers=2
 
       - name: Validate CLI TUI smoke frames
         run: |

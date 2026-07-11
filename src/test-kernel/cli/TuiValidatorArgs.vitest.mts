@@ -150,6 +150,24 @@ describe('TUI validator args', () => {
     expect(result.stderr).toBe('');
   });
 
+  it('inserts a frame oracle once without deduplicating explicit scenarios', () => {
+    const result = runValidator([
+      '--list-selected',
+      'child-event-order-roster-first',
+      'compact-user-question',
+      'child-event-order-roster-first',
+    ]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim().split('\n')).toEqual([
+      'child-event-order-canonical',
+      'child-event-order-roster-first',
+      'compact-user-question',
+      'child-event-order-roster-first',
+    ]);
+    expect(result.stderr).toBe('');
+  });
+
   it('treats a leading package-manager separator as transparent for selected scenarios', () => {
     const result = runValidator([
       '--',

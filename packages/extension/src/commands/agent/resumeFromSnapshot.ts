@@ -14,7 +14,7 @@ import {
   isResumeInFlight,
   resolveAndResumeStream,
 } from '@agent/runtime/resolveAndResumeStream';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -30,9 +30,10 @@ export { isResumeInFlight };
 export function tryResumeFromSnapshot(streamId: StreamTabId): Promise<boolean> {
   return resolveAndResumeStream(streamId, {
     runtimeHost: extensionAgentRuntimeHost,
-    // The extension runs on the default session, whose machine IS the shared
-    // service instance (SessionHandle.defaultSession aliases it by identity).
-    streamStatus: StreamStatusService,
+    // The extension runs on the default session for this host-path caller
+    // (outside any run ALS), so its status plane is the same one every other
+    // unmigrated default-session caller reads through `defaultSession()`.
+    streamStatus: defaultSession().status,
     resolveResumeState: async (id) => {
       const progressState = ProgressViewProvider.getInstance()?.state;
       if (!progressState) {
