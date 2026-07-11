@@ -4,7 +4,7 @@ import {
   CodexThreads,
 } from '@tools/agentCliSessionStores';
 
-import { defaultSession } from './SessionHandle';
+import { killAllSessionBackgroundProcesses } from './SessionHandle';
 
 /**
  * Stops agent-spawned child processes and CLI-backed agent sessions before
@@ -13,7 +13,7 @@ import { defaultSession } from './SessionHandle';
  */
 export function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    defaultSession().executions.killBackgroundProcesses(),
+    killAllSessionBackgroundProcesses(),
   );
   // Interrupt CLI-backed sessions so their streams don't reload in a stale
   // WAITING state.
