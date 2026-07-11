@@ -6,7 +6,11 @@
  * `HistoryItem` shape for the settings UI. Action handlers (delete, rerun,
  * export) remain host-specific because they touch host-only UI surfaces.
  */
-import { getExecutionStore, listExecutions } from '@agent/storage';
+import {
+  getExecutionStore,
+  isUserVisibleExecution,
+  listExecutions,
+} from '@agent/storage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   HistoryItem,
@@ -15,9 +19,7 @@ import type {
 
 export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
   const entries = await listExecutions();
-  const visibleEntries = entries.filter(
-    (entry) => entry.agentConfig !== null && entry.category !== 'process',
-  );
+  const visibleEntries = entries.filter(isUserVisibleExecution);
   const historyItems = await Promise.all(
     visibleEntries.map(async (entry): Promise<HistoryItem> => {
       const cfg = entry.agentConfig!;
