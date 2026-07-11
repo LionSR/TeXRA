@@ -176,7 +176,6 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     mocks.startChildRunLoop.mockImplementation(
       (params: { strategy: ChildRunStrategy<unknown> }) => {
         strategy = params.strategy;
-        params.strategy.onSessionStart?.({ executions } as any);
       },
     );
 
@@ -197,7 +196,11 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
 
     envReady.resolve({});
-    const [firstResult, secondResult] = await Promise.all([first, second]);
+    const firstResult = await first;
+    strategy?.onTurnSuccess?.({ sessionId: 'stale-session' }, {
+      executions,
+    } as any);
+    const secondResult = await second;
 
     expect(firstResult.status).toBe('executed');
     expect(secondResult.summary).toMatch(/Follow-up queued/);
@@ -207,7 +210,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
       text: 'also update the tests',
     });
 
-    strategy?.onSessionCleanup?.();
+    strategy?.releaseSessionOwnership?.();
     expect(ClaudeAgentSessions.lookup('stale-session')).toBeUndefined();
   });
 
@@ -226,7 +229,6 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     mocks.startChildRunLoop.mockImplementation(
       (params: { strategy: ChildRunStrategy<unknown> }) => {
         strategy = params.strategy;
-        params.strategy.onSessionStart?.({ executions } as any);
       },
     );
 
@@ -251,7 +253,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     expect(mocks.buildClaudeAgentEnv).toHaveBeenCalledTimes(2);
     expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
 
-    strategy?.onSessionCleanup?.();
+    strategy?.releaseSessionOwnership?.();
     expect(ClaudeAgentSessions.lookup('stale-session')).toBeUndefined();
   });
 

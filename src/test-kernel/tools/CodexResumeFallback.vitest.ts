@@ -138,7 +138,6 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.startChildRunLoop.mockImplementation(
       (params: { strategy: ChildRunStrategy<unknown> }) => {
         strategy = params.strategy;
-        params.strategy.onSessionStart?.({ executions } as any);
       },
     );
 
@@ -168,7 +167,9 @@ describe('codex tool - atomic resume fallback', () => {
         }
       },
     );
-    const [firstResult, secondResult] = await Promise.all([first, second]);
+    const firstResult = await first;
+    strategy?.onTurnSuccess?.({}, { executions } as any);
+    const secondResult = await second;
 
     expect(firstResult.status).toBe('executed');
     expect(secondResult.summary).toMatch(/Follow-up queued/);
@@ -180,7 +181,7 @@ describe('codex tool - atomic resume fallback', () => {
       text: 'also update the tests',
     });
 
-    strategy?.onSessionCleanup?.();
+    strategy?.releaseSessionOwnership?.();
     expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
   });
 
@@ -206,7 +207,6 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.startChildRunLoop.mockImplementation(
       (params: { strategy: ChildRunStrategy<unknown> }) => {
         strategy = params.strategy;
-        params.strategy.onSessionStart?.({ executions } as any);
       },
     );
 
@@ -233,7 +233,7 @@ describe('codex tool - atomic resume fallback', () => {
     expect(mocks.importCodexClass).toHaveBeenCalledTimes(2);
     expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
 
-    strategy?.onSessionCleanup?.();
+    strategy?.releaseSessionOwnership?.();
     expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
   });
 });
