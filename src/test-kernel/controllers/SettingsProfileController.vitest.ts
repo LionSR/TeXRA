@@ -211,15 +211,17 @@ describe('SettingsProfileController', () => {
 
     const reliabilitySettings = controller.getReliabilitySettings();
 
-    expect(
-      reliabilitySettings.find(
-        (setting) => setting.key === 'texra.model.retry.maxAttempts',
-      )?.value,
-    ).toBe(DEFAULT_CORE_SETTINGS.model.retry.maxAttempts);
-    expect(
-      reliabilitySettings.find(
-        (setting) => setting.key === 'texra.model.retry.backoffMs',
-      )?.value,
-    ).toBe(DEFAULT_CORE_SETTINGS.model.retry.backoffMs);
+    expect(reliabilitySettings).toContainEqual(
+      expect.objectContaining({
+        key: 'texra.model.retry.maxAttempts',
+        value: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+      }),
+    );
+    expect(reliabilitySettings).toContainEqual(
+      expect.objectContaining({
+        key: 'texra.model.retry.backoffMs',
+        value: DEFAULT_CORE_SETTINGS.model.retry.backoffMs,
+      }),
+    );
   });
 });
