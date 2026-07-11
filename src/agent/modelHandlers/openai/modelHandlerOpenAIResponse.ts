@@ -866,7 +866,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Store compacted messages for use in this request.
       // Mark as pending compaction - state will be finalized after successful API call.
       // This prevents stale state if API call fails and needs retry.
-      this.compactionResult = { compactedMessages, tokensAfter, sourceMessages: messages };
+      this.compactionResult = {
+        compactedMessages,
+        tokensAfter,
+        sourceMessages: messages,
+      };
 
       return compactedMessages;
     } catch (err) {
