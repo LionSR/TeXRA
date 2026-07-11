@@ -133,6 +133,17 @@ export const streamByIdContext = createContext<StreamByIdMap>(
 );
 
 /**
+ * Durable delivery boundary for follow-up events. The conversation element
+ * outlives whichever stream-specific input is currently rendered, so async
+ * paste work can still reach host handlers after that input disconnects.
+ */
+export type FollowUpEventSink = (event: CustomEvent) => void;
+
+export const followUpEventSinkContext = createContext<FollowUpEventSink>(
+  'progress-follow-up-event-sink',
+);
+
+/**
  * Whether request panels render in a read-only, archived mode — true for a
  * static trace-viewer export (`packages/trace-viewer/`) replaying a finished
  * run with no live backend to send actions to. Defaults to `false` for every
