@@ -342,9 +342,11 @@ export async function preflightCliHistoryDeleteAll(options: {
   yes?: boolean;
 }): Promise<CliHistoryDeleteAllPreflight> {
   if (!options.all) return { proceed: false, count: 0 };
-  // Unlike list/show, a full wipe intentionally counts (and later clears)
-  // every stored execution, including `isUserVisibleExecution`-hidden
+  // Unlike list, a full wipe intentionally counts (and later clears) every
+  // stored execution, including `isUserVisibleExecution`-hidden
   // process-bookkeeping entries — don't add the visibility filter here.
+  // (`show`/`export` were never filtered either — both are explicit-id
+  // lookups, a different contract from browsing a list.)
   const count = (await listExecutions()).length;
   return { proceed: options.yes === true, count };
 }
