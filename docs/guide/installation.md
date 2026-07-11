@@ -11,7 +11,7 @@ This guide will walk you through the process of installing TeXRA and all its dep
 
 TeXRA is designed to work on all major operating systems with the following minimum requirements:
 
-- **Visual Studio Code**: Version 1.106 or newer (for the VS Code extension)
+- **Visual Studio Code**: Version 1.125 or newer (for the VS Code extension)
 - **Operating System**: Windows, macOS, or Linux
 - **Internet Connection**: Required for API access to language models
 
