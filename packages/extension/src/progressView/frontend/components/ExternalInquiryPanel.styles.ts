@@ -214,27 +214,14 @@ export const externalInquiryPanelStyles: CSSResult = css`
 
   .external-inquiry-request__session-links-input {
     width: 100%;
+  }
+
+  .external-inquiry-request__session-links-input::part(textarea) {
     min-height: 2.75rem;
     max-height: min(12vh, 5rem);
-    resize: vertical;
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
-    padding: ${sp.small} ${sp.medium};
-    background: var(--wa-form-control-background-color);
-    color: var(--wa-form-control-text-color);
-    border: var(--border-thin) solid var(--wa-form-control-border-color);
-    border-radius: var(--border-radius);
-    outline: none;
-    transition: border-color var(--transition-fast);
-  }
-
-  .external-inquiry-request__session-links-input:focus {
-    border-color: var(--wa-color-focus);
-  }
-
-  .external-inquiry-request__session-links-input::placeholder {
-    color: var(--wa-color-text-placeholder);
   }
 
   .external-inquiry-request__session-links-hint {
@@ -264,27 +251,14 @@ export const externalInquiryPanelStyles: CSSResult = css`
 
   .external-inquiry-request__answer-input {
     width: 100%;
+  }
+
+  .external-inquiry-request__answer-input::part(textarea) {
     min-height: 96px;
     max-height: min(24vh, 12rem);
-    resize: vertical;
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size);
     line-height: var(--line-height-normal);
-    padding: ${sp.medium};
-    background: var(--wa-form-control-background-color);
-    color: var(--wa-form-control-text-color);
-    border: var(--border-thin) solid var(--wa-form-control-border-color);
-    border-radius: var(--border-radius);
-    outline: none;
-    transition: border-color var(--transition-fast);
-  }
-
-  .external-inquiry-request__answer-input:focus {
-    border-color: var(--wa-color-focus);
-  }
-
-  .external-inquiry-request__answer-input::placeholder {
-    color: var(--wa-color-text-placeholder);
   }
 
   .external-inquiry-request__answer-hint {
@@ -300,12 +274,12 @@ export const externalInquiryPanelStyles: CSSResult = css`
       max-height: min(18vh, 10rem);
     }
 
-    .external-inquiry-request__answer-input {
+    .external-inquiry-request__answer-input::part(textarea) {
       min-height: 80px;
       max-height: min(20vh, 10rem);
     }
 
-    .external-inquiry-request__session-links-input {
+    .external-inquiry-request__session-links-input::part(textarea) {
       min-height: 2.5rem;
       max-height: min(10vh, 4.5rem);
     }
