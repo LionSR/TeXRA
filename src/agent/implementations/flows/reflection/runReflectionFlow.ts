@@ -254,6 +254,9 @@ export async function runReflectionFlow<C = unknown>(
       };
     }
 
+    // Hydrate the canonical live collection from the persisted round snapshot.
+    outputState.rounds = shared.roundOutputs;
+
     const prepContextNode = new PrepareContextNode<C>();
     const texCountNode = new TeXCountNode<C>();
     const mediaNode = new MediaExtractionNode<C>();
