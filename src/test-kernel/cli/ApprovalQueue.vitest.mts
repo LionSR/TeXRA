@@ -160,6 +160,13 @@ describe('CLI approval queue', () => {
 
     currentApproval.get()?.decide({ accepted: true });
     await expect(nextResult).resolves.toEqual({ accepted: true });
+
+    const cancelledDuringPresentation = enqueueApproval(
+      bashPayload('child-4'),
+      { onPresent: clearApprovals },
+    );
+    await expect(cancelledDuringPresentation).resolves.toEqual(interrupted);
+    expect(currentApproval.get()).toBeUndefined();
   });
 
   it('notifies only when a TUI approval becomes the foreground modal', async () => {
@@ -245,10 +252,17 @@ describe('CLI approval queue', () => {
     } as ApprovalPayload;
     const staleForStreamA = bashPayload('stream-a');
     const untouched = bashPayload('stream-b');
+    const presented: string[] = [];
 
-    const planResult = enqueueApproval(planPayload);
-    const staleResult = enqueueApproval(staleForStreamA);
-    const untouchedResult = enqueueApproval(untouched);
+    const planResult = enqueueApproval(planPayload, {
+      onPresent: () => presented.push('plan'),
+    });
+    const staleResult = enqueueApproval(staleForStreamA, {
+      onPresent: () => presented.push('stale'),
+    });
+    const untouchedResult = enqueueApproval(untouched, {
+      onPresent: () => presented.push('untouched'),
+    });
 
     await vi.waitFor(() => {
       expect(currentApproval.get()?.payload).toBe(planPayload);
@@ -267,6 +281,7 @@ describe('CLI approval queue', () => {
     await vi.waitFor(() => {
       expect(currentApproval.get()?.payload).toBe(untouched);
     });
+    expect(presented).toEqual(['plan', 'untouched']);
     currentApproval.get()?.decide({ accepted: true });
     await expect(untouchedResult).resolves.toEqual({ accepted: true });
   });
