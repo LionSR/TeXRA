@@ -3,9 +3,14 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - component type
 import type { StreamHeader } from '@progressView/frontend/components/StreamHeader';
+import { ELEMENT_IDS } from '@progressView/frontend/constants';
 
 // Local imports - shared schemas
-import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
+import {
+  AgentCategory,
+  STREAM_PHASE,
+  type StreamTabInfo,
+} from '@shared/schemas';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
@@ -23,11 +28,24 @@ function baseStream(): StreamTabInfo {
 async function mount(props: Partial<StreamHeader> = {}): Promise<StreamHeader> {
   const element = document.createElement('stream-header') as StreamHeader;
   element.stream = baseStream();
+  element.status = STREAM_PHASE.RUNNING;
+  // Buttons default to hidden until the host confirms which commands it
+  // supports (`isKnownUnsupported` treats `null` as "unknown, so hide").
+  element.unsupportedCommands = new Set();
   Object.assign(element, props);
   document.body.append(element);
   await element.updateComplete;
   return element;
 }
+
+// Shared DOM setup for every describe block below — `useLitComponentTestDom`
+// creates one jsdom + registers `stream-header` once; calling it again per
+// describe would rebind `customElements` to a second jsdom instance without
+// the class registered on it, silently leaving `element.shadowRoot`
+// undefined for the second block's tests.
+useLitComponentTestDom(
+  () => import('@progressView/frontend/components/StreamHeader'),
+);
 
 /**
  * Regression coverage for #8158: the goal chip (`wa-badge`) and progress
@@ -38,10 +56,6 @@ async function mount(props: Partial<StreamHeader> = {}): Promise<StreamHeader> {
  * status-indicator pattern.
  */
 describe('stream-header tooltips', () => {
-  useLitComponentTestDom(
-    () => import('@progressView/frontend/components/StreamHeader'),
-  );
-
   it('anchors the goal chip tooltip via wa-tooltip[for], not a native title', async () => {
     const element = await mount({
       goalActive: true,
@@ -83,5 +97,47 @@ describe('stream-header tooltips', () => {
     expect(
       element.shadowRoot?.querySelector('wa-tooltip[for="progressBadge"]'),
     ).toBeFalsy();
+  });
+});
+
+/**
+ * Regression coverage for consolidating the toolbar's wa-button-group +
+ * external-tooltip workaround onto `renderIconActionButtonParts` (src/
+ * shared/wa/actionButtons.ts): each toolbar button must anchor its own
+ * `<wa-tooltip>` by id (not via a slotted child, which would break
+ * wa-button-group's corner-fusion), and clicking a button must dispatch
+ * `toolbar-command` directly — no more delegated `[data-command]` lookup.
+ */
+describe('stream-header toolbar', () => {
+  it('renders the stop button as a wa-button with a matching sibling tooltip', async () => {
+    const element = await mount();
+
+    const stopButton = element.shadowRoot?.querySelector<HTMLElement>(
+      `#${ELEMENT_IDS.STOP_STREAM_BTN}`,
+    );
+    expect(stopButton).toBeTruthy();
+    expect(stopButton?.tagName).toBe('WA-BUTTON');
+    expect(stopButton?.hasAttribute('data-command')).toBe(false);
+
+    const stopTooltip = element.shadowRoot?.querySelector(
+      `wa-tooltip[for="${ELEMENT_IDS.STOP_STREAM_BTN}"]`,
+    );
+    expect(stopTooltip).toBeTruthy();
+  });
+
+  it('dispatches toolbar-command with the button-specific command on click', async () => {
+    const element = await mount();
+    const events: unknown[] = [];
+    element.addEventListener('toolbar-command', (event) => {
+      events.push((event as CustomEvent).detail);
+    });
+
+    const stopButton = element.shadowRoot?.querySelector<HTMLElement>(
+      `#${ELEMENT_IDS.STOP_STREAM_BTN}`,
+    );
+    stopButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ command: expect.any(String) });
   });
 });
