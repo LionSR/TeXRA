@@ -27,12 +27,14 @@ function snapshot(parentStreamId?: StreamTabId): ToolUseSessionSnapshot {
 
 function capturedResumeOptions(): {
   parentStreamId?: StreamTabId;
+  isCancellationRequested?: () => boolean;
   setupSession: (session: { appendFollowUp(item: unknown): void }) => void;
 } {
   const calls = resumeToolUseFromSnapshotMock.mock
     .calls as unknown as unknown[][];
   return calls.at(-1)?.[2] as {
     parentStreamId?: StreamTabId;
+    isCancellationRequested?: () => boolean;
     setupSession: (session: { appendFollowUp(item: unknown): void }) => void;
   };
 }
@@ -134,6 +136,33 @@ describe('resumeToolUseSnapshot', () => {
     );
 
     expect(capturedResumeOptions().parentStreamId).toBe(explicitParent);
+  });
+
+  it('restores drained follow-ups when cancellation reaches flow setup', async () => {
+    defaultSession().followUps.enqueue(
+      STREAM,
+      { text: 'queued one' },
+      { force: true },
+    );
+    const isCancellationRequested = vi.fn(() => true);
+    const appendFollowUp = vi.fn();
+    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const options = args[2] as ReturnType<typeof capturedResumeOptions>;
+        expect(options.isCancellationRequested).toBe(isCancellationRequested);
+        options.setupSession({ appendFollowUp });
+      },
+    );
+
+    await expect(
+      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        isCancellationRequested,
+        onError: vi.fn(),
+      }),
+    ).resolves.toBe(false);
+
+    expect(appendFollowUp).not.toHaveBeenCalled();
+    expect(defaultSession().followUps.getAll(STREAM)).toEqual(['queued one']);
   });
 
   it('re-enqueues follow-ups, settles to WAITING, and reports on failure', async () => {
