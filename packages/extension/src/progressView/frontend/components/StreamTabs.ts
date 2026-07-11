@@ -39,6 +39,7 @@ import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles } from './StreamTab.styles';
 import { streamTabsContainerStyles } from './StreamTabsContainer.styles';
@@ -441,12 +442,14 @@ export class StreamTabs extends LitElement {
                 }),
             )}
           </div>
-          ${when(
-            this.streams.length === 0,
-            () =>
-              html`<div class="log-placeholder">
-                No streams yet. Run a TeXRA command to get started.
-              </div>`,
+          ${when(this.streams.length === 0, () =>
+            renderEmptyState({
+              icon: 'terminal',
+              title: 'No streams yet',
+              body: 'Run a TeXRA command to get started.',
+              headingTag: 'h3',
+              className: 'log-placeholder',
+            }),
           )}
         </div>
         ${
