@@ -498,6 +498,11 @@ function normalizeSessionLinks(links?: string[] | null): string[] | undefined {
  * thread is missing, not open, has no turns, or its last turn isn't open —
  * the shared guard behind `recordAnswerForOpenTurn` and
  * `persistOpenTurnDraft`.
+ *
+ * `afterWrite`, if returned by `update`, runs after the manifest write but
+ * still inside the thread lock — for side effects (e.g. mirroring the
+ * thread directory to an execution) that must not interleave with a
+ * concurrent mutation of the same thread.
  */
 async function withOpenTurnUpdate<T>(
   threadId: ExternalInquiryThreadId,
@@ -506,8 +511,16 @@ async function withOpenTurnUpdate<T>(
     lastTurn: OpenInquiryTurn,
     timestamp: string,
   ) =>
-    | Promise<{ manifest: ExternalInquiryThreadManifest; result: T } | null>
-    | { manifest: ExternalInquiryThreadManifest; result: T }
+    | Promise<{
+        manifest: ExternalInquiryThreadManifest;
+        result: T;
+        afterWrite?: () => Promise<void>;
+      } | null>
+    | {
+        manifest: ExternalInquiryThreadManifest;
+        result: T;
+        afterWrite?: () => Promise<void>;
+      }
     | null,
 ): Promise<{ manifest: ExternalInquiryThreadManifest; result: T } | null> {
   return withThreadLock(threadId, async () => {
@@ -523,7 +536,8 @@ async function withOpenTurnUpdate<T>(
     if (!outcome) return null;
 
     await writeThreadManifest(outcome.manifest);
-    return outcome;
+    await outcome.afterWrite?.();
+    return { manifest: outcome.manifest, result: outcome.result };
   });
 }
 
@@ -653,6 +667,8 @@ export async function recordAnswerForOpenTurn(params: {
   sessionLinks?: string[] | null;
   executionId?: ExecutionId;
 }): Promise<PersistedAnsweredTurn | null> {
+  let executionMirrorPaths: ExternalInquiryExecutionMirrorPaths | undefined;
+
   const outcome = await withOpenTurnUpdate(
     params.threadId,
     async (existing, lastTurn, timestamp) => {
@@ -689,19 +705,27 @@ export async function recordAnswerForOpenTurn(params: {
         turns: [...existing.turns.slice(0, -1), answeredTurn],
       };
 
-      return { manifest: nextManifest, result: answeredTurn };
+      return {
+        manifest: nextManifest,
+        result: answeredTurn,
+        // Mirroring copies the whole thread directory, so it must observe
+        // the manifest just written above and must not interleave with a
+        // concurrent mutation (e.g. a follow-up recordOpenQuestion) — both
+        // require staying inside the thread lock.
+        afterWrite: params.executionId
+          ? async () => {
+              executionMirrorPaths = await mirrorThreadToExecution({
+                executionId: params.executionId!,
+                threadId: params.threadId,
+                turn: answeredTurn,
+              });
+            }
+          : undefined,
+      };
     },
   );
 
   if (!outcome) return null;
-
-  const executionMirrorPaths = params.executionId
-    ? await mirrorThreadToExecution({
-        executionId: params.executionId,
-        threadId: params.threadId,
-        turn: outcome.result,
-      })
-    : undefined;
 
   return {
     threadId: params.threadId,
@@ -751,7 +775,7 @@ export async function persistOpenTurnDraft(params: {
   threadId: ExternalInquiryThreadId;
   draft: InquiryDraft | null;
 }): Promise<void> {
-  await withOpenTurnUpdate(params.threadId, (existing, lastTurn) => {
+  await withOpenTurnUpdate(params.threadId, (existing, lastTurn, timestamp) => {
     const nextTurn: OpenInquiryTurn = {
       ...lastTurn,
       draft: params.draft ?? undefined,
@@ -759,6 +783,7 @@ export async function persistOpenTurnDraft(params: {
 
     const nextManifest: ExternalInquiryThreadManifest = {
       ...existing,
+      updatedAt: timestamp,
       turns: [...existing.turns.slice(0, -1), nextTurn],
     };
 
