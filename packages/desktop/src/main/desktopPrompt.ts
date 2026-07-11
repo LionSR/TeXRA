@@ -32,7 +32,7 @@ export async function promptInRenderer(
       panel.style.cssText = [
         'width:min(520px,calc(100vw - 48px))',
         'box-sizing:border-box',
-        'padding:var(--wa-space-l,20px)',
+        'padding:var(--wa-space-l,24px)',
         'border:1px solid var(--wa-color-surface-border,#d0d7de)',
         'border-radius:6px',
         'background:var(--wa-color-surface-default,Canvas)',
@@ -42,7 +42,7 @@ export async function promptInRenderer(
 
       const title = document.createElement('h2');
       title.textContent = ${JSON.stringify(options.title)};
-      title.style.cssText = 'margin:0 0 var(--wa-space-s,10px);font-size:var(--font-size-h3,16px);font-weight:var(--wa-font-weight-semibold,600)';
+      title.style.cssText = 'margin:0 0 var(--wa-space-s,12px);font-size:var(--font-size-h3,16px);font-weight:var(--wa-font-weight-semibold,600)';
 
       const label = document.createElement('label');
       label.textContent = ${JSON.stringify(options.prompt)};
@@ -55,7 +55,7 @@ export async function promptInRenderer(
       input.style.cssText = [
         'width:100%',
         'box-sizing:border-box',
-        'padding:var(--wa-space-xs,8px) var(--wa-space-s,10px)',
+        'padding:var(--wa-space-xs,8px) var(--wa-space-s,12px)',
         'border:1px solid var(--wa-form-control-border-color,#d0d7de)',
         'border-radius:4px',
         'background:var(--wa-form-control-background-color,Field)',
@@ -69,12 +69,12 @@ export async function promptInRenderer(
       const cancel = document.createElement('button');
       cancel.type = 'button';
       cancel.textContent = 'Cancel';
-      cancel.style.cssText = 'padding:var(--wa-space-2xs,6px) var(--wa-space-s,12px)';
+      cancel.style.cssText = 'padding:var(--wa-space-2xs,4px) var(--wa-space-s,12px)';
 
       const submit = document.createElement('button');
       submit.type = 'submit';
       submit.textContent = 'Save';
-      submit.style.cssText = 'padding:var(--wa-space-2xs,6px) var(--wa-space-s,12px)';
+      submit.style.cssText = 'padding:var(--wa-space-2xs,4px) var(--wa-space-s,12px)';
 
       const cleanup = (value) => {
         document.removeEventListener('keydown', onKeyDown, true);
