@@ -1,4 +1,9 @@
-import { mkdtemp, readFile as nodeReadFile, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdtemp,
+  readFile as nodeReadFile,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path, { join } from 'node:path';
 
@@ -10,6 +15,7 @@ import {
   ensureTexraGitignored,
   gitignoreWithTexra,
   serializeInitConfig,
+  writeInitConfig,
   type InitAnswers,
 } from '@cli/runtime/initConfig';
 
@@ -60,44 +66,85 @@ describe('workspaceTexraConfigPath', () => {
 });
 
 describe('gitignoreWithTexra', () => {
-  it('appends .texra/ to a non-empty file', () => {
-    expect(gitignoreWithTexra('node_modules\ndist\n')).toBe(
+  it.each([
+    [
+      'appends to content',
+      'node_modules\ndist\n',
       'node_modules\ndist\n.texra/\n',
-    );
-  });
-
-  it('creates content from an empty file', () => {
-    expect(gitignoreWithTexra('')).toBe('.texra/\n');
-  });
-
-  it('returns null when .texra/ is already ignored', () => {
-    expect(gitignoreWithTexra('node_modules\n.texra/\n')).toBeNull();
-  });
-
-  it('treats a bare .texra entry as already ignored', () => {
-    expect(gitignoreWithTexra('.texra\n')).toBeNull();
+    ],
+    ['creates content', '', '.texra/\n'],
+    ['recognizes .texra/', 'node_modules\n.texra/\n', null],
+    ['recognizes bare .texra', '.texra\n', null],
+  ])('%s', (_case, existing, expected) => {
+    expect(gitignoreWithTexra(existing)).toBe(expected);
   });
 });
 
 describe('ensureTexraGitignored', () => {
-  it('creates .gitignore when absent', async () => {
+  it.each([
+    ['creates an absent file', undefined, 'created', '.texra/\n'],
+    [
+      'appends to existing content',
+      'node_modules\n',
+      'added',
+      'node_modules\n.texra/\n',
+    ],
+  ] as const)('%s', async (_case, existing, outcome, expected) => {
     const workspace = await mkdtemp(join(tmpdir(), 'texra-gitignore-'));
+    const gitignorePath = join(workspace, '.gitignore');
+    if (existing !== undefined)
+      await writeFile(gitignorePath, existing, 'utf8');
 
-    await expect(ensureTexraGitignored(workspace)).resolves.toBe('created');
-    await expect(
-      nodeReadFile(join(workspace, '.gitignore'), 'utf8'),
-    ).resolves.toBe('.texra/\n');
+    await expect(ensureTexraGitignored(workspace)).resolves.toBe(outcome);
+    await expect(nodeReadFile(gitignorePath, 'utf8')).resolves.toBe(expected);
   });
 
-  it('appends to an existing .gitignore that does not yet ignore .texra', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-gitignore-'));
-    await writeFile(join(workspace, '.gitignore'), 'node_modules\n', 'utf8');
+  const skipPermissionTest =
+    process.platform === 'win32' ||
+    (typeof process.getuid === 'function' && process.getuid() === 0);
+  (skipPermissionTest ? it.skip : it)(
+    'does not atomically replace a read-only .gitignore',
+    async () => {
+      const workspace = await mkdtemp(join(tmpdir(), 'texra-gitignore-'));
+      const gitignorePath = join(workspace, '.gitignore');
+      await writeFile(gitignorePath, 'node_modules\n', 'utf8');
+      await chmod(gitignorePath, 0o444);
 
-    await expect(ensureTexraGitignored(workspace)).resolves.toBe('added');
-    await expect(
-      nodeReadFile(join(workspace, '.gitignore'), 'utf8'),
-    ).resolves.toBe('node_modules\n.texra/\n');
-  });
+      try {
+        await expect(ensureTexraGitignored(workspace)).rejects.toThrow(
+          /(EACCES|permission)/i,
+        );
+        await expect(nodeReadFile(gitignorePath, 'utf8')).resolves.toBe(
+          'node_modules\n',
+        );
+      } finally {
+        await chmod(gitignorePath, 0o644);
+      }
+    },
+  );
+
+  (skipPermissionTest ? it.skip : it)(
+    'still atomically replaces a write-only config',
+    async () => {
+      const workspace = await mkdtemp(join(tmpdir(), 'texra-config-'));
+      const configPath = workspaceTexraConfigPath(workspace);
+      await writeInitConfig(configPath, buildInitConfig(ANSWERS));
+      await chmod(configPath, 0o200);
+
+      try {
+        const updated = buildInitConfig({ ...ANSWERS, model: 'gemini35f' });
+        await expect(
+          writeInitConfig(configPath, updated),
+        ).resolves.toBeUndefined();
+        await chmod(configPath, 0o600);
+        await expect(nodeReadFile(configPath, 'utf8')).resolves.toContain(
+          '"model": "gemini35f"',
+        );
+      } finally {
+        await chmod(configPath, 0o600);
+      }
+    },
+  );
 
   it('does not overwrite .gitignore on a non-ENOENT read failure', async () => {
     // Reproduces #7470: a transient EACCES (or any non-missing-file error)
