@@ -67,4 +67,91 @@ describe('CLI platform signal handlers', () => {
     expect(events).toEqual(['shutdown', 'flush', 'exit:143']);
     expect(killSpy).not.toHaveBeenCalled();
   }, 30_000);
+
+  it('handOffCliShutdownSignalHandlers removes exactly the listeners it installed', async () => {
+    vi.resetModules();
+    const handlers = new Map<string, (...args: unknown[]) => void>();
+    vi.spyOn(process, 'once').mockImplementation(((
+      event: string | symbol,
+      listener: (...args: unknown[]) => void,
+    ) => {
+      if (event === 'SIGINT' || event === 'SIGTERM') {
+        handlers.set(event, listener);
+      }
+      return process;
+    }) as typeof process.once);
+    const removed: Array<[string | symbol, unknown]> = [];
+    vi.spyOn(process, 'removeListener').mockImplementation(((
+      event: string | symbol,
+      listener: (...args: unknown[]) => void,
+    ) => {
+      removed.push([event, listener]);
+      return process;
+    }) as typeof process.removeListener);
+
+    const lifecycle: LifecycleHost = {
+      onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
+      runShutdown: vi.fn(async () => undefined),
+    };
+
+    const {
+      installCliShutdownSignalHandlers,
+      handOffCliShutdownSignalHandlers,
+    } = await import('@cli/runtime/initPlatform');
+    installCliShutdownSignalHandlers(lifecycle);
+    expect(handlers.size).toBe(2);
+
+    handOffCliShutdownSignalHandlers();
+
+    expect(removed).toEqual([
+      ['SIGINT', handlers.get('SIGINT')],
+      ['SIGTERM', handlers.get('SIGTERM')],
+    ]);
+
+    // A second handoff (e.g. a stray second call) is a no-op, not a crash or
+    // a spurious removeListener call for listeners already handed off.
+    removed.length = 0;
+    handOffCliShutdownSignalHandlers();
+    expect(removed).toEqual([]);
+  });
+
+  it('runCliPlatformShutdownSequence runs lifecycle shutdown then the NDJSON flush, best-effort', async () => {
+    vi.resetModules();
+    const order: string[] = [];
+    mocks.flushNdjsonStdout.mockImplementation(async () => {
+      order.push('flush');
+    });
+    const { runCliPlatformShutdownSequence } =
+      await import('@cli/runtime/initPlatform');
+
+    const runShutdown = vi.fn(async () => {
+      order.push('shutdown');
+    });
+    await runCliPlatformShutdownSequence({
+      onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
+      runShutdown,
+    });
+    expect(order).toEqual(['shutdown', 'flush']);
+
+    // Best-effort: a lifecycle shutdown failure must not skip the flush, and
+    // an undefined lifecycle (tryPlatform() returning nothing) must not throw.
+    order.length = 0;
+    const failingRunShutdown = vi.fn(async () => {
+      order.push('shutdown');
+      throw new Error('shutdown failed');
+    });
+    await expect(
+      runCliPlatformShutdownSequence({
+        onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
+        runShutdown: failingRunShutdown,
+      }),
+    ).resolves.toBeUndefined();
+    expect(order).toEqual(['shutdown', 'flush']);
+
+    order.length = 0;
+    await expect(
+      runCliPlatformShutdownSequence(undefined),
+    ).resolves.toBeUndefined();
+    expect(order).toEqual(['flush']);
+  });
 });
