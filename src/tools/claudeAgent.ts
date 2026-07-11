@@ -42,6 +42,7 @@ import {
   getRunContextStreamId,
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
@@ -399,6 +400,18 @@ function startClaudeAgentLoop(params: {
   env: NodeJS.ProcessEnv;
   pathToClaudeCodeExecutable: string | undefined;
   runtimeHost: AgentRuntimeHost;
+  /**
+   * Set when this launch is the disk-based fallback for a session_id the
+   * in-memory registry no longer knows about (extension reload, crash):
+   * seeds the first turn's `resume` option so the SDK continues the prior
+   * conversation, and is registered up front (onSessionStart) so the
+   * in-memory guard picks the id back up as soon as possible. This narrows,
+   * but does not fully close, the window for a concurrent call with the same
+   * stale session_id to also observe an inactive registry and start its own
+   * fallback loop before either one's onSessionStart runs — the same
+   * await-before-registration gap codex.ts's registerThread already has.
+   */
+  resumeSessionId: string | undefined;
 }): void {
   const {
     childStream,
@@ -410,9 +423,27 @@ function startClaudeAgentLoop(params: {
   const { childStreamId, logger } = childStream;
 
   // The SDK needs the prior session id to resume the same conversation across
-  // turns; it's threaded forward from each turn's result.
-  let resumeSessionId: string | undefined;
+  // turns; it's threaded forward from each turn's result. Seeded from
+  // params.resumeSessionId when this launch is a disk-based fallback resume.
+  let resumeSessionId: string | undefined = params.resumeSessionId;
+  const fallbackSessionId = params.resumeSessionId;
   const storedSessionIds = new Set<string>();
+
+  const registerSession = (sessionId: string, session: SessionHandle): void => {
+    if (ClaudeAgentSessions.isActive(sessionId)) return;
+    ClaudeAgentSessions.register(sessionId, {
+      childStreamId,
+      parentStreamId,
+      executionId,
+      executions: session.executions,
+      model: params.model,
+      permissionMode: params.permissionMode,
+      effort: params.effort,
+      cwd: params.cwd,
+      additionalDirectories: params.additionalDirectories,
+    });
+    storedSessionIds.add(sessionId);
+  };
   // The joined prompt text for whichever turn is currently in flight —
   // captured here (rather than threaded through the loop contract) since
   // `formatDelivery`/`formatError` run strictly after the turn that set it.
@@ -444,6 +475,9 @@ function startClaudeAgentLoop(params: {
 
   const strategy: ChildRunStrategy<TurnResult> = {
     stageLabel: 'Claude Code session',
+    onSessionStart: fallbackSessionId
+      ? (session) => registerSession(fallbackSessionId, session)
+      : undefined,
     launch: (ports, abortController) =>
       runTurn(
         [{ text: initialPrompt, origin: 'user' }],
@@ -458,20 +492,7 @@ function startClaudeAgentLoop(params: {
       if (turn.errorMessage) log.error(turn.errorMessage);
     },
     onTurnSuccess: (turn, session) => {
-      if (turn.sessionId && !ClaudeAgentSessions.isActive(turn.sessionId)) {
-        ClaudeAgentSessions.register(turn.sessionId, {
-          childStreamId,
-          parentStreamId,
-          executionId,
-          executions: session.executions,
-          model: params.model,
-          permissionMode: params.permissionMode,
-          effort: params.effort,
-          cwd: params.cwd,
-          additionalDirectories: params.additionalDirectories,
-        });
-        storedSessionIds.add(turn.sessionId);
-      }
+      if (turn.sessionId) registerSession(turn.sessionId, session);
     },
     publishUsage: (turn) => {
       if (turn.usage) {
@@ -534,7 +555,10 @@ export class ClaudeAgentTool extends defineTool({
     return withAgentCliApproval(
       `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
       (runContext) => {
-        if (input.session_id) {
+        if (
+          input.session_id &&
+          ClaudeAgentSessions.isActive(input.session_id)
+        ) {
           return resumeAgentCliSession(ClaudeAgentSessions, {
             id: input.session_id,
             prompt: input.prompt,
@@ -547,6 +571,9 @@ export class ClaudeAgentTool extends defineTool({
             },
           });
         }
+        // Fall through when the session's in-memory loop is gone (extension
+        // reload, crash): launchClaudeAgentSession resumes via the SDK's
+        // `resume` option from disk.
         const { streamId, runtimeHost } = requireRunStream(
           CLAUDE_AGENT_NAME,
           runContext,
@@ -616,6 +643,7 @@ async function launchClaudeAgentSession(
         env,
         pathToClaudeCodeExecutable: await findClaudeBinaryPath(),
         runtimeHost,
+        resumeSessionId: input.session_id ?? undefined,
       }),
     summary: `Launched Claude Code CLI: ${preview}`,
     launchedLine: `Claude Code agent launched (model: ${model}, permission: ${permissionMode}).`,
