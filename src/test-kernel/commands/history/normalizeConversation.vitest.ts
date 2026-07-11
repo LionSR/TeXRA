@@ -653,7 +653,16 @@ describe('mediaAttachmentKindToContentBlock', () => {
     // themselves. Prove the round trip for every kind the schema defines, so
     // the two stay in sync: this module's own switch (not the caller's) is
     // what breaks the build if a kind is added or renamed.
-    const kinds: MediaAttachmentKind[] = ['image', 'document'];
+    //
+    // The `Record<MediaAttachmentKind, true>` (not a plain array literal)
+    // is what makes this exhaustive: adding a member to `MediaAttachmentKind`
+    // without adding it here fails to compile, so this test can't silently
+    // stop covering a kind the way a hand-maintained array could.
+    const KIND_COVERAGE: Record<MediaAttachmentKind, true> = {
+      image: true,
+      document: true,
+    };
+    const kinds = Object.keys(KIND_COVERAGE) as MediaAttachmentKind[];
 
     for (const kind of kinds) {
       const nodes = normalize([
