@@ -104,9 +104,8 @@ describe('multi-agent-tab preset card keyboard activation', () => {
       );
     });
 
-    const deleteButton = element.shadowRoot?.querySelector(
-      '.preset-delete-btn',
-    );
+    const deleteButton =
+      element.shadowRoot?.querySelector('.preset-delete-btn');
     expect(deleteButton).toBeInstanceOf(HTMLElement);
 
     dispatchKey(deleteButton!, 'Enter');
