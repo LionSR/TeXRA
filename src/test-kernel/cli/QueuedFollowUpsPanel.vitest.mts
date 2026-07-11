@@ -85,7 +85,7 @@ describe('CLI queued follow-up panel display model', () => {
 
     expect(display.rows.map((row) => row.text)).toEqual([
       '1. first',
-      '… 2 more queued',
+      '… +2 more queued',
     ]);
     expect(display.hiddenCount).toBe(2);
   });
@@ -97,7 +97,7 @@ describe('CLI queued follow-up panel display model', () => {
       width: 80,
     });
 
-    expect(display.rows.map((row) => row.text)).toEqual(['… 2 more queued']);
+    expect(display.rows.map((row) => row.text)).toEqual(['… +2 more queued']);
     expect(display.hiddenCount).toBe(2);
   });
 
