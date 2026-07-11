@@ -109,7 +109,7 @@ vi.mock('@cli/runtime/sessionResume', () => ({
   ): string => `not resumable (${resolution.kind}): ${id}`,
 }));
 
-import { setDefaultStreamLogStore, StreamSnapshotStore } from '@transcript';
+import { StreamSnapshotStore } from '@transcript';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { wakeQueuedFollowUpStream } from '@agent/followUp/ToolUseFollowUp';
 import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
@@ -123,7 +123,6 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { StreamLogStore } from '@transcript';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -278,6 +277,7 @@ describe('createChatSessionController', () => {
       events: {},
       status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
       executions: { stopAgentStream: mocks.stopAgentStream },
+      transcripts: { ensureLoaded: vi.fn(async () => undefined) },
     });
     mocks.resolveAndResumeStream.mockReset();
     mocks.resolveAndResumeStream.mockResolvedValue(true);
@@ -460,9 +460,11 @@ describe('createChatSessionController', () => {
     // bail out instead of silently starting `resumeToolUseFromSnapshot()`
     // once the awaits finish.
     const ensureLoaded = deferred<void>();
-    setDefaultStreamLogStore({
-      ensureLoaded: () => ensureLoaded.promise,
-    } as unknown as StreamLogStore);
+    const base = mocks.defaultSession();
+    mocks.defaultSession.mockReturnValue({
+      ...base,
+      transcripts: { ensureLoaded: () => ensureLoaded.promise },
+    });
 
     const session = makeSession({ runCompleted: true });
     const snapshotStore = {
@@ -486,7 +488,7 @@ describe('createChatSessionController', () => {
 
     const resumed = ctrl.resume('aaaaaa' as ExecutionId, preResolved);
     // resume() has claimed the slot and is suspended inside
-    // getDefaultStreamLogStore().ensureLoaded(); session.streamId is
+    // defaultSession().transcripts.ensureLoaded(); session.streamId is
     // already set to the resumed stream.
     expect(session.runPromise).toBeDefined();
     expect(session.streamId).toBe('stream-resume');
@@ -501,7 +503,6 @@ describe('createChatSessionController', () => {
     expect(mocks.resumeToolUseFromSnapshot).not.toHaveBeenCalled();
     expect(session.runCompleted).toBe(true);
 
-    setDefaultStreamLogStore(undefined as unknown as StreamLogStore);
   });
 
   it('reports a failed persisted-child wake while the CLI root slot is busy', async () => {
