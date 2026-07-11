@@ -44,6 +44,7 @@ import { ContextStateDataSchema } from '../contextManagement';
 import { RunUsageMapSchema, TokenUsageStatsSchema } from '../usage';
 import {
   AgentCategoryFilterSchema,
+  ProcessOutputTailSchema,
   ProgressViewPlacementSchema,
   StreamScopedBaseSchema,
 } from './data';
@@ -96,11 +97,11 @@ export const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   finishedProcessCount: z.number(),
 });
 
-export const UpdateProcessOutputMessageSchema = StreamScopedBaseSchema.extend({
+export const UpdateProcessOutputMessageSchema = StreamScopedBaseSchema.extend(
+  ProcessOutputTailSchema.shape,
+).extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT),
   executionId: z.string(),
-  stdout: z.string(),
-  stderr: z.string(),
 });
 
 export const UpdateParentStreamMessageSchema = StreamScopedBaseSchema.extend({

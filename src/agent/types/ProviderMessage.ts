@@ -23,10 +23,21 @@ export type ProviderMessage =
  * Uses z.custom() because ProviderMessage is a union of external SDK types
  * (Anthropic, OpenAI, Google) that cannot be represented as native Zod schemas.
  * This is the correct and intentional use of z.custom() for external type unions.
+ *
+ * The predicate stops short of full SDK shape validation (the union members
+ * don't share one discriminant), but it rejects the values that are never a
+ * valid provider message under any provider: null, arrays, and empty objects.
+ * Persisted conversation state is parsed through this schema on session
+ * resume, so this is the boundary where corrupted data should fail loudly
+ * instead of being silently trusted and surfacing as a confusing error deep
+ * inside a model handler.
  */
 export const ProviderMessageSchema = z.custom<ProviderMessage>(
   (value): value is ProviderMessage =>
-    typeof value === 'object' && value !== null,
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length > 0,
   {
     error: 'messages must contain provider message objects',
   },

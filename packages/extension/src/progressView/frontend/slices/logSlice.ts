@@ -4,10 +4,13 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ContextStateDataSchema,
   END_GROUP_STATUS,
+  GroupLogPayloadSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
+  TaskGroupStatusSchema,
   type ContextStateData,
+  type EndGroupStatus,
   type LogMessageData,
   type StreamLogEntry,
   type StreamLogTextDelta,
@@ -17,26 +20,18 @@ import {
 import type { StreamLogs, StreamState } from '../store';
 import type { HandlerRegistry } from '../messageHandlerTypes';
 
-function isTaskGroupStatus(value: unknown): value is TaskGroupStatus {
-  return (
-    value === STREAM_PHASE.RUNNING ||
-    value === STREAM_PHASE.COMPLETED ||
-    value === STREAM_PHASE.CANCELLED ||
-    value === STREAM_PHASE.FAILED
-  );
-}
-
 /**
- * A `GROUP_END` row's `data.status` now carries the canonical `RunOutcome`
- * every live/persisted producer writes (§8.2) — `TaskGroup.status` is
- * retyped to that same native vocabulary (#7993 step 3), so the common case
- * is a straight pass-through via `isTaskGroupStatus`. The one remaining
- * legacy arm handles entries the standalone trace-viewer forwards raw from
- * an exported trace file predating this cutover: that replay path stays
- * legacy-capable permanently (docs/proposals/session-scoped-runtime-
- * architecture.md §8.3 — the trace-viewer's own per-entry normalization is
- * separate future work), so a legacy 2-value `EndGroupStatus` string can
- * still reach this reader. Map it UP to the same native value
+ * A `GROUP_END` row's `data.status` carries either the native `TaskGroupStatus`
+ * (the `StreamPhase` running/completed/cancelled/failed subset) every
+ * live/persisted producer writes (§8.2, #7993 step 3's reader retype), or
+ * the legacy 2-value `EndGroupStatus` a pre-cutover exported trace file's
+ * raw entries still carry — the standalone trace-viewer's `replayTrace()`
+ * forwards `trace.entries` verbatim into this same `LOG_DELTA` pipeline, a
+ * permanent second boundary (docs/proposals/session-scoped-runtime-
+ * architecture.md §8.3). `GroupLogPayloadSchema.status` already validated
+ * `value` against the union of both vocabularies upstream, so the native
+ * arm here is a `safeParse`-based narrow rather than a hand-rolled type
+ * guard; the legacy arm maps a value UP to the same native value
  * `StreamLogStore.parsePersistedEntries` produces for the same on-disk
  * string (`'stopped'` -> `completed`, the documented lossy default; `'error'`
  * -> `failed`) so a task group renders identically whether it arrived live,
@@ -45,24 +40,14 @@ function isTaskGroupStatus(value: unknown): value is TaskGroupStatus {
  * caller-supplied default, as before.
  */
 function taskGroupEndStatus(
-  value: unknown,
+  value: TaskGroupStatus | EndGroupStatus | undefined,
   fallback: TaskGroupStatus,
 ): TaskGroupStatus {
-  if (isTaskGroupStatus(value)) return value;
+  const native = TaskGroupStatusSchema.safeParse(value);
+  if (native.success) return native.data;
   if (value === END_GROUP_STATUS.STOPPED) return STREAM_PHASE.COMPLETED;
   if (value === END_GROUP_STATUS.ERROR) return STREAM_PHASE.FAILED;
   return fallback;
-}
-
-function isStageKind(
-  value: unknown,
-): value is 'run' | 'round' | 'phase' | 'session' {
-  return (
-    value === 'run' ||
-    value === 'round' ||
-    value === 'phase' ||
-    value === 'session'
-  );
 }
 
 function asContextStateData(data: unknown): ContextStateData | undefined {
@@ -87,10 +72,7 @@ function updateTaskGroups(
   taskGroupIndex: Map<string, number>,
   entry: StreamLogEntry,
 ): boolean {
-  const payload =
-    typeof entry.data === 'object' && entry.data !== null
-      ? (entry.data as Record<string, unknown>)
-      : {};
+  const payload = GroupLogPayloadSchema.catch({}).parse(entry.data);
   const cachedIndex = taskGroupIndex.get(entry.id);
   const groupIndex =
     cachedIndex !== undefined &&
@@ -103,18 +85,19 @@ function updateTaskGroups(
   }
 
   if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
-    const status = isTaskGroupStatus(payload.status)
-      ? payload.status
-      : STREAM_PHASE.RUNNING;
+    // `GROUP_START` only ever carries the native `TaskGroupStatus`
+    // vocabulary (never the legacy `EndGroupStatus` — a run hasn't ended
+    // yet), so narrow rather than fold.
+    const startStatus = TaskGroupStatusSchema.safeParse(payload.status);
     const nextGroup = {
       id: entry.id,
-      name: entry.text ?? String(payload.name ?? entry.id),
+      name: entry.text ?? payload.name ?? entry.id,
       startTime: entry.timestamp,
-      status,
+      status: startStatus.success ? startStatus.data : STREAM_PHASE.RUNNING,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-      ...(isStageKind(payload.kind) ? { kind: payload.kind } : {}),
-      ...(typeof payload.index === 'number' ? { index: payload.index } : {}),
-      ...(typeof payload.total === 'number' ? { total: payload.total } : {}),
+      ...(payload.kind ? { kind: payload.kind } : {}),
+      ...(payload.index !== undefined ? { index: payload.index } : {}),
+      ...(payload.total !== undefined ? { total: payload.total } : {}),
     };
 
     if (groupIndex === -1) {
@@ -131,8 +114,7 @@ function updateTaskGroups(
   }
 
   const status = taskGroupEndStatus(payload.status, STREAM_PHASE.COMPLETED);
-  const endTime =
-    typeof payload.endTime === 'number' ? payload.endTime : undefined;
+  const endTime = payload.endTime;
 
   if (groupIndex === -1) {
     taskGroupIndex.set(entry.id, streamState.taskGroups.length);
@@ -142,9 +124,9 @@ function updateTaskGroups(
       startTime: entry.timestamp,
       status,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-      ...(isStageKind(payload.kind) ? { kind: payload.kind } : {}),
-      ...(typeof payload.index === 'number' ? { index: payload.index } : {}),
-      ...(typeof payload.total === 'number' ? { total: payload.total } : {}),
+      ...(payload.kind ? { kind: payload.kind } : {}),
+      ...(payload.index !== undefined ? { index: payload.index } : {}),
+      ...(payload.total !== undefined ? { total: payload.total } : {}),
       ...(endTime !== undefined ? { endTime } : {}),
     });
   } else {
