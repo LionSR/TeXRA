@@ -10,6 +10,9 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/details/details.js';
+
 // Local imports - shared utilities
 import {
   ExtendedTokenUsageStatsSchema,
@@ -43,20 +46,22 @@ export function formatFileListTemplate(
   // Raw fallback when parsing fails
   if (!parseResult.success) {
     // prettier-ignore
-    return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+    return html`<wa-details appearance="plain" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
       iconName: 'file',
       label: 'Files (raw)',
       labelClass: 'summary-text',
-    })}<ul class="file-list-content" data-log-id=${ifDefined(id)}><pre>${text ?? ''}</pre></ul></details>`;
+      summarySlot: true,
+    })}<ul class="file-list-content" data-log-id=${ifDefined(id)}><pre>${text ?? ''}</pre></ul></wa-details>`;
   }
 
   const renderData = buildFileListRender(parseResult.data);
   // prettier-ignore
-  return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
     iconName: 'file',
     label: renderData?.summary ?? 'Files',
     labelClass: 'summary-text',
-  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${renderData?.items ?? ''}</ul></details>`;
+    summarySlot: true,
+  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${renderData?.items ?? ''}</ul></wa-details>`;
 }
 
 /** Render XML link template. */
@@ -93,11 +98,12 @@ export function formatMissingOutputsTemplate(
     return html`<li class="detail-item" title=${filePath}><wa-icon library=${TEXRA_ICON_LIBRARY} name="warning" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${basename}</span></li>`;
   });
   // prettier-ignore
-  return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
     iconName: 'warning',
     label: `Missing outputs (${missing.length})`,
     labelClass: 'summary-text',
-  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listItems}</ul>${xmlFile ? renderXmlLink(xmlFile) : ''}</details>`;
+    summarySlot: true,
+  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listItems}</ul>${xmlFile ? renderXmlLink(xmlFile) : ''}</wa-details>`;
 }
 
 // =============================================================================
