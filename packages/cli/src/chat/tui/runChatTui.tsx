@@ -43,6 +43,7 @@ import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { seedCliRosterFromDefaultTeam } from '@cli/runtime/defaultTeamRoster';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
+  handOffCliShutdownSignalHandlers,
   initInteractiveCliPlatform,
   runCliPlatformShutdownSequence,
   setCliHelperModel,
@@ -271,11 +272,12 @@ export async function runChat(
     return { exitCode: CliExitCode.Usage };
   }
 
-  // installSignalHandlers: false (baked into initInteractiveCliPlatform) —
-  // this function is about to install its own SIGINT/SIGTERM/SIGHUP handlers
-  // (below, once Ink mounts) and owns teardown exclusively from here on; see
-  // initInteractiveCliPlatform's doc comment for why a second, platform-level
-  // handler set would race it.
+  // The platform's own SIGINT/SIGTERM handler stays live through onboarding
+  // and model resolution below — this function does not suppress it. Once
+  // Ink actually mounts (below), handOffCliShutdownSignalHandlers() removes
+  // it immediately before this function installs its own process.on pair, so
+  // exactly one owner is ever registered for a given signal; see
+  // initInteractiveCliPlatform's doc comment for the full handoff design.
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the apiMode + model
@@ -987,6 +989,12 @@ export async function runChat(
     clearPendingExit();
     ink.unmount();
   }
+  // Ownership transfers right here, not any earlier: everything above this
+  // line (initInteractiveCliPlatform, onboarding, model resolution) ran with
+  // the platform's own handler still live, so a signal during that window
+  // still got a graceful shutdown. This removes it and makes the handlers
+  // installed below the sole owner.
+  handOffCliShutdownSignalHandlers();
   process.on('SIGINT', handleSigint);
   process.on('SIGTERM', handleSigterm);
   process.on('SIGHUP', handleSighup);

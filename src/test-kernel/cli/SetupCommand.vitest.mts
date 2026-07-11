@@ -82,9 +82,10 @@ describe('texra setup combined flow', () => {
 
     await runSetup(INTERACTIVE_CONTEXT);
 
-    // `texra setup` always ends in the chat TUI, so the TUI must own
-    // SIGINT/SIGTERM exclusively once it mounts — initInteractiveCliPlatform
-    // is what suppresses the platform's own handler (see initPlatform.ts).
+    // `texra setup` always ends in the chat TUI, so it must route through
+    // initInteractiveCliPlatform — not plain initCliPlatform — so the TUI can
+    // later hand itself exclusive SIGINT/SIGTERM ownership once it mounts
+    // (see initPlatform.ts).
     expect(mocks.initInteractiveCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ ...INTERACTIVE_CONTEXT, quietLogs: true }),
     );
