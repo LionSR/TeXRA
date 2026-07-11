@@ -11,10 +11,8 @@ import {
   STREAM_TRANSITION_CAUSE,
 } from '@common/constants/streamStatus';
 import {
-  END_GROUP_STATUS,
   RUN_OUTCOME,
   STREAM_PHASE,
-  type EndGroupStatus,
   type ExecutionId,
   type RunOutcome,
   type StreamPhase,
@@ -32,7 +30,7 @@ export interface RestartRepairOptions {
   executionIds: ReadonlyMap<StreamTabId, ExecutionId>;
   closeRunningGroups(
     streamIds: readonly StreamTabId[],
-    status: EndGroupStatus,
+    status: RunOutcome,
     now: number,
   ): Promise<readonly StreamTabId[]>;
   repairStreams?: Iterable<StreamTabId>;
@@ -268,11 +266,15 @@ export async function repairRestartedStreams(
 
   const now = options.now ?? Date.now();
   const failedGroupStreams = [...failedStreams, ...orphanedGroupStreams];
+  // Restart repair's own crash-vs-graceful-interrupt classification (§8.2):
+  // a stream repaired back to WAITING never crashed — it's a graceful
+  // interrupt — so its still-open transcript group closes as CANCELLED, not
+  // the unconditional error default a crash-classified stream gets below.
   const closedWaitingGroups =
     waitingGroupStreams.length > 0
       ? await options.closeRunningGroups(
           waitingGroupStreams,
-          END_GROUP_STATUS.STOPPED,
+          RUN_OUTCOME.CANCELLED,
           now,
         )
       : [];
@@ -280,7 +282,7 @@ export async function repairRestartedStreams(
     failedGroupStreams.length > 0
       ? await options.closeRunningGroups(
           failedGroupStreams,
-          END_GROUP_STATUS.ERROR,
+          RUN_OUTCOME.FAILED,
           now,
         )
       : [];

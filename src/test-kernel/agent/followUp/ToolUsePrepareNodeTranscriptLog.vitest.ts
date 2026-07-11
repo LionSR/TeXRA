@@ -9,6 +9,8 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUsePrepareNode } from '@agent/implementations/flows/tooluse/nodes/ToolUsePrepareNode';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
+import { buildInitialToolUsePrompts } from '@utils/prompt';
 
 function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},
@@ -108,20 +110,34 @@ function buildSnapshot(
 }
 
 describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
-  it('keeps the persisted messages byte-identical on resume, never rewriting messages[0]', async () => {
+  it('keeps the persisted message prefix while rebuilding the per-call system prompt', async () => {
     // Rewriting the persisted system message on every resume to reflect
     // current workspace/tool state would change the leading bytes of the
     // request and invalidate the provider's prefix-based prompt cache. Per
     // maintainer ruling, resume must use the snapshot's messages verbatim —
     // a mid-run agent-config edit does not propagate into an
-    // already-suspended run's prefix. This is the regression test for that
-    // contract: no local re-derivation, no port call, no mutation.
+    // already-suspended run's prefix. The separate per-call system prompt,
+    // however, must still be rebuilt from the current prompt configuration.
     const snapshot = buildSnapshot();
     const services = buildServices({ snapshot });
     const node = new ToolUsePrepareNode().setServices(services);
+    const resolvedToolNames = services.resolvedTools.map((tool) => tool.name);
+    const rebuiltPrompts = await buildInitialToolUsePrompts(
+      services.prompt,
+      services.userVarChannels.transient,
+      services.logger,
+      {
+        resolvedToolNames,
+        hasDelegationTools: hasDelegationTool(resolvedToolNames),
+        isSubagent: services.isSubagent,
+      },
+    );
 
     const result = await node.exec(undefined);
 
+    expect(result.result.systemPrompt).toBe(
+      `${rebuiltPrompts.systemPrompt}\n${rebuiltPrompts.instructionSuffix}`,
+    );
     expect(result.result.messages).toBe(snapshot.messages);
     expect(result.result.messages[0]).toEqual({
       role: 'system',

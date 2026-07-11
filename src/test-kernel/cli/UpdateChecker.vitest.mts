@@ -124,8 +124,7 @@ describe('isPackageManagerInstall', () => {
     // A dev build runs straight from packages/cli/dist — no node_modules
     // segment — which is exactly why this gate is needed: detectInstallMethod
     // would otherwise fall back to 'npm' and prompt `npm install -g`.
-    const devPath =
-      '/Users/me/Local/AI-Projects/coauthor/packages/cli/dist/bin/texra.js';
+    const devPath = '/Users/me/projects/texra/packages/cli/dist/bin/texra.js';
     expect(isPackageManagerInstall(devPath)).toBe(false);
     expect(detectInstallMethod(devPath)).toBe('npm');
     expect(

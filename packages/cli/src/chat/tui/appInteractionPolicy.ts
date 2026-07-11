@@ -17,6 +17,7 @@ const FORM_FOREGROUND_MAX_ROWS = 18;
 // Match form sizing for approval modals that already budget or scroll their
 // content. Natural-height approvals stay uncapped until they grow row budgets.
 const APPROVAL_FOREGROUND_MAX_ROWS = 18;
+type ApprovalKind = PendingApproval['payload']['kind'];
 
 // A bare Esc and the second key of an `Esc s` / `Esc p` chord are two
 // separate keystrokes on terminals without true Meta-key detection (macOS
@@ -142,14 +143,14 @@ export function approvalVisibleForActiveStream({
 
 export function foregroundEscapeAction({
   activeFormEscapeAction,
+  approvalKind,
   childControlEscapeAction,
   foregroundKind,
-  pending,
 }: {
   readonly activeFormEscapeAction?: string;
+  readonly approvalKind?: ApprovalKind;
   readonly childControlEscapeAction?: string;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
-  readonly pending: PendingApproval | undefined;
 }): string | undefined {
   switch (foregroundKind) {
     case undefined:
@@ -160,16 +161,15 @@ export function foregroundEscapeAction({
       return childControlEscapeAction ?? 'close';
     case 'transcript':
       return 'close';
-    case 'approval': {
-      const kind = pending?.payload.kind;
-      return kind === 'externalInquiry' || kind === 'userQuestion'
+    case 'approval':
+      return approvalKind === 'externalInquiry' ||
+        approvalKind === 'userQuestion'
         ? 'skip'
         : 'cancel';
-    }
   }
 }
 
-export function childControlForegroundMaxRows({
+function childControlForegroundMaxRows({
   hasItems,
 }: {
   readonly hasItems: boolean;
@@ -179,12 +179,12 @@ export function childControlForegroundMaxRows({
     : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
 }
 
-export function approvalForegroundMaxRows(
-  pending: PendingApproval | undefined,
+function approvalForegroundMaxRows(
+  approvalKind: ApprovalKind | undefined,
 ): number | undefined {
-  if (pending === undefined) return undefined;
+  if (approvalKind === undefined) return undefined;
 
-  switch (pending.payload.kind) {
+  switch (approvalKind) {
     case 'bash':
     case 'toolEdit':
     case 'proposal':
@@ -195,18 +195,18 @@ export function approvalForegroundMaxRows(
     case 'userQuestion':
       return undefined;
     default:
-      return assertNever(pending.payload, 'Unhandled approval payload kind');
+      return assertNever(approvalKind, 'Unhandled approval payload kind');
   }
 }
 
 export function foregroundMaxRowsForKind({
+  approvalKind,
   childControlHasItems,
   kind,
-  pending,
 }: {
+  readonly approvalKind?: ApprovalKind;
   readonly childControlHasItems: boolean;
   readonly kind: ForegroundSurfaceKind | undefined;
-  readonly pending: PendingApproval | undefined;
 }): number | undefined {
   switch (kind) {
     case 'childControls':
@@ -214,7 +214,7 @@ export function foregroundMaxRowsForKind({
     case 'form':
       return FORM_FOREGROUND_MAX_ROWS;
     case 'approval':
-      return approvalForegroundMaxRows(pending);
+      return approvalForegroundMaxRows(approvalKind);
     case 'transcript':
     case undefined:
       return undefined;
