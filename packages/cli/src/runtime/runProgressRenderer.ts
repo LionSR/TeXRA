@@ -15,7 +15,6 @@ import type {
 import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
 import {
   STREAM_PHASE,
-  STREAM_STATUS,
   type ActiveChildInfo,
   type ConversationProgress,
   type RoundStage,
@@ -403,7 +402,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 function formatRunProgressStatus(status: StreamPhase): string {
   if (status === STREAM_PHASE.COMPLETED) return 'done';
   if (status === STREAM_PHASE.CANCELLED) return 'interrupted';
-  if (status === STREAM_PHASE.FAILED) return STREAM_STATUS.ERROR;
+  if (status === STREAM_PHASE.FAILED) return 'error';
   return status;
 }
 

@@ -2,8 +2,8 @@ import {
   defaultShortcutModifierLabel,
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
-import { isInFlightStatus } from '@common/constants/streamStatus';
-import type { StreamLifecycleStatus, StreamTabId } from '@shared/schemas';
+import { isInFlightPhase } from '@common/constants/streamStatus';
+import type { StreamPhase, StreamTabId } from '@shared/schemas';
 
 import { resolveChildControlDisplayTargets } from './childControls';
 import { activeStreamScope } from './streamViews';
@@ -31,7 +31,7 @@ export function focusedChildFollowUpRoute(init: {
   const status = init.streams.get(scope.streamId)?.status;
   // A focused child normally has a status. Keep the previous permissive
   // behavior during the brief edge where parent focus arrives first.
-  if (status !== undefined && !isInFlightStatus(status)) {
+  if (status !== undefined && !isInFlightPhase(status)) {
     return { kind: 'reject', streamId: scope.streamId };
   }
   return { kind: 'accept', streamId: scope.streamId };
@@ -41,7 +41,7 @@ export function focusedChildInputDisabledMessage(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly shortcutModifierLabel?: string;
-  readonly status: StreamLifecycleStatus | undefined;
+  readonly status: StreamPhase | undefined;
   readonly subagentControlsAvailable?: boolean;
   readonly taskControlsAvailable?: boolean;
 }): string | undefined {
@@ -52,7 +52,7 @@ export function focusedChildInputDisabledMessage(init: {
   if (
     scope.kind !== 'child' ||
     init.status === undefined ||
-    isInFlightStatus(init.status)
+    isInFlightPhase(init.status)
   ) {
     return undefined;
   }

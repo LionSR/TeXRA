@@ -1,8 +1,8 @@
 import stripAnsi from 'strip-ansi';
 
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
-import { isLiveElapsedStatus } from '@common/constants/streamStatus';
-import { type StreamLifecycleStatus } from '@shared/schemas';
+import { isActivePhase } from '@common/constants/streamStatus';
+import { type StreamPhase } from '@shared/schemas';
 
 import type { ConversationEntry } from '../state/cliState';
 
@@ -84,14 +84,14 @@ export function nextRenderableTranscriptEntry(
 export function userPromptAwaitsLiveContinuation(
   entries: readonly ConversationEntry[],
   index: number,
-  status: StreamLifecycleStatus | undefined,
+  status: StreamPhase | undefined,
 ): boolean {
   const entry = entries[index];
   if (
     entry?.role !== 'user' ||
     isInquiryContinuationText(entry.text) ||
     !isRenderableTranscriptEntry(entry) ||
-    !isLiveElapsedStatus(status)
+    !isActivePhase(status)
   ) {
     return false;
   }
@@ -100,7 +100,7 @@ export function userPromptAwaitsLiveContinuation(
 
 export function splitTranscriptEntries(
   entries: readonly ConversationEntry[],
-  status: StreamLifecycleStatus | undefined,
+  status: StreamPhase | undefined,
 ): {
   readonly finalized: ConversationEntry[];
   /** Non-finalized entries in original stream order. The renderer must
@@ -113,7 +113,7 @@ export function splitTranscriptEntries(
    *  fixed. */
   readonly pending: ConversationEntry[];
 } {
-  const showLiveAssistant = isLiveElapsedStatus(status);
+  const showLiveAssistant = isActivePhase(status);
   const finalized: ConversationEntry[] = [];
   const pending: ConversationEntry[] = [];
   for (const [index, entry] of entries.entries()) {

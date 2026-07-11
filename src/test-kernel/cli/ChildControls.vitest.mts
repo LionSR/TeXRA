@@ -58,7 +58,7 @@ import {
 
 // Local imports - shared schemas
 import {
-  STREAM_STATUS,
+  STREAM_PHASE,
   TOOL_USE_STATUS,
   type NormalizedToolUse,
   type StreamTabId,
@@ -124,10 +124,8 @@ function childStatusStreams(
       row.childStreamId,
       slice({
         streamId: row.childStreamId,
-        // Test fixtures reuse the loosely-typed `ActiveChildInfo.status`
-        // strings (e.g. legacy 'stopped'/'initializing') that
-        // `StreamLifecycleStatusSchema` accepts and normalizes at runtime,
-        // but the static `StreamLifecycleStatus` type doesn't include them.
+        // ChildStreamEntryRow keeps process status text stringly typed, while
+        // subagent StreamSlice status is the canonical StreamPhase.
         status: row.status as StreamSlice['status'],
       }),
     ]),
@@ -306,7 +304,7 @@ describe('CLI child execution controls', () => {
           executionId: 'agent-2',
           agentName: 'reviewer',
           childStreamId: 'child-b',
-          status: 'stopped',
+          status: STREAM_PHASE.CANCELLED,
           elapsed: '20s',
           active: false,
         },
@@ -419,7 +417,7 @@ describe('CLI child execution controls', () => {
     expect(childElapsed(parentSlice.activeProcesses[0], 62_000)).toBe('1s');
     expect(
       childElapsed(
-        { startedAt: 0, status: STREAM_STATUS.RUNNING, elapsed: '1s' },
+        { startedAt: 0, status: STREAM_PHASE.RUNNING, elapsed: '1s' },
         7_501_234,
       ),
     ).toBe('2h 5m');
@@ -432,7 +430,7 @@ describe('CLI child execution controls', () => {
           kind: 'process',
           executionId: 'proc-1',
           agentName: 'bash',
-          status: STREAM_STATUS.WAITING,
+          status: STREAM_PHASE.WAITING,
           elapsed: '3s',
         },
       ],
@@ -446,7 +444,7 @@ describe('CLI child execution controls', () => {
           executionId: 'agent-1',
           agentName: 'review',
           childStreamId: 'child-a',
-          status: STREAM_STATUS.WAITING,
+          status: STREAM_PHASE.WAITING,
           elapsed: '20s',
         },
       ],
@@ -498,7 +496,7 @@ describe('CLI child execution controls', () => {
             childStreamId: 'agent-1-stream',
             executionId: 'agent-1',
             agentName: 'reviewer',
-            status: 'initializing',
+            status: STREAM_PHASE.RUNNING,
             startedAt: 1_000,
           },
         ],
@@ -512,7 +510,7 @@ describe('CLI child execution controls', () => {
           'agent-1-stream',
           slice({
             streamId: 'agent-1-stream',
-            status: 'initializing' as StreamSlice['status'],
+            status: STREAM_PHASE.RUNNING,
           }),
         ],
       ]),
@@ -760,7 +758,7 @@ describe('CLI child execution controls', () => {
           executionId: 'agent-1',
           agentName: 'critic',
           childStreamId: 'child-a',
-          status: 'stopped',
+          status: STREAM_PHASE.CANCELLED,
           active: false,
         },
         {
@@ -1057,7 +1055,7 @@ describe('CLI child execution controls', () => {
           executionId: 'agent-1',
           agentName: 'review',
           childStreamId: 'review-stream',
-          status: 'stopped',
+          status: STREAM_PHASE.CANCELLED,
           active: false,
         },
       ],

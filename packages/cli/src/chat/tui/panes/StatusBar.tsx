@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
-import { STREAM_STATUS } from '@shared/schemas';
+import { isActivePhase } from '@common/constants/streamStatus';
 
 import { approvalQueueStatus } from '../state/approvalQueue';
 import { terminalCapabilities } from '../state/terminalCapabilities';
@@ -99,10 +99,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     };
   }, [sessionMeta.model, codexPreferenceVersion]);
 
-  const runStartedAt =
-    statusSlice?.status === STREAM_STATUS.RUNNING
-      ? statusSlice.runStartedAt
-      : undefined;
+  const runStartedAt = isActivePhase(statusSlice?.status)
+    ? statusSlice?.runStartedAt
+    : undefined;
   const now = useLiveNowMs(runStartedAt !== undefined, runStartedAt);
 
   const display = buildStatusBarDisplay({
