@@ -21,11 +21,8 @@ import {
   COMMIT_LABEL_FORMAT,
   splitCommitLines,
 } from '@utils/git/commitLogFormat';
-import {
-  GIT_INSTALL_OPTIONS,
-  isToolAvailable,
-} from '@utils/git/gitInstallHelp';
 import { isGitRepository as probeGitRepository } from '@utils/system/isGitRepository';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'gitCommands';
 logger.initialize(CHANNEL);
@@ -215,7 +212,29 @@ async function getGitToken(
 
 const IGNORED_FILES = new Set(['.DS_Store', 'Thumbs.db']);
 
+/**
+ * Platform-specific package-manager install options surfaced when `git` is
+ * missing from PATH. Each option pairs the package-manager binary (used to
+ * probe whether the PM is installed) with the full install command.
+ */
+const GIT_INSTALL_OPTIONS: Partial<
+  Record<NodeJS.Platform, { tool: string; command: string }>
+> = {
+  darwin: { tool: 'brew', command: 'brew install git' },
+  win32: { tool: 'winget', command: 'winget install --id Git.Git -e' },
+  linux: { tool: 'apt-get', command: 'sudo apt-get install git' },
+};
+
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
+
+function isToolAvailable(tool: string): boolean {
+  return (
+    execaSync(tool, ['--version'], {
+      reject: false,
+      env: { ...process.env, PATH: extendEnvPath() },
+    }).exitCode === 0
+  );
+}
 
 async function promptGitMissing(): Promise<void> {
   const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
