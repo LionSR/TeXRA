@@ -322,8 +322,8 @@ importers:
         specifier: ^5.0.6
         version: 5.0.6
       '@types/vscode':
-        specifier: ^1.105.0
-        version: 1.120.0
+        specifier: ^1.125.0
+        version: 1.125.0
       '@types/write-file-atomic':
         specifier: ^4.0.3
         version: 4.0.3
@@ -723,8 +723,8 @@ importers:
         specifier: ^5.0.6
         version: 5.0.6
       '@types/vscode':
-        specifier: ^1.105.0
-        version: 1.120.0
+        specifier: ^1.125.0
+        version: 1.125.0
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.63.0
         version: 8.63.0(@typescript-eslint/parser@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
@@ -2566,8 +2566,8 @@ packages:
   '@types/turndown@5.0.6':
     resolution: {integrity: sha512-ru00MoyeeouE5BX4gRL+6m/BsDfbRayOskWqUvh7CLGW+UXxHQItqALa38kKnOiZPqJrtzJUgAC2+F0rL1S4Pg==}
 
-  '@types/vscode@1.120.0':
-    resolution: {integrity: sha512-feaT4Rst+FkTch5zz/ZbNCxoIvo55YU80Be2kiL7OJcod4+CUYf2lUBPdIJzozNnSEMq1VRTGrWEcCGFB3fBmA==}
+  '@types/vscode@1.125.0':
+    resolution: {integrity: sha512-0icm/ZQAaism87P0ekHqi4/Ju9du+Tm0RUW+y7vqRsxY2cY0FNRX1nAnaW7nT6npPt2tfHiheZ55Zm9UhqonFA==}
 
   '@types/write-file-atomic@4.0.3':
     resolution: {integrity: sha512-qdo+vZRchyJIHNeuI1nrpsLw+hnkgqP/8mlaN6Wle/NKhydHmUN9l4p3ZE8yP90AJNJW4uB8HQhedb4f1vNayQ==}
@@ -8095,7 +8095,7 @@ snapshots:
 
   '@types/turndown@5.0.6': {}
 
-  '@types/vscode@1.120.0': {}
+  '@types/vscode@1.125.0': {}
 
   '@types/write-file-atomic@4.0.3':
     dependencies:
