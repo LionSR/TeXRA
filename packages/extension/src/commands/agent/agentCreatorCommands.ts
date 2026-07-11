@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
+import { z } from 'zod';
 
 import {
   type AgentCategory,
@@ -20,9 +21,13 @@ import { AbsoluteFS } from '@utils/files';
 const CHANNEL = 'AgentCreator';
 logger.initialize(CHANNEL);
 
-interface ParsedCreatorYaml {
-  prompts: { systemPrompt: string; userRequest: string; retryPrompt?: string };
-}
+const ParsedCreatorYamlSchema = z.object({
+  prompts: z.object({
+    systemPrompt: z.string(),
+    userRequest: z.string(),
+    retryPrompt: z.string().optional(),
+  }),
+});
 
 /** Cached after first load. Templates are bundled resources — stable for the session. */
 let creatorConfig: CreatorConfig | null = null;
@@ -45,8 +50,8 @@ async function loadCreatorConfig(
       ),
       AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
     ]);
-  const wf = yaml.parse(workflowYaml) as ParsedCreatorYaml;
-  const tu = yaml.parse(toolUseYaml) as ParsedCreatorYaml;
+  const wf = ParsedCreatorYamlSchema.parse(yaml.parse(workflowYaml));
+  const tu = ParsedCreatorYamlSchema.parse(yaml.parse(toolUseYaml));
   const defaultRetry =
     'The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.';
   creatorConfig = {
