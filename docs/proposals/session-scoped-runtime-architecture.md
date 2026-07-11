@@ -1079,6 +1079,32 @@ does not — validate `data.status`; the normalization is a _value_ transform
 on top of the existing parse, not a schema change, and needs no persisted
 format-version bump.
 
+**Census correction (found while landing #8087, folded in here per that PR's
+own recommendation):** the two live callers named above are not the only
+`StreamLogStore` clients — `assembleTrace()`
+(`src/transcript/traceAssembler.ts`) is a **third**, and it sits upstream of
+the trace-viewer's input rather than downstream of it. It constructs a fresh
+`StreamLogStore` instance and calls `.load()`/`.ensureLoaded()` on it to
+build every exported `TraceDocument` — used by the CLI's single-file export,
+the extension's history browser, and the settings-view chat export
+(`ChatExportController`) — so it runs through `parsePersistedEntries` like
+any other reader. Consequently, every `TraceDocument` `assembleTrace()`
+builds after this boundary lands carries canonical `RunOutcome`/`StreamPhase`
+values in its `GROUP_START`/`GROUP_END` rows, **including a re-export built
+from pre-cutover on-disk history** — a genuinely externally-authored
+`trace.json` that predates the cutover and is never reassembled keeps the
+legacy 2-value strings forever (per the trace-viewer boundary below), so
+`replayTrace.ts`'s `toStreamLifecycleStatus` has to read a
+`StreamLogStore`-derived `TraceDocument` right alongside a legacy one without
+knowing in advance which vocabulary it's holding. That consumer-side
+handling already landed in #8087: `toStreamLifecycleStatus` parses the
+terminal group's `data.status` with `StreamLifecycleStatusSchema` (the
+already-shipped `StreamPhase`-or-legacy-`StreamStatus` union, §2), not the
+narrower legacy-only `StreamStatusSchema` the original census described — see
+`replayTrace.ts:105-116`. This is a census fix only: `assembleTrace()` is a
+third _client_ of boundary 1, not a third _boundary_ — it does not change the
+two-boundary count in this section's heading.
+
 **Target:** extend `parsePersistedEntries` (or a transform run immediately
 after it, before entries reach callers) so that any `GROUP_START`/`GROUP_END`
 entry's `data.status` is normalized in place at load time:

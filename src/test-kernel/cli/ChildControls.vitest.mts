@@ -7,13 +7,13 @@ import {
   type ChildStreamEntryRow,
 } from '@test/support/childStreamEntries';
 import {
-  compactPickerOverflowText,
   computePickerListLayout,
   emptyPickerText,
   isUltraCompactPickerRows,
   pickerTitle,
 } from '@cli/chat/tui/modals/ChildControlPicker';
 import { pickerKeyHintsForColumns } from '@cli/chat/tui/modals/childControlPickerHints';
+import { compactPickerOverflowText } from '@cli/chat/tui/render/overflowText';
 import {
   computeTaskDetailLayout,
   isUltraCompactTaskDetailRows,

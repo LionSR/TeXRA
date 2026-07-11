@@ -1,16 +1,16 @@
 import { create } from 'mutative';
 
-import { legacyEndGroupStatusForOutcome } from '@common/constants/streamStatus';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ContextStateDataSchema,
+  END_GROUP_STATUS,
   GroupLogPayloadSchema,
   MESSAGE_TYPES,
-  RunOutcomeSchema,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_STATUS,
+  STREAM_PHASE,
   TaskGroupStatusSchema,
   type ContextStateData,
+  type EndGroupStatus,
   type LogMessageData,
   type StreamLogEntry,
   type StreamLogTextDelta,
@@ -21,32 +21,33 @@ import type { StreamLogs, StreamState } from '../store';
 import type { HandlerRegistry } from '../messageHandlerTypes';
 
 /**
- * A `GROUP_END` row's `data.status` now carries either the legacy 2-value
- * `EndGroupStatus` (rows the standalone trace-viewer forwards raw from an
- * exported trace file — that replay path stays legacy-capable permanently,
- * see docs/proposals/session-scoped-runtime-architecture.md §8.3) or the
- * canonical `RunOutcome` every live/persisted producer now writes (§8.2).
- * Fold a canonical value down to the same legacy bucket the pre-cutover
- * writer used so `TaskGroup.status` — not yet retyped to `StreamPhase`/
- * `RunOutcome` (that reader migration is #7993 goal item 3) — keeps
- * rendering exactly as it does today; only the transcript row itself gains
- * the completed/cancelled bit this step. A value that is neither vocabulary
- * (malformed data) falls back to the caller-supplied default, as before.
- *
- * Both branches parse via the schemas rather than hand-rolled guards —
- * `GroupLogPayloadSchema.status` already validated `value` against the union
- * of the two vocabularies upstream, so these `safeParse` calls just narrow.
+ * A `GROUP_END` row's `data.status` carries either the native `TaskGroupStatus`
+ * (the `StreamPhase` running/completed/cancelled/failed subset) every
+ * live/persisted producer writes (§8.2, #7993 step 3's reader retype), or
+ * the legacy 2-value `EndGroupStatus` a pre-cutover exported trace file's
+ * raw entries still carry — the standalone trace-viewer's `replayTrace()`
+ * forwards `trace.entries` verbatim into this same `LOG_DELTA` pipeline, a
+ * permanent second boundary (docs/proposals/session-scoped-runtime-
+ * architecture.md §8.3). `GroupLogPayloadSchema.status` already validated
+ * `value` against the union of both vocabularies upstream, so the native
+ * arm here is a `safeParse`-based narrow rather than a hand-rolled type
+ * guard; the legacy arm maps a value UP to the same native value
+ * `StreamLogStore.parsePersistedEntries` produces for the same on-disk
+ * string (`'stopped'` -> `completed`, the documented lossy default; `'error'`
+ * -> `failed`) so a task group renders identically whether it arrived live,
+ * from a rehydrated stream, or forwarded raw by the trace-viewer. A value
+ * that is neither vocabulary (malformed data) falls back to the
+ * caller-supplied default, as before.
  */
 function taskGroupEndStatus(
-  value: unknown,
+  value: TaskGroupStatus | EndGroupStatus | undefined,
   fallback: TaskGroupStatus,
 ): TaskGroupStatus {
-  const legacy = TaskGroupStatusSchema.safeParse(value);
-  if (legacy.success) return legacy.data;
-  const outcome = RunOutcomeSchema.safeParse(value);
-  return outcome.success
-    ? legacyEndGroupStatusForOutcome(outcome.data)
-    : fallback;
+  const native = TaskGroupStatusSchema.safeParse(value);
+  if (native.success) return native.data;
+  if (value === END_GROUP_STATUS.STOPPED) return STREAM_PHASE.COMPLETED;
+  if (value === END_GROUP_STATUS.ERROR) return STREAM_PHASE.FAILED;
+  return fallback;
 }
 
 function asContextStateData(data: unknown): ContextStateData | undefined {
@@ -84,15 +85,15 @@ function updateTaskGroups(
   }
 
   if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
-    // `GROUP_START` only ever carries the legacy `TaskGroupStatus`
-    // vocabulary (never a `RunOutcome` — a run hasn't ended yet), so narrow
-    // rather than fold.
+    // `GROUP_START` only ever carries the native `TaskGroupStatus`
+    // vocabulary (never the legacy `EndGroupStatus` — a run hasn't ended
+    // yet), so narrow rather than fold.
     const startStatus = TaskGroupStatusSchema.safeParse(payload.status);
     const nextGroup = {
       id: entry.id,
       name: entry.text ?? payload.name ?? entry.id,
       startTime: entry.timestamp,
-      status: startStatus.success ? startStatus.data : STREAM_STATUS.RUNNING,
+      status: startStatus.success ? startStatus.data : STREAM_PHASE.RUNNING,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
       ...(payload.kind ? { kind: payload.kind } : {}),
       ...(payload.index !== undefined ? { index: payload.index } : {}),
@@ -112,7 +113,7 @@ function updateTaskGroups(
     return false;
   }
 
-  const status = taskGroupEndStatus(payload.status, STREAM_STATUS.STOPPED);
+  const status = taskGroupEndStatus(payload.status, STREAM_PHASE.COMPLETED);
   const endTime = payload.endTime;
 
   if (groupIndex === -1) {
