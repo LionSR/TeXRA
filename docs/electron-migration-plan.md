@@ -383,7 +383,11 @@ The monorepo now has a local unsigned package rehearsal for the Electron desktop
 macOS `.app` bundle from the built desktop main, preload, and renderer artifacts, then verifies the
 packaged `app.asar` contains the expected runtime files. The package verifier also reads the
 desktop main esbuild metafile and checks that the startup import graph does not eagerly pull in
-provider SDKs that should remain behind lazy agent-execution imports.
+provider SDKs that should remain behind lazy agent-execution imports. Its Codex payload check
+rejects unexpected platform packages independently of size. Size ceilings use the audited npm
+unpacked size of each `@openai/codex` 0.144.1 platform package plus 16 MiB of headroom per retained
+package; a universal build receives the sum of its component ceilings. A future Codex update that
+exceeds this headroom requires a tarball-content review before the platform baseline is updated.
 
 From the repository root:
 
