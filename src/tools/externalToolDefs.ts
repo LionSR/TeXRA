@@ -11,6 +11,9 @@
  *   - {@link @controllers/settingsView/ToolDashboardData} — reads everything for the UI
  */
 
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports
 import { platform } from '@platform/platform';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
@@ -142,37 +145,24 @@ async function probeZoteroBbt(port: number): Promise<boolean> {
   }
 }
 
-async function getGitHubPRPrerequisites(): Promise<{
-  tokenPresent: boolean;
-  inGitRepo: boolean;
-}> {
+const GitHubPRPrerequisitesSchema = z.object({
+  tokenPresent: z.boolean(),
+  inGitRepo: z.boolean(),
+});
+type GitHubPRPrerequisites = z.infer<typeof GitHubPRPrerequisitesSchema>;
+
+async function getGitHubPRPrerequisites(): Promise<GitHubPRPrerequisites> {
   const tokenPresent = (await getGitHubToken()) !== undefined;
   const inGitRepo = await isGitRepository();
   return { tokenPresent, inGitRepo };
-}
-
-type GitHubPRPrerequisites = Awaited<
-  ReturnType<typeof getGitHubPRPrerequisites>
->;
-
-function isGitHubPRPrerequisites(
-  value: unknown,
-): value is GitHubPRPrerequisites {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { tokenPresent?: unknown }).tokenPresent === 'boolean' &&
-    typeof (value as { inGitRepo?: unknown }).inGitRepo === 'boolean'
-  );
 }
 
 async function resolveGitHubPRPrerequisites(
   probeResult: unknown,
 ): Promise<GitHubPRPrerequisites> {
   if (probeResult === undefined) return getGitHubPRPrerequisites();
-  return isGitHubPRPrerequisites(probeResult)
-    ? probeResult
-    : getGitHubPRPrerequisites();
+  const parsed = GitHubPRPrerequisitesSchema.safeParse(probeResult);
+  return parsed.success ? parsed.data : getGitHubPRPrerequisites();
 }
 
 async function probeTexraCli(): Promise<boolean> {
@@ -181,24 +171,16 @@ async function probeTexraCli(): Promise<boolean> {
   return checkToolInstalled(TEXRA_LOCAL_CLI_CHECK, false);
 }
 
-interface Lean4Prerequisites {
-  extensionAvailable: boolean;
-  lakeAvailable: boolean;
-}
-
-function isLean4Prerequisites(value: unknown): value is Lean4Prerequisites {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { extensionAvailable?: unknown }).extensionAvailable ===
-      'boolean' &&
-    typeof (value as { lakeAvailable?: unknown }).lakeAvailable === 'boolean'
-  );
-}
+const Lean4PrerequisitesSchema = z.object({
+  extensionAvailable: z.boolean(),
+  lakeAvailable: z.boolean(),
+});
+type Lean4Prerequisites = z.infer<typeof Lean4PrerequisitesSchema>;
 
 function resolveLean4Prerequisites(probeResult: unknown): Lean4Prerequisites {
-  return isLean4Prerequisites(probeResult)
-    ? probeResult
+  const parsed = Lean4PrerequisitesSchema.safeParse(probeResult);
+  return parsed.success
+    ? parsed.data
     : { extensionAvailable: false, lakeAvailable: false };
 }
 
