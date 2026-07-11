@@ -11,10 +11,9 @@ import {
   computePickerListLayout,
   emptyPickerText,
   isUltraCompactPickerRows,
-  pickerKeyHints,
-  pickerKeyHintsForColumns,
   pickerTitle,
 } from '@cli/chat/tui/modals/ChildControlPicker';
+import { pickerKeyHintsForColumns } from '@cli/chat/tui/modals/childControlPickerHints';
 import {
   computeTaskDetailLayout,
   isUltraCompactTaskDetailRows,
@@ -1155,10 +1154,10 @@ describe('CLI child execution controls', () => {
   });
 
   it('advertises only applicable keys for child pickers', () => {
-    expect(pickerKeyHints('tasks', 0)).toEqual([
+    expect(pickerKeyHintsForColumns('tasks', 0)).toEqual([
       { key: 'Esc', action: 'close' },
     ]);
-    expect(pickerKeyHints('tasks', 1)).toEqual([
+    expect(pickerKeyHintsForColumns('tasks', 1)).toEqual([
       { key: '↑/↓', action: 'navigate' },
       { key: 'Enter', action: 'view' },
       { key: 'k', action: 'kill' },
@@ -1168,19 +1167,19 @@ describe('CLI child execution controls', () => {
       kind: 'jump',
       index: 2,
     });
-    expect(pickerKeyHints('tasks', 3)).toContainEqual({
+    expect(pickerKeyHintsForColumns('tasks', 3)).toContainEqual({
       key: '1-9',
       action: 'jump',
     });
-    expect(pickerKeyHints('subagents', 1)).toContainEqual({
+    expect(pickerKeyHintsForColumns('subagents', 1)).toContainEqual({
       key: 'Enter',
       action: 'view',
     });
-    expect(pickerKeyHints('subagents', 1)).toContainEqual({
+    expect(pickerKeyHintsForColumns('subagents', 1)).toContainEqual({
       key: 'f',
       action: 'focus',
     });
-    expect(pickerKeyHints('subagents', 1, false)).not.toContainEqual({
+    expect(pickerKeyHintsForColumns('subagents', 1, false)).not.toContainEqual({
       key: 'k',
       action: 'kill',
     });
