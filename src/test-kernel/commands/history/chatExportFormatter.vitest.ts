@@ -88,6 +88,62 @@ describe('formatChatAsMarkdown', () => {
     );
   });
 
+  it.each([
+    {
+      shape: 'live Anthropic nested',
+      block: {
+        type: 'web_fetch_tool_result',
+        content: {
+          type: 'web_fetch_result',
+          url: 'https://example.com/live-export',
+          content: {
+            type: 'document',
+            title: 'Live Export',
+            source: {
+              type: 'text',
+              media_type: 'text/plain',
+              data: 'Live export content',
+            },
+          },
+        },
+      },
+      url: 'https://example.com/live-export',
+      title: 'Live Export',
+      content: 'Live export content',
+    },
+    {
+      shape: 'archived flat',
+      block: {
+        type: 'web_fetch_tool_result',
+        url: 'https://example.com/archived-export',
+        title: 'Archived Export',
+        page_content: 'Archived export content',
+      },
+      url: 'https://example.com/archived-export',
+      title: 'Archived Export',
+      content: 'Archived export content',
+    },
+  ])(
+    'renders $shape web-fetch fields in Markdown and LaTeX exports',
+    ({ block, url, title, content }) => {
+      const input = {
+        timestamp: '2026-01-01T00:00:00.000Z',
+        config: {},
+        messages: [{ role: 'assistant', content: [block] }],
+      };
+
+      const markdown = formatChatAsMarkdown(input);
+      assert.ok(markdown.includes(`**URL:** ${url}`));
+      assert.ok(markdown.includes(`**Title:** ${title}`));
+      assert.ok(markdown.includes(content));
+
+      const latex = formatChatAsLatex(input, '');
+      assert.ok(latex.includes(`\\textbf{URL:} \\url{${url}}`));
+      assert.ok(latex.includes(`\\textbf{Title:} ${title}`));
+      assert.ok(latex.includes(content));
+    },
+  );
+
   it('sanitizes web tool URLs before rendering Markdown links', () => {
     const markdown = formatChatAsMarkdown({
       timestamp: '2026-01-01T00:00:00.000Z',
