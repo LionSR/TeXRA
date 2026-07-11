@@ -41,13 +41,20 @@ export class ToolUsePrepareNode<C> extends Node<
 
     if (snapshot) {
       logger.debug('Resuming tool-use session from saved state.');
-      // Rebuild the current system text: for providers that embed it into
-      // `messages` (OpenAI, OpenRouter), swap it into the persisted
-      // first-message slot. For providers that pass `system` per-call
-      // instead (Anthropic, Google), it's returned as `systemPrompt` so the
-      // round flow can resupply it on every subsequent model call.
-      const supportsSystemPrompt =
-        this.services.modelHandler.capabilities?.supportsSystemPrompt !== false;
+      // The persisted messages are used verbatim -- including `messages[0]`
+      // for providers that embed the system prompt into `messages` (OpenAI,
+      // OpenRouter). Rewriting that text on every resume to reflect current
+      // workspace/tool state would change the leading bytes of the request
+      // and invalidate the provider's prefix-based prompt cache; per
+      // maintainer ruling, staleness is preferable to that cache miss. A
+      // system-prompt edit made between suspend and resume therefore does
+      // not propagate into an already-suspended run.
+      //
+      // `systemPrompt` below is still rebuilt fresh: for providers that pass
+      // `system` per-call instead of storing it in `messages` (Anthropic,
+      // Google), it isn't part of the cached prefix at all -- the round flow
+      // resupplies it on every model call regardless of resume, so rebuilding
+      // it here is orthogonal to the caching concern above.
       const rebuiltPrompts = await buildInitialToolUsePrompts(
         this.services.prompt,
         userVarChannels.transient,
@@ -58,15 +65,10 @@ export class ToolUsePrepareNode<C> extends Node<
         rebuiltPrompts.systemPrompt,
         rebuiltPrompts.instructionSuffix,
       );
-      const messages = refreshPersistedSystemMessage(
-        snapshot.messages,
-        systemMessage,
-        supportsSystemPrompt,
-      );
       return {
         kind: 'success',
         result: {
-          messages,
+          messages: snapshot.messages,
           runState: snapshot.run,
           workspaceState: AgentWorkspaceState.fromSnapshot(snapshot.workspace),
           userChannels: {
@@ -188,84 +190,4 @@ function buildSystemText(
   return systemPrompt
     ? `${systemPrompt}\n${instructionSuffix}`
     : instructionSuffix;
-}
-
-/**
- * Rebuild the persisted system message on resume so it reflects current
- * workspace/tool state rather than whatever was frozen at snapshot time.
- *
- * Two message-shape conventions are handled, keyed on the model's
- * supportsSystemPrompt capability:
- *
- * - `supportsSystemPrompt !== false` (OpenAI Chat/Responses/OpenRouter
- *   with a real system role): the persisted systemPrompt is at
- *   `messages[0]` with role='system'. Later role='system' entries
- *   (the OpenAI supportsIntermDevMsgs developer-message path at
- *   index 1) must NOT be touched — they hold the task userRequest.
- *
- * - `supportsSystemPrompt === false` (o1-mini, o1-preview): the
- *   systemPrompt is the FIRST CONTENT BLOCK of `messages[0]` with
- *   role='user'. We replace only that block's text and leave any
- *   subsequent blocks (userPrefix, userRequest) untouched.
- *
- * Providers that pass `system` per-call (Anthropic, Google) never store the
- * systemPrompt in `messages`, so both branches are a no-op there — those
- * providers get the rebuilt text via the returned `systemPrompt` field
- * instead (see caller).
- */
-function refreshPersistedSystemMessage(
-  persisted: ProviderMessage[],
-  systemText: string,
-  supportsSystemPrompt: boolean,
-): ProviderMessage[] {
-  const first = persisted[0];
-  if (!first || typeof first !== 'object') return persisted;
-
-  const role = (first as { role?: unknown }).role;
-  const expectedRole = supportsSystemPrompt ? 'system' : 'user';
-  if (role !== expectedRole) return persisted;
-
-  const existing = first as Record<string, unknown>;
-  const updated = [...persisted];
-
-  // For system-role messages: preserve existing content block type (OpenAI Chat
-  // uses 'text', OpenAI Responses uses 'input_text') so the resumed snapshot
-  // stays valid across providers.
-  const prevType = Array.isArray(existing.content)
-    ? (existing.content[0] as { type?: unknown } | undefined)?.type
-    : undefined;
-  const firstBlockType = typeof prevType === 'string' ? prevType : null;
-  const systemContent = firstBlockType
-    ? [{ type: firstBlockType, text: systemText }]
-    : systemText;
-
-  updated[0] = (
-    supportsSystemPrompt
-      ? { ...existing, content: systemContent }
-      : withFirstBlockReplaced(existing, systemText)
-  ) as ProviderMessage;
-  return updated;
-}
-
-/**
- * For the o1-style user-role case: replace the text of just the first
- * content block, leaving userPrefix / userRequest blocks alongside it
- * untouched. If the content isn't a shape we recognize (e.g. string
- * content, empty array, non-text first block), leave the message alone.
- */
-function withFirstBlockReplaced(
-  existing: Record<string, unknown>,
-  systemText: string,
-): Record<string, unknown> {
-  const content = existing.content;
-  if (!Array.isArray(content) || content.length === 0) return existing;
-  const firstBlock = content[0];
-  if (typeof firstBlock !== 'object' || firstBlock === null) return existing;
-  const type = (firstBlock as { type?: unknown }).type;
-  if (typeof type !== 'string') return existing;
-  const newContent = [
-    { ...(firstBlock as Record<string, unknown>), text: systemText },
-    ...content.slice(1),
-  ];
-  return { ...existing, content: newContent };
 }

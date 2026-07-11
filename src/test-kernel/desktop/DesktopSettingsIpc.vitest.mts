@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
@@ -158,6 +158,28 @@ interface DesktopSettingsIpcModule {
   };
 }
 
+type DesktopSettingsIpcOptions = Parameters<
+  DesktopSettingsIpcModule['createDesktopSettingsIpc']
+>[0];
+
+type RendererMessage = Parameters<
+  DesktopSettingsIpcOptions['postToRenderer']
+>[0];
+
+type SettingsFixtureOverrides = Omit<
+  DesktopSettingsIpcOptions,
+  'globalState' | 'postToRenderer' | 'workspaceState'
+> & {
+  globalState?: DesktopSettingsIpcOptions['globalState'];
+  postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
+  workspaceState?: DesktopSettingsIpcOptions['workspaceState'];
+};
+
+type CapturedSettingsFixtureOverrides = Omit<
+  SettingsFixtureOverrides,
+  'postToRenderer'
+>;
+
 class MemoryStateStore implements StateStore {
   readonly values = new Map<string, unknown>();
 
@@ -242,6 +264,31 @@ async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
   ) as Promise<DesktopSettingsIpcModule>;
 }
 
+let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];
+
+function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
+  const globalState = overrides.globalState ?? new MemoryStateStore();
+  const workspaceState = overrides.workspaceState ?? new MemoryStateStore();
+  const settings = createDesktopSettingsIpc({
+    ...overrides,
+    globalState,
+    postToRenderer: overrides.postToRenderer ?? (() => undefined),
+    workspaceState,
+  });
+  return { globalState, settings, workspaceState };
+}
+
+function createCapturedSettingsFixture(
+  overrides: CapturedSettingsFixtureOverrides = {},
+) {
+  const posted: RendererMessage[] = [];
+  const fixture = createSettingsFixture({
+    ...overrides,
+    postToRenderer: (message) => posted.push(message),
+  });
+  return { ...fixture, posted };
+}
+
 function flushAsyncWork(): Promise<void> {
   return new Promise((resolve) =>
     setImmediate(() => setImmediate(() => resolve())),
@@ -286,6 +333,10 @@ function inactiveLatexSettingsStatus(): unknown {
 }
 
 describe('desktop settings IPC', () => {
+  beforeAll(async () => {
+    ({ createDesktopSettingsIpc } = await loadDesktopSettingsIpc());
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
     setGitAuthorEnv({});
@@ -293,19 +344,15 @@ describe('desktop settings IPC', () => {
   });
 
   it('applies Git author settings on creation and posts only for settings readiness', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
     workspaceState.values.set(WorkspaceStateKey.GIT_AUTHOR_NAME, 'TeXRA Bot');
     workspaceState.values.set(
       WorkspaceStateKey.GIT_AUTHOR_EMAIL,
       'bot@example.com',
     );
-    const posted: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
+    const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(posted).toEqual([]);
@@ -357,14 +404,10 @@ describe('desktop settings IPC', () => {
   }, 15_000);
 
   it('round-trips Git author writes through workspace state and refreshes the renderer', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
-    const posted: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
+    const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -409,17 +452,14 @@ describe('desktop settings IPC', () => {
   });
 
   it('round-trips desktop crash reporting settings through global state and secrets', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const globalState = new MemoryStateStore();
     const secrets = new MemorySecrets();
-    const posted: unknown[] = [];
+
     let initializeCalls = 0;
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
+    const { settings, posted } = createCapturedSettingsFixture({
       globalState,
       secrets,
-      postToRenderer: (message) => posted.push(message),
       promptSecret: async () => ' https://example.invalid/123 ',
       initializeCrashReporting: async () => {
         initializeCalls += 1;
@@ -460,7 +500,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('initializes desktop crash reporting when users enable an existing DSN', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const globalState = new MemoryStateStore();
     const secrets = new MemorySecrets();
     await secrets.set(
@@ -469,11 +508,9 @@ describe('desktop settings IPC', () => {
     );
     let initializeCalls = 0;
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
+    const { settings } = createSettingsFixture({
       globalState,
       secrets,
-      postToRenderer: () => undefined,
       initializeCrashReporting: async () => {
         initializeCalls += 1;
       },
@@ -491,14 +528,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const posted: unknown[] = [];
-
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
-    });
+    const { settings, posted } = createCapturedSettingsFixture();
 
     // Was previously declared unsupported and appeared in the derived
     // capability broadcast (SET_UNSUPPORTED_COMMANDS); the fix removes it.
@@ -525,13 +555,9 @@ describe('desktop settings IPC', () => {
   });
 
   it('routes revealGoalStream to the window-owned progress bridge (issue #7751 FS6)', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const revealed: string[] = [];
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => undefined,
+    const { settings } = createSettingsFixture({
       revealStream: async (streamId) => {
         revealed.push(streamId);
       },
@@ -549,13 +575,9 @@ describe('desktop settings IPC', () => {
   });
 
   it('runs allowlisted LaTeX install commands through the desktop host', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const commands: string[] = [];
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       runInstallCommand: async (command) => {
         commands.push(command);
       },
@@ -573,14 +595,10 @@ describe('desktop settings IPC', () => {
   });
 
   it('rejects unknown desktop LaTeX install commands', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const commands: string[] = [];
     const errors: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       runInstallCommand: async (command) => {
         commands.push(command);
       },
@@ -603,15 +621,12 @@ describe('desktop settings IPC', () => {
   });
 
   it('shows provider key rows and stores desktop API keys', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const secrets = new MemorySecrets();
-    const posted: unknown[] = [];
+
     const infoMessages: string[] = [];
     let promptCalls = 0;
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
+    const { settings, posted } = createCapturedSettingsFixture({
       secrets,
       promptSecret: async () => {
         promptCalls += 1;
@@ -620,7 +635,6 @@ describe('desktop settings IPC', () => {
       showInfoMessage: async (message) => {
         infoMessages.push(message);
       },
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -662,15 +676,11 @@ describe('desktop settings IPC', () => {
   });
 
   it('falls back to the host secret prompt when no provider key is submitted', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const secrets = new MemorySecrets();
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
+    const { settings } = createSettingsFixture({
       secrets,
       promptSecret: async () => '  sk-prompt  ',
-      postToRenderer: () => {},
     });
 
     expect(
@@ -685,14 +695,9 @@ describe('desktop settings IPC', () => {
   });
 
   it('delegates desktop sign-in without posting stale profile data', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const posted: unknown[] = [];
     let signInCalls = 0;
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
+    const { settings, posted } = createCapturedSettingsFixture({
       signIn: async () => {
         signInCalls += 1;
       },
@@ -715,14 +720,9 @@ describe('desktop settings IPC', () => {
   it('handles ChatGPT subscription preference commands in desktop settings', async () => {
     const { initPlatform } = await import('@platform/platform');
     initPlatform(createFakePlatform());
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const posted: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
+    const { settings, posted } = createCapturedSettingsFixture({
       modelListRefresh: Promise.resolve(),
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -785,14 +785,10 @@ describe('desktop settings IPC', () => {
   });
 
   it('round-trips LaTeX config writes through workspace state and refreshes the renderer', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
-    const posted: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
+    const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -836,15 +832,12 @@ describe('desktop settings IPC', () => {
   });
 
   it('reports invalid LaTeX config writes without mutating workspace state', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
-    const posted: unknown[] = [];
+
     const errors: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
+    const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
       onError: (error) => errors.push(error),
     });
 
@@ -868,7 +861,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('persists model settings through global state', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
     const globalState = new MemoryStateStore();
     globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
@@ -880,13 +872,12 @@ describe('desktop settings IPC', () => {
       MODEL_LIST_VERSION,
     );
     globalState.values.set(GlobalStateKey.HELPER_MODEL, 'gpt55');
-    const posted: unknown[] = [];
+
     const errors: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
+    const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
       globalState,
-      postToRenderer: (message) => posted.push(message),
       onError: (error) => errors.push(error),
     });
 
@@ -944,7 +935,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('loads desktop tool dashboard and approval settings on settings readiness', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
     workspaceState.values.set(
       WorkspaceStateKey.CODEX_SANDBOX_MODE,
@@ -952,11 +942,9 @@ describe('desktop settings IPC', () => {
     );
     const config = new MemoryConfigStore();
     config.values.set('texra.toolUse.requireBashApproval', false);
-    const posted: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
+    const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
-      globalState: new MemoryStateStore(),
       config,
       sendStartupCatalogData: true,
       loadAgents: async () => undefined,
@@ -974,7 +962,6 @@ describe('desktop settings IPC', () => {
       ],
       detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
       onError: () => undefined,
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -1008,19 +995,14 @@ describe('desktop settings IPC', () => {
   });
 
   it('writes the bash-approval toggle to the workspace config scope, not global', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const config = new MemoryConfigStore();
-    const posted: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
+    const { settings, posted } = createCapturedSettingsFixture({
       config,
       loadAgents: async () => undefined,
       getCustomAgentDirectory: async () => '',
       detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
       onError: () => undefined,
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -1050,13 +1032,9 @@ describe('desktop settings IPC', () => {
   });
 
   it('does not delay unrelated startup settings behind model-list refresh', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const modelListRefresh = createDeferred();
-    const posted: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
+    const { settings, posted } = createCapturedSettingsFixture({
       config: new MemoryConfigStore(),
       sendStartupCatalogData: true,
       modelListRefresh: modelListRefresh.promise,
@@ -1065,7 +1043,6 @@ describe('desktop settings IPC', () => {
       buildToolDashboardItems: async () => [],
       detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
       onError: () => undefined,
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -1106,14 +1083,12 @@ describe('desktop settings IPC', () => {
   });
 
   it('handles desktop tool dashboard refreshes and toggles', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const globalState = new MemoryStateStore();
-    const posted: unknown[] = [];
+
     let refreshCount = 0;
     const buildCalls: unknown[][] = [];
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
+    const { settings, posted } = createCapturedSettingsFixture({
       globalState,
       config: new MemoryConfigStore(),
       buildToolDashboardItems: async (cachedResults = []) => {
@@ -1138,7 +1113,6 @@ describe('desktop settings IPC', () => {
       refreshToolAvailability: async () => {
         refreshCount++;
       },
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -1168,19 +1142,15 @@ describe('desktop settings IPC', () => {
   });
 
   it('refreshes launcher agent options after agent visibility changes', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
-    const posted: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
+    const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
-      globalState: new MemoryStateStore(),
       loadAgents: async () => undefined,
       loadAgentOptionsData: async () => ({
         workflow: [{ value: 'builtInWorkflow:correct', label: 'correct' }],
         toolUse: [],
       }),
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -1212,15 +1182,11 @@ describe('desktop settings IPC', () => {
   });
 
   it('opens the desktop custom agent directory through the shell opener', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const openPath = vi.fn(async (_filePath: string) => undefined);
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
+    const { settings } = createSettingsFixture({
       getCustomAgentDirectory: async () => '/agents/custom',
       openPath,
-      postToRenderer: () => undefined,
     });
 
     expect(
@@ -1235,9 +1201,8 @@ describe('desktop settings IPC', () => {
   });
 
   it('applies desktop team presets and refreshes settings plus launcher options', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
-    const posted: unknown[] = [];
+
     const infoMessages: string[] = [];
     const errorMessages: string[] = [];
     let loadCount = 0;
@@ -1290,9 +1255,8 @@ describe('desktop settings IPC', () => {
       ],
     };
 
-    const settings = createDesktopSettingsIpc({
+    const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
-      globalState: new MemoryStateStore(),
       loadAgents: async () => {
         loadCount += 1;
       },
@@ -1310,7 +1274,6 @@ describe('desktop settings IPC', () => {
       showErrorMessage: async (message) => {
         errorMessages.push(message);
       },
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -1386,9 +1349,8 @@ describe('desktop settings IPC', () => {
   });
 
   it('saves desktop team presets from currently visible agents', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
-    const posted: unknown[] = [];
+
     const infoMessages: string[] = [];
     const catalog = {
       workflow: [
@@ -1417,9 +1379,8 @@ describe('desktop settings IPC', () => {
       ],
     };
 
-    const settings = createDesktopSettingsIpc({
+    const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
-      globalState: new MemoryStateStore(),
       loadAgents: async () => undefined,
       getAgents: (category) => catalog[category],
       getVisibleAgents: (category) =>
@@ -1428,7 +1389,6 @@ describe('desktop settings IPC', () => {
       showInfoMessage: async (message) => {
         infoMessages.push(message);
       },
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -1467,9 +1427,8 @@ describe('desktop settings IPC', () => {
   });
 
   it('deletes desktop custom team presets and reports unknown team ids', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
-    const posted: unknown[] = [];
+
     const errorMessages: string[] = [];
     workspaceState.values.set(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
       {
@@ -1482,13 +1441,11 @@ describe('desktop settings IPC', () => {
       },
     ]);
 
-    const settings = createDesktopSettingsIpc({
+    const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
-      globalState: new MemoryStateStore(),
       showErrorMessage: async (message) => {
         errorMessages.push(message);
       },
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -1519,18 +1476,15 @@ describe('desktop settings IPC', () => {
   });
 
   it('surfaces a visible desktop error for unknown team presets', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
     const errorMessages: string[] = [];
 
-    const settings = createDesktopSettingsIpc({
+    const { settings } = createSettingsFixture({
       workspaceState,
-      globalState: new MemoryStateStore(),
       loadAgents: async () => undefined,
       showErrorMessage: async (message) => {
         errorMessages.push(message);
       },
-      postToRenderer: () => {},
     });
 
     expect(
@@ -1551,14 +1505,9 @@ describe('desktop settings IPC', () => {
   });
 
   it('persists desktop API access mode changes before refreshing settings data', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const posted: unknown[] = [];
     const persistedModes: string[] = [];
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
+    const { settings, posted } = createCapturedSettingsFixture({
       setApiAccessMode: async (mode) => {
         persistedModes.push(mode);
       },
@@ -1598,15 +1547,12 @@ describe('desktop settings IPC', () => {
   });
 
   it('clears OpenRouter routing when desktop users enable included access', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const globalState = new MemoryStateStore();
     globalState.values.set(GlobalStateKey.USE_OPENROUTER, true);
     const persistedModes: string[] = [];
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
+    const { settings } = createSettingsFixture({
       globalState,
-      postToRenderer: () => {},
       setApiAccessMode: async (mode) => {
         persistedModes.push(mode);
       },
@@ -1635,14 +1581,9 @@ describe('desktop settings IPC', () => {
   });
 
   it('refreshes agent and model options after desktop auth changes', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const posted: unknown[] = [];
     let loadCount = 0;
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
+    const { settings, posted } = createCapturedSettingsFixture({
       loadAgents: async () => {
         loadCount += 1;
       },
@@ -1681,7 +1622,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('refreshes persisted model list on desktop startup', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const globalState = new MemoryStateStore();
     globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 12);
     globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
@@ -1692,10 +1632,8 @@ describe('desktop settings IPC', () => {
     ]);
     const errors: unknown[] = [];
 
-    createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
+    createSettingsFixture({
       globalState,
-      postToRenderer: () => {},
       onError: (error) => errors.push(error),
     });
     await flushAsyncWork();
@@ -1714,7 +1652,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('strips retired models from recent persisted model lists', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const globalState = new MemoryStateStore();
     globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 20);
     globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
@@ -1723,10 +1660,8 @@ describe('desktop settings IPC', () => {
     ]);
     const errors: unknown[] = [];
 
-    createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
+    createSettingsFixture({
       globalState,
-      postToRenderer: () => {},
       onError: (error) => errors.push(error),
     });
     await flushAsyncWork();
@@ -1747,14 +1682,9 @@ describe('desktop settings IPC', () => {
   });
 
   it('does not duplicate profile refresh after delegated desktop sign-out', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const posted: unknown[] = [];
     let signOutCalls = 0;
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
+    const { settings, posted } = createCapturedSettingsFixture({
       signOut: async () => {
         signOutCalls += 1;
       },
@@ -1784,14 +1714,10 @@ describe('desktop settings IPC', () => {
   });
 
   it('handles desktop memory toggle messages', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const globalState = new MemoryStateStore();
-    const posted: unknown[] = [];
 
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
+    const { settings, posted } = createCapturedSettingsFixture({
       globalState,
-      postToRenderer: (message) => posted.push(message),
     });
 
     expect(
@@ -1810,7 +1736,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('reruns an agent from history through the shared runAgent path', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const { getExecutionStore } = await import('@agent/storage');
     const { AgentConfigSchema } =
       await import('@agent/core/definition/AgentConfig');
@@ -1827,10 +1752,7 @@ describe('desktop settings IPC', () => {
 
     const infos: string[] = [];
     const runRequests: unknown[] = [];
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       showInfoMessage: async (message) => {
         infos.push(message);
       },
@@ -1852,7 +1774,6 @@ describe('desktop settings IPC', () => {
   });
 
   it("restores a history item's setup into the main view", async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const { getExecutionStore } = await import('@agent/storage');
     const { AgentConfigSchema } =
       await import('@agent/core/definition/AgentConfig');
@@ -1869,10 +1790,7 @@ describe('desktop settings IPC', () => {
 
     const errors: string[] = [];
     const restoredTaskStates: unknown[] = [];
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       showErrorMessage: async (message) => {
         errors.push(message);
       },
@@ -1895,12 +1813,8 @@ describe('desktop settings IPC', () => {
   });
 
   it('reports missing history items for rerun and restore instead of dropping them', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const shownErrors: string[] = [];
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       showErrorMessage: async (message) => {
         shownErrors.push(message);
       },
@@ -1923,7 +1837,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('errors instead of a false success when rerun has no runExecution dependency wired (Copilot #7827)', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const { getExecutionStore } = await import('@agent/storage');
     const { AgentConfigSchema } =
       await import('@agent/core/definition/AgentConfig');
@@ -1943,10 +1856,7 @@ describe('desktop settings IPC', () => {
     // Deliberately omit `runExecution` — this is the desktop wiring gap the
     // finding calls out: the IPC handler must not report success when the
     // host never wired the execution bridge.
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       showInfoMessage: async (message) => {
         infos.push(message);
       },
@@ -1968,7 +1878,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('surfaces a friendly error instead of throwing on a corrupted history config (Copilot/texra-review #7827)', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const { getExecutionStore } = await import('@agent/storage');
 
     const historyId = 'dddd4444';
@@ -1983,10 +1892,7 @@ describe('desktop settings IPC', () => {
 
     const infos: string[] = [];
     const errors: string[] = [];
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       showInfoMessage: async (message) => {
         infos.push(message);
       },
@@ -2020,7 +1926,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('exports a history chat to Markdown via the shared ChatExportController', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const exportInput = {
       timestamp: '2026-01-01T00:00:00.000Z',
       config: { agent: 'chat' },
@@ -2037,10 +1942,7 @@ describe('desktop settings IPC', () => {
 
     const opened: string[] = [];
     const infos: string[] = [];
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       resourcesPath: repoPath('packages', 'extension', 'resources'),
       openPath: async (filePath) => {
         opened.push(filePath);
@@ -2073,7 +1975,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('falls back to opening the .tex source when LaTeX compilation fails', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const exportInput = {
       timestamp: '2026-01-01T00:00:00.000Z',
       config: { agent: 'chat' },
@@ -2092,10 +1993,7 @@ describe('desktop settings IPC', () => {
 
     const opened: string[] = [];
     const infos: string[] = [];
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       resourcesPath: repoPath('packages', 'extension', 'resources'),
       openPath: async (filePath) => {
         opened.push(filePath);
@@ -2120,7 +2018,6 @@ describe('desktop settings IPC', () => {
   });
 
   it('exports a history chat to HTML via the shared trace-viewer template', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     chatExportMocks.exportAsHtml.mockResolvedValue({
       status: 'ok',
       result: {
@@ -2131,10 +2028,7 @@ describe('desktop settings IPC', () => {
 
     const opened: string[] = [];
     const resourcesPath = repoPath('packages', 'extension', 'resources');
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       resourcesPath,
       openPath: async (filePath) => {
         opened.push(filePath);
@@ -2157,16 +2051,12 @@ describe('desktop settings IPC', () => {
   });
 
   it('reports a missing history item on export instead of throwing', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     chatExportMocks.buildExportInput.mockResolvedValue({
       status: 'config_missing',
     });
 
     const infos: string[] = [];
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: () => {},
+    const { settings } = createSettingsFixture({
       resourcesPath: repoPath('packages', 'extension', 'resources'),
       showInfoMessage: async (message) => {
         infos.push(message);
@@ -2185,13 +2075,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('ignores unsupported or malformed settings messages', async () => {
-    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
-    const posted: unknown[] = [];
-    const settings = createDesktopSettingsIpc({
-      workspaceState: new MemoryStateStore(),
-      globalState: new MemoryStateStore(),
-      postToRenderer: (message) => posted.push(message),
-    });
+    const { settings, posted } = createCapturedSettingsFixture();
 
     expect(settings.handleMessage({ command: 'unknown' })).toBe(false);
     expect(
