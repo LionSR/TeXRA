@@ -745,15 +745,13 @@ function wireConversation(): void {
     )) as EventListener);
   conversationView.addEventListener('followup-change', ((e: CustomEvent) =>
     handleFollowUpChange(e, ctx())) as EventListener);
-  conversationView.addEventListener('followup-send', () =>
-    handleFollowUpSend(ctx()),
-  );
+  conversationView.addEventListener('followup-send', ((e: CustomEvent) =>
+    handleFollowUpSend(e, ctx())) as EventListener);
   conversationView.addEventListener('followup-polish', () =>
     handleFollowUpPolish(ctx()),
   );
-  conversationView.addEventListener('followup-clear', () =>
-    handleFollowUpClear(ctx()),
-  );
+  conversationView.addEventListener('followup-clear', ((e: CustomEvent) =>
+    handleFollowUpClear(e, ctx())) as EventListener);
   // followup-focus-complete: clear the focus/polish/transcribe trigger flags.
   conversationView.addEventListener(
     'followup-focus-complete',
