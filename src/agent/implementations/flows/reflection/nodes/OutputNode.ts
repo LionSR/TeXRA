@@ -33,7 +33,6 @@ import {
   type CompileFailure,
   type CompileResult,
   type FileLocation,
-  type RoundOutput,
 } from '@shared/schemas';
 import { FlexibleFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -48,7 +47,6 @@ interface OutputPrepInput {
 }
 
 interface OutputExecResult {
-  roundOutput: RoundOutput;
   summary: RoundSummary;
   compileFailures: CompileFailure[];
   compileResult?: CompileResult;
@@ -178,15 +176,11 @@ export class OutputNode<C = unknown> extends Node<
     );
 
     // Get round output — critical, throw if it fails
-    const roundOutput = await getRoundOutput(
-      outputState,
-      diffBaseFiles,
-      currentRound,
-      { isRewrite: setting.isRewrite },
-    );
+    await getRoundOutput(outputState, diffBaseFiles, currentRound, {
+      isRewrite: setting.isRewrite,
+    });
 
     return {
-      roundOutput,
       summary,
       compileFailures,
       compileResult: compileRoundResult,
@@ -231,19 +225,20 @@ export class OutputNode<C = unknown> extends Node<
       };
     }
 
-    return {
-      roundOutput: {
-        round: currentRound,
-        rawOutput: null,
-        outputs: [],
-        compileFailures: [],
-        xmlSummary: {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: null,
-          sourceLocation: null,
-        },
+    outputState.rounds[currentRound] = {
+      round: currentRound,
+      rawOutput: null,
+      outputs: [],
+      compileFailures: [],
+      xmlSummary: {
+        tagContents: {},
+        documents: [],
+        singleOutputFile: null,
+        sourceLocation: null,
       },
+    };
+
+    return {
       summary,
       compileFailures: [],
       compileResult: undefined,
@@ -261,7 +256,7 @@ export class OutputNode<C = unknown> extends Node<
     const outputDependencies = this.outputDependencies();
     const { runtimeHost, streamId } = outputDependencies;
     const { outputLocation, currentRound, endTurn } = prepRes;
-    const { summary, roundOutput } = execRes;
+    const { summary } = execRes;
 
     // Emit output files event
     emitRunFact(logger, 'addOutputFiles', {
@@ -324,8 +319,8 @@ export class OutputNode<C = unknown> extends Node<
       }, this.recoverWarn('Validate expected outputs'));
     }
 
-    // Store round output
-    shared.roundOutputs[currentRound] = roundOutput;
+    // Project the canonical live collection into PersistedFlow's cloned state.
+    shared.roundOutputs = outputState.rounds;
     if (execRes.compileResult) {
       shared.lastCompileResult = execRes.compileResult;
       const compileFailureContext = shouldUseCompileFailureRepairContext(
