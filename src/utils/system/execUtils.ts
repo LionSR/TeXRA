@@ -347,10 +347,12 @@ export async function executeCommand(
       timedOut,
     );
   } catch (err) {
-    logger.error(
-      options.channel ?? CHANNEL,
-      `Error executing command: ${toErrorMessage(err)}`,
-    );
+    if (!options.quiet) {
+      logger.error(
+        options.channel ?? CHANNEL,
+        `Error executing command: ${toErrorMessage(err)}`,
+      );
+    }
 
     return resultFromExecutionError(err);
   } finally {
@@ -408,10 +410,12 @@ export function executeCommandSync(
 
     return resultFromProcessOutput(stdout, stderr, exitCode, timedOut);
   } catch (err) {
-    logger.error(
-      options.channel ?? CHANNEL,
-      `Error executing command: ${toErrorMessage(err)}`,
-    );
+    if (!options.quiet) {
+      logger.error(
+        options.channel ?? CHANNEL,
+        `Error executing command: ${toErrorMessage(err)}`,
+      );
+    }
 
     return resultFromExecutionError(err);
   }
