@@ -167,8 +167,13 @@ async function readCommandStdout(
   args: readonly string[],
   timeoutMs: number,
 ): Promise<string | undefined> {
+  // Runs before platform init (chat/orchestrate startup), so pass an
+  // explicit cwd — the wrapper's WorkspaceFS default would throw — and
+  // quiet: true so wrapper debug lines can't leak to the console sink.
   const result = await executeCommand([command, ...args], {
     timeout: timeoutMs,
+    cwd: process.cwd(),
+    quiet: true,
   });
   return result.success ? (result.stdout ?? '') : undefined;
 }

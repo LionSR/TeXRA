@@ -185,6 +185,8 @@ export async function executeCommand(
     stderr?: Options['stderr'];
     /** Abort signal used to terminate the subprocess and any shell children. */
     signal?: AbortSignal;
+    /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
+    quiet?: boolean;
   } = {},
 ): Promise<ExecResult> {
   // Hoisted so the finally block can clear them on both success and error paths.
@@ -260,13 +262,17 @@ export async function executeCommand(
     let shellTimeout: number | undefined;
     if (Array.isArray(command)) {
       const [cmd, ...args] = command;
-      logger.debug(
-        logChannel,
-        `Running command: ${shellQuote([cmd, ...args])}`,
-      );
+      if (!options.quiet) {
+        logger.debug(
+          logChannel,
+          `Running command: ${shellQuote([cmd, ...args])}`,
+        );
+      }
       subprocess = execa(cmd, args, execaOptions);
     } else {
-      logger.debug(logChannel, `Running command: ${command}`);
+      if (!options.quiet) {
+        logger.debug(logChannel, `Running command: ${command}`);
+      }
       // Shell commands with pipes (e.g. "find / | head -2") create child
       // processes that inherit stdout.  execa's built-in timeout only kills
       // the shell process; the piped children keep stdout open which causes
@@ -330,7 +336,9 @@ export async function executeCommand(
     const normalizedStderr =
       shellAborted && !stderr ? 'Command aborted by user' : stderr;
 
-    logCommandStderr(logChannel, normalizedStderr, options.truncate);
+    if (!options.quiet) {
+      logCommandStderr(logChannel, normalizedStderr, options.truncate);
+    }
 
     return resultFromProcessOutput(
       stdout,
@@ -367,6 +375,8 @@ export function executeCommandSync(
     env?: Record<string, string>;
     timeout?: number;
     cwd?: string;
+    /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
+    quiet?: boolean;
   } = {},
 ): ExecResult {
   try {
@@ -380,14 +390,21 @@ export function executeCommandSync(
       reject: false,
     };
     const logChannel = options.channel ?? CHANNEL;
-    logger.debug(logChannel, `Running command: ${shellQuote([cmd, ...args])}`);
+    if (!options.quiet) {
+      logger.debug(
+        logChannel,
+        `Running command: ${shellQuote([cmd, ...args])}`,
+      );
+    }
     const result = execaSync(cmd, args, execaOptions);
     const stdout = (result.stdout as string) ?? '';
     const stderr = (result.stderr as string) ?? '';
     const exitCode = result.exitCode ?? 1;
     const timedOut = result.timedOut ?? false;
 
-    logCommandStderr(logChannel, stderr, options.truncate);
+    if (!options.quiet) {
+      logCommandStderr(logChannel, stderr, options.truncate);
+    }
 
     return resultFromProcessOutput(stdout, stderr, exitCode, timedOut);
   } catch (err) {

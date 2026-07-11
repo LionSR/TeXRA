@@ -5,11 +5,11 @@ import { executeCommandSync } from '@utils/system/execUtils';
 import type { ExecResult } from '@shared/schemas/opResults';
 
 export function git(cwd: string, ...args: readonly string[]): ExecResult {
-  return executeCommandSync(['git', ...args], { cwd });
+  return executeCommandSync(['git', ...args], { cwd, quiet: true });
 }
 
 export function gh(cwd: string, ...args: readonly string[]): ExecResult {
-  return executeCommandSync(['gh', ...args], { cwd });
+  return executeCommandSync(['gh', ...args], { cwd, quiet: true });
 }
 
 export function isGitRepo(cwd: string): boolean {
