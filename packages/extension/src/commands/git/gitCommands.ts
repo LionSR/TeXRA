@@ -21,7 +21,11 @@ import {
   COMMIT_LABEL_FORMAT,
   splitCommitLines,
 } from '@utils/git/commitLogFormat';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import {
+  GIT_INSTALL_OPTIONS,
+  isToolAvailable,
+} from '@utils/git/gitInstallHelp';
+import { isGitRepository as probeGitRepository } from '@utils/system/isGitRepository';
 
 const CHANNEL = 'gitCommands';
 logger.initialize(CHANNEL);
@@ -40,7 +44,7 @@ export const gitCommands = {
 
 export function registerGitCommands(context: vscode.ExtensionContext): void {
   // `isGitRepository`, `getRecentCommits`, and `findCommitInHistory`
-  // return values to `executeCommand` callers (sync `boolean`,
+  // return values to `executeCommand` callers (`boolean`,
   // `string[] | null`, `string | null` respectively) and accept
   // optional positional arguments — they keep their per-command
   // registration. `texra.cloneOverleafProject` migrated through the
@@ -55,25 +59,19 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
 
 /**
  * Check if the workspace (or a given path) is inside a git repository.
+ * Delegates to the host-neutral probe shared with the desktop host so both
+ * hosts can't drift apart on worktree/submodule handling.
  *
  * @param rootPath - Optional root path override. Defaults to VS Code workspace.
  *   Pass a worktree path to check a specific checkout.
  */
-function isGitRepository(rootPath?: string): boolean {
-  const workspacePath = rootPath ?? WorkspaceFS.getPath();
-  if (!workspacePath) {
-    return false;
-  }
-  const result = execaSync('git', ['rev-parse', '--is-inside-work-tree'], {
-    cwd: workspacePath,
-    reject: false,
-  });
-  return result.exitCode === 0;
+function isGitRepository(rootPath?: string): Promise<boolean> {
+  return probeGitRepository(rootPath ?? WorkspaceFS.getPath());
 }
 
-function getRecentCommits(rootPath?: string): string[] | null {
+async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
   const workspacePath = rootPath ?? WorkspaceFS.getPath();
-  if (!workspacePath || !isGitRepository(workspacePath)) {
+  if (!workspacePath || !(await isGitRepository(workspacePath))) {
     return null;
   }
 
@@ -217,29 +215,7 @@ async function getGitToken(
 
 const IGNORED_FILES = new Set(['.DS_Store', 'Thumbs.db']);
 
-/**
- * Platform-specific package-manager install options surfaced when `git` is
- * missing from PATH. Each option pairs the package-manager binary (used to
- * probe whether the PM is installed) with the full install command.
- */
-const GIT_INSTALL_OPTIONS: Partial<
-  Record<NodeJS.Platform, { tool: string; command: string }>
-> = {
-  darwin: { tool: 'brew', command: 'brew install git' },
-  win32: { tool: 'winget', command: 'winget install --id Git.Git -e' },
-  linux: { tool: 'apt-get', command: 'sudo apt-get install git' },
-};
-
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
-
-function isToolAvailable(tool: string): boolean {
-  return (
-    execaSync(tool, ['--version'], {
-      reject: false,
-      env: { ...process.env, PATH: extendEnvPath() },
-    }).exitCode === 0
-  );
-}
 
 async function promptGitMissing(): Promise<void> {
   const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
