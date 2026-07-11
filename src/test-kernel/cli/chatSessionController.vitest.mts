@@ -707,6 +707,7 @@ describe('createChatSessionController', () => {
     await expect(ctrl.tryResumeStream(child)).resolves.toBe(true);
 
     expect(rootStreamId.get()).toBe(root);
+    expect(mocks.notify).toHaveBeenCalledWith({ kind: 'agentFinished' });
   });
 
   it('does not auto-resume after stop during helper-model setup', async () => {
