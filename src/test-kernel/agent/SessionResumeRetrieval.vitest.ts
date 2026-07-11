@@ -11,10 +11,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
-import {
-  AgentWorkspaceState,
-  type AgentWorkspaceSnapshot,
-} from '@agent/core/state/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -24,14 +21,15 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
-  buildResumedSharedFromSnapshot,
-  normalizeResumedWorkspaceSnapshot,
   runToolUseFlow,
   type RunToolUseFlowResult,
   type RunToolUseFlowInput,
   type ToolUseFlowSetupCallback,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
-import { migrateSharedState } from '@agent/implementations/flows/tooluse/nodes/types';
+import {
+  migrateSharedState,
+  ToolUseRunSharedCanonicalSchema,
+} from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
@@ -98,21 +96,26 @@ function buildToolUseSnapshot(
   };
 }
 
-async function runResumedFlow(
+async function runPersistedFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
-  snapshot: ToolUseSessionSnapshot,
+  snapshot: ToolUseSessionSnapshot | undefined,
   onSetup?: (context: ToolUseSetupContext) => void,
   session: SessionHandle = new SessionHandle(),
 ): Promise<RunToolUseFlowResult> {
+  const config = snapshot?.agentConfig ?? CONFIG;
+  const userVarChannels = snapshot?.user ?? {
+    input: Object.freeze({ MODEL: config.model }),
+    transient: {},
+  };
   const context = createRunContext({
     modelSource: 'live',
-    getModel: () => snapshot.agentConfig.model,
+    getModel: () => config.model,
     runScope: createRunScope({
       runtimeHost: noopAgentRuntimeHost,
       streamId,
       executionId,
-      agentName: snapshot.agentConfig.agent,
+      agentName: config.agent,
       session,
     }),
   });
@@ -122,11 +125,11 @@ async function runResumedFlow(
     return await withRunContext(context, () =>
       runToolUseFlow(
         {
-          config: snapshot.agentConfig,
+          config,
           setting: TOOL_USE_SETTING,
           prompt: TOOL_USE_PROMPT,
           logger: noopTrace,
-          userVarChannels: snapshot.user,
+          userVarChannels,
           modelHandler: createTaggedModelHandler(ACTIVE_COMPATIBILITY_KEY),
           streamStatus: session.status,
           checkInterruption: () => interrupted,
@@ -134,7 +137,7 @@ async function runResumedFlow(
             interrupted = true;
           },
           setAbortController: () => {},
-          resumeSnapshot: snapshot,
+          ...(snapshot !== undefined && { resumeSnapshot: snapshot }),
           isSubagent: true,
           toolInjections: new ToolInjectionRegistry(),
         },
@@ -152,12 +155,22 @@ async function runResumedFlowToWaiting(
   streamId: StreamTabId,
   snapshot: ToolUseSessionSnapshot,
 ): Promise<void> {
-  const result = await runResumedFlow(executionId, streamId, snapshot);
+  const result = await runPersistedFlow(executionId, streamId, snapshot);
   expect(result.outcome).toBe(STREAM_PHASE.WAITING);
 }
 
 describe('retrieveSessionResumeData', () => {
   setupPlatform({ workspacePath: '/workspace' });
+
+  it('rejects malformed fields at the shared-state boundary', () => {
+    expect(
+      migrateSharedState({
+        messages: [],
+        shouldSkipCycle: 'false',
+        stateSlices: null,
+      }),
+    ).toBeNull();
+  });
 
   it('uses the persisted current model while preserving the original stream id', async () => {
     const executionId = 'abc123' as ExecutionId;
@@ -313,7 +326,7 @@ describe('retrieveSessionResumeData', () => {
     ]);
   });
 
-  it('normalizes a flat legacy conversation-keyed flow record for tool-use resume', async () => {
+  it('falls back to a flat legacy conversation when messages is invalid', async () => {
     // Distinct from the nested `{ state: { conversation } }` case above: this
     // is the flat (unwrapped) legacy shape -- `conversation` at the top level
     // of `shared`, never renamed to `messages`.
@@ -323,6 +336,7 @@ describe('retrieveSessionResumeData', () => {
       flowName: 'texra',
       params: {},
       shared: {
+        messages: null,
         conversation: [
           { role: 'user', content: 'Continue the flat legacy conversation.' },
         ],
@@ -512,7 +526,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
-      const result = await runResumedFlow(
+      const result = await runPersistedFlow(
         executionId,
         streamId,
         snapshot,
@@ -557,7 +571,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
-      const result = await runResumedFlow(
+      const result = await runPersistedFlow(
         executionId,
         streamId,
         snapshot,
@@ -608,7 +622,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
 
     try {
-      const result = await runResumedFlow(
+      const result = await runPersistedFlow(
         executionId,
         streamId,
         snapshot,
@@ -739,132 +753,72 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
   });
 
-  it('migrates a legacy top-level {todos, plan} workspace snapshot when the persisted cursor is already past ToolUsePrepareNode', async () => {
-    // Regression for the codex P1 on #8005: ToolUsePrepareNode.exec() is the
-    // *other* legacy-migrating hydration boundary for workspaceSnapshot, but
-    // it only runs on session-init resume. A flow record whose persisted
-    // cursor has already advanced past ToolUsePrepareNode (e.g. suspended
-    // mid-cycle) skips that node entirely on resume -- PersistedFlow.
-    // ensureRecord just reuses the existing record -- so this resume
-    // boundary (SessionResumeRetrieval + runToolUseFlow's self-heal) is the
-    // only place left that can migrate a pre-refactor top-level
-    // `{todos, plan}` workspace snapshot before ToolUseCycleNode.prep()'s
-    // canonical-only `fromCanonicalSnapshot` sees it.
-    const executionId = 'abc141' as ExecutionId;
-    const streamId = 'chat@gpt54#abc141' as StreamTabId;
-    const legacyWorkspaceSnapshot = {
-      todos: [
-        {
-          content: 'Ship the fix',
-          status: 'in_progress',
-          activeForm: 'Shipping the fix',
-        },
-      ],
-      plan: { objective: 'Migrate legacy workspace snapshots on resume' },
-    };
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        messages: [{ role: 'user', content: 'Continue.' }],
-        shouldSkipCycle: false,
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: legacyWorkspaceSnapshot,
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gpt54' }),
-            transient: {},
+  it.each([
+    { name: 'direct stored-state recovery', withSnapshot: false },
+    { name: 'unvalidated resume snapshot', withSnapshot: true },
+  ])(
+    'migrates a legacy workspace before strict validation: $name',
+    async ({ withSnapshot }) => {
+      const suffix = withSnapshot ? 'snapshot' : 'stored';
+      const executionId = `abc141-${suffix}` as ExecutionId;
+      const streamId = `chat@gpt54#abc141-${suffix}` as StreamTabId;
+      const legacyWorkspaceSnapshot = {
+        todos: [
+          {
+            content: 'Ship the fix',
+            status: 'in_progress',
+            activeForm: 'Shipping the fix',
+          },
+        ],
+        plan: { objective: 'Migrate legacy workspace snapshots on resume' },
+      };
+      await getExecutionStore(executionId).write(flowKey(executionId), {
+        flowName: 'texra',
+        params: {},
+        shared: {
+          messages: [{ role: 'user', content: 'Continue.' }],
+          shouldSkipCycle: true,
+          stateSlices: {
+            runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+            workspaceSnapshot: legacyWorkspaceSnapshot,
+            userChannels: {
+              input: Object.freeze({ MODEL: 'gpt54' }),
+              transient: {},
+            },
           },
         },
-      },
-      createdAt: new Date().toISOString(),
-      // Cursor already past ToolUsePrepareNode -- resume replays from here,
-      // never touching ToolUsePrepareNode's own hydration.
-      cursor: { nextNodeId: 'ToolUseCycleNode' },
-      nodes: [{ action: 'default', nodeId: 'ToolUsePrepareNode' }],
-    });
+        createdAt: new Date().toISOString(),
+        cursor: { nextNodeId: 'start/default' },
+        nodes: [{ action: 'default', nodeId: 'start' }],
+      });
 
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      agentConfigToTaskState(CONFIG),
-    );
-    expect(resume?.type).toBe('toolUse');
-    if (resume?.type !== 'toolUse') return;
+      const snapshot = withSnapshot
+        ? buildToolUseSnapshot(executionId, streamId)
+        : undefined;
+      if (snapshot) {
+        // Simulate a typed external command payload that bypassed schema parsing.
+        Object.assign(snapshot, { workspace: legacyWorkspaceSnapshot });
+      }
+      const result = await runPersistedFlow(executionId, streamId, snapshot);
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
 
-    const structuralBase = migrateSharedState({
-      messages: [{ role: 'user', content: 'Continue.' }],
-      shouldSkipCycle: false,
-      stateSlices: {
-        runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-        workspaceSnapshot: legacyWorkspaceSnapshot,
-        userChannels: { input: { MODEL: 'gpt54' }, transient: {} },
-      },
-    });
-    expect(structuralBase).not.toBeNull();
-    if (!structuralBase) return;
-
-    const healed = buildResumedSharedFromSnapshot(
-      structuralBase.data,
-      resume.snapshot,
-      undefined,
-    );
-
-    // This is exactly ToolUseCycleNode.prep()'s canonical-only re-derivation
-    // -- it must not throw, and the migrated todos/plan must survive.
-    const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
-      healed.stateSlices!.workspaceSnapshot,
-    );
-    expect(workspaceState.workPlan.todos).toEqual(
-      legacyWorkspaceSnapshot.todos,
-    );
-    expect(workspaceState.workPlan.plan).toEqual(legacyWorkspaceSnapshot.plan);
-  });
-
-  it('normalizeResumedWorkspaceSnapshot migrates a raw legacy workspace snapshot for the no-resumeSnapshot defensive fallback', () => {
-    // Regression for the codex P1 on #8005, targeted at runToolUseFlow's
-    // *other* self-heal branch: a fresh launch that happens to find a
-    // leftover flow record (no resumeSnapshot -- the resume boundary above
-    // was never consulted) migrates/backfills locally via
-    // migrateSharedState, which only unwraps the outer structural wrapper
-    // and never touches the nested stateSlices.workspaceSnapshot. Without
-    // normalizeResumedWorkspaceSnapshot, a legacy top-level `{todos, plan}`
-    // workspace snapshot survives untouched into the self-healed record and
-    // later fails ToolUseCycleNode.prep()'s canonical-only
-    // fromCanonicalSnapshot, whereas the pre-#8005 fromSnapshot silently
-    // migrated it.
-    const legacyWorkspaceSnapshot = {
-      todos: [
-        {
-          content: 'Ship the fix',
-          status: 'in_progress',
-          activeForm: 'Shipping the fix',
-        },
-      ],
-      plan: { objective: 'Migrate legacy workspace snapshots on resume' },
-    };
-
-    // Documents the failure mode: the raw legacy shape (what
-    // migrateSharedState's untouched pass-through produces) has no
-    // `workPlan` field, so the canonical-only parse throws.
-    expect(() =>
-      AgentWorkspaceState.fromCanonicalSnapshot(
-        legacyWorkspaceSnapshot as unknown as AgentWorkspaceSnapshot,
-      ),
-    ).toThrow();
-
-    const normalized = normalizeResumedWorkspaceSnapshot(
-      legacyWorkspaceSnapshot,
-    );
-    const workspaceState =
-      AgentWorkspaceState.fromCanonicalSnapshot(normalized);
-    expect(workspaceState.workPlan.todos).toEqual(
-      legacyWorkspaceSnapshot.todos,
-    );
-    expect(workspaceState.workPlan.plan).toEqual(legacyWorkspaceSnapshot.plan);
-
-    // Idempotent: normalizing an already-canonical snapshot is a no-op pass-through.
-    const canonical = AgentWorkspaceState.create().toSnapshot();
-    expect(normalizeResumedWorkspaceSnapshot(canonical)).toEqual(canonical);
-  });
+      const healedRecord = await getExecutionStore(
+        executionId,
+      ).read<FlowRecord>(flowKey(executionId));
+      const healedShared = ToolUseRunSharedCanonicalSchema.parse(
+        healedRecord?.shared,
+      );
+      expect(healedShared.stateSlices).not.toBeNull();
+      if (!healedShared.stateSlices) return;
+      const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
+        healedShared.stateSlices.workspaceSnapshot,
+      );
+      expect(workspaceState.workPlan.todos).toEqual(
+        legacyWorkspaceSnapshot.todos,
+      );
+      expect(workspaceState.workPlan.plan).toEqual(
+        legacyWorkspaceSnapshot.plan,
+      );
+    },
+  );
 });
