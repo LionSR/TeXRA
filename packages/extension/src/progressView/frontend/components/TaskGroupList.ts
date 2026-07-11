@@ -9,7 +9,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import {
-  STREAM_STATUS,
+  STREAM_PHASE,
   type GettingStartedAction,
   type LogMessageData,
   type TaskGroup,
@@ -55,15 +55,22 @@ const TIMELINE_ITEM_WINDOW_STEP = 120;
 const DEFAULT_GROUP_MESSAGE_WINDOW = 400;
 const GROUP_MESSAGE_WINDOW_STEP = 400;
 
-/** Maps group status to a wa-icon name; null indicates an animated spinner. */
+/**
+ * Maps group status to a wa-icon name; null indicates an animated spinner.
+ * `TaskGroup.status` is the native `StreamPhase`/`RunOutcome` vocabulary
+ * (#7993 step 3) — `CANCELLED` now renders distinctly from `COMPLETED`
+ * instead of folding into one neutral "stopped" icon.
+ */
 function getStatusIcon(status: string): string | null {
   switch (status) {
-    case STREAM_STATUS.RUNNING:
+    case STREAM_PHASE.RUNNING:
       return null;
-    case STREAM_STATUS.ERROR:
+    case STREAM_PHASE.FAILED:
       return 'error';
-    case STREAM_STATUS.STOPPED:
+    case STREAM_PHASE.COMPLETED:
       return 'check';
+    case STREAM_PHASE.CANCELLED:
+      return 'circle-stop';
     default:
       return 'circle-outline';
   }
@@ -288,7 +295,13 @@ export class TaskGroupList extends LitElement {
     );
   }
 
-  /** Play sound when a run group completes */
+  /**
+   * Play sound when a run group completes. `STREAM_STATUS.STOPPED` folded
+   * `completed`/`cancelled` into one neutral bucket; the native
+   * `TaskGroup.status` (#7993 step 3) keeps them apart, so this checks both
+   * terminal-but-not-failed phases to preserve the prior "stopped" trigger
+   * byte-for-byte — a failed round still does not play the sound.
+   */
   private checkForCompletedRuns(): void {
     const nextStatuses = new Map<string, string>();
     for (const group of this.groups) {
@@ -298,10 +311,10 @@ export class TaskGroupList extends LitElement {
         (group.kind === 'round' ||
           (group.kind === undefined &&
             parseWorkflowOutputRoundDir(group.name) !== null));
-      const wasRunning = prev === STREAM_STATUS.RUNNING;
+      const wasRunning = prev === STREAM_PHASE.RUNNING;
       const isNowComplete =
-        group.status === STREAM_STATUS.READY ||
-        group.status === STREAM_STATUS.STOPPED;
+        group.status === STREAM_PHASE.COMPLETED ||
+        group.status === STREAM_PHASE.CANCELLED;
 
       if (isRunGroup && wasRunning && isNowComplete) {
         playCompletionSound();

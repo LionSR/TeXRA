@@ -17,8 +17,9 @@ import {
   AgentCategory,
   LOG_LEVELS,
   MESSAGE_TYPES,
+  RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_STATUS,
+  STREAM_PHASE,
   createStreamState,
   type ProgressViewOutboundMessage,
   type StreamLogEntry,
@@ -162,18 +163,20 @@ describe('LOG_DELTA text deltas', () => {
   });
 });
 
-// #7993 step 2: every GROUP_END row a live/persisted producer writes now
-// carries the literal RunOutcome ('completed'/'cancelled'/'failed'), not the
-// folded 2-value EndGroupStatus ('stopped'/'error') logSlice.ts's
-// isTaskGroupStatus type guard alone recognizes. Without the read-side fold
-// this suite pins, every GROUP_END row — including a failure — would fall
-// through to isTaskGroupStatus's STOPPED default, losing the error icon.
-// The standalone trace-viewer forwards raw legacy entries into this same
-// LOG_DELTA handler (replayTrace.ts, §8.3's second, permanent boundary), so
-// the legacy wire values must keep working identically alongside the new
-// canonical ones — logSlice.ts stays a tolerant reader of both, it does not
-// go canonical-only.
-describe('LOG_DELTA GROUP_END task-group status (#7993 step 2)', () => {
+// #7993 step 3: TaskGroup.status is now the native StreamPhase/RunOutcome
+// vocabulary, not the legacy 2-value EndGroupStatus ('stopped'/'error')
+// folded down from it. Every GROUP_END row a live/persisted producer writes
+// carries the literal RunOutcome ('completed'/'cancelled'/'failed') and
+// logSlice.ts's isTaskGroupStatus type guard now recognizes those directly —
+// without that retyping, every canonical GROUP_END row (including a
+// failure) would fall through to the STOPPED default, losing the error icon
+// and folding completed/cancelled together. The standalone trace-viewer
+// still forwards raw legacy entries into this same LOG_DELTA handler
+// (replayTrace.ts, §8.3's second, permanent boundary), so logSlice.ts stays
+// a tolerant reader of the legacy wire values too — it maps them UP to the
+// same native value StreamLogStore.parsePersistedEntries would produce for
+// the same on-disk string, rather than going canonical-only.
+describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
   function groupStartEntry(id: string): StreamLogEntry {
     return {
       seqNo: 1,
@@ -201,14 +204,20 @@ describe('LOG_DELTA GROUP_END task-group status (#7993 step 2)', () => {
   it.each([
     // Canonical values every StreamLogStore-sourced GROUP_END row now
     // carries directly (live producers write RunOutcome; persisted legacy
-    // rows are normalized to it at StreamLogStore.parsePersistedEntries).
-    ['completed', STREAM_STATUS.STOPPED],
-    ['cancelled', STREAM_STATUS.STOPPED],
-    ['failed', STREAM_STATUS.ERROR],
+    // rows are normalized to it at StreamLogStore.parsePersistedEntries) —
+    // completed/cancelled stay distinct instead of folding into one bucket,
+    // and a failure keeps its own value (the error icon's source).
+    ['completed', RUN_OUTCOME.COMPLETED],
+    ['cancelled', RUN_OUTCOME.CANCELLED],
+    ['failed', RUN_OUTCOME.FAILED],
     // Legacy values the standalone trace-viewer still forwards raw from a
-    // pre-cutover exported trace file — never normalized, permanently.
-    ['stopped', STREAM_STATUS.STOPPED],
-    ['error', STREAM_STATUS.ERROR],
+    // pre-cutover exported trace file — never normalized, permanently —
+    // map UP to the native value, matching parsePersistedEntries exactly.
+    ['stopped', RUN_OUTCOME.COMPLETED],
+    ['error', RUN_OUTCOME.FAILED],
+    // Malformed/unrecognized data.status falls back to the caller-supplied
+    // default, now STREAM_PHASE.COMPLETED (was STREAM_STATUS.STOPPED).
+    ['bogus', STREAM_PHASE.COMPLETED],
   ] as const)(
     'maps GROUP_END data.status %s to task-group status %s',
     (wireStatus, expectedStatus) => {
