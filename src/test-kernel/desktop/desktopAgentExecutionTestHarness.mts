@@ -3,6 +3,7 @@ import { onTestFinished, vi } from 'vitest';
 
 // Local imports - shared schemas
 import type { RunOutcome } from '@shared/schemas';
+import type { OutputFileSummary } from '@shared/schemas/output';
 
 export type DesktopAgentExecutionModule =
   typeof import('@desktop/main/desktopAgentExecution');
@@ -12,7 +13,7 @@ export type RunExecutionRequest = (
   options: {
     openWorkflowOutput(result: {
       outcome: RunOutcome;
-      outputs: Array<{ absolutePath: string }>;
+      outputs: Array<Pick<OutputFileSummary, 'absolutePath' | 'round'>>;
     }): Promise<void>;
     // This window's SessionHandle. The onboarding run-completion test drives a
     // terminal `result` event through it via `attachRunTrace`.
@@ -47,9 +48,7 @@ export function mockLoggerModule(
   }));
 }
 
-/**
- * Minimal AgentTrace stand-in for bridging terminal results into a session.
- */
+/** Minimal AgentTrace stand-in for bridging terminal results into a session. */
 export function makeFakeTrace(): {
   subscribe(fn: (event: unknown) => void): () => void;
   emit(event: unknown): void;
