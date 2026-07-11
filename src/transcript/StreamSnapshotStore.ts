@@ -629,9 +629,8 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     filesByRound: RoundIndexed<string>,
   ): void {
-    const patch = this.parseRoundPatch<string>(
-      filesByRound,
-      (raw) => raw as string[],
+    const patch = this.parseRoundPatch<string>(filesByRound, (raw) =>
+      z.array(z.string()).parse(Array.isArray(raw) ? raw : []),
     );
     if (patch.size === 0) return;
 
