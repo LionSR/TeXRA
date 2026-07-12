@@ -48,10 +48,8 @@ import type {
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import {
-  findActiveAgentExecutionHandle,
   getAllActiveExecutionIds,
   SessionHandle,
-  untrackActiveAgentExecution,
 } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import {
@@ -102,6 +100,7 @@ import {
   type DesktopToolEditApprovalController,
 } from './desktopToolEditApproval.js';
 import { createDesktopHostInteractions } from './desktopHostInteractions.js';
+import { DesktopExecutionRebinder } from './desktopExecutionRebinder.js';
 import { toLogData } from './desktopLogUtils.js';
 import {
   DesktopProgressFileActions,
@@ -242,6 +241,7 @@ export class DesktopProgressBridge {
   private readonly detachHostInteractions: () => void;
   /** Detaches the session→toast consumer; called on dispose. */
   private detachResultToast: (() => void) | undefined;
+  private readonly executionRebinder: DesktopExecutionRebinder;
 
   constructor(
     private readonly postToRenderer: (message: unknown) => boolean | void,
@@ -251,6 +251,10 @@ export class DesktopProgressBridge {
       emit: (event, payload) => this.handleInteractionEvent(event, payload),
     };
     this.session = new SessionHandle({ hostChannel });
+    this.executionRebinder = new DesktopExecutionRebinder(
+      this.session,
+      this.logger,
+    );
     this.runtimeHost = {
       ...hostChannel,
       interactions: this.session.interactions,
@@ -687,6 +691,7 @@ export class DesktopProgressBridge {
   dispose(): void {
     this.detachResultToast?.();
     this.detachHostInteractions();
+    this.executionRebinder.dispose();
     this.toolEditApprovals.dispose();
     this.unsubscribe();
     this.backend.dispose();
@@ -756,7 +761,11 @@ export class DesktopProgressBridge {
     // rail entry owner at all: the old window's bridge already stopped
     // forwarding events (disposed), and nothing else ever subscribed this
     // window to them. See #8148.
-    this.rebindActiveExecutions(activeExecutionIds, allExecutionIds);
+    this.executionRebinder.rebind(
+      activeExecutionIds,
+      allExecutionIds,
+      this.sessionProgress.restoredStreams,
+    );
     this.sessionProgress.forgetActiveRestoredStreams(
       activeExecutionIds,
       allExecutionIds,
@@ -765,57 +774,8 @@ export class DesktopProgressBridge {
   }
 
   /**
-   * Reattach every still-active execution a restored (ghost) stream points
-   * at to THIS window's session, so window recreation doesn't strand a
-   * headless-continuing run on its previous window's disposed bridge (#8148).
-   * Idempotent (guarded by `this.session.executions.getHandle`), since
-   * startup repair calls `refreshActiveExecutionIds` more than once.
-   */
-  private rebindActiveExecutions(
-    activeExecutionIds: ReadonlySet<string>,
-    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>,
-  ): void {
-    for (const [streamId, snapshot] of this.sessionProgress.restoredStreams) {
-      const executionId = snapshot.executionId ?? allExecutionIds.get(streamId);
-      if (!executionId || !activeExecutionIds.has(executionId)) continue;
-      if (this.session.executions.getHandle(executionId)) continue;
-      const found = findActiveAgentExecutionHandle(executionId);
-      if (!found || found.handle.childStreamId !== streamId) continue;
-      const { handle, status } = found;
-      this.session.executions.track(handle);
-      // `hydrateRestoredStreams()` already seeded this window's status from
-      // the on-disk snapshot's `lastKnownStatus`, which goes stale the moment
-      // the run transitions while headless (nothing persists it, #8148).
-      // Overwrite with the live status the owning session actually has, so
-      // display and `terminateWaitingHandle`'s WAITING/RESUMING check both
-      // see the truth instead of a possibly-wrong RUNNING carried from disk.
-      if (status) {
-        this.session.status.transition(streamId, status, 'restart-repair', {
-          trace: handle.trace,
-        });
-      }
-      const detachTrace = handle.trace
-        ? this.session.attachRunTrace(handle.trace, streamId)
-        : undefined;
-      void handle.result.finally(() => {
-        detachTrace?.();
-        // Release from every live session that still owns this handle, not
-        // just this window's -- otherwise the session that originally
-        // launched it (retained post-dispose via `keepActiveExecutions`)
-        // never sees its own registry go idle and leaks in `liveSessions`.
-        untrackActiveAgentExecution(executionId);
-      });
-    }
-  }
-
-  /**
-   * Consults detectWaitingStreams() (the KV-store-backed, ground-truth
-   * persisted flow record check) and then re-fetches active execution ids
-   * to drop any stream that became active while that await was in flight --
-   * a narrow but real race (another window, or a headless run, could resume
-   * the stream mid-lookup). Shared by both the primary try path and the
-   * degraded catch-fallback path in repairOrphanedStreamsAfterRestart so the
-   * two can no longer silently diverge on this check the way they once did.
+   * Detect persisted waiting streams, then recheck live executions so both
+   * primary and degraded restart-repair paths reject resumes won mid-read.
    */
   private async detectRaceGuardedWaitingStreams(
     executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
