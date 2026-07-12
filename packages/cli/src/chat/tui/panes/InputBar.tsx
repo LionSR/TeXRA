@@ -14,6 +14,7 @@ import { ReverseSearch } from '../input/ReverseSearch';
 import { isCtrlInput } from '../input/inputKeys';
 import { openRegisteredCliSlashForm } from '../commands/slashForms';
 import { SlashPalette } from '../commands/SlashPalette';
+import { COLOR_BORDER, COLOR_HINT } from '../ui/colors';
 import { POINTER } from '../ui/glyphs';
 import {
   matchSlashCommands,
@@ -347,11 +348,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       {attachNotice ? <Text dimColor>{attachNotice}</Text> : null}
       <Box
         borderStyle="round"
-        borderColor="gray"
+        borderColor={COLOR_BORDER}
         paddingX={1}
         aria-role="textbox"
       >
-        <Text aria-hidden color="cyan">
+        <Text aria-hidden color={COLOR_HINT}>
           {prompt ?? POINTER}{' '}
         </Text>
         {disabled && props.disabledMessage ? (

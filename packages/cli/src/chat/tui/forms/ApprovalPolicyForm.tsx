@@ -38,7 +38,7 @@ export function ApprovalPolicyForm(
 ): React.JSX.Element {
   if (isCompactFormRows(props.availableRows)) {
     return (
-      <FormFrame color="cyan" title="/approval" showCloseHint={false}>
+      <FormFrame title="/approval" showCloseHint={false}>
         <Select
           items={APPROVAL_POLICY_ITEMS}
           activeValue={props.currentPolicy}
@@ -56,7 +56,7 @@ export function ApprovalPolicyForm(
   }
 
   return (
-    <FormFrame color="cyan" title="/approval" showCloseHint={false}>
+    <FormFrame title="/approval" showCloseHint={false}>
       <Text dimColor>
         Choose when privileged actions prompt or auto-approve.
       </Text>

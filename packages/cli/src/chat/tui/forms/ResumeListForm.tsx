@@ -11,6 +11,7 @@ import {
 import { formatCliHistoryResumeSummary } from '@cli/runtime/historyLabels';
 import type { ExecutionId } from '@shared/schemas';
 
+import { COLOR_WARNING } from '../ui/colors';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';
@@ -58,7 +59,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
   const entries = data ?? [];
   if (entries.length === 0) {
     return (
-      <FormFrame color="yellow" title="/resume">
+      <FormFrame color={COLOR_WARNING} title="/resume">
         <Text>No resumable sessions found.</Text>
       </FormFrame>
     );
@@ -75,7 +76,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
   }));
 
   return (
-    <FormFrame color="cyan" title="/resume" showCloseHint={false}>
+    <FormFrame title="/resume" showCloseHint={false}>
       <Text dimColor>Choose a previous session to continue.</Text>
       <Box marginTop={1}>
         <Select

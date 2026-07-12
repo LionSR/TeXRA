@@ -40,7 +40,7 @@ export const LOGIN_FORM_ITEMS = [
 export function LoginForm(props: LoginFormProps): React.JSX.Element {
   if (isCompactFormRows(props.availableRows)) {
     return (
-      <FormFrame color="cyan" title="/login" showCloseHint={false}>
+      <FormFrame title="/login" showCloseHint={false}>
         <Select
           items={LOGIN_FORM_ITEMS}
           maxVisibleItems={LOGIN_FORM_ITEMS.length}
@@ -57,7 +57,7 @@ export function LoginForm(props: LoginFormProps): React.JSX.Element {
   }
 
   return (
-    <FormFrame color="cyan" title="/login" showCloseHint={false}>
+    <FormFrame title="/login" showCloseHint={false}>
       <Text dimColor>Choose how TeXRA should authenticate model calls.</Text>
       <Box marginTop={1} flexDirection="column">
         <Select

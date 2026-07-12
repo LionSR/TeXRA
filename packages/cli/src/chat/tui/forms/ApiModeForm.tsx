@@ -51,7 +51,7 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
 
   if (isCompactFormRows(props.availableRows)) {
     return (
-      <FormFrame color="cyan" title="/api" showCloseHint={false}>
+      <FormFrame title="/api" showCloseHint={false}>
         <Select
           items={items}
           activeValue={props.currentMode}
@@ -66,7 +66,7 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
   }
 
   return (
-    <FormFrame color="cyan" title="/api" showCloseHint={false}>
+    <FormFrame title="/api" showCloseHint={false}>
       <Text dimColor>
         Choose which credentials model calls should use. Press 1 for API keys.
       </Text>

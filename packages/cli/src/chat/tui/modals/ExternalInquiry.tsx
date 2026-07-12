@@ -5,6 +5,7 @@ import { writeClipboardText } from '@cli/runtime/clipboardText';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 import { clamp } from '@utils/core';
 
+import { COLOR_SUCCESS, COLOR_WARNING } from '../ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
@@ -320,14 +321,14 @@ export function ExternalInquiry(
   return (
     <BorderedPanel
       borderStyle="single"
-      color="green"
+      color={COLOR_SUCCESS}
       width={columns}
       title={
         <>
           Agent asks:
           {copyStatus !== 'idle' ? (
             <Text
-              color={copyStatus === 'failed' ? 'yellow' : 'green'}
+              color={copyStatus === 'failed' ? COLOR_WARNING : COLOR_SUCCESS}
               dimColor={copyStatus === 'copying'}
             >
               {copyStatusLabel(copyStatus)}

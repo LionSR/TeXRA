@@ -23,6 +23,7 @@ import {
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { KeyHints } from '../ui/KeyHints';
 import { BorderedPanel } from '../ui/BorderedPanel';
+import { COLOR_HINT } from '../ui/colors';
 import { POINTER } from '../ui/glyphs';
 import {
   nextWrappingHighlightIndex,
@@ -93,7 +94,7 @@ function PickerItemHead({
   readonly index: number;
   readonly label: string;
 }): React.JSX.Element {
-  const color = highlighted ? 'cyan' : undefined;
+  const color = highlighted ? COLOR_HINT : undefined;
   return (
     <>
       <Box flexShrink={0}>
@@ -402,7 +403,7 @@ export function ChildControlPicker({
     ].filter((part): part is string => Boolean(part));
     return (
       <Box flexDirection="column" minWidth={0} width={availableColumns}>
-        <Text bold color="cyan" wrap="truncate-end">
+        <Text bold color={COLOR_HINT} wrap="truncate-end">
           {titleParts.join(' · ')}
         </Text>
         {selectedItem ? (
@@ -425,7 +426,7 @@ export function ChildControlPicker({
 
   return (
     <BorderedPanel
-      color="cyan"
+      color={COLOR_HINT}
       width={availableColumns}
       title={pickerTitle(mode)}
       footer={
