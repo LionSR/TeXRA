@@ -24,10 +24,7 @@ export interface DiffViewHost {
   ): Promise<DiffSession>;
   closeDiff(session: DiffSession): Promise<void>;
   revealFirstChange(session: DiffSession, line: number): Promise<void>;
-  readProposedContent(
-    session: DiffSession,
-    fallbackContent: string,
-  ): Promise<string>;
+  readProposedContent(session: DiffSession): Promise<string>;
 }
 
 export interface ExternalOpener {

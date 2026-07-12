@@ -43,14 +43,17 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'nativeToolEditApproval';
 
 interface PendingApprovalEntry extends LatexPreviewEntry {
   request: ToolEditApprovalRequest;
+  session: SessionHandle;
   diffSession: DiffSession;
   title: string;
+  relativePath: string;
   streamId?: StreamTabId;
   lineChanges: LineChanges;
   settle: (result: ToolEditApprovalResult) => void;
@@ -114,6 +117,22 @@ async function showProgressViewApprovalPrompt(
     vscode.commands.executeCommand('texra.showProgressView'),
   ).catch(() => {});
 
+  publishProgressViewApprovalPrompt(
+    session,
+    requestId,
+    request,
+    relativePath,
+    lineChanges,
+  );
+}
+
+function publishProgressViewApprovalPrompt(
+  session: SessionHandle,
+  requestId: string,
+  request: ToolEditApprovalRequest,
+  relativePath: string,
+  lineChanges: LineChanges,
+): void {
   // Activate the stream that needs approval and post the prompt (shared with
   // the desktop host); VS Code computes the relative path via the workspace.
   emitToolEditApprovalPrompt(getRuntimeHost(), session, {
@@ -126,6 +145,22 @@ async function showProgressViewApprovalPrompt(
 
 function resolveProgressViewApprovalPrompt(requestId: string): void {
   getRuntimeHost().emit('resolveToolEditPermission', { requestId });
+}
+
+function restoreProgressViewApprovalPrompt(
+  requestId: string,
+  entry: PendingApprovalEntry,
+): void {
+  // The frontend removes the panel optimistically on approve. Reset backend
+  // delivery tracking, then publish the still-pending request under the same ID.
+  resolveProgressViewApprovalPrompt(requestId);
+  publishProgressViewApprovalPrompt(
+    entry.session,
+    requestId,
+    entry.request,
+    entry.relativePath,
+    entry.lineChanges,
+  );
 }
 
 export async function nativeRequestApproval(
@@ -200,12 +235,14 @@ export async function nativeRequestApproval(
 
       const entry: PendingApprovalEntry = {
         request,
+        session: options.session,
         diffSession: openedSession,
         originalUri: { fsPath: originalSource.filePath },
         proposedUri: { fsPath: proposedSource.filePath },
         originalContent,
         proposedContent,
         title,
+        relativePath: description,
         streamId: streamId ?? undefined,
         lineChanges,
         isSettled: () => approvalSettled,
@@ -288,10 +325,12 @@ export async function nativeRequestApproval(
     result = await approvalPromise;
 
     if (result.accepted) {
-      // Normalize here: these reads bypass BaseFS so may contain CRLF.
-      const appliedContent = normalizeLineEndings(
-        await diffViewHost.readProposedContent(openedSession, proposedContent),
-      );
+      const appliedContent = result.appliedContent;
+      if (appliedContent == null) {
+        throw new Error(
+          'Tool edit approval settled without the current proposed content.',
+        );
+      }
       const userPatch = computeUserPatch(proposedContent, appliedContent);
       result = {
         ...result,
@@ -360,14 +399,20 @@ export async function handleProgressViewToolEditApprovalAction(
       break;
 
     case 'approve': {
-      // Normalize: this read bypasses BaseFS so may contain CRLF.
-      const appliedContent = normalizeLineEndings(
-        await diffViewHost.readProposedContent(
-          entry.diffSession,
-          entry.proposedContent,
-        ),
-      );
-      entry.settle({ accepted: true, appliedContent });
+      try {
+        // Normalize: this read bypasses BaseFS so may contain CRLF.
+        const appliedContent = normalizeLineEndings(
+          await diffViewHost.readProposedContent(entry.diffSession),
+        );
+        entry.settle({ accepted: true, appliedContent });
+      } catch (error) {
+        if (!entry.isSettled()) {
+          entry.onError(
+            `Approval failed because the edited document could not be read: ${toErrorMessage(error)}`,
+          );
+          restoreProgressViewApprovalPrompt(payload.requestId, entry);
+        }
+      }
       break;
     }
 

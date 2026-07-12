@@ -168,13 +168,14 @@ class FakeDiffViewHost implements DiffViewHost {
     this.revealed.push({ session, line });
   }
 
-  async readProposedContent(
-    session: DiffSession,
-    fallbackContent: string,
-  ): Promise<string> {
-    return (
-      this.proposedContent.get(session.proposed.filePath) ?? fallbackContent
-    );
+  async readProposedContent(session: DiffSession): Promise<string> {
+    const content = this.proposedContent.get(session.proposed.filePath);
+    if (content === undefined) {
+      throw new Error(
+        `No proposed diff content for ${session.proposed.filePath}.`,
+      );
+    }
+    return content;
   }
 
   setProposedContent(filePath: string, content: string): void {

@@ -83,10 +83,7 @@ describe('FakeHosts', () => {
     await hosts.diff.revealFirstChange(session, 12);
     await hosts.diff.closeDiff(session);
 
-    assert.equal(
-      await hosts.diff.readProposedContent(session, 'fallback'),
-      'edited',
-    );
+    assert.equal(await hosts.diff.readProposedContent(session), 'edited');
     assert.deepEqual(hosts.diff.opened, [
       {
         original: { filePath: '/tmp/original.tex' },
@@ -97,5 +94,19 @@ describe('FakeHosts', () => {
     ]);
     assert.deepEqual(hosts.diff.revealed, [{ session, line: 12 }]);
     assert.deepEqual(hosts.diff.closed, [session]);
+  });
+
+  it('fails when proposed diff content is unavailable', async () => {
+    const hosts = createFakeUIHosts();
+    const session = await hosts.diff.openDiff(
+      { filePath: '/tmp/original.tex' },
+      { filePath: '/tmp/missing.tex' },
+      'Changes',
+    );
+
+    await assert.rejects(
+      hosts.diff.readProposedContent(session),
+      /No proposed diff content/,
+    );
   });
 });
