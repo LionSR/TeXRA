@@ -206,9 +206,10 @@ afterEach(async () => {
 });
 
 describe('native tool edit approval', () => {
-  it('does not accept when the current proposed document cannot be read', async () => {
+  it('restores a failed approval prompt and accepts a later retry', async () => {
     const { approval, requestId, runtimeHost } = await startApproval();
-    await rm(currentProposedUri().fsPath);
+    const proposedUri = currentProposedUri();
+    await rm(proposedUri.fsPath);
 
     await handleProgressViewToolEditApprovalAction({
       requestId,
@@ -219,13 +220,23 @@ describe('native tool edit approval', () => {
     expect(vscodeMocks.showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining('edited document could not be read'),
     );
-    expect(runtimeHost.resolved).toHaveLength(0);
+    expect(runtimeHost.resolved).toEqual([{ requestId }]);
+    expect(runtimeHost.shown).toHaveLength(2);
+    expect(runtimeHost.shown[1]).toEqual(runtimeHost.shown[0]);
 
+    const getText = vi.fn(() => 'beta after retry\r\n');
+    vscodeMocks.textDocuments.push({ uri: proposedUri, getText });
     await handleProgressViewToolEditApprovalAction({
       requestId,
-      action: 'reject',
+      action: 'approve',
     });
-    await expect(approval).resolves.toMatchObject({ accepted: false });
+
+    await expect(approval).resolves.toMatchObject({
+      accepted: true,
+      appliedContent: 'beta after retry\n',
+    });
+    expect(getText).toHaveBeenCalledOnce();
+    expect(runtimeHost.resolved).toEqual([{ requestId }, { requestId }]);
   });
 
   it('accepts the current edited document content', async () => {
