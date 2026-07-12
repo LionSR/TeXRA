@@ -23,6 +23,7 @@ export const UsageProviderSchema = z.enum([
   'moonshot',
   'minimax',
   'glm',
+  'meta',
   'unknown',
 ]);
 
