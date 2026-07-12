@@ -60,6 +60,70 @@ describe('CLI secrets', () => {
     }
   });
 
+  it('merges overlapping set() calls instead of one silently dropping the other', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
+    const storageRoot = path.join(root, 'storage');
+    const secretsPath = cliSecretsPath(storageRoot);
+
+    try {
+      const secrets = new CliSecrets(secretsPath);
+
+      // Two overlapping mutations on the same instance, started before
+      // either resolves. Without intra-process serialization, each opens
+      // its own JsonStore off the same on-disk snapshot and the later
+      // flush silently drops the other's key.
+      await Promise.all([
+        secrets.set('KEY_A', 'value-a'),
+        secrets.set('KEY_B', 'value-b'),
+      ]);
+
+      expect(await secrets.get('KEY_A')).toBe('value-a');
+      expect(await secrets.get('KEY_B')).toBe('value-b');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores a non-string stored value instead of returning it as a key', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
+    const storageRoot = path.join(root, 'storage');
+    const secretsPath = cliSecretsPath(storageRoot);
+
+    try {
+      const secrets = new CliSecrets(secretsPath);
+      await secrets.set('GOOD_KEY', 'good-value');
+      await fs.writeFile(
+        secretsPath,
+        JSON.stringify({ GOOD_KEY: 'good-value', BAD_KEY: { nested: true } }),
+        'utf8',
+      );
+
+      expect(await secrets.getStored('GOOD_KEY')).toBe('good-value');
+      expect(await secrets.getStored('BAD_KEY')).toBeUndefined();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('restricts the secrets file and its directory to the owner', async () => {
+    if (process.platform === 'win32') return; // POSIX modes don't apply.
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
+    const storageRoot = path.join(root, 'storage');
+    const secretsPath = cliSecretsPath(storageRoot);
+
+    try {
+      const secrets = new CliSecrets(secretsPath);
+      await secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
+
+      const fileStat = await fs.stat(secretsPath);
+      const dirStat = await fs.stat(path.dirname(secretsPath));
+      expect(fileStat.mode & 0o777).toBe(0o600);
+      expect(dirStat.mode & 0o777).toBe(0o700);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps one process-wide secrets store after the first root is selected', async () => {
     vi.resetModules();
     const { getCliSecrets } = await import('@cli/runtime/cliSecrets');
