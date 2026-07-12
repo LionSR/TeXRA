@@ -16,7 +16,11 @@ import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 // Local file imports
 import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
-import { resolveLatexDir, stripLatexComments } from './latexParsingUtils';
+import {
+  collectCommaSeparatedMatches,
+  resolveLatexDir,
+  stripLatexComments,
+} from './latexParsingUtils';
 import { TikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
 
@@ -292,19 +296,19 @@ export class LatexMediaManager {
       const uncommented = stripLatexComments(content);
       const baseDir = path.dirname(realPath);
 
-      for (const match of uncommented.matchAll(USEPACKAGE_PATTERN)) {
-        for (const entry of match[1].split(',')) {
-          const name = entry.trim();
-          if (!name) continue;
-          const candidate = path.join(baseDir, `${name}.sty`);
-          if (
-            await FlexibleFS.exists({
-              kind: 'external',
-              absolutePath: candidate,
-            })
-          ) {
-            found.add(candidate);
-          }
+      const packageNames = collectCommaSeparatedMatches(
+        uncommented,
+        USEPACKAGE_PATTERN,
+      );
+      for (const name of packageNames) {
+        const candidate = path.join(baseDir, `${name}.sty`);
+        if (
+          await FlexibleFS.exists({
+            kind: 'external',
+            absolutePath: candidate,
+          })
+        ) {
+          found.add(candidate);
         }
       }
     } catch (error) {
