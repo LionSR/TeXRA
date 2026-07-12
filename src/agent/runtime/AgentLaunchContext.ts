@@ -293,8 +293,9 @@ async function assembleAgentLaunchContext(
     ? await createModelHandlerForCompatibilityKey(
         modelConfig,
         modelHandlerCompatibilityKey,
+        setting.agentCategory,
       )
-    : await createModelHandler(modelConfig);
+    : await createModelHandler(modelConfig, setting.agentCategory);
 
   const streamId =
     input.streamTabIdOverride ??
