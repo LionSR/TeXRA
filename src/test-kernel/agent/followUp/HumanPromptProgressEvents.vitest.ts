@@ -12,7 +12,7 @@ import type { StreamTabId } from '@shared/schemas';
 import { AskUserQuestionTool } from '@tools/userQuestion';
 import {
   cleanupAllApprovals,
-  proposalApprovalState,
+  proposalApprovals,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
   toggleBashApprovalSessionBypass,
@@ -286,7 +286,7 @@ describe('human prompt progress events', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:proposal-bypass' as StreamTabId;
 
-    const enabled = proposalApprovalState.toggleBypass(streamId, explicit.host);
+    const enabled = proposalApprovals().toggleBypass(streamId, explicit.host);
 
     expect(enabled).toBe(true);
     expect(explicit.events).toEqual([

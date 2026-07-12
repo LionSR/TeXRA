@@ -10,6 +10,7 @@ import {
 } from '@cli/chat/tui/panes/statusBarDisplay';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
+import { KEY_HINT_SEPARATOR } from '@cli/chat/tui/ui/KeyHints';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
@@ -168,20 +169,35 @@ describe('CLI StatusBar display model', () => {
       PERSONAL_API_MODE_LABEL,
     ]);
     expect(display.right).toBeUndefined();
-    expect(display.bindings).toContain('[/api]api');
-    expect(display.bindings).toContain('[/model]models');
-    expect(display.bindings).not.toContain('[/agent]agents');
-    // [Ctrl-J]newline must be visible — the binding exists in BaseTextInput
+    expect(display.bindings).toContain('/api api');
+    expect(display.bindings).toContain('/model models');
+    expect(display.bindings).not.toContain('/agent agents');
+    // Ctrl-J newline must be visible — the binding exists in BaseTextInput
     // (see #4399) but used to be discoverable only via source diving.
-    expect(display.bindings).toContain('[Ctrl-J]newline');
-    expect(display.bindings).not.toContain('[Shift-Enter]newline');
-    expect(display.bindings).toContain('[Ctrl-C]exit');
-    expect(display.bindings).not.toContain('[Ctrl-C]stop');
-    expect(display.bindings).not.toContain('[Alt-s]subagents');
+    expect(display.bindings).toContain('Ctrl-J newline');
+    expect(display.bindings).not.toContain('Shift-Enter newline');
+    expect(display.bindings).toContain('Ctrl-C exit');
+    expect(display.bindings).not.toContain('Ctrl-C stop');
+    expect(display.bindings).not.toContain('Alt-s subagents');
     // Stream-navigation hints stay hidden in a single-stream chat.
-    expect(display.bindings).not.toContain('[Tab]streams');
-    expect(display.bindings).not.toContain('[Alt-1..9]focus');
+    expect(display.bindings).not.toContain('Tab streams');
+    expect(display.bindings).not.toContain('Alt-1..9 focus');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
+  });
+
+  it('renders bindings in the shared KeyHints hint format', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        subagentControlsAvailable: true,
+        hasMultipleStreams: true,
+        transcriptAvailable: true,
+      }),
+    );
+
+    // One hint vocabulary across the TUI: unbracketed `key action` pairs
+    // joined by the KeyHints separator, matching every modal footer (#8199).
+    expect(display.bindings).toContain(KEY_HINT_SEPARATOR);
+    expect(display.bindings).not.toMatch(/[[\]]/);
   });
 
   it('advertises the transcript viewer when the focused stream has history', () => {
@@ -194,9 +210,9 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('[Tab]streams');
-    expect(display.bindings).toContain('[Ctrl-T]transcript');
-    expect(display.bindings).toContain('[Alt-s]subagents');
+    expect(display.bindings).toContain('Tab streams');
+    expect(display.bindings).toContain('Ctrl-T transcript');
+    expect(display.bindings).toContain('Alt-s subagents');
   });
 
   it('keeps the transcript shortcut in narrow stream views', () => {
@@ -209,8 +225,8 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('[Ctrl-T]transcript');
-    expect(display.bindings).toContain('[Ctrl-C]exit');
+    expect(display.bindings).toContain('Ctrl-T transcript');
+    expect(display.bindings).toContain('Ctrl-C exit');
   });
 
   it('prefers transcript over stream cycling when the bar is very narrow', () => {
@@ -223,7 +239,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toBe('[Ctrl-T]transcript  [Ctrl-C]exit');
+    expect(display.bindings).toBe('Ctrl-T transcript · Ctrl-C exit');
   });
 
   it('advertises root agent selection while setup can still change it', () => {
@@ -237,7 +253,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      '[/agent]agents  [/model]models  [/api]api  [Ctrl-J]newline  [Ctrl-C]exit',
+      '/agent agents · /model models · /api api · Ctrl-J newline · Ctrl-C exit',
     );
   });
 
@@ -252,8 +268,8 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('[Ctrl-T]transcript');
-    expect(display.bindings).toContain('[/agent]agents');
+    expect(display.bindings).toContain('Ctrl-T transcript');
+    expect(display.bindings).toContain('/agent agents');
   });
 
   it('keeps model and API controls visible after local-command transcript rows', () => {
@@ -267,7 +283,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      '[/agent]agents  [/model]models  [/api]api  [Ctrl-C]exit',
+      '/agent agents · /model models · /api api · Ctrl-C exit',
     );
   });
 
@@ -283,11 +299,11 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('[Tab]streams');
-    expect(display.bindings).toContain('[Alt-p]tasks');
-    expect(display.bindings).toContain('[Alt-s]subagents');
-    expect(display.bindings).not.toContain('[/model]models');
-    expect(display.bindings).not.toContain('[/api]api');
+    expect(display.bindings).toContain('Tab streams');
+    expect(display.bindings).toContain('Alt-p tasks');
+    expect(display.bindings).toContain('Alt-s subagents');
+    expect(display.bindings).not.toContain('/model models');
+    expect(display.bindings).not.toContain('/api api');
   });
 
   it('keeps root agent selection visible when setup bindings get narrow', () => {
@@ -300,10 +316,10 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('[/agent]agents');
-    expect(display.bindings).toContain('[Ctrl-C]exit');
-    expect(display.bindings).not.toContain('[/model]models');
-    expect(display.bindings).not.toContain('[/api]api');
+    expect(display.bindings).toContain('/agent agents');
+    expect(display.bindings).toContain('Ctrl-C exit');
+    expect(display.bindings).not.toContain('/model models');
+    expect(display.bindings).not.toContain('/api api');
   });
 
   it('hides task shortcuts when no task rows exist', () => {
@@ -318,9 +334,9 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('[/status]details');
-    expect(display.bindings).toContain('[Ctrl-C]stop');
-    expect(display.bindings).not.toContain('[Option-p]tasks');
+    expect(display.bindings).toContain('/status details');
+    expect(display.bindings).toContain('Ctrl-C stop');
+    expect(display.bindings).not.toContain('Option-p tasks');
   });
 
   it('keeps subagent shortcuts grouped when task shortcuts are hidden', () => {
@@ -338,13 +354,13 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).not.toContain('[Option-p]tasks');
-    expect(display.bindings).toContain('[Option-s]subagents');
-    expect(display.bindings.indexOf('[Option-s]subagents')).toBeLessThan(
-      display.bindings.indexOf('[/status]details'),
+    expect(display.bindings).not.toContain('Option-p tasks');
+    expect(display.bindings).toContain('Option-s subagents');
+    expect(display.bindings.indexOf('Option-s subagents')).toBeLessThan(
+      display.bindings.indexOf('/status details'),
     );
-    expect(display.bindings.indexOf('[Option-s]subagents')).toBeLessThan(
-      display.bindings.indexOf('[Ctrl-C]stop'),
+    expect(display.bindings.indexOf('Option-s subagents')).toBeLessThan(
+      display.bindings.indexOf('Ctrl-C stop'),
     );
   });
 
@@ -365,8 +381,8 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).not.toContain('PgUp');
     expect(display.bindings).not.toContain('scroll');
-    expect(display.bindings).toContain('[Tab]streams');
-    expect(display.bindings).toContain('[Ctrl-C]stop root');
+    expect(display.bindings).toContain('Tab streams');
+    expect(display.bindings).toContain('Ctrl-C stop root');
   });
 
   it('advertises Shift-Enter for newline when the Kitty protocol is active', () => {
@@ -374,8 +390,8 @@ describe('CLI StatusBar display model', () => {
       statusInput({ shiftEnterNewline: true }),
     );
 
-    expect(display.bindings).toContain('[Shift-Enter]newline');
-    expect(display.bindings).not.toContain('[Ctrl-J]newline');
+    expect(display.bindings).toContain('Shift-Enter newline');
+    expect(display.bindings).not.toContain('Ctrl-J newline');
   });
 
   it('shows live running signals and approval depth', () => {
@@ -412,11 +428,11 @@ describe('CLI StatusBar display model', () => {
     expect(display.right).toBe(
       '1. Keep the proof und… · 2. Also mention the f…',
     );
-    expect(display.bindings).toContain('[Alt-s]subagents');
-    expect(display.bindings).toContain('[Ctrl-C]stop');
+    expect(display.bindings).toContain('Alt-s subagents');
+    expect(display.bindings).toContain('Ctrl-C stop');
     // Stream-navigation hints appear once more than one stream is live.
-    expect(display.bindings).toContain('[Tab]streams');
-    expect(display.bindings).toContain('[Alt-1..9]focus');
+    expect(display.bindings).toContain('Tab streams');
+    expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
   it('keeps critical controls visible in narrow subagent sessions', () => {
@@ -435,9 +451,9 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      '[Tab]streams  [Alt-p]tasks  [Alt-s]subagents  [Ctrl-C]stop',
+      'Tab streams · Alt-p tasks · Alt-s subagents · Ctrl-C stop',
     );
-    expect(display.bindings).toContain('[Ctrl-C]stop');
+    expect(display.bindings).toContain('Ctrl-C stop');
   });
 
   it('prefers the task picker when one child-control shortcut fits', () => {
@@ -456,8 +472,8 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toBe('[Option-p]tasks  [Ctrl-C]stop');
-    expect(display.bindings).not.toContain('[Option-s]subagents');
+    expect(display.bindings).toBe('Option-p tasks · Ctrl-C stop');
+    expect(display.bindings).not.toContain('Option-s subagents');
   });
 
   it('drops low-priority status details before narrow footers lose separators', () => {
@@ -598,7 +614,7 @@ describe('CLI StatusBar display model', () => {
       'root active',
       PERSONAL_API_MODE_LABEL,
     ]);
-    expect(display.bindings).toContain('[Ctrl-C]stop root');
+    expect(display.bindings).toContain('Ctrl-C stop root');
 
     const liveChildDisplay = buildStatusBarDisplay({
       ...baseDisplayInput,
@@ -932,7 +948,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(statusInput({ width: 50 }));
 
     expect(display.bindings).toBe(
-      '[Alt-p]tasks  [/status]details  [Ctrl-C]exit',
+      'Alt-p tasks · /status details · Ctrl-C exit',
     );
   });
 
@@ -952,7 +968,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.left.map(statusBarSegmentText)).toContain('1 approval');
     expect(display.bindings).toBe(
-      'Use foreground panel shortcuts  [Esc]close  [Ctrl-C]stop',
+      'Use foreground panel shortcuts · Esc close · Ctrl-C stop',
     );
   });
 
@@ -969,7 +985,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.left.map(statusBarSegmentText)).toContain('1 question');
     expect(display.left.map(statusBarSegmentText)).not.toContain('1 approval');
-    expect(display.bindings).toContain('[Esc]skip');
+    expect(display.bindings).toContain('Esc skip');
   });
 
   it('shows cancel for non-question approval foregrounds', () => {
@@ -982,7 +998,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('[Esc]cancel');
+    expect(display.bindings).toContain('Esc cancel');
   });
 
   it('keeps escape and Ctrl-C actions visible in narrow foreground panels', () => {
@@ -999,7 +1015,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toBe('[Esc]close  [Ctrl-C]stop');
+    expect(display.bindings).toBe('Esc close · Ctrl-C stop');
   });
 
   it('falls back to the bare Ctrl-C action in tiny foreground panels', () => {
@@ -1016,7 +1032,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toBe('[Ctrl-C]stop');
+    expect(display.bindings).toBe('Ctrl-C stop');
   });
 
   it('shows a live elapsed segment only while running', () => {
@@ -1120,7 +1136,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.right).toBe('Keep the proof…');
-    expect(display.bindings).toContain('[Ctrl-C]exit');
+    expect(display.bindings).toContain('Ctrl-C exit');
   });
 
   it('shows the resume command while exit confirmation is armed', () => {
@@ -1232,9 +1248,9 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('[Esc 1..9]focus');
-    expect(display.bindings).toContain('[Esc p]tasks');
-    expect(display.bindings).toContain('[Esc s]subagents');
-    expect(display.bindings).not.toContain('[Option-p]tasks');
+    expect(display.bindings).toContain('Esc 1..9 focus');
+    expect(display.bindings).toContain('Esc p tasks');
+    expect(display.bindings).toContain('Esc s subagents');
+    expect(display.bindings).not.toContain('Option-p tasks');
   });
 });
