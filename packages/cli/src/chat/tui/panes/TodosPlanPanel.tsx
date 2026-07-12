@@ -208,7 +208,7 @@ export function TodosPlanPanel(
             <Text
               dimColor
               wrap="truncate-end"
-            >{`+${hiddenCount} more todo/plan item${hiddenCount === 1 ? '' : 's'}`}</Text>
+            >{`… +${hiddenCount} more todo/plan item${hiddenCount === 1 ? '' : 's'}`}</Text>
           </Box>
         ) : null}
       </Box>

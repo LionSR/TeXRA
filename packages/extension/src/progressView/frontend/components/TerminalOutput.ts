@@ -37,6 +37,28 @@ const MIN_SCROLLBACK = 4_000;
 /** Maximum visible rows before terminal scrolls internally. */
 const MAX_VISIBLE_ROWS = 20;
 
+/**
+ * Events that signal an ancestor disclosure container revealed this terminal,
+ * so it should refit to its now-visible container. Covers both the legacy
+ * native `<details>` `toggle` event (still emitted by any un-migrated
+ * surface) and Web Awesome's `<wa-details>`, which is not a `<details>` and
+ * never fires `toggle` — it dispatches `wa-show` synchronously when it starts
+ * opening and `wa-after-show` once its reveal animation finishes. Listening
+ * to both wa-details events covers the immediate-open case (matching the old
+ * un-animated native-toggle timing) and the post-animation case (accurate
+ * final layout for the fit-addon column/row calculation).
+ */
+export const TERMINAL_REFIT_EVENTS = [
+  'toggle',
+  'wa-show',
+  'wa-after-show',
+] as const;
+
+/** Ancestor selector for the ancestor disclosure container, matching both
+ * the Web Awesome `<wa-details>` custom element and any un-migrated native
+ * `<details>` surface. */
+const DETAILS_ANCESTOR_SELECTOR = 'wa-details, details';
+
 export interface TerminalTextUpdatePlan {
   reset: boolean;
   textToWrite: string;
@@ -104,7 +126,7 @@ export class TerminalOutput extends LitElement {
   private terminal: Terminal | null = null;
   private fitAddon: FitAddon | null = null;
   private resizeObserver: ResizeObserver | null = null;
-  private detailsElement: HTMLDetailsElement | null = null;
+  private detailsElement: Element | null = null;
   private isFlushingText = false;
   private needsFlush = false;
   private pendingText = '';
@@ -148,10 +170,12 @@ export class TerminalOutput extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
 
-    this.detailsElement?.removeEventListener(
-      'toggle',
-      this.handleDetailsToggle,
-    );
+    for (const eventName of TERMINAL_REFIT_EVENTS) {
+      this.detailsElement?.removeEventListener(
+        eventName,
+        this.handleDetailsToggle,
+      );
+    }
     this.detailsElement = null;
     window.removeEventListener('resize', this.handleWindowResize);
 
@@ -164,8 +188,13 @@ export class TerminalOutput extends LitElement {
   }
 
   private attachResizeHooks(): void {
-    this.detailsElement = this.closest('details');
-    this.detailsElement?.addEventListener('toggle', this.handleDetailsToggle);
+    this.detailsElement = this.closest(DETAILS_ANCESTOR_SELECTOR);
+    for (const eventName of TERMINAL_REFIT_EVENTS) {
+      this.detailsElement?.addEventListener(
+        eventName,
+        this.handleDetailsToggle,
+      );
+    }
     window.addEventListener('resize', this.handleWindowResize);
 
     this.resizeObserver = new ResizeObserver(() => {

@@ -91,7 +91,7 @@ export const latexTabStyles: CSSResult = css`
 
   .dependency-guide {
     padding: var(--wa-space-xs);
-    background: var(--wa-color-surface-lowered, rgba(128, 128, 128, 0.08));
+    background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius);
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
@@ -116,7 +116,7 @@ export const latexTabStyles: CSSResult = css`
     flex: 1;
     min-width: 0;
     padding: var(--wa-space-2xs) var(--wa-space-xs);
-    background: var(--wa-color-surface-lowered, rgba(128, 128, 128, 0.08));
+    background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius-small);
     font-family: var(--wa-font-family-mono, monospace), monospace;
     font-size: var(--font-size-sm);
