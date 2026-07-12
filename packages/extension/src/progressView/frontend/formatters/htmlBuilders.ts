@@ -98,9 +98,6 @@ export function wrapInPre(text: string, className = ''): TemplateResult {
   return html`<pre class=${ifDefined(className || undefined)}>${content}</pre>`;
 }
 
-// Note: Toggle icons now use CSS-only rotation via details[open] selector.
-// Always render the chevron-right icon and CSS will rotate when open.
-
 /**
  * Stop an Enter/Space keydown on a control slotted into a `<wa-details>`
  * summary from also toggling the details panel.
@@ -151,11 +148,6 @@ export interface DetailsSummaryOptions {
   iconName: string;
   label: string;
   labelClass?: string;
-  /**
-   * Render as `<wa-details>` summary-slot content instead of a native summary.
-   * The caller must register `<wa-details>` and rely on its built-in toggle icon.
-   */
-  summarySlot?: boolean;
   timestamp?: { display: string; tooltip: string };
   copyButton?: {
     title: string;
@@ -167,7 +159,11 @@ export interface DetailsSummaryOptions {
   extraContent?: TemplateResult;
 }
 
-/** Build a details summary element with icon, label, and optional extras. */
+/**
+ * Build a `<wa-details>` summary-slot header with icon, label, and optional
+ * extras. The caller must render it inside a `<wa-details>` and rely on its
+ * built-in toggle icon.
+ */
 export function buildDetailsSummary(
   options: DetailsSummaryOptions,
 ): TemplateResult {
@@ -175,7 +171,6 @@ export function buildDetailsSummary(
     iconName,
     label,
     labelClass = 'label',
-    summarySlot = false,
     timestamp,
     copyButton,
     extraContent,
@@ -192,13 +187,8 @@ export function buildDetailsSummary(
     ? buildCopyButton(copyButton.title, copyButton)
     : nothing;
   const extraTemplate = extraContent ?? nothing;
-  if (summarySlot) {
-    // prettier-ignore
-    return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
-  }
-  // Native details toggle icon uses CSS rotation via details[open].
   // prettier-ignore
-  return html`<summary class="details-summary"><wa-icon library=${TEXRA_ICON_LIBRARY} name="chevron-right" class="toggle-icon" aria-hidden="true"></wa-icon> ${iconTemplate} <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</summary>`;
+  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
 }
 
 /** Build rendered templates for file list. */
