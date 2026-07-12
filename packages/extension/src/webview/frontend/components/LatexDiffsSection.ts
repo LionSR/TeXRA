@@ -16,7 +16,10 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - main view
 import type { LatexDiffsActionDetail } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButtonParts,
+} from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
 import {
@@ -253,102 +256,42 @@ export class LatexDiffsSection extends LitElement {
   }
 
   /**
-   * Combined delegation handler for toolbar buttons.
-   * Routes to the appropriate action based on `data-diff-action` or `data-file-action`.
-   */
-  private handleToolbarClick(event: MouseEvent): void {
-    const target = event.target as HTMLElement;
-
-    const diffButton = target.closest<HTMLElement>('[data-diff-action]');
-    if (diffButton?.dataset.diffAction) {
-      this.dispatchEvent(
-        MainViewEvents.latexDiffsAction({
-          action: diffButton.dataset.diffAction as LatexDiffsAction,
-        }),
-      );
-      return;
-    }
-
-    const fileButton = target.closest<HTMLElement>(
-      '[data-file-action][data-file-type]',
-    );
-    if (!fileButton) return;
-    const fileAction = fileButton.dataset.fileAction;
-    const fileType = fileButton.dataset.fileType as
-      'base' | 'edited' | undefined;
-    if (!fileType) return;
-    if (fileAction === 'current') {
-      this.dispatchEvent(MainViewEvents.getCurrentFile({ type: fileType }));
-    } else if (fileAction === 'empty') {
-      this.dispatchEvent(MainViewEvents.emptyFile({ type: fileType }));
-    }
-  }
-
-  /** Icon-only header utility (set current / clear) with a native tooltip. */
-  private renderFileUtilityButton({
-    id,
-    icon,
-    label,
-    fileAction,
-    fileType,
-  }: {
-    id: string;
-    icon: TeXRAIconName;
-    label: string;
-    fileAction: 'current' | 'empty';
-    fileType: 'base' | 'edited';
-  }): TemplateResult {
-    return html`
-      <wa-button
-        id=${id}
-        class="action-icon-button"
-        appearance="plain"
-        variant="neutral"
-        size="small"
-        type="button"
-        aria-label=${label}
-        data-file-action=${fileAction}
-        data-file-type=${fileType}
-      >
-        ${waIcon(icon)}
-      </wa-button>
-      <wa-tooltip for=${id}>${label}</wa-tooltip>
-    `;
-  }
-
-  /**
    * A cluster of labeled operation buttons. Tooltips render after the group:
    * wa-button-group fuses corners via CSS :first/:last-child on its slotted
-   * children, so a slotted wa-tooltip would break the segmenting.
+   * children, so a slotted wa-tooltip would break the segmenting — hence
+   * `renderLabeledActionButtonParts` rather than the concatenated
+   * `renderLabeledActionButton`.
    */
   private renderDiffActionGroup(
     label: string,
     actions: readonly DiffActionSpec[],
   ): TemplateResult {
+    const parts = actions.map((action) => ({
+      id: action.id,
+      ...renderLabeledActionButtonParts({
+        id: action.id,
+        icon: action.icon,
+        text: action.label,
+        tooltip: action.tooltip,
+        appearance: 'outlined',
+        onClick: () =>
+          this.dispatchEvent(
+            MainViewEvents.latexDiffsAction({ action: action.action }),
+          ),
+      }),
+    }));
     return html`
       <wa-button-group label=${label}>
         ${repeat(
-          actions,
-          (action) => action.id,
-          (action) => html`
-            <wa-button
-              id=${action.id}
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              type="button"
-              data-diff-action=${action.action}
-            >
-              ${waIcon(action.icon, { slot: 'start' })} ${action.label}
-            </wa-button>
-          `,
+          parts,
+          (part) => part.id,
+          (part) => part.button,
         )}
       </wa-button-group>
       ${repeat(
-        actions,
-        (action) => action.id,
-        (action) =>
-          html`<wa-tooltip for=${action.id}>${action.tooltip}</wa-tooltip>`,
+        parts,
+        (part) => part.id,
+        (part) => part.tooltip,
       )}
     `;
   }
@@ -403,23 +346,26 @@ export class LatexDiffsSection extends LitElement {
               <div class="file-select-label-group">
                 <label for="baseFile">Base</label>
               </div>
-              <div
-                class="file-select-actions"
-                @click=${this.handleToolbarClick}
-              >
-                ${this.renderFileUtilityButton({
+              <div class="file-select-actions">
+                ${renderIconActionButton({
                   id: 'currentBaseFileButton',
                   icon: 'file-code',
                   label: 'Set current file as base',
-                  fileAction: 'current',
-                  fileType: 'base',
+                  tooltip: 'Set current file as base',
+                  onClick: () =>
+                    this.dispatchEvent(
+                      MainViewEvents.getCurrentFile({ type: 'base' }),
+                    ),
                 })}
-                ${this.renderFileUtilityButton({
+                ${renderIconActionButton({
                   id: 'emptyBaseFileButton',
                   icon: 'close',
                   label: 'Clear base file',
-                  fileAction: 'empty',
-                  fileType: 'base',
+                  tooltip: 'Clear base file',
+                  onClick: () =>
+                    this.dispatchEvent(
+                      MainViewEvents.emptyFile({ type: 'base' }),
+                    ),
                 })}
               </div>
             </div>
@@ -447,23 +393,26 @@ export class LatexDiffsSection extends LitElement {
                   File containing edits to merge into the base file
                 </wa-tooltip>
               </div>
-              <div
-                class="file-select-actions"
-                @click=${this.handleToolbarClick}
-              >
-                ${this.renderFileUtilityButton({
+              <div class="file-select-actions">
+                ${renderIconActionButton({
                   id: 'currentEditedFileButton',
                   icon: 'file-code',
                   label: 'Set current file as edited',
-                  fileAction: 'current',
-                  fileType: 'edited',
+                  tooltip: 'Set current file as edited',
+                  onClick: () =>
+                    this.dispatchEvent(
+                      MainViewEvents.getCurrentFile({ type: 'edited' }),
+                    ),
                 })}
-                ${this.renderFileUtilityButton({
+                ${renderIconActionButton({
                   id: 'emptyEditedFileButton',
                   icon: 'close',
                   label: 'Clear edited file',
-                  fileAction: 'empty',
-                  fileType: 'edited',
+                  tooltip: 'Clear edited file',
+                  onClick: () =>
+                    this.dispatchEvent(
+                      MainViewEvents.emptyFile({ type: 'edited' }),
+                    ),
                 })}
               </div>
             </div>
@@ -475,7 +424,7 @@ export class LatexDiffsSection extends LitElement {
             >
               ${this.renderFileOptions(this.editedFileOptions)}
             </wa-select>
-            <div class="diff-actions" @click=${this.handleToolbarClick}>
+            <div class="diff-actions">
               ${this.renderDiffActionGroup(
                 'Review changes',
                 EDITED_REVIEW_ACTIONS,
@@ -508,7 +457,7 @@ export class LatexDiffsSection extends LitElement {
             >
               ${this.renderCommitOptions()}
             </wa-select>
-            <div class="diff-actions" @click=${this.handleToolbarClick}>
+            <div class="diff-actions">
               ${this.renderDiffActionGroup(
                 'Diff against commit',
                 COMMIT_DIFF_ACTIONS,

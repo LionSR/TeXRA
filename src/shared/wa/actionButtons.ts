@@ -36,6 +36,14 @@ export interface IconActionButtonOptions {
    * falls back to the native `title` attribute so the hint is still visible.
    */
   readonly tooltip?: string;
+  /** Reflects `hidden` on the button host — removes it from layout/a11y
+   * tree while keeping the same DOM node (e.g. a chrome action that only
+   * applies in some view states). */
+  readonly hidden?: boolean;
+  /** Explicit `aria-hidden="true"|"false"` on the button host, independent
+   * of `hidden` — for toolbars that keep an inert button in the layout
+   * (e.g. CSS-faded) but still want it out of the accessibility tree. */
+  readonly ariaHidden?: boolean;
   readonly onClick?: (event: MouseEvent) => void;
 }
 
@@ -55,7 +63,17 @@ interface ActionButtonBaseOptions extends Omit<
   readonly text?: string;
 }
 
-function renderActionButtonBase({
+/** The button and its (optional) sibling `<wa-tooltip>`, kept apart so a
+ * `<wa-button-group>` caller can slot every button first and every tooltip
+ * after — `<wa-button-group>` fuses corners via CSS `:first-child`/
+ * `:last-child` on its slotted children, so an interleaved `<wa-tooltip>`
+ * would break the segmenting. */
+interface ActionButtonParts {
+  readonly button: TemplateResult;
+  readonly tooltip: TemplateResult | typeof nothing;
+}
+
+function renderActionButtonParts({
   id,
   icon,
   label,
@@ -68,8 +86,10 @@ function renderActionButtonBase({
   disabled,
   busy,
   tooltip,
+  hidden,
+  ariaHidden,
   onClick,
-}: ActionButtonBaseOptions): TemplateResult {
+}: ActionButtonBaseOptions): ActionButtonParts {
   const classes = [
     text ? 'action-button' : 'action-icon-button',
     busy ? 'is-busy' : undefined,
@@ -97,15 +117,28 @@ function renderActionButtonBase({
       title=${ifDefined(useWebAwesomeTooltip ? undefined : nativeTitle)}
       data-action=${ifDefined(action)}
       ?disabled=${disabled || busy}
+      ?hidden=${hidden}
+      aria-hidden=${ifDefined(
+        ariaHidden === undefined ? undefined : String(ariaHidden),
+      )}
       @click=${onClick}
     >
       ${waIcon(icon, { slot: text ? 'start' : undefined })} ${text}
     </wa-button>
   `;
 
+  return { button, tooltip: tooltipTemplate };
+}
+
+function renderActionButtonBase(
+  options: ActionButtonBaseOptions,
+): TemplateResult {
+  const { button, tooltip } = renderActionButtonParts(options);
+  const { busy } = options;
+
   // `busy` undefined → plain button (unchanged for every other caller).
   // `busy` defined → stable overlay wrapper so toggling never reflows the row.
-  if (busy === undefined) return html`${button}${tooltipTemplate}`;
+  if (busy === undefined) return html`${button}${tooltip}`;
   return html`
     <span class="action-icon-busy">
       ${button}
@@ -118,7 +151,7 @@ function renderActionButtonBase({
           : nothing
       }
     </span>
-    ${tooltipTemplate}
+    ${tooltip}
   `;
 }
 
@@ -132,4 +165,27 @@ export function renderLabeledActionButton(
   options: LabeledActionButtonOptions,
 ): TemplateResult {
   return renderActionButtonBase(options);
+}
+
+/**
+ * Same button shapes as {@link renderIconActionButton} /
+ * {@link renderLabeledActionButton}, but returns the button and its tooltip
+ * as separate templates instead of concatenating them. Use inside a
+ * `<wa-button-group>`: render every `.button` in the group's default slot,
+ * then every `.tooltip` as a sibling after the group closes.
+ */
+export function renderIconActionButtonParts(
+  options: IconActionButtonOptions,
+): ActionButtonParts {
+  return renderActionButtonParts(options);
+}
+
+// Exported for API symmetry with `renderIconActionButtonParts` (which has
+// multiple callers) and type-safety parity with `renderLabeledActionButton`
+// (`LabeledActionButtonOptions` vs `IconActionButtonOptions` at the public
+// boundary) — not because this has multiple callers today.
+export function renderLabeledActionButtonParts(
+  options: LabeledActionButtonOptions,
+): ActionButtonParts {
+  return renderActionButtonParts(options);
 }

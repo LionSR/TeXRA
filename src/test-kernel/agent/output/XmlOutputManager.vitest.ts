@@ -65,6 +65,14 @@ async function writeAndSplitDocuments(
   );
 }
 
+const RECOVERED_DOCUMENT_LINES = [
+  '\\documentclass{article}',
+  '\\begin{document}',
+  'Recovered.',
+  '\\end{document}',
+];
+const RECOVERED_DOCUMENT_CONTENT = [...RECOVERED_DOCUMENT_LINES, ''].join('\n');
+
 describe('XmlOutputManager', () => {
   beforeEach(async () => {
     formatterMocks.runLatexFormatter.mockReset();
@@ -145,74 +153,30 @@ describe('XmlOutputManager', () => {
     ).resolves.toBe('Appendix text.\n');
   });
 
-  it('removes surrounding markdown fences from percent filename output', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '```latex',
-      '% main.tex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      'Recovered.',
-      '\\end{document}',
-      '```',
-    ]);
+  it.each([
+    [
+      'removes surrounding markdown fences from percent filename output',
+      ['```latex', '% main.tex', ...RECOVERED_DOCUMENT_LINES, '```'],
+    ],
+    [
+      'removes compact markdown fence info strings after percent headers',
+      ['% main.tex', '```latex', ...RECOVERED_DOCUMENT_LINES, '```'],
+    ],
+    [
+      'removes spaced markdown fence info strings after percent headers',
+      ['% main.tex', '``` latex', ...RECOVERED_DOCUMENT_LINES, '```'],
+    ],
+  ] satisfies readonly (readonly [string, readonly string[]])[])(
+    '%s',
+    async (_name, output) => {
+      const outputs = await writeAndSplitDocuments(output);
 
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        'Recovered.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-  });
-
-  it('removes compact markdown fence info strings after percent headers', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main.tex',
-      '```latex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      'Recovered.',
-      '\\end{document}',
-      '```',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        'Recovered.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-  });
-
-  it('removes spaced markdown fence info strings after percent headers', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main.tex',
-      '``` latex',
-      '\\documentclass{article}',
-      '\\begin{document}',
-      'Recovered.',
-      '\\end{document}',
-      '```',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual(['main.tex']);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      [
-        '\\documentclass{article}',
-        '\\begin{document}',
-        'Recovered.',
-        '\\end{document}',
-        '',
-      ].join('\n'),
-    );
-  });
+      expect(outputs.map((entry) => entry.source)).toEqual(['main.tex']);
+      await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+        RECOVERED_DOCUMENT_CONTENT,
+      );
+    },
+  );
 
   it('preserves fence-looking lines inside percent-header content', async () => {
     const outputs = await writeAndSplitDocuments([
@@ -286,78 +250,63 @@ describe('XmlOutputManager', () => {
     await expect(AbsoluteFS.exists('/tmp/run/paper.tex')).resolves.toBe(false);
   });
 
-  it('recovers dot-prefixed relative percent filename headers', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% ./main.tex',
-      'Main text.',
-      '% ./sections/appendix.tex',
-      'Appendix text.',
-    ]);
+  it.each([
+    [
+      'recovers dot-prefixed relative percent filename headers',
+      [
+        '% ./main.tex',
+        'Main text.',
+        '% ./sections/appendix.tex',
+        'Appendix text.',
+      ],
+      {
+        'main.tex': 'Main text.\n',
+        'sections/appendix.tex': 'Appendix text.\n',
+      },
+    ],
+    [
+      'recovers hyphenated percent filename headers',
+      ['% main-file.tex', 'Main text.', '% sections/part-1.tex', 'Part text.'],
+      {
+        'main-file.tex': 'Main text.\n',
+        'sections/part-1.tex': 'Part text.\n',
+      },
+    ],
+    [
+      'recovers underscore-prefixed percent filename headers',
+      [
+        '% _macros.tex',
+        '\\newcommand{\\R}{\\mathbb{R}}',
+        '% _generated/main.tex',
+        'Generated text.',
+      ],
+      {
+        '_macros.tex': '\\newcommand{\\R}{\\mathbb{R}}\n',
+        '_generated/main.tex': 'Generated text.\n',
+      },
+    ],
+    [
+      'recovers backslash-separated percent filename headers',
+      ['% sections\\intro.tex', 'Intro text.'],
+      {
+        'sections/intro.tex': 'Intro text.\n',
+      },
+    ],
+  ] satisfies readonly (readonly [
+    string,
+    readonly string[],
+    Record<string, string>,
+  ])[])('%s', async (_name, output, expectedFiles) => {
+    const outputs = await writeAndSplitDocuments(output);
 
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main.tex',
-      'sections/appendix.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
-      'Main text.\n',
+    expect(outputs.map((entry) => entry.source)).toEqual(
+      Object.keys(expectedFiles),
     );
-    await expect(
-      AbsoluteFS.read('/tmp/run/sections/appendix.tex'),
-    ).resolves.toBe('Appendix text.\n');
-  });
-
-  it('recovers hyphenated percent filename headers', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% main-file.tex',
-      'Main text.',
-      '% sections/part-1.tex',
-      'Part text.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'main-file.tex',
-      'sections/part-1.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/main-file.tex')).resolves.toBe(
-      'Main text.\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/sections/part-1.tex')).resolves.toBe(
-      'Part text.\n',
-    );
-  });
-
-  it('recovers underscore-prefixed percent filename headers', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% _macros.tex',
-      '\\newcommand{\\R}{\\mathbb{R}}',
-      '% _generated/main.tex',
-      'Generated text.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      '_macros.tex',
-      '_generated/main.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/_macros.tex')).resolves.toBe(
-      '\\newcommand{\\R}{\\mathbb{R}}\n',
-    );
-    await expect(AbsoluteFS.read('/tmp/run/_generated/main.tex')).resolves.toBe(
-      'Generated text.\n',
-    );
-  });
-
-  it('recovers backslash-separated percent filename headers', async () => {
-    const outputs = await writeAndSplitDocuments([
-      '% sections\\intro.tex',
-      'Intro text.',
-    ]);
-
-    expect(outputs.map((output) => output.source)).toEqual([
-      'sections/intro.tex',
-    ]);
-    await expect(AbsoluteFS.read('/tmp/run/sections/intro.tex')).resolves.toBe(
-      'Intro text.\n',
-    );
+    for (const [source, content] of Object.entries(expectedFiles)) {
+      await expect(AbsoluteFS.read(`/tmp/run/${source}`)).resolves.toBe(
+        content,
+      );
+    }
   });
 
   it('keeps percent filename comments inside a LaTeX document body', async () => {
