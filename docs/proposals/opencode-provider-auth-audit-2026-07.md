@@ -222,7 +222,7 @@ that a session is valid merely because a record exists locally. A truthful statu
 
 | State                     | Meaning                                                      | User presentation                  |
 | ------------------------- | ------------------------------------------------------------ | ---------------------------------- |
-| Ready                     | Access token is outside its refresh window                   | Signed in; refreshes automatically |
+| Ready                     | Access token is valid and not near expiry                    | Signed in; refreshes automatically |
 | Refresh due               | Access token is near expiry                                  | Checking sign-in                   |
 | Transient failure         | Refresh could not be verified because of a temporary failure | Still signed in; retrying          |
 | Reauthentication required | Refresh was rejected terminally or credentials are absent    | Sign in again                      |
