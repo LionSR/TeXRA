@@ -56,7 +56,7 @@ export function appEscapeInterruptActive({
   );
 }
 
-// The footer advertises `[Esc s]subagents` / `[Esc p]tasks` any time these
+// The footer advertises `Esc s subagents` / `Esc p tasks` any time these
 // controls are available, regardless of which stream is currently focused
 // or whether it's still in-flight (e.g. WAITING). Bare Esc must therefore
 // give a chord a chance to resolve any time that binding is on screen —

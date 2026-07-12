@@ -15,6 +15,7 @@ import {
   type CodexSessionCoordinator,
   type CodexSessionStatus,
 } from './CodexSessionCoordinator';
+import { CodexAuthError } from './codexSessionTypes';
 import {
   isCodexSubscriptionToolUseOnly,
   isPreferCodexSubscription,
@@ -62,6 +63,55 @@ export async function getCodexStatus(): Promise<CodexSessionStatus> {
 /** Whether a Codex session is currently signed in (no network, no throw). */
 export async function isCodexSignedIn(): Promise<boolean> {
   return (await getCodexStatus()).signedIn;
+}
+
+/**
+ * Whether subscription routing should use the stored session. Expiring sessions
+ * are refreshed by the coordinator; absent/dead sessions return false after its
+ * re-auth path clears them. If a re-auth error leaves a session in storage, the
+ * refresh was superseded and the error propagates rather than misrouting the
+ * newer session. Retryable/config errors likewise propagate so callers do not
+ * silently spend fallback quota or immediately retry the same refresh.
+ */
+export async function isCodexSessionRoutable(): Promise<boolean> {
+  if (!tryPlatform()) return false;
+  const coordinator = codexCoordinator();
+  try {
+    await coordinator.getFreshAccessToken();
+    return true;
+  } catch (error) {
+    if (!(error instanceof CodexAuthError)) {
+      throw new CodexAuthError(
+        `Could not access ChatGPT session: ${toErrorMessage(error)}`,
+        'transient',
+        undefined,
+        { cause: error },
+      );
+    }
+    if (error.needsReauth) {
+      let storedSession;
+      try {
+        storedSession = await coordinator.loadSession();
+      } catch (readError) {
+        throw new CodexAuthError(
+          `Could not verify ChatGPT session: ${toErrorMessage(readError)}`,
+          'transient',
+          undefined,
+          { cause: readError },
+        );
+      }
+      if (storedSession) {
+        throw new CodexAuthError(
+          'ChatGPT session changed while refreshing.',
+          'transient',
+          error.status,
+          { cause: error },
+        );
+      }
+      return false;
+    }
+    throw error;
+  }
 }
 
 /**

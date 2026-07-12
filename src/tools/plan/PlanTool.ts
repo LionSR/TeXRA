@@ -38,7 +38,7 @@ import {
   type Goal,
 } from '@shared/schemas/goal';
 import { type ToolResult } from '@shared/schemas/toolResult';
-import { proposalApprovalState } from '@tools/approval';
+import { proposalApprovals } from '@tools/approval';
 import { requireStreamId } from '@tools/contextHelpers';
 import {
   GoalStore,
@@ -162,7 +162,7 @@ Best practices:
       logger.warn('Plan created without streamId — skipping approval gate');
       return this.buildApprovedResult({ autoApproved: false });
     }
-    if (proposalApprovalState.isBypassed(streamId)) {
+    if (proposalApprovals().isBypassed(streamId)) {
       logger.info('Plan auto-approved via delegated-task auto-approval');
       return this.buildApprovedResult({ autoApproved: true });
     }

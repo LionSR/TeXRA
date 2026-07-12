@@ -50,7 +50,7 @@ export class ModelsTab extends LitElement {
       .chatgpt-subscription__header {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: var(--wa-space-xs);
       }
       .chatgpt-subscription__title {
         font-weight: var(--font-weight-semibold);
@@ -72,7 +72,7 @@ export class ModelsTab extends LitElement {
       .chatgpt-subscription__limit {
         display: flex;
         align-items: flex-start;
-        gap: 0.4rem;
+        gap: var(--wa-space-xs);
         margin: 0 0 var(--wa-space-xs);
         opacity: 0.85;
         font-size: var(--font-size-sm);
@@ -84,7 +84,7 @@ export class ModelsTab extends LitElement {
       .chatgpt-subscription__row {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
+        gap: var(--wa-space-s);
         flex-wrap: wrap;
       }
       .chatgpt-subscription__setting {
@@ -93,7 +93,7 @@ export class ModelsTab extends LitElement {
       .chatgpt-subscription__account {
         display: inline-flex;
         align-items: center;
-        gap: 0.35rem;
+        gap: var(--wa-space-2xs);
       }
     `,
   ];

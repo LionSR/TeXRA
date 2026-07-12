@@ -46,7 +46,6 @@ interface DesktopToolEditApprovalModule {
     }): boolean;
     requestApproval(
       request: ToolEditApprovalRequest,
-      session?: SessionHandle,
     ): Promise<ToolEditApprovalResult>;
     dispose(): void;
   };
@@ -156,12 +155,18 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     const actual = await vi.importActual<
       typeof import('@agent/runtime/RunContext')
     >('@agent/runtime/RunContext');
+    const { createSessionApprovals } = await vi.importActual<
+      typeof import('@agent/runtime/streamApprovalQueue')
+    >('@agent/runtime/streamApprovalQueue');
+    // Session-owned approval state (bypass reads) for the fake run session.
+    const approvals = createSessionApprovals();
     return {
       ...actual,
       tryUseRunContext: vi.fn(() =>
         activeToolEditApproval
           ? {
               session: {
+                approvals,
                 interactions: {
                   requestToolEditApproval: activeToolEditApproval,
                 },
@@ -516,9 +521,10 @@ describe('desktop tool edit approval', () => {
         desktopModule,
       } = await loadApprovalModules();
       const runtimeHost = createRecordingRuntimeHost();
+      const session = createTestSession();
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
-        session: createTestSession(),
+        session,
         tempRoot,
       });
       useControllerApproval(controller);
@@ -535,7 +541,8 @@ describe('desktop tool edit approval', () => {
         });
         await vi.waitFor(() => expect(shown).toHaveLength(1));
 
-        cleanupApprovalsForStream('stream-cleanup');
+        // Pending registries are session-owned: sweep the owning session.
+        cleanupApprovalsForStream('stream-cleanup', session);
 
         await expect(resultPromise).resolves.toMatchObject({ accepted: false });
         expect(resolved).toEqual([{ requestId: shown[0].requestId }]);
