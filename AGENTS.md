@@ -137,14 +137,17 @@ This project uses Zod v4. Follow these idiomatic patterns:
 
 **Default values**
 
-- `.prefault(val)` - Substitutes for `undefined` BEFORE validation and transforms; use for documented legacy omissions
+- `.prefault(val)` - Substitutes for `undefined` BEFORE validation and transforms; use for documented absent-input defaults, including legacy omissions
 - `.default(val)` - Returns a valid output default for `undefined` without parsing that default
 - `.catch(val)` - Substitutes after a validation error; use only where malformed present data may be discarded by policy
 
 Preserve the distinction between absent and invalid present data. In security,
 accounting, lifecycle, and durable-state schemas, use `.prefault(...)` only for
-documented omissions and let malformed present values fail validation. Do not
-use `.catch(...)` to turn corruption or contract drift into an ordinary default.
+documented absent fields with explicit product or compatibility meaning, and let
+malformed present values fail validation. Do not use `.catch(...)` to turn
+corruption or contract drift into an ordinary default.
+An absent required field is also a validation error, so `.catch(...)` replaces
+missing required data as well as invalid present data.
 
 **When to use each default pattern:**
 
