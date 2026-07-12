@@ -42,10 +42,14 @@ const tempDirs: string[] = [];
 async function installFreshDefaultSession(): Promise<void> {
   const { installPlatform } = await import('@test/support/setupPlatform');
   await installPlatform();
-  const [{ initializeDefaultSession }, { StreamLogStore }] = await Promise.all([
+  const [
+    { initializeDefaultSession, teardownDefaultSession },
+    { StreamLogStore },
+  ] = await Promise.all([
     import('@agent/runtime/SessionHandle'),
     import('@transcript'),
   ]);
+  teardownDefaultSession();
   initializeDefaultSession({ transcripts: await StreamLogStore.open() });
 }
 
@@ -163,7 +167,10 @@ function stubRunExecutionDeps(): void {
 }
 
 describe('executeCliRequest', () => {
-  beforeEach(stubRunExecutionDeps);
+  beforeEach(async () => {
+    stubRunExecutionDeps();
+    await installFreshDefaultSession();
+  });
 
   afterEach(async () => {
     vi.restoreAllMocks();
@@ -669,7 +676,10 @@ describe('executeCliRequest', () => {
 });
 
 describe('executeCliConfig', () => {
-  beforeEach(stubRunExecutionDeps);
+  beforeEach(async () => {
+    stubRunExecutionDeps();
+    await installFreshDefaultSession();
+  });
 
   it('reports invalid configs without starting the runtime host', async () => {
     const { executeCliConfig } = await import('@cli/runtime/runExecution');

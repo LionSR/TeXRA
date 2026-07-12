@@ -31,6 +31,11 @@ interface MockStorageOptions {
   summaries: Record<string, unknown>;
   rawLogJson?: Record<string, string>;
   rawSummaryJson?: Record<string, string>;
+  logReadError?: Error;
+  summaryEnsureDirError?: Error;
+  summaryWriteError?: Error;
+  summaryDeleteError?: Error;
+  logWriteError?: Error;
   logMtimes?: Record<string, number>;
   summaryMtimes?: Record<string, number>;
   onLogRead?: (key: string) => Promise<void> | void;
@@ -114,12 +119,18 @@ function mockStorage({
   summaries,
   rawLogJson = {},
   rawSummaryJson = {},
+  logReadError,
+  summaryEnsureDirError,
+  summaryWriteError,
+  summaryDeleteError,
+  logWriteError,
   logMtimes = {},
   summaryMtimes = {},
   onLogRead,
   pauseLogWriteKey,
 }: MockStorageOptions): {
   deletes: string[];
+  ensuredDirs: string[];
   fullLogReads: () => number;
   releasePausedWrite: () => void;
   waitForPausedWrite: () => Promise<void>;
@@ -136,6 +147,7 @@ function mockStorage({
           markPausedWriteStarted = resolve;
         });
   const deletes: string[] = [];
+  const ensuredDirs: string[] = [];
   const writes = new Map<string, unknown>();
 
   vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
@@ -159,6 +171,7 @@ function mockStorage({
     if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
       if (!Object.hasOwn(logs, key)) throw notFound();
       fullLogReads += 1;
+      if (logReadError) throw logReadError;
       await onLogRead?.(key);
       return rawLogJson[key] ?? JSON.stringify(logs[key]);
     }
@@ -166,7 +179,12 @@ function mockStorage({
     throw new Error(`Unexpected read target: ${target}`);
   });
 
-  vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
+  vi.spyOn(StorageFS, 'ensureDir').mockImplementation(async (target) => {
+    ensuredDirs.push(target);
+    if (target === STREAM_LOG_SUMMARIES_DIR && summaryEnsureDirError) {
+      throw summaryEnsureDirError;
+    }
+  });
   vi.spyOn(StorageFS, 'exists').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);
     if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
@@ -193,6 +211,15 @@ function mockStorage({
     target: string,
     content: string | Uint8Array,
   ): Promise<void> => {
+    if (logWriteError && target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
+      throw logWriteError;
+    }
+    if (
+      summaryWriteError &&
+      target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)
+    ) {
+      throw summaryWriteError;
+    }
     if (
       pauseLogWriteKey != null &&
       !pausedLogWriteUsed &&
@@ -214,12 +241,20 @@ function mockStorage({
   vi.spyOn(StorageFS, 'write').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'delete').mockImplementation(async (target) => {
+    if (
+      summaryDeleteError &&
+      (target === STREAM_LOG_SUMMARIES_DIR ||
+        target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`))
+    ) {
+      throw summaryDeleteError;
+    }
     deletes.push(target);
     writes.delete(target);
   });
 
   return {
     deletes,
+    ensuredDirs,
     fullLogReads: () => fullLogReads,
     releasePausedWrite: () => releasePausedWriteImpl(),
     waitForPausedWrite: () => waitForPausedWrite,
@@ -253,6 +288,26 @@ describe('StreamLogStore load', () => {
     expect(store.keys()).toEqual([]);
   });
 
+  it('opens a read-only store without creating directories or writing caches', async () => {
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {},
+    });
+
+    const store = await StreamLogStore.openReadOnly();
+
+    expect(store.mode).toEqual({ kind: 'read-only' });
+    expect(storage.ensuredDirs).toEqual([]);
+    expect(storage.fullLogReads()).toBe(1);
+    expect(storage.writes.size).toBe(0);
+    expect(store.keys()).toEqual(['alpha']);
+    await store.ensureLoaded('alpha');
+    expect(store.get('alpha')?.size).toBe(1);
+    expect(() => store.append('alpha', logEntry('alpha', 2, 250))).toThrow(
+      'read-only transcript store',
+    );
+  });
+
   it('constructs an inspectable ephemeral store only with an explicit reason', async () => {
     const store = StreamLogStore.ephemeral('interactive fallback test');
 
@@ -275,6 +330,101 @@ describe('StreamLogStore load', () => {
 
     await expect(StreamLogStore.open()).rejects.toThrow(
       'storage permission denied',
+    );
+  });
+
+  it('rejects when an authoritative transcript log cannot be read', async () => {
+    const failure = new Error('authoritative transcript read denied');
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {},
+      logReadError: failure,
+    });
+
+    await expect(StreamLogStore.open()).rejects.toBe(failure);
+  });
+
+  it('opens from authoritative logs when the summary directory cannot be prepared', async () => {
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {},
+      summaryEnsureDirError: new Error('summary directory is read-only'),
+    });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    const store = await StreamLogStore.open();
+
+    expect(store.keys()).toEqual(['alpha']);
+    expect(store.getFirstTimestamp('alpha')).toBe(200);
+    expect(storage.fullLogReads()).toBe(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining('Failed to prepare transcript summary cache'),
+    );
+  });
+
+  it('opens from authoritative logs when summary cache writeback fails', async () => {
+    const storage = mockStorage({
+      logs: {
+        alpha: [logEntry('alpha', 1, 200)],
+        beta: [logEntry('beta', 1, 300)],
+      },
+      summaries: {},
+      summaryWriteError: new Error('summary write denied'),
+    });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    const store = await StreamLogStore.open();
+
+    expect(store.keys()).toEqual(['alpha', 'beta']);
+    expect(store.getFirstTimestamp('alpha')).toBe(200);
+    expect(storage.fullLogReads()).toBe(2);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining('Failed to write transcript summary cache for'),
+    );
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes authoritative logs when summary cache deletion fails', async () => {
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {
+        alpha: { firstTimestamp: 200, lastTimestamp: 200 },
+      },
+      summaryDeleteError: new Error('summary delete denied'),
+    });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const store = await StreamLogStore.open();
+
+    await expect(store.delete('alpha')).resolves.toBeUndefined();
+
+    expect(storage.deletes).toContain(storageFile(STREAM_LOGS_DIR, 'alpha'));
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining(
+        'Failed to delete transcript summary cache for alpha',
+      ),
+    );
+  });
+
+  it('clears authoritative logs when summary cache clearing fails', async () => {
+    const storage = mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {
+        alpha: { firstTimestamp: 200, lastTimestamp: 200 },
+      },
+      summaryDeleteError: new Error('summary clear denied'),
+    });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const store = await StreamLogStore.open();
+
+    await expect(store.clear()).resolves.toBeUndefined();
+
+    expect(storage.deletes).toContain(STREAM_LOGS_DIR);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining('Failed to clear transcript summary cache'),
     );
   });
 
@@ -1146,6 +1296,20 @@ describe('StreamLogStore load', () => {
       'persisted transcripts failed to load',
     );
     expect(storage.writes.size).toBe(0);
+  });
+
+  it('rejects flush when authoritative transcript writes fail', async () => {
+    mockStorage({
+      logs: {},
+      summaries: {},
+      logWriteError: new Error('authoritative transcript write denied'),
+    });
+    const store = await StreamLogStore.open();
+    store.append('alpha', logEntry('alpha', 1, 200));
+
+    await expect(store.flush()).rejects.toThrow(
+      'Transcript flush failed after 3 retries',
+    );
   });
 
   it('fails persistent opening for a corrupt startup log', async () => {

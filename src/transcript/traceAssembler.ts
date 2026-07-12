@@ -51,10 +51,10 @@ export async function assembleTrace(
   executionId: ExecutionId,
 ): Promise<AssembleTraceResult> {
   const executionStore = getExecutionStore(executionId);
-  // A call-scoped persistent store avoids reloading a live host's session while
-  // reading the same on-disk transcript files.
+  // A call-scoped read-only store avoids reloading a live host's session or
+  // mutating persistence while reading the same transcript files.
   const [streamLogStore, config, meta] = await Promise.all([
-    StreamLogStore.open(),
+    StreamLogStore.openReadOnly(),
     executionStore.readConfig(),
     executionStore.readMeta(),
   ]);
