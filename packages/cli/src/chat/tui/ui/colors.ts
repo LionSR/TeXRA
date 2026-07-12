@@ -30,7 +30,8 @@ export const COLOR_ACCENT = 'magenta';
  *  set the plan-review card apart from the edit/bash approval cards). */
 export const COLOR_INFO = 'blue';
 
-/** Neutral chrome border with no semantic weight (the idle input box). */
+/** Neutral chrome with no semantic weight: the idle input box border and
+ *  the neutral "stopped" subagent status marker. */
 export const COLOR_BORDER = 'gray';
 
 // Not migrated onto this palette — decided in TeXRA#8118:
