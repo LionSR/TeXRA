@@ -43,6 +43,7 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'nativeToolEditApproval';
@@ -288,10 +289,12 @@ export async function nativeRequestApproval(
     result = await approvalPromise;
 
     if (result.accepted) {
-      // Normalize here: these reads bypass BaseFS so may contain CRLF.
-      const appliedContent = normalizeLineEndings(
-        await diffViewHost.readProposedContent(openedSession, proposedContent),
-      );
+      const appliedContent = result.appliedContent;
+      if (appliedContent == null) {
+        throw new Error(
+          'Tool edit approval settled without the current proposed content.',
+        );
+      }
       const userPatch = computeUserPatch(proposedContent, appliedContent);
       result = {
         ...result,
@@ -360,14 +363,19 @@ export async function handleProgressViewToolEditApprovalAction(
       break;
 
     case 'approve': {
-      // Normalize: this read bypasses BaseFS so may contain CRLF.
-      const appliedContent = normalizeLineEndings(
-        await diffViewHost.readProposedContent(
-          entry.diffSession,
-          entry.proposedContent,
-        ),
-      );
-      entry.settle({ accepted: true, appliedContent });
+      try {
+        // Normalize: this read bypasses BaseFS so may contain CRLF.
+        const appliedContent = normalizeLineEndings(
+          await diffViewHost.readProposedContent(entry.diffSession),
+        );
+        entry.settle({ accepted: true, appliedContent });
+      } catch (error) {
+        if (!entry.isSettled()) {
+          entry.onError(
+            `Approval failed because the edited document could not be read: ${toErrorMessage(error)}`,
+          );
+        }
+      }
       break;
     }
 
