@@ -232,8 +232,10 @@ export async function executeCommand(
     // Only the shell/string form needs this hand-rolled abort + force-kill
     // machinery: it terminates via `signalProcessGroup` (negative-PID /
     // tree-kill) so piped children don't outlive the shell. The array form
-    // spawns a single non-detached process, so it delegates straight to
-    // execa's own `cancelSignal` / `forceKillAfterDelay` natives below.
+    // spawns a single non-detached process and leaves all signalling to
+    // execa's own `cancelSignal` / `forceKillAfterDelay` natives below; its
+    // only hand-rolled piece is the signal-free stream-destroy backstop
+    // installed in its abort listener.
     const terminateSubprocess = (signal: NodeJS.Signals): void => {
       const pid = subprocess.pid;
       if (!pid) return;
