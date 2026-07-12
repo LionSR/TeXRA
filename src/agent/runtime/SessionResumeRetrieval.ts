@@ -159,9 +159,12 @@ async function retrieveToolUseResumeData(
     const { flowRecord } = resumability;
 
     const migrationResult = migrateSharedState(flowRecord.shared);
-    if (migrationResult === null) {
+    if (!migrationResult.success) {
       logger.warn(
         `Invalid flow record structure for execution: ${executionId}`,
+        {
+          data: { error: migrationResult.error },
+        },
       );
       return null;
     }
