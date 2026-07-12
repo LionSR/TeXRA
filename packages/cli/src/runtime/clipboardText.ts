@@ -68,9 +68,7 @@ async function reapWindowsCopyHelpers(): Promise<void> {
   );
 }
 
-async function reapWedgedCopyHelpers(
-  platform: NodeJS.Platform,
-): Promise<void> {
+async function reapWedgedCopyHelpers(platform: NodeJS.Platform): Promise<void> {
   try {
     await (platform === 'win32'
       ? reapWindowsCopyHelpers()
