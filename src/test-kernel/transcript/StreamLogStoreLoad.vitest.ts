@@ -29,6 +29,8 @@ interface MockStorageOptions {
   /** Values are usually arrays; non-array values simulate corrupt logs. */
   logs: Record<string, unknown>;
   summaries: Record<string, unknown>;
+  rawLogJson?: Record<string, string>;
+  rawSummaryJson?: Record<string, string>;
   logMtimes?: Record<string, number>;
   summaryMtimes?: Record<string, number>;
   onLogRead?: (key: string) => Promise<void> | void;
@@ -110,6 +112,8 @@ function fileStat(mtime: number): FileStat {
 function mockStorage({
   logs,
   summaries,
+  rawLogJson = {},
+  rawSummaryJson = {},
   logMtimes = {},
   summaryMtimes = {},
   onLogRead,
@@ -149,14 +153,14 @@ function mockStorage({
 
     if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
       if (!Object.hasOwn(summaries, key)) throw notFound();
-      return JSON.stringify(summaries[key]);
+      return rawSummaryJson[key] ?? JSON.stringify(summaries[key]);
     }
 
     if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
       if (!Object.hasOwn(logs, key)) throw notFound();
       fullLogReads += 1;
       await onLogRead?.(key);
-      return JSON.stringify(logs[key]);
+      return rawLogJson[key] ?? JSON.stringify(logs[key]);
     }
 
     throw new Error(`Unexpected read target: ${target}`);
@@ -363,6 +367,36 @@ describe('StreamLogStore load', () => {
     expect(store.keys()).toEqual(['alpha']);
     expect(store.getFirstTimestamp('alpha')).toBe(200);
     expect(store.getLastTimestamp('alpha')).toBeUndefined();
+  });
+
+  it('rebuilds malformed summary JSON from the authoritative stream log', async () => {
+    const storage = mockStorage({
+      logs: {
+        alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
+      },
+      summaries: { alpha: {} },
+      rawSummaryJson: { alpha: '{"firstTimestamp":' },
+    });
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    const store = await StreamLogStore.open();
+
+    expect(storage.fullLogReads()).toBe(1);
+    expect(store.keys()).toEqual(['alpha']);
+    expect(store.getFirstTimestamp('alpha')).toBe(200);
+    expect(store.getLastTimestamp('alpha')).toBe(250);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining('Ignoring corrupt summary cache for alpha'),
+    );
+    expect(
+      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
+    ).toEqual({
+      firstTimestamp: 200,
+      lastTimestamp: 250,
+      hasRunningGroup: false,
+      hasRunningStreamingText: false,
+    });
   });
 
   it('falls back once for missing summaries and writes the sidecar cache', async () => {
@@ -1116,12 +1150,11 @@ describe('StreamLogStore load', () => {
 
   it('fails persistent opening for a corrupt startup log', async () => {
     const storage = mockStorage({
-      logs: { delta: 'not an array at all' },
+      logs: { delta: [] },
       summaries: {},
+      rawLogJson: { delta: '[{"id":' },
     });
-    await expect(StreamLogStore.open()).rejects.toThrow(
-      'persisted log is not an array',
-    );
+    await expect(StreamLogStore.open()).rejects.toThrow(SyntaxError);
     expect(storage.writes.size).toBe(0);
   });
 });
