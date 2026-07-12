@@ -752,15 +752,21 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
 
+    // Consolidated per-stream state (#8124): every field lives on one record
+    // keyed by stream id, so priming a stale in-memory meta means seeding
+    // just the `meta` field of that record rather than a standalone map.
     const internals = store as unknown as {
-      meta: Map<StreamTabId, { schemaVersion: number; description?: string }>;
+      records: Map<
+        StreamTabId,
+        { meta?: { schemaVersion: number; description?: string } }
+      >;
     };
-    internals.meta.set(STREAM, { schemaVersion: 0 });
+    internals.records.set(STREAM, { meta: { schemaVersion: 0 } });
 
     store.setDescription(STREAM, 'Updated session');
     await store.flush();
 
-    expect(internals.meta.get(STREAM)).toMatchObject({
+    expect(internals.records.get(STREAM)?.meta).toMatchObject({
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       description: 'Updated session',
     });
