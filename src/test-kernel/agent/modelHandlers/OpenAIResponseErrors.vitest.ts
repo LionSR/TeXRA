@@ -94,8 +94,10 @@ describe('OpenAI Responses error normalization', () => {
         id: 'resp_failed',
         status: 'failed',
         error: {
+          code: 'server_error',
           message: 'The background response ended before completion.',
         },
+        incomplete_details: null,
       },
       'openai',
     );
