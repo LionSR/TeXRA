@@ -39,6 +39,7 @@ const CHANNEL = 'AgentReview';
 const agentReviewCommands = {
   run: 'texra.agentReview.run',
   runWithOptions: 'texra.agentReview.runWithOptions',
+  stop: 'texra.agentReview.stop',
   fixAll: 'texra.agentReview.fixAllIssues',
   fixIssue: 'texra.agentReview.fixIssue',
   dismissIssue: 'texra.agentReview.dismissIssue',
@@ -139,6 +140,10 @@ export function registerAgentReviewCommands(
     {
       id: agentReviewCommands.runWithOptions,
       handler: () => void handleRunWithOptions(),
+    },
+    {
+      id: agentReviewCommands.stop,
+      handler: () => AgentReviewService.stop(),
     },
     {
       id: agentReviewCommands.fixAll,

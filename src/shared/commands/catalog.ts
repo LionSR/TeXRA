@@ -451,6 +451,13 @@ export const commandCatalog = [
     icon: '$(ellipsis)',
   },
   {
+    id: 'texra.agentReview.stop',
+    title: 'Stop Agent Review',
+    shortTitle: 'Stop',
+    category: 'TeXRA',
+    icon: '$(debug-stop)',
+  },
+  {
     id: 'texra.agentReview.fixAllIssues',
     title: 'Fix All Agent Review Issues',
     shortTitle: 'Fix All Issues',
