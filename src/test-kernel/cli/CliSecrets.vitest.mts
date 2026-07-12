@@ -75,10 +75,13 @@ describe('CLI secrets', () => {
       await Promise.all([
         secrets.set('KEY_A', 'value-a'),
         secrets.set('KEY_B', 'value-b'),
+        secrets.set('ORDERED_KEY', 'old-value'),
+        secrets.set('ORDERED_KEY', 'new-value'),
       ]);
 
       expect(await secrets.get('KEY_A')).toBe('value-a');
       expect(await secrets.get('KEY_B')).toBe('value-b');
+      expect(await secrets.get('ORDERED_KEY')).toBe('new-value');
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
