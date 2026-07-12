@@ -13,7 +13,7 @@ import {
 } from '@auth/codex';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
-  CODEX_SUBSCRIPTION_CONTEXT_WINDOW,
+  CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
   isCodexSubscriptionEligible,
 } from '@model/providerCapabilities';
 import {
@@ -247,7 +247,7 @@ describe('computeModelOptionsData relay quota state', () => {
 
     expect(model.availability).toBe('subscription-access');
     expect(model.context).toBe(
-      `${Math.round(CODEX_SUBSCRIPTION_CONTEXT_WINDOW / 1000)}K`,
+      `${Math.round(CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW / 1000)}K`,
     );
     expect(model.cost).toBe('$0.000/$0.000');
     expect(model.hint).not.toContain(FAST_FIRST_RESPONSE_HINT);

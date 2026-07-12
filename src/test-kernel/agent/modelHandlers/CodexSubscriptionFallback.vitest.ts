@@ -14,7 +14,10 @@ import {
   setPreferCodexSubscription,
 } from '@auth/codex';
 import { setServerSideKeyService } from '@auth/serverKeys';
-import { CODEX_SUBSCRIPTION_CONTEXT_WINDOW } from '@model/providerCapabilities';
+import {
+  CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
+  CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
+} from '@model/providerCapabilities';
 import { AgentCategory } from '@shared/schemas/agent';
 
 import type { ResponseUsage } from 'openai/resources/responses/responses';
@@ -143,7 +146,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     // The model's own 1.05M API window must not leak through on the
     // subscription path, where the backend rejects requests past the ceiling.
     expect(handler.getEffectiveContextWindow()).toBe(
-      CODEX_SUBSCRIPTION_CONTEXT_WINDOW,
+      CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
     );
   });
 
@@ -153,7 +156,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     const handler = new ModelHandlerCodex(largeWindowConfig);
     handler.setAgentCategory(AgentCategory.ToolUse);
     expect(handler.getEffectiveContextWindow()).toBe(
-      CODEX_SUBSCRIPTION_CONTEXT_WINDOW,
+      CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
     );
 
     // "Use your own API key" routes to the real OpenAI API, which honors the
@@ -217,7 +220,10 @@ describe('ModelHandlerCodex subscription fallback', () => {
     const handler = new ModelHandlerCodex(largeWindowConfig);
     handler.setAgentCategory(AgentCategory.ToolUse);
     const requestSpy = vi.fn();
-    setCumulativeInputTokens(handler, CODEX_SUBSCRIPTION_CONTEXT_WINDOW - 10);
+    setCumulativeInputTokens(
+      handler,
+      CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT - 10,
+    );
 
     await expect(
       handler.createResponse({
@@ -225,7 +231,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
         messages: [],
         temperature: 0,
       }),
-    ).rejects.toThrow(/cannot enforce a reduced output budget locally/);
+    ).rejects.toThrow(/route input limit/);
     expect(requestSpy).not.toHaveBeenCalled();
   });
 
@@ -237,7 +243,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     const requestSpy = vi.fn();
     setCumulativeInputTokens(
       handler,
-      CODEX_SUBSCRIPTION_CONTEXT_WINDOW - config.maxOutputTokens - 100,
+      CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT - 100,
     );
 
     await expect(
@@ -248,32 +254,6 @@ describe('ModelHandlerCodex subscription fallback', () => {
       }),
     ).rejects.toThrow(/safety buffer/);
     expect(requestSpy).not.toHaveBeenCalled();
-  });
-
-  it('sends subscription requests when only the stripped output budget exceeds the Codex cap', async () => {
-    await initFakePlatformWithSubscription();
-
-    const handler = new ModelHandlerCodex(largeWindowConfig);
-    handler.setAgentCategory(AgentCategory.ToolUse);
-    const streamSpy = vi
-      .fn()
-      .mockResolvedValue(
-        createResponseStream(
-          createResponse(CODEX_SUBSCRIPTION_CONTEXT_WINDOW - 1),
-        ),
-      );
-    setCumulativeInputTokens(handler, CODEX_SUBSCRIPTION_CONTEXT_WINDOW - 3000);
-
-    await handler.createResponse({
-      client: { responses: { stream: streamSpy } } as never,
-      messages: [],
-      temperature: 0,
-    });
-
-    expect(streamSpy).toHaveBeenCalledOnce();
-    expect(streamSpy.mock.calls[0]?.[0]?.max_output_tokens).toBeLessThan(
-      config.maxOutputTokens,
-    );
   });
 
   it('keeps workflow agents on the subscription when the tool-use-only switch is off', async () => {
