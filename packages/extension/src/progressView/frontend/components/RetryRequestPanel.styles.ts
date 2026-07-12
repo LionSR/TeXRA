@@ -49,8 +49,6 @@ export const retryRequestPanelStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
-  /* Note: .toggle-icon rotation handled by commonViewStyles */
-
   .retry-request__error-body {
     margin-top: ${sp.tiny};
     padding: ${sp.small};
