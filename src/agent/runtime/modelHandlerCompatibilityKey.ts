@@ -14,6 +14,7 @@ export const MODEL_HANDLER_COMPATIBILITY_KEYS = [
   'ModelHandlerDashScope',
   'ModelHandlerMiniMax',
   'ModelHandlerGLM',
+  'ModelHandlerMeta',
 ] as const;
 
 export type ModelHandlerCompatibilityKey =
