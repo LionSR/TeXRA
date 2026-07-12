@@ -133,13 +133,14 @@ export function createChildStream(
     executionId,
     config: options.config,
   });
+  const description = truncateWithEllipsis(options.description, 80);
   session.events.emit({
     scope: 'session',
     event: {
       type: 'updateStreamDescription',
       payload: {
         streamId: childStreamId,
-        description: truncateWithEllipsis(options.description, 80),
+        description,
       },
     },
   });
@@ -154,6 +155,9 @@ export function createChildStream(
     runTrace.trace,
   );
   if (options.toolName) handle.toolName = options.toolName;
+  // Both facts above fire before the handle is tracked, so a session that
+  // rebinds this child later can only replay them from the handle (#8258).
+  handle.initialRunFacts = { config: options.config, description };
   session.executions.trackAgentExecution(handle, {
     status: STREAM_PHASE.RUNNING,
   });
