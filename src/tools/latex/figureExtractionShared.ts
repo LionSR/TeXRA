@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { ToolError, type ToolFileAttachment } from '@shared/schemas/toolResult';
 import { buildFileAttachment } from '@tools/attachments';
+import { formatToolOutput } from '@tools/formatting';
 import {
   resolveAndFormat,
   type WorkspacePathResolution,
@@ -28,6 +29,21 @@ interface AttachmentLimitOptions {
   limit: number;
   describe: (filePath: string) => string;
   mimeType?: string;
+}
+
+/**
+ * Shared "nothing found" result for extraction tools: an executed result
+ * with no output body, formatted via `formatToolOutput(label, null)`.
+ */
+export function emptyExtractionResult(
+  label: string,
+  summary: string,
+): { status: 'executed'; summary: string; output: string } {
+  return {
+    status: 'executed',
+    summary,
+    output: formatToolOutput(label, null),
+  };
 }
 
 export async function resolveLatexFileOrThrow(

@@ -22,6 +22,7 @@ import {
 } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getValidatedConfig } from '@utils/config/configUtils';
+import { isStrictlyWithin } from '@utils/core/pathCore';
 
 export type BuildDisplayFn = (
   location: FileLocation,
@@ -198,11 +199,7 @@ function tempPathToLocation(tempPath: string): FileLocation {
     normalizedTempPath,
   );
 
-  if (
-    relativePath &&
-    !relativePath.startsWith('..') &&
-    !path.isAbsolute(relativePath)
-  ) {
+  if (isStrictlyWithin(normalizedWorkspacePath, normalizedTempPath)) {
     return createWorkspaceLocation(tempPath, relativePath);
   }
 

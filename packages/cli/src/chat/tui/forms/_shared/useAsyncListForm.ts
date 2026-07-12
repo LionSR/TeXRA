@@ -4,13 +4,14 @@
 // copied verbatim across every list form; it lives here once.
 
 import { useInput } from 'ink';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import {
   isEscapeInput,
   isPlainReturnInput,
   type ReturnKeyInput,
 } from '@cli/chat/tui/input/inputKeys';
+import { useCancellableEffect } from '@cli/chat/tui/state/useCancellableEffect';
 
 export interface AsyncListFormState<T> {
   readonly data: T | undefined;
@@ -116,24 +117,23 @@ export function useAsyncListForm<T>(
   });
 
   const { load } = options;
-  useEffect(() => {
-    let cancelled = false;
-    void load()
-      .then((result) => {
-        if (cancelled) return;
-        setData(result);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(String(err));
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+  useCancellableEffect(
+    (isCancelled) => {
+      void load()
+        .then((result) => {
+          if (isCancelled()) return;
+          setData(result);
+          setLoading(false);
+        })
+        .catch((err: unknown) => {
+          if (isCancelled()) return;
+          setError(String(err));
+          setLoading(false);
+        });
+    },
     // Load once on mount, matching the original per-form `useEffect(..., [])`.
-  }, []);
+    [],
+  );
 
   return { data, loading, error, pendingInput, clearPendingInput, setData };
 }

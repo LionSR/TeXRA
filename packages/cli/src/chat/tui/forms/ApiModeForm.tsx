@@ -1,8 +1,9 @@
 import { Box, Text } from 'ink';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
+import { useCancellableEffect } from '../state/useCancellableEffect';
 import { KeyHints } from '../ui/KeyHints';
 import { LoadingIndicator } from '../ui/LoadingIndicator';
 import { Select } from '../ui/Select';
@@ -21,20 +22,19 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
     null,
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    setStatusLines(null);
-    void loadCliApiStatusLines({ apiMode: props.currentMode })
-      .then((lines) => {
-        if (!cancelled) setStatusLines(lines);
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setStatusLines([String(error)]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [props.currentMode]);
+  useCancellableEffect(
+    (isCancelled) => {
+      setStatusLines(null);
+      void loadCliApiStatusLines({ apiMode: props.currentMode })
+        .then((lines) => {
+          if (!isCancelled()) setStatusLines(lines);
+        })
+        .catch((error: unknown) => {
+          if (!isCancelled()) setStatusLines([String(error)]);
+        });
+    },
+    [props.currentMode],
+  );
 
   const items = [
     {
