@@ -227,6 +227,9 @@ importers:
       pretty-ms:
         specifier: ^9.3.0
         version: 9.3.0
+      proper-lockfile:
+        specifier: ^4.1.2
+        version: 4.1.2
       safe-stable-stringify:
         specifier: ^2.5.0
         version: 2.5.0
@@ -315,6 +318,9 @@ importers:
       '@types/pluralize':
         specifier: ^0.0.33
         version: 0.0.33
+      '@types/proper-lockfile':
+        specifier: ^4.1.4
+        version: 4.1.4
       '@types/shell-quote':
         specifier: ^1.7.5
         version: 1.7.5
@@ -2545,6 +2551,9 @@ packages:
 
   '@types/pluralize@0.0.33':
     resolution: {integrity: sha512-JOqsl+ZoCpP4e8TDke9W79FDcSgPAR0l6pixx2JHkhnRjvShyYiAYw2LVsnA7K08Y6DeOnaU6ujmENO4os/cYg==}
+
+  '@types/proper-lockfile@4.1.4':
+    resolution: {integrity: sha512-uo2ABllncSqg9F1D4nugVl9v93RmjxF6LJzQLMLDdPaXCUIDPeOJ21Gbqi43xNKzBi/WQ0Q0dICqufzQbMjipQ==}
 
   '@types/react@19.2.17':
     resolution: {integrity: sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw==}
@@ -8135,6 +8144,10 @@ snapshots:
   '@types/nunjucks@3.2.6': {}
 
   '@types/pluralize@0.0.33': {}
+
+  '@types/proper-lockfile@4.1.4':
+    dependencies:
+      '@types/retry': 0.12.0
 
   '@types/react@19.2.17':
     dependencies:
