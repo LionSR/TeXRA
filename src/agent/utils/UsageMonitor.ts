@@ -304,10 +304,13 @@ export class UsageMonitor {
       // pre-call check sees this round's cost before the next call — bounding
       // free-tier overage to roughly one round instead of a whole session.
       if (usedRelay) {
-        const flushed = await UsageLogService.flush();
-        if (!flushed) {
+        const flushResult = await UsageLogService.flush();
+        if (
+          flushResult.pendingEntryCount > 0 ||
+          flushResult.unacceptedEntryCount > 0
+        ) {
           this.context.logger.debug(
-            'Usage flush included an unaccepted batch; server spend data may be incomplete.',
+            `Server spend data is incomplete: ${flushResult.pendingEntryCount} usage entries remain queued and ${flushResult.unacceptedEntryCount} were not accepted.`,
           );
         }
       }

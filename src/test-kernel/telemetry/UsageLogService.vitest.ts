@@ -34,6 +34,10 @@ function batchId(batch: unknown): string {
   return (batch as { batchId: string }).batchId;
 }
 
+function flushResult(pendingEntryCount: number, unacceptedEntryCount = 0) {
+  return { pendingEntryCount, unacceptedEntryCount };
+}
+
 // ky passes a Request object; read each batch body from it. `beforeRespond`
 // lets a test stall or fail a specific call before the success response.
 function stubFetch(
@@ -95,8 +99,8 @@ describe('UsageLogService', () => {
 
     releaseFirstFetch?.();
     await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
-      true,
-      true,
+      flushResult(0),
+      flushResult(0),
     ]);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -112,14 +116,47 @@ describe('UsageLogService', () => {
     const fetchMock = stubFetch(batches);
 
     UsageLogService.log(usageEntry('first'));
-    await expect(UsageLogService.flush()).resolves.toBe(false);
+    await expect(UsageLogService.flush()).resolves.toEqual(flushResult(1));
 
     expect(fetchMock).not.toHaveBeenCalled();
 
-    await expect(UsageLogService.flush()).resolves.toBe(true);
+    await expect(UsageLogService.flush()).resolves.toEqual(flushResult(0));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(batches.map(batchModels)).toEqual([['first']]);
+  });
+
+  it('reports entries evicted by the queue bound as unaccepted', async () => {
+    UsageLogService.initialize({
+      batchSize: 2000,
+      flushIntervalMs: 60_000,
+      enabled: true,
+    });
+    const tokenSpy = vi
+      .spyOn(SupabaseClient, 'getRelayAccessToken')
+      .mockResolvedValue(null);
+    vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    const batches: unknown[] = [];
+    const fetchMock = stubFetch(
+      batches,
+      () =>
+        new Response(JSON.stringify({ success: true, accepted: 1000 }), {
+          status: 200,
+        }),
+    );
+
+    for (let index = 0; index < 1001; index += 1) {
+      UsageLogService.log(usageEntry(`entry-${index}`));
+    }
+
+    await expect(UsageLogService.flush()).resolves.toEqual(
+      flushResult(1000, 1),
+    );
+
+    tokenSpy.mockResolvedValue('token');
+    await expect(UsageLogService.flush()).resolves.toEqual(flushResult(0, 1));
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it('requeues entries when send fails after dequeue', async () => {
@@ -133,11 +170,11 @@ describe('UsageLogService', () => {
     });
 
     UsageLogService.log(usageEntry('first'));
-    await expect(UsageLogService.flush()).resolves.toBe(false);
+    await expect(UsageLogService.flush()).resolves.toEqual(flushResult(1));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    await expect(UsageLogService.flush()).resolves.toBe(true);
+    await expect(UsageLogService.flush()).resolves.toEqual(flushResult(0));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['first'], ['first']]);
@@ -163,8 +200,8 @@ describe('UsageLogService', () => {
       });
 
       UsageLogService.log(usageEntry('first'));
-      await expect(UsageLogService.flush()).resolves.toBe(false);
-      await expect(UsageLogService.flush()).resolves.toBe(true);
+      await expect(UsageLogService.flush()).resolves.toEqual(flushResult(1));
+      await expect(UsageLogService.flush()).resolves.toEqual(flushResult(0));
 
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(batches.map(batchModels)).toEqual([['first'], ['first']]);
@@ -201,12 +238,12 @@ describe('UsageLogService', () => {
     UsageLogService.log(usageEntry('valid'));
     releaseRejection?.();
 
-    await expect(flush).resolves.toBe(false);
+    await expect(flush).resolves.toEqual(flushResult(0, 1));
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['invalid'], ['valid']]);
     expect(batchId(batches[1])).not.toBe(batchId(batches[0]));
 
-    await expect(UsageLogService.flush()).resolves.toBe(true);
+    await expect(UsageLogService.flush()).resolves.toEqual(flushResult(0, 1));
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -238,7 +275,9 @@ describe('UsageLogService', () => {
       for (let entryIndex = 0; entryIndex < 100; entryIndex += 1) {
         UsageLogService.log(usageEntry(`${batchIndex}-${entryIndex}`));
       }
-      await expect(UsageLogService.flush()).resolves.toBe(false);
+      await expect(UsageLogService.flush()).resolves.toEqual(
+        flushResult(0, (batchIndex + 1) * 100),
+      );
     }
 
     expect(fetchMock).toHaveBeenCalledTimes(11);
@@ -268,10 +307,10 @@ describe('UsageLogService', () => {
     });
 
     UsageLogService.log(usageEntry('first'));
-    await expect(UsageLogService.flush()).resolves.toBe(false);
+    await expect(UsageLogService.flush()).resolves.toEqual(flushResult(1));
 
     UsageLogService.log(usageEntry('second'));
-    await expect(UsageLogService.flush()).resolves.toBe(true);
+    await expect(UsageLogService.flush()).resolves.toEqual(flushResult(0));
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(batches.map(batchModels)).toEqual([
@@ -281,5 +320,31 @@ describe('UsageLogService', () => {
     ]);
     expect(batchId(batches[1])).toBe(batchId(batches[0]));
     expect(batchId(batches[2])).not.toBe(batchId(batches[0]));
+  });
+
+  it('preserves a retry batch across dispose and reinitialization', async () => {
+    const tokenSpy = vi
+      .spyOn(SupabaseClient, 'getRelayAccessToken')
+      .mockResolvedValue('token');
+    const batches: unknown[] = [];
+    const fetchMock = stubFetch(batches, (callCount) => {
+      if (callCount === 1) throw new Error('network unavailable');
+    });
+
+    UsageLogService.log(usageEntry('first'));
+    await expect(UsageLogService.flush()).resolves.toEqual(flushResult(1));
+    tokenSpy.mockResolvedValue(null);
+
+    await UsageLogService.dispose();
+    UsageLogService.initialize({
+      batchSize: 100,
+      flushIntervalMs: 60_000,
+      enabled: true,
+    });
+    tokenSpy.mockResolvedValue('token');
+
+    await expect(UsageLogService.flush()).resolves.toEqual(flushResult(0));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(batchId(batches[1])).toBe(batchId(batches[0]));
   });
 });
