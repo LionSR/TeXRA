@@ -9,6 +9,7 @@ import {
   createProgressViewCommandHandlers as createSharedProgressViewCommandHandlers,
   type ProgressViewCommandActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -440,6 +441,42 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       event: 'updateToolEditApprovalBypassState',
       payload: { streamId: stream, bypassActive: false },
     });
+  });
+
+  it('updates the durable owner of a rebound stream', async () => {
+    const stream = 'stream:rebound-bypass';
+    const owner = createTestSession();
+    const presenter = createTestSession();
+    const { host } = createRecordingRuntimeHost();
+    const handlers = createProgressViewCommandHandlers(
+      createActions({
+        bypass: {
+          runtimeHost: host,
+          session: presenter,
+          sessionForStream: () => owner,
+        },
+      }),
+    );
+    try {
+      expect(
+        dispatchProgressViewInbound(
+          {
+            command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+            stream,
+          },
+          handlers,
+        ),
+      ).toBe(true);
+      await Promise.resolve();
+
+      expect(isApprovalBypassedForStream(stream, owner)).toBe(true);
+      expect(isBashApprovalBypassedForStream(stream, owner)).toBe(true);
+      expect(isApprovalBypassedForStream(stream, presenter)).toBe(false);
+      expect(isBashApprovalBypassedForStream(stream, presenter)).toBe(false);
+    } finally {
+      owner.dispose();
+      presenter.dispose();
+    }
   });
 
   it('forces edit and bash bypass on without inverting a decoupled stream', async () => {

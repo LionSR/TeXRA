@@ -95,6 +95,16 @@ export class DesktopExecutionRebinder {
     this.interactionForwards.clear();
   }
 
+  /** Resolve the durable runtime owner for a stream mirrored into this window. */
+  ownerSessionForStream(streamId: StreamTabId): SessionHandle | undefined {
+    const rootOwner = this.rootOwners.get(streamId);
+    if (rootOwner) return rootOwner;
+    for (const binding of this.agentBindings.values()) {
+      if (binding.streamId === streamId) return binding.ownerSession;
+    }
+    return undefined;
+  }
+
   private forwardInteractions(ownerSession: SessionHandle): void {
     if (
       ownerSession === this.targetSession ||
@@ -102,28 +112,11 @@ export class DesktopExecutionRebinder {
     ) {
       return;
     }
-    const target = this.targetSession.interactions;
     this.interactionForwards.set(
       ownerSession,
-      ownerSession.useHostInteractions({
-        requestToolEditApproval: (request, options) =>
-          target.requestToolEditApproval(request, options),
-        requestBashApproval: (request, options) =>
-          target.requestBashApproval(request, options),
-        requestPlanApproval: (request, options) =>
-          target.requestPlanApproval(request, options),
-        requestAgentProposal: (request, options) =>
-          target.requestAgentProposal(request, options),
-        requestRetry: (request, options) =>
-          target.requestRetry(request, options),
-        askUserQuestion: (request, options) =>
-          target.askUserQuestion(request, options),
-        openExternalInquiry: (request) => target.openExternalInquiry(request),
-        setApprovalBypassState: (update) =>
-          target.setApprovalBypassState(update),
-        resolve: (requestId, result) => target.resolve(requestId, result),
-        cancel: (selector) => target.cancel(selector),
-      }),
+      ownerSession.useHostInteractions(
+        this.targetSession.interactions.createForwarder(),
+      ),
     );
   }
 
@@ -156,6 +149,7 @@ export class DesktopExecutionRebinder {
         this.rootOwners.delete(streamId);
         this.detachOwnerObserverIfUnused(ownerSession);
       }
+      this.detachInteractionForwardIfUnused(ownerSession);
     };
     const releaseCurrent = (): void => {
       const staleHandle = currentHandle;
@@ -404,6 +398,17 @@ export class DesktopExecutionRebinder {
     this.ownerRegistrationObservers.delete(ownerSession);
   }
 
+  private detachInteractionForwardIfUnused(ownerSession: SessionHandle): void {
+    for (const binding of this.agentBindings.values()) {
+      if (binding.ownerSession === ownerSession) return;
+    }
+    for (const binding of this.processBindings.values()) {
+      if (binding.ownerSession === ownerSession) return;
+    }
+    this.interactionForwards.get(ownerSession)?.();
+    this.interactionForwards.delete(ownerSession);
+  }
+
   private bindProcess(
     executionId: ExecutionId,
     ownerSession: SessionHandle,
@@ -422,6 +427,7 @@ export class DesktopExecutionRebinder {
       if (this.processBindings.get(executionId) === binding) {
         this.processBindings.delete(executionId);
       }
+      this.detachInteractionForwardIfUnused(ownerSession);
     };
     const binding: ReboundProcessBinding = {
       ownerSession,
