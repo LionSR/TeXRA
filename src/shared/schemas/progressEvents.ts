@@ -36,6 +36,11 @@ export interface SetActiveStreamPayload {
    * stream tab appears without yanking the user away from their current view.
    */
   suppressViewSwitch?: boolean;
+  /**
+   * When suppressing a switch, widen a restrictive category filter so this
+   * stream remains reachable. Used for interaction requests with pending UI.
+   */
+  ensureVisible?: boolean;
 }
 
 export interface UpdateStreamDescriptionPayload {

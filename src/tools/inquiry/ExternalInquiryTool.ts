@@ -395,12 +395,19 @@ export class ExternalInquiryTool extends defineTool({
       }
     }
 
+    // Register the asking stream without switching the active view: hosts
+    // own presentation focus (the extension/desktop progress views badge the
+    // stream row, the CLI TUI activates on modal present) — #8246.
     runtimeHost.emit('requestEnsureProgressView', {});
     ownerSession.events.emit({
       scope: 'session',
       event: {
         type: 'setActiveStream',
-        payload: { streamId },
+        payload: {
+          streamId,
+          suppressViewSwitch: true,
+          ensureVisible: true,
+        },
       },
     });
     const isFollowUp = !!input.thread_id;
