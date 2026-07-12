@@ -21,13 +21,14 @@ const gpt55Config: ModelConfig = {
   inputPrice: 5,
   outputPrice: 30,
   contextWindow: 1_050_000,
-  // Codex eligibility is now derived from the top reasoning-effort tier
-  // (see providerCapabilities.ts), not from a hardcoded fullName allowlist.
+  // Codex eligibility comes from the registry's codexSubscription flag
+  // (see providerCapabilities.ts), not from tier/naming heuristics.
   capabilities: {
     ...DEFAULT_MODEL_CAPABILITIES,
     reasoningEffort: ReasoningEffort.XHIGH,
   },
   openRouterOnly: false,
+  codexSubscription: true,
 };
 
 describe('provider capabilities', () => {
