@@ -34,6 +34,7 @@ import {
   hasContextWindowErrorMarker,
   isContextWindowError,
 } from '@common/errors/sdkErrorUtils';
+import type { ToolDefinition } from '@model';
 
 // Type imports
 import { pathToLocation } from '@utils/files';
@@ -164,6 +165,32 @@ function createMessages(count: number): ResponseInputItem[] {
 }
 
 describe('ModelHandlerOpenAIResponse.createResponse', () => {
+  it('enables parallel tool calls by default', async () => {
+    const handler = createHandler();
+    let request: Record<string, unknown> | undefined;
+    const client = {
+      responses: {
+        create: async (params: Record<string, unknown>) => {
+          request = params;
+          return createResponse('resp-parallel-tools', { input_tokens: 12 });
+        },
+      },
+    };
+    const tools: ToolDefinition[] = [
+      { name: 'lookup', description: 'Look up a value' },
+    ];
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(1),
+      temperature: 0,
+      tools,
+    });
+
+    assert.equal(request?.tool_choice, 'auto');
+    assert.equal(request?.parallel_tool_calls, true);
+  });
+
   it('rejects concurrent calls on the same handler instance', async () => {
     const handler = createHandler();
     let resolveCreate: (response: any) => void = () => undefined;
