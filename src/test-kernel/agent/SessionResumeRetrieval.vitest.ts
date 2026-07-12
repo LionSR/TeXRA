@@ -693,6 +693,35 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
+  it('cleans up a fresh launch cancelled before persistence recovery', async () => {
+    const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
+    const store = getExecutionStore(executionId);
+    const session = new SessionHandle();
+    const readSpy = vi.spyOn(store, 'read');
+    const deleteSpy = vi.spyOn(store, 'delete');
+    const releaseSpy = vi.spyOn(session.followUps, 'release');
+
+    try {
+      const result = await runPersistedFlow(
+        executionId,
+        streamId,
+        undefined,
+        (flowContext) => flowContext.interrupt(),
+        session,
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(readSpy).not.toHaveBeenCalled();
+      expect(deleteSpy).toHaveBeenCalledWith(flowKey(executionId));
+      expect(releaseSpy).toHaveBeenCalledWith(streamId);
+    } finally {
+      readSpy.mockRestore();
+      deleteSpy.mockRestore();
+      releaseSpy.mockRestore();
+    }
+  });
+
   it('skips repair writes when cancellation arrives during the recovery read', async () => {
     const executionId = 'abc-cancel-read' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-read' as StreamTabId;
