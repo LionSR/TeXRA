@@ -34,6 +34,9 @@ const POSIX_COPY_HELPERS: ReadonlySet<string> = new Set([
   'xsel', // Linux (X11), including clipboardy's bundled fallback binary
   'clip.exe', // WSL
   'termux-clipboard-set', // Android (Termux)
+  // Linux `ps -o comm=` reports the kernel task name, which TASK_COMM_LEN
+  // truncates to 15 characters — `termux-clipboard-set` surfaces as this.
+  'termux-clipboar',
 ]);
 
 async function reapPosixCopyHelpers(): Promise<void> {
@@ -56,10 +59,15 @@ async function reapPosixCopyHelpers(): Promise<void> {
 async function reapWindowsCopyHelpers(): Promise<void> {
   // clipboardy copies via `powershell.exe -EncodedCommand …` (powershell-utils)
   // or its bundled `clipboard_<arch>.exe` fallback; both are direct children.
+  // This reap script is itself a direct-child powershell.exe, so it must not
+  // match its own filter: `$_.ProcessId -ne $PID` excludes it, and splitting
+  // the '-EncodedCommand' literal keeps this script's command line (and a
+  // concurrent reap's) from containing the very substring it greps for.
   const script =
     `Get-CimInstance Win32_Process -Filter 'ParentProcessId=${process.pid}' | ` +
-    `Where-Object { $_.Name -like 'clipboard_*.exe' -or ` +
-    `($_.Name -eq 'powershell.exe' -and $_.CommandLine -match '-EncodedCommand') } | ` +
+    `Where-Object { $_.ProcessId -ne $PID -and ` +
+    `($_.Name -like 'clipboard_*.exe' -or ` +
+    `($_.Name -eq 'powershell.exe' -and $_.CommandLine -match ('-Encoded' + 'Command'))) } | ` +
     `ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
   await execFileAsync(
     'powershell',
@@ -68,13 +76,28 @@ async function reapWindowsCopyHelpers(): Promise<void> {
   );
 }
 
+// Killing a wedged helper makes clipboardy retry with its bundled fallback
+// binary (Windows `clipboard_<arch>.exe`, Linux bundled `xsel`) — a new direct
+// child spawned after the first sweep's process snapshot. A healthy fallback
+// finishes within milliseconds (landing the still-current text before the user
+// can copy anything else); one delayed second sweep catches a fallback that
+// wedges exactly like the helper it replaced.
+const FALLBACK_REAP_DELAY_MS = 300;
+
 async function reapWedgedCopyHelpers(platform: NodeJS.Platform): Promise<void> {
-  try {
-    await (platform === 'win32'
-      ? reapWindowsCopyHelpers()
-      : reapPosixCopyHelpers());
-  } catch {
-    // Best effort: a reap failure must not mask the timeout result.
+  for (let sweep = 0; sweep < 2; sweep += 1) {
+    if (sweep > 0) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, FALLBACK_REAP_DELAY_MS),
+      );
+    }
+    try {
+      await (platform === 'win32'
+        ? reapWindowsCopyHelpers()
+        : reapPosixCopyHelpers());
+    } catch {
+      // Best effort: a reap failure must not mask the timeout result.
+    }
   }
 }
 

@@ -77,7 +77,7 @@ describe('CLI clipboard text writer', () => {
       const resultPromise = writeClipboardText('question', {
         platform: 'darwin',
       });
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(6_000);
       const result = await resultPromise;
 
       expect(result).toEqual({
@@ -93,20 +93,22 @@ describe('CLI clipboard text writer', () => {
     vi.useFakeTimers();
     try {
       writeMock.mockReturnValue(new Promise<void>(() => {}));
-      execFileMock.mockResolvedValue({
+      execFileMock.mockResolvedValueOnce({
         stdout: [
           '  101      1 /usr/bin/pbcopy', // someone else's child
           `  202 ${process.pid} vim`, // our child, not a copy helper
           `  303 ${process.pid} /usr/bin/pbcopy`, // wedged helper
           `  404 ${process.pid} wl-copy`, // stray from an earlier attempt
+          `  505 ${process.pid} termux-clipboar`, // TASK_COMM_LEN-truncated
         ].join('\n'),
         stderr: '',
       });
+      execFileMock.mockResolvedValue({ stdout: '', stderr: '' });
 
       const resultPromise = writeClipboardText('question', {
         platform: 'darwin',
       });
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(6_000);
       const result = await resultPromise;
 
       expect(result).toEqual({
@@ -118,9 +120,44 @@ describe('CLI clipboard text writer', () => {
         ['-Ao', 'pid=,ppid=,comm='],
         expect.objectContaining({ timeout: 2_000 }),
       );
-      expect(process.kill).toHaveBeenCalledTimes(2);
+      expect(process.kill).toHaveBeenCalledTimes(3);
       expect(process.kill).toHaveBeenCalledWith(303, 'SIGKILL');
       expect(process.kill).toHaveBeenCalledWith(404, 'SIGKILL');
+      expect(process.kill).toHaveBeenCalledWith(505, 'SIGKILL');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sweeps again after a delay to catch the fallback helper a kill can spawn', async () => {
+    vi.useFakeTimers();
+    try {
+      writeMock.mockReturnValue(new Promise<void>(() => {}));
+      execFileMock.mockResolvedValueOnce({
+        stdout: `  303 ${process.pid} xsel`, // wedged system helper
+        stderr: '',
+      });
+      // Killing the system helper makes clipboardy retry with its bundled
+      // fallback binary, which here wedges too.
+      execFileMock.mockResolvedValueOnce({
+        stdout: `  606 ${process.pid} /repo/node_modules/clipboardy/fallbacks/linux/xsel`,
+        stderr: '',
+      });
+
+      const resultPromise = writeClipboardText('question', {
+        platform: 'linux',
+      });
+      await vi.advanceTimersByTimeAsync(6_000);
+      const result = await resultPromise;
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'Clipboard write timed out after 5000ms',
+      });
+      expect(execFileMock).toHaveBeenCalledTimes(2);
+      expect(process.kill).toHaveBeenCalledTimes(2);
+      expect(process.kill).toHaveBeenCalledWith(303, 'SIGKILL');
+      expect(process.kill).toHaveBeenCalledWith(606, 'SIGKILL');
     } finally {
       vi.useRealTimers();
     }
@@ -134,21 +171,27 @@ describe('CLI clipboard text writer', () => {
       const resultPromise = writeClipboardText('question', {
         platform: 'win32',
       });
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(6_000);
       const result = await resultPromise;
 
       expect(result).toEqual({
         ok: false,
         reason: 'Clipboard write timed out after 5000ms',
       });
-      expect(execFileMock).toHaveBeenCalledTimes(1);
+      // One sweep for the wedged helper, one for the fallback a kill spawns.
+      expect(execFileMock).toHaveBeenCalledTimes(2);
       const [command, args] = execFileMock.mock.calls[0] as [
         string,
         readonly string[],
       ];
       expect(command).toBe('powershell');
-      expect(args.at(-1)).toContain(`ParentProcessId=${process.pid}`);
-      expect(args.at(-1)).toContain('Stop-Process');
+      const script = args.at(-1) ?? '';
+      expect(script).toContain(`ParentProcessId=${process.pid}`);
+      expect(script).toContain('Stop-Process');
+      // The reap script must not match itself: it excludes its own PID and
+      // its command line never contains the literal it greps for.
+      expect(script).toContain('$_.ProcessId -ne $PID');
+      expect(script).not.toContain('-EncodedCommand');
       expect(process.kill).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -164,7 +207,7 @@ describe('CLI clipboard text writer', () => {
       const resultPromise = writeClipboardText('question', {
         platform: 'darwin',
       });
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(6_000);
       const result = await resultPromise;
 
       expect(result).toEqual({
