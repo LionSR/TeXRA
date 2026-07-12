@@ -49,6 +49,7 @@
       "@agent/runtime/AgentRuntimeHost",
       "@agent/runtime/agentShutdown",
       "@agent/runtime/detachSubagentsOnStop",
+      "@agent/runtime/executionRegistry",
       "@agent/runtime/helperModelName",
       "@agent/runtime/hostInteractionResultMappers",
       "@agent/runtime/HostInteractions",
