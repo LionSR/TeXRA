@@ -58,6 +58,7 @@ import { getConfig } from '@utils/config/configUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
+import { toDataUrl } from '../support/dataUrl';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import {
@@ -1221,7 +1222,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           createInputText(`Image: ${media.file_name}`),
           {
             type: 'input_image',
-            image_url: `data:${mediaType};base64,${media.data}`,
+            image_url: toDataUrl(mediaType, media.data),
             detail: 'high',
           },
         ];

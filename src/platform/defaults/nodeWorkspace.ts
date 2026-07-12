@@ -5,6 +5,7 @@
 import * as path from 'node:path';
 
 import { normalizeFilePath } from '@utils/core';
+import { isPathWithin } from '@utils/core/pathCore';
 
 import type { WorkspaceProvider } from '../interfaces';
 
@@ -20,7 +21,7 @@ export function createNodeWorkspace(
       const root = this.getWorkspacePath();
       if (!root) return filePath;
       const relative = path.relative(root, filePath);
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      if (!isPathWithin(root, filePath)) {
         return filePath;
       }
       return normalizeFilePath(relative);

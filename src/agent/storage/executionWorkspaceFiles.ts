@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AbsoluteFS } from '@utils/files';
 import { byStringProp, normalizeFilePath } from '@utils/core';
+import { isStrictlyWithin } from '@utils/core/pathCore';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 export interface ExecutionWorkspaceFile {
@@ -26,11 +27,7 @@ export function resolveExecutionWorkspaceFilePath(
     ? path.normalize(cleanedPath)
     : path.resolve(absoluteRoot, cleanedPath);
   const relativePath = path.relative(absoluteRoot, absolutePath);
-  if (
-    !relativePath ||
-    relativePath.startsWith('..') ||
-    path.isAbsolute(relativePath)
-  ) {
+  if (!isStrictlyWithin(absoluteRoot, absolutePath)) {
     return undefined;
   }
 
