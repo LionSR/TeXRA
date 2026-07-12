@@ -15,6 +15,7 @@ import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
+import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
 
 function buildConfig(
   provider: ModelProvider,
@@ -313,5 +314,57 @@ describe('OpenAI-compatible provider request params', () => {
     });
 
     assert.equal(createCalls[0].reasoning_effort, 'max');
+  });
+
+  it('passes medium reasoning effort through for current Grok models', async () => {
+    const handler = new ModelHandlerXAI(
+      buildConfig(ModelProvider.XAI, {
+        name: 'grok45',
+        fullName: 'grok-4.5',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MEDIUM,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    (handler as any).getStreamingConfig = () => false;
+
+    const { client, createCalls } = createClientStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'think' }],
+      temperature: 0,
+    });
+
+    assert.equal(createCalls[0].reasoning_effort, 'medium');
+  });
+
+  it('clamps above-high reasoning effort to high for Grok models', async () => {
+    const handler = new ModelHandlerXAI(
+      buildConfig(ModelProvider.XAI, {
+        name: 'grok45',
+        fullName: 'grok-4.5',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.XHIGH,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    (handler as any).getStreamingConfig = () => false;
+
+    const { client, createCalls } = createClientStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'think harder' }],
+      temperature: 0,
+    });
+
+    assert.equal(createCalls[0].reasoning_effort, 'high');
   });
 });
