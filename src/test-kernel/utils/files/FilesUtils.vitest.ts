@@ -2,7 +2,15 @@
 // relativeFS JSON, pasted images).
 
 import * as assert from 'node:assert';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getMimeType } from '@utils/files';
 import * as path from 'node:path';
@@ -107,52 +115,40 @@ describe('pathUtils Test Suite', () => {
 // ---------------------------------------------------------------------------
 
 describe('FlexibleFS.write', () => {
-  it('retries the write after clearing symlink loops', async () => {
-    const originalWrite = AbsoluteFS.write;
-    const originalDelete = AbsoluteFS.delete;
+  it('propagates ELOOP without deleting the path or retrying', async () => {
+    const location = pathToLocation('file.tex');
+    const expectedPath = WorkspaceFS.toAbsolute('file.tex');
+    const cause = new Error('native cause');
+    const loopError = new Error('loop detected', {
+      cause,
+    }) as NodeJS.ErrnoException;
+    loopError.code = 'ELOOP';
+    loopError.path = expectedPath;
 
-    const writes: string[] = [];
-    let deleteTarget: string | undefined;
-    let attempt = 0;
+    const write = vi.spyOn(AbsoluteFS, 'write').mockRejectedValue(loopError);
+    const deletePath = vi.spyOn(AbsoluteFS, 'delete').mockResolvedValue();
 
     try {
-      (AbsoluteFS as unknown as { write: typeof AbsoluteFS.write }).write =
-        (async (target: string, content: string | Uint8Array) => {
-          writes.push(target);
-          attempt += 1;
-          if (attempt === 1) {
-            const error = new Error('loop detected') as NodeJS.ErrnoException;
-            error.code = 'ELOOP';
-            throw error;
-          }
+      await assert.rejects(
+        () => FlexibleFS.write(location, 'content'),
+        (error: unknown) => {
+          assert.strictEqual(error, loopError);
+          assert.strictEqual((error as NodeJS.ErrnoException).code, 'ELOOP');
+          assert.strictEqual(
+            (error as NodeJS.ErrnoException).path,
+            expectedPath,
+          );
+          assert.strictEqual((error as Error).cause, cause);
+          return true;
+        },
+      );
 
-          const resolvedContent =
-            typeof content === 'string'
-              ? content
-              : Buffer.from(content).toString('utf-8');
-          assert.strictEqual(resolvedContent, 'content');
-        }) as typeof AbsoluteFS.write;
-
-      (AbsoluteFS as unknown as { delete: typeof AbsoluteFS.delete }).delete =
-        (async (
-          target: string,
-          options?: { recursive?: boolean; useTrash?: boolean },
-        ) => {
-          deleteTarget = target;
-          assert.deepEqual(options, { recursive: true, useTrash: false });
-        }) as typeof AbsoluteFS.delete;
-
-      const location = pathToLocation('file.tex');
-      const expectedPath = WorkspaceFS.toAbsolute('file.tex');
-      await FlexibleFS.write(location, 'content');
-
-      assert.deepEqual(writes, [expectedPath, expectedPath]);
-      assert.strictEqual(deleteTarget, expectedPath);
+      expect(write).toHaveBeenCalledOnce();
+      expect(write).toHaveBeenCalledWith(expectedPath, 'content');
+      expect(deletePath).not.toHaveBeenCalled();
     } finally {
-      (AbsoluteFS as unknown as { write: typeof AbsoluteFS.write }).write =
-        originalWrite;
-      (AbsoluteFS as unknown as { delete: typeof AbsoluteFS.delete }).delete =
-        originalDelete;
+      write.mockRestore();
+      deletePath.mockRestore();
     }
   });
 });
