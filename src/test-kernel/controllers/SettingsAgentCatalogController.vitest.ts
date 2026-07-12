@@ -165,6 +165,7 @@ describe('SettingsAgentCatalogController', () => {
         ...persistedPreset,
         icon: 'bookmark',
       },
+      unresolvedNames: ['missing'],
     });
     assert.deepEqual(enabled.workflow, ['remote:writer']);
     // Unresolved names are kept bare so the agent joins the roster the

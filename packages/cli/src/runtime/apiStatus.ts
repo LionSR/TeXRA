@@ -1,5 +1,6 @@
 import { platform } from '@platform/platform';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatPercent } from '@utils/text/stringUtils';
 
@@ -37,10 +38,13 @@ export function formatCliAuthStatusLine(
  */
 export function formatApiKeyShadowWarning(
   authenticated: boolean,
-  hasPersonalKey: boolean,
+  personalKeyProviders: readonly string[],
 ): string | undefined {
-  if (!authenticated || !hasPersonalKey) return undefined;
-  return 'note: a provider API key is set while signed in — `--api-mode` (or `/api`) controls which one is used.';
+  if (!authenticated || personalKeyProviders.length === 0) return undefined;
+  const providers = personalKeyProviders
+    .map((provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider)
+    .join(', ');
+  return `available: included TeXRA access; personal API keys: ${providers}`;
 }
 
 const CLI_API_STATUS_ACTION_HINTS: Record<
@@ -76,12 +80,12 @@ export function formatCliApiStatusActionHint(
   ];
 }
 
-async function anyPersonalKeyPresent(): Promise<boolean> {
+async function personalKeyProviders(): Promise<string[]> {
   const secrets = platform().secrets;
   const origins = await Promise.all(
     API_PROVIDERS.map((provider) => lookupApiKeyOrigin(secrets, provider)),
   );
-  return origins.some((origin) => origin !== 'none');
+  return API_PROVIDERS.filter((_, index) => origins[index] !== 'none');
 }
 
 export async function loadCliApiStatusLines(
@@ -96,16 +100,20 @@ export async function loadCliApiStatusLines(
     `api: ${formatCliApiMode(mode)}`,
     formatCliAuthStatusLine(profile),
   ];
-  const hasPersonalKey =
+  const configuredPersonalKeyProviders =
     options.includeActionHint === true || profile.authenticated
-      ? await anyPersonalKeyPresent()
-      : false;
+      ? await personalKeyProviders()
+      : [];
+  const hasPersonalKey = configuredPersonalKeyProviders.length > 0;
   const actionHint = options.includeActionHint
     ? formatCliApiStatusActionHint(mode, profile, { hasPersonalKey })
     : undefined;
 
   if (profile.authenticated) {
-    const shadowWarning = formatApiKeyShadowWarning(true, hasPersonalKey);
+    const shadowWarning = formatApiKeyShadowWarning(
+      true,
+      configuredPersonalKeyProviders,
+    );
     if (shadowWarning) lines.push(shadowWarning);
   }
 

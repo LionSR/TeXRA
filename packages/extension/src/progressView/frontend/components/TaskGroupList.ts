@@ -7,9 +7,13 @@ import { classMap } from 'lit/directives/class-map.js';
 import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+// Local imports - stream state
+import { isInFlightPhase } from '@common/constants/streamStatus';
+
 // Local imports - shared schemas
 import {
   STREAM_PHASE,
+  StreamPhaseSchema,
   type GettingStartedAction,
   type LogMessageData,
   type TaskGroup,
@@ -30,11 +34,7 @@ import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatDuration } from '@utils/core';
 
 // Local imports - progress view constants
-import {
-  ACTIVE_STREAM_STATUSES,
-  ELEMENT_IDS,
-  GROUP_DOM_IDS,
-} from '../constants';
+import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
@@ -297,7 +297,7 @@ export class TaskGroupList extends LitElement {
   }
 
   /**
-   * Play sound when a run group completes. `STREAM_STATUS.STOPPED` folded
+   * Play sound when a run group completes. The former stopped status folded
    * `completed`/`cancelled` into one neutral bucket; the native
    * `TaskGroup.status` (#7993 step 3) keeps them apart, so this checks both
    * terminal-but-not-failed phases to preserve the prior "stopped" trigger
@@ -644,9 +644,8 @@ export class TaskGroupList extends LitElement {
     // with no messages the terminal buffer is empty and would render a blank
     // <pre>, so show the same "Run is starting" / idle text instead.
     if (this.messages.length === 0 && this.groups.length === 0) {
-      const active = this.streamStatus
-        ? ACTIVE_STREAM_STATUSES.has(this.streamStatus)
-        : false;
+      const parsedPhase = StreamPhaseSchema.safeParse(this.streamStatus);
+      const active = parsedPhase.success && isInFlightPhase(parsedPhase.data);
       return html`
         <div
           id=${ELEMENT_IDS.LOG_CONTENT}

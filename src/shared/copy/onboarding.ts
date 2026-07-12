@@ -14,7 +14,8 @@ export const ONBOARDING_CARD_TITLE = 'Welcome to TeXRA';
 /** State 0 choice 1. */
 export const ONBOARDING_CHOICE_CHATGPT = {
   label: 'Use ChatGPT subscription',
-  description: 'Codex models through ChatGPT Plus, Pro, or Team',
+  description:
+    'OpenAI models through ChatGPT Plus, Pro, or Team; no API key needed',
 } as const;
 
 /** State 0 choice 2. */

@@ -48,11 +48,9 @@ export function confirmCardKeyAction(
     case 'y':
       return 'approve';
     case 'n':
-      return 'reject';
+      return 'feedback';
     case 'a':
       return allowAlways ? 'approveAlways' : 'ignore';
-    case 'e':
-      return 'feedback';
     default:
       return 'ignore';
   }
@@ -60,7 +58,7 @@ export function confirmCardKeyAction(
 
 export function confirmCardKeyHints({
   approveLabel = 'approve',
-  rejectLabel = 'reject',
+  rejectLabel = 'reject & note',
   alwaysAllowLabel,
   extraActions = [],
 }: ConfirmCardHintOptions): ConfirmCardHintAction[] {
@@ -71,7 +69,6 @@ export function confirmCardKeyHints({
       ? []
       : [{ key: 'a', action: alwaysAllowLabel }]),
     ...extraActions,
-    { key: 'e', action: 'feedback' },
     { key: 'Esc', action: 'cancel' },
   ];
 }
@@ -104,12 +101,12 @@ function hintsFit(
 
 function compactHintAction(action: string): string {
   switch (action) {
-    case 'commands for session':
-      return 'cmd session';
+    case 'reject & note':
+      return 'reject';
+    case 'approve all':
+      return 'all';
     case 'approve edits for session':
       return 'edit session';
-    case 'feedback':
-      return 'note';
     default:
       return action;
   }
@@ -132,19 +129,11 @@ export function confirmCardKeyHintsForWidth(
   if (hintsFit(compactHints, options.maxColumns)) return compactHints;
 
   const withoutExtraActions = compactHints.filter(
-    (hint) => isCoreApprovalHint(hint) || hint.key === 'a' || hint.key === 'e',
+    (hint) => isCoreApprovalHint(hint) || hint.key === 'a',
   );
   if (hintsFit(withoutExtraActions, options.maxColumns)) {
     return withoutExtraActions;
   }
-
-  const withoutFeedback = compactHints.filter((hint) => hint.key !== 'e');
-  if (hintsFit(withoutFeedback, options.maxColumns)) return withoutFeedback;
-
-  const withFeedback = compactHints.filter(
-    (hint) => isCoreApprovalHint(hint) || hint.key === 'e',
-  );
-  if (hintsFit(withFeedback, options.maxColumns)) return withFeedback;
 
   const coreHints = compactHints.filter(isCoreApprovalHint);
   if (hintsFit(coreHints, options.maxColumns)) return coreHints;

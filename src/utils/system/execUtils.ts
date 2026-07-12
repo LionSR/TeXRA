@@ -235,7 +235,7 @@ export async function executeCommand(
     // spawns a single non-detached process and leaves all signalling to
     // execa's own `cancelSignal` / `forceKillAfterDelay` natives below; its
     // only hand-rolled piece is the signal-free stream-destroy backstop
-    // installed in its abort listener.
+    // armed for abort and timeout teardown.
     const terminateSubprocess = (signal: NodeJS.Signals): void => {
       const pid = subprocess.pid;
       if (!pid) return;
@@ -253,13 +253,20 @@ export async function executeCommand(
       }
     };
 
-    const installAbortListener = (onAbort: () => void): void => {
-      if (!options.signal) return;
-      options.signal.addEventListener('abort', onAbort, { once: true });
-      removeAbortListener = () => {
-        options.signal?.removeEventListener('abort', onAbort);
-      };
-      if (options.signal.aborted) onAbort();
+    const installAbortListener = (
+      onAbort: () => void,
+      armOnTimeout = false,
+    ): void => {
+      if (options.signal) {
+        options.signal.addEventListener('abort', onAbort, { once: true });
+        removeAbortListener = () => {
+          options.signal?.removeEventListener('abort', onAbort);
+        };
+        if (options.signal.aborted) onAbort();
+      }
+      if (armOnTimeout && options.timeout !== undefined) {
+        shellTimeoutId = setTimeout(onAbort, options.timeout);
+      }
     };
 
     let shellTimeout: number | undefined;
@@ -323,11 +330,12 @@ export async function executeCommand(
       // No signal is sent here — the array form intentionally keeps no
       // process-group semantics, so the descendant itself is left alone.
       installAbortListener(() => {
+        if (forceKillTimeoutId !== undefined) return;
         forceKillTimeoutId = setTimeout(() => {
           subprocess.stdout?.destroy();
           subprocess.stderr?.destroy();
         }, FORCE_KILL_DELAY_MS);
-      });
+      }, true);
     } else {
       installAbortListener(() => {
         shellAborted = true;
