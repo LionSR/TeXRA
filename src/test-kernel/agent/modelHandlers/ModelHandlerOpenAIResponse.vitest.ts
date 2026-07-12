@@ -30,6 +30,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
 import {
+  attachContextWindowError,
   hasContextWindowErrorMarker,
   isContextWindowError,
 } from '@common/errors/sdkErrorUtils';
@@ -864,6 +865,268 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.deepEqual(requests[2].input, rebuiltMessages);
     assert.equal(tokenCountCalls, 3);
     assert.equal(requests[2].max_output_tokens, 99990);
+  });
+
+  it('compacts before sending when the live pre-flight count crosses the threshold', async () => {
+    const handler = createHandler({
+      openRouterOnly: false,
+      contextWindow: 200000,
+    });
+    const compactCalls: ResponseInputItem[][] = [];
+    const requests: any[] = [];
+    let tokenCountCalls = 0;
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => {
+            tokenCountCalls += 1;
+            // Turn 2's live count lands between the 75% threshold (150k) and
+            // the 200k window: the stale cumulative from turn 1 (100k) would
+            // never have triggered, but the live count must.
+            return { input_tokens: tokenCountCalls === 2 ? 180000 : 1000 };
+          },
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse(`resp-${requests.length}`, {
+            input_tokens: 100000,
+          });
+        },
+      },
+    };
+    (
+      handler as unknown as { compactConversation: unknown }
+    ).compactConversation = async (
+      _client: unknown,
+      msgs: ResponseInputItem[],
+    ) => {
+      compactCalls.push(msgs);
+      const compacted = msgs.slice(-1);
+      (handler as unknown as { compactionResult: unknown }).compactionResult = {
+        sourceMessages: msgs,
+        compactedMessages: compacted,
+        tokensAfter: 1000,
+      };
+      return compacted;
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+
+    const secondTurn = createMessages(4);
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: secondTurn,
+      temperature: 0,
+    });
+
+    assert.equal(result.response.id, 'resp-2');
+    assert.equal(requests.length, 2);
+    assert.equal(compactCalls.length, 1);
+    assert.equal(tokenCountCalls, 3);
+    assert.deepEqual(requests[1].input, secondTurn.slice(-1));
+  });
+
+  it('recovers a pre-flight context-window overflow by dropping the chain and compacting', async () => {
+    const handler = createHandler({
+      openRouterOnly: false,
+      contextWindow: 200000,
+    });
+    const compactCalls: ResponseInputItem[][] = [];
+    const requests: any[] = [];
+    let tokenCountCalls = 0;
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => {
+            tokenCountCalls += 1;
+            // Turn 2's pre-flight count overflows the 200k window (the count
+            // includes server-side chained history); the internal retry after
+            // dropping the chain and compacting fits again.
+            return { input_tokens: tokenCountCalls === 2 ? 300000 : 1000 };
+          },
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse(`resp-${requests.length}`, {
+            input_tokens: 100000,
+          });
+        },
+      },
+    };
+    (
+      handler as unknown as {
+        compactConversation: unknown;
+        compactionResult: unknown;
+      }
+    ).compactConversation = async (
+      _client: unknown,
+      msgs: ResponseInputItem[],
+    ) => {
+      compactCalls.push(msgs);
+      const compacted = msgs.slice(-1);
+      (handler as unknown as { compactionResult: unknown }).compactionResult = {
+        sourceMessages: msgs,
+        compactedMessages: compacted,
+      };
+      return compacted;
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+
+    const secondTurn = createMessages(4);
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: secondTurn,
+      temperature: 0,
+    });
+
+    // The overflow never escaped to the caller: the oversized chained request
+    // was never sent, and the recovered attempt went out unchained with the
+    // compacted transcript.
+    assert.equal(result.response.id, 'resp-2');
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].previous_response_id, undefined);
+    assert.equal(compactCalls.length, 1);
+    assert.equal(tokenCountCalls, 3);
+    assert.deepEqual(requests[1].input, secondTurn.slice(-1));
+  });
+
+  it('recovers an unchained pre-flight overflow by compacting (no previous_response_id to drop)', async () => {
+    // cursor[bot]/claude[bot] review finding on this PR: recovery used to
+    // require hasPreviousResponseId(), so after invalidateChain() or on a
+    // non-chaining route an overflow failed hard without ever attempting
+    // compaction — a regression vs the old cumulative-threshold trigger.
+    const handler = setupHandler(
+      new NonChainingResponseHandler(
+        createConfig({ openRouterOnly: false, contextWindow: 200000 }),
+      ),
+    );
+    const compactCalls: ResponseInputItem[][] = [];
+    const requests: any[] = [];
+    let tokenCountCalls = 0;
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => {
+            tokenCountCalls += 1;
+            return { input_tokens: tokenCountCalls === 2 ? 300000 : 1000 };
+          },
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse(`resp-${requests.length}`, {
+            input_tokens: 100000,
+          });
+        },
+      },
+    };
+    (
+      handler as unknown as { compactConversation: unknown }
+    ).compactConversation = async (
+      _client: unknown,
+      msgs: ResponseInputItem[],
+    ) => {
+      compactCalls.push(msgs);
+      const compacted = msgs.slice(-1);
+      (handler as unknown as { compactionResult: unknown }).compactionResult = {
+        sourceMessages: msgs,
+        compactedMessages: compacted,
+        tokensAfter: 1000,
+      };
+      return compacted;
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+
+    const secondTurn = createMessages(4);
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: secondTurn,
+      temperature: 0,
+    });
+
+    assert.equal(result.response.id, 'resp-2');
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].previous_response_id, undefined);
+    assert.equal(compactCalls.length, 1);
+    assert.deepEqual(requests[1].input, secondTurn.slice(-1));
+  });
+
+  it('bounds failed compaction recovery and preserves unchained history', async () => {
+    const handler = createHandler({
+      openRouterOnly: false,
+      contextWindow: 200000,
+    });
+    const compactCalls: ResponseInputItem[][] = [];
+    const requests: any[] = [];
+    let tokenCountCalls = 0;
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => {
+            tokenCountCalls += 1;
+            return {
+              input_tokens:
+                tokenCountCalls === 2 || tokenCountCalls === 3 ? 180000 : 1000,
+            };
+          },
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          if (requests.length > 1) {
+            const error = new Error('maximum context length exceeded');
+            attachContextWindowError(error);
+            throw error;
+          }
+          return createResponse(`resp-${requests.length}`, {
+            input_tokens: 100000,
+          });
+        },
+      },
+    };
+    (
+      handler as unknown as { compactConversation: unknown }
+    ).compactConversation = async (
+      _client: unknown,
+      msgs: ResponseInputItem[],
+    ) => {
+      compactCalls.push(msgs);
+      return msgs;
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+
+    const secondTurn = createMessages(4);
+    await assert.rejects(
+      handler.createResponse({
+        client: client as any,
+        messages: secondTurn,
+        temperature: 0,
+      }),
+      /maximum context length exceeded/,
+    );
+
+    assert.equal(compactCalls.length, 2);
+    assert.equal(requests.length, 3);
+    assert.equal(requests[1].previous_response_id, 'resp-1');
+    assert.equal(requests[2].previous_response_id, undefined);
+    assert.deepEqual(requests[2].input, secondTurn);
   });
 
   it('tags the fallback hard-failure throw with the context-window marker', () => {
