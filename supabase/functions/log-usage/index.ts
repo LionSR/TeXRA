@@ -12,6 +12,13 @@
  * Endpoints:
  * - POST /log-usage - Log a batch of usage entries
  *
+ * Response contract:
+ * - Complete writes return success with the exact accepted entry count.
+ * - Malformed JSON and invalid batches are rejected atomically with
+ *   `success: false`, `accepted: 0`, and `retryable: false`.
+ * - Authentication and operational failures omit the permanent-rejection
+ *   marker so clients retain and retry the original batch identifier.
+ *
  * Database Requirements:
  * - Tables: usage_logs, subscription_usage_logs
  * - RPCs: usage_logs_upsert, subscription_usage_logs_upsert (service role only)
