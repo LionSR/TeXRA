@@ -23,6 +23,9 @@ import type { CliModelAccess } from '../runtime/modelAccess';
 export interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];
   readonly resumeItems?: readonly CliOrchestrationItem[];
+  readonly agentItems?: readonly CliOrchestrationItem[];
+  readonly teamItems?: readonly CliOrchestrationItem[];
+  readonly accountItems?: readonly CliOrchestrationItem[];
   /** Model access list for the second step. An empty list means unknown
    *  registry state, so the launcher still starts chats with runtime defaults;
    *  a known list with no runnable model disables chat/team starts. */
@@ -207,12 +210,25 @@ export function OrchestrationApp(
 ): React.JSX.Element {
   const app = useApp();
   const { columns, rows } = useWindowSize();
-  const { items, modelItems } = orchestrationModelAccessView(
+  const modelAccessView = orchestrationModelAccessView(
     props.items,
     props.models,
     props.apiMode,
     { allowDefaultModelLaunch: props.allowDefaultModelLaunch },
   );
+  const { items, modelItems } = modelAccessView;
+  const agentItems = orchestrationModelAccessView(
+    props.agentItems ?? [],
+    props.models,
+    props.apiMode,
+    { allowDefaultModelLaunch: props.allowDefaultModelLaunch },
+  ).items;
+  const teamItems = orchestrationModelAccessView(
+    props.teamItems ?? [],
+    props.models,
+    props.apiMode,
+    { allowDefaultModelLaunch: props.allowDefaultModelLaunch },
+  ).items;
   const listFooterHints = orchestrationFooterHints(items);
   const statusLines = props.statusLines ?? [];
   type LauncherStep =
@@ -220,13 +236,21 @@ export function OrchestrationApp(
     | {
         readonly kind: 'model';
         readonly action: CliOrchestrationModelPickAction;
+        readonly backTo: 'launcher' | 'agent' | 'team';
       }
     | { readonly kind: 'model-access' }
-    | { readonly kind: 'resume' };
+    | { readonly kind: 'resume' }
+    | { readonly kind: 'agent' }
+    | { readonly kind: 'team' }
+    | { readonly kind: 'account' };
   const [step, setStep] = useState<LauncherStep>({ kind: 'launcher' });
   const pending = step.kind === 'model' ? step.action : undefined;
+  const pendingBackTo = step.kind === 'model' ? step.backTo : 'launcher';
   const modelAccessOpen = step.kind === 'model-access';
   const resumeOpen = step.kind === 'resume';
+  const agentOpen = step.kind === 'agent';
+  const teamOpen = step.kind === 'team';
+  const accountOpen = step.kind === 'account';
   const modelAccessItems = props.modelAccess
     ? buildModelAccessItems(props.modelAccess)
     : [];
@@ -243,12 +267,18 @@ export function OrchestrationApp(
     ? ['Model access', 'Choose how TeXRA should authenticate model calls.']
     : resumeOpen
       ? ['Resume', 'Choose a previous session to continue.']
-      : pending
-        ? [
-            `${modelStepTitle} · ${formatCliApiMode(props.apiMode)}`,
-            modelStepSubtitle,
-          ]
-        : [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
+      : agentOpen
+        ? ['Agent', 'Choose one agent for this session.']
+        : teamOpen
+          ? ['Team', 'Choose a team for this session.']
+          : accountOpen
+            ? ['Account', 'Sign in, change account, or sign out.']
+            : pending
+              ? [
+                  `${modelStepTitle} · ${formatCliApiMode(props.apiMode)}`,
+                  modelStepSubtitle,
+                ]
+              : [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
   const layout = orchestrationLauncherLayout({
     rows,
     columns,
@@ -256,12 +286,22 @@ export function OrchestrationApp(
       ? modelAccessItems.length
       : resumeOpen
         ? (props.resumeItems?.length ?? 0)
-        : pending
-          ? modelItems.length
-          : items.length,
+        : agentOpen
+          ? agentItems.length
+          : teamOpen
+            ? teamItems.length
+            : accountOpen
+              ? (props.accountItems?.length ?? 0)
+              : pending
+                ? modelItems.length
+                : items.length,
     headerLines,
-    statusLines: pending ? [] : statusLines,
-    footerHints: pending ? [] : listFooterHints,
+    statusLines: step.kind === 'launcher' ? statusLines : [],
+    footerHints: teamOpen
+      ? orchestrationFooterHints(teamItems)
+      : step.kind === 'launcher'
+        ? listFooterHints
+        : [],
   });
 
   const finish = (action: CliOrchestrationAction): void => {
@@ -278,8 +318,27 @@ export function OrchestrationApp(
       setStep({ kind: 'resume' });
       return;
     }
+    if (action.kind === 'browse-agents') {
+      setStep({ kind: 'agent' });
+      return;
+    }
+    if (action.kind === 'browse-teams') {
+      setStep({ kind: 'team' });
+      return;
+    }
+    if (action.kind === 'browse-accounts') {
+      setStep({ kind: 'account' });
+      return;
+    }
     if (isCliOrchestrationModelPickAction(action) && modelItems.length > 0) {
-      setStep({ kind: 'model', action });
+      setStep({
+        kind: 'model',
+        action,
+        backTo:
+          step.kind === 'agent' || step.kind === 'team'
+            ? step.kind
+            : 'launcher',
+      });
     } else {
       finish(action);
     }
@@ -343,6 +402,56 @@ export function OrchestrationApp(
     );
   }
 
+  if (agentOpen || teamOpen || accountOpen) {
+    const picker = agentOpen
+      ? {
+          title: 'Agent',
+          subtitle: 'Choose one agent for this session.',
+          items: agentItems,
+        }
+      : teamOpen
+        ? {
+            title: 'Team',
+            subtitle: 'Choose a team for this session.',
+            items: teamItems,
+          }
+        : {
+            title: 'Account',
+            subtitle: 'Sign in, change account, or sign out.',
+            items: props.accountItems ?? [],
+          };
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <Text bold color="cyan">
+          {picker.title}
+        </Text>
+        <Text dimColor>{picker.subtitle}</Text>
+        <Box marginTop={1}>
+          <Select
+            key={`orchestration-${step.kind}-picker`}
+            items={picker.items}
+            maxVisibleItems={layout.maxVisibleItems}
+            showOverflow={layout.showOverflow}
+            onSelect={onItemSelect}
+            onCancel={() => setStep({ kind: 'launcher' })}
+          />
+        </Box>
+        {layout.footerHints.length > 0 ? (
+          <Box marginTop={1} flexDirection="column">
+            {layout.footerHints.map((hint) => (
+              <Text key={hint} dimColor wrap="wrap">
+                {hint}
+              </Text>
+            ))}
+          </Box>
+        ) : null}
+        <Box marginTop={1}>
+          <KeyHints hints={modelPickKeyHints()} confirmCancel={false} />
+        </Box>
+      </Box>
+    );
+  }
+
   if (pending) {
     return (
       <Box flexDirection="column" paddingX={1}>
@@ -359,7 +468,7 @@ export function OrchestrationApp(
             maxVisibleItems={layout.maxVisibleItems}
             showOverflow={layout.showOverflow}
             onSelect={(model) => finish({ ...pending, model })}
-            onCancel={() => setStep({ kind: 'launcher' })}
+            onCancel={() => setStep({ kind: pendingBackTo })}
           />
         </Box>
         <Box marginTop={1}>
@@ -373,7 +482,7 @@ export function OrchestrationApp(
     <Box flexDirection="column" paddingX={1}>
       <Box gap={1}>
         <Text bold color="cyan">
-          TeXRA
+          {'{ T } TeXRA'}
         </Text>
         <Text dimColor>v{props.version}</Text>
       </Box>
@@ -420,6 +529,9 @@ export interface RunOrchestrationTuiOptions {
    *  hidden configured model. */
   readonly models: readonly CliModelAccess[];
   readonly resumeItems?: readonly CliOrchestrationItem[];
+  readonly agentItems?: readonly CliOrchestrationItem[];
+  readonly teamItems?: readonly CliOrchestrationItem[];
+  readonly accountItems?: readonly CliOrchestrationItem[];
   readonly apiMode: CliApiMode;
   readonly modelAccess?: CliModelAccessStatus;
   readonly version: string;
@@ -443,6 +555,9 @@ export async function runOrchestrationTui(
       <OrchestrationApp
         items={items}
         resumeItems={options.resumeItems}
+        agentItems={options.agentItems}
+        teamItems={options.teamItems}
+        accountItems={options.accountItems}
         models={options.models}
         apiMode={options.apiMode}
         modelAccess={options.modelAccess}

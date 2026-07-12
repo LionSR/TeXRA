@@ -65,6 +65,17 @@ export async function selectCliModelAccessRoute(
     };
   }
 
+  if (isPreferCodexSubscription()) {
+    const update = await setPreferCodexSubscription(false);
+    invalidateModelOptionsCache();
+    return {
+      apiMode: effectiveCliApiMode(context),
+      message: update.effective
+        ? `Prefer ChatGPT subscription remains enabled because a more specific setting overrides ${update.target} config.`
+        : 'Prefer ChatGPT subscription disabled for Codex models.',
+    };
+  }
+
   const status = await getCodexStatus();
   let accountLabel = status.email ?? status.accountId ?? 'your account';
   if (!status.signedIn) {
@@ -85,7 +96,7 @@ export async function selectCliModelAccessRoute(
   return {
     apiMode: effectiveCliApiMode(context),
     message: update.effective
-      ? `Model access set to ChatGPT subscription (${accountLabel}).`
+      ? `Prefer ChatGPT subscription enabled for Codex models (${accountLabel}).`
       : 'ChatGPT sign-in succeeded, but a more specific setting keeps subscription access disabled.',
   };
 }

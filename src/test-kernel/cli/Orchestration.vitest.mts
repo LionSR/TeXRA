@@ -10,8 +10,11 @@ import {
   orchestrationWrappedLineRows,
 } from '@cli/orchestration/runOrchestrationTui';
 import {
+  buildCliAccountItems,
+  buildCliAgentItems,
   buildCliOrchestrationItems,
   buildCliResumeItems,
+  buildCliTeamItems,
   buildModelAccessItems,
   orchestrationModelAccessView,
 } from '@cli/runtime/orchestration';
@@ -298,8 +301,8 @@ describe('CLI orchestration items', () => {
     expect(buildModelAccessItems(status)).toEqual([
       {
         value: 'chatgpt',
-        label: 'ChatGPT subscription',
-        description: 'Use researcher@example.com with ChatGPT',
+        label: 'Prefer ChatGPT subscription',
+        description: 'Off · researcher@example.com',
       },
       {
         value: 'included',
@@ -314,7 +317,65 @@ describe('CLI orchestration items', () => {
     ]);
   });
 
-  it('groups resumable executions into one launcher row before recent agents', () => {
+  it('offers account management as one startup row with provider actions', () => {
+    const account = {
+      texraSignedIn: true,
+      texraAccountLabel: 'researcher@example.com',
+      chatGptSignedIn: false,
+    };
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [],
+      toolUseAgents: [],
+      account,
+    });
+
+    expect(items.map((item) => item.label)).toEqual([
+      'New chat',
+      'Account',
+      'Help',
+    ]);
+    expect(buildCliAccountItems(account).map((item) => item.value)).toEqual([
+      { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
+      { kind: 'account', provider: 'texra', operation: 'switch' },
+      { kind: 'account', provider: 'texra', operation: 'sign-out' },
+    ]);
+  });
+
+  it('offers both sign-in paths when no account is present', () => {
+    const account = {
+      texraSignedIn: false,
+      chatGptSignedIn: false,
+    };
+
+    expect(buildCliAccountItems(account).map((item) => item.value)).toEqual([
+      { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
+      { kind: 'account', provider: 'texra', operation: 'sign-in' },
+    ]);
+    expect(
+      buildModelAccessItems({
+        active: 'personal',
+        chatGptSignedIn: false,
+        texraSignedIn: false,
+      })[1]?.description,
+    ).toBe('Sign in through Account to use included models');
+  });
+
+  it('does not offer to sign out an environment-managed relay token', () => {
+    const items = buildCliAccountItems({
+      texraSignedIn: true,
+      texraCredentialSource: 'relayToken',
+      chatGptSignedIn: false,
+    });
+
+    expect(items[1]).toMatchObject({
+      label: 'TeXRA relay token',
+      disabled: true,
+      description: 'Managed by the TEXRA_RELAY_TOKEN environment variable',
+    });
+  });
+
+  it('groups resumable executions into one launcher row before agent selection', () => {
     const history = [
       historyEntry('aaaaaaaaaaaa', {
         agent: 'review',
@@ -338,8 +399,7 @@ describe('CLI orchestration items', () => {
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
       'Resume',
-      'Chat with review',
-      'Chat with orchestrator',
+      'Agent',
       'Help',
     ]);
     expect(items[1]?.description).toBe('2 resumable sessions');
@@ -349,7 +409,7 @@ describe('CLI orchestration items', () => {
     ]);
   });
 
-  it('hides delegated child executions from startup recent rows', () => {
+  it('hides delegated child executions from the resume menu', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [],
       history: [
@@ -380,7 +440,7 @@ describe('CLI orchestration items', () => {
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
       'Resume',
-      'Chat with orchestrator',
+      'Agent',
       'Help',
     ]);
   });
@@ -401,8 +461,7 @@ describe('CLI orchestration items', () => {
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
-      'Chat with review',
-      'Chat with orchestrator',
+      'Agent',
       'Help',
     ]);
   });
@@ -436,86 +495,29 @@ describe('CLI orchestration items', () => {
     );
   });
 
-  it('filters recent agent entries to known tool-use agents', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [
-        historyEntry('aaaaaaaaaaaa', {
-          agent: 'polish',
-          category: AgentCategory.Workflow,
-        }),
-        historyEntry('bbbbbbbbbbbb', { agent: 'missing' }),
-        historyEntry('cccccccccccc', { agent: 'review' }),
-      ],
-      toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
+  it('orders assistant and orchestrator first in the single-agent menu', () => {
+    const items = buildCliAgentItems([
+      toolUseAgent('review'),
+      toolUseAgent('orchestrator'),
+      toolUseAgent('assistant'),
+      toolUseAgent('research'),
+      toolUseAgent('simplifier'),
+    ]);
+
+    expect(items.map((item) => item.label)).toEqual([
+      'assistant',
+      'orchestrator',
+      'research',
+      'review',
+    ]);
+    expect(items[0]?.value).toEqual({
+      kind: 'chat',
+      agent: 'builtInToolUse:assistant',
     });
-
-    expect(items.map((item) => item.label)).toContain('Chat with review');
-    expect(items.map((item) => item.label)).not.toContain('Chat with polish');
-    expect(items.map((item) => item.label)).not.toContain('Chat with missing');
-  });
-
-  it('does not offer simplifier as an inferred startup chat agent', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [
-        historyEntry('aaaaaaaaaaaa', { agent: 'simplifier' }),
-        historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
-      ],
-      toolUseAgents: [
-        toolUseAgent('assistant'),
-        toolUseAgent('simplifier'),
-        toolUseAgent('review'),
-      ],
-    });
-
-    expect(items.map((item) => item.label)).toContain('Chat with review');
-    expect(items.map((item) => item.label)).not.toContain(
-      'Chat with simplifier',
-    );
-  });
-
-  it('does not duplicate the default chat agent in startup recent agents', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [
-        historyEntry('aaaaaaaaaaaa', { agent: 'assistant' }),
-        historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
-      ],
-      toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
-    });
-
-    expect(items.map((item) => item.label)).toContain('New chat');
-    expect(items.map((item) => item.label)).toContain('Chat with review');
-    expect(items.map((item) => item.label)).not.toContain(
-      'Chat with assistant',
-    );
-  });
-
-  it('does not duplicate the roster default when assistant is hidden', () => {
-    // A scoped roster hides `assistant`, so New chat starts the roster-resolved
-    // default (`research`). It must not also appear as a "Chat with research"
-    // recent row, while a non-default recent agent still does.
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [
-        historyEntry('aaaaaaaaaaaa', { agent: 'research' }),
-        historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
-      ],
-      toolUseAgents: [toolUseAgent('research'), toolUseAgent('review')],
-    });
-
-    expect(items.map((item) => item.label)).toContain('New chat');
-    expect(items.map((item) => item.label)).toContain('Chat with review');
-    expect(items.map((item) => item.label)).not.toContain('Chat with research');
   });
 
   it('lists team presets as runnable orchestration actions', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [readyPresetPlan()],
-      history: [],
-      toolUseAgents: [],
-    });
+    const items = buildCliTeamItems([readyPresetPlan()], {});
 
     expect(items.find((item) => item.label === 'Team physicist')).toEqual(
       expect.objectContaining({
@@ -530,28 +532,32 @@ describe('CLI orchestration items', () => {
   });
 
   it('lists every team preset so the user can switch between teams', () => {
+    const plans = [
+      readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),
+      readyPresetPlan({ id: 'physicist', name: 'Physicist' }),
+      readyPresetPlan({ id: 'mathematician', name: 'Mathematician' }),
+    ];
     const items = buildCliOrchestrationItems({
-      presetPlans: [
-        readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),
-        readyPresetPlan({ id: 'physicist', name: 'Physicist' }),
-        readyPresetPlan({ id: 'mathematician', name: 'Mathematician' }),
-      ],
+      presetPlans: plans,
       history: [],
       toolUseAgents: [],
     });
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
+      'Team',
+      'Help',
+    ]);
+    expect(buildCliTeamItems(plans, {}).map((item) => item.label)).toEqual([
       'Team lean-project',
       'Team physicist',
       'Team mathematician',
-      'Help',
     ]);
   });
 
   it('does not promote built-in team members to fallback roots', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [
+    const items = buildCliTeamItems(
+      [
         presetPlan(
           {
             id: 'lean-project',
@@ -564,9 +570,8 @@ describe('CLI orchestration items', () => {
           },
         ),
       ],
-      history: [],
-      toolUseAgents: [],
-    });
+      { includeLoginHint: true },
+    );
 
     expect(items.find((item) => item.label === 'Team lean-project')).toEqual(
       expect.objectContaining({
@@ -581,14 +586,13 @@ describe('CLI orchestration items', () => {
   });
 
   it('dedupes launcher footer hints from unavailable teams', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [
+    const items = buildCliTeamItems(
+      [
         presetPlan({ id: 'lean-project', name: 'Lean Project' }),
         presetPlan({ id: 'physicist', name: 'Physicist' }),
       ],
-      history: [],
-      toolUseAgents: [],
-    });
+      { includeLoginHint: true },
+    );
 
     expect(orchestrationFooterHints(items)).toEqual([
       'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
@@ -597,12 +601,10 @@ describe('CLI orchestration items', () => {
   });
 
   it('omits the launcher login hint after a remote team load attempt', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [presetPlan({ id: 'lean-project', name: 'Lean Project' })],
-      history: [],
-      toolUseAgents: [],
-      includeMultiAgentLoginHint: false,
-    });
+    const items = buildCliTeamItems(
+      [presetPlan({ id: 'lean-project', name: 'Lean Project' })],
+      { includeLoginHint: false },
+    );
 
     expect(orchestrationFooterHints(items)).toEqual([
       'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
@@ -610,11 +612,10 @@ describe('CLI orchestration items', () => {
   });
 
   it('keeps team launch actions keyed by preset id only', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
-      history: [],
-      toolUseAgents: [],
-    });
+    const items = buildCliTeamItems(
+      [presetPlan({ id: 'physicist', name: 'Physicist' })],
+      {},
+    );
 
     expect(
       items.find((item) => item.label === 'Team physicist')?.value,
@@ -643,11 +644,7 @@ describe('CLI orchestration items', () => {
     const disabledLabels = view.items
       .filter((item) => item.disabled)
       .map((item) => item.label);
-    expect(disabledLabels).toEqual([
-      'New chat',
-      'Chat with review',
-      'Team physicist',
-    ]);
+    expect(disabledLabels).toEqual(['New chat']);
     expect(
       view.items.find((item) => item.label === 'Resume'),
     ).not.toHaveProperty('disabled');
@@ -660,8 +657,8 @@ describe('CLI orchestration items', () => {
 
   it('preserves unavailable team descriptions when model access is also blocked', () => {
     const view = orchestrationModelAccessView(
-      buildCliOrchestrationItems({
-        presetPlans: [
+      buildCliTeamItems(
+        [
           presetPlan(
             {
               id: 'lean-project',
@@ -674,18 +671,12 @@ describe('CLI orchestration items', () => {
             },
           ),
         ],
-        history: [],
-        toolUseAgents: [],
-      }),
+        {},
+      ),
       [modelAccess('deepseekT', 'provider-key', false)],
       'personal',
     );
 
-    expect(view.items[0]).toMatchObject({
-      label: 'New chat',
-      disabled: true,
-      description: 'No personal API-key models are runnable',
-    });
     expect(
       view.items.find((item) => item.label === 'Team lean-project'),
     ).toMatchObject({

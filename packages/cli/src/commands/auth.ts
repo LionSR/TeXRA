@@ -270,6 +270,17 @@ async function runLoginCommand(
   });
 }
 
+/** Run the normal interactive TeXRA sign-in flow from another CLI surface. */
+export function runInteractiveCliLogin(
+  context: CliContext,
+  options: { readonly selectAccount?: boolean } = {},
+): Promise<number> {
+  return runLoginCommand(
+    context,
+    loginInitFromArgs({ selectAccount: options.selectAccount }),
+  );
+}
+
 export const logoutCommand = defineCliCommand({
   meta: { name: 'logout', description: 'Sign out of TeXRA' },
   args: {

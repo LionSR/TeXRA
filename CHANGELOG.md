@@ -49,8 +49,9 @@ All notable changes to this project will be documented in this file.
   subscription, included TeXRA access, or personal API keys before starting a
   session. ChatGPT-only users can select all compatible OpenAI models without
   configuring an OpenAI API key.
-- **Startup and settings lists are easier to scan** — resumable sessions now
-  live behind one Resume entry, and `/config` first groups settings by subject.
+- **Startup and settings lists are easier to scan** — resumable sessions,
+  agents, and teams now live behind one entry each; the launcher also provides
+  account sign-in and sign-out controls. `/config` groups settings by subject.
 
 #### Bug Fixes
 

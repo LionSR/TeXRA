@@ -128,8 +128,24 @@ describe('CLI model access routes', () => {
     );
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result.message).toBe(
-      'Model access set to ChatGPT subscription (user@example.com).',
+      'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
     );
     expect(result.apiMode).toBe('personal');
+  });
+
+  it('uses the ChatGPT row as a preference switch when already enabled', async () => {
+    mocks.isPreferCodexSubscription.mockReturnValue(true);
+
+    const result = await selectCliModelAccessRoute(context, 'chatgpt', {
+      writeProgress: vi.fn(),
+    });
+
+    expect(mocks.signInCliChatGpt).not.toHaveBeenCalled();
+    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
+    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
+    expect(result).toEqual({
+      apiMode: 'personal',
+      message: 'Prefer ChatGPT subscription disabled for Codex models.',
+    });
   });
 });
