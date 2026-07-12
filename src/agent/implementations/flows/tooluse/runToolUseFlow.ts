@@ -8,6 +8,7 @@ import { getExecutionStore } from '@agent/storage';
 import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,
+  modelHandlersShareConversationFormat,
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
 import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
@@ -266,10 +267,9 @@ export async function runToolUseFlow<C = unknown>(
     const previousHandler = services.modelHandler;
     const nextHandler = (await createModelHandler(
       nextConfig,
+      setting.agentCategory,
     )) as ToolUseServices<C>['modelHandler'];
-    // Backstop for untagged/custom handlers and future route drift. This is a
-    // constructor-reference comparison, so CLI minification cannot affect it.
-    if (nextHandler.constructor !== previousHandler.constructor) {
+    if (!modelHandlersShareConversationFormat(previousHandler, nextHandler)) {
       nextHandler.dispose();
       throw new Error(MODEL_SWITCH_DIFFERENT_FORMAT_ERROR);
     }
