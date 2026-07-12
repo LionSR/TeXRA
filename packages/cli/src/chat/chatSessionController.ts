@@ -83,6 +83,37 @@ import {
 } from './tui/state/transcript';
 import { projectStreamTranscript } from './tui/state/transcriptProjection';
 
+interface InterruptedFollowUp {
+  readonly text: string;
+  readonly mediaFiles?: readonly string[] | undefined;
+  readonly displayText?: string | undefined;
+}
+
+type InterruptedFollowUpAdmission =
+  | { readonly kind: 'not_interrupted' }
+  | {
+      readonly kind: 'accepted';
+      readonly streamId: StreamTabId;
+      readonly completion: Promise<boolean>;
+    };
+
+interface InterruptedContinuationBatch {
+  readonly streamId: StreamTabId;
+  readonly followUps: InterruptedFollowUp[];
+  completion: Promise<boolean>;
+  superseded: boolean;
+}
+
+interface SupersededInterruptedRecovery {
+  readonly streamId: StreamTabId;
+  readonly followUps: readonly InterruptedFollowUp[];
+}
+
+interface AutoResumeOptions {
+  readonly extraFollowUps?: readonly InterruptedFollowUp[];
+  readonly onFollowUpQueueReady?: () => void;
+}
+
 // ---------------------------------------------------------------------------
 // Reusable config builders & execution-registration helpers
 // (moved from runChatTui.tsx — host-neutral, no Ink dependency)
@@ -168,6 +199,15 @@ export interface ChatSessionController {
   stop(): void;
 
   /**
+   * Atomically admit a message into an interrupted root conversation.
+   * Messages arriving during teardown share one resume and are replayed in
+   * admission order.
+   */
+  admitInterruptedFollowUp(
+    followUp: InterruptedFollowUp,
+  ): InterruptedFollowUpAdmission;
+
+  /**
    * Attempt to resume a queued follow-up target from the CLI platform port.
    * Returns true only when this controller accepts the target resume.
    */
@@ -204,6 +244,48 @@ export function createChatSessionController(
     followUpQueue,
     snapshotStore,
   } = init;
+  let interruptedContinuation: InterruptedContinuationBatch | undefined;
+
+  const supersedeInterruptedRecovery = ():
+    SupersededInterruptedRecovery | undefined => {
+    const streamId = session.interruptedStreamId;
+    const followUps = interruptedContinuation
+      ? [...interruptedContinuation.followUps]
+      : [];
+    if (interruptedContinuation) {
+      interruptedContinuation.superseded = true;
+      interruptedContinuation = undefined;
+    }
+    session.interruptedStreamId = undefined;
+    return streamId ? { streamId, followUps } : undefined;
+  };
+
+  const enqueueRecoveryFollowUps = (
+    recovery: SupersededInterruptedRecovery | undefined,
+    streamId: StreamTabId,
+  ): void => {
+    for (const followUp of recovery?.followUps ?? []) {
+      defaultSession().followUps.enqueue(streamId, followUp, { force: true });
+    }
+    if (recovery?.followUps.length) {
+      defaultSession().events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateQueuedFollowUps',
+          payload: { streamId },
+        },
+      });
+    }
+  };
+
+  const restoreInterruptedRecovery = (
+    recovery: SupersededInterruptedRecovery | undefined,
+  ): void => {
+    const streamId = session.interruptedStreamId ?? recovery?.streamId;
+    if (!streamId) return;
+    session.interruptedStreamId = streamId;
+    enqueueRecoveryFollowUps(recovery, streamId);
+  };
 
   // -----------------------------------------------------------------------
   // Internal helpers
@@ -212,6 +294,7 @@ export function createChatSessionController(
   const interruptActiveRun = (): void => {
     clearApprovals();
     if (!session.streamId) return;
+    session.interruptedStreamId = session.streamId;
     defaultSession().executions.stopAgentStream(session.streamId, {
       detachActiveChildren: detachSubagentsOnStop(),
       runtimeHost: session.runtimeHost,
@@ -277,6 +360,7 @@ export function createChatSessionController(
   // -----------------------------------------------------------------------
 
   const startRootRun = (config: AgentConfigPayload): void => {
+    session.interruptedStreamId = undefined;
     const currentModel = config.model;
     const sessionContext = getSessionContext(currentModel);
     patchSessionMeta({
@@ -362,9 +446,11 @@ export function createChatSessionController(
       return;
     }
 
+    const supersededRecovery = supersedeInterruptedRecovery();
     try {
       const resolution = preResolved ?? (await resolveCliResumeSnapshot(id));
       if (resolution.kind !== 'toolUse') {
+        restoreInterruptedRecovery(supersededRecovery);
         appendLocalErrorTranscript(explainNonResumable(resolution, id));
         markChatTuiRunCompleted(session);
         resolveRunPromise();
@@ -414,6 +500,7 @@ export function createChatSessionController(
       // matching `tryResumeStream()`'s stop-check after its own preparatory
       // awaits — instead of starting an agent the user already cancelled.
       if (session.stopRequested) {
+        restoreInterruptedRecovery(supersededRecovery);
         finalize();
         resolveRunPromise();
         return;
@@ -424,6 +511,10 @@ export function createChatSessionController(
           resumeToolUseFromSnapshot(resolution.snapshot, runtimeHost, {
             approvalPromptsUnavailable: approvalsUnavailable,
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+            drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({
+              ...followUp,
+              origin: 'user' as const,
+            })),
             isCancellationRequested: () => session.stopRequested,
           }),
         )
@@ -448,13 +539,17 @@ export function createChatSessionController(
       // interface contract.
       runChain.then(resolveRunPromise, rejectRunPromise);
     } catch (error: unknown) {
+      restoreInterruptedRecovery(supersededRecovery);
       reportRunFailure(error);
       markChatTuiRunCompleted(session);
       resolveRunPromise();
     }
   };
 
-  const tryResumeStream = (streamId: StreamTabId): Promise<boolean> => {
+  const tryResumeStream = (
+    streamId: StreamTabId,
+    options: AutoResumeOptions = {},
+  ): Promise<boolean> => {
     let resolveRun: (resumed: boolean) => void = () => {};
     let rejectRun: (error: unknown) => void = () => {};
     const runPromise = new Promise<boolean>((resolve, reject) => {
@@ -529,6 +624,15 @@ export function createChatSessionController(
                 approvalPromptsUnavailable: approvalsUnavailable,
                 runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
                 allowWaitingResult: true,
+                extraFollowUps: options.extraFollowUps,
+                onFollowUpQueueReady: () => {
+                  if (options.onFollowUpQueueReady) {
+                    options.onFollowUpQueueReady();
+                  } else {
+                    const recovery = supersedeInterruptedRecovery();
+                    enqueueRecoveryFollowUps(recovery, streamId);
+                  }
+                },
                 isCancellationRequested: () => session.stopRequested,
                 onResult: (result) => {
                   resumedToWaiting = result.outcome === STREAM_PHASE.WAITING;
@@ -575,6 +679,63 @@ export function createChatSessionController(
     return runPromise;
   };
 
+  const admitInterruptedFollowUp = (
+    followUp: InterruptedFollowUp,
+  ): InterruptedFollowUpAdmission => {
+    if (interruptedContinuation) {
+      interruptedContinuation.followUps.push(followUp);
+      return {
+        kind: 'accepted',
+        streamId: interruptedContinuation.streamId,
+        completion: interruptedContinuation.completion,
+      };
+    }
+
+    if (!session.interruptedStreamId) {
+      return { kind: 'not_interrupted' };
+    }
+
+    const batch: InterruptedContinuationBatch = {
+      streamId: session.interruptedStreamId,
+      followUps: [followUp],
+      completion: Promise.resolve(false),
+      superseded: false,
+    };
+    batch.completion = (async () => {
+      await session.runPromise?.catch(() => undefined);
+      if (batch.superseded) return true;
+      try {
+        const resumed = await tryResumeStream(batch.streamId, {
+          extraFollowUps: batch.followUps,
+          onFollowUpQueueReady: () => {
+            session.interruptedStreamId = undefined;
+            if (interruptedContinuation === batch) {
+              interruptedContinuation = undefined;
+            }
+          },
+        });
+        if (
+          !resumed &&
+          !batch.superseded &&
+          session.interruptedStreamId === undefined
+        ) {
+          session.interruptedStreamId = batch.streamId;
+        }
+        return resumed;
+      } finally {
+        if (interruptedContinuation === batch) {
+          interruptedContinuation = undefined;
+        }
+      }
+    })();
+    interruptedContinuation = batch;
+    return {
+      kind: 'accepted',
+      streamId: batch.streamId,
+      completion: batch.completion,
+    };
+  };
+
   // -----------------------------------------------------------------------
   // stop
   // -----------------------------------------------------------------------
@@ -588,6 +749,7 @@ export function createChatSessionController(
     startRootRun,
     resume,
     stop,
+    admitInterruptedFollowUp,
     tryResumeStream,
     canStartRootRun: () => chatTuiCanStartRootRun(session),
   };
