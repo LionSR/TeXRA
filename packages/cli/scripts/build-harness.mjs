@@ -23,7 +23,9 @@ try {
     platform: 'node',
     format: 'esm',
     target: 'node20',
-    external: ['fsevents'],
+    // See build-bundle.mjs: clipboardy resolves its fallback binaries
+    // relative to `import.meta.url`, which esbuild bundling breaks.
+    external: ['fsevents', 'clipboardy'],
     jsx: 'automatic',
     loader: { '.tsx': 'tsx', '.ts': 'ts' },
     alias: { 'react-devtools-core': reactDevtoolsStub },
