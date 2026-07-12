@@ -8,7 +8,10 @@ import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError } from '@common/errors';
-import { isUserAbort } from '@common/errors/sdkErrorUtils';
+import {
+  isContextWindowError,
+  isUserAbort,
+} from '@common/errors/sdkErrorUtils';
 import {
   isCredentialExhausted,
   STREAM_PHASE,
@@ -199,12 +202,18 @@ export abstract class RetryableInvocationNode<
     }
   }
 
-  /** Auth/permission errors (401, 403) and credential-exhausted errors
-   *  (relay monthly limit, upstream credit/quota depletion) skip auto-retries —
-   *  they need human attention (switching keys, topping up). `userRetryable`
+  /** Auth/permission errors (401, 403), credential-exhausted errors (relay
+   *  monthly limit, upstream credit/quota depletion), and context-window
+   *  overflows skip auto-retries — they need human attention (switching
+   *  keys, topping up, shrinking the request) rather than an identical retry
+   *  that can only fail the same way again. A provider handler that knows
+   *  how to recover from an overflow (e.g. OpenAI Responses' compaction
+   *  retry) does so and never lets the error reach this gate; only overflow
+   *  errors nobody already recovered from are stopped here. `userRetryable`
    *  only gates the manual retry UI; auto-retry is a stricter subset. */
   shouldAutoRetry(error: Error): boolean {
     if (isUserAbort(error)) return false;
+    if (isContextWindowError(error)) return false;
 
     const formatted = normalizeProviderError(error);
     if (isCredentialExhausted(formatted)) return false;
