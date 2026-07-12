@@ -82,7 +82,7 @@ export const DEFAULT_CORE_SETTINGS = {
     useGoogleInteractionsAPI: true,
     useGoogleInteractionsServerState: true,
     useBackgroundResponses: true,
-    openaiParallelToolCalls: false,
+    openaiParallelToolCalls: true,
     compactionThresholdPercent: 75,
     gpt5ReasoningSummary: false,
     retry: {
@@ -374,7 +374,7 @@ export const CoreSettingsShape = {
       ),
       openaiParallelToolCalls: boolField(
         DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
-        'Let OpenAI models use multiple tools at the same time for faster results. Disabled by default for more predictable behavior.',
+        'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool execution.',
       ),
       compactionThresholdPercent: numberField(
         DEFAULT_CORE_SETTINGS.model.compactionThresholdPercent,

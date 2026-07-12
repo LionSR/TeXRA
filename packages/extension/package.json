@@ -288,8 +288,8 @@
           },
           "texra.model.openaiParallelToolCalls": {
             "type": "boolean",
-            "default": false,
-            "description": "Let OpenAI models use multiple tools at the same time for faster results. Disabled by default for more predictable behavior.",
+            "default": true,
+            "description": "Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool execution.",
             "scope": "resource"
           },
           "texra.model.compactionThresholdPercent": {
