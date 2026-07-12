@@ -91,16 +91,36 @@ export function isMissingFinishReasonError(err: unknown): boolean {
 }
 
 /**
+ * True when `err` (or a nested `error` body, e.g. `WebSocketError#error`)
+ * carries OpenAI's native `param` field naming `previous_response_id` — the
+ * SDK flattens this from the JSON body onto `APIError#param` for any 4xx
+ * response, and `ResponseErrorEvent#param` carries it for the WebSocket
+ * transport's connection-level `error` event. This identifies the invalid
+ * parameter directly instead of pattern-matching for its name inside prose.
+ */
+function hasPreviousResponseIdErrorParam(err: unknown): boolean {
+  const isMatch = (param: unknown): boolean =>
+    isString(param) && param === 'previous_response_id';
+
+  if (!isObject(err)) return false;
+  if (isMatch((err as { param?: unknown }).param)) return true;
+
+  const body = detectRawErrorBody(err);
+  return isObject(body) && isMatch((body as { param?: unknown }).param);
+}
+
+/**
  * Checks if an error indicates the previous_response_id is invalid or expired
- * (OpenAI Responses API).
+ * (OpenAI Responses API): the stored id is unusable and the chain must be
+ * rebuilt from local history.
  *
- * OpenAI surfaces this in two shapes depending on how the SDK serializes the
- * error body:
- *   1. `... param: 'previous_response_id' ...` (parameter name in message)
- *   2. `Previous response with id 'resp_...' not found.` (user-facing message)
- * Both forms indicate the stored id is unusable and the chain must be rebuilt.
+ * Prefers the native `param` field (see {@link hasPreviousResponseIdErrorParam}).
+ * Where that isn't available — e.g. a 404 "not found" response, which OpenAI
+ * reports without a `param` since no parameter name applies to a missing
+ * resource — falls back to matching the user-facing message text.
  */
 export function isPreviousResponseIdError(err: unknown): boolean {
+  if (hasPreviousResponseIdErrorParam(err)) return true;
   if (!(err instanceof Error)) return false;
   const m = err.message.toLowerCase();
   return (
