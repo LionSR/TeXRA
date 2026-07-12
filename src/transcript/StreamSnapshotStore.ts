@@ -1377,6 +1377,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     data: StreamData,
   ): Promise<void> {
+    const version = this.streamVersion(stream);
     const record = this.getOrCreateRecord(stream);
     const metaOverlay = record.metaOverlay ? record.meta : undefined;
     const runConfigOverlay =
@@ -1409,6 +1410,7 @@ export class StreamSnapshotStore {
     if (meta) {
       record.meta = meta;
       hydrated = await this.hydrateRunStateFromMeta(stream, meta);
+      if (this.streamVersion(stream) !== version) return;
     } else {
       record.meta = undefined;
     }
