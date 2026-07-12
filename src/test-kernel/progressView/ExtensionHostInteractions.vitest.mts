@@ -10,10 +10,12 @@ import type { StreamTabId } from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 
 const mocks = vi.hoisted(() => ({
+  cancelNativeToolEditApprovals: vi.fn(),
   nativeRequestApproval: vi.fn(),
 }));
 
 vi.mock('@frontend/approval/nativeToolEditApproval', () => ({
+  cancelNativeToolEditApprovals: mocks.cancelNativeToolEditApprovals,
   nativeRequestApproval: mocks.nativeRequestApproval,
 }));
 
@@ -215,6 +217,23 @@ describe('createExtensionHostInteractions', () => {
 
     await expect(resultPromise).resolves.toEqual({ action: 'cancel' });
     expect(handlers.retry.resolve).toHaveBeenCalledWith('stream-a');
+  });
+
+  it('routes tool-edit cancellation through the native approval owner', () => {
+    const session = createTestSession();
+    const interactions = createInteractions({ session });
+    const selector = {
+      kind: 'toolEdit' as const,
+      streamId: 'stream-a' as StreamTabId,
+      cause: 'Stream resources released.',
+    };
+
+    interactions.cancel(selector);
+
+    expect(mocks.cancelNativeToolEditApprovals).toHaveBeenCalledWith(
+      session,
+      selector,
+    );
   });
 
   it('forwards a cancellation cause as bash reject feedback', async () => {

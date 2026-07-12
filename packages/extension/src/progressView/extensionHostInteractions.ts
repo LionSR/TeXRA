@@ -6,6 +6,7 @@ import {
   type HostBashApprovalRequest,
   type HostBashApprovalResult,
   type HostInteractionCancelSelector,
+  type HostInteractionOptions,
   type HostInteractionResolution,
   type HostInteractions,
   type HostPlanApprovalRequest,
@@ -24,7 +25,10 @@ import {
   toUserQuestionResult,
 } from '@agent/runtime/hostInteractionResultMappers';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { nativeRequestApproval } from '@frontend/approval/nativeToolEditApproval';
+import {
+  cancelNativeToolEditApprovals,
+  nativeRequestApproval,
+} from '@frontend/approval/nativeToolEditApproval';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import type {
@@ -47,6 +51,7 @@ interface PendingExtensionInteraction<T> {
   readonly id: string;
   readonly kind: PendingKind;
   readonly streamId?: StreamTabId;
+  readonly cancellationScope?: object;
   readonly settle: (value: T) => void;
 }
 
@@ -161,6 +166,9 @@ export function createExtensionHostInteractions(
   };
 
   const cancel = (selector: HostInteractionCancelSelector = {}): void => {
+    if (selector.kind == null || selector.kind === 'toolEdit') {
+      cancelNativeToolEditApprovals(options.session, selector);
+    }
     for (const pending of [...pendingRequests.values()]) {
       if (matchesCancelSelector(pending, selector)) {
         releasePending(pending, selector.cause);
@@ -171,18 +179,28 @@ export function createExtensionHostInteractions(
   return {
     requestToolEditApproval(
       request: ToolEditApprovalRequest,
+      interactionOptions?: HostInteractionOptions,
     ): Promise<ToolEditApprovalResult> {
-      return nativeRequestApproval(request, { session: options.session });
+      return nativeRequestApproval(request, {
+        session: options.session,
+        cancellationScope: interactionOptions?.cancellationScope,
+      });
     },
 
     requestBashApproval(
       request: HostBashApprovalRequest,
+      interactionOptions?: HostInteractionOptions,
     ): Promise<HostBashApprovalResult> {
       const requestId = `bash-${nanoid()}`;
       const streamId = request.streamId ?? '';
       revealStream(request.streamId);
       return showPending<HostBashApprovalResult>(
-        { id: requestId, kind: 'bash', streamId },
+        {
+          id: requestId,
+          kind: 'bash',
+          streamId,
+          cancellationScope: interactionOptions?.cancellationScope,
+        },
         () =>
           handlers().bash.show({
             requestId,
@@ -196,6 +214,7 @@ export function createExtensionHostInteractions(
 
     requestPlanApproval(
       request: HostPlanApprovalRequest,
+      interactionOptions?: HostInteractionOptions,
     ): Promise<PlanApprovalResult> {
       revealStream(request.streamId);
       return showPending<PlanApprovalResult>(
@@ -203,6 +222,7 @@ export function createExtensionHostInteractions(
           id: request.approvalId,
           kind: 'plan',
           streamId: request.streamId,
+          cancellationScope: interactionOptions?.cancellationScope,
         },
         () => handlers().planApproval.show(request),
       );
@@ -210,6 +230,7 @@ export function createExtensionHostInteractions(
 
     requestAgentProposal(
       request: AgentProposalPermission,
+      interactionOptions?: HostInteractionOptions,
     ): Promise<ProposalResult> {
       revealStream(request.streamId);
       return showPending<ProposalResult>(
@@ -217,18 +238,23 @@ export function createExtensionHostInteractions(
           id: request.proposalId,
           kind: 'proposal',
           streamId: request.streamId,
+          cancellationScope: interactionOptions?.cancellationScope,
         },
         () => handlers().agentProposal.show(request),
       );
     },
 
-    requestRetry(request: HostRetryRequest): Promise<RetryResult> {
+    requestRetry(
+      request: HostRetryRequest,
+      interactionOptions?: HostInteractionOptions,
+    ): Promise<RetryResult> {
       revealStream(request.streamId);
       return showPending<RetryResult>(
         {
           id: request.streamId,
           kind: 'retry',
           streamId: request.streamId,
+          cancellationScope: interactionOptions?.cancellationScope,
         },
         () => handlers().retry.show(request),
       );
@@ -236,6 +262,7 @@ export function createExtensionHostInteractions(
 
     askUserQuestion(
       request: Parameters<NonNullable<HostInteractions['askUserQuestion']>>[0],
+      interactionOptions?: HostInteractionOptions,
     ): Promise<HostUserQuestionResult> {
       revealStream(request.streamId || undefined);
       return showPending<HostUserQuestionResult>(
@@ -243,6 +270,7 @@ export function createExtensionHostInteractions(
           id: request.requestId,
           kind: 'userQuestion',
           streamId: request.streamId,
+          cancellationScope: interactionOptions?.cancellationScope,
         },
         () => handlers().userQuestion.show(request),
       );

@@ -32,10 +32,12 @@ import { createRecordingHost } from '../progressTestUtils';
 let testApprovalHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
+let detachHostInteractions = (): void => {};
 
 function installTestPlatform(): Promise<void> {
   return installPlatform({}).then(() => {
-    defaultSession().useHostInteractions({
+    detachHostInteractions();
+    detachHostInteractions = defaultSession().useHostInteractions({
       requestToolEditApproval: (request) => {
         const handler = testApprovalHandler;
         if (!handler) {
@@ -69,7 +71,8 @@ describe('human prompt progress events', () => {
 
   afterEach(() => {
     cleanupAllApprovals();
-    defaultSession().interactions.dispose();
+    detachHostInteractions();
+    detachHostInteractions = () => {};
     testApprovalHandler = undefined;
   });
 
