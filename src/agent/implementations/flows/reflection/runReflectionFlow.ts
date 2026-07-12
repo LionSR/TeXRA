@@ -17,7 +17,11 @@ import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
+import {
+  PersistedFlowStateError,
+  flowKey,
+  readPersistedFlowRecord,
+} from '@agent/node/persistedFlow';
 import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
 import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
@@ -199,7 +203,7 @@ export async function runReflectionFlow<C = unknown>(
   const kv = getExecutionStore(executionId);
 
   try {
-    const flowRecord = await kv.read<FlowRecord>(flowKey(executionId));
+    const flowRecord = await readPersistedFlowRecord(kv, executionId);
     // Boundary hydration: the one place a freshly-read persisted record
     // (possibly written by an older build, hence the legacy todos/plan
     // fallback in AgentWorkspaceStateSnapshotSchema) is parsed. Downstream,
@@ -207,13 +211,17 @@ export async function runReflectionFlow<C = unknown>(
     // ReflectionFlowStateCanonicalSchema instead — see its constructor call
     // below — since by then `shared` is always this run's own canonical
     // toSnapshot() output, never a legacy shape.
-    const validated = flowRecord?.shared
-      ? ReflectionFlowStateSchema.safeParse(flowRecord.shared)
-      : null;
-    const isResume = validated?.success ?? false;
+    const isResume = flowRecord !== null;
 
-    if (validated?.success) {
-      shared = validated.data as ReflectionFlowShared;
+    if (flowRecord) {
+      const validated = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
+      if (!validated.success) {
+        throw new PersistedFlowStateError(executionId, 'invalid-shared', {
+          cause: validated.error,
+        });
+      }
+
+      shared = validated.data;
       shared.modelHandlerCompatibilityKey ??=
         inferPersistedModelHandlerCompatibilityKey(
           config.model,
@@ -225,19 +233,7 @@ export async function runReflectionFlow<C = unknown>(
       logger.debug(
         `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
       );
-    }
-
-    if (!shared) {
-      if (flowRecord) {
-        // A record already exists but its `shared` failed schema validation
-        // (or was missing) — it's stale/corrupt, not resumable. Delete it so
-        // PersistedFlow.ensureRecord() doesn't silently re-adopt the invalid
-        // record instead of the freshly-built `shared` below; otherwise the
-        // very next stepWithResult() would read that same invalid blob and
-        // fail sharedSchema validation again, crashing the run instead of
-        // starting over.
-        await kv.delete(flowKey(executionId));
-      }
+    } else {
       shared = {
         currentRound: 0,
         totalRounds,

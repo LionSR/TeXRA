@@ -18,9 +18,10 @@ import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   PersistedFlow,
+  PersistedFlowStateError,
   flowKey,
+  readPersistedFlowRecord,
   stampFlowRecordSchemaVersion,
-  type FlowRecord,
 } from '@agent/node/persistedFlow';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -42,7 +43,6 @@ import type { SubagentProgressUpdate } from '@shared/schemas';
 // Local imports - tools and flow
 import { getDefaultToolRegistry } from '@tools/registry';
 import { TaskRunFileService } from '@utils/files';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -351,6 +351,7 @@ export async function runToolUseFlow<C = unknown>(
   let totalCostUsd: number | undefined;
   let teardownSetup: (() => void) | undefined;
   let preserveResumeRecord = false;
+  let persistenceRecoveryPending = false;
   const compatibilityKey = activeModelHandlerCompatibilityKey(
     services.modelHandler,
   );
@@ -371,20 +372,12 @@ export async function runToolUseFlow<C = unknown>(
       return { outcome };
     }
 
-    let flowRecord: FlowRecord | null = null;
-    try {
-      flowRecord = (await kv.read<FlowRecord>(flowKey(executionId))) ?? null;
-    } catch (error) {
-      // A failed read here silently converts a resume into an empty-history
-      // fresh run -- as loud as the adjacent migration-failure warning below,
-      // so it is visible instead of vanishing into debug output.
-      logger.warn('Resume parse failed, starting fresh', {
-        data: { executionId, error: toErrorMessage(error) },
-      });
-    }
+    persistenceRecoveryPending = true;
+    const flowRecord = await readPersistedFlowRecord(kv, executionId);
     // Cancellation can also arrive while the recovery read is pending. Do not
     // start a migration or repair write after that handoff.
     if (input.checkInterruption()) {
+      persistenceRecoveryPending = false;
       preserveResumeRecord = input.resumeSnapshot !== undefined;
       return { outcome };
     }
@@ -393,13 +386,13 @@ export async function runToolUseFlow<C = unknown>(
     // queue clear instead of the resume-startup rescue above.
     inResumeStartupWindow = false;
 
-    if (flowRecord?.shared) {
+    if (flowRecord) {
       logger.debug('Resuming tool-use flow from persistence');
       const migrationResult = migrateSharedState(flowRecord.shared);
-      if (migrationResult === null) {
-        logger.warn('Failed to parse flow record shared state, starting fresh');
-        await kv.delete(flowKey(executionId));
-        flowRecord = null;
+      if (!migrationResult.success) {
+        throw new PersistedFlowStateError(executionId, 'invalid-shared', {
+          cause: migrationResult.error,
+        });
       } else if (input.resumeSnapshot) {
         // The resume boundary (SessionResumeRetrieval.retrieveToolUseResumeData)
         // already migrated this record's legacy shapes and strictly validated
@@ -473,6 +466,9 @@ export async function runToolUseFlow<C = unknown>(
         }
       }
     }
+    // Cleanup may delete a terminal flow record only after absence was
+    // confirmed or a present record passed its migration boundary.
+    persistenceRecoveryPending = false;
 
     const prepareNode = new ToolUsePrepareNode<C>();
     const cycleNode = new ToolUseCycleNode<C>();
@@ -550,12 +546,25 @@ export async function runToolUseFlow<C = unknown>(
     activePersistedFlow = undefined;
     teardownSetup?.();
     teardownSetup = undefined;
+    let preservationReason: string | undefined;
     if (preserveResumeRecord) {
-      logger.debug('Flow record preserved after resume startup cancellation');
+      preservationReason =
+        'Flow record preserved after resume startup cancellation';
+    } else if (persistenceRecoveryPending) {
+      preservationReason =
+        'Flow record preserved after persistence recovery failure';
     } else if (outcome === STREAM_PHASE.WAITING) {
-      logger.debug('Flow record preserved for native subagent WAITING');
+      preservationReason = 'Flow record preserved for native subagent WAITING';
     } else if (shared.userCancelledRetry) {
-      logger.debug('Flow record preserved for resume after retry cancellation');
+      preservationReason =
+        'Flow record preserved for resume after retry cancellation';
+    }
+    const preserveFlowRecord = preservationReason !== undefined;
+    const preserveFollowUpQueue =
+      preserveFlowRecord && !persistenceRecoveryPending;
+
+    if (preservationReason) {
+      logger.debug(preservationReason);
     } else {
       try {
         await kv.delete(flowKey(executionId));
@@ -564,26 +573,14 @@ export async function runToolUseFlow<C = unknown>(
       }
     }
 
-    // WAITING outcome: leave the follow-up queue live, matching the flow
-    // record preserved above. A delegate_agent follow-up can race into it via
-    // sendFollowUp's 'active' branch between the WAITING transition inside
-    // ToolUseWaitNode and this teardown — the tool-use flow context detaches
-    // above, but the stream doesn't leave WAITING until resume, so the same
-    // live queue instance is what a genuine kill (see ExecutionRegistry.
-    // terminate's waiting-cleanup path) or resume drains instead of a
-    // `dispose()` here silently discarding it.
+    // Recovery failures preserve the unread record but release the rebuilt
+    // live queue. The resume wrapper owns the drained batch and restores it
+    // after rejection; retaining both copies here would replay it twice.
     //
-    // Resume-startup cancellation (preserveResumeRecord): a resume's
-    // setupSession re-appends its drained follow-up batch into this same
-    // live queue before the flow is interruptible. `flowContext.interrupt()`
-    // uses `sessionLifecycle.interruptPreservingQueue()` instead of
-    // `interrupt()` for exactly this window (see its call site above), so
-    // that batch survives a cancellation landing while the recovery read is
-    // pending. Skipping `dispose()`/release here too keeps it intact for the
-    // next `resumeQueuedToolUseSnapshot` call's `drainItems()` instead of
-    // discarding the user's queued input alongside the preserved flow
-    // record.
-    if (outcome !== STREAM_PHASE.WAITING && !preserveResumeRecord) {
+    // WAITING retains its existing stronger property: the live lifecycle
+    // remains attached to the queue so a racing follow-up, a genuine kill,
+    // or the next resume observes the same queue instance.
+    if (!preserveFollowUpQueue) {
       sessionLifecycle.dispose();
     }
     runSession.interactions.cancel({ streamId, cause: 'Run ended.' });
