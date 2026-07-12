@@ -30,6 +30,7 @@
 
 import { Hono, type Context as HonoContext } from '@hono/hono';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { parseApprovalDecision } from './approvalRequest.ts';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
 import { randomBase64Url } from '../_shared/crypto.ts';
@@ -247,7 +248,10 @@ app.post('/approve', async (c) => {
     if (userCode.length !== USER_CODE_LENGTH) {
       return errorResponse(c, 'Enter the code shown in your terminal', 400);
     }
-    const approve = body?.approve !== false;
+    const approve = parseApprovalDecision(body);
+    if (approve === null) {
+      return errorResponse(c, 'Approval decision must be true or false', 400);
+    }
 
     const { data, error } = await c
       .get('supabase')
