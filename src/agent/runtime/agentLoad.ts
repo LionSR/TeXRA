@@ -1,7 +1,5 @@
 import * as path from 'node:path';
 
-import * as yaml from 'yaml';
-
 import {
   resolveAgent,
   type AgentSource,
@@ -19,6 +17,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
+import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
 import { agentKey } from '@shared/schemas/agent';
 import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
@@ -45,8 +44,18 @@ export interface AgentYamlValidationResult extends ValidAgentDefinition {
 export function validateAgentYamlContent(
   content: string | object,
 ): AgentYamlValidationResult {
-  const raw = typeof content === 'string' ? yaml.parse(content) : content;
-  const data = AgentDefinitionSchema.parse(raw);
+  let data: ReturnType<(typeof AgentDefinitionSchema)['parse']>;
+  if (typeof content === 'string') {
+    const parsed = parseYamlWith(content, AgentDefinitionSchema);
+    if (parsed.isErr()) {
+      throw new Error(`Failed to parse agent YAML: ${parsed.error.message}`, {
+        cause: parsed.error,
+      });
+    }
+    data = parsed.value;
+  } else {
+    data = AgentDefinitionSchema.parse(content);
+  }
   const rootName = typeof data.name === 'string' ? data.name.trim() : '';
 
   if (!rootName) {
@@ -72,7 +81,14 @@ export async function loadYaml(absolutePath: string): Promise<object> {
   }
 
   const yamlContent = await AbsoluteFS.read(absolutePath);
-  return yaml.parse(yamlContent);
+  const parsed = safeParseYaml(yamlContent);
+  if (parsed.isErr()) {
+    throw new Error(
+      `Failed to parse YAML at ${absolutePath}: ${parsed.error.message}`,
+      { cause: parsed.error },
+    );
+  }
+  return parsed.value as object;
 }
 
 function ensureAgentCategoryForSource<
