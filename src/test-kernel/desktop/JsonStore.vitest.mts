@@ -1,5 +1,12 @@
 // Node imports
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -73,6 +80,31 @@ describe('shared JsonStore', () => {
     await expect(
       JsonStore.open(filePath, { strict: true }),
     ).rejects.toBeInstanceOf(SyntaxError);
+  });
+
+  it('opens read-only on unwritable storage; only the first write prepares the directory', async () => {
+    if (process.platform === 'win32') return; // POSIX modes don't apply.
+    const JsonStore = await loadJsonStore();
+    tempDir = await mkdtemp(join(tmpdir(), 'texra-json-store-'));
+    const dir = join(tempDir, 'nested');
+    const filePath = join(dir, 'secrets.json');
+    // Unwritable parent: any open-time mkdir/chmod would throw (#8220).
+    await chmod(tempDir, 0o500);
+
+    try {
+      const store = await JsonStore.open(filePath, { mode: 0o600 });
+
+      expect(store.get('key', 'fallback')).toBe('fallback');
+      await expect(stat(dir)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      await chmod(tempDir, 0o700);
+      await store.set('key', 'value');
+
+      expect((await stat(filePath)).mode & 0o777).toBe(0o600);
+      expect((await stat(dir)).mode & 0o777).toBe(0o700);
+    } finally {
+      await chmod(tempDir, 0o700);
+    }
   });
 
   it('restricts the store file and its directory to the owner when a mode is set', async () => {
