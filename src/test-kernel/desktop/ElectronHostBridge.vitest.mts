@@ -164,7 +164,12 @@ describe('desktop Electron host bridge', () => {
     rendererListener?.({ sender: webContents }, { command: 'ready' });
     expect(rendererMessages).toEqual([{ command: 'ready' }]);
 
-    const hostMessage = { command: 'setTheme', theme: 'vscode-dark' };
+    // `theme` must be a real `ProgressSetThemeMessageSchema` value
+    // ('dark' | 'light') — `postToRenderer` now runs every message through
+    // `assertKnownOutboundMessage` (dev/test only), so an arbitrary
+    // placeholder like the renderer-side test's `'vscode-dark'` would throw
+    // here instead of exercising the channel-routing behavior under test.
+    const hostMessage = { command: 'setTheme', theme: 'dark' };
     bridge.postToRenderer(hostMessage);
     expect(sends).toEqual([
       { channel: ELECTRON_WEBVIEW_PUSH_CHANNEL, message: hostMessage },
@@ -177,5 +182,65 @@ describe('desktop Electron host bridge', () => {
     );
     closedListeners[0]?.();
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
+  });
+
+  // #8123: `postToRenderer` now routes every message through the existing
+  // MainView / ProgressView outbound Zod schemas (dev/test only) before
+  // handing it to `webContents.send`, instead of forwarding whatever shape
+  // the caller happened to build.
+  describe('outbound schema validation (#8123)', () => {
+    async function createBridge() {
+      const { ELECTRON_WEBVIEW_PUSH_CHANNEL } = await loadHostBridgeModule();
+      const ipcMain = { on: vi.fn(), off: vi.fn() };
+      const { installDesktopHostBridge } =
+        await loadMainHostBridgeModule(ipcMain);
+      const sends: Array<{ channel: string; message: unknown }> = [];
+      const window = {
+        isDestroyed: () => false,
+        once: vi.fn(),
+        webContents: {
+          isDestroyed: () => false,
+          send: vi.fn((channel, message) => sends.push({ channel, message })),
+        },
+      };
+      return {
+        bridge: installDesktopHostBridge(window),
+        sends,
+        pushChannel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+      };
+    }
+
+    it('throws on a ProgressView-domain message with a bad field (schema/producer drift)', async () => {
+      const { bridge } = await createBridge();
+      // Same fixture shape as the channel-routing test above, but with the
+      // invalid theme value restored — proves the assertion actually fires
+      // for a real MainView/ProgressView schema mismatch, not just that the
+      // production code compiles.
+      expect(() =>
+        bridge.postToRenderer({ command: 'setTheme', theme: 'vscode-dark' }),
+      ).toThrow(/Outbound message failed schema validation/);
+    });
+
+    it('forwards a well-formed MainView outbound message unchanged', async () => {
+      const { bridge, sends, pushChannel } = await createBridge();
+      const message = {
+        command: 'setCurrentFile',
+        filePath: 'paper.tex',
+        fileType: 'input',
+      };
+      expect(() => bridge.postToRenderer(message)).not.toThrow();
+      expect(sends).toEqual([{ channel: pushChannel, message }]);
+    });
+
+    it('passes a desktop-only command unrecognized by either outbound schema through unchecked', async () => {
+      const { bridge, sends, pushChannel } = await createBridge();
+      // `desktop:showPdf` (and settings/history/onboarding commands) aren't
+      // modeled by MainViewMessageSchema or ProgressViewOutboundMessageSchema
+      // — out of scope for this change, so no schema claims the command and
+      // it must not throw.
+      const message = { command: 'desktop:showPdf', title: 't' };
+      expect(() => bridge.postToRenderer(message)).not.toThrow();
+      expect(sends).toEqual([{ channel: pushChannel, message }]);
+    });
   });
 });
