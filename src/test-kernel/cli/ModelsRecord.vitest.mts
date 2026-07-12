@@ -181,14 +181,14 @@ describe('CLI model list empty-state text', () => {
       [
         'No models are currently available.',
         'Run `texra models list --all` to see unavailable models and access status.',
-        'Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
+        'Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included TeXRA access.',
       ].join('\n'),
     );
   });
 
   it('points included-mode users at login or personal API key setup', () => {
     expect(formatNoListableModelsMessage('included')).toContain(
-      'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.',
+      'Run `texra login` for included TeXRA access, or retry with `--api-mode personal` after configuring a provider API key.',
     );
   });
 
@@ -197,7 +197,7 @@ describe('CLI model list empty-state text', () => {
       [
         'No models are currently available.',
         'Run `texra models list --all` to see unavailable models and access status.',
-        'Run `texra login` for included relay access, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
+        'Run `texra login` for included TeXRA access, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
       ].join('\n'),
     );
   });

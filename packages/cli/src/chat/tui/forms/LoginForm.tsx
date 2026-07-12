@@ -23,7 +23,7 @@ export const LOGIN_FORM_ITEMS = [
   {
     value: 'texra',
     label: 'Researcher Access',
-    description: 'TeXRA relay and remote agents',
+    description: 'Included models and remote agents',
   },
   {
     value: 'chatgpt --device',

@@ -26,6 +26,10 @@ import { COLOR_ERROR } from '../ui/colors';
 import { KeyHints } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
 import { Select, type SelectItem } from '../ui/Select';
+import {
+  buildConfigCategoryItems,
+  configCategoryLabel,
+} from './configCategories';
 import { FormFrame } from './_shared/FormFrame';
 import { computeSelectWindowSize } from './_shared/selectWindow';
 
@@ -160,12 +164,18 @@ export interface ConfigFormProps {
 }
 
 type ConfigFormMode =
-  | { readonly kind: 'list' }
-  | { readonly kind: 'enum'; readonly entry: StateSettingEntry }
+  | { readonly kind: 'categories' }
+  | { readonly kind: 'list'; readonly category: string }
+  | {
+      readonly kind: 'enum';
+      readonly entry: StateSettingEntry;
+      readonly category: string;
+    }
   | {
       readonly kind: 'text';
       readonly entry: StateSettingEntry;
       readonly isNumber: boolean;
+      readonly category: string;
     };
 
 const LIST_CHROME_ROWS = 5;
@@ -228,7 +238,7 @@ function ConfigTextEditor(props: {
 }
 
 export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
-  const [mode, setMode] = useState<ConfigFormMode>({ kind: 'list' });
+  const [mode, setMode] = useState<ConfigFormMode>({ kind: 'categories' });
   // Optimistic overrides: a write is async, so without these a rapid second
   // toggle would recompute from a stale `readValue`. The override is set
   // synchronously (so the next keypress sees it), reconciles with the store
@@ -278,7 +288,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     if (mode.kind !== 'enum') return;
     if (isConfigResetInput(input, key)) {
       resetEntry(mode.entry);
-      setMode({ kind: 'list' });
+      setMode({ kind: 'list', category: mode.category });
     }
   });
 
@@ -303,9 +313,9 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
           showOverflow={window.showOverflow}
           onSelect={(value) => {
             commit(entry, value);
-            setMode({ kind: 'list' });
+            setMode({ kind: 'list', category: mode.category });
           }}
-          onCancel={() => setMode({ kind: 'list' })}
+          onCancel={() => setMode({ kind: 'list', category: mode.category })}
         />
         <Box marginTop={1}>
           <KeyHints
@@ -334,26 +344,66 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
         onSubmit={(raw) => {
           if (!isNumber && raw.trim() === '') {
             resetEntry(entry);
-            setMode({ kind: 'list' });
+            setMode({ kind: 'list', category: mode.category });
             return undefined;
           }
 
           const parsed = validateSettingInput(entry, raw, isNumber);
           if (!parsed.ok) return parsed.message;
           commit(entry, parsed.value);
-          setMode({ kind: 'list' });
+          setMode({ kind: 'list', category: mode.category });
           return undefined;
         }}
         onReset={() => {
           resetEntry(entry);
-          setMode({ kind: 'list' });
+          setMode({ kind: 'list', category: mode.category });
         }}
-        onCancel={() => setMode({ kind: 'list' })}
+        onCancel={() => setMode({ kind: 'list', category: mode.category })}
       />
     );
   }
 
-  const items = buildConfigListItems(props.entries, effective);
+  if (mode.kind === 'categories') {
+    const categories = buildConfigCategoryItems(props.entries);
+    if (categories.length === 0) {
+      return (
+        <FormFrame title="/config">
+          <Text dimColor>No configurable settings are available here yet.</Text>
+        </FormFrame>
+      );
+    }
+    const window = computeSelectWindowSize({
+      availableRows: props.availableRows,
+      itemCount: categories.length,
+      chromeRows: LIST_CHROME_ROWS,
+    });
+    return (
+      <FormFrame title="/config" showCloseHint={false}>
+        <Select
+          items={categories}
+          maxVisibleItems={window.maxVisibleItems}
+          showOverflow={window.showOverflow}
+          onSelect={(category) => setMode({ kind: 'list', category })}
+          onCancel={props.onClose}
+        />
+        <Box marginTop={1}>
+          <KeyHints
+            hints={[
+              { key: '↑/↓', action: 'navigate' },
+              { key: 'Enter', action: 'open' },
+              { key: 'Esc', action: 'close' },
+            ]}
+            confirmCancel={false}
+          />
+        </Box>
+      </FormFrame>
+    );
+  }
+
+  const categoryEntries = props.entries.filter(
+    (entry) => entry.category === mode.category,
+  );
+  const items = buildConfigListItems(categoryEntries, effective);
 
   if (items.length === 0) {
     return (
@@ -370,7 +420,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   });
 
   const handleSelect = (key: string): void => {
-    const entry = props.entries.find((candidate) => candidate.key === key);
+    const entry = categoryEntries.find((candidate) => candidate.key === key);
     if (!entry) return;
     const kind = settingEditKind(entry);
     if (kind === 'boolean') {
@@ -379,30 +429,43 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
       const formName = entry.openForm;
       if (formName) props.openForm?.(formName);
     } else if (kind === 'enum') {
-      setMode({ kind: 'enum', entry });
+      setMode({ kind: 'enum', entry, category: mode.category });
     } else if (kind === 'string') {
-      setMode({ kind: 'text', entry, isNumber: false });
+      setMode({
+        kind: 'text',
+        entry,
+        isNumber: false,
+        category: mode.category,
+      });
     } else if (kind === 'number') {
-      setMode({ kind: 'text', entry, isNumber: true });
+      setMode({
+        kind: 'text',
+        entry,
+        isNumber: true,
+        category: mode.category,
+      });
     }
     // 'readonly' rows are disabled in the list and never reach here.
   };
 
   return (
-    <FormFrame title="/config" showCloseHint={false}>
+    <FormFrame
+      title={`/config · ${configCategoryLabel(mode.category)}`}
+      showCloseHint={false}
+    >
       <Select
         items={items}
         maxVisibleItems={window.maxVisibleItems}
         showOverflow={window.showOverflow}
         onSelect={handleSelect}
-        onCancel={props.onClose}
+        onCancel={() => setMode({ kind: 'categories' })}
       />
       <Box marginTop={1}>
         <KeyHints
           hints={[
             { key: '↑/↓', action: 'navigate' },
             { key: 'Enter', action: 'toggle / edit / open' },
-            { key: 'Esc', action: 'close' },
+            { key: 'Esc', action: 'back' },
           ]}
           confirmCancel={false}
         />

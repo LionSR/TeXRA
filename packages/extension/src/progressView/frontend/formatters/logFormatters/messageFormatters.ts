@@ -148,7 +148,7 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   // prettier-ignore
   const summaryTemplate = html`<div slot="summary" class="details-summary"><wa-icon library=${TEXRA_ICON_LIBRARY} name="error" class="icon" aria-hidden="true"></wa-icon>${labelSpan}${copyButton}</div>`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" class=${classMap({
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap({
     'banner-details': true,
     'banner-details--error': true,
     'banner-details--relay-error': isRelayError,

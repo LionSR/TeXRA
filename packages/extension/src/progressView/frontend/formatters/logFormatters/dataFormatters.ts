@@ -46,7 +46,7 @@ export function formatFileListTemplate(
   // Raw fallback when parsing fails
   if (!parseResult.success) {
     // prettier-ignore
-    return html`<wa-details appearance="plain" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+    return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
       iconName: 'file',
       label: 'Files (raw)',
       labelClass: 'summary-text',
@@ -55,7 +55,7 @@ export function formatFileListTemplate(
 
   const renderData = buildFileListRender(parseResult.data);
   // prettier-ignore
-  return html`<wa-details appearance="plain" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
     iconName: 'file',
     label: renderData?.summary ?? 'Files',
     labelClass: 'summary-text',
@@ -96,7 +96,7 @@ export function formatMissingOutputsTemplate(
     return html`<li class="detail-item" title=${filePath}><wa-icon library=${TEXRA_ICON_LIBRARY} name="warning" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${basename}</span></li>`;
   });
   // prettier-ignore
-  return html`<wa-details appearance="plain" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
     iconName: 'warning',
     label: `Missing outputs (${missing.length})`,
     labelClass: 'summary-text',
