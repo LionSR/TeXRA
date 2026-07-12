@@ -55,14 +55,13 @@ export class GettingStartedBanner extends LitElement {
         line-height: var(--line-height-normal, 1.4);
       }
 
+      /* Layout only — button sizing (min-height/padding-inline/
+         border-radius/font-size) comes from the shared .actions rule
+         in bannerStyles.ts, same as the other inline banners. */
       .getting-started-actions {
         display: flex;
         flex-wrap: wrap;
         gap: var(--wa-space-3xs);
-      }
-
-      .getting-started-actions wa-button::part(base) {
-        min-height: 26px;
       }
 
       .dismiss-button {
@@ -97,7 +96,7 @@ export class GettingStartedBanner extends LitElement {
               Then run setup to connect TeXRA, check LaTeX, and choose a starter
               agent team.
             </p>
-            <div class="getting-started-actions">
+            <div class="getting-started-actions actions">
               <wa-button
                 variant="brand"
                 appearance="filled"
