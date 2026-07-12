@@ -15,6 +15,10 @@ import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  matchesCancelSelector,
+  type HostInteractionCancelSelector,
+} from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
@@ -57,6 +61,14 @@ interface PendingApprovalEntry extends LatexPreviewEntry {
   streamId?: StreamTabId;
   lineChanges: LineChanges;
   settle: (result: ToolEditApprovalResult) => void;
+  cancellationScope?: object;
+}
+
+interface InitializingNativeApproval {
+  readonly request: ToolEditApprovalRequest;
+  readonly session: SessionHandle;
+  readonly cancellationScope?: object;
+  cancellation?: ToolEditApprovalResult;
 }
 
 interface ToolEditApprovalActionPayload {
@@ -66,9 +78,53 @@ interface ToolEditApprovalActionPayload {
 }
 
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
+const initializingApprovals = new Map<string, InitializingNativeApproval>();
 const diffViewHost: DiffViewHost = new VscodeDiffViewHost();
 let storageDirectory: string | undefined;
 let runtimeHost: AgentRuntimeHost | undefined;
+
+/** Reject native approvals owned by one session and selected interaction scope. */
+export function cancelNativeToolEditApprovals(
+  session: SessionHandle,
+  selector: HostInteractionCancelSelector = {},
+): void {
+  for (const initialization of initializingApprovals.values()) {
+    if (
+      initialization.session !== session ||
+      initialization.cancellation ||
+      !matchesCancelSelector(
+        {
+          kind: 'toolEdit',
+          streamId: initialization.request.streamId ?? undefined,
+          cancellationScope: initialization.cancellationScope,
+        },
+        selector,
+      )
+    ) {
+      continue;
+    }
+    initialization.cancellation = {
+      accepted: false,
+      userMessage: selector.cause,
+    };
+  }
+  for (const entry of pendingApprovals.values()) {
+    if (
+      entry.session !== session ||
+      !matchesCancelSelector(
+        {
+          kind: 'toolEdit',
+          streamId: entry.streamId,
+          cancellationScope: entry.cancellationScope,
+        },
+        selector,
+      )
+    ) {
+      continue;
+    }
+    entry.settle({ accepted: false, userMessage: selector.cause });
+  }
+}
 
 function getStorageDir(): string {
   if (!storageDirectory) {
@@ -116,6 +172,9 @@ async function showProgressViewApprovalPrompt(
   await Promise.resolve(
     vscode.commands.executeCommand('texra.showProgressView'),
   ).catch(() => {});
+
+  const entry = pendingApprovals.get(requestId);
+  if (!entry || entry.session !== session || entry.isSettled()) return;
 
   publishProgressViewApprovalPrompt(
     session,
@@ -165,7 +224,7 @@ function restoreProgressViewApprovalPrompt(
 
 export async function nativeRequestApproval(
   request: ToolEditApprovalRequest,
-  options: { session: SessionHandle },
+  options: { session: SessionHandle; cancellationScope?: object },
 ): Promise<ToolEditApprovalResult> {
   getStorageDir(); // Validates initialization
 
@@ -178,26 +237,47 @@ export async function nativeRequestApproval(
   } = request;
 
   const requestId = `approval-${nanoid()}`;
-  const directory = await ensureStorageDir();
+  const lineChanges = computeLineChangeSummary(
+    originalContent,
+    proposedContent,
+  );
+  const initialization: InitializingNativeApproval = {
+    request,
+    session: options.session,
+    cancellationScope: options.cancellationScope,
+  };
+  initializingApprovals.set(requestId, initialization);
+  let approvalSources: Awaited<ReturnType<typeof writeApprovalTempFiles>>;
+  try {
+    const directory = await ensureStorageDir();
+    approvalSources = await writeApprovalTempFiles({
+      directory,
+      targetPath: filePath,
+      originalContent,
+      proposedContent,
+    });
+  } catch (error) {
+    initializingApprovals.delete(requestId);
+    throw error;
+  }
   const {
     originalPath,
     proposedPath,
     cleanup: cleanupApprovalSources,
-  } = await writeApprovalTempFiles({
-    directory,
-    targetPath: filePath,
-    originalContent,
-    proposedContent,
-  });
+  } = approvalSources;
+  if (initialization.cancellation) {
+    initializingApprovals.delete(requestId);
+    await cleanupApprovalSources();
+    return {
+      ...initialization.cancellation,
+      lineChanges: initialization.cancellation.lineChanges ?? lineChanges,
+    };
+  }
   const originalSource: DiffSource = { filePath: originalPath };
   const proposedSource: DiffSource = { filePath: proposedPath };
 
   const description = vscode.workspace.asRelativePath(
     WorkspaceFS.fullPath(filePath),
-  );
-  const lineChanges = computeLineChangeSummary(
-    originalContent,
-    proposedContent,
   );
   const { added, removed } = lineChanges;
   const totalChanged = added + removed;
@@ -222,6 +302,14 @@ export async function nativeRequestApproval(
     );
     diffSession = openedSession;
 
+    if (initialization.cancellation) {
+      result = initialization.cancellation;
+      return {
+        ...result,
+        lineChanges: result.lineChanges ?? lineChanges,
+      };
+    }
+
     let approvalSettled = false;
     const approvalPromise = new Promise<ToolEditApprovalResult>((resolve) => {
       const settle = (value: ToolEditApprovalResult) => {
@@ -245,6 +333,7 @@ export async function nativeRequestApproval(
         relativePath: description,
         streamId: streamId ?? undefined,
         lineChanges,
+        cancellationScope: initialization.cancellationScope,
         isSettled: () => approvalSettled,
         settle,
         workspaceTempCleanup: [],
@@ -253,6 +342,7 @@ export async function nativeRequestApproval(
       };
 
       pendingApprovals.set(requestId, entry);
+      initializingApprovals.delete(requestId);
       // Register with the owning session's registry for rejection tracking
       registerPendingApproval(
         requestId,
@@ -344,14 +434,16 @@ export async function nativeRequestApproval(
       lineChanges: result.lineChanges ?? lineChanges,
     };
   } finally {
+    initializingApprovals.delete(requestId);
     // Stop listening for tab closes before we programmatically close the diff.
     tabCloseDisposable?.dispose();
     // Get entry before deleting to access workspace temp cleanup functions
     const entry = pendingApprovals.get(requestId);
     pendingApprovals.delete(requestId);
     unregisterPendingApproval(requestId, options.session);
-    if (diffSession) {
-      await diffViewHost.closeDiff(diffSession);
+    const currentDiffSession = entry?.diffSession ?? diffSession;
+    if (currentDiffSession) {
+      await diffViewHost.closeDiff(currentDiffSession);
     }
     await cleanupApprovalSources();
 
@@ -375,19 +467,28 @@ export async function handleProgressViewToolEditApprovalAction(
   }
 
   switch (payload.action) {
-    case 'openDiff':
-      entry.diffSession = await diffViewHost.openDiff(
+    case 'openDiff': {
+      const reopenedSession = await diffViewHost.openDiff(
         entry.diffSession.original,
         entry.diffSession.proposed,
         entry.title,
         { preserveFocus: true },
       );
+      if (
+        entry.isSettled() ||
+        pendingApprovals.get(payload.requestId) !== entry
+      ) {
+        await diffViewHost.closeDiff(reopenedSession);
+        return;
+      }
+      entry.diffSession = reopenedSession;
       await revealFirstChangedLine(
         entry.diffSession,
         entry.originalContent,
         entry.proposedContent,
       );
       break;
+    }
 
     case 'showLatexdiff':
       // Use ONLYCHANGEDPAGE for tool edit approvals to focus on changes

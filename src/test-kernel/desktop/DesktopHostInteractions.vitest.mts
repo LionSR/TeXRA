@@ -49,6 +49,7 @@ interface DesktopHostInteractionsModule {
     session: SessionHandle;
     getApprovalHandlers(): unknown;
     getToolEditApprovals(): {
+      cancel: ReturnType<typeof vi.fn>;
       requestApproval: ReturnType<typeof vi.fn>;
     };
   }): DesktopHostInteractions;
@@ -91,6 +92,7 @@ async function createInteractions(handlers = createHandlers()) {
   const runtimeHost = { emit: vi.fn() };
   const session = createTestSession();
   const toolEditApprovals = {
+    cancel: vi.fn(),
     requestApproval: vi.fn(async () => ({ accepted: true })),
   };
   const sessionEvents: SessionEvent[] = [];
@@ -179,7 +181,8 @@ describe('createDesktopHostInteractions', () => {
 
   it('forwards a cancellation cause as bash reject feedback', async () => {
     const handlers = createHandlers();
-    const { interactions } = await createInteractions(handlers);
+    const { interactions, toolEditApprovals } =
+      await createInteractions(handlers);
 
     const resultPromise = interactions.requestBashApproval({
       command: 'rm -rf build',
@@ -196,6 +199,48 @@ describe('createDesktopHostInteractions', () => {
       userMessage: 'Stream resources released.',
     });
     expect(handlers.bash.resolve).toHaveBeenCalled();
+    expect(toolEditApprovals.cancel).toHaveBeenCalledWith({
+      streamId: 'stream-a',
+      cause: 'Stream resources released.',
+    });
+  });
+
+  it('can cancel synchronously while presenting a request', async () => {
+    const handlers = createHandlers();
+    const { interactions } = await createInteractions(handlers);
+    handlers.bash.show.mockImplementation(() => {
+      interactions.cancel({
+        kind: 'bash',
+        streamId: 'stream-sync' as StreamTabId,
+        cause: 'Stopped during presentation.',
+      });
+    });
+
+    const result = interactions.requestBashApproval({
+      command: 'echo pending',
+      streamId: 'stream-sync' as StreamTabId,
+    });
+
+    await expect(result).resolves.toEqual({
+      accepted: false,
+      userMessage: 'Stopped during presentation.',
+    });
+  });
+
+  it('routes tool-edit cancellation to the window controller', async () => {
+    const { interactions, toolEditApprovals } = await createInteractions();
+
+    interactions.cancel({
+      kind: 'toolEdit',
+      streamId: 'stream-a' as StreamTabId,
+      cause: 'Owning execution ended.',
+    });
+
+    expect(toolEditApprovals.cancel).toHaveBeenCalledWith({
+      kind: 'toolEdit',
+      streamId: 'stream-a',
+      cause: 'Owning execution ended.',
+    });
   });
 
   it('preserves a bash timeout resolution as distinct from rejection', async () => {

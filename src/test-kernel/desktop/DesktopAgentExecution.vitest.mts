@@ -39,6 +39,10 @@ import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progres
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import {
+  isApprovalBypassedForStream,
+  isBashApprovalBypassedForStream,
+} from '@tools/approval';
 
 // Local imports - desktop test support
 import {
@@ -72,6 +76,13 @@ type TestableBridge = Bridge & {
       }) => Promise<unknown>;
       requestBashApproval?: (request: {
         command: string;
+        streamId?: StreamTabId;
+      }) => Promise<unknown>;
+      requestToolEditApproval?: (request: {
+        path: string;
+        originalContent: string;
+        proposedContent: string;
+        sourceTool: string;
         streamId?: StreamTabId;
       }) => Promise<unknown>;
     };
@@ -417,6 +428,28 @@ function progressMessages(
       message !== null &&
       (message as ProgressMessage).command === command,
   );
+}
+
+function shownToolEditRequestId(messages: unknown[]): string | undefined {
+  for (const message of progressMessages(
+    messages,
+    PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+  )) {
+    const update = message as ProgressMessage & {
+      action?: string;
+      permission?: {
+        kind?: string;
+        data?: { requestId?: string };
+      };
+    };
+    if (
+      update.action === 'show' &&
+      update.permission?.kind === PERMISSION_KIND.TOOL_EDIT
+    ) {
+      return update.permission.data?.requestId;
+    }
+  }
+  return undefined;
 }
 
 function restoredSnapshot(
@@ -3353,7 +3386,10 @@ describe('DesktopProgressBridge', () => {
       bridgeA.session.executions.trackAgentExecution(handle, {
         status: STREAM_PHASE.RUNNING,
       });
+      let closed = false;
       const close = (): void => {
+        if (closed) return;
+        closed = true;
         activeExecutionIds = [executionId];
         bridgeA.dispose();
       };
@@ -3488,6 +3524,292 @@ describe('DesktopProgressBridge', () => {
           }),
         ).toBe(true);
         await expect(planPromise).resolves.toEqual({ action: 'approve' });
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('replays a tool-edit approval with a fresh window request id', async () => {
+      const streamId = 'rebound-stream-tool-edit' as StreamTabId;
+      const executionId = 'ec00ed' as ExecutionId;
+      const messagesA: unknown[] = [];
+      const owner = await createReboundOwner({
+        streamId,
+        executionId,
+        messages: messagesA,
+      });
+      const approvalPromise =
+        owner.bridgeA.runtimeHost.interactions?.requestToolEditApproval?.({
+          path: '/workspace/rebound-tool-edit.txt',
+          originalContent: 'old\n',
+          proposedContent: 'new\n',
+          sourceTool: 'write_file',
+          streamId,
+        });
+      expect(approvalPromise).toBeDefined();
+      let oldRequestId = '';
+      await vi.waitFor(() => {
+        oldRequestId = shownToolEditRequestId(messagesA) ?? '';
+        expect(oldRequestId).not.toBe('');
+      });
+
+      const messagesB: unknown[] = [];
+      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING, messagesB);
+      try {
+        await (bridgeB as unknown as { restartRepair: Promise<void> })
+          .restartRepair;
+        let newRequestId = '';
+        await vi.waitFor(() => {
+          newRequestId = shownToolEditRequestId(messagesB) ?? '';
+          expect(newRequestId).not.toBe('');
+        });
+        expect(newRequestId).not.toBe(oldRequestId);
+
+        const handleToolEdit = assertSupported(
+          bridgeB.progressViewInboundHandlers[
+            PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
+          ],
+        );
+        await handleToolEdit({
+          command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+          requestId: newRequestId,
+          action: 'reject',
+          feedback: 'Not this edit.',
+        });
+
+        await expect(approvalPromise).resolves.toMatchObject({
+          accepted: false,
+          userMessage: 'Not this edit.',
+        });
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('keeps owner approvals pending when a replacement window also closes', async () => {
+      const streamId = 'rebound-stream-second-close' as StreamTabId;
+      const executionId = 'ec00ec' as ExecutionId;
+      const owner = await createReboundOwner({ streamId, executionId });
+      const messagesB: unknown[] = [];
+      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING, messagesB);
+      await (bridgeB as unknown as { restartRepair: Promise<void> })
+        .restartRepair;
+
+      const approval =
+        owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
+          approvalId: 'plan-second-window-close',
+          streamId,
+          plan: { objective: 'Survive a second window close.' },
+          goalEnabled: false,
+        });
+      expect(approval).toBeDefined();
+      await vi.waitFor(() => {
+        expect(
+          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+        ).toContainEqual(
+          expect.objectContaining({
+            action: 'show',
+            permission: expect.objectContaining({
+              data: expect.objectContaining({
+                approvalId: 'plan-second-window-close',
+              }),
+            }),
+          }),
+        );
+      });
+
+      bridgeB.dispose();
+      const messagesC: unknown[] = [];
+      const { bridgeB: bridgeC } = owner.reopen(
+        STREAM_PHASE.RUNNING,
+        messagesC,
+      );
+      try {
+        await (bridgeC as unknown as { restartRepair: Promise<void> })
+          .restartRepair;
+        await vi.waitFor(() => {
+          expect(
+            progressMessages(
+              messagesC,
+              PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+            ),
+          ).toContainEqual(
+            expect.objectContaining({
+              action: 'show',
+              permission: expect.objectContaining({
+                data: expect.objectContaining({
+                  approvalId: 'plan-second-window-close',
+                }),
+              }),
+            }),
+          );
+        });
+        expect(
+          bridgeC.session.interactions.resolve('plan-second-window-close', {
+            kind: 'plan',
+            action: 'approve',
+          }),
+        ).toBe(true);
+        await expect(approval).resolves.toEqual({ action: 'approve' });
+      } finally {
+        bridgeC.dispose();
+      }
+    });
+
+    it('replays approvals requested before close and while awaiting reopen repair (#8261)', async () => {
+      const streamId = 'rebound-stream-approval-gap' as StreamTabId;
+      const executionId = 'ec00ef' as ExecutionId;
+      const messagesA: unknown[] = [];
+      const owner = await createReboundOwner({
+        streamId,
+        executionId,
+        messages: messagesA,
+      });
+      const pendingBeforeClose =
+        owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
+          approvalId: 'plan-before-close',
+          streamId,
+          plan: { objective: 'Preserve the pending approval.' },
+          goalEnabled: false,
+        });
+      expect(pendingBeforeClose).toBeDefined();
+      await vi.waitFor(() => {
+        expect(
+          progressMessages(messagesA, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+        ).toContainEqual(
+          expect.objectContaining({
+            action: 'show',
+            permission: expect.objectContaining({
+              data: expect.objectContaining({
+                approvalId: 'plan-before-close',
+              }),
+            }),
+          }),
+        );
+      });
+
+      owner.close();
+      const pendingWhileClosed =
+        owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
+          approvalId: 'plan-while-closed',
+          streamId,
+          plan: { objective: 'Buffer the approval until repair.' },
+          goalEnabled: false,
+        });
+      expect(pendingWhileClosed).toBeDefined();
+
+      const messagesB: unknown[] = [];
+      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING, messagesB);
+      try {
+        await (bridgeB as unknown as { restartRepair: Promise<void> })
+          .restartRepair;
+
+        const enableBypass = assertSupported(
+          bridgeB.progressViewInboundHandlers[
+            PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS
+          ],
+        );
+        await enableBypass({
+          command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+          stream: streamId,
+        });
+        expect(
+          isApprovalBypassedForStream(streamId, owner.bridgeA.session),
+        ).toBe(true);
+        expect(
+          isBashApprovalBypassedForStream(streamId, owner.bridgeA.session),
+        ).toBe(true);
+        expect(isApprovalBypassedForStream(streamId, bridgeB.session)).toBe(
+          false,
+        );
+
+        await vi.waitFor(() => {
+          const approvals = progressMessages(
+            messagesB,
+            PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          );
+          for (const approvalId of ['plan-before-close', 'plan-while-closed']) {
+            expect(approvals).toContainEqual(
+              expect.objectContaining({
+                action: 'show',
+                permission: expect.objectContaining({
+                  data: expect.objectContaining({ approvalId }),
+                }),
+              }),
+            );
+          }
+        });
+
+        for (const approvalId of ['plan-before-close', 'plan-while-closed']) {
+          expect(
+            bridgeB.session.interactions.resolve(approvalId, {
+              kind: 'plan',
+              action: 'approve',
+            }),
+          ).toBe(true);
+        }
+        await expect(pendingBeforeClose).resolves.toEqual({
+          action: 'approve',
+        });
+        await expect(pendingWhileClosed).resolves.toEqual({
+          action: 'approve',
+        });
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('releases rebound stream interactions from the durable owner session', async () => {
+      const streamId = 'rebound-stream-delete' as StreamTabId;
+      const executionId = 'ec00f9' as ExecutionId;
+      const owner = await createReboundOwner({ streamId, executionId });
+      const messagesB: unknown[] = [];
+      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING, messagesB);
+
+      try {
+        await (bridgeB as unknown as { restartRepair: Promise<void> })
+          .restartRepair;
+        const planPromise =
+          owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
+            approvalId: 'plan-rebound-delete',
+            streamId,
+            plan: { objective: 'Cancel through the durable owner.' },
+            goalEnabled: false,
+          });
+        expect(planPromise).toBeDefined();
+        await vi.waitFor(() => {
+          expect(
+            progressMessages(
+              messagesB,
+              PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+            ),
+          ).toContainEqual(
+            expect.objectContaining({
+              action: 'show',
+              permission: expect.objectContaining({
+                data: expect.objectContaining({
+                  approvalId: 'plan-rebound-delete',
+                }),
+              }),
+            }),
+          );
+        });
+
+        await bridgeB.deleteStream(streamId);
+
+        await expect(planPromise).resolves.toEqual({
+          action: 'reject',
+          feedback: 'Stream resources released.',
+        });
+        expect(
+          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+        ).toContainEqual(
+          expect.objectContaining({
+            action: 'resolve',
+            kind: PERMISSION_KIND.PLAN_APPROVAL,
+            id: 'plan-rebound-delete',
+          }),
+        );
       } finally {
         bridgeB.dispose();
       }

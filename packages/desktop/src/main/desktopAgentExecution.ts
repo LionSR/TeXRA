@@ -260,6 +260,14 @@ export class DesktopProgressBridge {
       ...hostChannel,
       interactions: this.session.interactions,
     };
+    this.toolEditApprovals = createDesktopToolEditApprovalController({
+      runtimeHost: this.runtimeHost,
+      session: this.session,
+      openPath: options.openPath,
+      openBuildDisplay: options.openBuildDisplay,
+      openDiff: options.openDiff,
+      showErrorMessage: this.options.showErrorMessage,
+    });
     this.detachHostInteractions = this.session.useHostInteractions(
       createDesktopHostInteractions({
         runtimeHost: this.runtimeHost,
@@ -278,7 +286,7 @@ export class DesktopProgressBridge {
       },
       hasTarget: () => true,
       getStreamControls: (stream) =>
-        getProgressStreamControls(stream, this.session),
+        getProgressStreamControls(stream, this.sessionForStream(stream)),
       deleteStream: (stream) => this.deleteStream(stream),
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
@@ -371,14 +379,6 @@ export class DesktopProgressBridge {
       this.session,
       this.runtimeHost,
     );
-    this.toolEditApprovals = createDesktopToolEditApprovalController({
-      runtimeHost: this.runtimeHost,
-      session: this.session,
-      openPath: options.openPath,
-      openBuildDisplay: options.openBuildDisplay,
-      openDiff: options.openDiff,
-      showErrorMessage: this.options.showErrorMessage,
-    });
     this.fileActions = new DesktopProgressFileActions(
       {
         openPath: options.openPath,
@@ -535,6 +535,7 @@ export class DesktopProgressBridge {
         bypass: {
           runtimeHost: this.runtimeHost,
           session: this.session,
+          sessionForStream: (stream) => this.sessionForStream(stream),
         },
         file: {
           openFile: async (file, line) => {
@@ -691,8 +692,8 @@ export class DesktopProgressBridge {
 
   dispose(): void {
     this.detachResultToast?.();
-    this.detachHostInteractions();
     this.executionRebinder.dispose();
+    this.detachHostInteractions();
     this.toolEditApprovals.dispose();
     this.unsubscribe();
     this.backend.dispose();
@@ -1149,12 +1150,14 @@ export class DesktopProgressBridge {
     ) {
       return;
     }
+    const ownerSession = this.sessionForStream(streamId);
     this.deletedStreams.add(streamId);
-    this.sessionProgress.onStreamDeleted(streamId);
 
     // Releases approval state (pending approvals, bypass flags, pending
-    // requests) and the follow-up queue for this stream.
-    releaseStreamResources(streamId, this.session);
+    // requests) and the follow-up queue for this stream. Do this before the
+    // deletion event releases the rebound binding that identifies the owner.
+    releaseStreamResources(streamId, ownerSession);
+    this.sessionProgress.onStreamDeleted(streamId);
 
     this.releaseApprovalsForStream(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
@@ -1177,7 +1180,7 @@ export class DesktopProgressBridge {
     // approvals or bypass flags.
     for (const streamId of streamIds) {
       this.deletedStreams.add(streamId);
-      releaseStreamResources(streamId, this.session);
+      releaseStreamResources(streamId, this.sessionForStream(streamId));
     }
     // Catch pending approvals with no concrete stream context (undefined or
     // empty streamId) — the per-stream loop skips them because they do not
@@ -1227,16 +1230,23 @@ export class DesktopProgressBridge {
   }
 
   private stopStream(streamId: StreamTabId): void {
+    const ownerSession = this.sessionForStream(streamId);
     // Kind-scoped: clear only the pending retry panel for this stream.
-    this.session.interactions.cancel({
+    ownerSession.interactions.cancel({
       streamId,
       kind: 'retry',
       cause: 'Retry request cleared.',
     });
-    this.session.executions.stopAgentStream(streamId, {
+    ownerSession.executions.stopAgentStream(streamId, {
       detachActiveChildren: detachSubagentsOnStop(),
       runtimeHost: this.runtimeHost,
     });
+  }
+
+  private sessionForStream(streamId: StreamTabId): SessionHandle {
+    return (
+      this.executionRebinder.ownerSessionForStream(streamId) ?? this.session
+    );
   }
 
   async tryResumeStream(streamId: StreamTabId): Promise<boolean> {

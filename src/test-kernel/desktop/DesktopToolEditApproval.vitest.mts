@@ -42,6 +42,11 @@ interface DesktopToolEditApprovalModule {
     showErrorMessage?: (message: string) => Promise<void> | void;
     tempRoot?: string;
   }): {
+    cancel(selector?: {
+      streamId?: string | null;
+      kind?: string;
+      cause?: string;
+    }): void;
     handleAction(payload: {
       requestId: string;
       action: string;
@@ -516,6 +521,157 @@ describe('desktop tool edit approval', () => {
         controller.dispose();
         await rm(tempRoot, { recursive: true, force: true });
         await rm(workspaceRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
+  approvalTest(
+    'does not present a stream approval cancelled during initialization',
+    async () => {
+      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const { requestToolEditApproval, desktopModule } =
+        await loadApprovalModules();
+      const runtimeHost = createRecordingRuntimeHost();
+      const controller = desktopModule.createDesktopToolEditApprovalController({
+        runtimeHost,
+        session: createTestSession(),
+        tempRoot,
+      });
+      useControllerApproval(controller);
+
+      try {
+        const resultPromise = requestToolEditApproval({
+          path: '/workspace/cancel-during-init.tex',
+          originalContent: 'old\n',
+          proposedContent: 'new\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-cancel-during-init',
+        });
+        controller.cancel({
+          kind: 'toolEdit',
+          streamId: 'stream-cancel-during-init',
+          cause: 'Owning execution ended.',
+        });
+
+        await expect(resultPromise).resolves.toMatchObject({
+          accepted: false,
+          userMessage: 'Owning execution ended.',
+        });
+        expect(runtimeHost.shownToolEditPermissions).toEqual([]);
+        expect(runtimeHost.resolvedToolEditPermissions).toEqual([]);
+        await waitForEmptyDir(tempRoot);
+      } finally {
+        controller.dispose();
+        await rm(tempRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
+  approvalTest(
+    'does not present an approval when disposed during initialization',
+    async () => {
+      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const { requestToolEditApproval, desktopModule } =
+        await loadApprovalModules();
+      const runtimeHost = createRecordingRuntimeHost();
+      const controller = desktopModule.createDesktopToolEditApprovalController({
+        runtimeHost,
+        session: createTestSession(),
+        tempRoot,
+      });
+      useControllerApproval(controller);
+
+      try {
+        const resultPromise = requestToolEditApproval({
+          path: '/workspace/dispose-during-init.tex',
+          originalContent: 'old\n',
+          proposedContent: 'new\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-dispose-during-init',
+        });
+        controller.dispose();
+
+        await expect(resultPromise).resolves.toMatchObject({
+          accepted: false,
+          userMessage: 'Desktop session disposed.',
+        });
+        expect(runtimeHost.shownToolEditPermissions).toEqual([]);
+        expect(runtimeHost.resolvedToolEditPermissions).toEqual([]);
+        await waitForEmptyDir(tempRoot);
+      } finally {
+        controller.dispose();
+        await rm(tempRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
+  approvalTest(
+    'cancels only tool-edit approvals selected for the owning stream',
+    async () => {
+      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const { requestToolEditApproval, desktopModule } =
+        await loadApprovalModules();
+      const runtimeHost = createRecordingRuntimeHost();
+      const controller = desktopModule.createDesktopToolEditApprovalController({
+        runtimeHost,
+        session: createTestSession(),
+        tempRoot,
+      });
+      useControllerApproval(controller);
+      const { shownToolEditPermissions: shown } = runtimeHost;
+      const { resolvedToolEditPermissions: resolved } = runtimeHost;
+
+      try {
+        const cancelledPromise = requestToolEditApproval({
+          path: '/workspace/cancelled.tex',
+          originalContent: 'old\n',
+          proposedContent: 'new\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-cancelled',
+        });
+        const retainedPromise = requestToolEditApproval({
+          path: '/workspace/retained.tex',
+          originalContent: 'old\n',
+          proposedContent: 'new\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-retained',
+        });
+        await vi.waitFor(() => expect(shown).toHaveLength(2));
+        const cancelledRequest = shown.find(
+          (request) => request.streamId === 'stream-cancelled',
+        );
+        const retainedRequest = shown.find(
+          (request) => request.streamId === 'stream-retained',
+        );
+        if (!cancelledRequest || !retainedRequest) {
+          throw new Error('Expected both stream-scoped approval prompts.');
+        }
+
+        controller.cancel({
+          kind: 'toolEdit',
+          streamId: 'stream-cancelled',
+          cause: 'Owning execution ended.',
+        });
+
+        await expect(cancelledPromise).resolves.toMatchObject({
+          accepted: false,
+          userMessage: 'Owning execution ended.',
+        });
+        expect(resolved).toEqual([{ requestId: cancelledRequest.requestId }]);
+
+        controller.handleAction({
+          requestId: retainedRequest.requestId,
+          action: 'reject',
+          feedback: 'Retained request resolved normally.',
+        });
+        await expect(retainedPromise).resolves.toMatchObject({
+          accepted: false,
+          userMessage: 'Retained request resolved normally.',
+        });
+        await waitForEmptyDir(tempRoot);
+      } finally {
+        controller.dispose();
+        await rm(tempRoot, { recursive: true, force: true });
       }
     },
   );
