@@ -18,7 +18,8 @@ import {
 } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
-  deliverChildRunFollowUp: vi.fn(),
+  enqueueChildRunFollowUp: vi.fn(),
+  wakeChildRunFollowUp: vi.fn(),
   executeAgent: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
@@ -45,7 +46,8 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 
 vi.mock('@tools/childRunDelivery', () => ({
-  deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
+  enqueueChildRunFollowUp: mocks.enqueueChildRunFollowUp,
+  wakeChildRunFollowUp: mocks.wakeChildRunFollowUp,
   persistChildRunReport: mocks.persistChildRunReport,
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,
 }));
@@ -80,7 +82,11 @@ function baseParams(parentSession = new SessionHandle()) {
 describe('NativeToolUseStrategy', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+    mocks.enqueueChildRunFollowUp.mockResolvedValue({
+      kind: 'enqueued',
+      sendResult: { status: 'sent' },
+    });
+    mocks.wakeChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
     mocks.synchronizeAgentResultOutcome.mockResolvedValue(undefined);
@@ -400,7 +406,7 @@ describe('NativeToolUseStrategy', () => {
         strategy,
       });
       await vi.waitFor(() =>
-        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
+        expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(1),
       );
 
       session.followUps.acquire(childStreamId).enqueue({
@@ -412,7 +418,7 @@ describe('NativeToolUseStrategy', () => {
         expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledTimes(1),
       );
       await vi.waitFor(() =>
-        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(2),
+        expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(2),
       );
       // Give an accidentally re-enqueued batch enough time to start a second
       // immediate resume. The guarded mock above prevents an actual busy loop.
@@ -431,7 +437,7 @@ describe('NativeToolUseStrategy', () => {
       ]);
       expect(session.followUps.getAll(childStreamId)).toEqual([]);
       expect(session.status.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
-      const resumedDeliveries = mocks.deliverChildRunFollowUp.mock.calls.filter(
+      const resumedDeliveries = mocks.enqueueChildRunFollowUp.mock.calls.filter(
         ([delivery]) => delivery.followUp.text.includes('follow-up response'),
       );
       expect(resumedDeliveries).toHaveLength(1);

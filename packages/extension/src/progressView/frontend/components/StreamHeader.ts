@@ -30,6 +30,7 @@ import {
 } from '@shared/streams/streamStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA icon component
@@ -42,7 +43,6 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
 import { archivedContext } from '../contexts/streamContexts';
 import { ProgressEvents } from '../events';
-import { getComposedPathElement } from '../utils';
 import { toolbarToggleStyles } from '../styles/toolbarToggleStyles';
 import {
   renderProgressBadgeContent,
@@ -347,8 +347,9 @@ export class StreamHeader extends LitElement {
     // sibling <wa-tooltip> elements share the same active-state-aware title.
     // The tooltips live OUTSIDE <wa-button-group>: the group's rounded-corner
     // styling keys off ::slotted(:first-child)/(:last-child), so interleaving
-    // tooltip nodes between the buttons would break those selectors. They
-    // anchor by `for=${btn.id}` within this shadow root instead.
+    // tooltip nodes between the buttons would break those selectors —
+    // `renderIconActionButtonParts` keeps them apart, and each anchors by
+    // `for=${btn.id}` within this shadow root.
     const toolbarButtonViews = (toolbarButtons as ToolbarButton[]).map(
       (btn) => {
         const { disabled: computedDisabled, hidden } = this.getButtonState(
@@ -359,8 +360,8 @@ export class StreamHeader extends LitElement {
           hasExecutionId,
         );
         // Read-only trace-viewer export: no toolbar action reaches a live
-        // backend. handleToolbarClick already checks the disabled attribute
-        // before dispatching, so this one flag both looks and behaves inert.
+        // backend — the onClick below re-checks `disabled` before
+        // dispatching, so this one flag both looks and behaves inert.
         const disabled = this.archived || computedDisabled;
         const isActive = Boolean(
           btn.isToggle &&
@@ -369,13 +370,29 @@ export class StreamHeader extends LitElement {
             : this.yoloActive),
         );
         const title = isActive && btn.titleActive ? btn.titleActive : btn.title;
-        const classes = classMap({
-          'action-icon-button': true,
-          ...(btn.className ? { [btn.className]: true } : {}),
-          'toolbar-button--hidden': hidden,
-          'is-active': isActive,
+        const className = [
+          btn.className,
+          hidden ? 'toolbar-button--hidden' : undefined,
+          isActive ? 'is-active' : undefined,
+        ]
+          .filter(Boolean)
+          .join(' ');
+        const { button, tooltip } = renderIconActionButtonParts({
+          id: btn.id,
+          icon: btn.icon as TeXRAIconName,
+          label: title,
+          tooltip: title,
+          className,
+          disabled,
+          ariaHidden: hidden,
+          onClick: () => {
+            if (disabled) return;
+            this.dispatchEvent(
+              ProgressEvents.toolbarCommand({ command: btn.command }),
+            );
+          },
         });
-        return { btn, disabled, hidden, title, classes };
+        return { id: btn.id, hidden, button, tooltip };
       },
     );
 
@@ -410,34 +427,17 @@ export class StreamHeader extends LitElement {
               id=${ELEMENT_IDS.TOOLBAR_CONTAINER}
               label="Stream actions"
               data-agent-mode=${agentCategory}
-              @click=${this.handleToolbarClick}
             >
               ${repeat(
                 toolbarButtonViews,
-                (view) => view.btn.id,
-                ({ btn, disabled, hidden, title, classes }) => html`
-                  <wa-button
-                    id=${btn.id}
-                    class=${classes}
-                    appearance="plain"
-                    variant="neutral"
-                    size="small"
-                    type="button"
-                    aria-label=${title}
-                    data-command=${btn.command}
-                    aria-hidden=${hidden ? 'true' : 'false'}
-                    ?disabled=${disabled}
-                  >
-                    ${waIcon(btn.icon as TeXRAIconName)}
-                  </wa-button>
-                `,
+                (view) => view.id,
+                (view) => view.button,
               )}
             </wa-button-group>
             ${repeat(
               toolbarButtonViews.filter((view) => !view.hidden),
-              (view) => view.btn.id,
-              (view) =>
-                html`<wa-tooltip for=${view.btn.id}>${view.title}</wa-tooltip>`,
+              (view) => view.id,
+              (view) => view.tooltip,
             )}
           </div>
         </div>
@@ -543,15 +543,5 @@ export class StreamHeader extends LitElement {
     this.dispatchEvent(
       ProgressEvents.streamSwitch({ streamId: parentStreamId }),
     );
-  }
-
-  private handleToolbarClick(event: MouseEvent) {
-    const button = getComposedPathElement<HTMLElement>(event, '[data-command]');
-    if (!button || button.hasAttribute('disabled')) return;
-
-    const command = button.dataset.command;
-    if (!command) return;
-
-    this.dispatchEvent(ProgressEvents.toolbarCommand({ command }));
   }
 }
