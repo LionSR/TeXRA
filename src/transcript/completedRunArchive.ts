@@ -140,8 +140,8 @@ export interface CompletedRunConversationReadResult {
 
 export interface CompletedRunConversationReaderOptions extends CompletedRunReaderOptions {
   /**
-   * An already-open store. When omitted a call-scoped persistent instance is
-   * opened so this read path never reloads a shared live store.
+   * An already-open store. When omitted a call-scoped read-only instance is
+   * opened so this reader neither reloads a live store nor mutates persistence.
    */
   readonly streamLogStore?: StreamLogStore;
 }
@@ -477,7 +477,7 @@ export async function readCompletedRunConversation(
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
   let streamLogStore = options.streamLogStore;
   if (!streamLogStore) {
-    streamLogStore = await StreamLogStore.open();
+    streamLogStore = await StreamLogStore.openReadOnly();
   }
   const loadedStreamLogStore = streamLogStore;
 

@@ -23,6 +23,7 @@ import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import {
   defaultSession,
   initializeDefaultSession,
+  teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { initializePolishModel } from '@agent/runtime/polishModel';
@@ -770,6 +771,10 @@ export async function activate(context: vscode.ExtensionContext) {
 export async function deactivate() {
   const host = lifecycleHost;
   lifecycleHost = undefined;
-  leanVscodeIntegration.clearVscodeLeanServerEntries();
-  await host?.runShutdown();
+  try {
+    leanVscodeIntegration.clearVscodeLeanServerEntries();
+    await host?.runShutdown();
+  } finally {
+    teardownDefaultSession();
+  }
 }

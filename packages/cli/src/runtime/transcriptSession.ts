@@ -23,8 +23,12 @@ type OpenPersistentStore = () => Promise<StreamLogStore>;
 
 function persistentSession(session: SessionHandle): CliTranscriptSession {
   if (session.transcripts.mode.kind !== 'persistent') {
+    const detail =
+      session.transcripts.mode.kind === 'ephemeral'
+        ? `ephemeral (${session.transcripts.mode.reason})`
+        : 'read-only';
     throw new Error(
-      `Persistent transcripts are required, but the default session is ephemeral (${session.transcripts.mode.reason}).`,
+      `Persistent transcripts are required, but the default session is ${detail}.`,
     );
   }
   return { session, canResume: true };
@@ -53,6 +57,9 @@ export async function initializeInteractiveTranscriptSession(
   if (existing) {
     if (existing.transcripts.mode.kind === 'persistent') {
       return { session: existing, canResume: true };
+    }
+    if (existing.transcripts.mode.kind === 'read-only') {
+      return persistentSession(existing);
     }
     if (policy.onPersistentOpenFailure === 'fail') {
       return persistentSession(existing);
