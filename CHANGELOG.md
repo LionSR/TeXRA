@@ -50,6 +50,14 @@ All notable changes to this project will be documented in this file.
   thinking, tool, and file entries use Web Awesome's native left-side
   disclosure placement consistently.
 
+### Desktop
+
+#### Bug Fixes
+
+- **Approvals survive window replacement** — closing and reopening the desktop
+  window no longer rejects or loses an approval requested by a session that is
+  still running.
+
 ### CLI
 
 #### New Features

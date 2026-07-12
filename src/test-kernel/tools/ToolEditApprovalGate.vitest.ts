@@ -35,6 +35,7 @@ const TEST_STREAM_ID = 'TestAgent@model: test.tex' as StreamTabId;
 let testApprovalHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
+let detachHostInteractions = (): void => {};
 
 async function installPlatform(
   config: Record<string, unknown> = {},
@@ -42,7 +43,8 @@ async function installPlatform(
 ) {
   testApprovalHandler = undefined;
   await installFakePlatform({ workspacePath: '/workspace', config, files });
-  defaultSession().useHostInteractions({
+  detachHostInteractions();
+  detachHostInteractions = defaultSession().useHostInteractions({
     requestToolEditApproval: (request) => {
       const handler = testApprovalHandler;
       if (!handler) {
@@ -93,7 +95,8 @@ describe('Tool edit approval gating', () => {
     WorkspaceFS.write = originalWrite;
     WorkspaceFS.appendFile = originalAppend;
     testApprovalHandler = undefined;
-    defaultSession().interactions.dispose();
+    detachHostInteractions();
+    detachHostInteractions = () => {};
     cleanupAllApprovals();
   });
 

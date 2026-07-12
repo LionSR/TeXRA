@@ -5,6 +5,7 @@ import {
   type HostBashApprovalRequest,
   type HostBashApprovalResult,
   type HostInteractionCancelSelector,
+  type HostInteractionOptions,
   type HostInteractionResolution,
   type HostInteractions,
   type HostPlanApprovalRequest,
@@ -34,21 +35,25 @@ type PendingDesktopInteraction =
   | {
       kind: 'bash';
       streamId?: StreamTabId;
+      cancellationScope?: object;
       settle: (result: HostBashApprovalResult) => void;
     }
   | {
       kind: 'plan';
       streamId: StreamTabId;
+      cancellationScope?: object;
       settle: (result: PlanApprovalResult) => void;
     }
   | {
       kind: 'proposal';
       streamId: StreamTabId;
+      cancellationScope?: object;
       settle: (result: ProposalResult) => void;
     }
   | {
       kind: 'userQuestion';
       streamId?: StreamTabId;
+      cancellationScope?: object;
       settle: (result: HostUserQuestionResult) => void;
     };
 
@@ -75,12 +80,17 @@ class DesktopHostInteractions implements HostInteractions {
 
   requestToolEditApproval(
     request: ToolEditApprovalRequest,
+    options?: HostInteractionOptions,
   ): Promise<ToolEditApprovalResult> {
-    return this.options.getToolEditApprovals().requestApproval(request);
+    const approvals = this.options.getToolEditApprovals();
+    return options
+      ? approvals.requestApproval(request, options)
+      : approvals.requestApproval(request);
   }
 
   requestBashApproval(
     request: HostBashApprovalRequest,
+    options?: HostInteractionOptions,
   ): Promise<HostBashApprovalResult> {
     const requestId = `desktop-bash-${nanoid()}`;
     const streamId = request.streamId ?? undefined;
@@ -91,37 +101,48 @@ class DesktopHostInteractions implements HostInteractions {
       allowBypass: true,
       streamId: streamId ?? '',
     };
-    return this.showPending(requestId, { kind: 'bash', streamId }, (settle) => {
-      this.revealStream(streamId);
-      this.options.getApprovalHandlers().bash.show(payload);
-      return settle;
-    });
+    return this.showPending(
+      requestId,
+      { kind: 'bash', streamId, cancellationScope: options?.cancellationScope },
+      () => {
+        this.revealStream(streamId);
+        this.options.getApprovalHandlers().bash.show(payload);
+      },
+    );
   }
 
   requestPlanApproval(
     request: HostPlanApprovalRequest,
+    options?: HostInteractionOptions,
   ): Promise<PlanApprovalResult> {
     return this.showPending(
       request.approvalId,
-      { kind: 'plan', streamId: request.streamId },
-      (settle) => {
+      {
+        kind: 'plan',
+        streamId: request.streamId,
+        cancellationScope: options?.cancellationScope,
+      },
+      () => {
         this.revealStream(request.streamId);
         this.options.getApprovalHandlers().planApproval.show(request);
-        return settle;
       },
     );
   }
 
   requestAgentProposal(
     request: AgentProposalPermission,
+    options?: HostInteractionOptions,
   ): Promise<ProposalResult> {
     return this.showPending(
       request.proposalId,
-      { kind: 'proposal', streamId: request.streamId },
-      (settle) => {
+      {
+        kind: 'proposal',
+        streamId: request.streamId,
+        cancellationScope: options?.cancellationScope,
+      },
+      () => {
         this.revealStream(request.streamId);
         this.options.getApprovalHandlers().agentProposal.show(request);
-        return settle;
       },
     );
   }
@@ -132,15 +153,19 @@ class DesktopHostInteractions implements HostInteractions {
 
   askUserQuestion(
     request: Parameters<NonNullable<HostInteractions['askUserQuestion']>>[0],
+    options?: HostInteractionOptions,
   ): Promise<HostUserQuestionResult> {
     const streamId = request.streamId || undefined;
     return this.showPending(
       request.requestId,
-      { kind: 'userQuestion', streamId },
-      (settle) => {
+      {
+        kind: 'userQuestion',
+        streamId,
+        cancellationScope: options?.cancellationScope,
+      },
+      () => {
         this.revealStream(streamId);
         this.options.getApprovalHandlers().userQuestion.show(request);
-        return settle;
       },
     );
   }
@@ -198,6 +223,9 @@ class DesktopHostInteractions implements HostInteractions {
    * one settle identically for a given kind.
    */
   cancel(selector: HostInteractionCancelSelector = {}): void {
+    if (selector.kind == null || selector.kind === 'toolEdit') {
+      this.options.getToolEditApprovals().cancel(selector);
+    }
     for (const [requestId, request] of [...this.pendingRequests.entries()]) {
       if (!matchesCancelSelector(request, selector)) continue;
       this.resolve(requestId, {
@@ -215,7 +243,7 @@ class DesktopHostInteractions implements HostInteractions {
   private showPending<TResult, TEntry extends PendingDesktopInteraction>(
     requestId: string,
     entry: Omit<TEntry, 'settle'>,
-    show: (settle: TEntry['settle']) => TEntry['settle'],
+    show: () => void,
   ): Promise<TResult> {
     // Replacement cancellation: a request re-issued under a still-pending id
     // rejects the stale prompt before the replacement is shown.
@@ -227,11 +255,17 @@ class DesktopHostInteractions implements HostInteractions {
       });
     }
     return new Promise<TResult>((resolve) => {
-      const settle = show((result: unknown) => resolve(result as TResult));
+      const settle = (result: unknown) => resolve(result as TResult);
       this.pendingRequests.set(requestId, {
         ...entry,
         settle,
       } as TEntry);
+      try {
+        show();
+      } catch (error) {
+        this.pendingRequests.delete(requestId);
+        throw error;
+      }
     });
   }
 

@@ -24,6 +24,7 @@ import { createRecordingHost } from '../progressTestUtils';
 let testApprovalHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
+let detachHostInteractions = (): void => {};
 
 function installTestPlatform(): Promise<void> {
   return installPlatform({
@@ -31,7 +32,8 @@ function installTestPlatform(): Promise<void> {
     storagePath,
     globalStoragePath: '/global/.texra/storage',
   }).then(() => {
-    defaultSession().useHostInteractions({
+    detachHostInteractions();
+    detachHostInteractions = defaultSession().useHostInteractions({
       requestToolEditApproval: (request) => {
         const handler = testApprovalHandler;
         if (!handler) {
@@ -117,7 +119,8 @@ describe('accept_run_files progress events', () => {
     AbsoluteFS.read = originalAbsoluteRead;
     FlexibleFS.read = originalFlexibleRead;
     testApprovalHandler = undefined;
-    defaultSession().interactions.dispose();
+    detachHostInteractions();
+    detachHostInteractions = () => {};
     cleanupAllApprovals();
   });
 

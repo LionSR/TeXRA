@@ -4,6 +4,11 @@ import path from 'node:path';
 import { nanoid } from 'nanoid';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  matchesCancelSelector,
+  type HostInteractionCancelSelector,
+  type HostInteractionOptions,
+} from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { DiffViewHost } from '@hosts/uiHosts';
@@ -40,6 +45,7 @@ export interface DesktopToolEditApprovalOptions {
 }
 
 export interface DesktopToolEditApprovalController {
+  cancel(selector?: HostInteractionCancelSelector): void;
   handleAction(payload: {
     requestId: string;
     action: ToolEditApprovalAction;
@@ -47,6 +53,7 @@ export interface DesktopToolEditApprovalController {
   }): boolean;
   requestApproval(
     request: ToolEditApprovalRequest,
+    options?: HostInteractionOptions,
   ): Promise<ToolEditApprovalResult>;
   dispose(): void;
 }
@@ -60,9 +67,20 @@ interface DesktopPendingToolEditApproval extends LatexPreviewEntry {
   originalContent: string;
   proposedContent: string;
   settle: (result: ToolEditApprovalResult) => void;
+  cancellationScope?: object;
+}
+
+interface InitializingToolEditApproval {
+  readonly request: ToolEditApprovalRequest;
+  readonly cancellationScope?: object;
+  cancellation?: ToolEditApprovalResult;
 }
 
 class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalController {
+  private readonly initializing = new Map<
+    string,
+    InitializingToolEditApproval
+  >();
   private readonly pending = new Map<string, DesktopPendingToolEditApproval>();
   private disposed = false;
 
@@ -70,6 +88,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
 
   async requestApproval(
     request: ToolEditApprovalRequest,
+    options?: HostInteractionOptions,
   ): Promise<ToolEditApprovalResult> {
     if (this.disposed) {
       throw new Error('Desktop tool edit approval controller is disposed.');
@@ -80,7 +99,27 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       request.originalContent,
       request.proposedContent,
     );
-    const entry = await this.createPendingEntry(requestId, request);
+    const initialization: InitializingToolEditApproval = {
+      request,
+      cancellationScope: options?.cancellationScope,
+    };
+    this.initializing.set(requestId, initialization);
+    let entry: DesktopPendingToolEditApproval;
+    try {
+      entry = await this.createPendingEntry(requestId, request);
+    } catch (error) {
+      this.initializing.delete(requestId);
+      throw error;
+    }
+    this.initializing.delete(requestId);
+    if (initialization.cancellation) {
+      this.cleanupEntry(entry);
+      return {
+        ...initialization.cancellation,
+        lineChanges: initialization.cancellation.lineChanges ?? lineChanges,
+      };
+    }
+    entry.cancellationScope = initialization.cancellationScope;
     let settled = false;
 
     const result = await new Promise<ToolEditApprovalResult>((resolve) => {
@@ -154,12 +193,50 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     }
   }
 
+  cancel(selector: HostInteractionCancelSelector = {}): void {
+    for (const initialization of this.initializing.values()) {
+      if (
+        initialization.cancellation ||
+        !matchesCancelSelector(
+          {
+            kind: 'toolEdit',
+            streamId: initialization.request.streamId ?? undefined,
+            cancellationScope: initialization.cancellationScope,
+          },
+          selector,
+        )
+      ) {
+        continue;
+      }
+      initialization.cancellation = {
+        accepted: false,
+        userMessage: selector.cause,
+      };
+    }
+    for (const [requestId, entry] of [...this.pending.entries()]) {
+      if (
+        !matchesCancelSelector(
+          {
+            kind: 'toolEdit',
+            streamId: entry.request.streamId ?? undefined,
+            cancellationScope: entry.cancellationScope,
+          },
+          selector,
+        )
+      ) {
+        continue;
+      }
+      this.settle(requestId, {
+        accepted: false,
+        userMessage: selector.cause,
+      });
+    }
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const requestId of [...this.pending.keys()]) {
-      this.settle(requestId, { accepted: false });
-    }
+    this.cancel({ cause: 'Desktop session disposed.' });
   }
 
   private async createPendingEntry(
