@@ -35,6 +35,12 @@ All notable changes to this project will be documented in this file.
 
 ### Extension (VS Code)
 
+#### New Features
+
+- **Team application offers Researcher Access when remote members are missing**
+  — applying a team while signed out now offers sign-in, reloads remote agents
+  after authentication, and reapplies the complete roster.
+
 #### Bug Fixes
 
 - **Lean project commands wait for the Lean extension to become ready** — cache

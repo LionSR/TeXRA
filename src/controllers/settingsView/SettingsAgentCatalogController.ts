@@ -41,7 +41,11 @@ export interface SettingsAgentCatalogControllerDeps {
 }
 
 export type SettingsAgentPresetApplyResult =
-  | { ok: true; preset: AgentModePreset }
+  | {
+      ok: true;
+      preset: AgentModePreset;
+      unresolvedNames: string[];
+    }
   | { ok: false; reason: 'unknownPreset' };
 
 /**
@@ -171,9 +175,12 @@ export class SettingsAgentCatalogController {
     const preset = this.getPreset(presetId);
     if (!preset) return { ok: false, reason: 'unknownPreset' };
 
-    await applyPresetRoster(this.deps.state, preset);
+    const { unresolvedNames } = await applyPresetRoster(
+      this.deps.state,
+      preset,
+    );
 
-    return { ok: true, preset };
+    return { ok: true, preset, unresolvedNames };
   }
 
   async saveCurrentPreset(name: string): Promise<AgentModePreset> {
