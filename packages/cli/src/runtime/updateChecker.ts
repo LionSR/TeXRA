@@ -333,7 +333,8 @@ export interface CheckCliUpdateAvailableOptions {
  * available, `notify` resolved (the user actually saw it). Any other outcome
  * (offline, registry hiccup, failed tap refresh, killed prompt) leaves the
  * stamp unwritten so the next launch retries instead of being suppressed for
- * a full day.
+ * a full day. The stamp write itself is best-effort: a failed write never
+ * rejects the completed attempt (it only means an early re-check).
  */
 export async function checkCliUpdateAvailable({
   currentVersion,
@@ -355,11 +356,19 @@ export async function checkCliUpdateAvailable({
       ? version
       : undefined;
   if (latest !== undefined) await notify(latest);
-  if (version && refreshed) {
-    await globalState.update(
-      GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-      nowMs,
-    );
+  if (version !== undefined && refreshed) {
+    try {
+      await globalState.update(
+        GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
+        nowMs,
+      );
+    } catch {
+      // Best-effort: the stamp write can fail even when `JsonStore.open`
+      // succeeded (readable-but-unwritable global storage). By this point the
+      // whole attempt — including the notify prompt — has completed, so a
+      // failed stamp must not reject and cancel an update the user already
+      // accepted; worst case the next launch re-checks a day early.
+    }
   }
   return latest;
 }

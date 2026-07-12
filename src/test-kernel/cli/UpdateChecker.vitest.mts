@@ -470,6 +470,31 @@ describe('checkCliUpdateAvailable', () => {
     ).toBeUndefined();
   });
 
+  it('still reports the update when the throttle stamp write fails', async () => {
+    // A readable-but-unwritable global state file lets `JsonStore.open`
+    // succeed while `update` rejects. The stamp is best-effort: its failure
+    // must not reject the completed attempt (which would cancel an update the
+    // user already accepted via the notify prompt) — the next launch just
+    // re-checks a day early.
+    const globalState = new MemoryStateStore();
+    globalState.update = async () => {
+      throw new Error('EACCES: permission denied');
+    };
+    const notified: string[] = [];
+
+    const latest = await checkCliUpdateAvailable({
+      currentVersion,
+      globalState,
+      fetchLatest: async () => ({ version: latestVersion, refreshed: true }),
+      notify: async (v) => {
+        notified.push(v);
+      },
+    });
+
+    expect(latest).toBe(latestVersion);
+    expect(notified).toEqual([latestVersion]);
+  });
+
   it('persists the throttle stamp only after notify completes', async () => {
     const globalState = new MemoryStateStore();
     const nowMs = Date.UTC(2026, 0, 1);
