@@ -6,7 +6,7 @@
 import { memo } from 'react';
 import { Box, Text } from 'ink';
 
-import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
+import { COLOR_ERROR, COLOR_HINT } from '../ui/colors';
 import { Markdown } from '../render/Markdown';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -18,6 +18,7 @@ import {
   USER_ENTRY_PREFIX,
 } from '../ui/glyphs';
 import { isInquiryContinuationText } from './transcriptEntries';
+import { childStatusColor } from './SubagentListDisplay';
 import { ToolUseRow } from './ToolUseRow';
 import { toolUseDisplayLines } from './toolRenderers';
 import type {
@@ -194,7 +195,9 @@ function ProcessEntryRow({
     );
   }
 
-  const color = process.isError ? COLOR_ERROR : COLOR_SUCCESS;
+  // Same status→color owner as the live SubagentList rows, so a cancelled or
+  // stopped child finalizes with the neutral dot instead of a green one.
+  const color = childStatusColor(process.status);
   const [, ...tailLines] = completedProcessDisplayLines(process);
   return (
     <Box
