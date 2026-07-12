@@ -866,6 +866,140 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(requests[2].max_output_tokens, 99990);
   });
 
+  it('compacts before sending when the live pre-flight count crosses the threshold', async () => {
+    const handler = createHandler({
+      openRouterOnly: false,
+      contextWindow: 200000,
+    });
+    const compactCalls: ResponseInputItem[][] = [];
+    const requests: any[] = [];
+    let tokenCountCalls = 0;
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => {
+            tokenCountCalls += 1;
+            // Turn 2's live count lands between the 75% threshold (150k) and
+            // the 200k window: the stale cumulative from turn 1 (100k) would
+            // never have triggered, but the live count must.
+            return { input_tokens: tokenCountCalls === 2 ? 180000 : 1000 };
+          },
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse(`resp-${requests.length}`, {
+            input_tokens: 100000,
+          });
+        },
+      },
+    };
+    (
+      handler as unknown as { compactConversation: unknown }
+    ).compactConversation = async (
+      _client: unknown,
+      msgs: ResponseInputItem[],
+    ) => {
+      compactCalls.push(msgs);
+      const compacted = msgs.slice(-1);
+      (handler as unknown as { compactionResult: unknown }).compactionResult =
+        {
+          sourceMessages: msgs,
+          compactedMessages: compacted,
+          tokensAfter: 1000,
+        };
+      return compacted;
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+
+    const secondTurn = createMessages(4);
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: secondTurn,
+      temperature: 0,
+    });
+
+    assert.equal(result.response.id, 'resp-2');
+    assert.equal(requests.length, 2);
+    assert.equal(compactCalls.length, 1);
+    assert.equal(tokenCountCalls, 3);
+    assert.deepEqual(requests[1].input, secondTurn.slice(-1));
+  });
+
+  it('recovers a pre-flight context-window overflow by dropping the chain and compacting', async () => {
+    const handler = createHandler({
+      openRouterOnly: false,
+      contextWindow: 200000,
+    });
+    const compactCalls: ResponseInputItem[][] = [];
+    const requests: any[] = [];
+    let tokenCountCalls = 0;
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => {
+            tokenCountCalls += 1;
+            // Turn 2's pre-flight count overflows the 200k window (the count
+            // includes server-side chained history); the internal retry after
+            // dropping the chain and compacting fits again.
+            return { input_tokens: tokenCountCalls === 2 ? 300000 : 1000 };
+          },
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse(`resp-${requests.length}`, {
+            input_tokens: 100000,
+          });
+        },
+      },
+    };
+    (
+      handler as unknown as {
+        compactConversation: unknown;
+        compactionResult: unknown;
+      }
+    ).compactConversation = async (
+      _client: unknown,
+      msgs: ResponseInputItem[],
+    ) => {
+      compactCalls.push(msgs);
+      const compacted = msgs.slice(-1);
+      (handler as unknown as { compactionResult: unknown }).compactionResult =
+        {
+          sourceMessages: msgs,
+          compactedMessages: compacted,
+        };
+      return compacted;
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+
+    const secondTurn = createMessages(4);
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: secondTurn,
+      temperature: 0,
+    });
+
+    // The overflow never escaped to the caller: the oversized chained request
+    // was never sent, and the recovered attempt went out unchained with the
+    // compacted transcript.
+    assert.equal(result.response.id, 'resp-2');
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].previous_response_id, undefined);
+    assert.equal(compactCalls.length, 1);
+    assert.equal(tokenCountCalls, 3);
+    assert.deepEqual(requests[1].input, secondTurn.slice(-1));
+  });
+
   it('tags the fallback hard-failure throw with the context-window marker', () => {
     // Mirrors ModelHandler.validateTokenLimits (#8078, followed up in #8100):
     // isContextWindowError() must recognize this throw via its typed marker,

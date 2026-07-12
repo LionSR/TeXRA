@@ -164,7 +164,7 @@ function createMessages(count: number): ResponseInputItem[] {
 }
 
 describe('ModelHandlerOpenAIResponse automatic compaction', () => {
-  it('compacts before the next response when prior usage crosses the threshold', async () => {
+  it('compacts before the next response when the live count crosses the threshold', async () => {
     const handler = createHandler();
     const requests: any[] = [];
     const compactRequests: any[] = [];
@@ -178,7 +178,10 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const client = {
       responses: {
         inputTokens: {
-          count: async () => ({ input_tokens: 100 }),
+          // 800 > the 75% threshold (750) of the 1000-token window. Turn 1
+          // has nothing to compact (no prior response); turn 2 compacts off
+          // this live pre-flight count.
+          count: async () => ({ input_tokens: 800 }),
         },
         compact: async (params: any) => {
           compactRequests.push(params);
@@ -237,7 +240,9 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const client = {
       responses: {
         inputTokens: {
-          count: async () => ({ input_tokens: 100 }),
+          // Over the 750-token threshold: turn 2's live count triggers the
+          // compaction whose payload the same-turn retry must then reuse.
+          count: async () => ({ input_tokens: 800 }),
         },
         compact: async (params: any) => {
           compactRequests.push(params);
@@ -315,10 +320,18 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
         content: [{ type: 'input_text', text: 'compacted state' }],
       },
     ] as unknown as ResponseInputItem[];
+    let tokenCountCalls = 0;
     const client = {
       responses: {
         inputTokens: {
-          count: async () => ({ input_tokens: 100 }),
+          count: async () => {
+            tokenCountCalls += 1;
+            // Turn 1 and turn 2's pre-compaction counts are over the 750
+            // threshold (turn 1 has no prior response, so only turn 2
+            // compacts); after compaction the transcript is small again, so
+            // turn 3 stays under and must NOT compact.
+            return { input_tokens: tokenCountCalls <= 2 ? 800 : 160 };
+          },
         },
         compact: async (params: any) => {
           compactRequests.push(params);
@@ -354,8 +367,8 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const turn2NewMessage = { role: 'user', content: 'message 3' };
     sharedMessages.push(turn2NewMessage as ResponseInputItem);
 
-    // Turn 1's response crossed the compaction threshold (800 > 750), so
-    // turn 2 compacts.
+    // Turn 2's live pre-flight count crosses the compaction threshold
+    // (800 > 750), so turn 2 compacts.
     const turn2Result = await handler.createResponse({
       client: client as any,
       messages: sharedMessages,
