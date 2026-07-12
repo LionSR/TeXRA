@@ -174,6 +174,33 @@ describe('executeCommand', () => {
     assert.doesNotThrow(() => process.kill(childPid, 0));
     process.kill(childPid, 'SIGKILL');
   }, 20_000);
+
+  it('unblocks timed-out array-form await when a descendant holds stdio', async () => {
+    if (process.platform === 'win32') return;
+
+    const dir = mkdtempSync(join(tmpdir(), 'texra-exec-timeout-array-'));
+    tempDirs.push(dir);
+    const pidFile = join(dir, 'sleep.pid');
+    const promise = executeCommand(
+      ['bash', '-c', 'sleep 60 & echo $! > "$PID_FILE"; wait'],
+      {
+        cwd: dir,
+        env: { PID_FILE: pidFile },
+        timeout: 50,
+      },
+    );
+
+    await waitForFile(pidFile);
+    const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
+    assert.ok(Number.isInteger(childPid) && childPid > 0);
+
+    const result = await promise;
+
+    assert.equal(result.success, false);
+    assert.equal(result.timedOut, true);
+    assert.doesNotThrow(() => process.kill(childPid, 0));
+    process.kill(childPid, 'SIGKILL');
+  }, 20_000);
 });
 
 // ---------------------------------------------------------------------------

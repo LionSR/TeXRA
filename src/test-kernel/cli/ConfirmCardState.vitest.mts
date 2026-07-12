@@ -9,17 +9,17 @@ import {
 } from '@cli/chat/tui/modals/ConfirmCardState';
 
 describe('CLI confirm-card key handling', () => {
-  it('keeps y/n and escape approval behavior', () => {
+  it('approves with y, collects rejection feedback with n, and cancels with escape', () => {
     expect(confirmCardKeyAction('y', {}, false)).toBe('approve');
     expect(confirmCardKeyAction('Y', {}, false)).toBe('approve');
-    expect(confirmCardKeyAction('n', {}, false)).toBe('reject');
+    expect(confirmCardKeyAction('n', {}, false)).toBe('feedback');
     expect(confirmCardKeyAction('', { escape: true }, false)).toBe('reject');
     expect(confirmCardKeyAction('\u001B', {}, false)).toBe('reject');
     expect(confirmCardKeyAction('\u001Bn', {}, false)).toBe('ignore');
   });
 
-  it('enters feedback mode with e', () => {
-    expect(confirmCardKeyAction('e', {}, false)).toBe('feedback');
+  it('does not reserve a second key for rejection feedback', () => {
+    expect(confirmCardKeyAction('e', {}, false)).toBe('ignore');
   });
 
   it('only enables approve-always where the modal allows it', () => {
@@ -30,13 +30,12 @@ describe('CLI confirm-card key handling', () => {
   it('shows scoped session-wide approval hints for approval modals', () => {
     expect(
       confirmCardKeyHints({
-        alwaysAllowLabel: 'commands for session',
+        alwaysAllowLabel: 'approve all',
       }),
     ).toEqual([
       { key: 'y', action: 'approve' },
-      { key: 'n', action: 'reject' },
-      { key: 'a', action: 'commands for session' },
-      { key: 'e', action: 'feedback' },
+      { key: 'n', action: 'reject & note' },
+      { key: 'a', action: 'approve all' },
       { key: 'Esc', action: 'cancel' },
     ]);
 
@@ -47,12 +46,13 @@ describe('CLI confirm-card key handling', () => {
     ).toContainEqual({ key: 'a', action: 'approve edits for session' });
 
     const compactRendered = confirmCardKeyHintsForWidth({
-      alwaysAllowLabel: 'commands for session',
+      alwaysAllowLabel: 'approve all',
       maxColumns: 72,
     })
       .map((hint) => `${hint.key} ${hint.action}`)
       .join(' · ');
-    expect(compactRendered).toContain('a commands for session');
+    expect(compactRendered).toContain('a approve all');
+    expect(compactRendered).toContain('n reject & note');
     expect(compactRendered.length).toBeLessThanOrEqual(72);
   });
 
@@ -66,23 +66,24 @@ describe('CLI confirm-card key handling', () => {
   it('compacts long optional approval hints before hiding cancel', () => {
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'commands for session',
+        alwaysAllowLabel: 'approve all',
         maxColumns: 80,
       }),
     ).toEqual(
-      confirmCardKeyHints({ alwaysAllowLabel: 'commands for session' }),
+      confirmCardKeyHints({
+        alwaysAllowLabel: 'approve all',
+      }),
     );
 
     const compact = confirmCardKeyHintsForWidth({
-      alwaysAllowLabel: 'commands for session',
+      alwaysAllowLabel: 'approve all',
       maxColumns: 60,
     });
 
     expect(compact).toEqual([
       { key: 'y', action: 'approve' },
-      { key: 'n', action: 'reject' },
-      { key: 'a', action: 'cmd session' },
-      { key: 'e', action: 'note' },
+      { key: 'n', action: 'reject & note' },
+      { key: 'a', action: 'approve all' },
       { key: 'Esc', action: 'cancel' },
     ]);
     expect(
@@ -97,16 +98,16 @@ describe('CLI confirm-card key handling', () => {
     ).toContainEqual({ key: 'a', action: 'edit session' });
   });
 
-  it('keeps session-scope hints before feedback on mid-width terminals', () => {
+  it('keeps the approve-all hint on mid-width terminals', () => {
     const compact = confirmCardKeyHintsForWidth({
-      alwaysAllowLabel: 'commands for session',
+      alwaysAllowLabel: 'approve all',
       maxColumns: 50,
     });
 
     expect(compact).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
-      { key: 'a', action: 'cmd session' },
+      { key: 'a', action: 'all' },
       { key: 'Esc', action: 'cancel' },
     ]);
     expect(
@@ -117,19 +118,19 @@ describe('CLI confirm-card key handling', () => {
   it('drops optional approval hints before hiding cancel on narrow terminals', () => {
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'commands for session',
+        alwaysAllowLabel: 'approve all',
         maxColumns: 42,
       }),
     ).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
-      { key: 'e', action: 'note' },
+      { key: 'a', action: 'all' },
       { key: 'Esc', action: 'cancel' },
     ]);
 
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'commands for session',
+        alwaysAllowLabel: 'approve all',
         maxColumns: 36,
       }),
     ).toEqual([
@@ -140,7 +141,7 @@ describe('CLI confirm-card key handling', () => {
 
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'commands for session',
+        alwaysAllowLabel: 'approve all',
         maxColumns: 10,
       }),
     ).toEqual([{ key: 'Esc', action: 'cancel' }]);

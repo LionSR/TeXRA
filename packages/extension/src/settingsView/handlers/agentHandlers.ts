@@ -11,9 +11,15 @@ import * as vscode from 'vscode';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import { createKey, getAgent, loadAgents } from '@agent/index';
+import {
+  createKey,
+  getAgent,
+  loadAgents,
+  refresh as refreshAgents,
+} from '@agent/index';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { AUTH_COMMANDS } from '@auth/constants';
 import { workspaceSM, globalSM } from '@common/state';
 import {
   showLoggedErrorMessage,
@@ -26,6 +32,7 @@ import {
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { REMOTE_ORCHESTRATOR_AGENT_NAMES } from '@shared/constants/agents';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -36,6 +43,10 @@ import type { SettingsAgentDirectoryController } from '@controllers/settingsView
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
+
+const REMOTE_TEAM_AGENT_NAMES = new Set<string>(
+  REMOTE_ORCHESTRATOR_AGENT_NAMES,
+);
 
 /**
  * Agent selection, directory, and team handler delegate.
@@ -415,7 +426,7 @@ export class AgentHandlers {
   ): Promise<void> {
     try {
       await loadAgents();
-      const result = await this.catalogController.applyPreset(data.presetId);
+      let result = await this.catalogController.applyPreset(data.presetId);
       if (!result.ok) {
         await showLoggedMessage(
           this.ctx.channel,
@@ -424,14 +435,59 @@ export class AgentHandlers {
         return;
       }
 
+      const unresolvedRemoteAgents = result.unresolvedNames.filter((name) =>
+        REMOTE_TEAM_AGENT_NAMES.has(name),
+      );
+      if (
+        unresolvedRemoteAgents.length > 0 &&
+        !(await SupabaseClient.isAuthenticated())
+      ) {
+        const count = unresolvedRemoteAgents.length;
+        const choice = await vscode.window.showInformationMessage(
+          `The "${result.preset.name}" team includes ${count} ${count === 1 ? 'member' : 'members'} provided through Researcher Access. Sign in to make the full team available.`,
+          'Sign in',
+          'Use available members',
+        );
+        if (choice === 'Sign in') {
+          const signedIn = await vscode.commands.executeCommand<boolean>(
+            AUTH_COMMANDS.SIGN_IN,
+          );
+          if (signedIn) {
+            // A signed-out startup may already have completed an empty remote
+            // load, so a normal cached load would not discover the newly
+            // authorized agents.
+            await refreshAgents({ includeRemote: true });
+            const reapplied = await this.catalogController.applyPreset(
+              data.presetId,
+            );
+            if (!reapplied.ok) {
+              await this.refreshAfterAgentMutation(
+                this.catalogController.getPresetToolUseRoot(
+                  result.preset.toolUseAgents,
+                ),
+              );
+              await showLoggedMessage(
+                this.ctx.channel,
+                `Team no longer exists: ${data.presetId}`,
+              );
+              return;
+            }
+            result = reapplied;
+          }
+        }
+      }
+
       await this.refreshAfterAgentMutation(
         this.catalogController.getPresetToolUseRoot(
           result.preset.toolUseAgents,
         ),
       );
 
+      const unresolvedCount = result.unresolvedNames.length;
       void vscode.window.showInformationMessage(
-        `Applied "${result.preset.name}" team`,
+        unresolvedCount === 0
+          ? `Applied "${result.preset.name}" team`
+          : `Applied "${result.preset.name}" with ${unresolvedCount} ${unresolvedCount === 1 ? 'member' : 'members'} still unavailable`,
       );
     } catch (error) {
       await showLoggedErrorMessage(

@@ -1,6 +1,10 @@
-import { type StreamTabId, type StreamTabInfo } from '@shared/schemas';
+import { isInFlightPhase } from '@common/constants/streamStatus';
+import {
+  DEFAULT_STREAM_METADATA_STATUS,
+  type StreamTabId,
+  type StreamTabInfo,
+} from '@shared/schemas';
 
-import { ACTIVE_STREAM_STATUSES } from './constants';
 import type { StreamState } from './store';
 
 export type StreamBranchActivity = 'active' | 'finished' | 'unknown';
@@ -136,5 +140,6 @@ function classifyStreamActivity(
 ): StreamBranchActivity {
   const status = streamStates.get(streamId)?.status;
   if (status === undefined) return 'unknown';
-  return ACTIVE_STREAM_STATUSES.has(status) ? 'active' : 'finished';
+  const phase = status === DEFAULT_STREAM_METADATA_STATUS ? undefined : status;
+  return isInFlightPhase(phase) ? 'active' : 'finished';
 }

@@ -10,6 +10,7 @@ import {
   type CodexSession,
 } from '@auth/codex';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
 
@@ -81,6 +82,10 @@ export async function signInWithChatGptSubscription(
   let update: Awaited<ReturnType<typeof setPreferCodexSubscription>>;
   try {
     update = await setPreferCodexSubscription(true);
+    // The sign-in operation owns its model-availability postcondition. Every
+    // caller may now refresh a picker without inheriting a stale pre-login
+    // snapshot, including paths that do not pass through Settings.
+    invalidateModelOptionsCache();
   } catch (error) {
     await showLoggedErrorMessage(
       channel,
