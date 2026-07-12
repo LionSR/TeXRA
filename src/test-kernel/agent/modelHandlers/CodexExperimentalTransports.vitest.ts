@@ -34,14 +34,15 @@ function config(): ModelConfig {
     inputPrice: 0,
     outputPrice: 0,
     contextWindow: 200_000,
-    // Codex eligibility is derived from the top reasoning-effort tier (see
-    // providerCapabilities.ts), not from a hardcoded fullName allowlist.
+    // Codex eligibility comes from the registry's codexSubscription flag
+    // (see providerCapabilities.ts), not from tier/naming heuristics.
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsReasoning: true,
       reasoningEffort: ReasoningEffort.XHIGH,
     },
     openRouterOnly: false,
+    codexSubscription: true,
   };
 }
 
