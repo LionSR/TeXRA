@@ -81,17 +81,19 @@ export function computeOpenAIResponsePrice(
 /**
  * Normalizes OpenAI Responses API usage into the unified format. Mirrors
  * {@link normalizeOpenAIUsage} but reads the Responses token fields
- * (`input_tokens`/`output_tokens` and their `*_details`) and is fixed to the
- * `openai-response` usage provider.
+ * (`input_tokens`/`output_tokens` and their `*_details`). The usage provider
+ * comes from the handler (`openai-response` for OpenAI/Codex; other backends
+ * on this surface tag their own provider, e.g. `meta`).
  */
 export function normalizeOpenAIResponseUsage(
   rawUsage: ResponseUsage,
   responseTimeMs: number,
+  provider: NormalizedUsage['provider'],
   computePrice: (usage: ResponseUsage) => number,
 ): NormalizedUsage {
   return normalizeUsage(
     {
-      provider: 'openai-response',
+      provider,
       computePrice,
       extract: (usage) => ({
         inputTokens: usage.input_tokens ?? 0,

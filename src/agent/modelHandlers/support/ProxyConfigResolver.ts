@@ -48,7 +48,7 @@ const BASE_URLS: Record<ModelProvider, string | null> = {
   [ModelProvider.DASHSCOPE]: null, // Resolved dynamically (China/international toggle)
   [ModelProvider.MINIMAX]: null, // Resolved dynamically (China/international toggle)
   [ModelProvider.GLM]: null, // Resolved dynamically (China/international toggle)
-  [ModelProvider.META]: null,
+  [ModelProvider.META]: 'https://api.meta.ai/v1',
   [ModelProvider.COPILOT]: null,
   [ModelProvider.OTHERS]: null,
 };
