@@ -13,10 +13,13 @@ import {
   pendingExitHint as pendingExitHintSignal,
   pendingExitResumeId as pendingExitResumeIdSignal,
   activeStreamId as activeStreamIdSignal,
+  rootRunPending as rootRunPendingSignal,
+  rootRunStreamId as rootRunStreamIdSignal,
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
   NO_BYPASS,
 } from '../state/cliState';
+import { chatTuiCanStopVisibleRun } from '../state/sessionRunState';
 import {
   activeSubagentsFor,
   childStreamEntries as childStreamEntriesSignal,
@@ -34,8 +37,6 @@ const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
-  readonly canStopActiveRun?: () => boolean;
-  readonly canStopPendingRunWithoutStream?: () => boolean;
   readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
   readonly queuedFollowUpPreview?: boolean;
@@ -56,11 +57,23 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const approvals = useSignal(approvalQueueStatus);
   const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();
+  // The Ctrl-C stop/exit hint derives from published run-state signals, never
+  // from impure session closures: memoized renders cache a closure's result
+  // on the closure's identity, which froze the hint at its boot-time value
+  // for the whole run (#8273).
+  const rootRunPending = useSignal(rootRunPendingSignal);
+  const rootRunStreamId = useSignal(rootRunStreamIdSignal);
   const target = statusBarStreamTarget({
     activeStreamId,
-    canStopActiveRun: props.canStopActiveRun?.() === true,
+    canStopActiveRun: chatTuiCanStopVisibleRun({
+      runPending: rootRunPending,
+      streamId: rootRunStreamId,
+      status: rootRunStreamId
+        ? streams.get(rootRunStreamId)?.status
+        : undefined,
+    }),
     canStopPendingRunWithoutStream:
-      props.canStopPendingRunWithoutStream?.() === true,
+      rootRunPending && rootRunStreamId === undefined,
     parentStream,
     streams,
   });
