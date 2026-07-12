@@ -67,12 +67,23 @@ export function createExtensionHostInteractions(
 
   const handlers = () => options.getApprovalHandlers();
 
-  const activateStream = (streamId?: StreamTabId | null) => {
+  // Interaction requests surface per-stream: the request panel is scoped to
+  // the viewed stream and the requesting stream's row shows a pending badge.
+  // `suppressViewSwitch` registers the stream so that row exists without
+  // yanking the active tab away from whatever the user is inspecting (#8246).
+  const revealStream = (streamId?: StreamTabId | null) => {
     options.runtimeHost.emit('requestEnsureProgressView', {});
     if (streamId) {
       options.session.events.emit({
         scope: 'session',
-        event: { type: 'setActiveStream', payload: { streamId } },
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId,
+            suppressViewSwitch: true,
+            ensureVisible: true,
+          },
+        },
       });
     }
   };
@@ -169,7 +180,7 @@ export function createExtensionHostInteractions(
     ): Promise<HostBashApprovalResult> {
       const requestId = `bash-${nanoid()}`;
       const streamId = request.streamId ?? '';
-      activateStream(request.streamId);
+      revealStream(request.streamId);
       return showPending<HostBashApprovalResult>(
         { id: requestId, kind: 'bash', streamId },
         () =>
@@ -186,7 +197,7 @@ export function createExtensionHostInteractions(
     requestPlanApproval(
       request: HostPlanApprovalRequest,
     ): Promise<PlanApprovalResult> {
-      activateStream(request.streamId);
+      revealStream(request.streamId);
       return showPending<PlanApprovalResult>(
         {
           id: request.approvalId,
@@ -200,7 +211,7 @@ export function createExtensionHostInteractions(
     requestAgentProposal(
       request: AgentProposalPermission,
     ): Promise<ProposalResult> {
-      activateStream(request.streamId);
+      revealStream(request.streamId);
       return showPending<ProposalResult>(
         {
           id: request.proposalId,
@@ -212,7 +223,7 @@ export function createExtensionHostInteractions(
     },
 
     requestRetry(request: HostRetryRequest): Promise<RetryResult> {
-      activateStream(request.streamId);
+      revealStream(request.streamId);
       return showPending<RetryResult>(
         {
           id: request.streamId,
@@ -226,7 +237,7 @@ export function createExtensionHostInteractions(
     askUserQuestion(
       request: Parameters<NonNullable<HostInteractions['askUserQuestion']>>[0],
     ): Promise<HostUserQuestionResult> {
-      activateStream(request.streamId || undefined);
+      revealStream(request.streamId || undefined);
       return showPending<HostUserQuestionResult>(
         {
           id: request.requestId,
@@ -238,7 +249,7 @@ export function createExtensionHostInteractions(
     },
 
     async openExternalInquiry(request) {
-      activateStream(request.streamId || undefined);
+      revealStream(request.streamId || undefined);
       handlers().externalInquiry.show(request);
       return { threadId: request.threadId };
     },
