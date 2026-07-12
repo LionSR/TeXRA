@@ -10,8 +10,10 @@ import type { ChatCompletion } from 'openai/resources/chat/completions';
 /**
  * Handler for xAI models using OpenAI-compatible API.
  *
- * Note: reasoning_effort is not supported by grok-4 models.
- * Specifying reasoning_effort parameter will result in an error response.
+ * Note: the legacy grok-4 generation (deprecated May 2026) rejected the
+ * reasoning_effort parameter outright. Current reasoning models (grok-4.3,
+ * grok-4.5) document low/medium/high effort control — see
+ * validateReasoningEffort in the base class for the clamp.
  *
  * processThinkingBlock is inherited from ModelHandlerOpenAI which already
  * extracts reasoning_content from the response message.
