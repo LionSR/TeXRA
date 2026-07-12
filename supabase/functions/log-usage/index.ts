@@ -17,6 +17,7 @@
  * - Invalid batches are rejected atomically over HTTP 200 with
  *   `success: false`, `accepted: 0`, and `retryable: false`; HTTP 200 lets
  *   clients predating the retry marker read the body during rolling deploys.
+ *   Restore HTTP 422 after clients predating #8267 age out under #6981.
  * - Malformed JSON uses the same permanent-rejection body with HTTP 400.
  * - Authentication and operational failures omit the permanent-rejection
  *   marker so clients retain and retry the original batch identifier.
@@ -238,7 +239,9 @@ Deno.serve(async (req: Request) => {
       // Keep the application-level rejection on HTTP 200 during the rolling
       // client transition. Older clients let ky throw before reading 4xx
       // bodies, which would pin this permanently invalid batch at the head of
-      // their retry queue. They already understand success:false on 2xx.
+      // their retry queue. They already understand success:false on 2xx. This
+      // compatibility status can return to 422 under the #6981 retirement gate
+      // once the minimum supported client includes #8267.
       return errorResponse(req, 'Invalid batch format or entry data', 200, {
         retryable: false,
       });
