@@ -12,6 +12,7 @@ import {
   toErrorMessage,
 } from '@utils/errors/errorMessage';
 import { findInCauseChain, isDiskFullError } from '../errorPredicates';
+import { isContextWindowError } from './errorPatterns';
 import {
   detectPartialText,
   detectSdkErrorMetadata,
@@ -206,6 +207,26 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   if (isDiskFullError(err)) {
     return terminalError(
       'No space left on device. Free up disk space and try again.',
+    );
+  }
+
+  // Context-window overflow — deterministic: a retry resends the same
+  // oversized payload and fails again. Handler-level recovery (compaction,
+  // dropping previous_response_id) runs before the error reaches this
+  // classifier, so an overflow that arrives here is terminal for this turn.
+  // Guarded on the status code because isContextWindowError also matches by
+  // message wording, and a retryable provider error (e.g. a 429 mentioning
+  // tokens) must keep its retry affordance.
+  const overflowStatusCode = detectStatusCode(err);
+  if (
+    isContextWindowError(err) &&
+    (overflowStatusCode === undefined ||
+      !isRetryableStatusCode(overflowStatusCode))
+  ) {
+    return terminalError(
+      `${extractedMessage ?? 'Conversation exceeds the model context window.'} ` +
+        'Retrying would resend the same oversized request. Start a new ' +
+        'session, or reduce attached files and tool output.',
     );
   }
 
