@@ -415,6 +415,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   private inFlight = false;
 
+  /** Internal compaction recovery already attempted during this public call. */
+  private compactionRetrySource: 'threshold' | 'overflow' | null = null;
+
   /** DIAGNOSTIC: Pre-flight token estimate for comparison with actual usage */
   private _diagPreFlightTokens: number | null = null;
 
@@ -635,11 +638,29 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Check if the conversation should be compacted based on cumulative input tokens.
-   * Compaction is only triggered when:
-   * - Threshold percentage is greater than 0 (not disabled)
-   * - Cumulative input tokens exceed the calculated threshold (percentage of context window)
-   * - Not running through OpenRouter (which may not support compaction)
+   * Whether this route can compact at all: compaction is supported, not
+   * routed through OpenRouter (which may not support compaction), and there
+   * is prior conversation to compact. Shared by the manual/requested flag
+   * path and the live-count decision in {@link createResponseImpl}.
+   */
+  private canCompactRoute(): boolean {
+    return (
+      this.supportsManualCompaction &&
+      !this.isOpenRouterRoutingEnabled() &&
+      this.chainState.getCumulativeInputTokens() > 0
+    );
+  }
+
+  /**
+   * Check if the conversation should be compacted.
+   *
+   * Automatic compaction is decided by the live pre-flight token count in
+   * {@link createResponseImpl} — one measurement of the CURRENT request owns
+   * the decision (it sets {@link compactionRequested} and retries
+   * internally). The cumulative-usage threshold below is only the fallback
+   * decision for models that cannot count tokens pre-flight; the cumulative
+   * figure comes from the PREVIOUS successful response and goes stale the
+   * moment a single turn adds a large input.
    */
   private shouldCompact(): boolean {
     if (!this.supportsManualCompaction) {
@@ -647,15 +668,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return false;
     }
 
-    // Manual compaction request bypasses threshold checks.
+    // Manual/requested compaction bypasses threshold checks.
     // The flag is NOT cleared here - the caller clears it after compaction
     // is attempted to preserve the request across retries.
     if (this.compactionRequested) {
-      if (this.isOpenRouterRoutingEnabled()) {
-        return false;
-      }
-      // Only compact if there are tokens to compact
-      return this.chainState.getCumulativeInputTokens() > 0;
+      return this.canCompactRoute();
+    }
+
+    if (this.supportsTokenCounting) {
+      // The live pre-flight count decides for counting-capable models.
+      // Deliberate tradeoff: if the count API soft-fails for a turn, that
+      // turn has no automatic compaction trigger at all (the stale cumulative
+      // figure is not consulted) — the API enforces the window, and an
+      // API-side overflow still recovers via handleCreateResponseError's
+      // compact-and-retry. Costs one extra round-trip in that rare failure
+      // mode; keeps the live count the single decision owner.
+      return false;
     }
 
     const thresholdPercent = this.getCompactionThresholdPercent();
@@ -1434,6 +1462,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
     this.inFlight = true;
+    this.compactionRetrySource = null;
     try {
       return await run();
     } finally {
@@ -1545,9 +1574,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // For automatic compaction (threshold-based), this is a no-op since the flag is false.
       this.compactionRequested = false;
       if (wasManualRequest) {
+        // Requested compactions come from the manual command, the live-count
+        // threshold, or the overflow recovery — each already logged its
+        // trigger; this line records the execution.
         logProgressStatus(
           this.logger,
-          `Compacting conversation (manually requested, ${this.chainState.getCumulativeInputTokens()} input tokens)`,
+          `Compacting conversation (requested, ${this.chainState.getCumulativeInputTokens()} input tokens)`,
         );
       } else {
         const threshold = this.getCompactionTokenThreshold();
@@ -1624,66 +1656,100 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_output_tokens if needed
     //
-    // Two-layer protection against context overflow:
-    // 1. shouldCompact() uses cumulativeInputTokens (from PREVIOUS response) at 75% threshold
-    //    to proactively compact before trouble
-    // 2. This native count (CURRENT request) is the safety net at 100% threshold
-    //
-    // NOTE: When previous_response_id is set, the API includes server-side history
-    // (per OpenAI docs). However, there may be edge cases where token counting
-    // doesn't match actual context usage. See PRD Known Issues for investigation.
-    if (!this.supportsTokenCounting) {
-      maxOutputTokens = this.applyTokenCountFailureFallback(maxOutputTokens);
+    // The live count of the CURRENT request is the one accurate measurement
+    // (with previous_response_id set it includes server-side history, per
+    // OpenAI docs) and owns every context decision for counting-capable
+    // models: it reduces max_output_tokens, it triggers compaction at the
+    // threshold (below, after this block), and past 100% it throws — routed
+    // through handleCreateResponseError so a pre-flight overflow gets the
+    // same recovery as an API-side rejection (drop previous_response_id,
+    // compact, retry internally). Throwing it raw would dead-end: every
+    // external retry of the unchanged request overflows identically.
+    let preFlightTokens: number | undefined;
+    try {
+      if (!this.supportsTokenCounting) {
+        maxOutputTokens = this.applyTokenCountFailureFallback(maxOutputTokens);
+      }
+
+      await this.applyTokenCountLimit({
+        // Reuse built params for token counting (build once principle).
+        // IMPORTANT: Pass tools and systemPrompt for accurate count.
+        countTokens: () =>
+          this.estimateTokenCount(baseParams.input, {
+            client,
+            signal,
+            systemPrompt,
+            tools: convertedTools,
+          }),
+        currentMaxTokens: maxOutputTokens,
+        contextWindow: this.getEffectiveContextWindow(),
+        tokenBuffer: this.getTokenSafetyBuffer(),
+        detailLabel:
+          'OpenAI Response: max_output_tokens reduced to fit context window',
+        applyReduced: (adjusted) => {
+          maxOutputTokens = adjusted;
+        },
+        onCounted: (inputTokens) => {
+          preFlightTokens = inputTokens;
+          // DIAGNOSTIC: Log token count details for investigation.
+          // Compare pre-flight estimate with cumulative tokens from prev response.
+          const prevCumulative = this.chainState.getCumulativeInputTokens();
+          const utilizationEstimate =
+            (inputTokens / this.getEffectiveContextWindow()) * 100;
+          this._diagPreFlightTokens = inputTokens; // Compared in finalizeResponse
+          this.logger.debug('[TOKEN_DIAG] Pre-flight count', {
+            data: {
+              preFlightTokens: inputTokens,
+              utilizationEstimate,
+              prevCumulativeTokens: prevCumulative,
+              delta: inputTokens - prevCumulative,
+              newMessagesCount: newMessages.length,
+              totalMessagesCount: effectiveMessages.length,
+              hasPreviousResponseId: !!this.chainState.getPreviousResponseId(),
+              hasTools: !!convertedTools?.length,
+              toolCount: convertedTools?.length ?? 0,
+              contextWindow: this.getEffectiveContextWindow(),
+              maxOutputTokens,
+            },
+          });
+        },
+        onCountFailure: (err) => {
+          this.logger.debug('Token counting failed; applying fallback cap', {
+            data: buildErrorLogData(err, { operation: 'token counting' }),
+          });
+          maxOutputTokens =
+            this.applyTokenCountFailureFallback(maxOutputTokens);
+        },
+      });
+    } catch (error) {
+      return await this.handleCreateResponseError(
+        error,
+        options,
+        compactedThisCall,
+      );
     }
 
-    await this.applyTokenCountLimit({
-      // Reuse built params for token counting (build once principle).
-      // IMPORTANT: Pass tools and systemPrompt for accurate count.
-      countTokens: () =>
-        this.estimateTokenCount(baseParams.input, {
-          client,
-          signal,
-          systemPrompt,
-          tools: convertedTools,
-        }),
-      currentMaxTokens: maxOutputTokens,
-      contextWindow: this.getEffectiveContextWindow(),
-      tokenBuffer: this.getTokenSafetyBuffer(),
-      detailLabel:
-        'OpenAI Response: max_output_tokens reduced to fit context window',
-      applyReduced: (adjusted) => {
-        maxOutputTokens = adjusted;
-      },
-      onCounted: (inputTokens) => {
-        // DIAGNOSTIC: Log token count details for investigation.
-        // Compare pre-flight estimate with cumulative tokens from prev response.
-        const prevCumulative = this.chainState.getCumulativeInputTokens();
-        const utilizationEstimate =
-          (inputTokens / this.getEffectiveContextWindow()) * 100;
-        this._diagPreFlightTokens = inputTokens; // Compared in finalizeResponse
-        this.logger.debug('[TOKEN_DIAG] Pre-flight count', {
-          data: {
-            preFlightTokens: inputTokens,
-            utilizationEstimate,
-            prevCumulativeTokens: prevCumulative,
-            delta: inputTokens - prevCumulative,
-            newMessagesCount: newMessages.length,
-            totalMessagesCount: effectiveMessages.length,
-            hasPreviousResponseId: !!this.chainState.getPreviousResponseId(),
-            hasTools: !!convertedTools?.length,
-            toolCount: convertedTools?.length ?? 0,
-            contextWindow: this.getEffectiveContextWindow(),
-            maxOutputTokens,
-          },
-        });
-      },
-      onCountFailure: (err) => {
-        this.logger.debug('Token counting failed; applying fallback cap', {
-          data: buildErrorLogData(err, { operation: 'token counting' }),
-        });
-        maxOutputTokens = this.applyTokenCountFailureFallback(maxOutputTokens);
-      },
-    });
+    // Threshold decision on the live count: compact and retry internally
+    // before sending, using the same requested-compaction mechanism as the
+    // overflow recovery. The one-shot guard keeps a compaction attempt that
+    // failed to shrink the transcript from recursing again on its recount.
+    if (
+      preFlightTokens !== undefined &&
+      !compactedThisCall &&
+      this.compactionRetrySource === null &&
+      this.getCompactionThresholdPercent() > 0 &&
+      preFlightTokens > this.getCompactionTokenThreshold() &&
+      this.canCompactRoute()
+    ) {
+      logProgressStatus(
+        this.logger,
+        `Compacting conversation (pre-flight count ${preFlightTokens} tokens exceeds ${this.getCompactionThresholdPercent()}% threshold of ${this.getCompactionTokenThreshold()} tokens)`,
+      );
+      this.compactionRetrySource = 'threshold';
+      this.compactionRequested = true;
+      this._diagPreFlightTokens = null;
+      return this.createResponseImpl(options);
+    }
 
     // Phase 4: EXECUTE - Build final params and make the API call
     const parallelToolCalls = getConfig<boolean>(
@@ -2175,25 +2241,30 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.backgroundLifecycle.clearPending();
     } else if (
       isContextWindowError(error) &&
-      this.chainState.hasPreviousResponseId() &&
-      !compactedThisCall
+      !compactedThisCall &&
+      this.compactionRetrySource !== 'overflow' &&
+      (this.chainState.hasPreviousResponseId() || this.canCompactRoute())
     ) {
-      // Recovery: When using previous_response_id, accumulated reasoning tokens
-      // from prior turns are stored server-side and count against the context
-      // window, but inputTokens.count() may not fully reflect them. This causes
-      // pre-flight validation to pass while the API rejects the request.
-      //
-      // Fix: Drop server-side state (clearing previous_response_id discards the
-      // hidden reasoning tokens) and compact client-side messages, then retry.
-      // The guard !compactedThisCall prevents infinite recursion.
+      // Recovery for a context-window overflow (API-side or pre-flight):
+      // - When chaining, accumulated reasoning tokens from prior turns are
+      //   stored server-side and count against the window even where
+      //   inputTokens.count() may not fully reflect them — drop the chain
+      //   (clearing previous_response_id discards the hidden reasoning
+      //   tokens) and compact client-side messages, then retry.
+      // - Without a chain (e.g. after invalidateChain(), or a non-chaining
+      //   route), a compactable transcript still recovers via compaction
+      //   alone.
+      // Termination: compactedThisCall blocks re-entry after a successful
+      // compaction, and the overflow source blocks a second overflow recovery.
       logProgressStatus(
         this.logger,
         'Context window exceeded — compacting conversation and retrying.',
       );
-      this.chainState.setPreviousResponseId(null);
+      this.chainState.invalidateChain();
       // Don't call resetConversationState() — it zeroes cumulativeInputTokens
       // which would prevent shouldCompact() from triggering on the retry.
       this.backgroundLifecycle.clearPending();
+      this.compactionRetrySource = 'overflow';
       this.compactionRequested = true;
       this._diagPreFlightTokens = null;
       // Retry internally: the recursive call will compact (shouldCompact()=true)
