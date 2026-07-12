@@ -22,7 +22,10 @@ import {
   noopAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import { attachFlowAutoRetryRequired } from '@common/errors/sdkErrorUtils';
+import {
+  attachContextWindowError,
+  attachFlowAutoRetryRequired,
+} from '@common/errors/sdkErrorUtils';
 import {
   STREAM_PHASE,
   STREAM_STATUS,
@@ -184,6 +187,27 @@ describe('RetryState', () => {
     });
 
     expect(node.shouldAutoRetry(new Error('rate limit'))).toBe(true);
+  });
+
+  it('never auto-retries a context-window overflow, even one tagged flow-auto-retry-required', () => {
+    // Regression for the retry storm where a context-window overflow that
+    // slipped past provider-specific compaction recovery (e.g. no
+    // previous_response_id to chain from) was flattened into a plain,
+    // code-free Error and unconditionally tagged attachFlowAutoRetryRequired
+    // by the WebSocket transport before classification ran — so it looked
+    // identical to a genuinely transient failure and got auto-retried with
+    // the exact same oversized payload forever. The base shouldAutoRetry gate
+    // must refuse a context-window error unconditionally, regardless of any
+    // flow-auto-retry tag, so unrecovered overflows fail once instead of
+    // storming.
+    const node = createModelInvocationNode({
+      isAutoRetryManagedByProvider: () => false,
+    });
+    const overflow = new Error('OpenAI WebSocket response failed: overflow');
+    attachContextWindowError(overflow);
+    attachFlowAutoRetryRequired(overflow);
+
+    expect(node.shouldAutoRetry(overflow)).toBe(false);
   });
 
   it('updates the injected stream status owner during manual retry', async () => {
