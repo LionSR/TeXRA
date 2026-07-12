@@ -12,6 +12,12 @@ All notable changes to this project will be documented in this file.
   `engines.vscode` requirement moved from 1.106 to 1.125; users on older VS
   Code releases must update before installing this version.
 
+#### Bug Fixes
+
+- **Grok models keep a medium reasoning-effort selection** — the xAI effort
+  clamp no longer converts `medium` to `high`; current Grok reasoning models
+  (grok-4.3, grok-4.5) support low/medium/high.
+
 ## [0.39.3] - 2026-07-10
 
 ### Shared (all surfaces)
