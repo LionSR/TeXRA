@@ -286,6 +286,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
   }
 
+  private getEffectiveInputTokenLimit(): number {
+    return (
+      this.getActiveProviderCapabilities()?.inputTokenLimit ??
+      this.getEffectiveContextWindow()
+    );
+  }
+
   /**
    * OpenAI Response API supports file uploads. Reads the ChatGPT-subscription
    * profile when active (that backend disables tool-result file upload);
@@ -634,8 +641,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (percent <= 0) {
       return 0;
     }
-    // Calculate threshold as percentage of context window
-    return Math.floor((percent / 100) * this.getEffectiveContextWindow());
+    return Math.floor((percent / 100) * this.getEffectiveInputTokenLimit());
   }
 
   /**
@@ -1374,6 +1380,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (inputEstimate <= 0) return maxOutputTokens;
 
     const buffer = this.getTokenSafetyBuffer();
+    const inputTokenLimit = this.getEffectiveInputTokenLimit();
+    if (inputEstimate + buffer >= inputTokenLimit) {
+      const error = new Error(
+        `Token estimate (${inputEstimate}) + safety buffer (${buffer}) exceeds route input limit (${inputTokenLimit}).`,
+      );
+      attachContextWindowError(error);
+      throw error;
+    }
     const contextWindow = this.getEffectiveContextWindow();
     const bufferedMaxTokens = contextWindow - inputEstimate - buffer;
     const validation = this.validateTokenLimits(
