@@ -180,4 +180,24 @@ describe('agent YAML scanner', () => {
 
     expect(entries.map((entry) => entry.name)).toEqual(['unique']);
   });
+
+  it('skips a file with malformed YAML instead of throwing', async () => {
+    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
+    await writeFile(resolve(agentDir, 'broken.yaml'), 'name: "unterminated\n');
+    await writeFile(
+      resolve(agentDir, 'valid.yaml'),
+      [
+        'name: valid',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: hi',
+        '',
+      ].join('\n'),
+    );
+
+    const entries = await scanDirectory(agentDir, 'custom');
+
+    expect(entries.map((entry) => entry.name)).toEqual(['valid']);
+  });
 });
