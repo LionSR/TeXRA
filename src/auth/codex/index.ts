@@ -20,6 +20,7 @@ export {
 } from './codexJwt';
 export {
   CodexAuthError,
+  formatCodexAuthUnavailableMessage,
   CodexSessionSchema,
   type CodexSession,
   type CodexTokenResponse,
@@ -53,6 +54,7 @@ export {
   resetCodexCoordinator,
   getCodexStatus,
   getChatGptAuthStatus,
+  isCodexSessionRoutable,
   isCodexSignedIn,
 } from './codexAuthAccess';
 export {
