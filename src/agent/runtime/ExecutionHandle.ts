@@ -88,6 +88,8 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private _deliveryTargetStreamId: StreamTabId | undefined;
   private interruptHandler?: ExecutionInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
+  private acceptsPendingInterrupt = false;
+  private pendingInterrupt = false;
   private waitingCleanups?: Set<() => void>;
 
   /** Stable tool name for UI identification (e.g. "bash", "codex"). */
@@ -153,17 +155,38 @@ export class AgentExecutionHandle implements ExecutionHandle {
     return this._deliveryTargetStreamId;
   }
 
+  /** Whether lifecycle startup must preserve an already-cancelled status. */
+  get hasPendingInterrupt(): boolean {
+    return this.pendingInterrupt;
+  }
+
   /** Promote this subagent to a top-level execution (detach from parent). */
   detach(): void {
     this._deliveryTargetStreamId = undefined;
     this._parentStreamId = this.childStreamId;
   }
 
+  /** Allow a stop request to arrive between lifecycle tracking and setup. */
+  enablePendingInterrupt(): void {
+    this.acceptsPendingInterrupt = true;
+  }
+
+  /** Discard an undeliverable pre-attach stop when the runner exits. */
+  closePendingInterruptWindow(): void {
+    this.acceptsPendingInterrupt = false;
+    this.pendingInterrupt = false;
+  }
+
   attachToolUseFlow(context: LiveToolUseFlowContext): void {
     if (this.category !== 'toolUse') {
       throw new Error('Only tool-use execution handles can attach tool flows.');
     }
+    this.acceptsPendingInterrupt = false;
     this.toolUseFlowContext = context;
+    if (this.pendingInterrupt) {
+      this.pendingInterrupt = false;
+      context.interrupt();
+    }
   }
 
   detachToolUseFlow(context?: LiveToolUseFlowContext): void {
@@ -176,7 +199,12 @@ export class AgentExecutionHandle implements ExecutionHandle {
   }
 
   attachInterruptHandler(handler: ExecutionInterruptHandler): () => void {
+    this.acceptsPendingInterrupt = false;
     this.interruptHandler = handler;
+    if (this.pendingInterrupt) {
+      this.pendingInterrupt = false;
+      handler.interrupt();
+    }
     return () => this.detachInterruptHandler(handler);
   }
 
@@ -192,8 +220,12 @@ export class AgentExecutionHandle implements ExecutionHandle {
       return true;
     }
     const context = this.toolUseFlowContext;
-    if (!context) return false;
-    context.interrupt();
+    if (context) {
+      context.interrupt();
+      return true;
+    }
+    if (!this.acceptsPendingInterrupt) return false;
+    this.pendingInterrupt = true;
     return true;
   }
 

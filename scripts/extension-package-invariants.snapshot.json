@@ -207,11 +207,15 @@
         "commandPalette": [
           {
             "command": "texra.agentReview.run",
-            "when": "texra.activated"
+            "when": "texra.activated && !texra.agentReview.running"
           },
           {
             "command": "texra.agentReview.runWithOptions",
-            "when": "texra.activated"
+            "when": "texra.activated && !texra.agentReview.running"
+          },
+          {
+            "command": "texra.agentReview.stop",
+            "when": "texra.activated && texra.agentReview.running"
           },
           {
             "command": "texra.agentReview.fixAllIssues",
@@ -591,12 +595,17 @@
           {
             "command": "texra.agentReview.run",
             "group": "navigation@1",
-            "when": "texra.activated && view == texra.scmAgentReviewView"
+            "when": "texra.activated && view == texra.scmAgentReviewView && !texra.agentReview.running"
+          },
+          {
+            "command": "texra.agentReview.stop",
+            "group": "navigation@1",
+            "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.running"
           },
           {
             "command": "texra.agentReview.runWithOptions",
             "group": "navigation@2",
-            "when": "texra.activated && view == texra.scmAgentReviewView"
+            "when": "texra.activated && view == texra.scmAgentReviewView && !texra.agentReview.running"
           },
           {
             "command": "texra.agentReview.fixAllIssues",
