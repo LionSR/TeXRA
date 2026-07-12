@@ -229,6 +229,11 @@ export async function executeCommand(
     let shellTimedOut = false;
     let shellAborted = false;
 
+    // Only the shell/string form needs this hand-rolled abort + force-kill
+    // machinery: it terminates via `signalProcessGroup` (negative-PID /
+    // tree-kill) so piped children don't outlive the shell. The array form
+    // spawns a single non-detached process, so it delegates straight to
+    // execa's own `cancelSignal` / `forceKillAfterDelay` natives below.
     const terminateSubprocess = (signal: NodeJS.Signals): void => {
       const pid = subprocess.pid;
       if (!pid) return;
@@ -268,7 +273,11 @@ export async function executeCommand(
           `Running command: ${shellQuote([cmd, ...args])}`,
         );
       }
-      subprocess = execa(cmd, args, execaOptions);
+      subprocess = execa(cmd, args, {
+        ...execaOptions,
+        cancelSignal: options.signal,
+        forceKillAfterDelay: FORCE_KILL_DELAY_MS,
+      });
     } else {
       if (!options.quiet) {
         logger.debug(logChannel, `Running command: ${command}`);
@@ -306,7 +315,10 @@ export async function executeCommand(
     }
 
     if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
-    installAbortListener();
+    // Array-form abort is handled by execa's own `cancelSignal` (passed
+    // above); only the shell/string form needs the process-group-aware
+    // hand-rolled listener.
+    if (!Array.isArray(command)) installAbortListener();
 
     if (shellTimeout) {
       shellTimeoutId = setTimeout(() => {
@@ -331,10 +343,13 @@ export async function executeCommand(
 
     const stdout = (result.stdout as string) ?? '';
     const stderr = (result.stderr as string) ?? '';
-    const exitCode = result.exitCode ?? (shellAborted ? 130 : 1);
+    // `shellAborted` covers the hand-rolled shell-form path; `isCanceled`
+    // covers the array-form path, aborted natively via execa's `cancelSignal`.
+    const aborted = shellAborted || (result.isCanceled ?? false);
+    const exitCode = result.exitCode ?? (aborted ? 130 : 1);
     const timedOut = (result.timedOut ?? false) || shellTimedOut;
     const normalizedStderr =
-      shellAborted && !stderr ? 'Command aborted by user' : stderr;
+      aborted && !stderr ? 'Command aborted by user' : stderr;
 
     if (!options.quiet) {
       logCommandStderr(logChannel, normalizedStderr, options.truncate);
