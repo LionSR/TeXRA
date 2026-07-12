@@ -162,7 +162,7 @@ export const logEntryStyles = css`
     gap: var(--wa-space-2xs);
   }
 
-  /* Note: .toggle-icon and .details-summary base styles are in commonViewStyles */
+  /* Note: .details-summary base styles are in commonViewStyles */
 
   /* File list details styling */
   .file-list-details {
