@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared schemas and tools
 import { RUN_OUTCOME } from '@shared/schemas';
-import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
 // Local imports - desktop test support
@@ -169,7 +169,7 @@ describe('createDesktopAgentExecution', () => {
         runtimeUnavailableTools: [
           ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
           'inline_comment',
-          DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+          DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
         ],
       }),
     );
