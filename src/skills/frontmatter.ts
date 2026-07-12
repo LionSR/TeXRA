@@ -1,7 +1,5 @@
-// Third-party imports
-import * as yaml from 'yaml';
-
 // Local imports - utilities
+import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 export interface ExtractedFrontmatter {
@@ -35,12 +33,15 @@ export function extractFrontmatter(content: string): ExtractedFrontmatter {
     throw new Error('SKILL.md body must be non-empty');
   }
 
-  try {
-    return {
-      frontmatter: yaml.parse(frontmatterText),
-      body,
-    };
-  } catch (err) {
-    throw new Error(`Invalid SKILL.md frontmatter: ${String(err)}`);
+  const parsed = safeParseYaml(frontmatterText);
+  if (parsed.isErr()) {
+    throw new Error(`Invalid SKILL.md frontmatter: ${parsed.error.message}`, {
+      cause: parsed.error,
+    });
   }
+
+  return {
+    frontmatter: parsed.value,
+    body,
+  };
 }

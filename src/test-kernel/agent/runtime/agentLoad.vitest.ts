@@ -56,6 +56,15 @@ describe('validateAgentYamlContent', () => {
 
     assert.deepStrictEqual(result.settings.tools, ['grep']);
   });
+
+  it('wraps malformed YAML text through the shared parse boundary', () => {
+    assert.throws(
+      () => validateAgentYamlContent('name: "unterminated'),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.startsWith('Failed to parse agent YAML:'),
+    );
+  });
 });
 
 describe('loadAgentSettingAndPrompts', () => {
@@ -171,5 +180,23 @@ describe('loadAgentSettingAndPrompts', () => {
     const [settings] = await loadAgentSettingAndPrompts(resolution);
     assert.strictEqual(settings.agentCategory, AgentCategory.Workflow);
     assert.strictEqual(Object.hasOwn(settings, 'outputExt'), false);
+  });
+
+  it('rejects with a wrapped error naming the path for malformed YAML', async () => {
+    const resolution = customResolution('broken', AgentCategory.Workflow);
+
+    fileContents.set(
+      normalize(resolution.definitionPath),
+      'name: "unterminated\n',
+    );
+
+    await assert.rejects(
+      () => loadAgentSettingAndPrompts(resolution),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.startsWith(
+          `Failed to parse YAML at ${resolution.definitionPath}:`,
+        ),
+    );
   });
 });
