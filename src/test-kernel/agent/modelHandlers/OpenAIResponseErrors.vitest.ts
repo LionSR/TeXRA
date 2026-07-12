@@ -12,6 +12,7 @@ import {
 
 // Local imports - common errors
 import {
+  attachContextWindowError,
   formatProviderHttpError,
   normalizeProviderError,
   requiresFlowAutoRetry,
@@ -86,6 +87,35 @@ describe('OpenAI Responses error normalization', () => {
     expect(normalized.requestId).toBe('req_poll');
     expect(normalized.userRetryable).toBe(true);
     expect(requiresFlowAutoRetry(wrapped)).toBe(true);
+  });
+
+  it('classifies internally tagged context-window overflows as non-retryable', () => {
+    // The pre-flight guard's throw has no status code; without an explicit
+    // context-window branch the classifier would fall to the "no status code
+    // → retry for safety" default — but retrying resends the same oversized
+    // payload and deterministically fails again.
+    const error = new Error(
+      'Token count of message exceeds context window: 2331803 > 1050000',
+    );
+    attachContextWindowError(error);
+
+    const providerError = formatProviderHttpError(error);
+
+    expect(providerError.userRetryable).toBe(false);
+    expect(providerError.message).toContain('2331803 > 1050000');
+
+    const normalized = normalizeProviderError(error);
+    expect(normalized.userRetryable).toBe(false);
+  });
+
+  it('classifies provider-worded context-window errors as non-retryable', () => {
+    const error = new Error(
+      "This model's maximum context length is 1050000 tokens.",
+    );
+
+    const providerError = formatProviderHttpError(error);
+
+    expect(providerError.userRetryable).toBe(false);
   });
 
   it('keeps terminal background statuses retryable without HTTP metadata', () => {
