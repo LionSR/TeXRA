@@ -1,10 +1,10 @@
 // Local imports - stream state
+import { isActivePhase, isInFlightPhase } from '@common/constants/streamStatus';
 import {
-  isActiveStatus,
-  isInFlightStatus,
-  isTerminalStatus,
-} from '@common/constants/streamStatus';
-import type { StreamLifecycleStatus } from '@shared/schemas/stream';
+  DEFAULT_STREAM_METADATA_STATUS,
+  type StreamLifecycleStatus,
+  type StreamPhase,
+} from '@shared/schemas';
 import type { TokenUsageStats } from '@shared/schemas/usage';
 
 export interface StatusBarUsageTotals {
@@ -19,6 +19,12 @@ const ZERO_USAGE: StatusBarUsageTotals = {
   outputTokens: 0,
 };
 
+function lifecyclePhase(
+  status: StreamLifecycleStatus,
+): StreamPhase | undefined {
+  return status === DEFAULT_STREAM_METADATA_STATUS ? undefined : status;
+}
+
 /** Tracks active streams and usage totals for the extension status bar. */
 export class StatusBarUsageTracker {
   private readonly activeStreams = new Set<string>();
@@ -29,13 +35,14 @@ export class StatusBarUsageTracker {
     streamId: string,
     status: StreamLifecycleStatus,
   ): void {
-    if (isActiveStatus(status)) {
+    const phase = lifecyclePhase(status);
+    if (isActivePhase(phase)) {
       this.activeStreams.add(streamId);
     } else {
       this.activeStreams.delete(streamId);
     }
 
-    if (isTerminalStatus(status) && !isInFlightStatus(status)) {
+    if (!isInFlightPhase(phase)) {
       this.streamStatuses.delete(streamId);
       this.usageByStream.delete(streamId);
       return;
@@ -52,7 +59,7 @@ export class StatusBarUsageTracker {
    */
   public recordUsage(streamId: string, usage: TokenUsageStats): boolean {
     const status = this.streamStatuses.get(streamId);
-    if (status === undefined || !isInFlightStatus(status)) {
+    if (status === undefined || !isInFlightPhase(lifecyclePhase(status))) {
       return false;
     }
 

@@ -4,6 +4,7 @@ import { platform } from '@platform/platform';
 import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -30,8 +31,11 @@ import {
   writeMissingPresetAgents,
 } from '../runtime/multiAgentRunPlan';
 import {
+  buildCliAccountItems,
+  buildCliAgentItems,
   buildCliOrchestrationItems,
   buildCliResumeItems,
+  buildCliTeamItems,
 } from '../runtime/orchestration';
 import {
   getCliModelAccessList,
@@ -48,10 +52,16 @@ import {
   readCliModelAccessStatus,
   selectCliModelAccessRoute,
 } from '../runtime/modelAccessRoutes';
+import {
+  chatGptSignOutPreferenceMessage,
+  signOutCliChatGpt,
+} from '../runtime/chatgptLogin';
+import { getCliAuthProfile, signOutCliSupabase } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
 import { setExitCode } from './_helpers/exitCode';
+import { loginInitFromArgs, runLoginCommand } from './auth';
 import {
   INTERACTIVE_AGENT_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
@@ -157,14 +167,30 @@ async function runOrchestration(context: CliContext): Promise<number> {
       context,
       launcherApiModeOverride,
     );
-    const modelAccess = await readCliModelAccessStatus(apiMode);
+    const [modelAccess, authProfile] = await Promise.all([
+      readCliModelAccessStatus(apiMode),
+      getCliAuthProfile(),
+    ]);
     await seedCliRosterFromDefaultTeam();
+    const toolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
+    const accountStatus = {
+      texraSignedIn: authProfile.authenticated,
+      texraAccountLabel: authProfile.accountLabel,
+      texraCredentialSource: authProfile.credentialSource,
+      chatGptSignedIn: modelAccess.chatGptSignedIn,
+      chatGptAccountLabel: modelAccess.chatGptAccountLabel,
+    };
+    const launcherModelAccess = {
+      ...modelAccess,
+      texraSignedIn: authProfile.authenticated,
+    };
     const items = buildCliOrchestrationItems({
       presetPlans: presetPlanSet.plans,
       history,
-      toolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
+      toolUseAgents,
       includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
-      modelAccess,
+      modelAccess: launcherModelAccess,
+      account: accountStatus,
     });
     // Load the model registry up front so the launcher can offer a model pick
     // after an agent/team choice. Best-effort: an unavailable registry just
@@ -174,7 +200,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         apiMode,
         agentCategory: AgentCategory.ToolUse,
       }).catch((): readonly CliModelAccess[] => []),
-      loadCliApiStatusLines({ apiMode, includeActionHint: true }),
+      loadCliApiStatusLines({ apiMode }),
     ]);
     const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
       launchContext,
@@ -186,8 +212,13 @@ async function runOrchestration(context: CliContext): Promise<number> {
     const action = await runOrchestrationTui(items, {
       models,
       resumeItems: buildCliResumeItems(history),
+      agentItems: buildCliAgentItems(toolUseAgents),
+      teamItems: buildCliTeamItems(presetPlanSet.plans, {
+        includeLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
+      }),
+      accountItems: buildCliAccountItems(accountStatus),
       apiMode,
-      modelAccess,
+      modelAccess: launcherModelAccess,
       version: context.version,
       statusLines,
       allowDefaultModelLaunch,
@@ -237,6 +268,44 @@ async function runOrchestration(context: CliContext): Promise<number> {
         continue launcher;
       case 'configure-model-access':
         continue launcher;
+      case 'browse-agents':
+      case 'browse-teams':
+      case 'browse-accounts':
+        continue launcher;
+      case 'account': {
+        try {
+          if (action.provider === 'chatgpt') {
+            if (action.operation === 'sign-out') {
+              const update = await signOutCliChatGpt();
+              writeTextStdout(
+                `Signed out of ChatGPT.\n${chatGptSignOutPreferenceMessage(update)}`,
+              );
+            } else {
+              const result = await selectCliModelAccessRoute(
+                launchContext,
+                'chatgpt',
+                { writeProgress: writeTextStdout },
+              );
+              launcherApiModeOverride = result.apiMode;
+              writeTextStdout(result.message);
+            }
+          } else if (action.operation === 'sign-out') {
+            await signOutCliSupabase();
+            writeTextStdout('Signed out of TeXRA.');
+          } else {
+            await runLoginCommand(
+              launchContext,
+              loginInitFromArgs({
+                selectAccount: action.operation === 'switch',
+              }),
+            );
+          }
+          invalidateModelOptionsCache();
+        } catch (error: unknown) {
+          writeErrorStderr(error);
+        }
+        continue launcher;
+      }
       case 'set-model-access': {
         try {
           const result = await selectCliModelAccessRoute(

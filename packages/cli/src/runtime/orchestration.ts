@@ -1,6 +1,6 @@
 import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionId } from '@shared/schemas';
+import { agentKeyOf } from '@shared/schemas/agent';
 
 import {
   cliMultiAgentPresetCanLaunchTeam,
@@ -37,6 +37,14 @@ export type CliOrchestrationAction =
     }
   | { readonly kind: 'resume'; readonly id: ExecutionId }
   | { readonly kind: 'browse-resumes' }
+  | { readonly kind: 'browse-agents' }
+  | { readonly kind: 'browse-teams' }
+  | { readonly kind: 'browse-accounts' }
+  | {
+      readonly kind: 'account';
+      readonly provider: CliAccountProvider;
+      readonly operation: CliAccountOperation;
+    }
   | { readonly kind: 'configure-model-access' }
   | {
       readonly kind: 'set-model-access';
@@ -65,14 +73,26 @@ export interface BuildCliOrchestrationItemsInput {
   readonly toolUseAgents: readonly AgentEntry[];
   readonly includeMultiAgentLoginHint?: boolean;
   readonly modelAccess?: CliModelAccessStatus;
+  readonly account?: CliAccountStatus;
 }
 
 export type CliModelAccessRoute = 'chatgpt' | 'included' | 'personal';
+export type CliAccountProvider = 'chatgpt' | 'texra';
+export type CliAccountOperation = 'sign-in' | 'switch' | 'sign-out';
+
+export interface CliAccountStatus {
+  readonly texraSignedIn: boolean;
+  readonly texraAccountLabel?: string;
+  readonly texraCredentialSource?: 'session' | 'relayToken';
+  readonly chatGptSignedIn: boolean;
+  readonly chatGptAccountLabel?: string;
+}
 
 export interface CliModelAccessStatus {
   readonly active: CliModelAccessRoute;
   readonly chatGptSignedIn: boolean;
   readonly chatGptAccountLabel?: string;
+  readonly texraSignedIn?: boolean;
 }
 
 export interface CliModelAccessItem {
@@ -122,8 +142,6 @@ export function orchestrationModelAccessView(
   };
 }
 
-const MAX_RECENT_AGENT_ITEMS = 3;
-
 export function buildCliOrchestrationItems(
   input: BuildCliOrchestrationItemsInput,
 ): CliOrchestrationItem[] {
@@ -132,13 +150,9 @@ export function buildCliOrchestrationItems(
     {
       value: { kind: 'chat' },
       label: 'New chat',
-      description: 'Start the default tool-use chat',
+      description: `Start with ${pickDefaultToolUseAgent(input.toolUseAgents)}`,
     },
   ];
-
-  if (input.modelAccess) {
-    items.push(modelAccessItem(input.modelAccess));
-  }
 
   const resumeItems = buildCliResumeItems(userStartedHistory);
   if (resumeItems.length > 0) {
@@ -148,18 +162,132 @@ export function buildCliOrchestrationItems(
       description: `${resumeItems.length} resumable ${resumeItems.length === 1 ? 'session' : 'sessions'}`,
     });
   }
-  items.push(...recentAgentItems(userStartedHistory, input.toolUseAgents));
-  items.push(
-    ...presetItems(input.presetPlans, {
-      includeLoginHint: input.includeMultiAgentLoginHint,
-    }),
-  );
+  if (buildCliAgentItems(input.toolUseAgents).length > 0) {
+    items.push({
+      value: { kind: 'browse-agents' },
+      label: 'Agent',
+      description: 'Choose one agent',
+    });
+  }
+  if (input.presetPlans.length > 0) {
+    items.push({
+      value: { kind: 'browse-teams' },
+      label: 'Team',
+      description: 'Choose a team',
+    });
+  }
+  if (input.modelAccess) {
+    items.push(modelAccessItem(input.modelAccess));
+  }
+  if (input.account) {
+    items.push({
+      value: { kind: 'browse-accounts' },
+      label: 'Account',
+      description: accountSummary(input.account),
+    });
+  }
   items.push({
     value: { kind: 'help' },
     label: 'Help',
     description: 'Show CLI commands',
   });
   return items;
+}
+
+function accountSummary(status: CliAccountStatus): string {
+  if (status.texraCredentialSource === 'relayToken') {
+    return status.chatGptSignedIn
+      ? 'TeXRA relay token and ChatGPT signed in'
+      : 'TeXRA relay token configured';
+  }
+  if (status.texraSignedIn && status.chatGptSignedIn) {
+    return 'TeXRA and ChatGPT signed in';
+  }
+  if (status.chatGptSignedIn) {
+    return `ChatGPT · ${status.chatGptAccountLabel ?? 'signed in'}`;
+  }
+  if (status.texraSignedIn) {
+    return `TeXRA · ${status.texraAccountLabel ?? 'signed in'}`;
+  }
+  return 'Sign in or manage accounts';
+}
+
+export function buildCliAccountItems(
+  status: CliAccountStatus,
+): CliOrchestrationItem[] {
+  const items: CliOrchestrationItem[] = [];
+  if (status.chatGptSignedIn) {
+    items.push({
+      value: {
+        kind: 'account',
+        provider: 'chatgpt',
+        operation: 'sign-out',
+      },
+      label: 'Sign out of ChatGPT',
+      description: status.chatGptAccountLabel ?? 'ChatGPT subscription',
+    });
+  } else {
+    items.push({
+      value: {
+        kind: 'account',
+        provider: 'chatgpt',
+        operation: 'sign-in',
+      },
+      label: 'Sign in with ChatGPT',
+      description: 'Use a ChatGPT subscription',
+    });
+  }
+
+  if (status.texraSignedIn) {
+    if (status.texraCredentialSource === 'relayToken') {
+      items.push({
+        value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
+        label: 'TeXRA relay token',
+        description: 'Managed by the TEXRA_RELAY_TOKEN environment variable',
+        disabled: true,
+      });
+    } else {
+      items.push(
+        {
+          value: { kind: 'account', provider: 'texra', operation: 'switch' },
+          label: 'Change TeXRA account',
+          description: status.texraAccountLabel ?? 'Researcher Access',
+        },
+        {
+          value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
+          label: 'Sign out of TeXRA',
+          description: status.texraAccountLabel ?? 'Researcher Access',
+        },
+      );
+    }
+  } else {
+    items.push({
+      value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
+      label: 'Sign in to TeXRA',
+      description: 'Use included Researcher Access',
+    });
+  }
+  return items;
+}
+
+export function buildCliAgentItems(
+  toolUseAgents: readonly AgentEntry[],
+): CliOrchestrationItem[] {
+  const priority = new Map([
+    ['assistant', 0],
+    ['orchestrator', 1],
+  ]);
+  return implicitDefaultToolUseAgents(toolUseAgents)
+    .toSorted((left, right) => {
+      const byPriority =
+        (priority.get(left.name) ?? 2) - (priority.get(right.name) ?? 2);
+      return byPriority || left.name.localeCompare(right.name);
+    })
+    .map((agent) => ({
+      value: { kind: 'chat', agent: agentKeyOf(agent) },
+      label: agent.name,
+      description: agent.description ?? 'Tool-use agent',
+    }));
 }
 
 function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
@@ -190,15 +318,21 @@ export function buildModelAccessItems(
   return [
     {
       value: 'chatgpt',
-      label: modelAccessRouteLabel('chatgpt'),
-      description: status.chatGptSignedIn
-        ? `Use ${status.chatGptAccountLabel ?? 'your account'} with ChatGPT`
-        : 'Sign in with ChatGPT Plus/Pro/Team',
+      label: 'Prefer ChatGPT subscription',
+      description:
+        status.active === 'chatgpt'
+          ? `On · ${status.chatGptAccountLabel ?? 'your account'}`
+          : status.chatGptSignedIn
+            ? `Off · ${status.chatGptAccountLabel ?? 'your account'}`
+            : 'Sign in with ChatGPT Plus/Pro/Team',
     },
     {
       value: 'included',
       label: modelAccessRouteLabel('included'),
-      description: 'Use your TeXRA account',
+      description:
+        status.texraSignedIn === false
+          ? 'Sign in through Account to use included models'
+          : 'Use your TeXRA account',
     },
     {
       value: 'personal',
@@ -220,41 +354,11 @@ export function buildCliResumeItems(
     }));
 }
 
-function recentAgentItems(
-  history: readonly CliHistoryEntry[],
-  toolUseAgents: readonly AgentEntry[],
-): CliOrchestrationItem[] {
-  const toolUseNames = new Set(
-    implicitDefaultToolUseAgents(toolUseAgents).map((agent) => agent.name),
-  );
-  // The agent "New chat" already starts (the roster-resolved default, which is
-  // `assistant` on a full catalog but the team lead under a scoped roster), so
-  // it isn't duplicated as a redundant "Chat with …" recent row.
-  const defaultAgent = pickDefaultToolUseAgent(toolUseAgents);
-  const seen = new Set<string>();
-  const items: CliOrchestrationItem[] = [];
-
-  for (const entry of history) {
-    if (entry.category && entry.category !== AgentCategory.ToolUse) continue;
-    if (entry.agent === defaultAgent) continue;
-    if (!toolUseNames.has(entry.agent) || seen.has(entry.agent)) continue;
-    seen.add(entry.agent);
-    items.push({
-      value: { kind: 'chat', agent: entry.agent },
-      label: `Chat with ${entry.agent}`,
-      description: 'Recent tool-use agent',
-    });
-    if (items.length >= MAX_RECENT_AGENT_ITEMS) break;
-  }
-
-  return items;
-}
-
 // Lists every available team (built-in and custom) so the user can pick and
 // switch among them in the launcher, rather than being pinned to one. The
 // Select component windows and scrolls the visible rows, so the full team list
 // is offered without an artificial data cap that would hide extra custom teams.
-function presetItems(
+export function buildCliTeamItems(
   plans: readonly CliMultiAgentPresetRunPlan[],
   options: {
     readonly includeLoginHint?: boolean;

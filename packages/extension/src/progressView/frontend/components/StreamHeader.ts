@@ -14,8 +14,8 @@ import {
   commonViewStyles,
 } from '@shared/styles';
 import {
+  DEFAULT_STREAM_METADATA_STATUS,
   STREAM_PHASE,
-  STREAM_STATUS,
   STREAM_SUBSTATE,
   type ConversationProgress,
   type RoundStage,
@@ -301,7 +301,8 @@ export class StreamHeader extends LitElement {
   ];
 
   @property({ attribute: false }) stream: StreamTabInfo | null = null;
-  @property({ attribute: false }) status: string = STREAM_STATUS.READY;
+  @property({ attribute: false }) status: string =
+    DEFAULT_STREAM_METADATA_STATUS;
   @property({ attribute: false }) substate: StreamSubstate | undefined;
   @property({ attribute: false }) progress: ConversationProgress | undefined;
   @property({ attribute: false }) roundStage: RoundStage | undefined;
@@ -332,7 +333,7 @@ export class StreamHeader extends LitElement {
       return nothing;
     }
 
-    const status = this.status || STREAM_STATUS.READY;
+    const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
     const statusLabel = formatStreamStatusLabel(status, {
       style: 'progressHeader',
       ...(this.substate ? { substate: this.substate } : {}),
