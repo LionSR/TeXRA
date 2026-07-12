@@ -4,6 +4,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import type { PlanApprovalPermission } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
+import { COLOR_INFO } from '../ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
@@ -258,7 +259,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   return (
     <ConfirmCard
       borderStyle="double"
-      color="blue"
+      color={COLOR_INFO}
       compact={compact}
       title={PLAN_APPROVAL_TITLE}
       extraActions={

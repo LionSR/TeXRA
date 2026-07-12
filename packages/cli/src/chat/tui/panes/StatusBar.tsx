@@ -23,6 +23,7 @@ import {
   parentStream as parentStreamSignal,
 } from '../state/childExecutions';
 import { useLiveNowMs } from '../state/useLiveNowMs';
+import { COLOR_ERROR } from '../ui/colors';
 import { useSignal } from '../state/useSignal';
 import {
   buildStatusBarDisplay,
@@ -153,7 +154,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
             segment.badge ? (
               <Badge
                 key={`${segment.text}-${index}`}
-                color={segment.badgeColor ?? 'red'}
+                color={segment.badgeColor ?? COLOR_ERROR}
               >
                 {segment.text}
               </Badge>

@@ -16,6 +16,7 @@ import {
   streams as streamsSignal,
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
+import { COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
 import { TODO_ACTIVE, TODO_DONE, TODO_PENDING } from '../ui/glyphs';
 
 // Marker glyph + color per todo status; statuses absent here (e.g. PENDING)
@@ -23,8 +24,8 @@ import { TODO_ACTIVE, TODO_DONE, TODO_PENDING } from '../ui/glyphs';
 const TODO_STATUS_DISPLAY: Partial<
   Record<TodoStatus, { marker: string; color: string }>
 > = {
-  [TODO_STATUS.COMPLETED]: { marker: TODO_DONE, color: 'green' },
-  [TODO_STATUS.IN_PROGRESS]: { marker: TODO_ACTIVE, color: 'cyan' },
+  [TODO_STATUS.COMPLETED]: { marker: TODO_DONE, color: COLOR_SUCCESS },
+  [TODO_STATUS.IN_PROGRESS]: { marker: TODO_ACTIVE, color: COLOR_HINT },
 };
 
 function todoMarker(status: TodoStatus): string {

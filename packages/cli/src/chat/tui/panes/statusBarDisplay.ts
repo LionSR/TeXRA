@@ -28,6 +28,7 @@ import {
   truncateSummaryToWidth,
 } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
+import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '../ui/colors';
 import { STATUS_DIAMOND } from '../ui/glyphs';
 import {
   STATUS_BAR_HORIZONTAL_PADDING,
@@ -45,14 +46,17 @@ import {
 } from '../state/streamViews';
 import type { ApprovalQueueStatusKind } from '../state/approvalQueue';
 
-type StatusBarColor = 'cyan' | 'yellow' | 'red' | 'dim';
+// 'dim' is not an Ink color name — it is a sentinel this file's own renderer
+// (`StatusBar.tsx`) reads to apply `dimColor` instead of an explicit `color`.
+type StatusBarColor =
+  typeof COLOR_HINT | typeof COLOR_WARNING | typeof COLOR_ERROR | 'dim';
 type CtrlCAction = 'exit' | 'stop' | 'stop root';
 
 interface StatusBarSegment {
   readonly text: string;
   readonly color?: StatusBarColor;
   readonly badge?: boolean;
-  readonly badgeColor?: 'red' | 'yellow';
+  readonly badgeColor?: typeof COLOR_ERROR | typeof COLOR_WARNING;
   readonly compactPriority?: number;
   /** Shorter replacement text tried (in priority order) before the segment
    *  is removed outright when the bar overflows the terminal width. */
@@ -147,8 +151,8 @@ function formatUsage(
     Math.round(computeUtilizationPercent(used, contextWindow)),
   );
   let color: StatusBarColor;
-  if (ratio >= 0.9) color = 'red';
-  else if (ratio >= 0.6) color = 'yellow';
+  if (ratio >= 0.9) color = COLOR_ERROR;
+  else if (ratio >= 0.6) color = COLOR_WARNING;
   else color = 'dim';
   return {
     ...base,
@@ -243,7 +247,7 @@ function queuedFollowUpsCountSegment(
   return messages.length > 0
     ? {
         text: `queued ${messages.length}`,
-        color: 'yellow',
+        color: COLOR_WARNING,
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.queuedFollowUp,
       }
     : undefined;
@@ -259,7 +263,7 @@ function pendingInteractionSegment({
   if (depth <= 0) return undefined;
   return {
     text: `${depth} ${kind}${depth === 1 ? '' : 's'}`,
-    color: 'yellow',
+    color: COLOR_WARNING,
     compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalDepth,
   };
 }
@@ -561,7 +565,7 @@ function rootActiveSegment(
   return input.ctrlCAction === 'stop root' && !isActivePhase(input.status)
     ? {
         text: 'root active',
-        color: 'yellow',
+        color: COLOR_WARNING,
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.rootActive,
       }
     : undefined;
@@ -577,13 +581,13 @@ function approvalPolicySegment(
     case 'never':
       return {
         text: 'deny',
-        color: 'yellow',
+        color: COLOR_WARNING,
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
       };
     case 'yolo':
       return {
         text: 'yolo',
-        color: 'red',
+        color: COLOR_ERROR,
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
       };
     default:
@@ -651,22 +655,22 @@ export function statusBarStreamTarget({
 const BYPASS_BADGES: ReadonlyArray<{
   readonly field: keyof BypassState;
   readonly text: string;
-  readonly badgeColor: 'red' | 'yellow';
+  readonly badgeColor: typeof COLOR_ERROR | typeof COLOR_WARNING;
 }> = [
-  { field: 'superYolo', text: 'YOLO', badgeColor: 'red' },
-  { field: 'bash', text: 'AUTO-BASH', badgeColor: 'yellow' },
-  { field: 'toolEdit', text: 'AUTO-EDIT', badgeColor: 'yellow' },
+  { field: 'superYolo', text: 'YOLO', badgeColor: COLOR_ERROR },
+  { field: 'bash', text: 'AUTO-BASH', badgeColor: COLOR_WARNING },
+  { field: 'toolEdit', text: 'AUTO-EDIT', badgeColor: COLOR_WARNING },
 ];
 
 export function buildStatusBarDisplay(
   input: StatusBarDisplayInput,
 ): StatusBarDisplay {
   const left: StatusBarSegment[] = [
-    { text: STATUS_DIAMOND, color: 'cyan', decorative: true },
+    { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
   ];
 
   if (input.pendingExitHint) {
-    left.push({ text: PENDING_EXIT_HINT_TEXT, color: 'yellow' });
+    left.push({ text: PENDING_EXIT_HINT_TEXT, color: COLOR_WARNING });
     const queuedCount = input.queuedFollowUpMessages.length;
     if (queuedCount > 0) {
       // Exiting drops queued follow-ups silently — warn before the user
@@ -675,7 +679,7 @@ export function buildStatusBarDisplay(
         text: `${queuedCount} queued follow-up${
           queuedCount === 1 ? '' : 's'
         } will be discarded`,
-        color: 'red',
+        color: COLOR_ERROR,
       });
     }
   } else {
@@ -702,7 +706,7 @@ export function buildStatusBarDisplay(
     ) {
       left.push({
         text: 'thinking...',
-        color: 'yellow',
+        color: COLOR_WARNING,
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
       });
     }
@@ -713,7 +717,7 @@ export function buildStatusBarDisplay(
 
   left.push(
     input.subscriptionActive
-      ? { text: 'subscription', color: 'cyan', compactText: 'sub' }
+      ? { text: 'subscription', color: COLOR_HINT, compactText: 'sub' }
       : { text: input.apiMode, color: 'dim' },
   );
   const policy = approvalPolicySegment(input.approvalPolicy);

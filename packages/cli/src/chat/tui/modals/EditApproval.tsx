@@ -4,6 +4,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 import { ConfirmCard } from './ConfirmCard';
+import { COLOR_HINT } from '../ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
@@ -146,7 +147,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   return (
     <ConfirmCard
       borderStyle="double"
-      color="cyan"
+      color={COLOR_HINT}
       title={title}
       alwaysAllow={{ kind: 'toolEdit', label: 'approve edits for session' }}
       feedbackPlaceholder={EDIT_APPROVAL_FEEDBACK_PLACEHOLDER}

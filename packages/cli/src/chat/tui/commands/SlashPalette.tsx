@@ -13,6 +13,7 @@ import {
 } from './slashRegistry';
 
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
+import { COLOR_HINT } from '../ui/colors';
 import { KeyHints } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
 import { nextWrappingHighlightIndex } from '../ui/Select';
@@ -183,7 +184,7 @@ export function SlashPalette(
   return (
     <Box
       borderStyle="single"
-      borderColor="cyan"
+      borderColor={COLOR_HINT}
       flexDirection="column"
       paddingX={1}
     >
@@ -195,7 +196,7 @@ export function SlashPalette(
         return (
           <Box key={cmd.name} flexDirection="row">
             <Box flexShrink={0} width={commandLabelWidth}>
-              <Text color={i === highlight ? 'cyan' : undefined}>
+              <Text color={i === highlight ? COLOR_HINT : undefined}>
                 {i === highlight ? POINTER : ' '} /{cmd.name}
               </Text>
             </Box>
