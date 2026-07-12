@@ -111,6 +111,19 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 - **China (BigModel)**: Get your API key at [open.bigmodel.cn](https://open.bigmodel.cn/) — endpoint: open.bigmodel.cn (default)
 - **Coding Plan**: GLM offers monthly subscription plans as an alternative to pay-as-you-go, with access to all GLM models. Coding Plan uses a separate endpoint (`/api/coding/paas/v4`). Enable the "Coding Plan" toggle in the Models tab. [Subscribe here](https://z.ai/subscribe).
 
+## Meta (Muse Spark) Models
+
+| Model ID     | Use Case                                 | Cost | Speed  |
+| :----------- | :--------------------------------------- | :--- | :----- |
+| `musespark11` | Reasoning + vision + PDF, 1M context    | $$   | Medium |
+
+Muse Spark always reasons (effort is adjustable but cannot be disabled). TeXRA
+talks to the Meta Model API's Responses surface, which carries reasoning across
+turns and supports tool calling. The API is in public preview for US-based
+developers.
+
+- Get your API key at [dev.meta.ai](https://dev.meta.ai/) (Model API dashboard → API keys tab)
+
 ## Grok / xAI Models
 
 | Model ID | Use Case                        | Cost | Speed  |
