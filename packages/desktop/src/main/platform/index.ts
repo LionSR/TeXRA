@@ -1,4 +1,5 @@
-import { join } from 'node:path';
+import { access, constants } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 import { app } from 'electron';
 
@@ -17,6 +18,7 @@ import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { StreamSnapshotStore } from '@transcript';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import { isFileNotFoundError } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { configKeyVariants } from '@shared/config/configKeys';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -73,6 +75,29 @@ export interface ElectronPlatformInitResult {
 const WORKSPACE_CONFIG_MIGRATED_KEY =
   'desktop.workspaceConfigMigratedToProject';
 
+/**
+ * Whether a write through a `JsonStore` at `filePath` could succeed:
+ * `flush()` creates the containing directory on demand and then writes a
+ * temp file into it, so the deepest existing ancestor of `filePath` must be
+ * writable and traversable. Answers false for e.g. a read-only checkout
+ * without ever creating the directory in the project tree.
+ */
+async function canCreateOrWrite(filePath: string): Promise<boolean> {
+  let dir = dirname(filePath);
+  // Walk up to the deepest existing ancestor; the workspace root exists, so
+  // this terminates after a step or two.
+  for (;;) {
+    try {
+      await access(dir, constants.W_OK | constants.X_OK);
+      return true;
+    } catch (error) {
+      const parent = dirname(dir);
+      if (!isFileNotFoundError(error) || parent === dir) return false;
+      dir = parent;
+    }
+  }
+}
+
 export async function initializeElectronPlatform(
   mainDirname: string,
 ): Promise<ElectronPlatformInitResult> {
@@ -104,42 +129,64 @@ export async function initializeElectronPlatform(
   );
   // Workspace config lives in the project's `.texra/config.json` — the same
   // file the CLI reads and writes — so a checked-in config behaves
-  // identically in both hosts. Sessions without a workspace, and read-only
-  // project trees where the file cannot be created or written, fall back to
-  // the internal per-workspace store so startup never fails on config.
+  // identically in both hosts. Sessions without a workspace, and project
+  // trees where the file cannot be read or could never be written, fall
+  // back to the internal per-workspace store so startup never fails on
+  // config and settings writes keep working. Opening never creates
+  // `.texra/` (`JsonStore` only prepares the directory on write), so
+  // whether an absent file could ever be written is probed explicitly
+  // below instead of being inferred from an open failure.
   const legacyWorkspaceConfigPath = join(
     storage.getStoragePath(),
     'config.json',
   );
   let projectConfigStore: JsonStore | undefined;
+  let projectConfigWritable = false;
   if (workspacePath) {
+    const projectConfigPath = workspaceTexraConfigPath(workspacePath);
     try {
-      projectConfigStore = await JsonStore.open(
-        workspaceTexraConfigPath(workspacePath),
-      );
+      projectConfigStore = await JsonStore.open(projectConfigPath);
+      projectConfigWritable = await canCreateOrWrite(projectConfigPath);
     } catch (error) {
       console.warn(
         `[desktop] Cannot open project .texra/config.json; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,
       );
     }
   }
-  const workspaceConfigStore =
-    projectConfigStore ?? (await JsonStore.open(legacyWorkspaceConfigPath));
-  // One-time copy from the pre-project-file internal store into the project
-  // file; existing project values win, so a checked-in config is never
-  // overwritten. Presence is checked across key variants because checked-in
-  // CLI configs use bare keys (`model`) while this store wrote canonical
-  // `texra.*` keys, which shadow bare ones on read. A write failure (e.g. a
-  // read-only tree) only skips the merge-only migration — the readable
-  // project file stays the config source — and retries on the next launch.
+  // The pre-project-file internal store is both the migration source and the
+  // fallback config source; it is opened exactly once. Without a project
+  // store it is the only possible source, so a failed open stays fatal here
+  // (matching the previously unguarded open); with one, it is a soft
+  // degradation.
+  let internalConfigStore: JsonStore | undefined;
+  try {
+    internalConfigStore = await JsonStore.open(legacyWorkspaceConfigPath);
+  } catch (error) {
+    if (projectConfigStore === undefined) throw error;
+    console.warn(
+      `[desktop] Cannot open the internal workspace config store; the project config is the only source this session. Cause: ${toErrorMessage(error)}`,
+    );
+  }
+  // One-time copy from the internal store into the project file; existing
+  // project values win, so a checked-in config is never overwritten.
+  // Presence is checked across key variants because checked-in CLI configs
+  // use bare keys (`model`) while this store wrote canonical `texra.*` keys,
+  // which shadow bare ones on read. A write failure (e.g. a read-only tree)
+  // only skips the merge-only migration and retries on the next launch.
+  const projectHadContent =
+    projectConfigStore !== undefined &&
+    Object.keys(projectConfigStore.snapshot()).length > 0;
+  let migrationOutcome: 'not-run' | 'succeeded' | 'failed' = 'not-run';
   if (
     projectConfigStore &&
+    internalConfigStore &&
     workspaceStateStore.get<boolean>(WORKSPACE_CONFIG_MIGRATED_KEY) !== true
   ) {
     const projectStore = projectConfigStore;
     try {
-      const legacyStore = await JsonStore.open(legacyWorkspaceConfigPath);
-      for (const [key, value] of Object.entries(legacyStore.snapshot())) {
+      for (const [key, value] of Object.entries(
+        internalConfigStore.snapshot(),
+      )) {
         const inProject = configKeyVariants(key).some((variant) =>
           projectStore.has(variant),
         );
@@ -147,10 +194,55 @@ export async function initializeElectronPlatform(
           await projectStore.set(key, value);
         }
       }
+      migrationOutcome = 'succeeded';
+    } catch (error) {
+      migrationOutcome = 'failed';
+      console.warn(
+        `[desktop] Legacy workspace config migration failed; will retry on next launch. Cause: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+  // Single owner of the session's config-source decision: the project store
+  // serves the session only when it opened AND either already had content (a
+  // readable checked-in config is always the source), or the internal store
+  // is unreadable (there is nothing it could shadow), or config can actually
+  // land in the project tree (the location is writable and the migration
+  // copy-in didn't fail). The writability probe stands in for the eager
+  // `.texra/` creation `JsonStore.open()` performed before #8220: without
+  // it, an empty project store on an unwritable tree would be adopted
+  // without any throw — shadowing pre-migration settings and rejecting every
+  // later settings write at `flush()` — while the internal store would have
+  // kept working.
+  let workspaceConfigStore: JsonStore;
+  if (
+    projectConfigStore !== undefined &&
+    (projectHadContent ||
+      internalConfigStore === undefined ||
+      (migrationOutcome !== 'failed' && projectConfigWritable))
+  ) {
+    workspaceConfigStore = projectConfigStore;
+  } else if (internalConfigStore !== undefined) {
+    workspaceConfigStore = internalConfigStore;
+  } else {
+    // Unreachable: a failed internal open above is fatal unless a project
+    // store exists, and a missing internal store selects the project branch.
+    throw new Error('[desktop] No usable workspace config store');
+  }
+  // Latch the migrated flag only once the copied-in content actually serves
+  // from the project file. Latching on a vacuous success while the internal
+  // store remains the session source would permanently skip migrating any
+  // settings written later (e.g. once a read-only checkout becomes
+  // writable). Best-effort like the copy itself: a failed latch just re-runs
+  // the idempotent merge next launch.
+  if (
+    workspaceConfigStore === projectConfigStore &&
+    migrationOutcome === 'succeeded'
+  ) {
+    try {
       await workspaceStateStore.update(WORKSPACE_CONFIG_MIGRATED_KEY, true);
     } catch (error) {
       console.warn(
-        `[desktop] Legacy workspace config migration failed; will retry on next launch. Cause: ${toErrorMessage(error)}`,
+        `[desktop] Could not record the workspace config migration; it will re-run on next launch. Cause: ${toErrorMessage(error)}`,
       );
     }
   }
