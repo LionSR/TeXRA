@@ -18,6 +18,9 @@ export const ExternalInquirySessionLinksSchema = z.array(
   ExternalInquirySessionLinkSchema,
 );
 
+// Keep the 12-hex suffix aligned with hexId12(), the identifier-minting owner
+// used by externalInquiryStorage. The explicit bound rejects truncated or
+// extended identifiers at storage and tool-input boundaries.
 export const ExternalInquiryThreadIdSchema = z
   .string()
   .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID')

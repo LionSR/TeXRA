@@ -127,6 +127,10 @@ TeXRA is unusually well-positioned: YAML agent profiles are near-isomorphic to t
 
 **The cleanest internal seam** is the `agentCategory` dispatch at `executeAgent.ts:444/497`: both flows already take typed inputs (`RunReflectionFlowInput`/`RunToolUseFlowInput`) and return typed results. The improvement is to stop threading the 14-field `AgentLaunchContext` by spread (`{...ctx, ...interrupts, …}`) and pass explicit per-flow inputs, so adding an agent type = adding a flow keyed by category, not editing `executeAgent`.
 
+`AgentCategory` is permanently binary: `workflow` and `toolUse` are the two
+execution families. New agent profiles and execution modes belong within one
+of these families; they do not add a third category.
+
 **Risks that bound this work** (must be respected before promoting flows to config-selected delegates):
 
 1. **Shared coordinator state** — concurrent delegates keyed by `streamId` would cross-clear each other's retry/plan-approval requests. Move registries onto the per-run handle _first_.
