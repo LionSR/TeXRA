@@ -118,6 +118,24 @@ describe('OpenAI Responses error normalization', () => {
     expect(providerError.userRetryable).toBe(false);
   });
 
+  it('keeps body-classified rate limits retryable when their message mentions context', () => {
+    const error = Object.assign(
+      new Error("This model's maximum context length is temporarily limited."),
+      {
+        error: {
+          type: 'rate_limit_error',
+          message:
+            "This model's maximum context length is temporarily limited.",
+        },
+      },
+    );
+
+    const providerError = formatProviderHttpError(error);
+
+    expect(providerError.statusCode).toBe(429);
+    expect(providerError.userRetryable).toBe(true);
+  });
+
   it('keeps terminal background statuses retryable without HTTP metadata', () => {
     const wrapped = createOpenAIBackgroundTerminalError(
       {

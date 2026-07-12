@@ -217,7 +217,14 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Guarded on the status code because isContextWindowError also matches by
   // message wording, and a retryable provider error (e.g. a 429 mentioning
   // tokens) must keep its retry affordance.
-  const overflowStatusCode = detectStatusCode(err);
+  const detectedOverflowStatusCode = detectStatusCode(err);
+  const overflowStatusCode =
+    (detectedOverflowStatusCode !== undefined &&
+    detectedOverflowStatusCode >= 400
+      ? detectedOverflowStatusCode
+      : undefined) ??
+    inferStatusCodeFromBody(rawErrorBody) ??
+    detectedOverflowStatusCode;
   if (
     isContextWindowError(err) &&
     (overflowStatusCode === undefined ||

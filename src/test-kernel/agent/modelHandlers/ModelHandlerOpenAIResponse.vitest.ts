@@ -30,6 +30,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
 import {
+  attachContextWindowError,
   hasContextWindowErrorMarker,
   isContextWindowError,
 } from '@common/errors/sdkErrorUtils';
@@ -1063,7 +1064,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.deepEqual(requests[1].input, secondTurn.slice(-1));
   });
 
-  it('fails fast instead of recursing when compaction cannot shrink an overflowing transcript', async () => {
+  it('bounds failed compaction recovery and preserves unchained history', async () => {
     const handler = createHandler({
       openRouterOnly: false,
       contextWindow: 200000,
@@ -1076,21 +1077,25 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
         inputTokens: {
           count: async () => {
             tokenCountCalls += 1;
-            // Turn 2 overflows on every attempt — compaction doesn't help.
-            return { input_tokens: tokenCountCalls >= 2 ? 300000 : 1000 };
+            return {
+              input_tokens:
+                tokenCountCalls === 2 || tokenCountCalls === 3 ? 180000 : 1000,
+            };
           },
         },
         create: async (params: any) => {
           requests.push(params);
+          if (requests.length > 1) {
+            const error = new Error('maximum context length exceeded');
+            attachContextWindowError(error);
+            throw error;
+          }
           return createResponse(`resp-${requests.length}`, {
             input_tokens: 100000,
           });
         },
       },
     };
-    // A compaction that fails to produce a result (compactionResult stays
-    // unset), so compactedThisCall never becomes true — only the one-shot
-    // guard stands between this and infinite recursion.
     (
       handler as unknown as { compactConversation: unknown }
     ).compactConversation = async (
@@ -1107,19 +1112,21 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       temperature: 0,
     });
 
+    const secondTurn = createMessages(4);
     await assert.rejects(
       handler.createResponse({
         client: client as any,
-        messages: createMessages(4),
+        messages: secondTurn,
         temperature: 0,
       }),
-      /exceeds context window/,
+      /maximum context length exceeded/,
     );
 
-    // Exactly one recovery attempt: the failed compaction did not recurse
-    // again, and no oversized request ever reached the API.
-    assert.equal(compactCalls.length, 1);
-    assert.equal(requests.length, 1);
+    assert.equal(compactCalls.length, 2);
+    assert.equal(requests.length, 3);
+    assert.equal(requests[1].previous_response_id, 'resp-1');
+    assert.equal(requests[2].previous_response_id, undefined);
+    assert.deepEqual(requests[2].input, secondTurn);
   });
 
   it('tags the fallback hard-failure throw with the context-window marker', () => {

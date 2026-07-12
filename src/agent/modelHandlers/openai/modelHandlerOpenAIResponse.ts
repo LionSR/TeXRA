@@ -415,15 +415,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   private inFlight = false;
 
-  /**
-   * One-shot guard for the internal compact-and-retry recursions (the
-   * live-count threshold in {@link createResponseImpl} and the overflow
-   * recovery in {@link handleCreateResponseError}): if a compaction attempt
-   * fails to shrink the transcript, the recursive attempt would hit the same
-   * threshold/overflow again and must not recurse a second time. Reset per
-   * public call.
-   */
-  private compactionRetryAttempted = false;
+  /** Internal compaction recovery already attempted during this public call. */
+  private compactionRetrySource: 'threshold' | 'overflow' | null = null;
 
   /** DIAGNOSTIC: Pre-flight token estimate for comparison with actual usage */
   private _diagPreFlightTokens: number | null = null;
@@ -1469,7 +1462,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
     this.inFlight = true;
-    this.compactionRetryAttempted = false;
+    this.compactionRetrySource = null;
     try {
       return await run();
     } finally {
@@ -1743,7 +1736,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (
       preFlightTokens !== undefined &&
       !compactedThisCall &&
-      !this.compactionRetryAttempted &&
+      this.compactionRetrySource === null &&
       this.getCompactionThresholdPercent() > 0 &&
       preFlightTokens > this.getCompactionTokenThreshold() &&
       this.canCompactRoute()
@@ -1752,7 +1745,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.logger,
         `Compacting conversation (pre-flight count ${preFlightTokens} tokens exceeds ${this.getCompactionThresholdPercent()}% threshold of ${this.getCompactionTokenThreshold()} tokens)`,
       );
-      this.compactionRetryAttempted = true;
+      this.compactionRetrySource = 'threshold';
       this.compactionRequested = true;
       this._diagPreFlightTokens = null;
       return this.createResponseImpl(options);
@@ -2249,7 +2242,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } else if (
       isContextWindowError(error) &&
       !compactedThisCall &&
-      !this.compactionRetryAttempted &&
+      this.compactionRetrySource !== 'overflow' &&
       (this.chainState.hasPreviousResponseId() || this.canCompactRoute())
     ) {
       // Recovery for a context-window overflow (API-side or pre-flight):
@@ -2262,17 +2255,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       //   route), a compactable transcript still recovers via compaction
       //   alone.
       // Termination: compactedThisCall blocks re-entry after a successful
-      // compaction, and compactionRetryAttempted blocks it when compaction
-      // failed to shrink the transcript.
+      // compaction, and the overflow source blocks a second overflow recovery.
       logProgressStatus(
         this.logger,
         'Context window exceeded — compacting conversation and retrying.',
       );
-      this.chainState.setPreviousResponseId(null);
+      this.chainState.invalidateChain();
       // Don't call resetConversationState() — it zeroes cumulativeInputTokens
       // which would prevent shouldCompact() from triggering on the retry.
       this.backgroundLifecycle.clearPending();
-      this.compactionRetryAttempted = true;
+      this.compactionRetrySource = 'overflow';
       this.compactionRequested = true;
       this._diagPreFlightTokens = null;
       // Retry internally: the recursive call will compact (shouldCompact()=true)
