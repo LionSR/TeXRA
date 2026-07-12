@@ -546,6 +546,41 @@ describe('CLI orchestration items', () => {
     );
   });
 
+  it('shows teams as unavailable when the active policy denies delegation', () => {
+    const items = buildCliTeamItems([readyPresetPlan()], {
+      approvalContext: {
+        mode: 'interactive',
+        approvalPolicy: 'never',
+      },
+    });
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        label: 'Team physicist',
+        description:
+          'unavailable; approval policy "never" denies subagent delegation; Physicist',
+        disabled: true,
+        footerHints: [
+          'Restart with `texra orchestrate --approval-policy ask` to approve delegation when requested, or use `--approval-policy yolo` only when you intend to auto-approve privileged actions.',
+        ],
+      }),
+    ]);
+  });
+
+  it('keeps teams available when interactive approvals can be answered', () => {
+    const item = buildCliTeamItems([readyPresetPlan()], {
+      approvalContext: {
+        mode: 'interactive',
+        approvalPolicy: 'ask',
+      },
+    })[0];
+
+    expect(item).toMatchObject({
+      description: 'ready; 1 workflow; 2 tools; Physicist',
+      disabled: false,
+    });
+  });
+
   it('lists every team preset so the user can switch between teams', () => {
     const plans = [
       readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),

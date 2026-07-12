@@ -57,6 +57,10 @@ import {
   signOutCliChatGpt,
 } from '../runtime/chatgptLogin';
 import { getCliAuthProfile, signOutCliSupabase } from '../runtime/supabaseAuth';
+import {
+  evaluateTeamDelegationPolicy,
+  formatTeamDelegationPolicyBlock,
+} from '../runtime/approvalPolicyAvailability';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
@@ -207,6 +211,10 @@ async function runOrchestration(context: CliContext): Promise<number> {
       models,
       apiMode,
     );
+    const teamApprovalContext = {
+      mode: 'interactive' as const,
+      approvalPolicy: launchContext.approvalPolicy,
+    };
     const { runOrchestrationTui } =
       await import('../orchestration/runOrchestrationTui');
     const action = await runOrchestrationTui(items, {
@@ -215,6 +223,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       agentItems: buildCliAgentItems(toolUseAgents),
       teamItems: buildCliTeamItems(presetPlanSet.plans, {
         includeLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
+        approvalContext: teamApprovalContext,
       }),
       accountItems: buildCliAccountItems(accountStatus),
       apiMode,
@@ -235,6 +244,14 @@ async function runOrchestration(context: CliContext): Promise<number> {
         return result.exitCode;
       }
       case 'preset': {
+        const delegationPolicy =
+          evaluateTeamDelegationPolicy(teamApprovalContext);
+        if (!delegationPolicy.allowed) {
+          writeTextStderr(
+            formatTeamDelegationPolicyBlock(action.preset, delegationPolicy),
+          );
+          return CliExitCode.Usage;
+        }
         // Match the headless path: load remote premium agents (orchestrator,
         // delegation specialists) and replan so the team starts with its real
         // root instead of silently degrading to the first local tool-use agent.

@@ -63,6 +63,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Team sessions require usable delegation** — the CLI now marks teams as
+  unavailable and stops before launch when the active approval policy would
+  remove subagent delegation.
 - **Model access choices apply to the launched session** — switching access at
   startup overrides an earlier command-line mode, and selecting ChatGPT turns
   off OpenRouter routing so requests use the chosen subscription.

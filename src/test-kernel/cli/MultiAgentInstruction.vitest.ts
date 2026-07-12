@@ -4,7 +4,11 @@ import { formatUnavailableApprovalInstruction } from '@cli/commands/_helpers/app
 import { formatMultiAgentRunInstruction } from '@cli/commands/_helpers/multiAgentInstruction';
 import { formatCliRunFileInstruction } from '@cli/commands/_helpers/runFileInstruction';
 import { formatToolUseAgentRunInstruction } from '@cli/commands/_helpers/toolUseRunInstruction';
-import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
+import {
+  approvalPromptsUnavailable,
+  evaluateTeamDelegationPolicy,
+  formatTeamDelegationPolicyBlock,
+} from '@cli/runtime/approvalPolicyAvailability';
 
 const workingDirectory = '/tmp/texra-workspace';
 
@@ -118,6 +122,40 @@ describe('formatUnavailableApprovalInstruction', () => {
 
       expect(instruction).toBeUndefined();
     }
+  });
+
+  it('returns actionable team-launch decisions for unavailable approvals', () => {
+    const neverDecision = evaluateTeamDelegationPolicy({
+      mode: 'interactive',
+      approvalPolicy: 'never',
+    });
+    expect(neverDecision).toMatchObject({
+      allowed: false,
+      reason: 'approval policy "never" denies subagent delegation',
+    });
+    if (neverDecision.allowed) throw new Error('Expected delegation to fail');
+    expect(
+      formatTeamDelegationPolicyBlock('software-engineer', neverDecision),
+    ).toContain('texra orchestrate --approval-policy ask');
+
+    expect(
+      evaluateTeamDelegationPolicy({
+        mode: 'headless',
+        approvalPolicy: 'ask',
+      }),
+    ).toMatchObject({ allowed: false });
+    expect(
+      evaluateTeamDelegationPolicy({
+        mode: 'interactive',
+        approvalPolicy: 'ask',
+      }),
+    ).toEqual({ allowed: true });
+    expect(
+      evaluateTeamDelegationPolicy({
+        mode: 'headless',
+        approvalPolicy: 'yolo',
+      }),
+    ).toEqual({ allowed: true });
   });
 });
 

@@ -109,7 +109,7 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
     cwd: '/tmp/project',
     mode: 'headless',
     outputFormat: 'text',
-    approvalPolicy: 'never',
+    approvalPolicy: 'yolo',
     quietLogs: false,
     renderRunProgress: true,
     stderrIsTty: false,
@@ -141,10 +141,10 @@ function mockExpandedRunInputs(inputs: {
 }
 
 describe('CLI multi-agent run command', () => {
-  const approvalUnavailableWarning =
-    'WARN preset mathematician may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
+  const approvalNeverError =
+    'Team "mathematician" cannot start: approval policy "never" denies subagent delegation. Restart with `texra orchestrate --approval-policy ask` to approve delegation when requested, or use `--approval-policy yolo` only when you intend to auto-approve privileged actions.';
   const headlessAskError =
-    'Cannot run multi-agent preset "mathematician" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
+    'Team "mathematician" cannot start: a headless run cannot answer delegation prompts under approval policy "ask". Run `texra orchestrate --approval-policy ask` to answer delegation prompts, or use `--approval-policy yolo` only when you intend to auto-approve privileged actions.';
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -332,21 +332,26 @@ describe('CLI multi-agent run command', () => {
     );
   });
 
-  it('warns when approval policy never blocks team delegation', async () => {
+  it('refuses approval policy never before launching a team run', async () => {
     const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
-    const exitCode = await runMultiAgentPreset(cliContext(), {
-      preset: 'mathematician',
-      inputFiles: ['problem.tex'],
-      contextFiles: [],
-      model: 'deepseekT',
-      instruction: 'Solve the problem with the team.',
-    });
-
-    expect(exitCode).toBe(0);
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      approvalUnavailableWarning,
+    const exitCode = await runMultiAgentPreset(
+      cliContext({ approvalPolicy: 'never' }),
+      {
+        preset: 'mathematician',
+        inputFiles: ['problem.tex'],
+        contextFiles: [],
+        model: 'deepseekT',
+        instruction: 'Solve the problem with the team.',
+      },
     );
+
+    expect(exitCode).toBe(2);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(approvalNeverError);
+    expect(mocks.loadAgents).toHaveBeenCalledOnce();
+    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
+    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+    expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
   });
 
   it('refuses headless ask before launching a team run', async () => {
@@ -372,7 +377,7 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
   });
 
-  it('does not warn when yolo can auto-approve delegation', async () => {
+  it('allows yolo to auto-approve delegation', async () => {
     const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
     const exitCode = await runMultiAgentPreset(
@@ -387,9 +392,7 @@ describe('CLI multi-agent run command', () => {
     );
 
     expect(exitCode).toBe(0);
-    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
-      expect.stringContaining('may run without subagent delegation'),
-    );
+    expect(mocks.executeCliToolUseConfig).toHaveBeenCalledOnce();
   });
 
   it('allows instruction-only team runs without input files', async () => {

@@ -24,6 +24,10 @@ import {
   type CliModelAccess,
   type CliModelPickerItem,
 } from './modelAccess';
+import {
+  evaluateTeamDelegationPolicy,
+  type ApprovalInstructionContext,
+} from './approvalPolicyAvailability';
 import type { CliApiMode } from './apiAccessMode';
 
 export type CliOrchestrationAction =
@@ -362,18 +366,31 @@ export function buildCliTeamItems(
   plans: readonly CliMultiAgentPresetRunPlan[],
   options: {
     readonly includeLoginHint?: boolean;
+    readonly approvalContext?: ApprovalInstructionContext;
   },
 ): CliOrchestrationItem[] {
-  return plans.map((plan) => ({
-    value: { kind: 'preset', preset: plan.preset.id },
-    label: `Team ${plan.preset.id}`,
-    description: [
-      formatCliMultiAgentPresetLauncherSummary(plan),
-      plan.preset.name,
-    ].join('; '),
-    disabled: !cliMultiAgentPresetCanLaunchTeam(plan),
-    footerHints: formatCliMultiAgentPresetLauncherHints(plan, {
-      includeLoginHint: options.includeLoginHint,
-    }),
-  }));
+  const delegationPolicy = options.approvalContext
+    ? evaluateTeamDelegationPolicy(options.approvalContext)
+    : { allowed: true as const };
+
+  return plans.map((plan) => {
+    const staticLaunchable = cliMultiAgentPresetCanLaunchTeam(plan);
+    return {
+      value: { kind: 'preset' as const, preset: plan.preset.id },
+      label: `Team ${plan.preset.id}`,
+      description: [
+        delegationPolicy.allowed
+          ? formatCliMultiAgentPresetLauncherSummary(plan)
+          : `unavailable; ${delegationPolicy.reason}`,
+        plan.preset.name,
+      ].join('; '),
+      disabled: !staticLaunchable || !delegationPolicy.allowed,
+      footerHints: [
+        ...formatCliMultiAgentPresetLauncherHints(plan, {
+          includeLoginHint: options.includeLoginHint,
+        }),
+        delegationPolicy.allowed ? undefined : delegationPolicy.recovery,
+      ].filter((hint): hint is string => hint !== undefined),
+    };
+  });
 }

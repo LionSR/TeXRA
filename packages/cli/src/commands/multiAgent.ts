@@ -53,6 +53,10 @@ import {
   type CliToolUseRunResult,
 } from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
+import {
+  evaluateTeamDelegationPolicy,
+  formatTeamDelegationPolicyBlock,
+} from '../runtime/approvalPolicyAvailability';
 
 interface MultiAgentRunInit {
   readonly preset: string;
@@ -66,10 +70,6 @@ interface MultiAgentRunInit {
 
 const MULTI_AGENT_TASK_REQUIRED_MESSAGE =
   'Provide --input, --instruction, or --instruction-file for the team task. Example: texra multi-agent run physicist --instruction "Check this derivation"';
-
-function headlessAskMultiAgentMessage(presetId: string): string {
-  return `Cannot run multi-agent preset "${presetId}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`;
-}
 
 function writeMultiAgentRunResult(
   context: CliContext,
@@ -141,16 +141,17 @@ export async function runMultiAgentPreset(
   }
   await initCliPlatform({ ...context, quietLogs: true });
 
-  const rejectsHeadlessAsk =
-    context.mode === 'headless' && context.approvalPolicy === 'ask';
+  const delegationPolicy = evaluateTeamDelegationPolicy(context);
   const { plan, remoteAgentLoadAttempted } = await loadCliMultiAgentRunPlan(
     init,
     {
-      reloadRemoteAgents: !rejectsHeadlessAsk,
+      reloadRemoteAgents: delegationPolicy.allowed,
     },
   );
-  if (rejectsHeadlessAsk) {
-    writeTextStderr(headlessAskMultiAgentMessage(plan.preset.id));
+  if (!delegationPolicy.allowed) {
+    writeTextStderr(
+      formatTeamDelegationPolicyBlock(plan.preset.id, delegationPolicy),
+    );
     return CliExitCode.Usage;
   }
   if (remoteAgentLoadAttempted) {
@@ -198,12 +199,6 @@ export async function runMultiAgentPreset(
       readStdinText: readCliStdinText,
     },
     async ({ inputFiles, contextFiles }) => {
-      if (runContext.approvalPolicy === 'never') {
-        writeTextStderr(
-          `WARN preset ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
-        );
-      }
-
       const config: AgentConfigPayload = {
         agent: rootAgent.name,
         model,
