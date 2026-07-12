@@ -49,6 +49,7 @@ async function installPlatform(flagOn: boolean): Promise<Platform> {
 
 function startPlanUpdate(streamId: StreamTabId, objective: string) {
   const { events, host, interactions } = createRecordingHost();
+  const session = sessionWithInteractions(interactions);
   const workPlanState = new WorkPlanState();
   const tool = new PlanTool();
 
@@ -57,7 +58,7 @@ function startPlanUpdate(streamId: StreamTabId, objective: string) {
       run: {
         runtimeHost: host,
         streamId,
-        session: sessionWithInteractions(interactions),
+        session,
       },
       call: {
         tracker: new FileInteractionState(),
@@ -67,7 +68,7 @@ function startPlanUpdate(streamId: StreamTabId, objective: string) {
     () => tool.call({ command: 'update', objective }),
   );
 
-  return { resultPromise, events, host, workPlanState };
+  return { resultPromise, events, host, session, workPlanState };
 }
 
 function findPlanApproval(
@@ -127,12 +128,11 @@ describe('PlanTool — update (plan approval)', () => {
     const streamId = 'stream:plan-goal' as StreamTabId;
     await installPlatform(true);
 
+    const { resultPromise, events, host, session } = startPlanUpdate(
+      streamId,
+      plan.objective,
+    );
     try {
-      const { resultPromise, events, host } = startPlanUpdate(
-        streamId,
-        plan.objective,
-      );
-
       const approval = findPlanApproval(events);
       expect((approval.payload as { goalEnabled: boolean }).goalEnabled).toBe(
         true,
@@ -152,11 +152,11 @@ describe('PlanTool — update (plan approval)', () => {
       expect(goal!.status).toBe('active');
       // The approved plan document seeds the goal verbatim.
       expect(goal!.objective).toBe(plan.objective);
-      expect(isBashApprovalBypassedForStream(streamId)).toBe(true);
-      expect(isApprovalBypassedForStream(streamId)).toBe(false);
+      expect(isBashApprovalBypassedForStream(streamId, session)).toBe(true);
+      expect(isApprovalBypassedForStream(streamId, session)).toBe(false);
     } finally {
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId);
+      cleanupApprovalsForStream(streamId, session);
     }
   });
 
@@ -164,13 +164,12 @@ describe('PlanTool — update (plan approval)', () => {
     const streamId = 'stream:plan-goal-retarget' as StreamTabId;
     await installPlatform(true);
 
+    const existing = await GoalStore.start(streamId, 'Old objective');
+    const { resultPromise, events, host, session } = startPlanUpdate(
+      streamId,
+      followUpPlan.objective,
+    );
     try {
-      const existing = await GoalStore.start(streamId, 'Old objective');
-      const { resultPromise, events, host } = startPlanUpdate(
-        streamId,
-        followUpPlan.objective,
-      );
-
       const approval = findPlanApproval(events);
       expect(
         host.interactions?.resolve(
@@ -189,11 +188,11 @@ describe('PlanTool — update (plan approval)', () => {
       expect(goal!.status).toBe('active');
       expect(goal!.objective).toBe(followUpPlan.objective);
       expect(goal!.objective).not.toContain('Old objective');
-      expect(isBashApprovalBypassedForStream(streamId)).toBe(true);
-      expect(isApprovalBypassedForStream(streamId)).toBe(false);
+      expect(isBashApprovalBypassedForStream(streamId, session)).toBe(true);
+      expect(isApprovalBypassedForStream(streamId, session)).toBe(false);
     } finally {
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId);
+      cleanupApprovalsForStream(streamId, session);
     }
   });
 

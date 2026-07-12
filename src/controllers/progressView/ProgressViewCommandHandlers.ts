@@ -9,7 +9,7 @@ import type {
 } from '@shared/schemas/progressView';
 import {
   isApprovalBypassedForStream,
-  proposalApprovalState,
+  proposalApprovals,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
@@ -74,6 +74,11 @@ export interface ProgressViewFollowUpCommandActions {
 
 export interface ProgressViewBypassCommandOptions {
   runtimeHost: AgentRuntimeHost;
+  /**
+   * Session that owns the approval bypass state. Desktop scopes it to its
+   * window session; the extension omits it so the default session applies.
+   */
+  session?: SessionHandle;
   showInfo?(message: string): void | PromiseLike<unknown>;
 }
 
@@ -149,7 +154,7 @@ export function createProgressViewCommandHandlers(
   actions: ProgressViewCommandActions,
 ) {
   const { lifecycle, run, file, followUp, approval, externalInquiry } = actions;
-  const { runtimeHost, showInfo } = actions.bypass;
+  const { runtimeHost, session, showInfo } = actions.bypass;
 
   // Single source of truth for the coupled edit + bash session bypass behind
   // the one Yolo concept. The shield toolbar button flips it; the inline "Yolo
@@ -159,9 +164,10 @@ export function createProgressViewCommandHandlers(
     stream: StreamTabId,
     enabled: boolean,
   ): Promise<void> => {
-    setToolEditApprovalSessionBypass(stream, enabled, runtimeHost);
+    setToolEditApprovalSessionBypass(stream, enabled, runtimeHost, { session });
     setBashApprovalSessionBypass(stream, enabled, runtimeHost, {
       silent: true,
+      session,
     });
     await showInfo?.(
       enabled
@@ -180,14 +186,17 @@ export function createProgressViewCommandHandlers(
     enabled: boolean,
   ): Promise<void> => {
     if (enabled) {
-      if (!isApprovalBypassedForStream(stream)) {
-        setToolEditApprovalSessionBypass(stream, true, runtimeHost);
+      if (!isApprovalBypassedForStream(stream, session)) {
+        setToolEditApprovalSessionBypass(stream, true, runtimeHost, {
+          session,
+        });
       }
     } else {
-      setToolEditApprovalSessionBypass(stream, false, runtimeHost);
+      setToolEditApprovalSessionBypass(stream, false, runtimeHost, { session });
     }
     setBashApprovalSessionBypass(stream, enabled, runtimeHost, {
       silent: true,
+      session,
     });
     await showInfo?.(
       enabled
@@ -246,7 +255,7 @@ export function createProgressViewCommandHandlers(
     [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: (data) =>
       applyCoupledBypass(
         data.stream,
-        !isApprovalBypassedForStream(data.stream),
+        !isApprovalBypassedForStream(data.stream, session),
       ),
     // Inline "Yolo (this session)" prompt button: force bypass ON. Unlike the
     // shield toggle this is idempotent, so it can never invert an already-on
@@ -257,7 +266,7 @@ export function createProgressViewCommandHandlers(
     [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) =>
       applySuperYoloBypass(
         data.stream,
-        proposalApprovalState.toggleBypass(data.stream, runtimeHost),
+        proposalApprovals(session).toggleBypass(data.stream, runtimeHost),
       ),
     // Inline "Super Yolo (this session)" proposal button: force the
     // delegated-task auto-approval bypass ON. Idempotent like
@@ -268,7 +277,7 @@ export function createProgressViewCommandHandlers(
     // enabled branch: edit bypass rides along only if not already on, bash
     // silently.
     [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: (data) => {
-      proposalApprovalState.setBypass(data.stream, true, runtimeHost);
+      proposalApprovals(session).setBypass(data.stream, true, runtimeHost);
       return applySuperYoloBypass(data.stream, true);
     },
 
