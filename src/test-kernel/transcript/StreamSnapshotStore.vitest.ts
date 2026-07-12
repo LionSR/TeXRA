@@ -121,7 +121,7 @@ function toolUseTaskState(agent = 'search', model = 'deepseekproT'): TaskState {
 
 function injectDuringExecutionConfigHydration(
   executionId: ExecutionId,
-  inject: () => void,
+  inject: () => void | Promise<void>,
 ) {
   const originalRead = StorageFS.read.bind(StorageFS);
   const configPath = path.join(
@@ -131,7 +131,9 @@ function injectDuringExecutionConfigHydration(
   const injected = vi.fn(inject);
   vi.spyOn(StorageFS, 'read').mockImplementation(async (target: string) => {
     const raw = await originalRead(target);
-    if (target === configPath && injected.mock.calls.length === 0) injected();
+    if (target === configPath && injected.mock.calls.length === 0) {
+      await injected();
+    }
     return raw;
   });
   return injected;
@@ -968,6 +970,51 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
 
     expect(await StorageFS.exists(dir)).toBe(false);
+  });
+
+  it('does not resurrect a deleted sidecar dir when deleteStream lands during hydration', async () => {
+    // Regression for #8226: applyStreamData awaits execution-config hydration
+    // mid-seed. If the stream is deleted during that await, the continuation
+    // must not re-resolve a record for the evicted stream and flush merged
+    // sidecars — pre-fix, the legacy-shaped file below queued an unconditional
+    // rewrite that recreated `streamData/{id}/` after deleteDir() removed it.
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    const executionId = 'dead01' as ExecutionId;
+    await StorageFS.ensureDir(dir);
+    await Promise.all([
+      StorageFS.write(
+        path.join(dir, 'meta.json'),
+        JSON.stringify({
+          schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+          executionId,
+        }),
+      ),
+      // Legacy nested shape → `missingOutputs` lands in `data.legacyKeys`,
+      // arming the merged-sidecar rewrite regardless of overlays.
+      StorageFS.write(
+        path.join(dir, 'missingOutputs.json'),
+        JSON.stringify({ 'run-1': { '0': ['stale.tex'] } }),
+      ),
+      getExecutionStore(executionId).writeConfig(
+        toolUseTaskState().agentConfig,
+      ),
+    ]);
+
+    const store = new StreamSnapshotStore();
+    // Await the delete so evict + deleteDir fully complete before hydration
+    // resumes — only the post-await continuation can recreate the dir.
+    const wasDeleteInjected = injectDuringExecutionConfigHydration(
+      executionId,
+      () => store.deleteStream(STREAM),
+    );
+
+    await store.load([STREAM]);
+    expect(wasDeleteInjected).toHaveBeenCalledOnce();
+    await store.flush();
+
+    expect(await StorageFS.exists(dir)).toBe(false);
+    expect(await store.listPersistedStreams()).not.toContain(STREAM);
   });
 
   it('serializes same-key writes so a slow first write finishes before a queued second write starts', async () => {
