@@ -79,6 +79,10 @@ export const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. Crea
 
 Format the summary as a structured narrative that allows the conversation to continue seamlessly. Do NOT add any preamble or explanation — output only the summary.`;
 
+/** Final user instruction that makes the compaction task explicit after history. */
+export const COMPACTION_USER_PROMPT =
+  'Summarize the conversation history above now. Follow the compaction instructions exactly and output only the summary.';
+
 /** Compute reduced max tokens under context pressure (minimum 1). */
 export function computeReducedMaxTokens(
   availableTokens: number,
