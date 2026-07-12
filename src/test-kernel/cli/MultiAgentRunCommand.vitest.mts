@@ -310,7 +310,7 @@ describe('CLI multi-agent run command', () => {
 
   it('reports resolved remote agent loads without implying final missing agents', async () => {
     const remoteLoadMessage =
-      'Preset mathematician loaded relay-served agents before launch. Run `texra multi-agent show mathematician` to view the resolved team.';
+      'Preset mathematician loaded remote agents before launch. Run `texra multi-agent show mathematician` to view the resolved team.';
     mocks.cliMultiAgentPlanHasGaps
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false);

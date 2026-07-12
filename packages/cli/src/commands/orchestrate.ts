@@ -9,7 +9,11 @@ import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';
 import { listCliHistoryEntries } from '../runtime/history';
 import { initInteractiveCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+import {
+  writeErrorStderr,
+  writeTextStderr,
+  writeTextStdout,
+} from '../runtime/logSinks';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -25,7 +29,10 @@ import {
   loadCliMultiAgentPresetPlanSet,
   writeMissingPresetAgents,
 } from '../runtime/multiAgentRunPlan';
-import { buildCliOrchestrationItems } from '../runtime/orchestration';
+import {
+  buildCliOrchestrationItems,
+  buildCliResumeItems,
+} from '../runtime/orchestration';
 import {
   getCliModelAccessList,
   selectCliRunnableModel,
@@ -36,6 +43,11 @@ import { loadCliApiStatusLines } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
 import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
+import {
+  contextForCliModelAccess,
+  readCliModelAccessStatus,
+  selectCliModelAccessRoute,
+} from '../runtime/modelAccessRoutes';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
@@ -134,89 +146,119 @@ async function runOrchestration(context: CliContext): Promise<number> {
     });
     return result.exitCode;
   }
-  const history = await listCliHistoryEntries();
-  const presets = readCliMultiAgentPresets();
-  const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
-  await seedCliRosterFromDefaultTeam();
-  const items = buildCliOrchestrationItems({
-    presetPlans: presetPlanSet.plans,
-    history,
-    toolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
-    includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
-  });
-  // Load the model registry up front so the launcher can offer a model pick
-  // after an agent/team choice. Best-effort: an unavailable registry just
-  // launches with the default model instead of blocking the launcher.
-  const apiMode = effectiveCliApiMode(context);
-  const [models, statusLines] = await Promise.all([
-    getCliModelAccessList({
-      apiMode,
-      agentCategory: AgentCategory.ToolUse,
-    }).catch((): readonly CliModelAccess[] => []),
-    loadCliApiStatusLines({ apiMode, includeActionHint: true }),
-  ]);
-  const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
-    context,
-    models,
-    apiMode,
-  );
-  const { runOrchestrationTui } =
-    await import('../orchestration/runOrchestrationTui');
-  const action = await runOrchestrationTui(items, {
-    models,
-    apiMode,
-    version: context.version,
-    statusLines,
-    allowDefaultModelLaunch,
-    colorEnabled: resolveCliStdoutColorEnabled(context),
-  });
 
-  switch (action.kind) {
-    case 'chat': {
-      const { runChat } = await import('../chat/tui/runChatTui');
-      const result = await runChat(context, {
-        agentOverride: action.agent,
-        modelOverride: action.model,
-      });
-      return result.exitCode;
-    }
-    case 'preset': {
-      // Match the headless path: load remote premium agents (orchestrator,
-      // delegation specialists) and replan so the team starts with its real
-      // root instead of silently degrading to the first local tool-use agent.
-      const { plan } = await loadCliMultiAgentRunPlan({
-        preset: action.preset,
-      });
-      if (!cliMultiAgentPresetCanLaunchTeam(plan)) {
-        writeTextStderr(
-          formatCliMultiAgentTeamLaunchBlockMessage(plan, {
-            requestedPreset: action.preset,
+  let launcherApiModeOverride: CliApiMode | undefined;
+  launcher: while (true) {
+    const history = await listCliHistoryEntries();
+    const presets = readCliMultiAgentPresets();
+    const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
+    const apiMode = launcherApiModeOverride ?? effectiveCliApiMode(context);
+    const launchContext = contextForCliModelAccess(
+      context,
+      launcherApiModeOverride,
+    );
+    const modelAccess = await readCliModelAccessStatus(apiMode);
+    await seedCliRosterFromDefaultTeam();
+    const items = buildCliOrchestrationItems({
+      presetPlans: presetPlanSet.plans,
+      history,
+      toolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
+      includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
+      modelAccess,
+    });
+    // Load the model registry up front so the launcher can offer a model pick
+    // after an agent/team choice. Best-effort: an unavailable registry just
+    // launches with the default model instead of blocking the launcher.
+    const [models, statusLines] = await Promise.all([
+      getCliModelAccessList({
+        apiMode,
+        agentCategory: AgentCategory.ToolUse,
+      }).catch((): readonly CliModelAccess[] => []),
+      loadCliApiStatusLines({ apiMode, includeActionHint: true }),
+    ]);
+    const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
+      launchContext,
+      models,
+      apiMode,
+    );
+    const { runOrchestrationTui } =
+      await import('../orchestration/runOrchestrationTui');
+    const action = await runOrchestrationTui(items, {
+      models,
+      resumeItems: buildCliResumeItems(history),
+      apiMode,
+      modelAccess,
+      version: context.version,
+      statusLines,
+      allowDefaultModelLaunch,
+      colorEnabled: resolveCliStdoutColorEnabled(context),
+    });
+
+    switch (action.kind) {
+      case 'chat': {
+        const { runChat } = await import('../chat/tui/runChatTui');
+        const result = await runChat(launchContext, {
+          agentOverride: action.agent,
+          modelOverride: action.model,
+        });
+        return result.exitCode;
+      }
+      case 'preset': {
+        // Match the headless path: load remote premium agents (orchestrator,
+        // delegation specialists) and replan so the team starts with its real
+        // root instead of silently degrading to the first local tool-use agent.
+        const { plan } = await loadCliMultiAgentRunPlan({
+          preset: action.preset,
+        });
+        if (!cliMultiAgentPresetCanLaunchTeam(plan)) {
+          writeTextStderr(
+            formatCliMultiAgentTeamLaunchBlockMessage(plan, {
+              requestedPreset: action.preset,
+            }),
+          );
+          return CliExitCode.Usage;
+        }
+        const rootAgent = plan.rootAgent;
+        writeMissingPresetAgents(plan);
+        const { runChat } = await import('../chat/tui/runChatTui');
+        const result = await withCliMultiAgentPresetVisibility(plan, () =>
+          runChat(launchContext, {
+            agentOverride: rootAgent.name,
+            teamName: plan.preset.name,
+            modelOverride: action.model,
+            cliMultiAgentPresetId: plan.preset.id,
           }),
         );
-        return CliExitCode.Usage;
+        return result.exitCode;
       }
-      const rootAgent = plan.rootAgent;
-      writeMissingPresetAgents(plan);
-      const { runChat } = await import('../chat/tui/runChatTui');
-      const result = await withCliMultiAgentPresetVisibility(plan, () =>
-        runChat(context, {
-          agentOverride: rootAgent.name,
-          teamName: plan.preset.name,
-          modelOverride: action.model,
-          cliMultiAgentPresetId: plan.preset.id,
-        }),
-      );
-      return result.exitCode;
+      case 'resume':
+        return runResumeExecution(launchContext, action.id);
+      case 'browse-resumes':
+        continue launcher;
+      case 'configure-model-access':
+        continue launcher;
+      case 'set-model-access': {
+        try {
+          const result = await selectCliModelAccessRoute(
+            launchContext,
+            action.access,
+            { writeProgress: writeTextStdout },
+          );
+          launcherApiModeOverride = result.apiMode;
+          writeTextStdout(result.message);
+        } catch (error: unknown) {
+          writeErrorStderr(error);
+        }
+        continue launcher;
+      }
+      case 'help': {
+        const { rootCommand } = await import('./root');
+        await showUsage(rootCommand);
+        return CliExitCode.Success;
+      }
+      case 'exit':
+        return CliExitCode.Success;
     }
-    case 'resume':
-      return runResumeExecution(context, action.id);
-    case 'help': {
-      const { rootCommand } = await import('./root');
-      await showUsage(rootCommand);
-      return CliExitCode.Success;
-    }
-    case 'exit':
-      return CliExitCode.Success;
   }
 }
 

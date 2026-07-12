@@ -44,7 +44,7 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
     },
     {
       value: 'included' as const,
-      label: 'Included relay',
+      label: 'Included TeXRA access',
       description: 'use TeXRA included access',
     },
   ];

@@ -77,7 +77,7 @@ export function formatBannerContentTemplate(
     : html`<div class="banner-content markdown-content log-entry-content ${config.contentClass}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 
   // prettier-ignore
-  return html`<wa-details appearance="plain" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
     iconName: config.iconName,
     label: config.labelText,
     copyButton: {
@@ -111,7 +111,7 @@ export function formatModelResponseTemplate(
     : html`<div class="banner-content markdown-content log-entry-content banner-content--model message-${level}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 
   // prettier-ignore
-  return html`<wa-details appearance="plain" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
     iconName: 'sparkle',
     label: 'Assistant',
     timestamp: verbose

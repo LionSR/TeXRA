@@ -106,26 +106,26 @@ const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
   ]),
 } satisfies Record<CliApiMode, ReadonlySet<ModelAvailabilityKind>>;
 
-const RELAY_STATUS_BY_AVAILABILITY = {
-  'included-access': 'relay: included',
-  'not-included': 'relay: not included',
-  'included-login-required': 'relay: login required',
-  'relay-quota-exhausted': 'relay: quota exhausted',
-  'provider-key': 'relay: unavailable; api key set',
-  'openrouter-key': 'relay: unavailable; openrouter key set',
-  'missing-key': 'relay: unavailable; missing api key',
+const INCLUDED_ACCESS_STATUS_BY_AVAILABILITY = {
+  'included-access': 'included: available',
+  'not-included': 'included: unavailable',
+  'included-login-required': 'included: sign-in required',
+  'relay-quota-exhausted': 'included: usage limit reached',
+  'provider-key': 'included: unavailable; API key set',
+  'openrouter-key': 'included: unavailable; OpenRouter key set',
+  'missing-key': 'included: unavailable; missing API key',
   'subscription-access': 'chatgpt subscription',
   retired: 'retired',
 } satisfies Record<ModelAvailabilityKind, string>;
 
 const NO_RUNNABLE_MODEL_ACCESS_COPY = {
   includedLoginRequired: {
-    launchBlock: 'Sign in with texra login for included relay models',
-    summary: 'Included relay models require sign-in.',
+    launchBlock: 'Sign in with texra login for included TeXRA models',
+    summary: 'Included TeXRA models require sign-in.',
   },
   included: {
-    launchBlock: 'No included relay models are runnable',
-    summary: 'No included relay models are runnable.',
+    launchBlock: 'No included TeXRA models are runnable',
+    summary: 'No included TeXRA models are runnable.',
   },
   personal: {
     launchBlock: 'No personal API-key models are runnable',
@@ -264,8 +264,8 @@ export function formatModelStatusForCliMode(
   if (apiMode === 'personal') return `api: ${model.status}`;
 
   const availability = model.model.availability;
-  if (availability == null) return `relay: ${model.status}`;
-  return RELAY_STATUS_BY_AVAILABILITY[availability];
+  if (availability == null) return `included: ${model.status}`;
+  return INCLUDED_ACCESS_STATUS_BY_AVAILABILITY[availability];
 }
 
 // Reason a given model id cannot be switched to right now, or undefined if it can.
@@ -322,12 +322,12 @@ export function formatCliNoAvailableModelsRecovery(
   } = cliModelRecoveryActions(options);
 
   if (apiMode === 'personal') {
-    return `${startSentence(configureKeyAction)} for personal mode, or ${includedModeAction} and ${loginAction} for included relay access.`;
+    return `${startSentence(configureKeyAction)} for personal mode, or ${includedModeAction} and ${loginAction} for included TeXRA access.`;
   }
   if (apiMode === 'included') {
-    return `${startSentence(loginAction)} for included relay access, or ${personalModeAction} after configuring a provider API key.`;
+    return `${startSentence(loginAction)} for included TeXRA access, or ${personalModeAction} after configuring a provider API key.`;
   }
-  return `${startSentence(loginAction)} for included relay access, ${includedModeAction}, or ${configureKeyAction}.`;
+  return `${startSentence(loginAction)} for included TeXRA access, ${includedModeAction}, or ${configureKeyAction}.`;
 }
 
 function toCliModelAccess(
@@ -459,8 +459,8 @@ function formatCliModelRecovery(
   switch (availability) {
     case 'included-login-required':
       return apiMode === 'personal'
-        ? `${startSentence(loginAction)} for included relay access, then ${includedModeAction}.`
-        : `${startSentence(loginAction)} for included relay access, or ${personalModeAction} after configuring a provider API key.`;
+        ? `${startSentence(loginAction)} for included TeXRA access, then ${includedModeAction}.`
+        : `${startSentence(loginAction)} for included TeXRA access, or ${personalModeAction} after configuring a provider API key.`;
     case 'relay-quota-exhausted':
       return apiMode === 'personal'
         ? 'Retry later.'
