@@ -1,8 +1,8 @@
-// Local file imports
-import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
-
 // Type imports
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+
+// Local file imports
+import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 
 /**
  * Handler for Meta Muse Spark models via the Meta Model API
@@ -40,15 +40,5 @@ export class ModelHandlerMeta extends ModelHandlerOpenAIResponse {
   /** Tag usage with the Meta provider, not the OpenAI Responses surface. */
   protected override get usageProvider(): NormalizedUsage['provider'] {
     return 'meta';
-  }
-
-  /**
-   * The base getter assumes every directly-routed backend implements OpenAI's
-   * `/responses/input_tokens` endpoint; Meta's token-counting support is not
-   * verified for that endpoint, so defer to the per-model llm-zoo capability
-   * (false for Muse Spark) and let the heuristic fallback size the budget.
-   */
-  override get supportsTokenCounting(): boolean {
-    return this.capabilities.supportsTokenCounting;
   }
 }
