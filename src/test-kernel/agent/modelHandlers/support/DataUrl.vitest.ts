@@ -30,4 +30,14 @@ describe('parseDataUrl', () => {
   it('returns undefined for a raw base64 string with no data URL prefix', () => {
     expect(parseDataUrl('ABC123')).toBeUndefined();
   });
+
+  it('returns undefined for a ";base64," separator without the "data:" prefix', () => {
+    // Documents an intentional behavior change from the original inline
+    // openAIResponseFileUploads.ts extraction, which used a plain
+    // `indexOf(';base64,')` and would have matched this input. The sole
+    // caller always receives proper `data:` URLs from the OpenAI Response
+    // API, so the stricter contract is safe there; this test exists so the
+    // narrowing is documented rather than silently relied upon.
+    expect(parseDataUrl('something;base64,ABC123')).toBeUndefined();
+  });
 });
