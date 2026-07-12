@@ -235,9 +235,7 @@ Setup commands:
 - "update_elan": Update Elan to the latest version
 - "select_toolchain": Select the default Lean toolchain version
 
-Note: These commands do not capture output. For build output or other cases where you need captured stdout/stderr, use bash with lake CLI commands as fallback (e.g. lake build, lake env lean <file>, lake exe cache get).
-
-Requires: Lean 4 VS Code extension installed.`,
+In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanProjectInputSchema,
 }) {
   protected async execute(input: LeanProjectInput): Promise<ToolResult> {

@@ -9,21 +9,26 @@ import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { computeSelectWindowSize } from '../chat/tui/forms/_shared/selectWindow';
 import { formatCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import {
+  buildModelAccessItems,
   isCliOrchestrationModelPickAction,
   orchestrationModelAccessView,
   type CliOrchestrationAction,
   type CliOrchestrationItem,
   type CliOrchestrationModelPickAction,
+  type CliModelAccessRoute,
+  type CliModelAccessStatus,
 } from '../runtime/orchestration';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
 export interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];
+  readonly resumeItems?: readonly CliOrchestrationItem[];
   /** Model access list for the second step. An empty list means unknown
    *  registry state, so the launcher still starts chats with runtime defaults;
    *  a known list with no runnable model disables chat/team starts. */
   readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
+  readonly modelAccess?: CliModelAccessStatus;
   /** CLI version, shown in the launcher header (matches the chat session
    *  header) so a directly-launched `texra` reports which build is running. */
   readonly version: string;
@@ -101,7 +106,8 @@ const ORCHESTRATION_TARGET_VISIBLE_ITEMS = 4;
 
 // Shared between the wrapped-row layout measurement (`headerLines`) and the
 // rendered launcher header so the measured and displayed subtitle can't drift.
-const ORCHESTRATION_LAUNCHER_SUBTITLE = 'Choose how to start this CLI session.';
+const ORCHESTRATION_LAUNCHER_SUBTITLE =
+  'Start a session or configure model access.';
 
 function orchestrationLinesRowCost(
   lines: readonly string[],
@@ -188,6 +194,14 @@ function modelPickKeyHints(): readonly KeyHint[] {
   ];
 }
 
+function resumeKeyHints(): readonly KeyHint[] {
+  return [
+    { key: '↑/↓', action: 'navigate' },
+    { key: '1-9/a-z/Enter', action: 'resume' },
+    { key: 'Esc', action: 'back' },
+  ];
+}
+
 export function OrchestrationApp(
   props: OrchestrationAppProps,
 ): React.JSX.Element {
@@ -201,11 +215,23 @@ export function OrchestrationApp(
   );
   const listFooterHints = orchestrationFooterHints(items);
   const statusLines = props.statusLines ?? [];
-  // When set, the launcher is on its second step: choosing the model for this
-  // chat/team. Esc returns to the item list rather than exiting.
-  const [pending, setPending] = useState<
-    CliOrchestrationModelPickAction | undefined
-  >(undefined);
+  type LauncherStep =
+    | { readonly kind: 'launcher' }
+    | {
+        readonly kind: 'model';
+        readonly action: CliOrchestrationModelPickAction;
+      }
+    | { readonly kind: 'model-access' }
+    | { readonly kind: 'resume' };
+  const [step, setStep] = useState<LauncherStep>({ kind: 'launcher' });
+  const pending = step.kind === 'model' ? step.action : undefined;
+  const modelAccessOpen = step.kind === 'model-access';
+  const resumeOpen = step.kind === 'resume';
+  const modelAccessItems = props.modelAccess
+    ? buildModelAccessItems(props.modelAccess)
+    : [];
+  const activeModelAccess: CliModelAccessRoute | undefined =
+    props.modelAccess?.active;
   const isPendingTeam = pending?.kind === 'preset';
   // Model-step header text, shared between the wrapped-row measurement in
   // `headerLines` and the styled render in the `pending` branch below.
@@ -213,16 +239,26 @@ export function OrchestrationApp(
   const modelStepSubtitle = isPendingTeam
     ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
     : 'Model for the first message.';
-  const headerLines = pending
-    ? [
-        `${modelStepTitle} · ${formatCliApiMode(props.apiMode)}`,
-        modelStepSubtitle,
-      ]
-    : [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
+  const headerLines = modelAccessOpen
+    ? ['Model access', 'Choose how TeXRA should authenticate model calls.']
+    : resumeOpen
+      ? ['Resume', 'Choose a previous session to continue.']
+      : pending
+        ? [
+            `${modelStepTitle} · ${formatCliApiMode(props.apiMode)}`,
+            modelStepSubtitle,
+          ]
+        : [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
   const layout = orchestrationLauncherLayout({
     rows,
     columns,
-    itemCount: pending ? modelItems.length : items.length,
+    itemCount: modelAccessOpen
+      ? modelAccessItems.length
+      : resumeOpen
+        ? (props.resumeItems?.length ?? 0)
+        : pending
+          ? modelItems.length
+          : items.length,
     headerLines,
     statusLines: pending ? [] : statusLines,
     footerHints: pending ? [] : listFooterHints,
@@ -234,8 +270,16 @@ export function OrchestrationApp(
   };
 
   const onItemSelect = (action: CliOrchestrationAction): void => {
+    if (action.kind === 'configure-model-access') {
+      setStep({ kind: 'model-access' });
+      return;
+    }
+    if (action.kind === 'browse-resumes') {
+      setStep({ kind: 'resume' });
+      return;
+    }
     if (isCliOrchestrationModelPickAction(action) && modelItems.length > 0) {
-      setPending(action);
+      setStep({ kind: 'model', action });
     } else {
       finish(action);
     }
@@ -243,12 +287,61 @@ export function OrchestrationApp(
 
   useInput((_input, key) => {
     if (!key.escape) return;
-    if (pending) {
-      setPending(undefined);
+    if (step.kind !== 'launcher') {
+      setStep({ kind: 'launcher' });
     } else {
       finish({ kind: 'exit' });
     }
   });
+
+  if (modelAccessOpen) {
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <Text bold color="cyan">
+          Model access
+        </Text>
+        <Text dimColor>Choose how TeXRA should authenticate model calls.</Text>
+        <Box marginTop={1}>
+          <Select
+            key="orchestration-model-access-picker"
+            items={modelAccessItems}
+            activeValue={activeModelAccess}
+            maxVisibleItems={layout.maxVisibleItems}
+            showOverflow={layout.showOverflow}
+            onSelect={(access) => finish({ kind: 'set-model-access', access })}
+            onCancel={() => setStep({ kind: 'launcher' })}
+          />
+        </Box>
+        <Box marginTop={1}>
+          <KeyHints hints={modelPickKeyHints()} confirmCancel={false} />
+        </Box>
+      </Box>
+    );
+  }
+
+  if (resumeOpen) {
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <Text bold color="cyan">
+          Resume
+        </Text>
+        <Text dimColor>Choose a previous session to continue.</Text>
+        <Box marginTop={1}>
+          <Select
+            key="orchestration-resume-picker"
+            items={props.resumeItems ?? []}
+            maxVisibleItems={layout.maxVisibleItems}
+            showOverflow={layout.showOverflow}
+            onSelect={finish}
+            onCancel={() => setStep({ kind: 'launcher' })}
+          />
+        </Box>
+        <Box marginTop={1}>
+          <KeyHints hints={resumeKeyHints()} confirmCancel={false} />
+        </Box>
+      </Box>
+    );
+  }
 
   if (pending) {
     return (
@@ -266,7 +359,7 @@ export function OrchestrationApp(
             maxVisibleItems={layout.maxVisibleItems}
             showOverflow={layout.showOverflow}
             onSelect={(model) => finish({ ...pending, model })}
-            onCancel={() => setPending(undefined)}
+            onCancel={() => setStep({ kind: 'launcher' })}
           />
         </Box>
         <Box marginTop={1}>
@@ -326,7 +419,9 @@ export interface RunOrchestrationTuiOptions {
    *  model-dependent launch rows unless runtime defaults can still resolve a
    *  hidden configured model. */
   readonly models: readonly CliModelAccess[];
+  readonly resumeItems?: readonly CliOrchestrationItem[];
   readonly apiMode: CliApiMode;
+  readonly modelAccess?: CliModelAccessStatus;
   readonly version: string;
   readonly statusLines?: readonly string[];
   readonly allowDefaultModelLaunch?: boolean;
@@ -347,8 +442,10 @@ export async function runOrchestrationTui(
     const instance = render(
       <OrchestrationApp
         items={items}
+        resumeItems={options.resumeItems}
         models={options.models}
         apiMode={options.apiMode}
+        modelAccess={options.modelAccess}
         version={options.version}
         statusLines={options.statusLines}
         allowDefaultModelLaunch={options.allowDefaultModelLaunch}

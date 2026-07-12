@@ -205,7 +205,7 @@ export function formatToolUseTemplate(
   const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" @keydown=${stopSummaryToggleKeydown}><wa-icon library=${TEXRA_ICON_LIBRARY} name="reply" aria-hidden="true"></wa-icon> Setup</button>` : nothing}`;
 
   // prettier-ignore
-  return html`<wa-details appearance="plain" class=${classMap({
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap({
     'banner-details': true,
     'tool-use-details': true,
     'tool-use-error': showAsError,

@@ -451,13 +451,38 @@ async function computeModelOptionsDataUncached(
   access: ModelOptionsAccess,
   useApiKeyCache: boolean,
 ): Promise<ModelOptionData[]> {
-  const models = modelsOverride ?? access.visibleModels;
   const availabilityCtx = await buildAvailabilityContext(
     access,
     useApiKeyCache,
   );
+  const models =
+    modelsOverride ??
+    visibleModelsForAccess(access.visibleModels, availabilityCtx);
 
   return Promise.all(
     models.map((model) => buildModelOptionData(model, availabilityCtx)),
   );
+}
+
+function visibleModelsForAccess(
+  configuredModels: readonly string[],
+  context: ModelAvailabilityContext,
+): readonly string[] {
+  if (!context.codexSignedIn) return configuredModels;
+
+  const models = new Set(configuredModels);
+  for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
+    if (
+      !config.retired &&
+      !config.deprecated &&
+      resolveCodexSubscriptionCapabilitiesForAgentCategory(
+        config,
+        context.useOpenRouter,
+        context.agentCategory,
+      ) !== null
+    ) {
+      models.add(model);
+    }
+  }
+  return [...models];
 }

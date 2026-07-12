@@ -235,7 +235,7 @@ export function relayTokenStillActiveNotice(
   env: Record<string, string | undefined> = readCliEnv(),
 ): string | undefined {
   if (!getConfiguredRelayToken(env)) return undefined;
-  return `Note: ${RELAY_TOKEN_ENV_VAR} is still set in this environment, so included relay access stays active. Unset it (and revoke the token with \`texra auth token revoke\` if it leaked) to fully sign out.`;
+  return `Note: ${RELAY_TOKEN_ENV_VAR} is still set in this environment, so included TeXRA access stays active. Unset it (and revoke the token with \`texra auth token revoke\` if it leaked) to fully sign out.`;
 }
 
 /**

@@ -56,6 +56,15 @@ const PROJECT_COMMAND_VSCODE_IDS: Record<LeanProjectCommand, string> = {
   select_toolchain: 'lean4.setup.selectDefaultToolchain',
 };
 
+const LEAN_FEATURE_PROJECT_COMMANDS = new Set<LeanProjectCommand>([
+  'restart_server',
+  'stop_server',
+  'build',
+  'clean',
+  'fetch_cache',
+  'fetch_file_cache',
+]);
+
 const knownExtensionServers = new Set<string>();
 
 function vscodeServerId(workspaceRoot: string): string {
@@ -209,6 +218,7 @@ export async function executeFileCommand(
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
+    if (!(await getClientProvider())) return false;
     await vscode.commands.executeCommand(FILE_COMMAND_VSCODE_IDS[command]);
     return true;
   } catch {
@@ -414,5 +424,16 @@ export async function navigateToFirstError(
 export async function executeProjectCommand(
   command: LeanProjectCommand,
 ): Promise<void> {
+  if (LEAN_FEATURE_PROJECT_COMMANDS.has(command)) {
+    // vscode-lean4 registers these commands in activateLean4Features(), not
+    // during its initial extension activation. Awaiting the exported feature
+    // promise prevents a race with command registration after a Lean file opens.
+    const clientProvider = await getClientProvider();
+    if (!clientProvider) {
+      throw new Error(
+        'The Lean 4 extension is not ready. Open a Lean file in the project, then try again.',
+      );
+    }
+  }
   await vscode.commands.executeCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
 }

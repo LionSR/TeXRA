@@ -28,7 +28,7 @@ describe('CLI API status text', () => {
     };
 
     expect(formatRelayUsageStatus(summary)).toBe(
-      'relay usage this month: 14.0% used, 86.0% remaining',
+      'included usage this month: 14.0% used, 86.0% remaining',
     );
   });
 
@@ -72,7 +72,7 @@ describe('CLI API status text', () => {
     expect(
       formatCliApiStatusActionHint('included', { authenticated: false }),
     ).toBe(
-      'actions: `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
+      'actions: choose Model access below; `texra login` signs in to Researcher Access',
     );
     expect(
       formatCliApiStatusActionHint(
@@ -81,22 +81,20 @@ describe('CLI API status text', () => {
         { hasPersonalKey: true },
       ),
     ).toBe(
-      'actions: `--api-mode personal` uses provider keys; `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
+      'actions: choose Model access below; `texra login` signs in to Researcher Access',
     );
     expect(
       formatCliApiStatusActionHint('included', { authenticated: true }),
     ).toBe(
-      'actions: `texra login --select-account` changes account; `--api-mode personal` uses provider keys',
+      'actions: choose Model access below; `texra login --select-account` changes account',
     );
     expect(
       formatCliApiStatusActionHint('personal', { authenticated: true }),
-    ).toBe(
-      'actions: `--api-mode included` uses relay; `texra logout` signs out',
-    );
+    ).toBe('actions: choose Model access below; `texra logout` signs out');
     expect(
       formatCliApiStatusActionHint('personal', { authenticated: false }),
     ).toBe(
-      'actions: use ChatGPT, add a provider key, or sign in with Researcher Access',
+      'actions: choose Model access below, add a provider key, or sign in with Researcher Access',
     );
     expect(
       formatCliApiStatusActionHint(
@@ -104,8 +102,6 @@ describe('CLI API status text', () => {
         { authenticated: false },
         { hasPersonalKey: true },
       ),
-    ).toBe(
-      'actions: provider keys are configured; use ChatGPT or sign in with Researcher Access',
-    );
+    ).toBe('actions: choose Model access below; provider keys are configured');
   });
 });

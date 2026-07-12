@@ -48,9 +48,9 @@ describe('loadCliApiStatusLines', () => {
         includeActionHint: true,
       }),
     ).resolves.toEqual([
-      'api: included relay',
+      'api: included TeXRA access',
       'auth: signed out',
-      'actions: `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
+      'actions: choose Model access below; `texra login` signs in to Researcher Access',
     ]);
     expect(mocks.getCliApiMode).not.toHaveBeenCalled();
   });
@@ -63,7 +63,7 @@ describe('loadCliApiStatusLines', () => {
     ).resolves.toEqual([
       'api: personal API keys',
       'auth: signed out',
-      'actions: provider keys are configured; use ChatGPT or sign in with Researcher Access',
+      'actions: choose Model access below; provider keys are configured',
     ]);
   });
 });

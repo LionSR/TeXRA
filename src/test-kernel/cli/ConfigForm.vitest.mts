@@ -18,6 +18,10 @@ import {
   validateSettingInput,
 } from '@cli/chat/tui/forms/ConfigForm';
 import {
+  buildConfigCategoryItems,
+  configCategoryLabel,
+} from '@cli/chat/tui/forms/configCategories';
+import {
   listSlashCommands,
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
@@ -221,6 +225,28 @@ describe('ConfigForm helpers', () => {
       description: 'open /tools · globalState',
       disabled: false,
     });
+  });
+
+  it('groups settings by catalog category with readable labels and counts', () => {
+    const entries = [
+      entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS),
+      entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME),
+      entryByKey(WorkspaceStateKey.CODEX_REASONING_EFFORT),
+    ];
+
+    expect(buildConfigCategoryItems(entries)).toEqual([
+      {
+        value: 'git',
+        label: 'Git and worktrees',
+        description: '2 settings',
+      },
+      {
+        value: 'ai-agents',
+        label: 'AI agents',
+        description: '1 setting',
+      },
+    ]);
+    expect(configCategoryLabel('custom-provider')).toBe('Custom Provider');
   });
 
   it('marks an unsupported schema kind read-only', () => {
