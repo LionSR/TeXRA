@@ -10,6 +10,7 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
+import { ThemeSchema } from '../commonViewMessages';
 import { GoalStatusSchema } from '../goal';
 
 import { StreamTabIdSchema } from '../identifiers';
@@ -338,9 +339,15 @@ const GoalActiveUpdatedMessageSchema = StreamScopedBaseSchema.extend({
   objective: z.string().optional(),
 });
 
+// `theme` reuses the canonical `ThemeSchema` (`commonViewMessages.ts`) rather
+// than a locally re-declared enum — the actual desktop theme kind includes
+// `'high-contrast'` (see `DESKTOP_THEME_KIND`), which
+// `COMMON_COMMANDS.THEME_SET` messages already carry for both mainView and
+// progressView; a narrower local enum here previously just hadn't been
+// exercised against real payloads before outbound send validation (#8123).
 export const ProgressSetThemeMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
-  theme: z.enum(['dark', 'light']),
+  theme: ThemeSchema,
 });
 
 export const ProgressDeleteStreamMessageSchema = StreamScopedBaseSchema.extend({
