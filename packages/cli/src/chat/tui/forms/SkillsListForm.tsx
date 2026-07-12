@@ -8,6 +8,7 @@ import { formatRuntimeSkillActivation } from '@skills/runtimeSkills';
 import { readCliRuntimeSkills, skillListRecord } from '@cli/runtime/skills';
 import { escapeText } from '@shared/utils/xmlEscape';
 
+import { COLOR_WARNING } from '../ui/colors';
 import { KeyHints } from '../ui/KeyHints';
 import { Select, type SelectItem } from '../ui/Select';
 import {
@@ -117,7 +118,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
 
   if (skills.length === 0) {
     return (
-      <FormFrame color="yellow" title="/skills" showCloseHint={false}>
+      <FormFrame color={COLOR_WARNING} title="/skills" showCloseHint={false}>
         <Text>No discoverable skills found.</Text>
         {issueSummary ? <Text dimColor>{issueSummary}</Text> : null}
       </FormFrame>
@@ -133,7 +134,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
 
   if (isCompactFormRows(props.availableRows)) {
     return (
-      <FormFrame color="cyan" title="/skills" showCloseHint={false}>
+      <FormFrame title="/skills" showCloseHint={false}>
         <Text dimColor wrap="truncate-end">
           Select a skill to activate.
         </Text>
@@ -153,7 +154,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
   }
 
   return (
-    <FormFrame color="cyan" title="/skills" showCloseHint={false}>
+    <FormFrame title="/skills" showCloseHint={false}>
       <Text dimColor>Select a skill to activate it.</Text>
       {issueSummary ? <Text dimColor>{issueSummary}</Text> : null}
       <Select

@@ -14,6 +14,7 @@ import {
   USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
 } from './UserQuestionState';
+import { COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
@@ -294,7 +295,7 @@ function QuestionShell(props: QuestionShellProps): React.JSX.Element {
   return (
     <BorderedPanel
       borderStyle="single"
-      color="green"
+      color={COLOR_SUCCESS}
       width={columns}
       title="Agent asks:"
       footer={<KeyHints hints={props.hints} confirmCancel={false} />}
@@ -422,13 +423,16 @@ function MultiSelectQuestion(
         return (
           <Box key={option.label} minWidth={0}>
             <Box flexShrink={0}>
-              <Text color={focused ? 'cyan' : undefined}>
+              <Text color={focused ? COLOR_HINT : undefined}>
                 {focused ? POINTER : ' '} {checked ? TICK : ' '}{' '}
                 {optionIndex + 1}.{' '}
               </Text>
             </Box>
             <Box flexShrink={0} maxWidth={24}>
-              <Text color={focused ? 'cyan' : undefined} wrap="truncate-end">
+              <Text
+                color={focused ? COLOR_HINT : undefined}
+                wrap="truncate-end"
+              >
                 {option.label}
               </Text>
             </Box>

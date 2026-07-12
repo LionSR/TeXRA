@@ -105,7 +105,6 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
   if (isCompactFormRows(props.availableRows)) {
     return (
       <FormFrame
-        color="cyan"
         title="/tools · Toggle available external integrations."
         showCloseHint={false}
       >
@@ -124,7 +123,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
   }
 
   return (
-    <FormFrame color="cyan" title="/tools" showCloseHint={false}>
+    <FormFrame title="/tools" showCloseHint={false}>
       <Text dimColor>Toggle available external integrations.</Text>
       <Select
         items={items}

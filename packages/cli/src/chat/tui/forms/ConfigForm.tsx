@@ -22,6 +22,7 @@ import {
 
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isCtrlInput, type ReturnKeyInput } from '../input/inputKeys';
+import { COLOR_ERROR } from '../ui/colors';
 import { KeyHints } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
 import { Select, type SelectItem } from '../ui/Select';
@@ -189,7 +190,6 @@ function ConfigTextEditor(props: {
   });
   return (
     <FormFrame
-      color="cyan"
       title={`/config · ${settingDisplayName(props.entry)}`}
       showCloseHint={false}
     >
@@ -210,7 +210,7 @@ function ConfigTextEditor(props: {
       </Box>
       {error ? (
         <Box marginTop={1}>
-          <Text color="red">{error}</Text>
+          <Text color={COLOR_ERROR}>{error}</Text>
         </Box>
       ) : null}
       <Box marginTop={1}>
@@ -293,7 +293,6 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     });
     return (
       <FormFrame
-        color="cyan"
         title={`/config · ${settingDisplayName(entry)}`}
         showCloseHint={false}
       >
@@ -358,7 +357,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
 
   if (items.length === 0) {
     return (
-      <FormFrame color="cyan" title="/config">
+      <FormFrame title="/config">
         <Text dimColor>No configurable settings are available here yet.</Text>
       </FormFrame>
     );
@@ -390,7 +389,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   };
 
   return (
-    <FormFrame color="cyan" title="/config" showCloseHint={false}>
+    <FormFrame title="/config" showCloseHint={false}>
       <Select
         items={items}
         maxVisibleItems={window.maxVisibleItems}
