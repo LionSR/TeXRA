@@ -3,16 +3,22 @@
 // Standard library imports
 import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
-import { describe, it, beforeEach, afterEach } from 'vitest';
+import { describe, it, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports - agent runtime
-import type { ResolvedAgent } from '@agent/index';
+import { resolveAgent, type ResolvedAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   loadAgentSettingAndPrompts,
   validateAgentYamlContent,
 } from '@agent/runtime/agentLoad';
 import { AbsoluteFS } from '@utils/files';
+
+vi.mock('@agent/index', async () => {
+  const actual =
+    await vi.importActual<typeof import('@agent/index')>('@agent/index');
+  return { ...actual, resolveAgent: vi.fn(actual.resolveAgent) };
+});
 
 describe('validateAgentYamlContent', () => {
   it('rejects root settings that only satisfy the partial YAML schema', () => {
@@ -198,5 +204,59 @@ describe('loadAgentSettingAndPrompts', () => {
           `Failed to parse YAML at ${resolution.definitionPath}:`,
         ),
     );
+  });
+
+  it('rejects a circular "inherits" chain instead of recursing without bound', async () => {
+    const resolutionA = customResolution('agent_a', AgentCategory.Workflow);
+    const resolutionB = customResolution('agent_b', AgentCategory.Workflow);
+    const resolutionByName: Record<string, ResolvedAgent> = {
+      agent_a: resolutionA,
+      agent_b: resolutionB,
+    };
+
+    fileContents.set(
+      normalize(resolutionA.definitionPath),
+      [
+        'name: agent_a',
+        'inherits: agent_b',
+        'settings:',
+        '  agentCategory: workflow',
+        'prompts: {}',
+        '',
+      ].join('\n'),
+    );
+    fileContents.set(
+      normalize(resolutionB.definitionPath),
+      [
+        'name: agent_b',
+        'inherits: agent_a',
+        'settings:',
+        '  agentCategory: workflow',
+        'prompts: {}',
+        '',
+      ].join('\n'),
+    );
+
+    const actual =
+      await vi.importActual<typeof import('@agent/index')>('@agent/index');
+    const resolveAgentMock = vi.mocked(resolveAgent);
+    resolveAgentMock.mockImplementation(
+      (identifier: string) => resolutionByName[identifier.split(':').pop()!],
+    );
+
+    try {
+      await assert.rejects(
+        () => loadAgentSettingAndPrompts(resolutionA),
+        (error: unknown) =>
+          error instanceof Error &&
+          error.message.startsWith('Circular "inherits" chain detected:'),
+      );
+    } finally {
+      // mockRestore() only rehydrates vi.spyOn() mocks; this is a plain
+      // vi.fn(actual.resolveAgent), so restore the real implementation
+      // explicitly to avoid leaving `resolveAgent` returning undefined for
+      // any later test in this describe block.
+      resolveAgentMock.mockImplementation(actual.resolveAgent);
+    }
   });
 });
