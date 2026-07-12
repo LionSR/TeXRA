@@ -14,7 +14,9 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
+  FLOW_RECORD_SCHEMA_VERSION,
   PersistedFlowStateError,
   flowKey,
   type FlowRecord,
@@ -120,6 +122,22 @@ function flowRecord(shared: unknown): FlowRecord {
   };
 }
 
+function validReflectionShared(): unknown {
+  return {
+    currentRound: 0,
+    totalRounds: 1,
+    workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
+    context: null,
+    outputLocation: null,
+    conversation: [],
+    runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+    roundStateSnapshots: [],
+    roundOutputs: [],
+    continueRounds: true,
+    endTurn: false,
+  };
+}
+
 describe('runReflectionFlow persisted-state recovery', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
@@ -187,6 +205,23 @@ describe('runReflectionFlow persisted-state recovery', () => {
       reason: 'unsupported-record',
       stored: null,
     },
+    {
+      name: 'valid shared state without nodes',
+      reason: 'unsupported-record',
+      stored: {
+        flowName: 'texra',
+        shared: validReflectionShared(),
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    },
+    {
+      name: 'future envelope schema version',
+      reason: 'unsupported-record',
+      stored: {
+        ...flowRecord(validReflectionShared()),
+        schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
+      },
+    },
   ])('rejects and preserves $name', async ({ name, reason, stored }) => {
     const slug = name.replaceAll(' ', '-');
     const executionId = `reflection-flow-${slug}` as ExecutionId;
@@ -196,12 +231,14 @@ describe('runReflectionFlow persisted-state recovery', () => {
     const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
-      await expect(
-        runPersistedReflectionFlow(executionId, streamId),
-      ).rejects.toMatchObject({
+      const expectedError = {
         name: PersistedFlowStateError.name,
         reason,
-      });
+        cause: expect.objectContaining({ name: 'ZodError' }),
+      };
+      await expect(
+        runPersistedReflectionFlow(executionId, streamId),
+      ).rejects.toMatchObject(expectedError);
       expect(deleteSpy).not.toHaveBeenCalled();
       expect(await store.read(flowKey(executionId))).toEqual(stored);
     } finally {

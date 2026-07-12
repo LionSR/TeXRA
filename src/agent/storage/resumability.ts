@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
-import { flowKey } from '@agent/node/persistedFlow';
-import type { FlowRecord } from '@agent/node/persistedFlow';
+import {
+  PersistedFlowRecordEnvelopeSchema,
+  flowKey,
+  type FlowRecord,
+} from '@agent/node/persistedFlow';
 import * as logger from '@logger/logUtils';
 import {
   EXECUTION_STATUS,
@@ -19,15 +22,14 @@ import {
 
 const CHANNEL = 'Resumability';
 
-const ResumableFlowRecordSchema = z.looseObject({
-  flowName: z.string(),
-  // Legacy records carry an (always-empty) params bag; new records omit it
-  // entirely after the params channel was deleted (#7691).
-  params: z.record(z.string(), z.unknown()).optional(),
-  shared: z.record(z.string(), z.unknown()),
-  createdAt: z.string(),
-  nodes: z.array(z.looseObject({ action: z.string().optional() })),
-});
+const ResumableSharedSchema = z.record(z.string(), z.unknown());
+const ResumableFlowRecordSchema = PersistedFlowRecordEnvelopeSchema.refine(
+  (record) => ResumableSharedSchema.safeParse(record.shared).success,
+  {
+    message: 'Resumable flow shared state must be an object',
+    path: ['shared'],
+  },
+);
 
 export const RESUMABILITY_CAUSE = {
   INTERRUPTED_WITH_FLOW: 'interrupted-with-flow',
@@ -155,7 +157,7 @@ export async function deriveResumability(
     };
   }
 
-  if (rawFlowRecord == null) {
+  if (rawFlowRecord === undefined) {
     return {
       resumable: false,
       cause: RESUMABILITY_CAUSE.MISSING_FLOW,
@@ -179,7 +181,7 @@ export async function deriveResumability(
       meta?.terminalStatus === EXECUTION_STATUS.INTERRUPTED
         ? RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW
         : RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
-    flowRecord: flowResult.data as FlowRecord,
+    flowRecord: flowResult.data,
     ...metaFields,
   };
 }
