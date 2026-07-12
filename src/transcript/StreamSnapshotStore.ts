@@ -220,75 +220,107 @@ function executionIdFromMeta(
   return meta?.runDescriptor?.executionId ?? meta?.executionId;
 }
 
-export class StreamSnapshotStore {
-  // -- In-memory accumulators (one entry per stream that has emitted) --------
-  // Round-scoped accumulators hold the canonical RoundIndexed record — the
-  // same shape that is persisted and sent over IPC, so no conversion exists
-  // between memory, disk, and the wire.
-  private readonly outputFiles = new Map<
-    StreamTabId,
-    RoundIndexed<OutputFileInfo>
-  >();
-  private readonly missingOutputs = new Map<
-    StreamTabId,
-    RoundIndexed<string>
-  >();
-  private readonly compileFailures = new Map<
-    StreamTabId,
-    RoundIndexed<CompileFailure>
-  >();
-  private readonly usage = new Map<StreamTabId, Map<string, TokenUsageStats>>();
+/**
+ * Every per-stream field this store tracks, keyed by stream id in ONE map
+ * (`records`) instead of 17 independently hand-synced parallel maps/sets (9
+ * accumulator fields, `seeded`/`seedChain` seeding bookkeeping, 5 overlay
+ * fields, and the cached `KVStore` handle). Because every field for a stream
+ * lives on the same object, dropping a stream's memory is one
+ * `records.delete(stream)` — every field disappears with it BY CONSTRUCTION.
+ * The old design needed a hand-maintained `perStreamStores()` list (#7892)
+ * to keep `evict()`/`evictAll()`/`allKnownStreams()` from drifting apart —
+ * and that list had already drifted once (`allKnownStreams()` omitted
+ * `metaOverlays`) before #7892 unified it. A single record makes that whole
+ * drift class structurally impossible: there is no second list to omit a
+ * field from.
+ *
+ * `streamVersions` (must survive eviction to keep guarding in-flight seed
+ * races) and `writeMutexes` (keyed by the compound `${stream}::${key}`, not
+ * a bare stream id) stay as their own maps on the store — the same two
+ * exclusions #7892 already carved out of `perStreamStores()`.
+ */
+interface StreamRecord {
+  // -- Accumulated durable state (mirrors on-disk StreamData) --------------
+  outputFiles: RoundIndexed<OutputFileInfo>;
+  missingOutputs: RoundIndexed<string>;
+  compileFailures: RoundIndexed<CompileFailure>;
+  usage: Map<string, TokenUsageStats>;
   /**
    * Per-run usage values read from disk that failed to parse, preserved
    * verbatim so `writeUsage` can round-trip them back unchanged instead of a
    * lossy read permanently deleting them on the next save (#7464).
    */
-  private readonly usageUnparsed = new Map<StreamTabId, Map<string, unknown>>();
-  private readonly workPlan = new Map<StreamTabId, WorkPlanSnapshot>();
-  private readonly meta = new Map<StreamTabId, StreamTabMeta>();
-  /** Immutable run descriptors parsed/emitted once per execution stream. */
-  private readonly runDescriptors = new Map<StreamTabId, RunDescriptor>();
+  usageUnparsed: Map<string, unknown>;
+  workPlan: WorkPlanSnapshot;
+  meta: StreamTabMeta | undefined;
+  /** Immutable run descriptor parsed/emitted once per execution stream. */
+  runDescriptor: RunDescriptor | undefined;
   /** Current run config, hydrated from executions/{id}/config.json. */
-  private readonly runConfigs = new Map<StreamTabId, AgentConfig>();
+  runConfig: AgentConfig | undefined;
+
+  // -- Lazy seeding: a stream's existing disk data is read into memory BEFORE
+  // the first mutation so an accumulate/merge can't overwrite unloaded disk
+  // data. `seeded` = this stream's memory is current; `seedChain` serializes
+  // refresh/seed/mutate for it.
+  seeded: boolean;
+  seedChain: Promise<void> | undefined;
+
+  // -- Overlays: patches applied eagerly to memory while a seed is in flight,
+  // so `applyStreamData`'s post-seed reconciliation can replay them on top of
+  // the freshly-read disk state — an eager write racing ahead of its own seed
+  // is never clobbered by that seed's raw disk read. See `mutateWithOverlay`.
+  metaOverlay: boolean;
+  outputFileOverlay: OutputFilesPatch | undefined;
+  missingOutputsOverlay: RoundOverlay<string> | undefined;
+  compileFailuresOverlay: Map<number, CompileFailure[] | null> | undefined;
+  usageOverlay: Map<StorageKey, TokenUsageStats> | undefined;
+
+  // -- Cached KVStore handle for this stream's sidecar directory. ----------
+  kv: KVStore | undefined;
+}
+
+export class StreamSnapshotStore {
+  private readonly records = new Map<StreamTabId, StreamRecord>();
 
   // -- Per (stream, category) serialized write locks -------------------------
   private readonly writeMutexes = new Map<string, Mutex>();
 
-  // -- Lazy seeding: a stream's existing disk data is read into memory BEFORE
-  // the first mutation so an accumulate/merge can't overwrite unloaded disk
-  // data. `seeded` = streams whose memory is current; `seedChains` serializes
-  // refresh/seed/mutate per stream.
-  private readonly seeded = new Set<StreamTabId>();
-  private readonly seedChains = new Map<StreamTabId, Promise<void>>();
-  private readonly metaOverlays = new Set<StreamTabId>();
-  private readonly outputFileOverlays = new Map<
-    StreamTabId,
-    OutputFilesPatch
-  >();
-  private readonly missingOutputsOverlays = new Map<
-    StreamTabId,
-    RoundOverlay<string>
-  >();
-  private readonly compileFailuresOverlays = new Map<
-    StreamTabId,
-    Map<number, CompileFailure[] | null>
-  >();
-  private readonly usageOverlays = new Map<
-    StreamTabId,
-    Map<StorageKey, TokenUsageStats>
-  >();
   private readonly streamVersions = new Map<StreamTabId, number>();
   private hasAuthoritativeStreamSet = false;
 
-  private readonly kvCache = new Map<StreamTabId, KVStore>();
+  private getOrCreateRecord(stream: StreamTabId): StreamRecord {
+    let record = this.records.get(stream);
+    if (!record) {
+      record = {
+        outputFiles: {},
+        missingOutputs: {},
+        compileFailures: {},
+        usage: new Map(),
+        usageUnparsed: new Map(),
+        workPlan: EMPTY_WORK_PLAN,
+        meta: undefined,
+        runDescriptor: undefined,
+        runConfig: undefined,
+        seeded: false,
+        seedChain: undefined,
+        metaOverlay: false,
+        outputFileOverlay: undefined,
+        missingOutputsOverlay: undefined,
+        compileFailuresOverlay: undefined,
+        usageOverlay: undefined,
+        kv: undefined,
+      };
+      this.records.set(stream, record);
+    }
+    return record;
+  }
 
   private kv(streamId: StreamTabId): KVStore {
-    let store = this.kvCache.get(streamId);
-    if (!store) {
-      store = new KVStore(streamDataDir(streamId));
-      this.kvCache.set(streamId, store);
+    const record = this.getOrCreateRecord(streamId);
+    if (!record.kv) {
+      record.kv = new KVStore(streamDataDir(streamId));
     }
-    return store;
+    return record.kv;
   }
 
   private async readPersistedStreamDirs(): Promise<[string, number][]> {
@@ -309,10 +341,11 @@ export class StreamSnapshotStore {
   }
 
   private canMutateSynchronously(stream: StreamTabId): boolean {
-    if (this.seeded.has(stream)) return true;
+    const record = this.records.get(stream);
+    if (record?.seeded) return true;
 
-    if (this.hasAuthoritativeStreamSet && !this.seedChains.has(stream)) {
-      this.seeded.add(stream);
+    if (this.hasAuthoritativeStreamSet && !record?.seedChain) {
+      this.getOrCreateRecord(stream).seeded = true;
       return true;
     }
 
@@ -440,38 +473,40 @@ export class StreamSnapshotStore {
     const next: Promise<void> = this.ensureSeeded(stream, version)
       .then(() => {
         if (this.streamVersion(stream) !== version) return;
-        if (!this.seeded.has(stream)) {
-          if (this.seedChains.get(stream) === next) {
-            this.seedChains.delete(stream);
+        const record = this.records.get(stream);
+        if (!record?.seeded) {
+          if (record?.seedChain === next) {
+            record.seedChain = undefined;
           }
           return;
         }
         apply();
       })
       .catch((err: unknown) => {
-        if (!this.seeded.has(stream) && this.seedChains.get(stream) === next) {
-          this.seedChains.delete(stream);
+        const record = this.records.get(stream);
+        if (!record?.seeded && record?.seedChain === next) {
+          record.seedChain = undefined;
         }
         logger.warn(CHANNEL, `Deferred update failed for stream ${stream}`, {
           data: err,
         });
       });
-    this.seedChains.set(stream, next);
+    this.getOrCreateRecord(stream).seedChain = next;
     return next;
   }
 
   /** Read a stream's existing disk data into memory once. */
   private ensureSeeded(stream: StreamTabId, version: number): Promise<void> {
-    const existing = this.seedChains.get(stream);
+    const existing = this.records.get(stream)?.seedChain;
     if (existing) return existing;
     const seed = this.readSeed(stream, version);
-    this.seedChains.set(stream, seed);
+    this.getOrCreateRecord(stream).seedChain = seed;
     return seed;
   }
 
   private async readSeed(stream: StreamTabId, version: number): Promise<void> {
     if (this.streamVersion(stream) !== version) return;
-    if (this.seeded.has(stream)) return;
+    if (this.records.get(stream)?.seeded) return;
     const data = await readStreamData(this.kv(stream));
     if (this.streamVersion(stream) !== version) return;
     await this.applyStreamData(stream, data);
@@ -480,18 +515,6 @@ export class StreamSnapshotStore {
   // ==========================================================================
   // Mutators (mirror the consolidated managers)
   // ==========================================================================
-
-  private getOrCreate<T>(
-    map: Map<StreamTabId, RoundIndexed<T>>,
-    key: StreamTabId,
-  ): RoundIndexed<T> {
-    let inner = map.get(key);
-    if (!inner) {
-      inner = {};
-      map.set(key, inner);
-    }
-    return inner;
-  }
 
   /**
    * Shared round→value patch parsing for the round-keyed accumulators
@@ -512,13 +535,18 @@ export class StreamSnapshotStore {
     return patch;
   }
 
-  /** Apply a parsed round-keyed patch to `map`'s per-stream record. */
+  /**
+   * Apply a parsed round-keyed patch to one round-keyed field of a stream's
+   * record. `field` selects which field (output files / missing outputs /
+   * compile failures) — always present on the record (defaulted at
+   * creation), so no separate lazy-init step is needed here.
+   */
   private applyRoundPatch<T>(
-    map: Map<StreamTabId, RoundIndexed<T>>,
+    field: (record: StreamRecord) => RoundIndexed<T>,
     stream: StreamTabId,
     patch: Map<number, T[] | null>,
   ): RoundIndexed<T> {
-    const rounds = this.getOrCreate(map, stream);
+    const rounds = field(this.getOrCreateRecord(stream));
     for (const [round, value] of patch) {
       if (value === null) delete rounds[round];
       else rounds[round] = value;
@@ -530,7 +558,7 @@ export class StreamSnapshotStore {
     // Shallow copy: the write is queued, so snapshot the record at call time
     // rather than letting later round mutations leak into a pending write.
     this.write(stream, STREAM_DATA_KEYS.OUTPUT_FILES, {
-      ...this.outputFiles.get(stream),
+      ...this.records.get(stream)?.outputFiles,
     });
   }
 
@@ -539,27 +567,26 @@ export class StreamSnapshotStore {
     storageKey: StorageKey,
     delta: TokenUsageStats,
   ): TokenUsageStats | undefined {
-    const current =
-      this.usage.get(stream) ?? new Map<string, TokenUsageStats>();
-    if (isEmptyUsage(delta)) return current.get(storageKey);
-    const existing = current.get(storageKey) ?? emptyUsageStats();
+    const record = this.getOrCreateRecord(stream);
+    if (isEmptyUsage(delta)) return record.usage.get(storageKey);
+    const existing = record.usage.get(storageKey) ?? emptyUsageStats();
     const accumulated = sumUsageStats([existing, delta]);
-    current.set(storageKey, accumulated);
-    this.usage.set(stream, current);
+    record.usage.set(storageKey, accumulated);
     return accumulated;
   }
 
   private writeUsage(stream: StreamTabId): void {
-    const parsed = mapToRecord(this.usage.get(stream) ?? new Map());
-    const unparsed = this.usageUnparsed.get(stream);
+    const record = this.records.get(stream);
+    const parsed = mapToRecord(record?.usage ?? new Map());
+    const unparsed = record?.usageUnparsed;
     // Reinsert raw entries this store couldn't interpret so the write never
     // deletes them; a run that has since parsed successfully (`parsed`) wins
     // over its own stale raw fallback via spread order (#7464).
-    const record =
+    const payload =
       unparsed && unparsed.size > 0
         ? { ...Object.fromEntries(unparsed), ...parsed }
         : parsed;
-    this.write(stream, STREAM_DATA_KEYS.USAGE_STATS, record);
+    this.write(stream, STREAM_DATA_KEYS.USAGE_STATS, payload);
   }
 
   /**
@@ -568,21 +595,22 @@ export class StreamSnapshotStore {
    * always runs immediately, so a caller can read its own write back
    * synchronously whether or not the stream is seeded yet. A seeded stream
    * also persists immediately (`persist`). An unseeded stream instead
-   * records `overlayPatch` in `overlay` (merged with anything still pending
-   * from an earlier unseeded mutation on the same stream via `mergePatch`),
-   * leaving `overlayPatch` `undefined` to skip recording (used for
-   * effectively-empty patches). `applyStreamData`'s post-seed reconciliation
-   * then replays the overlay on top of the freshly-read disk state and
-   * persists it there, so an eager write racing ahead of its own seed is
-   * never clobbered by that seed's raw disk read. This is the guarantee
-   * `addOutputFiles`/`addUsage` used to hand-roll individually; every
-   * round/usage mutator now shares it here, so a future one inherits it by
-   * construction instead of needing its own bespoke overlay block.
+   * records `overlayPatch` on the stream's record via `setOverlay` (merged
+   * with anything still pending from an earlier unseeded mutation via
+   * `mergePatch`), leaving `overlayPatch` `undefined` to skip recording
+   * (used for effectively-empty patches). `applyStreamData`'s post-seed
+   * reconciliation then replays the overlay on top of the freshly-read disk
+   * state and persists it there, so an eager write racing ahead of its own
+   * seed is never clobbered by that seed's raw disk read. This is the
+   * guarantee `addOutputFiles`/`addUsage` used to hand-roll individually;
+   * every round/usage mutator now shares it here, so a future one inherits
+   * it by construction instead of needing its own bespoke overlay block.
    */
   private mutateWithOverlay<T, P>(
     stream: StreamTabId,
     overlayPatch: P | undefined,
-    overlay: Map<StreamTabId, P>,
+    getOverlay: (record: StreamRecord) => P | undefined,
+    setOverlay: (record: StreamRecord, value: P) => void,
     mergePatch: (existing: P | undefined, patch: P) => P,
     applyToMemory: () => T,
     persist: () => void,
@@ -596,7 +624,8 @@ export class StreamSnapshotStore {
 
     const version = this.streamVersion(stream);
     if (overlayPatch !== undefined) {
-      overlay.set(stream, mergePatch(overlay.get(stream), overlayPatch));
+      const record = this.getOrCreateRecord(stream);
+      setOverlay(record, mergePatch(getOverlay(record), overlayPatch));
     }
     return {
       result,
@@ -619,9 +648,12 @@ export class StreamSnapshotStore {
     this.mutateWithOverlay(
       stream,
       patch,
-      this.outputFileOverlays,
+      (record) => record.outputFileOverlay,
+      (record, value) => {
+        record.outputFileOverlay = value;
+      },
       mergeRoundPatch,
-      () => this.applyRoundPatch(this.outputFiles, stream, patch),
+      () => this.applyRoundPatch((record) => record.outputFiles, stream, patch),
       () => this.writeOutputFiles(stream),
     );
   }
@@ -638,12 +670,16 @@ export class StreamSnapshotStore {
     this.mutateWithOverlay(
       stream,
       { reset: false, patch },
-      this.missingOutputsOverlays,
+      (record) => record.missingOutputsOverlay,
+      (record, value) => {
+        record.missingOutputsOverlay = value;
+      },
       mergeMissingOutputsOverlay,
-      () => this.applyRoundPatch(this.missingOutputs, stream, patch),
+      () =>
+        this.applyRoundPatch((record) => record.missingOutputs, stream, patch),
       () =>
         this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {
-          ...this.missingOutputs.get(stream),
+          ...this.records.get(stream)?.missingOutputs,
         }),
     );
   }
@@ -663,12 +699,16 @@ export class StreamSnapshotStore {
     this.mutateWithOverlay(
       stream,
       patch,
-      this.compileFailuresOverlays,
+      (record) => record.compileFailuresOverlay,
+      (record, value) => {
+        record.compileFailuresOverlay = value;
+      },
       mergeRoundPatch,
-      () => this.applyRoundPatch(this.compileFailures, stream, patch),
+      () =>
+        this.applyRoundPatch((record) => record.compileFailures, stream, patch),
       () =>
         this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, {
-          ...this.compileFailures.get(stream),
+          ...this.records.get(stream)?.compileFailures,
         }),
     );
   }
@@ -691,7 +731,10 @@ export class StreamSnapshotStore {
     const { result: accumulated, pending } = this.mutateWithOverlay(
       stream,
       overlayPatch,
-      this.usageOverlays,
+      (record) => record.usageOverlay,
+      (record, value) => {
+        record.usageOverlay = value;
+      },
       mergeUsagePatch,
       () => this.applyUsageDeltaMemory(stream, storageKey, delta),
       () => {
@@ -701,10 +744,13 @@ export class StreamSnapshotStore {
 
     if (!pending) return accumulated;
     return pending.then(() => {
-      if (this.streamVersion(stream) !== version || !this.seeded.has(stream)) {
+      if (
+        this.streamVersion(stream) !== version ||
+        !this.records.get(stream)?.seeded
+      ) {
         return undefined;
       }
-      return this.usage.get(stream)?.get(storageKey);
+      return this.records.get(stream)?.usage.get(storageKey);
     });
   }
 
@@ -717,19 +763,19 @@ export class StreamSnapshotStore {
   // array — can never corrupt these in-memory accumulators. A shallow
   // `{ ...map }` spread would share the per-round arrays by reference.
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo> {
-    return cloneRoundIndexed(this.outputFiles.get(stream));
+    return cloneRoundIndexed(this.records.get(stream)?.outputFiles);
   }
 
   getMissingOutputs(stream: StreamTabId): RoundIndexed<string> {
-    return cloneRoundIndexed(this.missingOutputs.get(stream));
+    return cloneRoundIndexed(this.records.get(stream)?.missingOutputs);
   }
 
   getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure> {
-    return cloneRoundIndexed(this.compileFailures.get(stream));
+    return cloneRoundIndexed(this.records.get(stream)?.compileFailures);
   }
 
   getRunUsage(stream: StreamTabId): Map<string, TokenUsageStats> {
-    return new Map(this.usage.get(stream) ?? []);
+    return new Map(this.records.get(stream)?.usage ?? []);
   }
 
   /** Flattened set of known output-file paths for a stream. */
@@ -738,7 +784,7 @@ export class StreamSnapshotStore {
     options: { workspaceOnly?: boolean } = {},
   ): Set<string> {
     const paths = new Set<string>();
-    const rounds = this.outputFiles.get(stream);
+    const rounds = this.records.get(stream)?.outputFiles;
     if (!rounds) return paths;
     const workspaceOnly = options.workspaceOnly ?? false;
     for (const infos of Object.values(rounds)) {
@@ -757,16 +803,32 @@ export class StreamSnapshotStore {
    * the shared `reset`-aware overlay) rather than the plain deferred
    * `mutate()` path, so a clear and an update racing on the same unseeded
    * stream replay in call order instead of the clear always landing last.
+   *
+   * `existed` checks `missingOutputs` content specifically, not merely
+   * whether the stream has a record: every record defaults `missingOutputs`
+   * to `{}` on creation, and a record gets created for read-only reasons
+   * too (`kv()` — used by `read()`, `readPersistedExecutionId()`, and the
+   * post-`evict()` `kv()` call in `deleteStream()` — as well as any other
+   * accumulator's own lazy creation, e.g. `setTodos`). Gating on record
+   * presence alone would treat those as "missing outputs existed" and write
+   * a spurious `missingOutputs.json`, resurrecting a `streamData/{id}/`
+   * directory `listPersistedStreams()` would then report for a stream that
+   * was never actually tracking missing outputs (or was just deleted).
    */
   clearMissingOutputs(stream: StreamTabId): void {
     let existed = false;
     this.mutateWithOverlay(
       stream,
       { reset: true, patch: new Map<number, string[] | null>() },
-      this.missingOutputsOverlays,
+      (record) => record.missingOutputsOverlay,
+      (record, value) => {
+        record.missingOutputsOverlay = value;
+      },
       mergeMissingOutputsOverlay,
       () => {
-        existed = this.missingOutputs.delete(stream);
+        const record = this.records.get(stream);
+        existed = !!record && Object.keys(record.missingOutputs).length > 0;
+        this.getOrCreateRecord(stream).missingOutputs = {};
       },
       () => {
         if (existed) this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {});
@@ -778,62 +840,18 @@ export class StreamSnapshotStore {
   // Lifecycle (replace manager evict/evictAll)
   // ==========================================================================
 
-  /**
-   * Single source of truth for every per-stream accumulator/overlay/tracking
-   * collection keyed by `StreamTabId` (excluding `streamVersions`, which
-   * intentionally survives eviction to keep guarding in-flight races, and
-   * `writeMutexes`, which is keyed by `${stream}::${key}` and handled
-   * separately). `allKnownStreams()`, `evict()`, and `evictAll()` all derive
-   * from this one list instead of three independently hand-maintained ones,
-   * so a new per-stream field can't be wired into eviction inconsistently.
-   */
-  private perStreamStores(): {
-    delete(stream: StreamTabId): boolean;
-    clear(): void;
-    keys(): IterableIterator<StreamTabId>;
-  }[] {
-    return [
-      this.outputFiles,
-      this.missingOutputs,
-      this.compileFailures,
-      this.usage,
-      this.usageUnparsed,
-      this.workPlan,
-      this.meta,
-      this.runDescriptors,
-      this.runConfigs,
-      this.seeded,
-      this.seedChains,
-      this.metaOverlays,
-      this.outputFileOverlays,
-      this.missingOutputsOverlays,
-      this.compileFailuresOverlays,
-      this.usageOverlays,
-      this.kvCache,
-    ];
-  }
-
-  /** Every stream id with any in-memory accumulator/overlay state. */
-  private allKnownStreams(): Set<StreamTabId> {
-    const streams = new Set<StreamTabId>();
-    for (const store of this.perStreamStores()) {
-      for (const stream of store.keys()) streams.add(stream);
-    }
-    return streams;
-  }
-
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   evict(stream: StreamTabId): void {
     this.bumpStreamVersion(stream);
-    for (const store of this.perStreamStores()) store.delete(stream);
+    this.records.delete(stream);
     for (const key of [...this.writeMutexes.keys()]) {
       if (key.startsWith(`${stream}::`)) this.writeMutexes.delete(key);
     }
   }
 
   evictAll(): void {
-    for (const stream of this.allKnownStreams()) this.bumpStreamVersion(stream);
-    for (const store of this.perStreamStores()) store.clear();
+    for (const stream of this.records.keys()) this.bumpStreamVersion(stream);
+    this.records.clear();
     this.writeMutexes.clear();
   }
 
@@ -861,38 +879,39 @@ export class StreamSnapshotStore {
 
   setTodos(stream: StreamTabId, todos: TodoItem[]): void {
     this.mutate(stream, () => {
-      const next = { ...this.getWorkPlan(stream), todos };
-      this.workPlan.set(stream, next);
-      this.writeWorkPlan(stream, next);
+      const record = this.getOrCreateRecord(stream);
+      record.workPlan = { ...record.workPlan, todos };
+      this.writeWorkPlan(stream, record.workPlan);
     });
   }
 
   setPlan(stream: StreamTabId, plan: Plan | null): void {
     this.mutate(stream, () => {
-      const next = {
-        ...this.getWorkPlan(stream),
+      const record = this.getOrCreateRecord(stream);
+      record.workPlan = {
+        ...record.workPlan,
         plan,
         planSummary: plan ? planSummaryLine(plan.objective) : null,
       };
-      this.workPlan.set(stream, next);
-      this.writeWorkPlan(stream, next);
+      this.writeWorkPlan(stream, record.workPlan);
     });
   }
 
   getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {
-    return this.workPlan.get(stream) ?? EMPTY_WORK_PLAN;
+    return this.records.get(stream)?.workPlan ?? EMPTY_WORK_PLAN;
   }
 
   private patchMetaMemory(
     stream: StreamTabId,
     patch: Partial<StreamTabMeta>,
   ): StreamTabMeta {
+    const record = this.getOrCreateRecord(stream);
     const next: StreamTabMeta = {
-      ...(this.meta.get(stream) ?? {}),
+      ...(record.meta ?? {}),
       ...patch,
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
     };
-    this.meta.set(stream, next);
+    record.meta = next;
     return next;
   }
 
@@ -921,12 +940,12 @@ export class StreamSnapshotStore {
     patch: Partial<StreamTabMeta>,
   ): void {
     this.patchMetaMemory(stream, patch);
-    this.metaOverlays.add(stream);
+    this.getOrCreateRecord(stream).metaOverlay = true;
     const applied = this.mutate(stream, () => {
       this.writeMeta(stream, this.patchMetaMemory(stream, patch));
       return true;
     });
-    if (applied) this.metaOverlays.delete(stream);
+    if (applied) this.getOrCreateRecord(stream).metaOverlay = false;
   }
 
   // ==========================================================================
@@ -943,11 +962,12 @@ export class StreamSnapshotStore {
     executionId?: ExecutionId,
   ): void {
     const config = taskState.agentConfig;
-    this.runConfigs.set(stream, config);
+    const record = this.getOrCreateRecord(stream);
+    record.runConfig = config;
     const descriptor = executionId
       ? descriptorFromConfig(stream, executionId, config)
       : undefined;
-    if (descriptor) this.runDescriptors.set(stream, descriptor);
+    if (descriptor) record.runDescriptor = descriptor;
     this.queueMetaPatch(stream, {
       ...(executionId ? { executionId } : {}),
       ...(descriptor ? { runDescriptor: descriptor } : {}),
@@ -966,22 +986,22 @@ export class StreamSnapshotStore {
   }
 
   getTaskState(stream: StreamTabId): TaskState | undefined {
-    const config = this.runConfigs.get(stream);
+    const config = this.records.get(stream)?.runConfig;
     return config ? agentConfigToTaskState(config) : undefined;
   }
 
   getRunDescriptor(stream: StreamTabId): RunDescriptor | undefined {
-    return this.runDescriptors.get(stream);
+    return this.records.get(stream)?.runDescriptor;
   }
 
   getRunConfig(stream: StreamTabId): AgentConfig | undefined {
-    return this.runConfigs.get(stream);
+    return this.records.get(stream)?.runConfig;
   }
 
   getExecutionId(stream: StreamTabId): ExecutionId | undefined {
     // executionId is validated to a real ExecutionId at the single disk-read
     // entry (`readMeta`), so no cast/re-validation is needed here.
-    return this.meta.get(stream)?.executionId;
+    return this.records.get(stream)?.meta?.executionId;
   }
 
   /** Streams with persisted sidecars under `streamData/`. */
@@ -1029,32 +1049,37 @@ export class StreamSnapshotStore {
   async readLegacyInstruction(
     stream: StreamTabId,
   ): Promise<LegacyInstructionEntry | null> {
-    const meta = this.seeded.has(stream)
-      ? this.meta.get(stream)
+    const record = this.records.get(stream);
+    const meta = record?.seeded
+      ? record.meta
       : (await readStreamData(this.kv(stream))).meta;
     return readLegacyInstructionFromDisk(this.kv(stream), meta);
   }
 
   getParentStreamId(stream: StreamTabId): StreamTabId | undefined {
-    return this.meta.get(stream)?.parentStreamId;
+    return this.records.get(stream)?.meta?.parentStreamId;
   }
 
   getDescription(stream: StreamTabId): string | undefined {
-    return this.meta.get(stream)?.description;
+    return this.records.get(stream)?.meta?.description;
   }
 
   /** Read-only view of stream→executionId for waiting-stream detection. */
   getExecutionIdMap(): ReadonlyMap<StreamTabId, ExecutionId> {
     const map = new Map<StreamTabId, ExecutionId>();
-    for (const [stream, meta] of this.meta) {
-      if (meta.executionId) map.set(stream, meta.executionId);
+    for (const [stream, record] of this.records) {
+      if (record.meta?.executionId) map.set(stream, record.meta.executionId);
     }
     return map;
   }
 
   /** Stream IDs that still have execution sidecar state. */
   getTaskStateStreams(): Set<StreamTabId> {
-    return new Set(this.runConfigs.keys());
+    const streams = new Set<StreamTabId>();
+    for (const [stream, record] of this.records) {
+      if (record.runConfig !== undefined) streams.add(stream);
+    }
+    return streams;
   }
 
   /**
@@ -1068,8 +1093,9 @@ export class StreamSnapshotStore {
     const wantFile = normalizeFilePath(match.inputFile);
     const wantOutputFiles = normalizeOutputFiles(match.outputFiles);
     const result: StreamTabId[] = [];
-    for (const [stream, cfg] of this.runConfigs) {
-      if (cfg.agentCategory !== 'workflow') continue;
+    for (const [stream, record] of this.records) {
+      const cfg = record.runConfig;
+      if (!cfg || cfg.agentCategory !== 'workflow') continue;
       const cfgPrimaryInput = normalizeFilePath(cfg.inputFiles[0] ?? '');
       if (
         getCleanAgentName(cfg.agent) !== wantAgent ||
@@ -1147,7 +1173,11 @@ export class StreamSnapshotStore {
 
   /** Await deferred (seed-gated) mutations, then all in-flight writes. */
   async flush(): Promise<void> {
-    await Promise.all(this.seedChains.values());
+    await Promise.all(
+      [...this.records.values()]
+        .map((record) => record.seedChain)
+        .filter((chain): chain is Promise<void> => chain !== undefined),
+    );
     await Promise.all(
       [...this.writeMutexes.values()].map((mutex) => mutex.waitForUnlock()),
     );
@@ -1166,11 +1196,11 @@ export class StreamSnapshotStore {
    * stream, such as a display-only read that was never resumed, hits disk.
    */
   async read(streamId: StreamTabId): Promise<StreamSnapshot> {
-    const seedChain = this.seedChains.get(streamId);
+    const seedChain = this.records.get(streamId)?.seedChain;
     if (seedChain) {
       await seedChain;
     }
-    if (this.seeded.has(streamId)) {
+    if (this.records.get(streamId)?.seeded) {
       return this.snapshotFromMemory(streamId);
     }
     return assembleSnapshot(streamId, await readStreamData(this.kv(streamId)));
@@ -1186,13 +1216,14 @@ export class StreamSnapshotStore {
    * same as every other schema-derived type in this codebase.
    */
   private snapshotFromMemory(streamId: StreamTabId): StreamSnapshot {
+    const record = this.records.get(streamId);
     return assembleSnapshot(streamId, {
-      meta: this.meta.get(streamId),
-      outputFiles: cloneRoundIndexed(this.outputFiles.get(streamId)),
-      missingOutputs: cloneRoundIndexed(this.missingOutputs.get(streamId)),
-      compileFailures: cloneRoundIndexed(this.compileFailures.get(streamId)),
-      usage: this.usage.get(streamId) ?? new Map(),
-      usageUnparsed: this.usageUnparsed.get(streamId) ?? new Map(),
+      meta: record?.meta,
+      outputFiles: cloneRoundIndexed(record?.outputFiles),
+      missingOutputs: cloneRoundIndexed(record?.missingOutputs),
+      compileFailures: cloneRoundIndexed(record?.compileFailures),
+      usage: record?.usage ?? new Map(),
+      usageUnparsed: record?.usageUnparsed ?? new Map(),
       workPlan: this.getWorkPlan(streamId),
       legacyKeys: [],
     });
@@ -1207,11 +1238,11 @@ export class StreamSnapshotStore {
   async readOutputFiles(
     streamId: StreamTabId,
   ): Promise<RoundIndexed<OutputFileInfo>> {
-    const seedChain = this.seedChains.get(streamId);
+    const seedChain = this.records.get(streamId)?.seedChain;
     if (seedChain) {
       await seedChain;
     }
-    if (this.seeded.has(streamId)) {
+    if (this.records.get(streamId)?.seeded) {
       return this.getOutputFiles(streamId);
     }
     return (await readStreamData(this.kv(streamId))).outputFiles;
@@ -1251,25 +1282,27 @@ export class StreamSnapshotStore {
   }
 
   private evictStreamsExcept(keep: ReadonlySet<StreamTabId>): void {
-    for (const stream of this.allKnownStreams()) {
+    for (const stream of [...this.records.keys()]) {
       if (!keep.has(stream)) this.evict(stream);
     }
   }
 
   private refreshSeed(stream: StreamTabId): Promise<void> {
     const version = this.streamVersion(stream);
-    this.seeded.delete(stream);
-    const prev = this.seedChains.get(stream) ?? Promise.resolve();
+    const existing = this.records.get(stream);
+    if (existing) existing.seeded = false;
+    const prev = existing?.seedChain ?? Promise.resolve();
     const next = prev.then(async () => {
       if (this.streamVersion(stream) !== version) return;
       await this.flushWritesForStream(stream);
       if (this.streamVersion(stream) !== version) return;
-      this.kvCache.delete(stream);
+      const record = this.records.get(stream);
+      if (record) record.kv = undefined;
       const data = await readStreamData(this.kv(stream));
       if (this.streamVersion(stream) !== version) return;
       await this.applyStreamData(stream, data);
     });
-    this.seedChains.set(stream, next);
+    this.getOrCreateRecord(stream).seedChain = next;
     return next;
   }
 
@@ -1344,49 +1377,58 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     data: StreamData,
   ): Promise<void> {
-    const metaOverlay = this.metaOverlays.has(stream)
-      ? this.meta.get(stream)
-      : undefined;
+    const record = this.getOrCreateRecord(stream);
+    const metaOverlay = record.metaOverlay ? record.meta : undefined;
     const runConfigOverlay =
-      metaOverlay !== undefined ? this.runConfigs.get(stream) : undefined;
+      metaOverlay !== undefined ? record.runConfig : undefined;
     const runDescriptorOverlay =
-      metaOverlay !== undefined ? this.runDescriptors.get(stream) : undefined;
-    const usageOverlayToReplay = new Map(this.usageOverlays.get(stream));
-    const sidecarsToWrite = new Set(data.legacyKeys);
-    this.outputFiles.set(stream, data.outputFiles);
-    this.missingOutputs.set(stream, data.missingOutputs);
-    this.compileFailures.set(stream, data.compileFailures);
-    this.usage.set(
-      stream,
-      new Map([...data.usage].filter(([, v]) => !isEmptyUsage(v))),
-    );
-    this.usageUnparsed.set(stream, new Map(data.usageUnparsed));
-    this.workPlan.set(stream, data.workPlan);
-    this.runDescriptors.delete(stream);
-    this.runConfigs.delete(stream);
+      metaOverlay !== undefined ? record.runDescriptor : undefined;
+    const usageOverlayToReplay = new Map(record.usageOverlay);
+    // Seeded with `data.legacyKeys` unconditionally (unlike the overlay
+    // additions below, which are gated on that overlay actually being
+    // present): a legacy key with no corresponding overlay data still gets
+    // an empty-object write in `writeMergedSidecars`. That's a broader net
+    // than the old per-field `has()` guards, but harmless — disk readers
+    // (`parsePersistedRoundIndexed` and friends) treat an absent sidecar and
+    // an empty-object one identically.
+    const sidecarsToWrite = new Set<string>(data.legacyKeys);
+
+    record.outputFiles = data.outputFiles;
+    record.missingOutputs = data.missingOutputs;
+    record.compileFailures = data.compileFailures;
+    record.usage = new Map([...data.usage].filter(([, v]) => !isEmptyUsage(v)));
+    record.usageUnparsed = new Map(data.usageUnparsed);
+    record.workPlan = data.workPlan;
+    record.runDescriptor = undefined;
+    record.runConfig = undefined;
+
     let meta = metaOverlay
       ? { ...(data.meta ?? {}), ...metaOverlay }
       : data.meta;
     let hydrated: HydratedRunState = {};
     if (meta) {
-      this.meta.set(stream, meta);
+      record.meta = meta;
       hydrated = await this.hydrateRunStateFromMeta(stream, meta);
     } else {
-      this.meta.delete(stream);
+      record.meta = undefined;
     }
-    const latestMetaOverlay = this.metaOverlays.has(stream)
-      ? this.meta.get(stream)
-      : undefined;
+
+    // Re-fetch the record after the hydration await above (same object
+    // reference as `record` — records are mutated in place, not replaced —
+    // so this doesn't read from a different source): a concurrent eager
+    // mutation may have landed on this stream's overlay fields while
+    // hydration was in flight (the exact race #8014 fixed), and it must not
+    // be clobbered by what was read before that await.
+    const after = this.getOrCreateRecord(stream);
+    const latestMetaOverlay = after.metaOverlay ? after.meta : undefined;
     if (latestMetaOverlay) {
       meta = { ...(data.meta ?? {}), ...latestMetaOverlay };
-      this.meta.set(stream, meta);
+      after.meta = meta;
     }
     const latestRunConfigOverlay =
-      latestMetaOverlay !== undefined ? this.runConfigs.get(stream) : undefined;
+      latestMetaOverlay !== undefined ? after.runConfig : undefined;
     const latestRunDescriptorOverlay =
-      latestMetaOverlay !== undefined
-        ? this.runDescriptors.get(stream)
-        : undefined;
+      latestMetaOverlay !== undefined ? after.runDescriptor : undefined;
     const runConfig =
       latestRunConfigOverlay ?? runConfigOverlay ?? hydrated.config;
     const executionId = executionIdFromMeta(meta);
@@ -1397,47 +1439,46 @@ export class StreamSnapshotStore {
       (runConfig && executionId
         ? descriptorFromConfig(stream, executionId, runConfig)
         : undefined);
-    if (runConfig) this.runConfigs.set(stream, runConfig);
-    if (runDescriptor) {
-      this.runDescriptors.set(stream, runDescriptor);
-    }
-    this.metaOverlays.delete(stream);
-    const outputFileOverlay = this.outputFileOverlays.get(stream);
-    const missingOutputsOverlay = this.missingOutputsOverlays.get(stream);
-    const compileFailuresOverlay = this.compileFailuresOverlays.get(stream);
-    const usageOverlay = this.usageOverlays.get(stream);
+    if (runConfig) after.runConfig = runConfig;
+    if (runDescriptor) after.runDescriptor = runDescriptor;
+    after.metaOverlay = false;
+
+    const outputFileOverlay = after.outputFileOverlay;
+    const missingOutputsOverlay = after.missingOutputsOverlay;
+    const compileFailuresOverlay = after.compileFailuresOverlay;
+    const usageOverlay = after.usageOverlay;
     if (outputFileOverlay) {
-      this.applyRoundPatch(this.outputFiles, stream, outputFileOverlay);
+      this.applyRoundPatch((r) => r.outputFiles, stream, outputFileOverlay);
       sidecarsToWrite.add(STREAM_DATA_KEYS.OUTPUT_FILES);
-      this.outputFileOverlays.delete(stream);
+      after.outputFileOverlay = undefined;
     }
     if (missingOutputsOverlay) {
-      if (missingOutputsOverlay.reset) this.missingOutputs.set(stream, {});
+      if (missingOutputsOverlay.reset) after.missingOutputs = {};
       this.applyRoundPatch(
-        this.missingOutputs,
+        (r) => r.missingOutputs,
         stream,
         missingOutputsOverlay.patch,
       );
       sidecarsToWrite.add(STREAM_DATA_KEYS.MISSING_OUTPUTS);
-      this.missingOutputsOverlays.delete(stream);
+      after.missingOutputsOverlay = undefined;
     }
     if (compileFailuresOverlay) {
       this.applyRoundPatch(
-        this.compileFailures,
+        (r) => r.compileFailures,
         stream,
         compileFailuresOverlay,
       );
       sidecarsToWrite.add(STREAM_DATA_KEYS.COMPILE_FAILURES);
-      this.compileFailuresOverlays.delete(stream);
+      after.compileFailuresOverlay = undefined;
     }
     if (usageOverlay) {
       for (const [storageKey, delta] of usageOverlayToReplay) {
         this.applyUsageDeltaMemory(stream, storageKey, delta);
       }
       sidecarsToWrite.add(STREAM_DATA_KEYS.USAGE_STATS);
-      this.usageOverlays.delete(stream);
+      after.usageOverlay = undefined;
     }
-    this.seeded.add(stream);
+    after.seeded = true;
     this.writeMergedSidecars(stream, sidecarsToWrite);
   }
 
@@ -1446,24 +1487,22 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     keys: Iterable<string>,
   ): void {
+    const record = this.records.get(stream);
+    if (!record) return;
     for (const key of keys) {
       switch (key) {
         case STREAM_DATA_KEYS.OUTPUT_FILES:
-          if (this.outputFiles.has(stream)) this.writeOutputFiles(stream);
+          this.writeOutputFiles(stream);
           break;
         case STREAM_DATA_KEYS.USAGE_STATS:
-          if (this.usage.has(stream)) this.writeUsage(stream);
+          this.writeUsage(stream);
           break;
-        case STREAM_DATA_KEYS.MISSING_OUTPUTS: {
-          const rounds = this.missingOutputs.get(stream);
-          if (rounds) this.write(stream, key, { ...rounds });
+        case STREAM_DATA_KEYS.MISSING_OUTPUTS:
+          this.write(stream, key, { ...record.missingOutputs });
           break;
-        }
-        case STREAM_DATA_KEYS.COMPILE_FAILURES: {
-          const rounds = this.compileFailures.get(stream);
-          if (rounds) this.write(stream, key, { ...rounds });
+        case STREAM_DATA_KEYS.COMPILE_FAILURES:
+          this.write(stream, key, { ...record.compileFailures });
           break;
-        }
       }
     }
   }
@@ -1474,8 +1513,9 @@ export class StreamSnapshotStore {
    * extra I/O. (Ported from StreamMetaManager.)
    */
   private async backfillDescriptionsFromExecutionMeta(): Promise<void> {
-    for (const [streamId, meta] of [...this.meta]) {
-      if (!meta.executionId || meta.description) continue;
+    for (const [streamId, record] of [...this.records]) {
+      const meta = record.meta;
+      if (!meta?.executionId || meta.description) continue;
       try {
         const execMeta = await getExecutionStore(meta.executionId).readMeta();
         if (execMeta?.description) {
