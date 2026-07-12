@@ -108,6 +108,12 @@ export const proposalRequestPanelStyles: CSSResult = css`
     color: var(--wa-color-text-link-active, var(--wa-color-text-link));
   }
 
+  .workflow-proposal__file-name:focus-visible {
+    outline: var(--border-thin) solid var(--wa-color-focus);
+    outline-offset: var(--border-thin);
+    border-radius: var(--border-radius-small);
+  }
+
   .workflow-proposal__file-name--readonly {
     color: var(--color-text-secondary);
     cursor: default;

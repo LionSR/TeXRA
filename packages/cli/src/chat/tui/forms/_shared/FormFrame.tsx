@@ -3,10 +3,10 @@
 // bordered column with a colored title and an `Esc close` footer.
 
 import { Text, useWindowSize } from 'ink';
-import { Spinner } from '@inkjs/ui';
 
 import { KeyHints, type KeyHint } from '@cli/chat/tui/ui/KeyHints';
 import { BorderedPanel } from '@cli/chat/tui/ui/BorderedPanel';
+import { LoadingIndicator } from '@cli/chat/tui/ui/LoadingIndicator';
 import { FORM_FRAME_MAX_WIDTH } from '@cli/chat/tui/ui/theme';
 import { clamp } from '@utils/core';
 
@@ -53,9 +53,10 @@ export function FormFrame(props: FormFrameProps): React.JSX.Element {
 
 /**
  * The loading / error transient frame every async list form rendered before its
- * data resolved: a cyan `<Spinner>` frame while loading, then a red `{error}`
- * frame on failure. Returns `null` once data is ready so callers fall through to
- * their real layout: `const t = renderAsyncListFormTransient(...); if (t) return t;`.
+ * data resolved: a cyan `<LoadingIndicator>` row while loading, then a red
+ * `{error}` frame on failure. Returns `null` once data is ready so callers
+ * fall through to their real layout:
+ * `const t = renderAsyncListFormTransient(...); if (t) return t;`.
  * `showCloseHint` is forwarded to `FormFrame` so each form keeps its existing
  * footer behaviour (forms with their own footer pass `false`).
  */
@@ -73,7 +74,7 @@ export function renderAsyncListFormTransient(props: {
         title={props.title}
         showCloseHint={props.showCloseHint}
       >
-        <Spinner label={props.loadingLabel} />
+        <LoadingIndicator label={props.loadingLabel} />
       </FormFrame>
     );
   }

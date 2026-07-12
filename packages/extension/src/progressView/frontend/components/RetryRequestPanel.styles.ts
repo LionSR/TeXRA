@@ -54,7 +54,7 @@ export const retryRequestPanelStyles: CSSResult = css`
   .retry-request__error-body {
     margin-top: ${sp.tiny};
     padding: ${sp.small};
-    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
+    background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius-small);
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
@@ -65,6 +65,6 @@ export const retryRequestPanelStyles: CSSResult = css`
   }
 
   .retry-request--relay .retry-request__operation {
-    color: var(--wa-color-warning-on-quiet, #ff8c00);
+    color: var(--color-warning);
   }
 `;

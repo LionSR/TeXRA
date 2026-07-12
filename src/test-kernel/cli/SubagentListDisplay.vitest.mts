@@ -73,7 +73,10 @@ describe('CLI SubagentList display model', () => {
     expect(display.hiddenCount).toBe(2);
   });
 
-  it('reserves a single overflowing row for the overflow summary', () => {
+  it('uses the single available row for the highest-signal item', () => {
+    // Mirrors TodosPlanPanel's `compactTodosPlanRows` tie-break: at one row,
+    // show the top-priority row instead of spending it on the overflow
+    // marker.
     const display = compactRows({
       activeProcesses: [
         { kind: 'process', executionId: 'latexmk', agentName: 'latex build' },
@@ -95,8 +98,28 @@ describe('CLI SubagentList display model', () => {
       ],
     });
 
+    expect(display.rows.map((row) => row.child.executionId)).toEqual([
+      'strategy',
+    ]);
+    expect(display.hiddenCount).toBe(2);
+  });
+
+  it('spends zero rows on real content at a zero row budget', () => {
+    const display = compactRows({
+      activeProcesses: [],
+      maxRows: 0,
+      subagents: [
+        {
+          kind: 'subagent',
+          executionId: 'strategy',
+          agentName: 'strategy',
+          childStreamId: 'strategy-stream',
+        },
+      ],
+    });
+
     expect(display.rows).toEqual([]);
-    expect(display.hiddenCount).toBe(3);
+    expect(display.hiddenCount).toBe(1);
   });
 
   it('keeps exact-fit compact rows without adding an overflow summary', () => {
