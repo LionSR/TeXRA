@@ -12,6 +12,7 @@ import { unique } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,
+  emptyExtractionResult,
   resolveLatexFileOrThrow,
   texPathField,
 } from './figureExtractionShared';
@@ -41,12 +42,10 @@ export class ExtractLatexFiguresTool extends defineTool({
     const uniqueFigures = unique(figurePaths);
 
     if (uniqueFigures.length === 0) {
-      const summary = `No figures found in ${display}.`;
-      return {
-        status: 'executed',
-        summary,
-        output: formatToolOutput('Figures', null),
-      };
+      return emptyExtractionResult(
+        'Figures',
+        `No figures found in ${display}.`,
+      );
     }
 
     const { attachments, limitedPaths, limitReached } =

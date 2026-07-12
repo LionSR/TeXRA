@@ -36,6 +36,7 @@ import type {
 } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
+import { toDataUrl } from '../support/dataUrl';
 import {
   computeOpenRouterPrice,
   normalizeOpenRouterUsage,
@@ -440,7 +441,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           {
             type: 'image_url',
             imageUrl: {
-              url: `data:${media.media_type};base64,${media.data}`,
+              url: toDataUrl(media.media_type, media.data),
               detail: 'high',
             },
           } as ChatContentItems,

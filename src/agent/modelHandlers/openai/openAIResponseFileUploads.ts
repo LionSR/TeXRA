@@ -21,6 +21,7 @@ import { isNonEmptyString } from '@utils/core';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 
 import { loadAttachmentBuffer, wipeBuffer } from '../utils/toolAttachmentUtils';
+import { parseDataUrl, toDataUrl } from '../support/dataUrl';
 import { reportMediaAttachmentFailure } from '../support/mediaAttachmentPolicy';
 import { isInputFileContent, isMessageItem } from './openAIResponseContent';
 import type {
@@ -104,12 +105,8 @@ async function replaceFileDataWithUpload(
   let buffer: Buffer | undefined;
 
   try {
-    const base64Separator = ';base64,';
-    const separatorIndex = fileData.indexOf(base64Separator);
-    const payload =
-      separatorIndex >= 0
-        ? fileData.slice(separatorIndex + base64Separator.length)
-        : fileData;
+    const parsed = parseDataUrl(fileData);
+    const payload = parsed ? parsed.base64Data : fileData;
 
     buffer = Buffer.from(payload, 'base64');
     const uploadedFile = await client.files.create({
@@ -254,7 +251,7 @@ export async function buildInlineAttachmentParts(
         parts.push({
           type: 'input_image',
           detail: 'auto',
-          image_url: `data:${mimeType};base64,${base64}`,
+          image_url: toDataUrl(mimeType, base64),
         });
       } else {
         // PDF, office documents, and other file types accepted by input_file
@@ -263,7 +260,7 @@ export async function buildInlineAttachmentParts(
           : 'attachment';
         parts.push({
           type: 'input_file',
-          file_data: `data:${mimeType};base64,${base64}`,
+          file_data: toDataUrl(mimeType, base64),
           filename,
         });
       }

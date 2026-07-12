@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { normalizeFilePath } from '@utils/core';
+import { isPathWithin } from '@utils/core/pathCore';
 
 import { MEMORY_DISPLAY_ROOT } from './constants';
 
@@ -48,7 +49,7 @@ export function displayToStoragePath(displayPath: string): string {
   const resolved = path.resolve(MEMORY_STORAGE_DIR, suffix);
   const base = path.resolve(MEMORY_STORAGE_DIR);
   const relative = path.relative(base, resolved);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+  if (!isPathWithin(base, resolved)) {
     throw new Error(`Invalid memory path: ${displayPath}`);
   }
   return relative

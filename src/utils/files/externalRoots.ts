@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { isPathWithin } from '@utils/core/pathCore';
 
 /**
  * Allowlist of external filesystem roots that tools may read or write.
@@ -150,9 +151,7 @@ export function findExternalRoot(
   let best: MatchedExternalRoot | null = null;
   for (const root of roots.values()) {
     const relativePath = path.relative(root.absolutePath, resolved);
-    const contained =
-      relativePath === '' ||
-      (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+    const contained = isPathWithin(root.absolutePath, resolved);
     if (!contained) continue;
 
     const candidate: MatchedExternalRoot = {
