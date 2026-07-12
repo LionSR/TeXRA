@@ -126,20 +126,27 @@ export async function initializeElectronPlatform(
       );
     }
   }
-  const workspaceConfigStore =
+  let workspaceConfigStore =
     projectConfigStore ?? (await JsonStore.open(legacyWorkspaceConfigPath));
   // One-time copy from the pre-project-file internal store into the project
   // file; existing project values win, so a checked-in config is never
   // overwritten. Presence is checked across key variants because checked-in
   // CLI configs use bare keys (`model`) while this store wrote canonical
   // `texra.*` keys, which shadow bare ones on read. A write failure (e.g. a
-  // read-only tree) only skips the merge-only migration — the readable
+  // read-only tree) only skips the merge-only migration — a readable
   // project file stays the config source — and retries on the next launch.
+  // But when the project file was absent (opened empty) and the copy-in
+  // couldn't land, the empty project store would shadow the user's
+  // pre-migration settings for the whole session, so serve this session
+  // from the internal store instead — the pre-#8237 behavior, when an
+  // uncreatable `.texra/` failed the open above.
   if (
     projectConfigStore &&
     workspaceStateStore.get<boolean>(WORKSPACE_CONFIG_MIGRATED_KEY) !== true
   ) {
     const projectStore = projectConfigStore;
+    const projectFileWasEmpty =
+      Object.keys(projectStore.snapshot()).length === 0;
     try {
       const legacyStore = await JsonStore.open(legacyWorkspaceConfigPath);
       for (const [key, value] of Object.entries(legacyStore.snapshot())) {
@@ -155,6 +162,9 @@ export async function initializeElectronPlatform(
       console.warn(
         `[desktop] Legacy workspace config migration failed; will retry on next launch. Cause: ${toErrorMessage(error)}`,
       );
+      if (projectFileWasEmpty) {
+        workspaceConfigStore = await JsonStore.open(legacyWorkspaceConfigPath);
+      }
     }
   }
   const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
