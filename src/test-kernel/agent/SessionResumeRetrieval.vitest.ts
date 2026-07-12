@@ -704,6 +704,73 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
   });
 
+  it('skips the resume self-heal write when the persisted record is already canonical (issue #8018)', async () => {
+    // `resumeToolUseFromSnapshot` passes `resumeSnapshot` on every
+    // native-subagent turn, so the resume-branch self-heal write must not
+    // fire when the persisted record already matches what would be
+    // written -- otherwise every turn costs a `StorageFSKVStore` disk
+    // write for a no-op overwrite of identical bytes.
+    const executionId = 'abc143' as ExecutionId;
+    const streamId = 'chat@gpt54#abc143' as StreamTabId;
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        messages: [{ role: 'user', content: 'Continue.' }],
+        modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
+        shouldSkipCycle: false,
+        stateSlices: {
+          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+          userChannels: {
+            input: Object.freeze({ MODEL: 'gpt54' }),
+            transient: {},
+          },
+        },
+      },
+      createdAt: new Date().toISOString(),
+      cursor: { nextNodeId: WAIT_NODE_CURSOR },
+      nodes: [
+        { action: 'default', nodeId: 'start' },
+        { action: 'default', nodeId: 'start/default' },
+      ],
+    });
+
+    const resume = await retrieveSessionResumeData(
+      streamId,
+      executionId,
+      agentConfigToTaskState(CONFIG),
+    );
+    expect(resume?.type).toBe('toolUse');
+    if (resume?.type !== 'toolUse') return;
+    expect(resume.snapshot.modelHandlerCompatibilityKey).toBe(
+      ACTIVE_COMPATIBILITY_KEY,
+    );
+
+    const store = getExecutionStore(executionId);
+    const writeSpy = vi.spyOn(store, 'write');
+    try {
+      await runResumedFlowToWaiting(executionId, streamId, resume.snapshot);
+
+      // `PersistedFlow` still legitimately persists its own node-cursor
+      // progress once as the flow steps through to WAITING -- that write is
+      // not under test here. What must NOT happen is a *second*, earlier
+      // write from the resume-branch self-heal repairing an already-
+      // canonical record. Every write the flow does make must already carry
+      // the final WAITING cursor, never the pre-step one the self-heal write
+      // would have produced.
+      expect(writeSpy.mock.calls.length).toBeGreaterThan(0);
+      for (const [, record] of writeSpy.mock.calls) {
+        expect((record as FlowRecord).cursor).toEqual({
+          lastAction: 'waiting',
+          nextNodeId: WAIT_NODE_CURSOR,
+        });
+      }
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
   it('keeps a persisted snapshot compatibility key authoritative over the active handler', async () => {
     const executionId = 'abc142' as ExecutionId;
     const streamId = 'chat@gpt54#abc142' as StreamTabId;

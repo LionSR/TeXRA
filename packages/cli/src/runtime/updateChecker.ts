@@ -11,6 +11,7 @@ import {
   cliEnvValue,
   readCliAmbientState,
   readCliEntrypointPath,
+  resolveCliCwd,
   type CliContext,
 } from './cliContext';
 import { CliExitCode } from './exitCodes';
@@ -160,19 +161,21 @@ type CommandRunner = (
   command: string,
   args: readonly string[],
   timeoutMs: number,
+  cwd?: string,
 ) => Promise<string | undefined>;
 
 async function readCommandStdout(
   command: string,
   args: readonly string[],
   timeoutMs: number,
+  cwd?: string,
 ): Promise<string | undefined> {
   // Runs before platform init (chat/orchestrate startup), so pass an
   // explicit cwd — the wrapper's WorkspaceFS default would throw — and
   // quiet: true so wrapper debug lines can't leak to the console sink.
   const result = await executeCommand([command, ...args], {
     timeout: timeoutMs,
-    cwd: process.cwd(),
+    cwd: cwd ?? (await resolveCliCwd(undefined)),
     quiet: true,
   });
   return result.success ? (result.stdout ?? '') : undefined;
@@ -217,16 +220,18 @@ function parseHomebrewFormulaVersion(
 export async function fetchLatestHomebrewFormulaVersion(options?: {
   formula?: string;
   timeoutMs?: number;
+  cwd?: string;
   runCommand?: CommandRunner;
 }): Promise<string | undefined> {
   const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
   const runCommand = options?.runCommand ?? readCommandStdout;
   const timeoutMs = options?.timeoutMs ?? HOMEBREW_COMMAND_TIMEOUT_MS;
-  await runCommand('brew', ['update', '--quiet'], timeoutMs);
+  await runCommand('brew', ['update', '--quiet'], timeoutMs, options?.cwd);
   const stdout = await runCommand(
     'brew',
     ['info', '--json=v2', formula],
     timeoutMs,
+    options?.cwd,
   );
   return stdout == null
     ? undefined
@@ -301,7 +306,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   const method = detectInstallMethod();
   const latest =
     method === 'brew'
-      ? await fetchLatestHomebrewFormulaVersion()
+      ? await fetchLatestHomebrewFormulaVersion({ cwd: context.cwd })
       : await fetchLatestCliVersion();
   if (!latest || !isNewerVersion(latest, context.version)) return;
 
