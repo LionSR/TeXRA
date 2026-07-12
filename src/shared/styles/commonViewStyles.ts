@@ -389,6 +389,10 @@ export const commonViewStyles: CSSResult = css`
 
   .empty-state .empty-state-body {
     margin: 0;
+    /* Body copy was <p class="text-secondary"> before the helper: keep the
+       smaller secondary sizing so it stays subordinate to the title (color
+       already cascades from .empty-state). */
+    font-size: var(--font-size-sm);
   }
 
   /* Agent icon indicators (remote, multiple outputs) - fixed width for consistent sizing */
