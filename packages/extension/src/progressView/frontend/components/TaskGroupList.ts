@@ -25,7 +25,7 @@ import { designTokens } from '@shared/styles';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatDuration } from '@utils/core';
 
@@ -346,22 +346,17 @@ export class TaskGroupList extends LitElement {
     const suffix = revealCount === 1 ? options.label : `${options.label}s`;
     return html`
       <div class="log-reveal-row">
-        <button
-          type="button"
-          class="log-reveal-button"
+        <wa-button
+          appearance="outlined"
+          size="small"
           data-reveal-kind=${options.kind}
           data-reveal-scope=${options.scope}
           data-hidden-count=${String(options.hiddenCount)}
           @click=${this.handleRevealOlderRows}
           aria-label=${`Show ${revealCount} older ${suffix}`}
+          >${waIcon('chevron-up', { slot: 'start' })} Show ${revealCount} older
+          ${suffix}</wa-button
         >
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="chevron-up"
-            aria-hidden="true"
-          ></wa-icon>
-          <span>Show ${revealCount} older ${suffix}</span>
-        </button>
       </div>
     `;
   }
