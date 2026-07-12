@@ -155,6 +155,9 @@ export class ExecutionRegistry {
     string,
     Set<(handle: ExecutionHandle | undefined) => void>
   >();
+  private readonly registrationListeners = new Set<
+    (executionId: string, handle: ExecutionHandle | undefined) => void
+  >();
 
   constructor({
     processOutput = new ProcessOutputPoller(),
@@ -222,10 +225,12 @@ export class ExecutionRegistry {
     this.activeChildRunLoops.clear();
     this.processOutput.dispose();
     for (const executionId of executionIds) {
+      this.notifyRegistrationListeners(executionId, undefined);
       this.notifyWaiters(executionId);
     }
     this.changeCallbacks.clear();
     this.persistentListeners.clear();
+    this.registrationListeners.clear();
   }
 
   /** Register a live child-run loop and return its lifecycle disposer. */
@@ -256,6 +261,8 @@ export class ExecutionRegistry {
       this.processOutput.register(handle);
       this.emitChildActivity(handle.parentStreamId, 'processes');
     }
+    this.notifyRegistrationListeners(handle.executionId, handle);
+    this.notifyWaiters(handle.executionId);
   }
 
   /**
@@ -313,8 +320,16 @@ export class ExecutionRegistry {
     this.untrackHandle(handle);
   }
 
+  /** Remove `handle` only if it is still the current registration. */
+  untrackIfCurrent(handle: ExecutionHandle): boolean {
+    if (this.handles.get(handle.executionId) !== handle) return false;
+    this.untrackHandle(handle);
+    return true;
+  }
+
   private untrackHandle(handle: ExecutionHandle): void {
     this.handles.delete(handle.executionId);
+    this.notifyRegistrationListeners(handle.executionId, undefined);
     this.notifyWaiters(handle.executionId);
     if (handle instanceof AgentExecutionHandle && handle.isChildExecution) {
       this.emitChildActivity(handle.parentStreamId, 'subagents');
@@ -679,6 +694,29 @@ export class ExecutionRegistry {
     };
   }
 
+  /**
+   * Observe the current handle immediately, then every replacement or removal.
+   * Registering before the initial read closes the usual get/listen race.
+   */
+  observeHandle(
+    executionId: string,
+    cb: (handle: ExecutionHandle | undefined) => void,
+  ): () => void {
+    const detach = this.addListener(executionId, cb);
+    cb(this.handles.get(executionId));
+    return detach;
+  }
+
+  /** Observe handle registrations, replacements, and removals across all ids. */
+  addRegistrationListener(
+    cb: (executionId: string, handle: ExecutionHandle | undefined) => void,
+  ): () => void {
+    this.registrationListeners.add(cb);
+    return () => {
+      this.registrationListeners.delete(cb);
+    };
+  }
+
   private emitChildActivity(
     parentStreamId: StreamTabId,
     kind: 'subagents' | 'processes',
@@ -955,6 +993,15 @@ export class ExecutionRegistry {
     // any still-registered persistent listener is firing into the void.
     if (!this.handles.has(executionId)) {
       this.persistentListeners.delete(executionId);
+    }
+  }
+
+  private notifyRegistrationListeners(
+    executionId: string,
+    handle: ExecutionHandle | undefined,
+  ): void {
+    for (const listener of [...this.registrationListeners]) {
+      listener(executionId, handle);
     }
   }
 }
