@@ -1,9 +1,4 @@
-import { MainViewMessageSchema } from '@shared/schemas/mainView';
-import { ProgressViewOutboundMessageSchema } from '@shared/schemas/progressView';
-import {
-  assertKnownOutboundMessage,
-  UnsupportedCommandError,
-} from '@shared/utils/dispatcher';
+import { UnsupportedCommandError } from '@shared/utils/dispatcher';
 
 export type DesktopCommandMessage = { command: string } & Record<
   string,
@@ -16,27 +11,6 @@ export interface DesktopMessageHandler {
 
 export interface DesktopRenderer {
   postToRenderer(message: unknown): void;
-}
-
-/**
- * Dev/test-only shape check for every message posted to the desktop
- * renderer through {@link DesktopRenderer.postToRenderer}. Desktop
- * multiplexes `MainViewMessage`s, `ProgressViewOutboundMessage`s, and
- * desktop-only overlay/settings commands (`desktop:showPdf`, git-author
- * settings, history, ...) onto the one renderer-push channel
- * (`installDesktopHostBridge` in `hostBridge.ts`, the sole caller of this
- * function); only the first two domains have an outbound Zod schema today —
- * a command belonging to neither passes through unchecked, per
- * `assertKnownOutboundMessage`. No-op outside dev/test: this channel also
- * carries high-frequency progress-stream chunks, so production keeps
- * sending the typed payload as-is with zero added parse cost (see
- * `assertKnownOutboundMessage` for the full rationale).
- */
-export function assertDesktopOutboundMessage(message: unknown): void {
-  assertKnownOutboundMessage(
-    [MainViewMessageSchema, ProgressViewOutboundMessageSchema],
-    message,
-  );
 }
 
 export function isDesktopCommandMessage(
