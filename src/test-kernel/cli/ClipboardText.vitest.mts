@@ -44,4 +44,24 @@ describe('CLI clipboard text writer', () => {
 
     expect(result).toEqual({ ok: false, reason: 'pbcopy not found' });
   });
+
+  it('reports failure instead of hanging when the write never settles', async () => {
+    vi.useFakeTimers();
+    try {
+      writeMock.mockReturnValue(new Promise<void>(() => {}));
+
+      const resultPromise = writeClipboardText('question', {
+        platform: 'darwin',
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      const result = await resultPromise;
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'Clipboard write timed out after 5000ms',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
