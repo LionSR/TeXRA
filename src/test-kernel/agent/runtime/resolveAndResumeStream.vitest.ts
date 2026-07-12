@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const retrieveSessionResumeDataMock = vi.hoisted(() => vi.fn());

@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
@@ -117,7 +123,7 @@ function createLifecycleContext(
 
 describe('session isolation (SDK Step 7d PR 2)', () => {
   it('currentSession() resolves the active run context session, default otherwise', () => {
-    const sessionB = new SessionHandle();
+    const sessionB = createTestSession();
     try {
       expect(currentSession()).toBe(defaultSession());
       const ctx = createRunContext({
@@ -135,7 +141,7 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
   });
 
   it('a handle interrupt target lands in the run session only', () => {
-    const sessionB = new SessionHandle();
+    const sessionB = createTestSession();
     const executionId = 'exec:iso-interrupt' as ExecutionId;
     const streamId = 'stream:iso-interrupt' as StreamTabId;
     const interrupt = vi.fn();
@@ -165,7 +171,7 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
     await initTestPlatform();
     const executionId = 'e15001' as ExecutionId;
     const streamId = 'stream:iso-track' as StreamTabId;
-    const sessionB = new SessionHandle();
+    const sessionB = createTestSession();
     const ctx = createLifecycleContext(executionId, streamId, sessionB);
 
     try {

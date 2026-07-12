@@ -10,7 +10,10 @@ import { render } from 'ink';
 import React from 'react';
 
 import { getAgentsByCategory, loadAgents } from '@agent/index';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  initializeDefaultSession,
+} from '@agent/runtime/SessionHandle';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
@@ -39,6 +42,7 @@ import {
 } from '@shared/schemas';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { GoalStore } from '@tools/goal';
+import { StreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
@@ -273,7 +277,6 @@ const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
-const HARNESS_FOLLOW_UP_QUEUE = defaultSession().followUps.acquire(STREAM_ID);
 const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 // Keep platform state writes out of the repository unless a scenario opts in.
 const HARNESS_CWD =
@@ -288,10 +291,6 @@ if (!HARNESS_CWD_INPUT && process.env.HARNESS_KEEP_CWD !== '1') {
     rmSync(HARNESS_CWD, { recursive: true, force: true });
   });
 }
-for (const followUp of QUEUED_FOLLOW_UPS) {
-  HARNESS_FOLLOW_UP_QUEUE.enqueue(followUp);
-}
-
 function seedHarnessProjectSkill(): void {
   const skillDir = path.join(HARNESS_CWD, '.texra', 'skills', 'proof-audit');
   mkdirSync(skillDir, { recursive: true });
@@ -337,6 +336,11 @@ await initLocalCliPlatform({
   storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
   helperModel: 'harness-model',
 });
+initializeDefaultSession({ transcripts: await StreamLogStore.open() });
+const harnessFollowUpQueue = defaultSession().followUps.acquire(STREAM_ID);
+for (const followUp of QUEUED_FOLLOW_UPS) {
+  harnessFollowUpQueue.enqueue(followUp);
+}
 if (process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined) {
   await platform().workspaceState.update(
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,

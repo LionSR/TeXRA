@@ -1,5 +1,11 @@
-// Third-party imports
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
 import { setTimeout as sleep } from 'node:timers/promises';
+import { createTestSession } from '@test/support/sessionTestUtils';
+
+// Third-party imports
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -60,7 +66,7 @@ function fakePorts() {
   return { notify: vi.fn(), recordCost: vi.fn() };
 }
 
-function baseParams(parentSession = new SessionHandle()) {
+function baseParams(parentSession = createTestSession()) {
   if (parentSession !== defaultSession()) ownedSessions.add(parentSession);
   return {
     configPayload: {

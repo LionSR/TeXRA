@@ -127,8 +127,7 @@ describe('ChatExportController.exportAsHtml', () => {
     });
 
     const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
     store.append(streamId, {
       id: 'entry-1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -162,8 +161,7 @@ describe('ChatExportController.exportAsHtml', () => {
     await installStoragePlatform();
     const executionId = 'exec-missing-template' as ExecutionId;
     await getExecutionStore(executionId).writeConfig(config());
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
     const streamId = getStreamTabId('orchestrator', 'deepseekT', {
       executionId,
     });

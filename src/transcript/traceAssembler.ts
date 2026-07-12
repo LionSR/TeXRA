@@ -51,16 +51,12 @@ export async function assembleTrace(
   executionId: ExecutionId,
 ): Promise<AssembleTraceResult> {
   const executionStore = getExecutionStore(executionId);
-  // A fresh instance, not the session's shared `transcripts` store: .load()
-  // clears all of a store's in-memory state, which would wipe out a live
-  // host's in-flight session if this ran against the shared instance. Reads
-  // the same on-disk files regardless — StreamSnapshotStore below already
-  // follows this same call-scoped-instance pattern.
-  const streamLogStore = new StreamLogStore();
-  const [config, meta] = await Promise.all([
+  // A call-scoped read-only store avoids reloading a live host's session or
+  // mutating persistence while reading the same transcript files.
+  const [streamLogStore, config, meta] = await Promise.all([
+    StreamLogStore.openReadOnly(),
     executionStore.readConfig(),
     executionStore.readMeta(),
-    streamLogStore.load(),
   ]);
   if (!config) return { status: 'config_missing' };
 

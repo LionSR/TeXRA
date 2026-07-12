@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // Third-party imports
 import { afterEach, describe, expect, it } from 'vitest';
 

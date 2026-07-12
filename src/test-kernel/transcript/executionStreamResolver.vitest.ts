@@ -169,8 +169,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       snapshotWriter.setTaskState(childStream, taskState('bash'), executionId);
       await snapshotWriter.flush();
 
-      const logStore = new StreamLogStore();
-      await logStore.load();
+      const logStore = await StreamLogStore.open();
       logStore.append(childStream, {
         id: 'entry-1',
         type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -221,8 +220,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       snapshotWriter.setTodos(workPlanOnlyStream, [TODO]);
       await snapshotWriter.flush();
 
-      const logStore = new StreamLogStore();
-      await logStore.load();
+      const logStore = await StreamLogStore.open();
       logStore.append(logBackedStream, {
         id: 'entry-1',
         type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -348,8 +346,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       snapshotWriter.setTaskState(childStream, taskState('bash'), executionId);
       await snapshotWriter.flush();
 
-      const logStore = new StreamLogStore();
-      await logStore.load();
+      const logStore = await StreamLogStore.open();
       logStore.append(childStream, {
         id: 'entry-1',
         type: STREAM_LOG_ENTRY_TYPES.LOG,

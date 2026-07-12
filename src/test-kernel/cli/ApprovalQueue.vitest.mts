@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const notifyMock = vi.hoisted(() => vi.fn());

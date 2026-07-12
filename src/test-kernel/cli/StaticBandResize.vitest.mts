@@ -146,6 +146,7 @@ describe('Static band resize', () => {
       apiMode: 'personal',
       approvalPolicy: 'ask',
       canDelegate: false,
+      transcriptMode: 'persistent',
       version: '0.0.0-test',
     });
     patchStream(streamId, (slice) => ({

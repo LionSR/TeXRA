@@ -34,8 +34,10 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
-      logger: createRunTrace('ToolUseRoundFollowUpMedia', new StreamLogStore())
-        .trace,
+      logger: createRunTrace(
+        'ToolUseRoundFollowUpMedia',
+        StreamLogStore.ephemeral('test'),
+      ).trace,
       modelHandler: {
         addMediaToUserMessage,
         capabilities: { supportsVision: true },
@@ -164,7 +166,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       },
       logger: createRunTrace(
         'ToolUseRoundBlankToolResult',
-        new StreamLogStore(),
+        StreamLogStore.ephemeral('test'),
       ).trace,
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
@@ -351,8 +353,10 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       fileService: {
         createLocation: (filePath: string) => ({ absolutePath: filePath }),
       },
-      logger: createRunTrace('ToolUseRoundSystemPrompt', new StreamLogStore())
-        .trace,
+      logger: createRunTrace(
+        'ToolUseRoundSystemPrompt',
+        StreamLogStore.ephemeral('test'),
+      ).trace,
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },

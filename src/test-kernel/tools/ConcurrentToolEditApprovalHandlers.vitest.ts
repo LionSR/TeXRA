@@ -1,5 +1,11 @@
-// Third-party imports
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
 import * as assert from 'node:assert';
+import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
+
+// Third-party imports
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports - tests
@@ -31,7 +37,7 @@ describe('Concurrent session tool edit approval handlers', () => {
   const testSessions: SessionHandle[] = [];
 
   function createTestSession(): SessionHandle {
-    const session = new SessionHandle();
+    const session = createIsolatedTestSession();
     testSessions.push(session);
     return session;
   }

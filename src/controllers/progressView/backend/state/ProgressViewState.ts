@@ -362,7 +362,7 @@ export class ProgressViewState {
     this.logger.info('[Persistence] Starting state load from storage');
 
     // Load stream logs first — they define the set of known streams
-    await this.streamLogs.load();
+    await this.streamLogs.reload();
 
     const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);

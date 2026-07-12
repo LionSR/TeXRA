@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // Suites for src/tools/wolfram (WolframTool approval gating +
 // wolframScriptUtils argument handling).
 

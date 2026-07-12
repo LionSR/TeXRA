@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 import { describe, expect, it } from 'vitest';
 
 import { createRecordingHost } from '@test/agent/progressTestUtils';
@@ -13,8 +19,8 @@ describe('subscribeGoalStateChanges', () => {
   setupPlatform();
 
   it('delivers only goal changes from the supplied session', () => {
-    const sessionA = new SessionHandle();
-    const sessionB = new SessionHandle();
+    const sessionA = createTestSession();
+    const sessionB = createTestSession();
     const seen: unknown[] = [];
     const detach = subscribeGoalStateChanges(sessionA, (change) => {
       seen.push(change);
@@ -52,8 +58,8 @@ describe('subscribeGoalStateChanges', () => {
   });
 
   it('routes start, status, and edit notifications through the current run session only', async () => {
-    const runSession = new SessionHandle();
-    const otherSession = new SessionHandle();
+    const runSession = createTestSession();
+    const otherSession = createTestSession();
     const seenRun: unknown[] = [];
     const seenOther: unknown[] = [];
     const seenDefault: unknown[] = [];

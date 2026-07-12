@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // E2E fixtures for the promoted "one loop, N strategies" child-run driver.
 // These exercise the loop's own mechanics (queue acquire/drain, one
 // run-handle interrupt target for the child's whole lifetime, per-turn delivery, terminal
@@ -29,7 +32,10 @@ import {
   type ChildRunPorts,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
   STREAM_PHASE,
@@ -37,7 +43,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 
-const session = defaultSession();
+let session: SessionHandle;
 const trackedExecutionIds = new Set<string>();
 
 function uniqueStreamId(label: string): StreamTabId {
@@ -133,6 +139,7 @@ function createFakeStrategy(): FakeStrategyHandle {
 }
 
 beforeEach(() => {
+  session = defaultSession();
   vi.clearAllMocks();
   mocks.persistChildRunReport.mockImplementation(async (_id, msg: string) => {
     return { kind: 'persisted' as const, msg };
