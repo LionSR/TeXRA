@@ -103,6 +103,18 @@ export type PreparedShared = ToolUseRunShared & {
   stateSlices: StateSlicesSnapshot;
 };
 
+export type SharedStateMigrationResult =
+  | { success: true; data: ToolUseRunShared; migrated: boolean }
+  | { success: false; error: z.ZodError };
+
+function failedSharedMigration(value: unknown): SharedStateMigrationResult {
+  const result = ToolUseRunSharedSchema.safeParse(value);
+  if (result.success) {
+    throw new Error('Expected invalid tool-use shared state');
+  }
+  return result;
+}
+
 export function findLastAssistantText(
   messages: ProviderMessage[],
   extractAssistantText: (message: ProviderMessage) => string | undefined,
@@ -128,21 +140,25 @@ export function assertPreparedShared(
  */
 export function migrateSharedState(
   shared: unknown,
-): { data: ToolUseRunShared; migrated: boolean } | null {
-  if (!shared || typeof shared !== 'object') return null;
+): SharedStateMigrationResult {
+  if (!shared || typeof shared !== 'object') {
+    return failedSharedMigration(shared);
+  }
 
   // Unwrap nested `{ state: {...} }` wrapper if present. The unwrap itself
   // counts as a migration even if the inner shape is already canonical.
   const nested = 'state' in shared;
   const obj = nested ? (shared as Record<string, unknown>).state : shared;
-  if (!obj || typeof obj !== 'object') return null;
+  if (!obj || typeof obj !== 'object') return failedSharedMigration(obj);
 
   const record = obj as Record<string, unknown>;
   const messages = ProviderMessageArraySchema.safeParse(record.messages);
   const conversation = ProviderMessageArraySchema.safeParse(
     record.conversation,
   );
-  if (!messages.success && !conversation.success) return null;
+  if (!messages.success && !conversation.success) {
+    return failedSharedMigration(obj);
+  }
 
   const { conversation: _legacyConversation, ...candidate } = record;
   let migrated = nested;
@@ -154,9 +170,10 @@ export function migrateSharedState(
   }
 
   const parsed = ToolUseRunSharedSchema.safeParse(candidate);
-  if (!parsed.success) return null;
+  if (!parsed.success) return parsed;
 
   return {
+    success: true,
     data: parsed.data,
     migrated: migrated || !isDeepStrictEqual(candidate, parsed.data),
   };

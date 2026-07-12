@@ -389,8 +389,10 @@ export async function runToolUseFlow<C = unknown>(
     if (flowRecord) {
       logger.debug('Resuming tool-use flow from persistence');
       const migrationResult = migrateSharedState(flowRecord.shared);
-      if (migrationResult === null) {
-        throw new PersistedFlowStateError(executionId, 'invalid-shared');
+      if (!migrationResult.success) {
+        throw new PersistedFlowStateError(executionId, 'invalid-shared', {
+          cause: migrationResult.error,
+        });
       } else if (input.resumeSnapshot) {
         // The resume boundary (SessionResumeRetrieval.retrieveToolUseResumeData)
         // already migrated this record's legacy shapes and strictly validated
@@ -557,7 +559,9 @@ export async function runToolUseFlow<C = unknown>(
       preservationReason =
         'Flow record preserved for resume after retry cancellation';
     }
-    const preserveSessionState = preservationReason !== undefined;
+    const preserveFlowRecord = preservationReason !== undefined;
+    const preserveFollowUpQueue =
+      preserveFlowRecord && !persistenceRecoveryPending;
 
     if (preservationReason) {
       logger.debug(preservationReason);
@@ -569,15 +573,14 @@ export async function runToolUseFlow<C = unknown>(
       }
     }
 
-    // Every path that preserves the resumable flow record also preserves its
-    // follow-up queue. In particular, persistence recovery can fail after
-    // resume setup has already requeued input; releasing the queue here would
-    // discard that input while retaining only the flow record.
+    // Recovery failures preserve the unread record but release the rebuilt
+    // live queue. The resume wrapper owns the drained batch and restores it
+    // after rejection; retaining both copies here would replay it twice.
     //
     // WAITING retains its existing stronger property: the live lifecycle
     // remains attached to the queue so a racing follow-up, a genuine kill,
     // or the next resume observes the same queue instance.
-    if (!preserveSessionState) {
+    if (!preserveFollowUpQueue) {
       sessionLifecycle.dispose();
     }
     runSession.interactions.cancel({ streamId, cause: 'Run ended.' });
