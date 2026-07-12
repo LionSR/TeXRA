@@ -8,6 +8,7 @@ import {
 } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
+import { COLOR_ACCENT } from '../ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
@@ -222,7 +223,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   return (
     <ConfirmCard
       borderStyle="double"
-      color="magenta"
+      color={COLOR_ACCENT}
       title={title}
       onDecide={props.onDecide}
     >

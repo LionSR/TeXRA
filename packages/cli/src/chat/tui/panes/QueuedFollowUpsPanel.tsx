@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink';
 
 import { numberedFollowUpPreview } from '../render/followUpPreview';
+import { COLOR_WARNING } from '../ui/colors';
 import { truncateSummaryToWidth } from '../render/terminalText';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
@@ -85,7 +86,7 @@ export function QueuedFollowUpsPanel({
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text color="yellow" wrap="truncate-end">
+      <Text color={COLOR_WARNING} wrap="truncate-end">
         {display.title}
       </Text>
       {display.rows.map((row, index) => (
