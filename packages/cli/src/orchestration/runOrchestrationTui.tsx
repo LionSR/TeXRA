@@ -40,6 +40,28 @@ export interface OrchestrationAppProps {
   readonly onResolve: (action: CliOrchestrationAction) => void;
 }
 
+export type OrchestrationLauncherStep =
+  | { readonly kind: 'launcher' }
+  | {
+      readonly kind: 'model';
+      readonly action: CliOrchestrationModelPickAction;
+      readonly backTo: 'launcher' | 'agent' | 'team';
+    }
+  | { readonly kind: 'model-access' }
+  | { readonly kind: 'resume' }
+  | { readonly kind: 'agent' }
+  | { readonly kind: 'team' }
+  | { readonly kind: 'account' };
+
+/** Return the parent picker for Escape, or null when Escape exits the launcher. */
+export function orchestrationPreviousStep(
+  step: OrchestrationLauncherStep,
+): OrchestrationLauncherStep | null {
+  if (step.kind === 'launcher') return null;
+  if (step.kind === 'model') return { kind: step.backTo };
+  return { kind: 'launcher' };
+}
+
 export function orchestrationKeyHints(): readonly KeyHint[] {
   return [
     { key: '↑/↓', action: 'navigate' },
@@ -231,21 +253,10 @@ export function OrchestrationApp(
   ).items;
   const listFooterHints = orchestrationFooterHints(items);
   const statusLines = props.statusLines ?? [];
-  type LauncherStep =
-    | { readonly kind: 'launcher' }
-    | {
-        readonly kind: 'model';
-        readonly action: CliOrchestrationModelPickAction;
-        readonly backTo: 'launcher' | 'agent' | 'team';
-      }
-    | { readonly kind: 'model-access' }
-    | { readonly kind: 'resume' }
-    | { readonly kind: 'agent' }
-    | { readonly kind: 'team' }
-    | { readonly kind: 'account' };
-  const [step, setStep] = useState<LauncherStep>({ kind: 'launcher' });
+  const [step, setStep] = useState<OrchestrationLauncherStep>({
+    kind: 'launcher',
+  });
   const pending = step.kind === 'model' ? step.action : undefined;
-  const pendingBackTo = step.kind === 'model' ? step.backTo : 'launcher';
   const modelAccessOpen = step.kind === 'model-access';
   const resumeOpen = step.kind === 'resume';
   const agentOpen = step.kind === 'agent';
@@ -309,6 +320,15 @@ export function OrchestrationApp(
     app.exit();
   };
 
+  const goBack = (): void => {
+    const previous = orchestrationPreviousStep(step);
+    if (previous) {
+      setStep(previous);
+    } else {
+      finish({ kind: 'exit' });
+    }
+  };
+
   const onItemSelect = (action: CliOrchestrationAction): void => {
     if (action.kind === 'configure-model-access') {
       setStep({ kind: 'model-access' });
@@ -346,11 +366,7 @@ export function OrchestrationApp(
 
   useInput((_input, key) => {
     if (!key.escape) return;
-    if (step.kind !== 'launcher') {
-      setStep({ kind: 'launcher' });
-    } else {
-      finish({ kind: 'exit' });
-    }
+    goBack();
   });
 
   if (modelAccessOpen) {
@@ -368,7 +384,7 @@ export function OrchestrationApp(
             maxVisibleItems={layout.maxVisibleItems}
             showOverflow={layout.showOverflow}
             onSelect={(access) => finish({ kind: 'set-model-access', access })}
-            onCancel={() => setStep({ kind: 'launcher' })}
+            onCancel={goBack}
           />
         </Box>
         <Box marginTop={1}>
@@ -392,7 +408,7 @@ export function OrchestrationApp(
             maxVisibleItems={layout.maxVisibleItems}
             showOverflow={layout.showOverflow}
             onSelect={finish}
-            onCancel={() => setStep({ kind: 'launcher' })}
+            onCancel={goBack}
           />
         </Box>
         <Box marginTop={1}>
@@ -433,7 +449,7 @@ export function OrchestrationApp(
             maxVisibleItems={layout.maxVisibleItems}
             showOverflow={layout.showOverflow}
             onSelect={onItemSelect}
-            onCancel={() => setStep({ kind: 'launcher' })}
+            onCancel={goBack}
           />
         </Box>
         {layout.footerHints.length > 0 ? (
@@ -468,7 +484,7 @@ export function OrchestrationApp(
             maxVisibleItems={layout.maxVisibleItems}
             showOverflow={layout.showOverflow}
             onSelect={(model) => finish({ ...pending, model })}
-            onCancel={() => setStep({ kind: pendingBackTo })}
+            onCancel={goBack}
           />
         </Box>
         <Box marginTop={1}>
@@ -503,7 +519,7 @@ export function OrchestrationApp(
           maxVisibleItems={layout.maxVisibleItems}
           showOverflow={layout.showOverflow}
           onSelect={onItemSelect}
-          onCancel={() => finish({ kind: 'exit' })}
+          onCancel={goBack}
         />
       </Box>
       {layout.footerHints.length > 0 ? (

@@ -7,6 +7,7 @@ import {
   orchestrationFooterHints,
   orchestrationKeyHints,
   orchestrationLauncherLayout,
+  orchestrationPreviousStep,
   orchestrationWrappedLineRows,
 } from '@cli/orchestration/runOrchestrationTui';
 import {
@@ -131,6 +132,20 @@ const ORCHESTRATION_TEST_HEADER_LINES = [
 ] as const;
 
 describe('CLI orchestration items', () => {
+  it('returns from model selection to the agent or team picker that opened it', () => {
+    const action = { kind: 'chat' as const, agent: 'assistant' };
+
+    expect(
+      orchestrationPreviousStep({ kind: 'model', action, backTo: 'agent' }),
+    ).toEqual({ kind: 'agent' });
+    expect(
+      orchestrationPreviousStep({ kind: 'model', action, backTo: 'team' }),
+    ).toEqual({ kind: 'team' });
+    expect(
+      orchestrationPreviousStep({ kind: 'model', action, backTo: 'launcher' }),
+    ).toEqual({ kind: 'launcher' });
+  });
+
   it('advertises the full direct-open hotkey range used by Select', () => {
     expect(orchestrationKeyHints()).toContainEqual({
       key: '1-9/a-z/Enter',
