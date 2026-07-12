@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 import { describe, expect, it } from 'vitest';
 
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
@@ -64,6 +67,7 @@ const SESSION_META = {
   apiMode: 'personal',
   approvalPolicy: 'ask',
   canDelegate: false,
+  transcriptMode: 'persistent',
   version: '0.38.0',
 } as const;
 

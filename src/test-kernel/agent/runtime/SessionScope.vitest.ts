@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
@@ -24,8 +30,8 @@ const plan: Plan = { objective: 'Scope session-owned state.' };
 
 describe('cross-session active executions (SDK Step 7d PR 4)', () => {
   it('aggregates active execution ids across live sessions and drops them on dispose', () => {
-    const a = new SessionHandle();
-    const b = new SessionHandle();
+    const a = createTestSession();
+    const b = createTestSession();
     const { host } = createRecordingHost();
     const track = (session: SessionHandle, id: string): void => {
       session.executions.track(
@@ -62,8 +68,8 @@ describe('cross-session active executions (SDK Step 7d PR 4)', () => {
 
 describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
   it('registers the flush in the run session set, not the default set', () => {
-    const store = new StreamLogStore();
-    const sessionB = new SessionHandle();
+    const store = StreamLogStore.ephemeral('test');
+    const sessionB = createTestSession();
     try {
       const defaultBefore = getActiveFlushers().size;
       const handle = createRunTrace(
@@ -86,8 +92,8 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
   });
 
   it("drops the disposed session's flusher set from the process-wide drain", () => {
-    const store = new StreamLogStore();
-    const sessionB = new SessionHandle();
+    const store = StreamLogStore.ephemeral('test');
+    const sessionB = createTestSession();
     let drained = 0;
 
     // Registers sessionB.flushers in the process-wide drain registry.
@@ -115,8 +121,8 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
 
 describe('session-owned transcripts and follow-up queues (Stage 3a)', () => {
   it("writes run trace entries to the launching session's transcript store only", () => {
-    const launching = new SessionHandle();
-    const sibling = new SessionHandle();
+    const launching = createTestSession();
+    const sibling = createTestSession();
     const streamId = 'stream:session-transcript-owner' as StreamTabId;
 
     try {
@@ -147,8 +153,8 @@ describe('session-owned transcripts and follow-up queues (Stage 3a)', () => {
   });
 
   it('keeps same-stream follow-up queues isolated by session', () => {
-    const a = new SessionHandle();
-    const b = new SessionHandle();
+    const a = createTestSession();
+    const b = createTestSession();
     const streamId = 'stream:session-followups' as StreamTabId;
 
     try {
@@ -170,8 +176,8 @@ describe('session-owned transcripts and follow-up queues (Stage 3a)', () => {
 
 describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
   it("clears only the given session's pending interactions", async () => {
-    const a = new SessionHandle();
-    const b = new SessionHandle();
+    const a = createTestSession();
+    const b = createTestSession();
     const hostA = createRecordingHost();
     const hostB = createRecordingHost();
     const streamId = 'stream:approval-scope' as StreamTabId;
@@ -212,7 +218,7 @@ describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
 
 describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
   it('resolves the follow-up target against the passed session, not the process default', async () => {
-    const windowSession = new SessionHandle();
+    const windowSession = createTestSession();
     const { host } = createRecordingHost();
     const parentStream = 'stream:fu-parent' as StreamTabId;
 

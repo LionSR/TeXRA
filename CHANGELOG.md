@@ -25,6 +25,11 @@ All notable changes to this project will be documented in this file.
   clamp no longer converts `medium` to `high`; current Grok reasoning models
   (grok-4.3, grok-4.5) support low/medium/high.
 
+- **Agent runs no longer start with unavailable transcript persistence** —
+  headless CLI, desktop, and extension execution now fail initialization when
+  persistent transcripts cannot be opened. Interactive CLI fallback sessions
+  are clearly marked as ephemeral and are not advertised as resumable.
+
 ### Extension (VS Code)
 
 #### Bug Fixes

@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
@@ -246,7 +249,8 @@ describe('BashTool', () => {
 
     const options = roundServices({
       toolName: 'bash',
-      logger: createRunTrace('BashToolTest', new StreamLogStore()).trace,
+      logger: createRunTrace('BashToolTest', StreamLogStore.ephemeral('test'))
+        .trace,
       streamId: 'bash-tool' as StreamTabId,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
     });
@@ -280,7 +284,7 @@ describe('BashTool', () => {
   it('keeps result status out of visible tool log output', async () => {
     const runTrace = createRunTrace(
       'ToolStatusLogTest' as StreamTabId,
-      new StreamLogStore(),
+      StreamLogStore.ephemeral('test'),
     );
     const events: AgentEvent[] = [];
     const unsubscribe = runTrace.trace.subscribe((event) => {
@@ -671,7 +675,7 @@ describe('BashTool', () => {
 
     const runTrace = createRunTrace(
       'BashToolAbortTest' as StreamTabId,
-      new StreamLogStore(),
+      StreamLogStore.ephemeral('test'),
     );
     const events: AgentEvent[] = [];
     const unsubscribe = runTrace.trace.subscribe((event) => {

@@ -367,6 +367,7 @@ describe('/config slash command wiring', () => {
       apiMode: 'included',
       approvalPolicy: 'ask',
       canDelegate: false,
+      transcriptMode: 'persistent',
       version: 'test',
     });
     const { stores } = makeFakeSettingsStores();

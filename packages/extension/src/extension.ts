@@ -15,11 +15,16 @@ import { UsageLogService } from '@telemetry/UsageLogService';
 import { backfillFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+import { StreamLogStore } from '@transcript';
 import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal/promptLoader';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  initializeDefaultSession,
+  teardownDefaultSession,
+} from '@agent/runtime/SessionHandle';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
@@ -255,6 +260,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     },
   });
+  initializeDefaultSession({ transcripts: await StreamLogStore.open() });
   registerAgentFeatures();
   // Mirrors the CLI/desktop Node-host wiring (`nodeHost.ts`'s
   // `initializeNodeRuntimeSkills`, inlined here rather than imported so the
@@ -765,6 +771,10 @@ export async function activate(context: vscode.ExtensionContext) {
 export async function deactivate() {
   const host = lifecycleHost;
   lifecycleHost = undefined;
-  leanVscodeIntegration.clearVscodeLeanServerEntries();
-  await host?.runShutdown();
+  try {
+    leanVscodeIntegration.clearVscodeLeanServerEntries();
+    await host?.runShutdown();
+  } finally {
+    teardownDefaultSession();
+  }
 }

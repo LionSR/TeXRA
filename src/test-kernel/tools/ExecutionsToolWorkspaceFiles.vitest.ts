@@ -1,6 +1,12 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -174,7 +180,7 @@ describe('ExecutionsTool', () => {
 
   it('does not duplicate auto-delivered live subagent reports for the parent stream', async () => {
     const explicit = createRecordingHost();
-    const session = new SessionHandle();
+    const session = createTestSession();
     const executionId = 'abc123';
     const parentStreamId = 'stream:parent-report-suppression' as StreamTabId;
     const childStreamId = 'stream:child-report-suppression' as StreamTabId;

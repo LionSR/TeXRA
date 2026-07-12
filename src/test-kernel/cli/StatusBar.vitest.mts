@@ -107,6 +107,22 @@ describe('CLI StatusBar display model', () => {
     expect(shortCliApiMode('personal')).toBe('personal');
   });
 
+  it('keeps an ephemeral transcript warning in the durable status row', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({ transcriptMode: 'ephemeral' }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toContain(
+      'EPHEMERAL TRANSCRIPT',
+    );
+    expect(
+      display.left.find(
+        (segment) => statusBarSegmentText(segment) === 'EPHEMERAL TRANSCRIPT',
+      ),
+    ).toMatchObject({ badge: true, badgeColor: 'yellow' });
+    expect(display.bindings).not.toContain('Resume this session');
+  });
+
   it('surfaces non-default approval policies in the durable status row', () => {
     const input = statusInput({ approvalPolicy: 'ask' });
     const ask = buildStatusBarDisplay(input);

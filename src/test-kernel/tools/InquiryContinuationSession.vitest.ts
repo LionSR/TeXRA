@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sendFollowUpMock = vi.hoisted(() =>
@@ -115,7 +121,7 @@ describe('external inquiry continuation session routing', () => {
   });
 
   it('emits inquiry thread updates through the explicit session hub', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const explicitFacts: unknown[] = [];
     const defaultFacts: unknown[] = [];
     const detachExplicitFacts = session.events.subscribe((event) => {
@@ -159,7 +165,7 @@ describe('external inquiry continuation session routing', () => {
 
   it("emits inquiry thread updates through the active run's session when no explicit session is provided", async () => {
     const { host } = createRecordingHost();
-    const session = new SessionHandle();
+    const session = createTestSession();
     const runFacts: unknown[] = [];
     const defaultFacts: unknown[] = [];
     const detachRunFacts = session.events.subscribe((event) => {
@@ -200,7 +206,7 @@ describe('external inquiry continuation session routing', () => {
 
   it('falls back to the default session when the selected session has no event hub', async () => {
     const { host } = createRecordingHost();
-    const runSession = new SessionHandle();
+    const runSession = createTestSession();
     const runFacts: unknown[] = [];
     const defaultFacts: unknown[] = [];
     const detachRunFacts = runSession.events.subscribe((event) => {
@@ -245,7 +251,7 @@ describe('external inquiry continuation session routing', () => {
   });
 
   it('does not emit an inquiry thread update when no summary is returned', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const facts: unknown[] = [];
     const detachFacts = session.events.subscribe((event) => {
       facts.push(event);

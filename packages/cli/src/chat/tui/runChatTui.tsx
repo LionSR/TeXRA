@@ -50,6 +50,7 @@ import {
   type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
+import { initializeInteractiveTranscriptSession } from '@cli/runtime/transcriptSession';
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
   formatInteractiveTerminalFailure,
@@ -274,6 +275,15 @@ export async function runChat(
   // exactly one owner is ever registered for a given signal; see
   // initInteractiveCliPlatform's doc comment for the full handoff design.
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
+  const initialResume = init.initialResume;
+  const transcriptLifecycle = await initializeInteractiveTranscriptSession(
+    initialResume
+      ? { onPersistentOpenFailure: 'fail' }
+      : {
+          onPersistentOpenFailure: 'use-ephemeral',
+          showPersistentWarning: writeTextStderr,
+        },
+  );
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the apiMode + model
   // resolution below then see the freshly-set credentials in the same process.
@@ -287,7 +297,6 @@ export async function runChat(
     return { exitCode: CliExitCode.Success };
   }
   const apiMode = effectiveCliApiMode(context);
-  const initialResume = init.initialResume;
   // State 1 continuation (docs/prds/2026-06-11-agent-native-onboarding.md): on a true
   // first run the post-picker session starts with the setup agent. Threaded
   // through the same override slot resolveChatDefaults already honors, and
@@ -382,9 +391,13 @@ export async function runChat(
     apiMode,
     approvalPolicy: activeApprovalPolicy,
     canDelegate: chatAgentSupportsDelegation(agent),
+    transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
     teamName: init.teamName,
     version,
   });
+  if (transcriptLifecycle.warning) {
+    appendLocalErrorTranscript(transcriptLifecycle.warning);
+  }
   if (modelSelection.notice) {
     appendLocalAssistantTranscript(modelSelection.notice);
   }
@@ -400,19 +413,6 @@ export async function runChat(
     stdin: process.stdin,
     stdout: process.stdout,
   });
-
-  // Enable StreamLog persistence for the interactive session so transcripts
-  // survive exit and can be reopened on resume. Uses the shared (extension-
-  // compatible) StreamLogStore, so a workspace opened in either surface reads
-  // the same `streamLogs/<id>.json`. load() is summaries-only (lazy) and must
-  // run before any append — it clears in-memory logs on entry — hence before
-  // subscribeStreamLog wires the append→sync bridge below. Best-effort: a load
-  // failure leaves persistence off (save() no-ops) rather than breaking chat.
-  try {
-    await defaultSession().transcripts.load();
-  } catch {
-    // Persistence stays disabled; the session still runs in-memory as before.
-  }
 
   // Persist per-stream sidecar data (todos, plan, usage, output files) via the
   // shared, host-agnostic snapshot store so a `texra resume` restores the full
@@ -496,6 +496,7 @@ export async function runChat(
       status: rootStreamStatus(),
     });
   const isResumableIdle = (): boolean =>
+    transcriptLifecycle.canResume &&
     chatTuiIsResumableIdleOnExit({
       canInterruptActiveRun: canInterruptActiveRun(),
       canStopActiveRun: canStopActiveRun(),
@@ -852,7 +853,7 @@ export async function runChat(
   // resumable tool-use subagent, so any route can be continued by its own id.
   // Read the streams slice before resetCliState() clears it.
   const printResumeHintOnExit = (): void => {
-    if (!session.executionId) return;
+    if (!transcriptLifecycle.canResume || !session.executionId) return;
     const streams = streamsSignal.get();
     const hint = formatResumeHint(
       collectResumeTargets({
@@ -872,8 +873,8 @@ export async function runChat(
   };
   // Materialize buffered trace chunks, then drain the debounced StreamLog disk
   // writes so the tail of the session isn't lost (SAVE_DEBOUNCE_MS window).
-  // flush() is bounded (MAX_WRITE_RETRIES) and a no-op when persistence never
-  // loaded, so this can neither hang nor affect headless paths.
+  // Persistent flushes have bounded retries; an explicitly ephemeral session
+  // has no disk work to drain.
   const drainPersistence = async (): Promise<void> => {
     flushPendingRunTraces();
     detachSnapshotPersistence();
@@ -915,7 +916,9 @@ export async function runChat(
   const armExit = (): void => {
     exitArmed = true;
     pendingExitHint.set(true);
-    pendingExitResumeId.set(session.executionId);
+    pendingExitResumeId.set(
+      transcriptLifecycle.canResume ? session.executionId : undefined,
+    );
     if (pendingExitTimer) clearTimeout(pendingExitTimer);
     pendingExitTimer = setTimeout(clearPendingExit, 800);
   };

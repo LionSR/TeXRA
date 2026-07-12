@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - transcript
 import {
   STREAM_LOGS_DIR,
+  type StreamLogStore,
   type StreamSnapshotStore as ProgressSnapshotStore,
 } from '@transcript';
 
@@ -98,7 +99,7 @@ type TestableBridge = Bridge & {
       },
     ): unknown;
     releaseEntries(streamId: StreamTabId): void;
-    load(): Promise<void>;
+    reload(): Promise<void>;
     ensureLoaded(streamId: StreamTabId): Promise<void>;
     get(streamId: StreamTabId):
       | {
@@ -145,10 +146,10 @@ function bridgeFollowUps(
 type CreateBridgeOptions = {
   kvStoreBacking?: Map<string, unknown>;
   kvRead?: (key: string) => Promise<unknown> | unknown;
-  /** Forces `state.streamLogs.load()` to reject, to exercise the restart-repair fallback (catch) path. */
-  streamLogsLoadError?: Error;
-  /** Delays `state.streamLogs.load()`'s directory scan until this resolves, to exercise the narrow startup window before restart repair has populated `streamLogs` (issue #7850). */
-  streamLogsLoadGate?: Promise<void>;
+  /** Forces persistent transcript opening to reject. */
+  transcriptOpenError?: Error;
+  /** Delays persistent transcript opening until this promise resolves. */
+  transcriptOpenGate?: Promise<void>;
   retrieveSessionResumeData?: ReturnType<typeof vi.fn>;
   resumeToolUseFromSnapshot?: ReturnType<typeof vi.fn>;
   runAgent?: RunExecutionRequest;
@@ -196,6 +197,8 @@ const SEARCH_TOOL_USE_AGENT_CONFIG = {
  */
 async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   bridgeModule: DesktopAgentExecutionModule;
+  openTranscripts(): Promise<StreamLogStore>;
+  ephemeralTranscripts(): StreamLogStore;
   progressSnapshotStore?: ProgressSnapshotStore;
 }> {
   vi.resetModules();
@@ -265,12 +268,16 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
         return false;
       }
 
+      async modifiedAt(): Promise<number | undefined> {
+        return 1;
+      }
+
       async listKeys(): Promise<string[]> {
-        if (options.streamLogsLoadError && this.dir === STREAM_LOGS_DIR) {
-          throw options.streamLogsLoadError;
+        if (options.transcriptOpenError && this.dir === STREAM_LOGS_DIR) {
+          throw options.transcriptOpenError;
         }
-        if (options.streamLogsLoadGate && this.dir === STREAM_LOGS_DIR) {
-          await options.streamLogsLoadGate;
+        if (options.transcriptOpenGate && this.dir === STREAM_LOGS_DIR) {
+          await options.transcriptOpenGate;
         }
         if (!options.kvStoreBacking) return [];
         const prefix = `${this.dir}/`;
@@ -363,21 +370,34 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   const bridgeModule = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
-  return { bridgeModule, progressSnapshotStore };
+  const { StreamLogStore } = await import('@transcript');
+  const { initializeDefaultSession } =
+    await import('@agent/runtime/SessionHandle');
+  initializeDefaultSession({
+    transcripts: StreamLogStore.ephemeral('desktop module test default'),
+  });
+  return {
+    bridgeModule,
+    openTranscripts: () => StreamLogStore.open(),
+    ephemeralTranscripts: () => StreamLogStore.ephemeral('desktop bridge test'),
+    progressSnapshotStore,
+  };
 }
 
 async function createBridge(
   messages: unknown[],
   options: CreateBridgeOptions = {},
 ): Promise<TestableBridge> {
-  const { bridgeModule, progressSnapshotStore } =
+  const { bridgeModule, openTranscripts, progressSnapshotStore } =
     await loadBridgeModule(options);
+  const transcripts = await openTranscripts();
   return disposeAfterTest(
     new bridgeModule.DesktopProgressBridge(
       (message) => {
         messages.push(message);
       },
       {
+        transcripts,
         streamSnapshotStore: options.streamSnapshotStore,
         progressSnapshotStore,
         showErrorMessage: options.showErrorMessage,
@@ -1104,44 +1124,33 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
-  it('gates the Progress webview readiness paint on desktop startup repair', async () => {
-    // Regression test: the desktop webviewReady handler used to call
-    // syncFullView() / hydrateProgressViewInquiries() / replayPendingPrompts()
-    // directly, without awaiting `restartRepair` first. Restored streams are
-    // only folded into `streamLogs`/`session.status` once
-    // `repairOrphanedStreamsAfterRestart` (i.e. `restartRepair`) resolves --
-    // it awaits `state.streamLogs.load()` before anything else -- so a
-    // webviewReady race landing in that window paints the rail without the
-    // restored streams, with no guaranteed later repaint. Same race class as
-    // revealStream's #7850 fix. Gate the on-disk stream-log scan and assert
-    // `completeWebviewReady()` defers its entire paint sequence until
-    // `restartRepair` has actually settled.
-    let finishStreamLogsLoad!: () => void;
-    const streamLogsLoadGate = new Promise<void>((resolve) => {
-      finishStreamLogsLoad = resolve;
+  it('does not expose the desktop bridge before transcript opening settles', async () => {
+    let finishTranscriptOpen!: () => void;
+    const transcriptOpenGate = new Promise<void>((resolve) => {
+      finishTranscriptOpen = resolve;
     });
     const messages: unknown[] = [];
-    const bridge = await createBridge(messages, { streamLogsLoadGate });
+    const opening = createBridge(messages, { transcriptOpenGate });
+    const opened = vi.fn();
+    void opening.then(opened);
+    let bridge: TestableBridge | undefined;
 
     try {
-      const readyPromise = bridge.completeWebviewReady();
-
-      // streamLogs.load() is still gated, so restartRepair has not settled;
-      // completeWebviewReady() must not have painted anything yet.
       await settleProgressEvents();
+      expect(opened).not.toHaveBeenCalled();
       expect(messages).toEqual([]);
 
-      finishStreamLogsLoad();
-      await readyPromise;
+      finishTranscriptOpen();
+      bridge = await opening;
+      await bridge.completeWebviewReady();
 
-      // Once restartRepair settles, the deferred paint goes out.
       expect(
         progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS)
           .length,
       ).toBeGreaterThan(0);
     } finally {
-      finishStreamLogsLoad();
-      bridge.dispose();
+      finishTranscriptOpen();
+      bridge?.dispose();
     }
   });
 
@@ -1177,46 +1186,20 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
-  it('restores a RUNNING stream with a persisted flow record to WAITING when streamLogs.load() throws', async () => {
-    // Regression test: the catch-fallback path used to only
-    // consider streams whose CURRENT in-memory status was already WAITING,
-    // missing a stream that was RUNNING at crash time but still has a valid
-    // persisted flow record -- wrongly demoting it to FAILED instead of
-    // WAITING. The fallback must now consult detectWaitingStreams() (ground
-    // truth from the persisted KV record) just like the primary try path.
-    const detectWaitingStreams = vi.fn(
-      async (executionIds: ReadonlyMap<StreamTabId, string>) =>
-        new Set<StreamTabId>(
-          [...executionIds.keys()].filter(
-            (streamId) => streamId === 'resumable-stream',
-          ),
-        ),
-    );
-    const bridge = await createBridge([], {
-      detectWaitingStreams,
-      streamLogsLoadError: new Error('stream log store unavailable'),
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'resumable-stream',
-          executionId: 'abc123',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-      ]),
-    });
+  it('fails desktop bridge initialization when transcript opening fails', async () => {
+    const detectWaitingStreams = vi.fn();
+    const failure = new Error('stream log store unavailable');
 
-    try {
-      await vi.waitFor(() => {
-        expect(detectWaitingStreams).toHaveBeenCalledOnce();
-        expect(bridgeStatus(bridge).get('resumable-stream')).toBe(
-          STREAM_STATUS.WAITING,
-        );
-      });
-    } finally {
-      bridgeStatus(bridge).clearStream('resumable-stream');
-    }
+    await expect(
+      createBridge([], {
+        detectWaitingStreams,
+        transcriptOpenError: failure,
+      }),
+    ).rejects.toBe(failure);
+    expect(detectWaitingStreams).not.toHaveBeenCalled();
   });
 
-  it('closes fallback waiting groups from durable snapshots outside restored streams', async () => {
+  it('closes waiting groups from durable snapshots outside restored streams', async () => {
     let finishDetection!: (value: Set<StreamTabId>) => void;
     const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
       finishDetection = resolve;
@@ -1231,7 +1214,6 @@ describe('DesktopProgressBridge', () => {
         );
       },
       detectWaitingStreams,
-      streamLogsLoadError: new Error('stream log store unavailable'),
     });
     const restartRepair = (
       bridge as unknown as { restartRepair: Promise<void> }
@@ -1692,21 +1674,14 @@ describe('DesktopProgressBridge', () => {
     });
   });
 
-  it('waits for desktop startup repair before revealing a goal-owned stream (issue #7850)', async () => {
-    // Regression test: revealStream() used to check streamLogs.has()
-    // synchronously, before streamLogs.load() (which only resolves inside
-    // restartRepair) had populated it. A goal-owned stream restored from a
-    // prior session would look "unknown" during that narrow startup window
-    // and reveal would silently no-op. Gate the on-disk stream-log scan and
-    // assert reveal does not route until restartRepair (and thus the load)
-    // has actually completed.
-    let finishStreamLogsLoad!: () => void;
-    const streamLogsLoadGate = new Promise<void>((resolve) => {
-      finishStreamLogsLoad = resolve;
+  it('reveals a goal-owned stream after persistent opening completes', async () => {
+    let finishTranscriptOpen!: () => void;
+    const transcriptOpenGate = new Promise<void>((resolve) => {
+      finishTranscriptOpen = resolve;
     });
     const messages: unknown[] = [];
-    const bridge = await createBridge(messages, {
-      streamLogsLoadGate,
+    const opening = createBridge(messages, {
+      transcriptOpenGate,
       kvStoreBacking: new Map<string, unknown>([
         [
           `${STREAM_LOGS_DIR}/goal-owning-stream`,
@@ -1721,17 +1696,18 @@ describe('DesktopProgressBridge', () => {
         ],
       ]),
     });
+    const opened = vi.fn();
+    void opening.then(opened);
+    let bridge: TestableBridge | undefined;
 
     try {
-      const revealPromise = bridge.revealStream('goal-owning-stream');
-
-      // streamLogs.load() is still gated, so the stream has not been
-      // repaired into this window's streamLogs yet.
       await settleProgressEvents();
+      expect(opened).not.toHaveBeenCalled();
       expect(messages).toEqual([]);
 
-      finishStreamLogsLoad();
-      await revealPromise;
+      finishTranscriptOpen();
+      bridge = await opening;
+      await bridge.revealStream('goal-owning-stream');
 
       expect(messages).toContainEqual({
         command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
@@ -1744,7 +1720,8 @@ describe('DesktopProgressBridge', () => {
         command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       });
     } finally {
-      finishStreamLogsLoad();
+      finishTranscriptOpen();
+      bridge?.dispose();
     }
   });
 
@@ -2109,6 +2086,7 @@ describe('DesktopProgressBridge', () => {
       streamId: 'second',
       agentCategory: AgentCategory.Workflow,
     });
+    await bridge.streamLogs.ensureLoaded('first');
     bridge.streamLogs.append('first', {
       id: 'first-log',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -2872,7 +2850,7 @@ describe('DesktopProgressBridge', () => {
 
     await bridge.flush();
     bridge.streamLogs.releaseEntries(streamId);
-    await bridge.streamLogs.load();
+    await bridge.streamLogs.reload();
     await bridge.streamLogs.ensureLoaded(streamId);
 
     expect(
@@ -2921,7 +2899,7 @@ describe('DesktopProgressBridge', () => {
     };
 
     async function createWindowPair(): Promise<WindowPair> {
-      const { bridgeModule } = await loadBridgeModule();
+      const { bridgeModule, ephemeralTranscripts } = await loadBridgeModule();
       // Same registry as the bridge module graph — identity comparisons
       // against process-wide defaults must use this instance, not a
       // statically imported copy from the pre-reset registry.
@@ -2933,7 +2911,10 @@ describe('DesktopProgressBridge', () => {
           (message) => {
             messages.push(message);
           },
-          { streamSnapshotStore: snapshots },
+          {
+            transcripts: ephemeralTranscripts(),
+            streamSnapshotStore: snapshots,
+          },
         ) as unknown as TestableBridge;
         const session = (bridge as unknown as { session: SessionHandle })
           .session;
@@ -3331,16 +3312,19 @@ describe('DesktopProgressBridge', () => {
       messages?: unknown[];
     }) {
       let activeExecutionIds: readonly string[] = [];
-      const { bridgeModule } = await loadBridgeModule({
+      const { bridgeModule, ephemeralTranscripts } = await loadBridgeModule({
         activeExecutionIds: () => activeExecutionIds,
       });
       const { AgentExecutionHandle, ProcessExecutionHandle } =
         await import('@agent/runtime/executionRegistry');
       const { noopAgentRuntimeHost } =
         await import('@agent/runtime/AgentRuntimeHost');
-      const bridgeA = new bridgeModule.DesktopProgressBridge((message) => {
-        messages.push(message);
-      }) as unknown as TestableBridge & { session: SessionHandle };
+      const bridgeA = new bridgeModule.DesktopProgressBridge(
+        (message) => {
+          messages.push(message);
+        },
+        { transcripts: ephemeralTranscripts() },
+      ) as unknown as TestableBridge & { session: SessionHandle };
       await settleProgressEvents();
       const createHandle = (
         options: {
@@ -3386,7 +3370,7 @@ describe('DesktopProgressBridge', () => {
           (message) => {
             reopenedMessages.push(message);
           },
-          { streamSnapshotStore },
+          { transcripts: ephemeralTranscripts(), streamSnapshotStore },
         ) as unknown as TestableBridge & {
           session: SessionHandle;
         };

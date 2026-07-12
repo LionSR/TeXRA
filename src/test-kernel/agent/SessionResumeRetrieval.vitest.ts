@@ -1,3 +1,6 @@
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -101,7 +104,7 @@ async function runPersistedFlow(
   streamId: StreamTabId,
   snapshot: ToolUseSessionSnapshot | undefined,
   onSetup?: (context: ToolUseSetupContext) => void,
-  session: SessionHandle = new SessionHandle(),
+  session: SessionHandle = createTestSession(),
 ): Promise<RunToolUseFlowResult> {
   const config = snapshot?.agentConfig ?? CONFIG;
   const userVarChannels = snapshot?.user ?? {
@@ -612,7 +615,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId = 'chat@gpt54#abc-cancel-followup' as StreamTabId;
     const snapshot = buildToolUseSnapshot(executionId, streamId);
     const store = getExecutionStore(executionId);
-    const session = new SessionHandle();
+    const session = createTestSession();
     let flowContext: ToolUseSetupContext | undefined;
     const readSpy = vi.spyOn(store, 'read').mockImplementationOnce(async () => {
       // Cancellation arrives while the recovery read is pending -- after

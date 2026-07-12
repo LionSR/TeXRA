@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -95,7 +101,7 @@ describe('tool-use follow-up progress events', () => {
 
   it('publishes sent follow-up events through the owning session fact hub', async () => {
     const { events, host } = createRecordingHost();
-    const session = new SessionHandle();
+    const session = createTestSession();
     sessions.add(session);
     const facts: unknown[] = [];
     const detachFacts = session.events.subscribe((event) => {
@@ -134,8 +140,8 @@ describe('tool-use follow-up progress events', () => {
 
   it('prefers an explicit session over the active run context when notifying follow-up sent', () => {
     const run = createRecordingHost();
-    const explicitSession = new SessionHandle();
-    const activeSession = new SessionHandle();
+    const explicitSession = createTestSession();
+    const activeSession = createTestSession();
     sessions.add(explicitSession);
     sessions.add(activeSession);
     const explicitFacts: unknown[] = [];
@@ -175,7 +181,7 @@ describe('tool-use follow-up progress events', () => {
 
   it("routes follow-up sent notifications through the active run's current session", () => {
     const run = createRecordingHost();
-    const session = new SessionHandle();
+    const session = createTestSession();
     sessions.add(session);
     const facts: unknown[] = [];
     const detachFacts = session.events.subscribe((event) => {
@@ -256,7 +262,7 @@ describe('tool-use follow-up progress events', () => {
   });
 
   it('runs observers before session emission and catches observer errors', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     sessions.add(session);
     const order: string[] = [];
     const detachFacts = session.events.subscribe(() => {
@@ -318,7 +324,7 @@ describe('tool-use follow-up progress events', () => {
   });
 
   it('does not emit a follow-up sent fact when no follow-up reaches a live session', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     sessions.add(session);
     const facts: unknown[] = [];
     const detachFacts = session.events.subscribe((event) => {
