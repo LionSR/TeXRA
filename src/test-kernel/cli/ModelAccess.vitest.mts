@@ -314,7 +314,7 @@ describe('CLI model access resolution', () => {
         }),
         'included',
       ),
-    ).toBe('relay: included');
+    ).toBe('included: available');
     expect(
       formatModelStatusForCliMode(
         model('deepseekT', {
@@ -323,7 +323,7 @@ describe('CLI model access resolution', () => {
         }),
         'included',
       ),
-    ).toBe('relay: unavailable; api key set');
+    ).toBe('included: unavailable; API key set');
     expect(
       formatModelStatusForCliMode(
         model('deepseekT', {
@@ -336,7 +336,7 @@ describe('CLI model access resolution', () => {
         }),
         'included',
       ),
-    ).toBe('relay: quota exhausted');
+    ).toBe('included: usage limit reached');
     expect(
       formatModelStatusForCliMode(
         model('sonnet46T', {
@@ -349,7 +349,7 @@ describe('CLI model access resolution', () => {
         }),
         'included',
       ),
-    ).toBe('relay: login required');
+    ).toBe('included: sign-in required');
   });
 
   it('builds model picker rows from the access-list source of truth', () => {
@@ -395,8 +395,8 @@ describe('CLI model access resolution', () => {
 
     expect(rows.map((row) => row.value)).toEqual(['sonnet46T', 'gpt54']);
     expect(rows.map((row) => row.description)).toEqual([
-      'relay: included',
-      'relay: included',
+      'included: available',
+      'included: available',
     ]);
   });
 
@@ -575,10 +575,10 @@ describe('CLI model access resolution', () => {
 
   it('formats no-runnable model reasons for launch and model picker views', () => {
     expect(formatCliNoRunnableModelsLaunchBlock('includedLoginRequired')).toBe(
-      'Sign in with texra login for included relay models',
+      'Sign in with texra login for included TeXRA models',
     );
     expect(formatCliNoRunnableModelsLaunchBlock('included')).toBe(
-      'No included relay models are runnable',
+      'No included TeXRA models are runnable',
     );
     expect(formatCliNoRunnableModelsLaunchBlock('personal')).toBe(
       'No personal API-key models are runnable',
@@ -589,12 +589,12 @@ describe('CLI model access resolution', () => {
         INTERACTIVE_RECOVERY,
       ),
     ).toBe(
-      'Included relay models require sign-in. Run /login or switch with /api personal.',
+      'Included TeXRA models require sign-in. Run /login or switch with /api personal.',
     );
     expect(
       formatCliNoRunnableModelsMessage('included', INTERACTIVE_RECOVERY),
     ).toBe(
-      'No included relay models are runnable. Switch with /api personal or try again later.',
+      'No included TeXRA models are runnable. Switch with /api personal or try again later.',
     );
     expect(
       formatCliNoRunnableModelsMessage('personal', INTERACTIVE_RECOVERY),
@@ -604,12 +604,12 @@ describe('CLI model access resolution', () => {
     expect(
       formatCliNoAvailableModelsRecovery('included', INTERACTIVE_RECOVERY),
     ).toBe(
-      'Run /login for included relay access, or switch with /api personal after configuring a provider API key.',
+      'Run /login for included TeXRA access, or switch with /api personal after configuring a provider API key.',
     );
     expect(
       formatCliNoAvailableModelsRecovery('personal', INTERACTIVE_RECOVERY),
     ).toBe(
-      'Configure a provider API key for personal mode, or switch with /api included and run /login for included relay access.',
+      'Configure a provider API key for personal mode, or switch with /api included and run /login for included TeXRA access.',
     );
   });
 
@@ -630,7 +630,7 @@ describe('CLI model access resolution', () => {
         INTERACTIVE_RECOVERY,
       ),
     ).toBe(
-      'Included relay models require sign-in. Run /login or switch with /api personal.',
+      'Included TeXRA models require sign-in. Run /login or switch with /api personal.',
     );
     expect(
       emptyModelListMessageForCliMode(
@@ -648,7 +648,7 @@ describe('CLI model access resolution', () => {
         INTERACTIVE_RECOVERY,
       ),
     ).toBe(
-      'No included relay models are runnable. Switch with /api personal or try again later.',
+      'No included TeXRA models are runnable. Switch with /api personal or try again later.',
     );
     expect(
       emptyModelListMessageForCliMode(
@@ -670,7 +670,7 @@ describe('CLI model access resolution', () => {
     );
   });
 
-  it('rejects personal-key models in included relay mode', async () => {
+  it('rejects personal-key models in included TeXRA mode', async () => {
     await expect(
       resolveModelFromAccessList(
         [
@@ -695,7 +695,7 @@ describe('CLI model access resolution', () => {
     );
   });
 
-  it('falls back from included relay models in personal API mode', async () => {
+  it('falls back from included TeXRA models in personal API mode', async () => {
     await expect(
       resolveModelFromAccessList(
         [
@@ -740,13 +740,13 @@ describe('CLI model access resolution', () => {
         { fallbackReason: 'command-config' },
       ),
     ).rejects.toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included relay access, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
+      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included TeXRA access, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
     );
   });
 
   it('keeps personal-mode recovery scoped to provider keys or included mode', async () => {
     expect(formatCliNoAvailableModelsRecovery('personal')).toBe(
-      'Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
+      'Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included TeXRA access.',
     );
     await expect(
       resolveModelFromAccessList(
@@ -765,7 +765,7 @@ describe('CLI model access resolution', () => {
         { fallbackReason: 'command-config', apiMode: 'personal' },
       ),
     ).rejects.toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
+      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included TeXRA access.',
     );
   });
 
@@ -787,11 +787,11 @@ describe('CLI model access resolution', () => {
         {
           fallbackReason: 'command-config',
           noAvailableModelsMessage:
-            'Run `texra login` for included relay access.',
+            'Run `texra login` for included TeXRA access.',
         },
       ),
     ).rejects.toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included relay access.',
+      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included TeXRA access.',
     );
   });
 
@@ -967,7 +967,7 @@ describe('CLI model access resolution', () => {
     const text = formatCliModelDetails(
       model('sonnet46T', {
         available: false,
-        status: 'relay: included',
+        status: 'included: available',
         model: modelOption('sonnet46T', {
           availability: 'included-access',
           availabilityLabel: 'Included access',
@@ -995,7 +995,7 @@ describe('CLI model access resolution', () => {
     );
 
     expect(text).toContain(
-      'recovery: Run `texra login` for included relay access, then retry with `--api-mode included`.',
+      'recovery: Run `texra login` for included TeXRA access, then retry with `--api-mode included`.',
     );
     expect(text).not.toContain('retry with `--api-mode personal`');
   });
@@ -1046,6 +1046,32 @@ describe('CLI model access resolution', () => {
     ]);
   });
 
+  it('keeps ChatGPT models available without TeXRA sign-in or API keys', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('gpt56', {
+        availability: 'subscription-access',
+        availabilityLabel: 'ChatGPT subscription',
+        requiresKey: false,
+        disabled: false,
+      }),
+    ]);
+    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(false);
+
+    await expect(
+      getCliModelAccessList({ apiMode: 'included' }),
+    ).resolves.toMatchObject([
+      {
+        available: true,
+        model: {
+          value: 'gpt56',
+          availability: 'subscription-access',
+          requiresKey: false,
+          disabled: false,
+        },
+      },
+    ]);
+  });
+
   it('preserves relay quota status for signed-in included-mode users', async () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('deepseekT', {
@@ -1072,7 +1098,7 @@ describe('CLI model access resolution', () => {
     ]);
   });
 
-  it('marks only included-access models runnable in included relay mode', async () => {
+  it('marks only included-access models runnable in included TeXRA mode', async () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('gemini35f', {
         availability: 'included-access',

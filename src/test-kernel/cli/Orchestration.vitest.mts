@@ -11,6 +11,8 @@ import {
 } from '@cli/orchestration/runOrchestrationTui';
 import {
   buildCliOrchestrationItems,
+  buildCliResumeItems,
+  buildModelAccessItems,
   orchestrationModelAccessView,
 } from '@cli/runtime/orchestration';
 
@@ -122,7 +124,7 @@ function readyPresetPlan(
 
 const ORCHESTRATION_TEST_HEADER_LINES = [
   'TeXRA v0.0.0-test',
-  'Choose how to start this CLI session.',
+  'Start a session or configure model access.',
 ] as const;
 
 describe('CLI orchestration items', () => {
@@ -146,7 +148,7 @@ describe('CLI orchestration items', () => {
 
   it('budgets wrapped launcher status rows instead of assuming one row per line', () => {
     const accountHint =
-      'actions: `texra login --select-account` changes account; `--api-mode personal` uses provider keys';
+      'actions: choose Model access below; `texra login --select-account` changes account';
 
     expect(orchestrationWrappedLineRows(accountHint, 52)).toBeGreaterThan(1);
     expect(orchestrationBlockRowCost([accountHint], 52)).toBe(
@@ -218,7 +220,7 @@ describe('CLI orchestration items', () => {
 
   it('preserves the longest fitting status prefix before hiding all status lines', () => {
     const statusLines = [
-      'mode: included relay',
+      'mode: included TeXRA access',
       'auth: signed out',
       'actions: `texra login` unlocks included models',
     ];
@@ -275,19 +277,57 @@ describe('CLI orchestration items', () => {
     });
   });
 
-  it('lists recent resumable executions before recent agents', () => {
+  it('keeps model access directly below new chat and presents every access route', () => {
+    const status = {
+      active: 'included' as const,
+      chatGptSignedIn: true,
+      chatGptAccountLabel: 'researcher@example.com',
+    };
     const items = buildCliOrchestrationItems({
       presetPlans: [],
-      history: [
-        historyEntry('aaaaaaaaaaaa', {
-          agent: 'review',
-          status: CLI_HISTORY_RESUMABLE_STATUS,
-        }),
-        historyEntry('bbbbbbbbbbbb', {
-          agent: 'orchestrator',
-          status: CLI_HISTORY_RESUMABLE_STATUS,
-        }),
-      ],
+      history: [],
+      toolUseAgents: [],
+      modelAccess: status,
+    });
+
+    expect(items[1]).toEqual({
+      label: 'Model access',
+      description: 'Included TeXRA access',
+      value: { kind: 'configure-model-access' },
+    });
+    expect(buildModelAccessItems(status)).toEqual([
+      {
+        value: 'chatgpt',
+        label: 'ChatGPT subscription',
+        description: 'Use researcher@example.com with ChatGPT',
+      },
+      {
+        value: 'included',
+        label: 'Included TeXRA access',
+        description: 'Use your TeXRA account',
+      },
+      {
+        value: 'personal',
+        label: 'Personal API keys',
+        description: 'Use keys configured on this computer',
+      },
+    ]);
+  });
+
+  it('groups resumable executions into one launcher row before recent agents', () => {
+    const history = [
+      historyEntry('aaaaaaaaaaaa', {
+        agent: 'review',
+        status: CLI_HISTORY_RESUMABLE_STATUS,
+      }),
+      historyEntry('bbbbbbbbbbbb', {
+        agent: 'orchestrator',
+        status: CLI_HISTORY_RESUMABLE_STATUS,
+      }),
+    ];
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history,
       toolUseAgents: [
         toolUseAgent('assistant'),
         toolUseAgent('review'),
@@ -297,14 +337,16 @@ describe('CLI orchestration items', () => {
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
-      'Resume aaaaaaaaaaaa',
-      'Resume bbbbbbbbbbbb',
+      'Resume',
       'Chat with review',
       'Chat with orchestrator',
       'Help',
     ]);
-    expect(items[1]?.description).toBe('review; resumable; no input');
-    expect(items[2]?.description).toBe('orchestrator; resumable; no input');
+    expect(items[1]?.description).toBe('2 resumable sessions');
+    expect(buildCliResumeItems(history).map((item) => item.label)).toEqual([
+      'aaaaaaaaaaaa',
+      'bbbbbbbbbbbb',
+    ]);
   });
 
   it('hides delegated child executions from startup recent rows', () => {
@@ -337,7 +379,7 @@ describe('CLI orchestration items', () => {
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
-      'Resume cccccccccccc',
+      'Resume',
       'Chat with orchestrator',
       'Help',
     ]);
@@ -366,37 +408,31 @@ describe('CLI orchestration items', () => {
   });
 
   it('uses the input file name in resume launcher rows when present', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [
-        historyEntry('aaaaaaaaaaaa', {
-          agent: 'review',
-          status: CLI_HISTORY_RESUMABLE_STATUS,
-          inputBasename: 'paper.tex',
-        }),
-      ],
-      toolUseAgents: [toolUseAgent('review')],
-    });
+    const items = buildCliResumeItems([
+      historyEntry('aaaaaaaaaaaa', {
+        agent: 'review',
+        status: CLI_HISTORY_RESUMABLE_STATUS,
+        inputBasename: 'paper.tex',
+      }),
+    ]);
 
-    expect(items[1]?.description).toBe('review; resumable; paper.tex');
+    expect(items[0]?.description).toBe(
+      '2026-05-21T00:00:00Z; review; resumable; paper.tex',
+    );
   });
 
   it('uses the history description for resume launcher rows without input files', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [
-        historyEntry('aaaaaaaaaaaa', {
-          agent: 'assistant',
-          status: CLI_HISTORY_RESUMABLE_STATUS,
-          inputBasename: '-',
-          description: 'Sketching inductive Lean proof of Nat.add_comm.',
-        }),
-      ],
-      toolUseAgents: [toolUseAgent('assistant')],
-    });
+    const items = buildCliResumeItems([
+      historyEntry('aaaaaaaaaaaa', {
+        agent: 'assistant',
+        status: CLI_HISTORY_RESUMABLE_STATUS,
+        inputBasename: '-',
+        description: 'Sketching inductive Lean proof of Nat.add_comm.',
+      }),
+    ]);
 
-    expect(items[1]?.description).toBe(
-      'assistant; resumable; Sketching inductive Lean proof of Nat.add_comm.',
+    expect(items[0]?.description).toBe(
+      '2026-05-21T00:00:00Z; assistant; resumable; Sketching inductive Lean proof of Nat.add_comm.',
     );
   });
 
@@ -613,7 +649,7 @@ describe('CLI orchestration items', () => {
       'Team physicist',
     ]);
     expect(
-      view.items.find((item) => item.label === 'Resume aaaaaaaaaaaa'),
+      view.items.find((item) => item.label === 'Resume'),
     ).not.toHaveProperty('disabled');
     expect(view.items.at(-1)).toMatchObject({ label: 'Help' });
     expect(view.items[0]?.description).toBe(
@@ -681,7 +717,7 @@ describe('CLI orchestration items', () => {
       'sonnet46T',
     ]);
     expect(relayView.modelItems.map((item) => item.description)).toEqual([
-      'relay: included',
+      'included: available',
     ]);
     expect(personalView.modelItems.map((item) => item.value)).toEqual([
       'deepseekT',
@@ -734,7 +770,7 @@ describe('CLI orchestration items', () => {
 
     expect(view.items[0]).toMatchObject({
       disabled: true,
-      description: 'Sign in with texra login for included relay models',
+      description: 'Sign in with texra login for included TeXRA models',
     });
   });
 });

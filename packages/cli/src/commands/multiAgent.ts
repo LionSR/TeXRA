@@ -159,8 +159,8 @@ export async function runMultiAgentPreset(
     // signed-out shell with no visible reason.
     writeTextStderr(
       cliMultiAgentPlanHasGaps(plan)
-        ? `Preset ${plan.preset.id} attempted to load relay-served agents before launch, but some team members are still unavailable. ${inspectAdvice}`
-        : `Preset ${plan.preset.id} loaded relay-served agents before launch. ${inspectAdvice}`,
+        ? `Preset ${plan.preset.id} attempted to load remote agents before launch, but some team members are still unavailable. ${inspectAdvice}`
+        : `Preset ${plan.preset.id} loaded remote agents before launch. ${inspectAdvice}`,
     );
   }
   if (plan.missingAgentOverride) {

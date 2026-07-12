@@ -335,7 +335,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
       finish({
         configured: true,
         declined: false,
-        summary: `Signed in as ${label}. Included relay access is active.`,
+        summary: `Signed in as ${label}. Included TeXRA access is active.`,
       });
     const onError = (message: string): void => {
       setError(message);

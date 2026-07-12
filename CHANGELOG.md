@@ -25,6 +25,34 @@ All notable changes to this project will be documented in this file.
   clamp no longer converts `medium` to `high`; current Grok reasoning models
   (grok-4.3, grok-4.5) support low/medium/high.
 
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Lean project commands wait for the Lean extension to become ready** — cache
+  fetching and other project actions no longer fail with a missing-command
+  error while the Lean client is still activating.
+- **Progress entries keep disclosure controls on the left** — assistant,
+  thinking, tool, and file entries use Web Awesome's native left-side
+  disclosure placement consistently.
+
+### CLI
+
+#### New Features
+
+- **Model access can be changed from the startup launcher** — choose a ChatGPT
+  subscription, included TeXRA access, or personal API keys before starting a
+  session. ChatGPT-only users can select all compatible OpenAI models without
+  configuring an OpenAI API key.
+- **Startup and settings lists are easier to scan** — resumable sessions now
+  live behind one Resume entry, and `/config` first groups settings by subject.
+
+#### Bug Fixes
+
+- **Model access choices apply to the launched session** — switching access at
+  startup overrides an earlier command-line mode, and selecting ChatGPT turns
+  off OpenRouter routing so requests use the chosen subscription.
+
 ## [0.39.3] - 2026-07-10
 
 ### Shared (all surfaces)

@@ -103,7 +103,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('uses clear compact labels for API access mode', () => {
-    expect(shortCliApiMode('included')).toBe('relay');
+    expect(shortCliApiMode('included')).toBe('included');
     expect(shortCliApiMode('personal')).toBe('personal');
   });
 
