@@ -970,6 +970,46 @@ describe('StreamSnapshotStore', () => {
     expect(await StorageFS.exists(dir)).toBe(false);
   });
 
+  it('serializes same-key writes so a slow first write finishes before a queued second write starts', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+
+    const order: string[] = [];
+    let releaseFirstWrite: () => void = () => {};
+    const firstWriteGate = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+    let writeCount = 0;
+    const writeAtomicSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockImplementation(async () => {
+        writeCount += 1;
+        if (writeCount === 1) {
+          order.push('first-start');
+          await firstWriteGate;
+          order.push('first-end');
+        } else {
+          order.push('second-start');
+        }
+      });
+
+    // Both land on the same `${stream}::workPlan` write lock.
+    store.setTodos(STREAM, [TODO]);
+    store.setPlan(STREAM, PLAN);
+
+    // Let the first queued write actually begin before releasing it, so the
+    // assertion below reflects genuine serialization, not incidental timing.
+    await vi.waitFor(() => {
+      expect(order).toEqual(['first-start']);
+    });
+
+    releaseFirstWrite();
+    await store.flush();
+
+    expect(order).toEqual(['first-start', 'first-end', 'second-start']);
+    writeAtomicSpy.mockRestore();
+  });
+
   it('deleteStream refuses reserved stream ids before sidecar directory removal', async () => {
     const sentinel = path.join(STREAM_DATA_DIR, 'sentinel.json');
     await StorageFS.ensureDir(STREAM_DATA_DIR);
