@@ -13,11 +13,15 @@ import {
   untrackActiveAgentExecution,
 } from '@agent/runtime/SessionHandle';
 
+// Local imports - constants
+import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
+
 // Local imports - shared schemas
 import {
   STREAM_PHASE,
   type ExecutionId,
   type RestoredStreamSnapshot,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -159,6 +163,28 @@ export class DesktopExecutionRebinder {
       disposeBinding();
       if (staleHandle) untrackActiveAgentExecution(staleHandle);
     };
+    // Drop only the per-handle mirrors (trace, terminal, mirrored registry
+    // entry), keeping the binding and its owner-status mirror alive.
+    const releaseHandleMirror = (): void => {
+      const staleHandle = currentHandle;
+      currentHandle = undefined;
+      detachTrace?.();
+      detachTrace = undefined;
+      detachTerminalMirror?.();
+      detachTerminalMirror = undefined;
+      if (staleHandle) untrackActiveAgentExecution(staleHandle);
+    };
+    const mirrorTerminalStatus = (status: StreamPhase): void => {
+      if (
+        !this.targetSession.status.transitionToTerminal(streamId, status, {
+          events: this.targetSession.events,
+        })
+      ) {
+        this.logger.warn('Failed to mirror rebound terminal status', {
+          data: { streamId, status },
+        });
+      }
+    };
     const seedStatus = (handle: AgentExecutionHandle): void => {
       const status = ownerSession.status.get(streamId);
       if (!status) return;
@@ -199,7 +225,19 @@ export class DesktopExecutionRebinder {
         !(handle instanceof AgentExecutionHandle) ||
         handle.childStreamId !== streamId
       ) {
-        releaseCurrent();
+        // The owner untracks BEFORE its terminal stream-status transition
+        // lands (`finalizeRunTerminal` untracks first), and a child stream's
+        // finalization never emits a `result` trace event, so tearing the
+        // whole binding down here would strand the mirrored stream at
+        // RUNNING/WAITING (#8257). Release the handle mirror only; the
+        // owner-status mirror below stays attached until the terminal phase
+        // arrives (or a replacement handle rebinds).
+        releaseHandleMirror();
+        const ownerStatus = ownerSession.status.get(streamId);
+        if (isTerminalOutcomePhase(ownerStatus)) {
+          mirrorTerminalStatus(ownerStatus);
+          disposeBinding();
+        }
         return;
       }
       if (handle === currentHandle) return;
@@ -213,17 +251,29 @@ export class DesktopExecutionRebinder {
         : undefined;
       detachTerminalMirror = handle.trace?.subscribe((event) => {
         if (event.type !== 'result' || event.streamId !== streamId) return;
-        if (
-          !this.targetSession.status.transitionToTerminal(
-            streamId,
-            event.outcome,
-          )
-        ) {
-          this.logger.warn('Failed to mirror rebound terminal status', {
-            data: { streamId, status: event.outcome },
+        mirrorTerminalStatus(event.outcome);
+      });
+      // Launch facts (run.config, child description) fired before this
+      // binding subscribed to the trace; replay them so the rebound stream
+      // carries its real task state and label, not defaults (#8258).
+      const facts = handle.initialRunFacts;
+      if (facts) {
+        this.targetSession.publishRunEvent(streamId, {
+          type: 'run.config',
+          streamId,
+          executionId,
+          config: facts.config,
+        });
+        if (facts.description !== undefined) {
+          this.targetSession.events.emit({
+            scope: 'session',
+            event: {
+              type: 'updateStreamDescription',
+              payload: { streamId, description: facts.description },
+            },
           });
         }
-      });
+      }
       seedStatus(handle);
       if (staleHandle) untrackActiveAgentExecution(staleHandle);
     };
@@ -255,7 +305,13 @@ export class DesktopExecutionRebinder {
           streamId,
           change.status,
           change.cause,
-          change.substate ? { substate: change.substate } : {},
+          {
+            // Publish the mirror as an `updateStreamStatus` session fact:
+            // without `events`, the transition only updates the in-memory
+            // status map and never reaches the UI or snapshot store (#8256).
+            events: this.targetSession.events,
+            ...(change.substate ? { substate: change.substate } : {}),
+          },
         ) &&
         this.targetSession.status.get(streamId) !== change.status
       ) {
@@ -266,6 +322,11 @@ export class DesktopExecutionRebinder {
             current: this.targetSession.status.get(streamId),
           },
         });
+      }
+      // Owner already untracked the handle (see bindOwnerHandle): this
+      // terminal transition is the binding's last mirrored fact.
+      if (!currentHandle && isTerminalOutcomePhase(change.status)) {
+        disposeBinding();
       }
     });
     const ownerDetach = ownerSession.executions.observeHandle(
