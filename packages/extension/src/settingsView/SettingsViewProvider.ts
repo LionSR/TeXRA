@@ -7,6 +7,10 @@ import {
   BundledViewContentProvider,
 } from '@common/webview';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
+import {
+  isAgentCatalogAuthRefreshDeferred,
+  runAfterAgentCatalogAuthRefresh,
+} from '@frontend/auth/agentCatalogRefreshScope';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
 
@@ -38,6 +42,12 @@ export class SettingsViewProvider
     // Listen for auth state changes to refresh all data
     onTexraAuthSessionsChanged(context, () => {
       if (this._view) {
+        if (isAgentCatalogAuthRefreshDeferred()) {
+          runAfterAgentCatalogAuthRefresh(() =>
+            this.messageHandler.sendAllData(this._view!.webview),
+          );
+          return;
+        }
         void this.messageHandler.sendAllData(this._view.webview);
       }
     });
