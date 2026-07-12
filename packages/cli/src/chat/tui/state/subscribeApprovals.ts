@@ -49,7 +49,7 @@ import {
 } from '@model/apiProviders';
 import { isUpstreamCreditDepletedError } from '@shared/schemas';
 import {
-  proposalApprovalState,
+  proposalApprovals,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
@@ -489,7 +489,7 @@ async function requestProposalInteraction(
     decision.bypass === 'superYolo' &&
     request.streamId
   ) {
-    proposalApprovalState.setBypass(request.streamId, true, host);
+    proposalApprovals().setBypass(request.streamId, true, host);
     setTuiApprovalBypassState({
       streamId: request.streamId,
       kind: 'superYolo',
