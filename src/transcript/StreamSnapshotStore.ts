@@ -17,6 +17,7 @@
  * `read()` returns durable display state only; hosts clamp liveness on hydrate.
  */
 
+import { Mutex } from 'async-mutex';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -234,7 +235,7 @@ function executionIdFromMeta(
  * field from.
  *
  * `streamVersions` (must survive eviction to keep guarding in-flight seed
- * races) and `pendingWrites` (keyed by the compound `${stream}::${key}`, not
+ * races) and `writeMutexes` (keyed by the compound `${stream}::${key}`, not
  * a bare stream id) stay as their own maps on the store — the same two
  * exclusions #7892 already carved out of `perStreamStores()`.
  */
@@ -281,8 +282,8 @@ interface StreamRecord {
 export class StreamSnapshotStore {
   private readonly records = new Map<StreamTabId, StreamRecord>();
 
-  // -- Per (stream, category) serialized write chains -----------------------
-  private readonly pendingWrites = new Map<string, Promise<void>>();
+  // -- Per (stream, category) serialized write locks -------------------------
+  private readonly writeMutexes = new Map<string, Mutex>();
 
   private readonly streamVersions = new Map<StreamTabId, number>();
   private hasAuthoritativeStreamSet = false;
@@ -802,6 +803,17 @@ export class StreamSnapshotStore {
    * the shared `reset`-aware overlay) rather than the plain deferred
    * `mutate()` path, so a clear and an update racing on the same unseeded
    * stream replay in call order instead of the clear always landing last.
+   *
+   * `existed` checks `missingOutputs` content specifically, not merely
+   * whether the stream has a record: every record defaults `missingOutputs`
+   * to `{}` on creation, and a record gets created for read-only reasons
+   * too (`kv()` — used by `read()`, `readPersistedExecutionId()`, and the
+   * post-`evict()` `kv()` call in `deleteStream()` — as well as any other
+   * accumulator's own lazy creation, e.g. `setTodos`). Gating on record
+   * presence alone would treat those as "missing outputs existed" and write
+   * a spurious `missingOutputs.json`, resurrecting a `streamData/{id}/`
+   * directory `listPersistedStreams()` would then report for a stream that
+   * was never actually tracking missing outputs (or was just deleted).
    */
   clearMissingOutputs(stream: StreamTabId): void {
     let existed = false;
@@ -814,7 +826,8 @@ export class StreamSnapshotStore {
       },
       mergeMissingOutputsOverlay,
       () => {
-        existed = this.records.has(stream);
+        const record = this.records.get(stream);
+        existed = !!record && Object.keys(record.missingOutputs).length > 0;
         this.getOrCreateRecord(stream).missingOutputs = {};
       },
       () => {
@@ -831,15 +844,15 @@ export class StreamSnapshotStore {
   evict(stream: StreamTabId): void {
     this.bumpStreamVersion(stream);
     this.records.delete(stream);
-    for (const key of [...this.pendingWrites.keys()]) {
-      if (key.startsWith(`${stream}::`)) this.pendingWrites.delete(key);
+    for (const key of [...this.writeMutexes.keys()]) {
+      if (key.startsWith(`${stream}::`)) this.writeMutexes.delete(key);
     }
   }
 
   evictAll(): void {
     for (const stream of this.records.keys()) this.bumpStreamVersion(stream);
     this.records.clear();
-    this.pendingWrites.clear();
+    this.writeMutexes.clear();
   }
 
   /** Delete a stream's on-disk sidecar directory + in-memory state. */
@@ -856,7 +869,9 @@ export class StreamSnapshotStore {
 
   /** Delete the entire `streamData/` tree + all in-memory state. */
   async deleteAll(): Promise<void> {
-    const pending = [...this.pendingWrites.values()];
+    const pending = [...this.writeMutexes.values()].map((mutex) =>
+      mutex.waitForUnlock(),
+    );
     this.evictAll();
     await Promise.all(pending);
     await new KVStore(STREAM_DATA_DIR).deleteDir();
@@ -1114,15 +1129,16 @@ export class StreamSnapshotStore {
   private write(stream: StreamTabId, key: string, value: unknown): void {
     const chainKey = `${stream}::${key}`;
     const version = this.streamVersion(stream);
-    const prev = this.pendingWrites.get(chainKey) ?? Promise.resolve();
-    // Best-effort: a failed sidecar write must not break the chain, but it is
+    const mutex = this.writeMutexes.get(chainKey) ?? new Mutex();
+    this.writeMutexes.set(chainKey, mutex);
+    // Best-effort: a failed sidecar write must not break the lock, but it is
     // logged so silent data loss (disk full, permission denied) is diagnosable.
-    const next = prev
-      .then(() => {
+    void mutex
+      .runExclusive(() => {
         // Eviction guard: `evict()`/`deleteStream()` drop this chain key. A
         // write queued before that must NOT fire afterward, or a late `kv()`
         // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
-        if (!this.pendingWrites.has(chainKey)) return;
+        if (!this.writeMutexes.has(chainKey)) return;
         if (this.streamVersion(stream) !== version) return;
         return this.kv(stream).write(key, value);
       })
@@ -1133,25 +1149,24 @@ export class StreamSnapshotStore {
           { data: err },
         ),
       );
-    this.pendingWrites.set(chainKey, next);
   }
 
   private async flushWritesForStream(stream: StreamTabId): Promise<void> {
     const prefix = `${stream}::`;
     await Promise.all(
-      [...this.pendingWrites]
+      [...this.writeMutexes]
         .filter(([key]) => key.startsWith(prefix))
-        .map(([, pending]) => pending),
+        .map(([, mutex]) => mutex.waitForUnlock()),
     );
   }
 
   private cancelPendingWritesForStream(stream: StreamTabId): Promise<void>[] {
     const prefix = `${stream}::`;
     const pending: Promise<void>[] = [];
-    for (const [key, write] of this.pendingWrites) {
+    for (const [key, mutex] of this.writeMutexes) {
       if (!key.startsWith(prefix)) continue;
-      pending.push(write);
-      this.pendingWrites.delete(key);
+      pending.push(mutex.waitForUnlock());
+      this.writeMutexes.delete(key);
     }
     return pending;
   }
@@ -1163,7 +1178,9 @@ export class StreamSnapshotStore {
         .map((record) => record.seedChain)
         .filter((chain): chain is Promise<void> => chain !== undefined),
     );
-    await Promise.all(this.pendingWrites.values());
+    await Promise.all(
+      [...this.writeMutexes.values()].map((mutex) => mutex.waitForUnlock()),
+    );
   }
 
   // ==========================================================================
@@ -1367,6 +1384,13 @@ export class StreamSnapshotStore {
     const runDescriptorOverlay =
       metaOverlay !== undefined ? record.runDescriptor : undefined;
     const usageOverlayToReplay = new Map(record.usageOverlay);
+    // Seeded with `data.legacyKeys` unconditionally (unlike the overlay
+    // additions below, which are gated on that overlay actually being
+    // present): a legacy key with no corresponding overlay data still gets
+    // an empty-object write in `writeMergedSidecars`. That's a broader net
+    // than the old per-field `has()` guards, but harmless — disk readers
+    // (`parsePersistedRoundIndexed` and friends) treat an absent sidecar and
+    // an empty-object one identically.
     const sidecarsToWrite = new Set<string>(data.legacyKeys);
 
     record.outputFiles = data.outputFiles;
@@ -1389,7 +1413,9 @@ export class StreamSnapshotStore {
       record.meta = undefined;
     }
 
-    // Re-read fresh after the hydration await above: a concurrent eager
+    // Re-fetch the record after the hydration await above (same object
+    // reference as `record` — records are mutated in place, not replaced —
+    // so this doesn't read from a different source): a concurrent eager
     // mutation may have landed on this stream's overlay fields while
     // hydration was in flight (the exact race #8014 fixed), and it must not
     // be clobbered by what was read before that await.

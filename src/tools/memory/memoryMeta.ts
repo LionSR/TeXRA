@@ -12,6 +12,7 @@ import * as yaml from 'yaml';
 import { z } from 'zod';
 
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 
@@ -43,15 +44,6 @@ export type MemoryFileMeta = z.infer<typeof MemoryFileMetaSchema>;
 
 const FRONTMATTER_FENCE = '---';
 
-/** Parse a frontmatter YAML block, returning undefined on malformed YAML. */
-function parseYamlBlock(block: string): unknown {
-  try {
-    return yaml.parse(block);
-  } catch {
-    return undefined;
-  }
-}
-
 // ── Parsing ────────────────────────────────────────────────────────
 
 /**
@@ -76,13 +68,13 @@ export function parseFrontmatter(raw: string): {
   }
 
   const block = raw.slice(FRONTMATTER_FENCE.length + 1, endIdx);
-  const parsed = MemoryFileMetaSchema.safeParse(parseYamlBlock(block));
-  if (!parsed.success) {
+  const parsed = parseYamlWith(block, MemoryFileMetaSchema);
+  if (parsed.isErr()) {
     return { meta: null, content: raw };
   }
 
   return {
-    meta: parsed.data,
+    meta: parsed.value,
     content: raw.slice(endIdx + FRONTMATTER_FENCE.length + 2), // skip "\n---\n"
   };
 }
