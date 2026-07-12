@@ -57,7 +57,6 @@ import {
   createRunContext,
   withRunContext,
   type CreateLaunchRunContextOptions,
-  type CreateRunContextOptions,
 } from './RunContext';
 import { createRunScope, type RunScope } from './RunScope';
 import {
@@ -115,37 +114,6 @@ const STATUS_MESSAGES: Record<string, string> = {
   [STREAM_PHASE.FAILED]: 'failed',
 };
 
-/**
- * Project an {@link AgentLaunchContext} onto the subset of fields that belong
- * in the ambient {@link RunContext}.
- *
- * This is the single owner of the launch-context → ambient-context mapping, so
- * new per-run flags (e.g. `stopAfterCycle`, `approvalPromptsUnavailable`,
- * `runtimeUnavailableTools`) live in one place and are never silently dropped.
- * Run identity (`streamId`/`executionId`/`agentName`/`workingDirectory`)
- * travels via `ctx.runScope` unchanged; only `AgentConfig.model` is renamed
- * here, to `RunContext.model`, reading through `getModel` so tools observe
- * model switches applied to `AgentLaunchContext.config.model` during an
- * interactive session.
- */
-function agentContextToRunContext(
-  ctx: AgentLaunchContext,
-  options: Pick<
-    CreateLaunchRunContextOptions,
-    | 'delegationDepth'
-    | 'approvalPromptsUnavailable'
-    | 'runtimeUnavailableTools'
-    | 'stopAfterCycle'
-  > = {},
-): CreateRunContextOptions {
-  return {
-    runScope: ctx.runScope,
-    modelSource: 'live' as const,
-    getModel: () => ctx.config.model,
-    ...options,
-  };
-}
-
 export async function withExecutionRunContext<T>(
   ctx: AgentLaunchContext,
   options: Pick<
@@ -157,8 +125,21 @@ export async function withExecutionRunContext<T>(
   >,
   fn: () => T | Promise<T>,
 ): Promise<T> {
+  // Single owner of the launch-context → ambient-context mapping, so new
+  // per-run flags (e.g. `stopAfterCycle`, `approvalPromptsUnavailable`,
+  // `runtimeUnavailableTools`) live in one place and are never silently
+  // dropped. Run identity (`streamId`/`executionId`/`agentName`/
+  // `workingDirectory`) travels via `ctx.runScope` unchanged; only
+  // `AgentConfig.model` is renamed here, to `RunContext.model`, reading through
+  // `getModel` so tools observe model switches applied to
+  // `AgentLaunchContext.config.model` during an interactive session.
   return await withRunContext(
-    createRunContext(agentContextToRunContext(ctx, options)),
+    createRunContext({
+      runScope: ctx.runScope,
+      modelSource: 'live' as const,
+      getModel: () => ctx.config.model,
+      ...options,
+    }),
     fn,
   );
 }
