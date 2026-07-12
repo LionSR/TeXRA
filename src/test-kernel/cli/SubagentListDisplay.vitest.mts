@@ -28,6 +28,11 @@ describe('CLI SubagentList display model', () => {
     // A user stop is not an error: neutral (gray), not red, matching the
     // progress view / webview and the canonical RUN_OUTCOME (cancelled ≠ failed).
     expect(childStatusColor('stopped')).toBe('gray');
+    // The canonical `cancelled` phase (what stream slices actually carry —
+    // roster summaries alone use the legacy `stopped` spelling) must get the
+    // same neutral color, distinct from completed (green) and failed (red).
+    expect(childStatusColor(STREAM_PHASE.CANCELLED)).toBe('gray');
+    expect(childStatusColor(STREAM_PHASE.COMPLETED)).toBe('green');
   });
 
   it('uses a compact child row budget instead of clipping nested sections', () => {
