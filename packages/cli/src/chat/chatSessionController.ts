@@ -68,7 +68,7 @@ import {
   chatTuiCanStartRootRun,
   markChatTuiRunCompleted,
   markChatTuiRunPending,
-  publishChatTuiRootRunStartAvailability,
+  publishChatTuiRunState,
   tryClaimRootRunSlot,
   type TuiSession,
 } from './tui/state/sessionRunState';
@@ -301,6 +301,7 @@ export function createChatSessionController(
           runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
           onStreamResolved: (resolvedStreamId) => {
             session.streamId = resolvedStreamId;
+            publishChatTuiRunState(session);
             rootStreamId.set(resolvedStreamId);
             moveLocalTranscriptToStream(resolvedStreamId);
             activeStreamId.set(resolvedStreamId);
@@ -374,6 +375,7 @@ export function createChatSessionController(
       followUpQueue.clear();
       session.streamId = resolution.streamId;
       session.executionId = resolution.snapshot.executionId;
+      publishChatTuiRunState(session);
       rootStreamId.set(resolution.streamId);
 
       const currentModel = resolution.config.model;
@@ -508,7 +510,7 @@ export function createChatSessionController(
         activeStreamId.set(streamId);
         session.runCompleted = false;
         session.runExitCode = CliExitCode.Success;
-        publishChatTuiRootRunStartAvailability(session);
+        publishChatTuiRunState(session);
 
         let resumedToWaiting = false;
         const resumed = await setCliHelperModel(currentModel).then(() =>
