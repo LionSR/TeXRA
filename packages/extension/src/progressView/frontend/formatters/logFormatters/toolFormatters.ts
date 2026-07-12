@@ -216,6 +216,5 @@ export function formatToolUseTemplate(
     label: titleText,
     labelClass: 'tool-use-title',
     extraContent,
-    summarySlot: true,
   })}${bannerContentTemplate}</wa-details>`;
 }
