@@ -239,6 +239,13 @@ export const streamTabStyles = css`
     flex-shrink: 0;
   }
 
+  .nested-stream-icon {
+    font-size: var(--font-size-xs);
+    opacity: var(--opacity-faint);
+    flex-shrink: 0;
+    margin-right: var(--wa-space-3xs);
+  }
+
   .tab-delete::part(base) {
     padding: 0;
     border-radius: var(--border-radius-small);

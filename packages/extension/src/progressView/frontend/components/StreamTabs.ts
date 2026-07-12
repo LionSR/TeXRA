@@ -182,9 +182,16 @@ export class StreamTab extends LitElement {
         >
           <div class="tab-header">
             <span class="tab-title"
-              >${stream.parentStreamId ? '↳ ' : ''}${
-                stream.label || stream.name
-              }</span
+              >${
+                stream.parentStreamId
+                  ? html`<wa-icon
+                      library=${TEXRA_ICON_LIBRARY}
+                      name="chevron-right"
+                      class="nested-stream-icon"
+                      aria-hidden="true"
+                    ></wa-icon>`
+                  : nothing
+              }${stream.label || stream.name}</span
             >
             ${
               this.childCount > 0 && this.compact
