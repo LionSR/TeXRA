@@ -3317,51 +3317,111 @@ describe('DesktopProgressBridge', () => {
   // reattaching the run to the new window — so it kept running headless with
   // no rail entry, no live progress, no cancel, and a stale on-disk snapshot.
   describe('window recreation rebind (#8148)', () => {
-    it('reattaches a still-active execution to the newly created window instead of stranding it', async () => {
-      const streamId = 'rebound-stream' as StreamTabId;
-      const executionId = 'ec00cc' as ExecutionId;
+    async function createReboundOwner({
+      streamId,
+      executionId,
+      agentName = 'proofreader',
+      category = AgentCategory.Workflow,
+      messages = [],
+    }: {
+      streamId: StreamTabId;
+      executionId: ExecutionId;
+      agentName?: string;
+      category?: AgentCategory;
+      messages?: unknown[];
+    }) {
       let activeExecutionIds: readonly string[] = [];
       const { bridgeModule } = await loadBridgeModule({
         activeExecutionIds: () => activeExecutionIds,
       });
-      const { AgentExecutionHandle } =
+      const { AgentExecutionHandle, ProcessExecutionHandle } =
         await import('@agent/runtime/executionRegistry');
       const { noopAgentRuntimeHost } =
         await import('@agent/runtime/AgentRuntimeHost');
-
-      // Window A launches a real, still-running execution.
-      const messagesA: unknown[] = [];
       const bridgeA = new bridgeModule.DesktopProgressBridge((message) => {
-        messagesA.push(message);
+        messages.push(message);
       }) as unknown as TestableBridge & { session: SessionHandle };
       await settleProgressEvents();
-
-      const trace = makeFakeTrace();
-      const handle = new AgentExecutionHandle(
-        executionId,
-        streamId,
-        streamId,
-        'proofreader',
-        AgentCategory.Workflow,
-        noopAgentRuntimeHost,
-        trace as unknown as ConstructorParameters<
-          typeof AgentExecutionHandle
-        >[6],
-      );
+      const createHandle = (
+        options: {
+          executionId?: ExecutionId;
+          parentStreamId?: StreamTabId;
+          childStreamId?: StreamTabId;
+          agentName?: string;
+          category?: AgentCategory;
+        } = {},
+      ) => {
+        const nextTrace = makeFakeTrace();
+        const nextHandle = new AgentExecutionHandle(
+          options.executionId ?? executionId,
+          options.parentStreamId ?? streamId,
+          options.childStreamId ?? streamId,
+          options.agentName ?? agentName,
+          options.category ?? category,
+          noopAgentRuntimeHost,
+          nextTrace as unknown as ConstructorParameters<
+            typeof AgentExecutionHandle
+          >[6],
+        );
+        return { handle: nextHandle, trace: nextTrace };
+      };
+      const { handle, trace } = createHandle();
       bridgeA.session.executions.trackAgentExecution(handle, {
         status: STREAM_PHASE.RUNNING,
       });
-      activeExecutionIds = [executionId];
+      const close = (): void => {
+        activeExecutionIds = [executionId];
+        bridgeA.dispose();
+      };
 
-      // Window A closes. The bridge tears down its own UI consumers but
-      // keeps the execution registered (`keepActiveExecutions`) so
-      // process-wide guards still see it running headless.
-      bridgeA.dispose();
+      const reopen = (
+        lastKnownStatus: StreamPhase,
+        reopenedMessages: unknown[] = [],
+      ) => {
+        close();
+        const streamSnapshotStore = createStreamSnapshotStore([
+          restoredSnapshot({ streamId, executionId, lastKnownStatus }),
+        ]);
+        const bridgeB = new bridgeModule.DesktopProgressBridge(
+          (message) => {
+            reopenedMessages.push(message);
+          },
+          { streamSnapshotStore },
+        ) as unknown as TestableBridge & {
+          session: SessionHandle;
+        };
+        return { bridgeB, streamSnapshotStore };
+      };
 
-      // The run keeps emitting while no window exists at all -- this must
-      // not throw, and (correctly) has no live subscriber yet.
+      return {
+        ProcessExecutionHandle,
+        bridgeA,
+        close,
+        createHandle,
+        handle,
+        noopAgentRuntimeHost,
+        reopen,
+        trace,
+      };
+    }
+
+    it('reattaches a still-active execution to the newly created window instead of stranding it', async () => {
+      const streamId = 'rebound-stream' as StreamTabId;
+      const executionId = 'ec00cc' as ExecutionId;
+      // Window A launches a real, still-running execution.
+      const messagesA: unknown[] = [];
+      const owner = await createReboundOwner({
+        streamId,
+        executionId,
+        messages: messagesA,
+      });
+
+      // Closing the window retains its active execution for global guards.
+      owner.close();
+
+      // Headless progress has no live subscriber but must remain safe.
       expect(() =>
-        trace.emit({
+        owner.trace.emit({
           type: 'status',
           streamId,
           phase: STREAM_PHASE.WAITING,
@@ -3369,35 +3429,23 @@ describe('DesktopProgressBridge', () => {
         }),
       ).not.toThrow();
 
-      // Window B reopens: a brand-new bridge/session, hydrating the ghost
-      // rail entry the closed window last wrote to disk.
+      // Window B reopens from the persisted ghost entry.
       const messagesB: unknown[] = [];
-      const streamSnapshotStoreB = createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId,
-          executionId,
-          lastKnownStatus: STREAM_PHASE.RUNNING,
-        }),
-      ]);
-      const bridgeB = new bridgeModule.DesktopProgressBridge(
-        (message) => {
-          messagesB.push(message);
-        },
-        { streamSnapshotStore: streamSnapshotStoreB },
-      ) as unknown as TestableBridge & { session: SessionHandle };
+      const { bridgeB, streamSnapshotStore: streamSnapshotStoreB } =
+        owner.reopen(STREAM_PHASE.RUNNING, messagesB);
 
       try {
         await (bridgeB as unknown as { restartRepair: Promise<void> })
           .restartRepair;
 
-        // The still-active execution is now owned by window B's session --
-        // a rail entry, and a target `stopStream`/inspect can find.
-        expect(bridgeB.session.executions.getHandle(executionId)).toBe(handle);
+        // Window B can inspect and stop the still-active execution.
+        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+          owner.handle,
+        );
         expect(
           bridgeB.session.executions.getAgentHandleByStream(streamId),
-        ).toBe(handle);
-        // Restored ghosts and the rebound live stream cannot coexist as two
-        // entries for the same stream.
+        ).toBe(owner.handle);
+        // The live binding replaces, rather than duplicates, the ghost.
         expect(
           (
             bridgeB as unknown as {
@@ -3406,10 +3454,8 @@ describe('DesktopProgressBridge', () => {
           ).sessionProgress.hasRestoredStream(streamId),
         ).toBe(false);
 
-        // Subsequent live progress reaches window B exactly once, and the
-        // on-disk snapshot is refreshed even though nothing was watching
-        // between windows.
-        trace.emit({
+        // Later progress reaches B and refreshes its snapshot.
+        owner.trace.emit({
           type: 'status',
           streamId,
           phase: STREAM_PHASE.WAITING,
@@ -3432,12 +3478,7 @@ describe('DesktopProgressBridge', () => {
           ),
         ).toBe(false);
 
-        // Terminal completion untracks the handle from window B's session --
-        // no execution stranded as "still active" once it actually finishes.
-        // Mirrors the real run lifecycle: the trace 'result' event and
-        // `handle.settleResult` are both fired by the run's own finalize
-        // step (settling `handle.result` is what our rebind's cleanup
-        // awaits to untrack).
+        // Mirror the real finalize order: result, settlement, then untrack.
         const resultEvent = {
           type: 'result' as const,
           outcome: RUN_OUTCOME.COMPLETED,
@@ -3447,23 +3488,21 @@ describe('DesktopProgressBridge', () => {
           category: 'workflow' as const,
           isSubagent: false,
         };
-        trace.emit(resultEvent);
-        handle.settleResult(
-          resultEvent as unknown as Parameters<typeof handle.settleResult>[0],
+        owner.trace.emit(resultEvent);
+        owner.handle.settleResult(
+          resultEvent as unknown as Parameters<
+            typeof owner.handle.settleResult
+          >[0],
         );
-        await handle.result;
+        owner.bridgeA.session.executions.untrack(executionId);
+        await owner.handle.result;
         await settleProgressEvents();
         expect(
           bridgeB.session.executions.getHandle(executionId),
         ).toBeUndefined();
-        // Codex P1 (#8207 review): releasing the handle must not stop at
-        // window B's own registry. Window A's session was retained post-
-        // dispose specifically so `keepActiveExecutions` guards keep seeing
-        // this execution until it truly settles -- if only window B's
-        // registry is cleared, window A's registry never goes idle and that
-        // session leaks in the cross-session `liveSessions` set forever.
+        // Both registries must go idle; otherwise retained window A leaks.
         expect(
-          bridgeA.session.executions.getHandle(executionId),
+          owner.bridgeA.session.executions.getHandle(executionId),
         ).toBeUndefined();
       } finally {
         bridgeB.dispose();
@@ -3473,72 +3512,380 @@ describe('DesktopProgressBridge', () => {
     it('seeds the rebound stream with the live owning session status, not a stale on-disk snapshot (codex P2)', async () => {
       const streamId = 'rebound-stream-2' as StreamTabId;
       const executionId = 'ec00dd' as ExecutionId;
-      let activeExecutionIds: readonly string[] = [];
-      const { bridgeModule } = await loadBridgeModule({
-        activeExecutionIds: () => activeExecutionIds,
-      });
-      const { AgentExecutionHandle } =
-        await import('@agent/runtime/executionRegistry');
-      const { noopAgentRuntimeHost } =
-        await import('@agent/runtime/AgentRuntimeHost');
-
-      const bridgeA = new bridgeModule.DesktopProgressBridge(
-        () => {},
-      ) as unknown as TestableBridge & { session: SessionHandle };
-      await settleProgressEvents();
-
-      const trace = makeFakeTrace();
-      const handle = new AgentExecutionHandle(
+      const owner = await createReboundOwner({
+        streamId,
         executionId,
-        streamId,
-        streamId,
-        'proofreader',
-        AgentCategory.Workflow,
-        noopAgentRuntimeHost,
-        trace as unknown as ConstructorParameters<
-          typeof AgentExecutionHandle
-        >[6],
-      );
-      bridgeA.session.executions.trackAgentExecution(handle, {
-        status: STREAM_PHASE.RUNNING,
       });
-      activeExecutionIds = [executionId];
-      bridgeA.dispose();
+      owner.close();
 
-      // The run transitions to WAITING while headless. This mirrors the real
-      // lifecycle path (`ToolUseWaitNode` calling `streamStatus.transitionToWaiting`
-      // directly on the owning session, independent of whether any window is
-      // subscribed) -- window A's own `session.status` stays live and correct
-      // even with no bridge attached, unlike the on-disk snapshot which
-      // nothing persists to while no window exists (#8148).
+      // Owner status stays live while the persisted snapshot remains stale.
       expect(
-        bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
-          trace: trace as unknown as AgentTrace,
+        owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
+          trace: owner.trace as unknown as AgentTrace,
         }),
       ).toBe(true);
-      expect(bridgeA.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+      expect(owner.bridgeA.session.status.get(streamId)).toBe(
+        STREAM_PHASE.WAITING,
+      );
 
-      // Window B reopens with a STALE ghost snapshot still claiming RUNNING
-      // (nothing persisted the WAITING transition above to disk).
-      const streamSnapshotStoreB = createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId,
-          executionId,
-          lastKnownStatus: STREAM_PHASE.RUNNING,
-        }),
-      ]);
-      const bridgeB = new bridgeModule.DesktopProgressBridge(() => {}, {
-        streamSnapshotStore: streamSnapshotStoreB,
-      }) as unknown as TestableBridge & { session: SessionHandle };
+      // Window B's stale ghost still claims RUNNING.
+      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING);
 
       try {
         await (bridgeB as unknown as { restartRepair: Promise<void> })
           .restartRepair;
 
-        expect(bridgeB.session.executions.getHandle(executionId)).toBe(handle);
-        // Must reflect the live WAITING status from window A's session, not
-        // the stale RUNNING the ghost snapshot hydrated onto window B.
+        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+          owner.handle,
+        );
+        // The authoritative owner status wins over the ghost snapshot.
         expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('forwards the owner session host interactions to the reopened window (#8227)', async () => {
+      const streamId = 'rebound-stream-3' as StreamTabId;
+      const executionId = 'ec00ee' as ExecutionId;
+      const messagesA: unknown[] = [];
+      const owner = await createReboundOwner({
+        streamId,
+        executionId,
+        messages: messagesA,
+      });
+      const messagesB: unknown[] = [];
+      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING, messagesB);
+
+      try {
+        await (bridgeB as unknown as { restartRepair: Promise<void> })
+          .restartRepair;
+
+        // The retained run still resolves interactions through window A.
+        const planPromise =
+          owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
+            approvalId: 'plan-rebound',
+            streamId,
+            plan: { objective: 'Prove approvals reach the new window.' },
+            goalEnabled: false,
+          });
+        expect(planPromise).toBeDefined();
+
+        // The forwarded prompt surfaces only in window B.
+        await vi.waitFor(() => {
+          expect(
+            progressMessages(
+              messagesB,
+              PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+            ),
+          ).toContainEqual(
+            expect.objectContaining({
+              action: 'show',
+              permission: expect.objectContaining({
+                kind: PERMISSION_KIND.PLAN_APPROVAL,
+                data: expect.objectContaining({ approvalId: 'plan-rebound' }),
+              }),
+            }),
+          );
+        });
+        expect(
+          progressMessages(messagesA, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+        ).toEqual([]);
+
+        // Window B resolves the retained run's pending interaction.
+        expect(
+          bridgeB.session.interactions.resolve('plan-rebound', {
+            kind: 'plan',
+            action: 'approve',
+          }),
+        ).toBe(true);
+        await expect(planPromise).resolves.toEqual({ action: 'approve' });
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('rebinds still-active child subagent and process handles so stops cascade from the new window (#8228)', async () => {
+      const streamId = 'rebound-stream-4' as StreamTabId;
+      const childStreamId = 'rebound-child-4' as StreamTabId;
+      const executionId = 'ec00f0' as ExecutionId;
+      const childExecutionId = 'ec00f1' as ExecutionId;
+      const processExecutionId = 'ec00f2' as ExecutionId;
+      const owner = await createReboundOwner({
+        streamId,
+        executionId,
+      });
+      const { ProcessExecutionHandle } = owner;
+      const rootInterrupt = vi.fn();
+      owner.handle.attachInterruptHandler({ interrupt: rootInterrupt });
+
+      // Child handles have no persisted ghosts; only the owner knows them.
+      const { handle: childHandle } = owner.createHandle({
+        executionId: childExecutionId,
+        childStreamId,
+        agentName: 'searcher',
+        category: AgentCategory.ToolUse,
+      });
+      const killProcess = vi.fn(() => true);
+      const processHandle = new ProcessExecutionHandle(
+        processExecutionId,
+        streamId,
+        'bash',
+        killProcess,
+        owner.noopAgentRuntimeHost,
+      );
+      const childInterrupt = vi.fn();
+      childHandle.attachInterruptHandler({ interrupt: childInterrupt });
+      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING);
+
+      try {
+        await (bridgeB as unknown as { restartRepair: Promise<void> })
+          .restartRepair;
+        // Children launched after startup repair are observed for root life.
+        owner.bridgeA.session.executions.trackAgentExecution(childHandle, {
+          status: STREAM_PHASE.RUNNING,
+        });
+        owner.bridgeA.session.executions.track(processHandle);
+
+        // Both children and the child status are now visible in window B.
+        expect(bridgeB.session.executions.getHandle(childExecutionId)).toBe(
+          childHandle,
+        );
+        expect(bridgeB.session.executions.getHandle(processExecutionId)).toBe(
+          processHandle,
+        );
+        expect(bridgeB.session.status.get(childStreamId)).toBe(
+          STREAM_PHASE.RUNNING,
+        );
+
+        // Native child follow-ups replace the owner-side handle and trace.
+        const { handle: freshChildHandle } = owner.createHandle({
+          executionId: childExecutionId,
+          childStreamId,
+          agentName: 'searcher',
+          category: AgentCategory.ToolUse,
+        });
+        const freshChildInterrupt = vi.fn();
+        freshChildHandle.attachInterruptHandler({
+          interrupt: freshChildInterrupt,
+        });
+        owner.bridgeA.session.executions.track(freshChildHandle);
+        expect(bridgeB.session.executions.getHandle(childExecutionId)).toBe(
+          freshChildHandle,
+        );
+
+        // Stop cascades through root, current child turn, and process.
+        bridgeB.session.executions.stopAgentStream(streamId);
+        expect(rootInterrupt).toHaveBeenCalledTimes(1);
+        expect(childInterrupt).not.toHaveBeenCalled();
+        expect(freshChildInterrupt).toHaveBeenCalledTimes(1);
+        expect(killProcess).toHaveBeenCalledTimes(1);
+
+        // Owner-side process removal clears the mirrored entry too.
+        owner.bridgeA.session.executions.untrack(processExecutionId);
+        expect(
+          bridgeB.session.executions.getHandle(processExecutionId),
+        ).toBeUndefined();
+
+        // Owner-side child removal clears both registries.
+        freshChildHandle.settleResult({
+          type: 'result',
+          outcome: RUN_OUTCOME.CANCELLED,
+          executionId: childExecutionId,
+          streamId: childStreamId,
+          agentName: 'searcher',
+          category: 'toolUse',
+          isSubagent: true,
+        } as unknown as Parameters<typeof freshChildHandle.settleResult>[0]);
+        owner.bridgeA.session.executions.untrack(childExecutionId);
+        await freshChildHandle.result;
+        await settleProgressEvents();
+        expect(
+          bridgeB.session.executions.getHandle(childExecutionId),
+        ).toBeUndefined();
+        expect(
+          owner.bridgeA.session.executions.getHandle(childExecutionId),
+        ).toBeUndefined();
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('overwrites a stale WAITING seed with live RUNNING and mirrors later transitions (#8230, #8231)', async () => {
+      const streamId = 'rebound-stream-5' as StreamTabId;
+      const executionId = 'ec00f3' as ExecutionId;
+      const owner = await createReboundOwner({
+        streamId,
+        executionId,
+      });
+      // The owner is RUNNING while the persisted snapshot says WAITING.
+      const { bridgeB } = owner.reopen(STREAM_PHASE.WAITING);
+      const resultsSeenByB: unknown[] = [];
+      const detachResult = bridgeB.session.onResult((event) => {
+        resultsSeenByB.push(event);
+      });
+
+      try {
+        await (bridgeB as unknown as { restartRepair: Promise<void> })
+          .restartRepair;
+
+        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+          owner.handle,
+        );
+        // Rebind replays the missed resume rather than preserving WAITING.
+        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+
+        // Later owner transitions continue mirroring into window B.
+        expect(
+          owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
+            trace: owner.trace as unknown as AgentTrace,
+          }),
+        ).toBe(true);
+        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+        expect(
+          owner.bridgeA.session.status.transition(
+            streamId,
+            STREAM_PHASE.RUNNING,
+            'resume',
+            { trace: owner.trace as unknown as AgentTrace },
+          ),
+        ).toBe(true);
+        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+
+        // A later owner turn replaces both handle and trace.
+        const { handle: freshHandle, trace: freshTrace } = owner.createHandle();
+        owner.bridgeA.session.executions.track(freshHandle);
+        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+          freshHandle,
+        );
+        expect(
+          owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
+            trace: freshTrace as unknown as AgentTrace,
+          }),
+        ).toBe(true);
+        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+
+        const resultEvent = {
+          type: 'result' as const,
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId,
+          streamId,
+          agentName: 'proofreader',
+          category: 'workflow' as const,
+          isSubagent: false,
+        };
+        freshTrace.emit(resultEvent);
+        expect(resultsSeenByB).toContainEqual(resultEvent);
+        expect(bridgeB.session.status.get(streamId)).toBe(
+          STREAM_PHASE.COMPLETED,
+        );
+        owner.bridgeA.session.executions.untrack(executionId);
+        expect(
+          bridgeB.session.executions.getHandle(executionId),
+        ).toBeUndefined();
+      } finally {
+        detachResult();
+        bridgeB.dispose();
+      }
+    });
+
+    it('detaches agent and process mirrors when the reopened window closes', async () => {
+      const streamId = 'rebound-stream-dispose' as StreamTabId;
+      const executionId = 'ec00f5' as ExecutionId;
+      const processExecutionId = 'ec00f6' as ExecutionId;
+      const owner = await createReboundOwner({ streamId, executionId });
+      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING);
+      await (bridgeB as unknown as { restartRepair: Promise<void> })
+        .restartRepair;
+
+      const processHandle = new owner.ProcessExecutionHandle(
+        processExecutionId,
+        streamId,
+        'bash',
+        () => true,
+        owner.noopAgentRuntimeHost,
+      );
+      owner.bridgeA.session.executions.track(processHandle);
+      expect(bridgeB.session.executions.getHandle(processExecutionId)).toBe(
+        processHandle,
+      );
+
+      bridgeB.dispose();
+      expect(bridgeB.session.executions.getHandle(executionId)).toBeUndefined();
+      expect(
+        bridgeB.session.executions.getHandle(processExecutionId),
+      ).toBeUndefined();
+
+      const { handle: freshHandle } = owner.createHandle();
+      owner.bridgeA.session.executions.track(freshHandle);
+      owner.bridgeA.session.executions.untrack(processExecutionId);
+      expect(bridgeB.session.executions.getHandle(executionId)).toBeUndefined();
+      expect(
+        bridgeB.session.executions.getHandle(processExecutionId),
+      ).toBeUndefined();
+      owner.bridgeA.session.executions.untrack(executionId);
+    });
+
+    it('releases the original session registration when a resume supersedes the rebound handle (#8229)', async () => {
+      const streamId = 'rebound-stream-6' as StreamTabId;
+      const executionId = 'ec00f4' as ExecutionId;
+      const owner = await createReboundOwner({
+        streamId,
+        executionId,
+        agentName: 'search',
+        category: AgentCategory.ToolUse,
+      });
+      owner.close();
+      // Suspend while headless before reopening.
+      expect(
+        owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
+          trace: owner.trace as unknown as AgentTrace,
+        }),
+      ).toBe(true);
+      const { bridgeB } = owner.reopen(STREAM_PHASE.WAITING);
+
+      try {
+        await (bridgeB as unknown as { restartRepair: Promise<void> })
+          .restartRepair;
+        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+          owner.handle,
+        );
+
+        // Local resume replaces the rebound handle under the same id.
+        const { handle: freshHandle } = owner.createHandle();
+        bridgeB.session.executions.track(freshHandle);
+        expect(
+          bridgeB.session.status.transition(
+            streamId,
+            STREAM_PHASE.RUNNING,
+            'resume',
+          ),
+        ).toBe(true);
+
+        // The replacement releases window A's stale registration.
+        expect(
+          owner.bridgeA.session.executions.getHandle(executionId),
+        ).toBeUndefined();
+        // Identity-safe cleanup preserves the fresh local handle.
+        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+          freshHandle,
+        );
+
+        // Even a late settle of the stale handle cannot clobber the fresh one.
+        owner.handle.settleResult({
+          type: 'result',
+          outcome: RUN_OUTCOME.CANCELLED,
+          executionId,
+          streamId,
+          agentName: 'search',
+          category: 'toolUse',
+          isSubagent: false,
+        } as unknown as Parameters<typeof owner.handle.settleResult>[0]);
+        await owner.handle.result;
+        await settleProgressEvents();
+        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
+          freshHandle,
+        );
       } finally {
         bridgeB.dispose();
       }
