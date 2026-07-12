@@ -22,6 +22,7 @@ high-impact batch:
 | `P0.1`     | Retry or quarantine every unacknowledged client usage batch    | [#8267](https://github.com/LionSR/TeXRA/pull/8267) |
 | `P0.1`     | Validate usage batches atomically and mark permanent rejection | [#8270](https://github.com/LionSR/TeXRA/pull/8270) |
 | `P0.2`     | Omit diagnostics when a host has no linter                     | [#8271](https://github.com/LionSR/TeXRA/pull/8271) |
+| `P0.4`     | Require explicit persistent or ephemeral transcript stores     | [#8287](https://github.com/LionSR/TeXRA/pull/8287) |
 | `P0.10`    | Fail closed when ignore policy cannot be read or applied       | [#8272](https://github.com/LionSR/TeXRA/pull/8272) |
 | `P0.11`    | Preserve unreadable or invalid resumable flow state            | [#8277](https://github.com/LionSR/TeXRA/pull/8277) |
 | `P0.12`    | Remove automatic delete-and-replace on circular symlinks       | [#8276](https://github.com/LionSR/TeXRA/pull/8276) |
@@ -37,9 +38,9 @@ source order:
 
 1. `P0.3` durable JSON corruption, after the overlapping `JsonStore` work in
    #8237 settles.
-2. `P0.4` explicit persistent versus ephemeral transcript construction; its
-   current constructor permits nondurable production runs and spreads lifecycle
-   checks across every method.
+2. Review `P0.4` in #8287: explicit persistent versus ephemeral transcript
+   construction removes nondurable production runs and method-level lifecycle
+   checks.
 3. `P0.7` and `P0.8` terminal metadata and flush outcomes, designed together so
    completion and durability have one observable owner.
 4. `P0.5` diagnostic snapshot reads, before further persisted-schema cleanup.
@@ -402,7 +403,7 @@ fail when persistence cannot open unless the caller explicitly selects an
 ephemeral mode. Interactive hosts may continue with `ephemeral(reason)`, but must
 display that state.
 
-**Disposition:** Remove the unopened no-ops and duplicated host compensation.
+**Disposition:** Draft implementation: [#8287](https://github.com/LionSR/TeXRA/pull/8287).
 
 ### P0.5 Invalid persisted snapshots become valid empty/current snapshots
 
