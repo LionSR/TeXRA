@@ -16,6 +16,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
+  FLOW_RECORD_SCHEMA_VERSION,
   PersistedFlowStateError,
   flowKey,
   type FlowRecord,
@@ -73,6 +74,11 @@ const TOOL_USE_SETTING = AgentToolUseSettingSchema.parse({});
 const TOOL_USE_PROMPT = AgentPromptSchema.parse({});
 const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
 const WAIT_NODE_CURSOR = 'start/default/default';
+const VALID_TOOL_USE_SHARED = {
+  messages: [],
+  shouldSkipCycle: false,
+  stateSlices: null,
+};
 type ToolUseSetupContext = Parameters<ToolUseFlowSetupCallback>[0];
 
 function createTaggedModelHandler(
@@ -546,27 +552,40 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     );
   });
 
-  it('propagates a persistence read failure without deleting the flow record', async () => {
+  it('preserves the flow record and requeued follow-ups after a persistence read failure', async () => {
     const executionId = 'abc-flow-read-failure' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-read-failure' as StreamTabId;
     const snapshot = buildToolUseSnapshot(executionId, streamId);
     const store = getExecutionStore(executionId);
+    const session = new SessionHandle();
     const readFailure = new Error('flow storage unavailable');
     const readSpy = vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
     const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
       await expect(
-        runPersistedFlow(executionId, streamId, snapshot),
+        runPersistedFlow(
+          executionId,
+          streamId,
+          snapshot,
+          (context) => {
+            context.session.appendFollowUp({ text: 'queued before recovery' });
+          },
+          session,
+        ),
       ).rejects.toMatchObject({
         name: PersistedFlowStateError.name,
         reason: 'read-failed',
         cause: readFailure,
       });
       expect(deleteSpy).not.toHaveBeenCalled();
+      expect(session.followUps.getAll(streamId)).toEqual([
+        'queued before recovery',
+      ]);
     } finally {
       readSpy.mockRestore();
       deleteSpy.mockRestore();
+      session.followUps.release(streamId);
     }
   });
 
@@ -599,6 +618,26 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       reason: 'unsupported-record',
       stored: null,
     },
+    {
+      name: 'valid shared state without nodes',
+      reason: 'unsupported-record',
+      stored: {
+        flowName: 'texra',
+        shared: VALID_TOOL_USE_SHARED,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    },
+    {
+      name: 'future envelope schema version',
+      reason: 'unsupported-record',
+      stored: {
+        schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
+        flowName: 'texra',
+        shared: VALID_TOOL_USE_SHARED,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        nodes: [],
+      },
+    },
   ])('rejects and preserves $name', async ({ name, reason, stored }) => {
     const slug = name.replaceAll(' ', '-');
     const executionId = `abc-flow-${slug}` as ExecutionId;
@@ -609,12 +648,16 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
-      await expect(
-        runPersistedFlow(executionId, streamId, snapshot),
-      ).rejects.toMatchObject({
+      const expectedError = {
         name: PersistedFlowStateError.name,
         reason,
-      });
+        ...(reason === 'invalid-shared'
+          ? {}
+          : { cause: expect.objectContaining({ name: 'ZodError' }) }),
+      };
+      await expect(
+        runPersistedFlow(executionId, streamId, snapshot),
+      ).rejects.toMatchObject(expectedError);
       expect(deleteSpy).not.toHaveBeenCalled();
       expect(await store.read(flowKey(executionId))).toEqual(stored);
     } finally {
@@ -671,6 +714,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           },
         },
         createdAt: new Date().toISOString(),
+        nodes: [],
       };
     });
     const writeSpy = vi.spyOn(store, 'write');
