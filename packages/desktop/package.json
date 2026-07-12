@@ -29,7 +29,7 @@
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
     "playwright": "^1.61.1",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "^8.1.4"
   },
   "dependencies": {

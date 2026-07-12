@@ -8,7 +8,7 @@
     "build": "vite build --config vite.config.ts && vite build --config vite.standalone.config.ts"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "^8.1.4",
     "vite-plugin-singlefile": "^2.3.3"
   }
