@@ -104,9 +104,12 @@ export async function initializeElectronPlatform(
   );
   // Workspace config lives in the project's `.texra/config.json` — the same
   // file the CLI reads and writes — so a checked-in config behaves
-  // identically in both hosts. Sessions without a workspace, and read-only
-  // project trees where the file cannot be created or written, fall back to
-  // the internal per-workspace store so startup never fails on config.
+  // identically in both hosts. Sessions without a workspace, and project
+  // trees where the file exists but cannot be read, fall back to the
+  // internal per-workspace store so startup never fails on config. Opening
+  // never creates `.texra/` (`JsonStore` only prepares the directory on
+  // write), so a read-only tree opens fine and individual writes fail at
+  // write time instead.
   const legacyWorkspaceConfigPath = join(
     storage.getStoragePath(),
     'config.json',
