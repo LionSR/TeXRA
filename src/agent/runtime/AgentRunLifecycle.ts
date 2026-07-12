@@ -277,6 +277,7 @@ export async function runFlowWithLifecycle(
     runtimeHost,
     ctx.logger,
   );
+  handle.enablePendingInterrupt();
   session.executions.track(handle);
   // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
   // throw nor an async rejection from a consumer callback may abort the run.
@@ -320,8 +321,13 @@ export async function runFlowWithLifecycle(
     // The lifecycle owns every stream-status transition: RUNNING here,
     // terminal states in the success/error arms below. Runners must not
     // set stream status themselves.
-    transitionRunStart(ctx);
-    const result = await runner(handle);
+    if (!handle.hasPendingInterrupt) transitionRunStart(ctx);
+    let result: AgentRuntimeFlowResult;
+    try {
+      result = await runner(handle);
+    } finally {
+      handle.closePendingInterruptWindow();
+    }
     if (isWaitingFlowResult(result)) {
       logger.debug(`Task suspended with outcome: ${result.outcome}`);
       // The handle stays tracked (correct for resume) but the live tool-use
