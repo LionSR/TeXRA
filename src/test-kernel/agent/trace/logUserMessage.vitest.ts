@@ -17,7 +17,7 @@ describe('logUserMessage', () => {
   let store: StreamLogStore;
 
   beforeEach(async () => {
-    store = new StreamLogStore();
+    store = StreamLogStore.ephemeral('test');
     await store.clear();
     const runTrace = createRunTrace('TestUserMessageLogger', store);
     logger = runTrace.trace;

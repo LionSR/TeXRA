@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // Third-party imports
 import * as assert from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'vitest';

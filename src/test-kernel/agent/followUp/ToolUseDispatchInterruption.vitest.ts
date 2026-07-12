@@ -86,7 +86,7 @@ describe('ToolUseDispatchNode interruption', () => {
       },
       logger: createRunTrace(
         'ToolUseDispatchInterruption',
-        new StreamLogStore(),
+        StreamLogStore.ephemeral('test'),
       ).trace,
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
@@ -259,7 +259,7 @@ describe('ToolUseDispatchNode interruption', () => {
       },
       logger: createRunTrace(
         'ToolUseDispatchInterruption',
-        new StreamLogStore(),
+        StreamLogStore.ephemeral('test'),
       ).trace,
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),

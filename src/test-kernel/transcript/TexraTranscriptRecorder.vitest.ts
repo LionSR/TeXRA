@@ -15,7 +15,7 @@ import { isObject } from '@utils/core';
 describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)', () => {
   it("writes GROUP_START's data.status as StreamPhase.RUNNING", () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:group-start-native' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);
@@ -33,7 +33,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
 
   it('defaults GROUP_END to the literal RunOutcome.COMPLETED, not a folded EndGroupStatus', () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:group-end-default-outcome' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);
@@ -52,7 +52,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
 
   it('writes an explicit RunOutcome passed to stage.end() verbatim', () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:group-end-explicit-outcome' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);
@@ -70,7 +70,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
 
   it('defaults a stage.run() failure to RunOutcome.FAILED', async () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:group-end-run-failure' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);
@@ -94,7 +94,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
 describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
   it("preserves a round stage's kind onto its persisted GROUP_END row", () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:kind-preserved' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);
@@ -111,7 +111,7 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
 
   it("preserves the root run stage's kind onto its persisted GROUP_END row", () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:run-kind-preserved' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);
@@ -130,7 +130,7 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
 describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   it('upserts the round MODEL_RESPONSE stream entry to the authoritative text', () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:upsert' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);
@@ -154,7 +154,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
 
   it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:append' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);
@@ -171,7 +171,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
 
   it('does not let an earlier round leak its stream id into a later round', () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:round-reset' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);
@@ -203,7 +203,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
 
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:inner-round-reset' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);
@@ -238,7 +238,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
 
   it('ignores an empty finalized response', () => {
     const trace = new TraceEmitter();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:empty' as StreamTabId;
     store.ensureStream(streamId);
     attachTranscriptRecorder(trace, streamId, store);

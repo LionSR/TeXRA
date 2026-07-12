@@ -8,7 +8,7 @@ import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
-import { StreamSnapshotStore } from '@transcript';
+import { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import {
   isProgressBackendInteractionEvent,
   type ProgressBackendInteractionPayloads,
@@ -165,6 +165,7 @@ interface DesktopRunExecutionOptions {
 }
 
 export interface DesktopProgressBridgeOptions {
+  transcripts: StreamLogStore;
   openPath?: (filePath: string, line?: number) => Promise<void>;
   openBuildDisplay?: BuildDisplayFn;
   openDiff?: DiffViewHost['openDiff'];
@@ -242,12 +243,15 @@ export class DesktopProgressBridge {
 
   constructor(
     private readonly postToRenderer: (message: unknown) => boolean | void,
-    private readonly options: DesktopProgressBridgeOptions = {},
+    private readonly options: DesktopProgressBridgeOptions,
   ) {
     const hostChannel: AgentRuntimeHost = {
       emit: (event, payload) => this.handleInteractionEvent(event, payload),
     };
-    this.session = new SessionHandle({ hostChannel });
+    this.session = new SessionHandle({
+      hostChannel,
+      transcripts: options.transcripts,
+    });
     this.executionRebinder = new DesktopExecutionRebinder(
       this.session,
       this.logger,
@@ -840,7 +844,6 @@ export class DesktopProgressBridge {
 
   private async repairOrphanedStreamsAfterRestart(): Promise<void> {
     try {
-      await this.state.streamLogs.load();
       this.sessionProgress.hydrateRestoredStreams();
       const { activeExecutionIds, allExecutionIds } =
         this.refreshActiveExecutionIds();
@@ -1080,14 +1083,11 @@ export class DesktopProgressBridge {
 
   /**
    * Owns the Progress webview's readiness sequence. Restored streams are
-   * only folded into `streamLogs`/`session.status` once `restartRepair`
-   * settles (`repairOrphanedStreamsAfterRestart` awaits `streamLogs.load()`
-   * first), so painting the rail before that leaves restored streams
-   * missing from the first paint with nothing guaranteed to correct it —
-   * the same race class `revealStream` was fixed for (#7850). Gating the
-   * whole sequence here, instead of each `webviewReady` call site awaiting
-   * `restartRepair` inline, makes the ordering impossible to get wrong from
-   * a caller.
+   * folded into `session.status` by `restartRepair`; transcript persistence is
+   * already open before this bridge can be constructed. Painting the rail
+   * before repair settles would omit restored status from the first paint.
+   * Gating the whole sequence here makes the ordering uniform for every
+   * `webviewReady` caller.
    */
   async completeWebviewReady(
     onInquiryHydrationError: (error: unknown) => void = () => {},
@@ -1207,13 +1207,23 @@ export class DesktopProgressBridge {
       return;
     }
 
-    void this.streamLogs.ensureLoaded(streamId).then(() => {
-      if (this.state.activeStream !== streamId) return;
-      this.backend.factApplier.syncStreamContent(streamId, {
-        includeActiveState: true,
+    void this.streamLogs
+      .ensureLoaded(streamId)
+      .then(() => {
+        if (this.state.activeStream !== streamId) return;
+        this.backend.factApplier.syncStreamContent(streamId, {
+          includeActiveState: true,
+        });
+        this.sessionProgress.sendRestoredDisplay(streamId);
+      })
+      .catch((error: unknown) => {
+        this.logger.error(`Failed to load desktop transcript ${streamId}`, {
+          data: toLogData(error),
+        });
+        void this.options.showErrorMessage?.(
+          `Transcript load failed: ${toErrorMessage(error)}`,
+        );
       });
-      this.sessionProgress.sendRestoredDisplay(streamId);
-    });
   }
 
   private stopStream(streamId: StreamTabId): void {
@@ -1563,10 +1573,12 @@ export class DesktopProgressBridge {
   }
 }
 
-export function createDesktopAgentExecution(
+export async function createDesktopAgentExecution(
   options: DesktopAgentExecutionOptions,
-): DesktopAgentExecution {
+): Promise<DesktopAgentExecution> {
+  const transcripts = await StreamLogStore.open();
   const progress = new DesktopProgressBridge(options.postToRenderer, {
+    transcripts,
     openPath: options.opener?.openPath,
     openBuildDisplay: options.opener?.openBuildDisplay,
     openDiff: options.diff?.openDiff,

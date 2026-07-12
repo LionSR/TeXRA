@@ -1,3 +1,6 @@
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
@@ -114,7 +117,7 @@ describe('AgentLaunchContext', () => {
   it('compensates a late launch-assembly failure before trace disposal', async () => {
     const order: string[] = [];
     const failure = new Error('user vars unavailable');
-    const session = new SessionHandle();
+    const session = createTestSession();
     const detachEvents = session.events.subscribe(() => undefined);
     const detachStatus = session.status.onDidChange(({ status }) => {
       if (status === STREAM_PHASE.FAILED) order.push('terminal');

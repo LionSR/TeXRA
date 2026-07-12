@@ -14,6 +14,7 @@ import {
 } from '@shared/schemas';
 import { debounce, filterNotNull, isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { StorageFS } from '@utils/files/storageFS';
 
 import {
   isRunningGroupEntry,
@@ -49,6 +50,10 @@ interface ParsedPersistedEntries {
   entries: StreamLogEntry[];
   preservedRawEntries: StreamLogPreservedRawEntry[];
 }
+
+export type StreamLogStoreMode =
+  | { readonly kind: 'persistent' }
+  | { readonly kind: 'ephemeral'; readonly reason: string };
 
 function summaryOf(logInstance: StreamLog): StreamLogSummary {
   return {
@@ -117,6 +122,8 @@ function hasSomethingRunning(summary: StreamLogSummary | undefined): boolean {
 }
 
 export class StreamLogStore {
+  readonly mode: StreamLogStoreMode;
+
   private readonly logs = new Map<StreamTabId, StreamLog>();
   private readonly listeners = new Set<StreamLogListener>();
   private readonly dirtyStreamIds = new Set<StreamTabId>();
@@ -126,8 +133,8 @@ export class StreamLogStore {
   });
 
   /**
-   * Lightweight summary per stream (first/last timestamp). Populated at load
-   * and refreshed on append/update. Survives `releaseEntries` so sidebar
+   * Lightweight summary per stream (first/last timestamp). Populated at open
+   * or reload and refreshed on append/update. Survives `releaseEntries` so sidebar
    * metadata stays available for streams whose heavy entries have been evicted.
    */
   private readonly summaries = new Map<StreamTabId, StreamLogSummary>();
@@ -154,13 +161,10 @@ export class StreamLogStore {
    * Streams whose rehydrate read from disk failed. While marked, saves skip
    * them so we never overwrite the authoritative disk copy with a fresh
    * empty-log-plus-new-appends that would drop persisted history.
-   * Cleared when `ensureLoaded` eventually succeeds (subsequent `append`s
-   * opportunistically retry the load).
+   * Cleared when an explicit `ensureLoaded` retry succeeds; appends reject
+   * while the stream remains in this state.
    */
   private readonly loadFailed = new Set<StreamTabId>();
-
-  /** Guards persistence — tests create store without calling load(). */
-  private loaded = false;
 
   private readonly debouncedSave = debounce(
     () => this.executeWrite(),
@@ -183,6 +187,35 @@ export class StreamLogStore {
   private writeGeneration = 0;
   private readonly writeTombstones = new Set<StreamTabId>();
   private clearing = false;
+  private stateRevision = 0;
+  private pendingReload: Promise<void> | undefined;
+
+  private constructor(mode: StreamLogStoreMode) {
+    this.mode = Object.freeze(mode);
+  }
+
+  /** Open and validate the persistent transcript store before exposing it. */
+  static async open(): Promise<StreamLogStore> {
+    const store = new StreamLogStore({ kind: 'persistent' });
+    await Promise.all([
+      StorageFS.ensureDir(STREAM_LOGS_DIR),
+      StorageFS.ensureDir(STREAM_LOG_SUMMARIES_DIR),
+    ]);
+    store.replaceSummaries(await store.readPersistentSummaries());
+    return store;
+  }
+
+  /** Create an explicitly non-persistent transcript store. */
+  static ephemeral(reason: string): StreamLogStore {
+    const normalizedReason = reason.trim();
+    if (!normalizedReason) {
+      throw new Error('An ephemeral transcript store requires a reason.');
+    }
+    return new StreamLogStore({
+      kind: 'ephemeral',
+      reason: normalizedReason,
+    });
+  }
 
   onChange(listener: StreamLogListener): () => void {
     this.listeners.add(listener);
@@ -213,6 +246,7 @@ export class StreamLogStore {
     const logInstance = new StreamLog();
     this.logs.set(streamId, logInstance);
     this.summaries.set(streamId, {});
+    this.stateRevision += 1;
   }
 
   /**
@@ -222,6 +256,9 @@ export class StreamLogStore {
    * Subsequent access must go through `ensureLoaded` to rehydrate.
    */
   releaseEntries(streamId: StreamTabId): void {
+    // Ephemeral entries have no durable copy from which they could be restored.
+    if (this.mode.kind === 'ephemeral') return;
+
     const logInstance = this.logs.get(streamId);
     if (!logInstance) {
       // Can't drop what isn't resident — but if a rehydrate is in flight,
@@ -240,6 +277,7 @@ export class StreamLogStore {
     this.pendingRelease.delete(streamId);
     this.refreshSummary(streamId, logInstance);
     this.logs.delete(streamId);
+    this.stateRevision += 1;
   }
 
   /**
@@ -247,13 +285,14 @@ export class StreamLogStore {
    * resident or when the stream is unknown.
    */
   async ensureLoaded(streamId: StreamTabId): Promise<void> {
+    if (this.mode.kind === 'ephemeral') return;
+
     // Reactivation cancels any deferred release so the fresh agent work
     // doesn't get evicted mid-run.
     this.pendingRelease.delete(streamId);
-    // Normally skip when already resident. But after a failed rehydrate a
-    // subsequent `append` may have populated a fresh empty log — we still
-    // need to retry the disk read so the merge path can reunite it with
-    // the persisted history before saves are re-enabled.
+    // Normally skip when already resident. A concurrent append may have
+    // populated a fresh log before a rehydrate failed, so a retry must still
+    // reunite it with persisted history before saves are re-enabled.
     if (this.logs.has(streamId) && !this.loadFailed.has(streamId)) return;
     if (!this.summaries.has(streamId)) return;
     const existing = this.pendingLoads.get(streamId);
@@ -282,6 +321,7 @@ export class StreamLogStore {
             diskEntries.preservedRawEntries,
           );
           this.logs.set(streamId, merged);
+          this.stateRevision += 1;
           this.refreshSummary(streamId, merged);
           this.markDirty(streamId);
           void this.save();
@@ -292,6 +332,7 @@ export class StreamLogStore {
             diskEntries.preservedRawEntries,
           );
           this.logs.set(streamId, logInstance);
+          this.stateRevision += 1;
           this.refreshSummary(streamId, logInstance);
           // A `releaseEntries` that arrived while the load was in flight gets
           // queued; honor it now (unless a reactivation cleared the intent).
@@ -309,33 +350,40 @@ export class StreamLogStore {
         this.loadFailed.delete(streamId);
         if (this.dirtyStreamIds.has(streamId)) void this.save();
       } catch (err) {
-        // Rehydrate failed. Mark so `executeWrite` skips this stream and
-        // doesn't overwrite the on-disk history with whatever empty/partial
-        // log the agent may now be appending to. `append` retries the load
-        // in the background; once it succeeds the merge path runs.
+        // Keep the disk copy authoritative and surface the failed read. A
+        // caller may retry `ensureLoaded`, but no append is accepted until a
+        // retry succeeds and reunites the in-memory view with persisted data.
         this.loadFailed.add(streamId);
         log.warn(
           LOG_TAG,
           `Failed to reload stream ${streamId} from disk: ` +
             toErrorMessage(err),
         );
+        throw err;
       }
     })();
     this.pendingLoads.set(streamId, work);
-    // `work` traps every failure internally (the catch above marks
-    // loadFailed), so it never rejects and the cleanup always runs.
-    await work;
-    this.pendingLoads.delete(streamId);
+    try {
+      await work;
+    } finally {
+      this.pendingLoads.delete(streamId);
+    }
   }
 
   append(streamId: StreamTabId, entry: StreamLogAppendInput): StreamLogEntry {
     // New writes mean the stream is live again — cancel any deferred release.
     this.pendingRelease.delete(streamId);
-    // If a previous rehydrate errored, retry in the background so the
-    // eventual merge can combine disk history with these new entries
-    // before we're allowed to save. `ensureLoaded` dedupes via
-    // `pendingLoads` so repeated appends don't spam overlapping reads.
-    if (this.loadFailed.has(streamId)) void this.ensureLoaded(streamId);
+    this.assertWritableStream(streamId);
+    if (
+      this.mode.kind === 'persistent' &&
+      this.summaries.has(streamId) &&
+      !this.logs.has(streamId) &&
+      !this.pendingLoads.has(streamId)
+    ) {
+      throw new Error(
+        `Cannot append to released stream ${streamId}. Await ensureLoaded() first.`,
+      );
+    }
     const logInstance = this.getOrCreate(streamId);
     const appended = logInstance.append(entry);
     this.commitChange(streamId, logInstance);
@@ -348,6 +396,7 @@ export class StreamLogStore {
     id: string,
     patch: StreamLogUpdatePatch,
   ): StreamLogEntry | undefined {
+    this.assertWritableStream(streamId);
     const logInstance = this.logs.get(streamId);
     if (!logInstance) return undefined;
 
@@ -364,6 +413,7 @@ export class StreamLogStore {
     id: string,
     appendText: string,
   ): StreamLogEntry | undefined {
+    this.assertWritableStream(streamId);
     const logInstance = this.logs.get(streamId);
     if (!logInstance) return undefined;
 
@@ -397,12 +447,13 @@ export class StreamLogStore {
     this.writeTombstones.add(streamId);
     this.debouncedSave.cancel();
     this.forgetStreamState(streamId);
+    this.stateRevision += 1;
 
     try {
       await this.inFlightWrite;
       this.forgetStreamState(streamId);
       await this.executeWrite();
-      if (!this.loaded) return;
+      if (this.mode.kind === 'ephemeral') return;
 
       log.info(LOG_TAG, `Deleting stream: ${streamId}`);
       await Promise.all([
@@ -420,11 +471,12 @@ export class StreamLogStore {
     this.writeGeneration += 1;
     this.cancelPendingSave();
     this.forgetAllStreamState();
+    this.stateRevision += 1;
 
     try {
       await this.inFlightWrite;
       this.forgetAllStreamState();
-      if (!this.loaded) return;
+      if (this.mode.kind === 'ephemeral') return;
 
       log.info(LOG_TAG, `Clearing all ${count} streams`);
       await Promise.all([this.kv.deleteDir(), this.summaryKv.deleteDir()]);
@@ -441,7 +493,10 @@ export class StreamLogStore {
   ): Promise<StreamTabId[]> {
     const streamsToLoad = new Set(streamIds);
     for (const [streamId, summary] of this.summaries) {
-      if (hasSomethingRunning(summary) && !this.logs.has(streamId)) {
+      if (
+        hasSomethingRunning(summary) &&
+        (!this.logs.has(streamId) || this.loadFailed.has(streamId))
+      ) {
         streamsToLoad.add(streamId);
       }
     }
@@ -467,7 +522,9 @@ export class StreamLogStore {
   ): Promise<StreamTabId[]> {
     if (streamIds.length === 0) return [];
     const streamsToLoad = streamIds.filter(
-      (id) => !this.logs.has(id) && hasSomethingRunning(this.summaries.get(id)),
+      (id) =>
+        (!this.logs.has(id) || this.loadFailed.has(id)) &&
+        hasSomethingRunning(this.summaries.get(id)),
     );
     if (streamsToLoad.length > 0) {
       await pMap(streamsToLoad, (id) => this.ensureLoaded(id), {
@@ -528,54 +585,31 @@ export class StreamLogStore {
     return affected;
   }
 
-  /** Load stream-log summaries from disk. */
-  async load(): Promise<void> {
-    this.logs.clear();
-    this.summaries.clear();
-    this.dirtyStreamIds.clear();
-    this.pendingRelease.clear();
-    this.flushing.clear();
-    this.loadFailed.clear();
-    this.pendingLoads.clear();
-    this.writeTombstones.clear();
-    this.clearing = false;
-
-    // 1. Scan directory — filenames decode back to stream IDs
-    const streamIds = await this.kv.listKeys();
-
-    if (streamIds.length > 0) {
-      const results = await pMap(
-        streamIds,
-        (streamId) => this.loadStreamSummary(streamId as StreamTabId),
-        { concurrency: STREAM_LOG_LOAD_CONCURRENCY },
+  /**
+   * Transactionally reload persistent summaries. A failed read leaves the
+   * previously valid in-memory state untouched and rejects to the host.
+   */
+  async reload(): Promise<void> {
+    if (this.mode.kind === 'ephemeral') {
+      throw new Error(
+        `Cannot reload an ephemeral transcript store (${this.mode.reason}).`,
       );
-
-      const sortedResults = results
-        .filter(filterNotNull)
-        .sort(
-          (a, b) =>
-            (a.summary.firstTimestamp ?? Number.POSITIVE_INFINITY) -
-              (b.summary.firstTimestamp ?? Number.POSITIVE_INFINITY) ||
-            a.streamId.localeCompare(b.streamId),
-        );
-
-      for (const { streamId, summary } of sortedResults) {
-        this.summaries.set(streamId, summary);
-      }
-
-      log.info(
-        LOG_TAG,
-        `Loaded ${this.summaries.size} stream summaries (file-backed)`,
-      );
-      this.loaded = true;
-      return;
     }
+    if (this.pendingReload) return this.pendingReload;
 
-    this.loaded = true;
+    const work = this.executeReload();
+    this.pendingReload = work;
+    try {
+      await work;
+    } finally {
+      if (this.pendingReload === work) this.pendingReload = undefined;
+    }
   }
 
   save(): Promise<void> {
-    if (!this.loaded) return Promise.resolve();
+    if (this.mode.kind === 'ephemeral' || this.dirtyStreamIds.size === 0) {
+      return Promise.resolve();
+    }
     // Start/extend the debounce timer. perfect-debounce handles timer
     // management and returns a shared promise, but we ignore it and track
     // our own awaiters so we can settle them when the debounce is cancelled
@@ -587,7 +621,7 @@ export class StreamLogStore {
   }
 
   async flush(): Promise<void> {
-    if (!this.loaded) return;
+    if (this.mode.kind === 'ephemeral') return;
 
     // Drain iteratively: executeWrite may re-queue streams that are still
     // rehydrating (`pendingLoads`) or whose prior load failed. Wait for
@@ -615,14 +649,19 @@ export class StreamLogStore {
         const canRetry = [...this.dirtyStreamIds].some(
           (id) => !this.loadFailed.has(id),
         );
-        if (!canRetry) return;
-        if (writeAttempts >= MAX_WRITE_RETRIES) {
-          log.warn(
-            LOG_TAG,
-            `flush() gave up after ${MAX_WRITE_RETRIES} retries; ` +
-              `${this.dirtyStreamIds.size} stream(s) still dirty`,
-          );
+        if (!canRetry) {
+          if (this.dirtyStreamIds.size > 0) {
+            throw new Error(
+              `Cannot flush ${this.dirtyStreamIds.size} stream(s) whose persisted transcripts failed to load.`,
+            );
+          }
           return;
+        }
+        if (writeAttempts >= MAX_WRITE_RETRIES) {
+          throw new Error(
+            `Transcript flush failed after ${MAX_WRITE_RETRIES} retries; ` +
+              `${this.dirtyStreamIds.size} stream(s) remain dirty.`,
+          );
         }
         await this.executeWrite();
         writeAttempts++;
@@ -640,10 +679,18 @@ export class StreamLogStore {
     return logInstance;
   }
 
+  private assertWritableStream(streamId: StreamTabId): void {
+    if (!this.loadFailed.has(streamId)) return;
+    throw new Error(
+      `Cannot modify stream ${streamId} after its persisted transcript failed to load. Retry ensureLoaded() first.`,
+    );
+  }
+
   /** Shared post-mutation bookkeeping for append/update/appendText/endRunningGroups. */
   private commitChange(streamId: StreamTabId, logInstance: StreamLog): void {
     this.refreshSummary(streamId, logInstance);
-    this.markDirty(streamId);
+    this.stateRevision += 1;
+    if (this.mode.kind === 'persistent') this.markDirty(streamId);
     this.notify(streamId);
   }
 
@@ -662,6 +709,70 @@ export class StreamLogStore {
     }
   }
 
+  private async executeReload(): Promise<void> {
+    await this.flush();
+    if (this.dirtyStreamIds.size > 0) {
+      throw new Error(
+        'Cannot reload transcripts while persistent writes remain unresolved.',
+      );
+    }
+
+    const revision = this.stateRevision;
+    const summaries = await this.readPersistentSummaries();
+    if (revision !== this.stateRevision || this.pendingLoads.size > 0) {
+      throw new Error(
+        'Transcript state changed during reload; preserving the live state.',
+      );
+    }
+    this.replaceSummaries(summaries);
+  }
+
+  private async readPersistentSummaries(): Promise<
+    Map<StreamTabId, StreamLogSummary>
+  > {
+    const streamIds = await this.kv.listKeys();
+    const results = await pMap(
+      streamIds,
+      (streamId) => this.loadStreamSummary(streamId as StreamTabId),
+      { concurrency: STREAM_LOG_LOAD_CONCURRENCY },
+    );
+    const sortedResults = results
+      .filter(filterNotNull)
+      .sort(
+        (a, b) =>
+          (a.summary.firstTimestamp ?? Number.POSITIVE_INFINITY) -
+            (b.summary.firstTimestamp ?? Number.POSITIVE_INFINITY) ||
+          a.streamId.localeCompare(b.streamId),
+      );
+
+    return new Map(
+      sortedResults.map(({ streamId, summary }) => [streamId, summary]),
+    );
+  }
+
+  private replaceSummaries(
+    summaries: ReadonlyMap<StreamTabId, StreamLogSummary>,
+  ): void {
+    this.logs.clear();
+    this.summaries.clear();
+    for (const [streamId, summary] of summaries) {
+      this.summaries.set(streamId, summary);
+    }
+    this.dirtyStreamIds.clear();
+    this.pendingRelease.clear();
+    this.flushing.clear();
+    this.loadFailed.clear();
+    this.pendingLoads.clear();
+    this.writeTombstones.clear();
+    this.clearing = false;
+    this.stateRevision += 1;
+
+    log.info(
+      LOG_TAG,
+      `Loaded ${this.summaries.size} stream summaries (file-backed)`,
+    );
+  }
+
   private async loadStreamSummary(
     streamId: StreamTabId,
   ): Promise<StreamLoadResult | null> {
@@ -670,56 +781,41 @@ export class StreamLogStore {
       return { streamId, summary: persistedSummary };
     }
 
-    try {
-      const raw = await this.kv.read<unknown[]>(streamId);
-      const entries = this.parsePersistedEntries(streamId, raw);
-      if (
-        entries.entries.length === 0 &&
-        entries.preservedRawEntries.length === 0
-      ) {
-        return null;
-      }
-
-      const summary = this.summarizeEntries(entries.entries);
-      await this.writeSummary(streamId, summary).catch(() => {
-        log.warn(LOG_TAG, `Failed to write stream summary: ${streamId}`);
-      });
-      return { streamId, summary };
-    } catch (err) {
-      log.warn(
-        LOG_TAG,
-        `Skipping corrupt stream log: ${streamId} (${toErrorMessage(err)})`,
-      );
+    const raw = await this.kv.read<unknown[]>(streamId);
+    const entries = this.parsePersistedEntries(streamId, raw);
+    if (
+      entries.entries.length === 0 &&
+      entries.preservedRawEntries.length === 0
+    ) {
       return null;
     }
+
+    const summary = this.summarizeEntries(entries.entries);
+    await this.writeSummary(streamId, summary);
+    return { streamId, summary };
   }
 
   private async readSummary(
     streamId: StreamTabId,
   ): Promise<StreamLogSummary | undefined> {
-    try {
-      const summary = this.parsePersistedSummary(
-        await this.summaryKv.read<unknown>(streamId),
-      );
-      if (!summary) return undefined;
+    const summary = this.parsePersistedSummary(
+      await this.summaryKv.read<unknown>(streamId),
+    );
+    if (!summary) return undefined;
 
-      const [summaryMtime, logMtime] = await Promise.all([
-        this.summaryKv.modifiedAt(streamId),
-        this.kv.modifiedAt(streamId),
-      ]);
-      if (
-        summaryMtime !== undefined &&
-        logMtime !== undefined &&
-        summaryMtime < logMtime
-      ) {
-        return undefined;
-      }
-
-      return summary;
-    } catch {
-      log.warn(LOG_TAG, `Ignoring corrupt stream summary: ${streamId}`);
+    const [summaryMtime, logMtime] = await Promise.all([
+      this.summaryKv.modifiedAt(streamId),
+      this.kv.modifiedAt(streamId),
+    ]);
+    if (
+      summaryMtime !== undefined &&
+      logMtime !== undefined &&
+      summaryMtime < logMtime
+    ) {
       return undefined;
     }
+
+    return summary;
   }
 
   private summarizeEntries(
@@ -852,7 +948,7 @@ export class StreamLogStore {
     // is corrupt persisted data — throw so both callers route through the
     // same failure path as unparseable JSON (`ensureLoaded` marks the load
     // failed, which blocks saves from overwriting the on-disk file; startup
-    // summary loading skips the stream). Returning an empty log here would
+    // opening rejects). Returning an empty log here would
     // let a later save() destructively rewrite the corrupt source (#7464).
     if (rawEntries === undefined) return parsed;
     if (!Array.isArray(rawEntries)) {
@@ -892,10 +988,6 @@ export class StreamLogStore {
   }
 
   private executeWrite(): Promise<void> {
-    if (!this.loaded) {
-      return Promise.resolve();
-    }
-
     // Skip streams whose rehydrate is pending or errored — writing now
     // would clobber the authoritative on-disk history with a fresh
     // empty-plus-new-appends log before `ensureLoaded` merges disk entries

@@ -192,7 +192,7 @@ describe('tool-use round outcome persistence (#8023)', () => {
       const { host } = createRecordingHost();
       const logger = new TraceEmitter();
       const streamId = `stream:tool-use-round-${name}` as StreamTabId;
-      const store = new StreamLogStore();
+      const store = StreamLogStore.ephemeral('test');
       store.ensureStream(streamId);
       const recorder = attachTranscriptRecorder(logger, streamId, store);
       const node = new ToolUseCycleNode().setServices({

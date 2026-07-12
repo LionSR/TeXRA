@@ -8,7 +8,10 @@ import type { ChildStream } from '@tools/childStream';
 export function createFakeAgentCliChildStream(
   childStreamId: StreamTabId,
 ): ChildStream {
-  const logger = createRunTrace(childStreamId, new StreamLogStore()).trace;
+  const logger = createRunTrace(
+    childStreamId,
+    StreamLogStore.ephemeral('test'),
+  ).trace;
   return {
     childStreamId,
     logger,

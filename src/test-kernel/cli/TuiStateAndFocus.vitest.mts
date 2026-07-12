@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // Phase 4 state + focus-cycle smoke.
 
 import { EventEmitter } from 'node:events';

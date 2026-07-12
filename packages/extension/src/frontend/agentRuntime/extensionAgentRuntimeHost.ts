@@ -13,7 +13,9 @@ import {
 import { emitExtensionInteractionEvent } from '@frontend/events/extensionInteractionEvents';
 
 export const extensionAgentRuntimeHost: AgentRuntimeHost = {
-  interactions: defaultSession().interactions,
+  get interactions() {
+    return defaultSession().interactions;
+  },
   emit: (event, payload) => {
     if (isExtensionPresentationEvent(event)) {
       extensionPresentationEvents.emit(

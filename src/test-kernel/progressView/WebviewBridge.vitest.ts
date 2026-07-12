@@ -52,7 +52,7 @@ describe('WebviewBridge', () => {
   });
 
   it('flushes active stream log deltas', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
     const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
@@ -78,7 +78,7 @@ describe('WebviewBridge', () => {
   });
 
   it('does not queue inactive stream flushes that race with tab switches', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     let activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
     const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
@@ -96,7 +96,7 @@ describe('WebviewBridge', () => {
   });
 
   it('syncs inactive stream history explicitly on tab switch', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     let activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
     const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
@@ -127,7 +127,7 @@ describe('WebviewBridge', () => {
   });
 
   it('replays full streamed text when a webview syncs mid-stream', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
     const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
@@ -156,7 +156,7 @@ describe('WebviewBridge', () => {
   });
 
   it('keeps the cursor and dirty updates when no target accepts a log delta', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const activeStream = 'active' as StreamTabId;
     const sendMessage = vi
       .fn()
@@ -201,7 +201,7 @@ describe('WebviewBridge', () => {
   });
 
   it('serializes async flushes and preserves updates made during delivery', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const activeStream = 'active' as StreamTabId;
     const firstDelivery = deferredBoolean();
     const sendMessage = vi
@@ -242,7 +242,7 @@ describe('WebviewBridge', () => {
   });
 
   it('does not resend streamed text already covered by an in-flight full entry', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const activeStream = 'active' as StreamTabId;
     const firstDelivery = deferredBoolean();
     const sendMessage = vi
@@ -290,7 +290,7 @@ describe('WebviewBridge', () => {
   });
 
   it('ships streamed text as O(L) append deltas instead of full updates', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const activeStream = 'active' as StreamTabId;
     let deliveredBytes = 0;
     const sendMessage = vi.fn((message) => {
