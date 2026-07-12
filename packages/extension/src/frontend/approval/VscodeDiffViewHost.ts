@@ -121,19 +121,14 @@ export class VscodeDiffViewHost implements DiffViewHost {
     });
   }
 
-  async readProposedContent(
-    session: DiffSession,
-    fallbackContent: string,
-  ): Promise<string> {
+  async readProposedContent(session: DiffSession): Promise<string> {
     const proposedUri = this.toUri(session.proposed);
     const openDocument = vscode.workspace.textDocuments.find(
       (doc) => doc.uri.toString() === proposedUri.toString(),
     );
     return openDocument
       ? openDocument.getText()
-      : await fs
-          .readFile(proposedUri.fsPath, 'utf8')
-          .catch(() => fallbackContent);
+      : await fs.readFile(proposedUri.fsPath, 'utf8');
   }
 
   private toUri(source: DiffSource): vscode.Uri {
