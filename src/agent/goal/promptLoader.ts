@@ -10,9 +10,9 @@
  * yet wired Goal, or under tests), template lookups fall back to the
  * inline copy in `inlineTemplates` so the continuation loop still works.
  */
-import * as yaml from 'yaml';
 import { z } from 'zod';
 
+import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -83,7 +83,9 @@ async function loadPrompts(): Promise<GoalPrompts> {
   }
   try {
     const content = await AbsoluteFS.read(goalYamlPath);
-    cached = GoalPromptsYamlSchema.parse(yaml.parse(content));
+    const parsed = parseYamlWith(content, GoalPromptsYamlSchema);
+    if (parsed.isErr()) throw parsed.error;
+    cached = parsed.value;
   } catch (err) {
     // Fall back to inline templates, but warn so a broken/missing bundled
     // goal.yaml is detectable rather than silently masked.

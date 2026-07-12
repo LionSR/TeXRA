@@ -158,21 +158,20 @@ export class StreamTab extends LitElement {
       >
         ${
           hasChildren
-            ? html`<button
-                class="tab-expand"
+            ? html`<wa-button
+                class="action-icon-button tab-expand"
+                appearance="plain"
+                variant="neutral"
+                size="small"
+                type="button"
                 data-stream=${stream.name}
                 data-action="toggle-children"
                 title=${
                   this.expanded ? 'Collapse child streams' : childStreamLabel
                 }
                 aria-expanded=${this.expanded ? 'true' : 'false'}
-              >
-                <wa-icon
-                  library=${TEXRA_ICON_LIBRARY}
-                  name="chevron-right"
-                  aria-hidden="true"
-                ></wa-icon>
-              </button>`
+                >${waIcon('chevron-right')}</wa-button
+              >`
             : nothing
         }
         <button
