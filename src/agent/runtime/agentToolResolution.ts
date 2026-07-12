@@ -38,7 +38,10 @@ import {
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
 import { withoutDiagnosticsAddCommand } from '@tools/DiagnosticsTool';
-import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import {
+  DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+  DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
+} from '@tools/diagnosticsRuntimeCapabilities';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
 import {
   availableModelNamesFromOptions,
@@ -135,9 +138,12 @@ export async function resolveAgentTools({
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
   const runtimeUnavailable = new Set(runtimeUnavailableTools ?? []);
-  const diagnosticsAddUnavailable = runtimeUnavailable.has(
-    DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+  const diagnosticsReadUnavailable = runtimeUnavailable.has(
+    DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
   );
+  const diagnosticsAddUnavailable =
+    !diagnosticsReadUnavailable &&
+    runtimeUnavailable.has(DIAGNOSTICS_ADD_RUNTIME_CAPABILITY);
   const missingDependency: string[] = [];
 
   const toolConfigs = Array.isArray(tools) ? tools : [];

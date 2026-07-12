@@ -30,6 +30,21 @@ function worktreeContext() {
 }
 
 describe('DiagnosticsTool', () => {
+  it('reports a capability error when the host has no linter', async () => {
+    await installPlatform({}, { linter: undefined });
+
+    const result = await withRunContext(worktreeContext(), () =>
+      new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
+    );
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error:
+        'Diagnostics capability unavailable: this host did not configure Platform.linter.',
+      diagnostics: { name: 'ToolError' },
+    });
+  });
+
   it('reads diagnostics from the active working directory root', async () => {
     const paths: string[] = [];
     await installLinter(async (path) => {
@@ -61,6 +76,28 @@ describe('DiagnosticsTool', () => {
     expect(result.error).toContain('at message');
     expect(result.error).toContain('at severity');
     expect(result.error).toContain('at confidence');
+  });
+
+  it('reports a capability error when the host has no criticism sink', async () => {
+    await installPlatform({}, { addCriticismSink: undefined });
+
+    const result = await withRunContext(worktreeContext(), () =>
+      new DiagnosticsTool().call({
+        command: 'add',
+        path: 'paper.tex',
+        line: 3,
+        message: 'tighten this claim',
+        severity: 4,
+        confidence: 5,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error:
+        'Diagnostics add capability unavailable: this host did not configure Platform.addCriticismSink.',
+      diagnostics: { name: 'ToolError' },
+    });
   });
 
   it('reports when the criticism sink does not accept (feature disabled)', async () => {
