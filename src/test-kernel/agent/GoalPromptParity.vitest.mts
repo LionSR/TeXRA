@@ -1,5 +1,7 @@
 // Node imports
 import { readFileSync } from 'node:fs';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -71,5 +73,18 @@ describe('Goal prompt parity (YAML ↔ inline fallback)', () => {
     await expect(getContinuationTemplate()).resolves.toBe(
       readYaml().continuation.template,
     );
+  });
+
+  it('falls back to the inline template instead of throwing on malformed goal YAML', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+
+    const dir = await mkdtemp(resolve(tmpdir(), 'texra-goal-'));
+    const brokenPath = resolve(dir, 'broken.yaml');
+    await writeFile(brokenPath, 'continuation:\n  template: "unterminated\n');
+    initializeGoalPrompts(brokenPath);
+
+    const template = await getContinuationTemplate();
+    expect(template).toContain('Autonomous objective active');
   });
 });
