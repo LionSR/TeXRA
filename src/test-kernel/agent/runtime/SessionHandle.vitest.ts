@@ -66,6 +66,7 @@ describe('SessionHandle', () => {
       expect(fresh.events).not.toBe(defaultSession().events);
       expect(fresh.transcripts).not.toBe(defaultSession().transcripts);
       expect(fresh.followUps).not.toBe(defaultSession().followUps);
+      expect(fresh.approvals).not.toBe(defaultSession().approvals);
       expect(fresh.flushers).not.toBe(getActiveFlushers());
       expect(fresh.hostChannel).toBeUndefined();
     } finally {

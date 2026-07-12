@@ -19,7 +19,7 @@ import {
   cleanupAllApprovals,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
-  proposalApprovalState,
+  proposalApprovals,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
@@ -488,7 +488,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     ).toBe(true);
     await Promise.resolve();
 
-    expect(proposalApprovalState.isBypassed(stream)).toBe(true);
+    expect(proposalApprovals().isBypassed(stream)).toBe(true);
     expect(isApprovalBypassedForStream(stream)).toBe(true);
     expect(isBashApprovalBypassedForStream(stream)).toBe(true);
     expect(events).toEqual([
@@ -516,7 +516,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     ).toBe(true);
     await Promise.resolve();
 
-    expect(proposalApprovalState.isBypassed(stream)).toBe(false);
+    expect(proposalApprovals().isBypassed(stream)).toBe(false);
     expect(isApprovalBypassedForStream(stream)).toBe(false);
     expect(isBashApprovalBypassedForStream(stream)).toBe(false);
     expect(events.slice(-2)).toEqual([

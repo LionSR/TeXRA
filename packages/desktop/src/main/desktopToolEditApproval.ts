@@ -47,7 +47,6 @@ export interface DesktopToolEditApprovalController {
   }): boolean;
   requestApproval(
     request: ToolEditApprovalRequest,
-    session?: SessionHandle,
   ): Promise<ToolEditApprovalResult>;
   dispose(): void;
 }
@@ -71,7 +70,6 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
 
   async requestApproval(
     request: ToolEditApprovalRequest,
-    session: SessionHandle = this.options.session,
   ): Promise<ToolEditApprovalResult> {
     if (this.disposed) {
       throw new Error('Desktop tool edit approval controller is disposed.');
@@ -93,16 +91,24 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       };
       entry.isSettled = () => settled;
       this.pending.set(requestId, entry);
-      registerPendingApproval(requestId, {
-        // `streamId` is `.nullish()` on the tool schema (string | null |
-        // undefined); the approval registry expects `string | undefined`, so
-        // collapse null → undefined (matches nativeToolEditApproval).
-        streamId: request.streamId ?? undefined,
-        runtimeHost: this.options.runtimeHost,
-        isSettled: () => settled,
-        settle: (value) => this.settle(requestId, value),
-      });
-      this.showProgressPermission(session, requestId, request, lineChanges);
+      registerPendingApproval(
+        requestId,
+        {
+          // `streamId` is `.nullish()` on the tool schema (string | null |
+          // undefined); the approval registry expects `string | undefined`, so
+          // collapse null → undefined (matches nativeToolEditApproval).
+          streamId: request.streamId ?? undefined,
+          isSettled: () => settled,
+          settle: (value) => this.settle(requestId, value),
+        },
+        this.options.session,
+      );
+      this.showProgressPermission(
+        this.options.session,
+        requestId,
+        request,
+        lineChanges,
+      );
     });
 
     if (result.accepted && result.appliedContent != null) return result;
@@ -217,7 +223,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     if (!entry || entry.isSettled()) return;
 
     this.pending.delete(requestId);
-    unregisterPendingApproval(requestId);
+    unregisterPendingApproval(requestId, this.options.session);
     entry.settle(result);
     this.options.runtimeHost.emit('resolveToolEditPermission', { requestId });
     this.cleanupEntry(entry);
