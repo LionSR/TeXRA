@@ -50,7 +50,6 @@ export function formatFileListTemplate(
       iconName: 'file',
       label: 'Files (raw)',
       labelClass: 'summary-text',
-      summarySlot: true,
     })}<ul class="file-list-content" data-log-id=${ifDefined(id)}><pre>${text ?? ''}</pre></ul></wa-details>`;
   }
 
@@ -60,7 +59,6 @@ export function formatFileListTemplate(
     iconName: 'file',
     label: renderData?.summary ?? 'Files',
     labelClass: 'summary-text',
-    summarySlot: true,
   })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${renderData?.items ?? ''}</ul></wa-details>`;
 }
 
@@ -102,7 +100,6 @@ export function formatMissingOutputsTemplate(
     iconName: 'warning',
     label: `Missing outputs (${missing.length})`,
     labelClass: 'summary-text',
-    summarySlot: true,
   })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listItems}</ul>${xmlFile ? renderXmlLink(xmlFile) : ''}</wa-details>`;
 }
 

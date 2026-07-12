@@ -169,7 +169,6 @@ export class LatexdiffResults extends LitElement {
         ${buildDetailsSummary({
           iconName: 'diff',
           label: summaryText,
-          summarySlot: true,
         })}
         <ul class="latexdiff-content">
           ${repeat(
