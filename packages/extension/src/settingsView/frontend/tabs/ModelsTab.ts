@@ -250,8 +250,8 @@ export class ModelsTab extends LitElement {
           <span class="chatgpt-subscription__badge">experimental</span>
         </div>
         <p class="chatgpt-subscription__hint">
-          Use your own ChatGPT Plus/Pro/Team subscription for Codex models
-          instead of an API key.
+          Use OpenAI models through your ChatGPT Plus, Pro, or Team
+          subscription. No OpenAI API key is needed.
         </p>
         <p class="chatgpt-subscription__limit">
           ${waIcon('circle-info')}

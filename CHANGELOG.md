@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **ChatGPT sign-in unlocks compatible OpenAI models without an API key** —
+  the CLI and extension enable subscription routing, refresh model
+  availability, and expose supported OpenAI models after sign-in.
 - **Meta (Muse Spark) provider support** — Muse Spark 1.1 is now available as
   a direct provider with your own Meta Model API key (dev.meta.ai), including
   reasoning, tool calling, vision, and PDF input via Meta's Responses-compatible
@@ -47,8 +50,7 @@ All notable changes to this project will be documented in this file.
 
 - **Model access can be changed from the startup launcher** — choose a ChatGPT
   subscription, included TeXRA access, or personal API keys before starting a
-  session. ChatGPT-only users can select all compatible OpenAI models without
-  configuring an OpenAI API key.
+  session.
 - **Startup and settings lists are easier to scan** — resumable sessions,
   agents, and teams now live behind one entry each; the launcher also provides
   account sign-in and sign-out controls. `/config` groups settings by subject.
