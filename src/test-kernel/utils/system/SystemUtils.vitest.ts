@@ -137,6 +137,43 @@ describe('executeCommand', () => {
     assert.equal(result.stderr, 'Command aborted by user');
     await waitForProcessExit(childPid!);
   });
+
+  it('unblocks aborted array-form await when a descendant holds stdio', async () => {
+    if (process.platform === 'win32') return;
+
+    const dir = mkdtempSync(join(tmpdir(), 'texra-exec-abort-array-'));
+    tempDirs.push(dir);
+    const pidFile = join(dir, 'sleep.pid');
+    const controller = new AbortController();
+    // The backgrounded sleep inherits stdout/stderr; execa's cancelSignal
+    // only kills the tracked bash pid, so without the stream-teardown
+    // backstop this await would hang until the descendant exits.
+    const promise = executeCommand(
+      ['bash', '-c', 'sleep 60 & echo $! > "$PID_FILE"; wait'],
+      {
+        cwd: dir,
+        env: { PID_FILE: pidFile },
+        signal: controller.signal,
+        timeout: 60_000,
+      },
+    );
+
+    await waitForFile(pidFile);
+    const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
+    assert.ok(Number.isInteger(childPid) && childPid > 0);
+
+    controller.abort();
+    const result = await promise;
+
+    assert.equal(result.success, false);
+    assert.equal(result.timedOut, false);
+    assert.equal(result.exitCode, 130);
+    assert.equal(result.stderr, 'Command aborted by user');
+    // The array form intentionally has no process-group semantics: the
+    // descendant must survive the abort. Reap it so the test doesn't leak.
+    assert.doesNotThrow(() => process.kill(childPid, 0));
+    process.kill(childPid, 'SIGKILL');
+  }, 20_000);
 });
 
 // ---------------------------------------------------------------------------
