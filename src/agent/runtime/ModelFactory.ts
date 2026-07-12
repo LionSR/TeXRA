@@ -9,12 +9,16 @@ import {
   shouldUseInternalValidationModelHandler,
 } from '@agent/runtime/internalValidationOverride';
 import {
-  isCodexSignedIn,
-  resolveCodexSubscriptionCapabilities,
+  CodexAuthError,
+  formatCodexAuthUnavailableMessage,
+  isCodexSessionRoutable,
+  resolveCodexSubscriptionCapabilitiesForAgentCategory,
 } from '@auth/codex';
+import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { isGpt5ModelName } from '@model/modelNames';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import type { AgentCategory } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -301,6 +305,18 @@ export function activeModelHandlerCompatibilityKey(
   ];
 }
 
+/** Compare persisted format keys, falling back to class identity for untagged handlers. */
+export function modelHandlersShareConversationFormat(
+  first: object,
+  second: object,
+): boolean {
+  const firstKey = activeModelHandlerCompatibilityKey(first);
+  const secondKey = activeModelHandlerCompatibilityKey(second);
+  return firstKey !== undefined && secondKey !== undefined
+    ? firstKey === secondKey
+    : first.constructor === second.constructor;
+}
+
 function withModelHandlerCompatibilityKey<T extends ModelHandler>(
   handler: T,
   compatibilityKey: ModelHandlerCompatibilityKey,
@@ -379,6 +395,7 @@ function withCompatibilityRoutingMode(
  */
 export async function createModelHandler(
   originalConfig: ModelConfig,
+  agentCategory?: AgentCategory,
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
   const useOpenRouter = getUseOpenRouter();
@@ -395,7 +412,7 @@ export async function createModelHandler(
     config,
     compatibilityKey,
     useOpenRouter,
-    { allowCodexSubscriptionOverride: true },
+    { allowCodexSubscriptionOverride: true, agentCategory },
   );
 }
 
@@ -407,6 +424,7 @@ export async function createModelHandler(
 export async function createModelHandlerForCompatibilityKey(
   originalConfig: ModelConfig,
   compatibilityKey: ModelHandlerCompatibilityKey,
+  agentCategory?: AgentCategory,
 ): Promise<ModelHandler> {
   const routedConfig = withCompatibilityRoutingMode(
     withShortModelName(originalConfig),
@@ -420,6 +438,7 @@ export async function createModelHandlerForCompatibilityKey(
     {
       allowCodexSubscriptionOverride:
         compatibilityKey === 'ModelHandlerOpenAIResponse',
+      agentCategory,
     },
   );
 }
@@ -428,7 +447,10 @@ async function createModelHandlerForResolvedCompatibilityKey(
   config: ModelConfig,
   compatibilityKey: ModelHandlerCompatibilityKey | undefined,
   useOpenRouter: boolean,
-  options: { allowCodexSubscriptionOverride: boolean },
+  options: {
+    allowCodexSubscriptionOverride: boolean;
+    agentCategory: AgentCategory | undefined;
+  },
 ): Promise<ModelHandler> {
   // ChatGPT subscription (Codex backend via the user's OAuth session) — an
   // async, key-neutral override of the Responses path: these are OpenAI
@@ -438,8 +460,12 @@ async function createModelHandlerForResolvedCompatibilityKey(
   if (
     options.allowCodexSubscriptionOverride &&
     compatibilityKey !== 'ModelHandlerValidation' &&
-    resolveCodexSubscriptionCapabilities(config, useOpenRouter) &&
-    (await isCodexSignedIn())
+    resolveCodexSubscriptionCapabilitiesForAgentCategory(
+      config,
+      useOpenRouter,
+      options.agentCategory,
+    ) &&
+    (await isCodexSessionRoutableForAgent())
   ) {
     logger.debug(CHANNEL, 'Using ChatGPT subscription (Codex) Handler');
     const { ModelHandlerCodex } =
@@ -516,5 +542,19 @@ async function createModelHandlerForResolvedCompatibilityKey(
         route.compatibilityKey,
       );
     }
+  }
+}
+
+/** Classify retryable/config preflight failures for the agent lifecycle. */
+async function isCodexSessionRoutableForAgent(): Promise<boolean> {
+  try {
+    return await isCodexSessionRoutable();
+  } catch (error) {
+    if (error instanceof CodexAuthError) {
+      throw new AgentError(formatCodexAuthUnavailableMessage(error), {
+        cause: error,
+      });
+    }
+    throw error;
   }
 }
