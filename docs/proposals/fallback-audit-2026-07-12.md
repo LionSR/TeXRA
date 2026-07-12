@@ -1522,6 +1522,12 @@ useful recovery behavior and obscure the integrity fixes.
 
 ## Issue mapping
 
+For the current remediation batch, the implementation ledger above is the
+focused tracking surface for findings that already have draft pull requests.
+Unscheduled findings remain under #7726 and should receive a child issue when
+implementation is scheduled, avoiding a second open tracker beside an active
+pull request.
+
 | Existing issue   | Use in this audit                                                      |
 | ---------------- | ---------------------------------------------------------------------- |
 | #7726            | Parent tracker for false-success and broad masking chains              |
