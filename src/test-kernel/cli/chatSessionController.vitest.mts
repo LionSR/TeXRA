@@ -119,7 +119,11 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
-import { rootStreamId } from '@cli/chat/tui/state/cliState';
+import {
+  rootRunPending,
+  rootRunStreamId,
+  rootStreamId,
+} from '@cli/chat/tui/state/cliState';
 import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanStopActiveRun,
@@ -313,6 +317,8 @@ describe('createChatSessionController', () => {
       streamId: 'stream-resume',
     });
     rootStreamId.set(undefined);
+    rootRunPending.set(false);
+    rootRunStreamId.set(undefined);
   });
 
   it('returns an object satisfying the ChatSessionController interface', () => {
@@ -496,12 +502,18 @@ describe('createChatSessionController', () => {
     // already set to the resumed stream.
     expect(session.runPromise).toBeDefined();
     expect(session.streamId).toBe('stream-resume');
+    // #8273 regression: the controller must publish the run facts so status
+    // rendering can derive the Ctrl-C hint from signals instead of calling
+    // impure session closures that memoized renders cache stale.
+    expect(rootRunPending.get()).toBe(true);
+    expect(rootRunStreamId.get()).toBe('stream-resume');
 
     const canInterruptActiveRun = chatTuiCanInterruptActiveRun(session);
-    const canStopActiveRun = chatTuiCanStopActiveRun(
-      session,
-      STREAM_PHASE.WAITING,
-    );
+    const canStopActiveRun = chatTuiCanStopActiveRun({
+      runPending: Boolean(session.runPromise && !session.runCompleted),
+      streamId: session.streamId,
+      status: STREAM_PHASE.WAITING,
+    });
     const resumableIdle = chatTuiIsResumableIdleOnExit({
       canInterruptActiveRun,
       canStopActiveRun,
