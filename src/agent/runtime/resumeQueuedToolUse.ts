@@ -33,6 +33,11 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
    */
   readonly extraFollowUps?: readonly FollowUpQueueInput[];
   /**
+   * Fires after the shared stream queue is acquired and marked RESUMING, but
+   * before its queued items are drained into the rebuilt session.
+   */
+  readonly onFollowUpQueueReady?: () => void;
+  /**
    * Host-specific failure surface (log + toast). Invoked after the stream has
    * been returned to WAITING, so a blocking host dialog cannot strand the
    * stream in RESUMING while it awaits dismissal.
@@ -91,6 +96,7 @@ export async function resumeQueuedToolUseSnapshot(
     }
   };
   try {
+    options.onFollowUpQueueReady?.();
     followUps = [...seed, ...followUpsQueue.drainItems(streamId)];
     session.events.emit({
       scope: 'session',

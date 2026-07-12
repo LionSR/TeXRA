@@ -165,10 +165,15 @@ export type ToolUseFlowSetupCallback = (
   context: ToolUseFlowContext,
 ) => void | (() => void);
 
-type ToolUsePersistedFlow<C> = PersistedFlow<
+class ToolUsePersistedFlow<C> extends PersistedFlow<
   ToolUseRunShared,
   ToolUseServices<C>
->;
+> {
+  async prepareForFollowUp(shared: ToolUseRunShared): Promise<void> {
+    shared.shouldSkipCycle = true;
+    await this.resetNodeHistory(shared);
+  }
+}
 
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
@@ -352,6 +357,7 @@ export async function runToolUseFlow<C = unknown>(
   let teardownSetup: (() => void) | undefined;
   let preserveResumeRecord = false;
   let persistenceRecoveryPending = false;
+  let flowRunStarted = false;
   const compatibilityKey = activeModelHandlerCompatibilityKey(
     services.modelHandler,
   );
@@ -477,7 +483,7 @@ export async function runToolUseFlow<C = unknown>(
     cycleNode.next(waitNode);
     waitNode.on(FlowTransition.CONTINUE, cycleNode);
     waitNode.on(FlowTransition.WAITING, waitNode);
-    const pf: ToolUsePersistedFlow<C> = new PersistedFlow(
+    const pf = new ToolUsePersistedFlow<C>(
       prepareNode,
       kv,
       executionId,
@@ -495,7 +501,17 @@ export async function runToolUseFlow<C = unknown>(
         await store.writeWorkspaceFiles(currentTouchedFiles);
       }
     });
-    const finalAction = await pf.run(shared);
+    flowRunStarted = true;
+    let finalAction: Awaited<ReturnType<typeof pf.run>>;
+    try {
+      finalAction = await pf.run(shared);
+    } catch (error: unknown) {
+      if (input.checkInterruption()) {
+        shared = (await pf.getShared()) ?? shared;
+        await pf.prepareForFollowUp(shared);
+      }
+      throw error;
+    }
     // Re-read shared from the flow record — PersistedFlow deep-clones the
     // initial shared via structuredClone, so nodes mutate the clone, not the
     // original object.  Without this, reads of lastError, messages, etc. below
@@ -527,6 +543,9 @@ export async function runToolUseFlow<C = unknown>(
         cancelled: input.checkInterruption(),
       });
     }
+    if (outcome === RUN_OUTCOME.CANCELLED && input.checkInterruption()) {
+      await pf.prepareForFollowUp(shared);
+    }
     if (shared.lastError) {
       // Re-throw so runFlowWithLifecycle logs the error and shows
       // the user notification, while preserving terminal run accounting.
@@ -555,6 +574,8 @@ export async function runToolUseFlow<C = unknown>(
         'Flow record preserved after persistence recovery failure';
     } else if (outcome === STREAM_PHASE.WAITING) {
       preservationReason = 'Flow record preserved for native subagent WAITING';
+    } else if (flowRunStarted && input.checkInterruption()) {
+      preservationReason = 'Flow record preserved after user interruption';
     } else if (shared.userCancelledRetry) {
       preservationReason =
         'Flow record preserved for resume after retry cancellation';
