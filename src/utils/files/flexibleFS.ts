@@ -1,12 +1,6 @@
-// Local imports - log
-import * as logger from '@logger/logUtils';
-
 // Local imports - filesystem
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from './absoluteFS';
-
-const CHANNEL = 'flexibleFS';
-logger.initialize(CHANNEL);
 
 /**
  * Filesystem operations for FileLocation objects.
@@ -52,33 +46,8 @@ class FlexibleFSImpl {
     return AbsoluteFS.appendFile(target.absolutePath, content);
   }
 
-  async write(
-    target: FileLocation,
-    content: string | Uint8Array,
-  ): Promise<void> {
-    const absolutePath = target.absolutePath;
-
-    try {
-      await AbsoluteFS.write(absolutePath, content);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ELOOP') {
-        throw error;
-      }
-
-      const replacementSize =
-        typeof content === 'string'
-          ? Buffer.byteLength(content, 'utf-8')
-          : content.byteLength;
-      logger.warn(
-        CHANNEL,
-        `Detected circular symlink while writing ${absolutePath}, replaced with file (${replacementSize} bytes)`,
-      );
-      await AbsoluteFS.delete(absolutePath, {
-        recursive: true,
-        useTrash: false,
-      });
-      await AbsoluteFS.write(absolutePath, content);
-    }
+  write(target: FileLocation, content: string | Uint8Array): Promise<void> {
+    return AbsoluteFS.write(target.absolutePath, content);
   }
 
   ensureDir(target: FileLocation): Promise<void> {
