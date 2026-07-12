@@ -15,8 +15,10 @@
  * Response contract:
  * - Complete writes return success with the exact accepted entry count.
  * - Invalid batches are rejected atomically over HTTP 200 with
- *   `success: false`, `accepted: 0`, and `retryable: false`; HTTP 200 lets
- *   clients predating the retry marker read the body during rolling deploys.
+ *   `success: false`, `accepted: 0`, `retryable: false`, and a stable
+ *   `errorCode`; HTTP 200 lets clients predating the retry marker read the
+ *   body during rolling deploys. Sanitized validation issues identify the
+ *   rejected fields without echoing request values.
  *   Restore HTTP 422 after clients predating #8267 age out under #6981.
  * - Malformed JSON uses the same permanent-rejection body with HTTP 400.
  * - Authentication and operational failures omit the permanent-rejection
@@ -39,6 +41,7 @@ import { UsageBatchSchema, type UsageLogEntry } from './usageValidation.ts';
 // =============================================================================
 
 const LOG_USAGE_VERSION = '1.6.0';
+const MAX_REPORTED_VALIDATION_ISSUES = 20;
 
 const UsageDestinations = {
   paid: {
@@ -94,7 +97,16 @@ function errorResponse(
   req: Request,
   error: string,
   status: number,
-  options?: { retryable?: boolean },
+  options?: {
+    retryable?: boolean;
+    errorCode?: string;
+    issues?: readonly {
+      code: string;
+      path: readonly string[];
+      message: string;
+    }[];
+    issueCount?: number;
+  },
 ): Response {
   return versionedJsonResponse(
     req,
@@ -106,6 +118,13 @@ function errorResponse(
       ...(options?.retryable === undefined
         ? {}
         : { retryable: options.retryable }),
+      ...(options?.errorCode === undefined
+        ? {}
+        : { errorCode: options.errorCode }),
+      ...(options?.issues === undefined ? {} : { issues: options.issues }),
+      ...(options?.issueCount === undefined
+        ? {}
+        : { issueCount: options.issueCount }),
     },
     status,
   );
@@ -230,6 +249,7 @@ Deno.serve(async (req: Request) => {
     } catch {
       return errorResponse(req, 'Invalid JSON body', 400, {
         retryable: false,
+        errorCode: 'INVALID_JSON',
       });
     }
 
@@ -244,6 +264,15 @@ Deno.serve(async (req: Request) => {
       // once the minimum supported client includes #8267.
       return errorResponse(req, 'Invalid batch format or entry data', 200, {
         retryable: false,
+        errorCode: 'BATCH_REJECTED',
+        issueCount: batchResult.error.issues.length,
+        issues: batchResult.error.issues
+          .slice(0, MAX_REPORTED_VALIDATION_ISSUES)
+          .map((issue) => ({
+            code: issue.code,
+            path: issue.path.map((part) => String(part)),
+            message: issue.message,
+          })),
       });
     }
     const batch = batchResult.data;
