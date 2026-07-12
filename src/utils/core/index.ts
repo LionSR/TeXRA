@@ -111,9 +111,12 @@ export function getBasename(filePath: string | undefined | null): string {
  * Dotfiles keep their name (`'.gitignore'` → `'.gitignore'`).
  */
 export function getFileStem(filePath: string | undefined | null): string {
-  if (!filePath) return '';
-  const normalized = normalizeFilePath(filePath);
-  return pathBasename(normalized, pathExtname(normalized));
+  const base = getBasename(filePath);
+  // pathe's extname() misreads a dotfile's leading dot as an extension
+  // marker once a directory prefix is present (e.g. '/home/user/.bashrc'),
+  // even though it gets bare '.bashrc' right — so compute it against the
+  // basename alone, never the full path.
+  return pathBasename(base, pathExtname(base));
 }
 
 /** Exhaustiveness helper for discriminated unions. Call in the `default` branch of a switch. */
