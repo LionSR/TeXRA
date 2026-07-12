@@ -28,8 +28,17 @@ const SECRETS_FILE_MODE = 0o600;
  * lifetime of this instance: separate `texra` invocations are separate
  * processes, and a fresh open re-reads the file so a concurrently running
  * CLI invocation's write isn't clobbered by a stale in-memory snapshot.
+ *
+ * `set()`/`delete()` are additionally serialized through {@link mutationQueue}
+ * so overlapping mutations *within this process* don't each open a store off
+ * the same on-disk snapshot and flush independently — the later flush would
+ * otherwise silently drop the key the earlier one just wrote. Reads
+ * (`get`/`getStored`/`listStoredKeys`) stay outside the queue and always open
+ * a fresh store, matching prior `readSecrets()` behavior.
  */
 export class CliSecrets implements PlatformSecrets {
+  private mutationQueue: Promise<void> = Promise.resolve();
+
   constructor(private readonly filePath = cliSecretsPath()) {}
 
   async get(key: string): Promise<string | undefined> {
@@ -38,17 +47,16 @@ export class CliSecrets implements PlatformSecrets {
 
   async getStored(key: string): Promise<string | undefined> {
     const store = await this.openStore();
-    return store.get<string | undefined>(key, undefined);
+    const value = store.get<unknown>(key, undefined);
+    return typeof value === 'string' ? value : undefined;
   }
 
   async set(key: string, value: string): Promise<void> {
-    const store = await this.openStore();
-    await store.set(key, value);
+    await this.mutate((store) => store.set(key, value));
   }
 
   async delete(key: string): Promise<void> {
-    const store = await this.openStore();
-    await store.set(key, undefined);
+    await this.mutate((store) => store.set(key, undefined));
   }
 
   async listStoredKeys(): Promise<readonly string[]> {
@@ -58,6 +66,22 @@ export class CliSecrets implements PlatformSecrets {
 
   getEnv(name: string): string | undefined {
     return cliEnvValue(name);
+  }
+
+  /**
+   * Runs `op` against a freshly opened store, chained after any mutation
+   * already queued on this instance so overlapping `set()`/`delete()` calls
+   * serialize instead of racing. The chain link is established synchronously
+   * (before the first `await`), so ordering is captured at call time, not at
+   * whatever point `openStore()`'s `mkdir`/read happens to settle.
+   */
+  private mutate(op: (store: JsonStore) => Promise<void>): Promise<void> {
+    const mutation = this.mutationQueue.then(async () => {
+      const store = await this.openStore();
+      await op(store);
+    });
+    this.mutationQueue = mutation.catch(() => {});
+    return mutation;
   }
 
   private openStore(): Promise<JsonStore> {
