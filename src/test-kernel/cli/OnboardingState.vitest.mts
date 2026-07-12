@@ -69,10 +69,12 @@ describe('maskDisplayValue', () => {
 
 describe('formatApiKeyShadowWarning', () => {
   it('warns only when signed in AND a personal key is present', () => {
-    expect(formatApiKeyShadowWarning(true, true)).toMatch(/provider API key/);
-    expect(formatApiKeyShadowWarning(true, false)).toBeUndefined();
-    expect(formatApiKeyShadowWarning(false, true)).toBeUndefined();
-    expect(formatApiKeyShadowWarning(false, false)).toBeUndefined();
+    expect(formatApiKeyShadowWarning(true, ['deepseek'])).toBe(
+      'available: included TeXRA access; personal API keys: DeepSeek',
+    );
+    expect(formatApiKeyShadowWarning(true, [])).toBeUndefined();
+    expect(formatApiKeyShadowWarning(false, ['deepseek'])).toBeUndefined();
+    expect(formatApiKeyShadowWarning(false, [])).toBeUndefined();
   });
 });
 

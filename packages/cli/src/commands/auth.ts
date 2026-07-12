@@ -244,7 +244,7 @@ export const loginCommand = withUsageSections(
   ],
 );
 
-async function runLoginCommand(
+export async function runLoginCommand(
   context: CliContext,
   init: CliLoginInit,
 ): Promise<number> {

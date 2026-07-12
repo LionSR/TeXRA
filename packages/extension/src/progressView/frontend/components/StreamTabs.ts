@@ -13,7 +13,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports
 import {
-  STREAM_STATUS,
+  DEFAULT_STREAM_METADATA_STATUS,
   type StreamSubstate,
   type StreamTabId,
   type StreamTabInfo,
@@ -102,7 +102,7 @@ export class StreamTab extends LitElement {
   static override styles = [designTokens, animationStyles, streamTabStyles];
 
   @property({ attribute: false }) info!: StreamTabInfo;
-  @property({ type: String }) status: string = STREAM_STATUS.READY;
+  @property({ type: String }) status: string = DEFAULT_STREAM_METADATA_STATUS;
   @property({ attribute: false }) substate: StreamSubstate | undefined;
   @property({ attribute: false }) lastTimestamp: number | undefined = undefined;
   @property({ type: Boolean }) active = false;
@@ -127,7 +127,7 @@ export class StreamTab extends LitElement {
     if (changed.has('info')) {
       this._agentDecorator = getAgentCategoryDecorator(this.info.agentCategory);
     }
-    const status = this.status || STREAM_STATUS.READY;
+    const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
     const statusLabel =
       formatStreamStatusLabel(status, {
         style: 'progressHeader',
@@ -138,7 +138,7 @@ export class StreamTab extends LitElement {
 
   override render(): TemplateResult {
     const stream = this.info;
-    const status = this.status || STREAM_STATUS.READY;
+    const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
     const statusKey = streamStatusDisplayKey(status, this.substate) ?? status;
     const tooltip = this._tooltip;
     const agentDecorator = this._agentDecorator;
@@ -350,7 +350,9 @@ export class StreamTabs extends LitElement {
   }
 
   private getStatus(name: StreamTabId): string {
-    return this.streamStates.get(name)?.status ?? STREAM_STATUS.READY;
+    return (
+      this.streamStates.get(name)?.status ?? DEFAULT_STREAM_METADATA_STATUS
+    );
   }
 
   private getSubstate(name: StreamTabId): StreamSubstate | undefined {

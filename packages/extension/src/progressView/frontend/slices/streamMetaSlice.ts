@@ -8,7 +8,7 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   createStreamState,
-  STREAM_STATUS,
+  STREAM_PHASE,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -130,7 +130,7 @@ export const streamMetaHandlers = {
     const { stream, status, lastTimestamp, substate } = data;
     const state = ctx.getState();
     const isActiveStream = stream === state.activeStreamId;
-    const shouldFocus = isActiveStream && status === STREAM_STATUS.WAITING;
+    const shouldFocus = isActiveStream && status === STREAM_PHASE.WAITING;
 
     // Single atomic update: stream state + tab metadata in one setState call,
     // avoiding two Map copies and two Lit re-render triggers.

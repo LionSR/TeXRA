@@ -49,7 +49,7 @@ export function ConfirmCard({
   color,
   title,
   approveLabel = 'approve',
-  rejectLabel = 'reject',
+  rejectLabel = 'reject & note',
   alwaysAllow,
   extraActions = [],
   feedbackPlaceholder = 'Feedback to send with rejection',

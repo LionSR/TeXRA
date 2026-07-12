@@ -128,8 +128,41 @@ describe('CLI model access routes', () => {
     );
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result.message).toBe(
-      'Model access set to ChatGPT subscription (user@example.com).',
+      'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
     );
     expect(result.apiMode).toBe('personal');
+  });
+
+  it('uses the ChatGPT row as a preference switch when already enabled', async () => {
+    mocks.getCodexStatus.mockResolvedValue({ signedIn: true });
+    mocks.isPreferCodexSubscription.mockReturnValue(true);
+
+    const result = await selectCliModelAccessRoute(context, 'chatgpt', {
+      writeProgress: vi.fn(),
+    });
+
+    expect(mocks.signInCliChatGpt).not.toHaveBeenCalled();
+    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
+    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
+    expect(result).toEqual({
+      apiMode: 'personal',
+      message: 'Prefer ChatGPT subscription disabled for Codex models.',
+    });
+  });
+
+  it('signs in instead of toggling off a stale signed-out preference', async () => {
+    mocks.isPreferCodexSubscription.mockReturnValue(true);
+    mocks.signInCliChatGpt.mockResolvedValue({ email: 'user@example.com' });
+    mocks.setPreferCodexSubscription.mockResolvedValue({
+      effective: true,
+      target: 'global',
+    });
+
+    await selectCliModelAccessRoute(context, 'chatgpt', {
+      writeProgress: vi.fn(),
+    });
+
+    expect(mocks.signInCliChatGpt).toHaveBeenCalledOnce();
+    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(true);
   });
 });
