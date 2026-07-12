@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // Third-party imports
 
 // Node.js built-in imports

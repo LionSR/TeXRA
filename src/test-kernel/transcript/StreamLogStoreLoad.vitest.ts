@@ -239,6 +239,76 @@ describe('StreamLogStore load', () => {
     vi.restoreAllMocks();
   });
 
+  it('opens a valid persistent store before exposing it', async () => {
+    mockStorage({ logs: {}, summaries: {} });
+
+    const store = await StreamLogStore.open();
+
+    expect(store.mode).toEqual({ kind: 'persistent' });
+    expect(Object.isFrozen(store.mode)).toBe(true);
+    expect(store.keys()).toEqual([]);
+  });
+
+  it('constructs an inspectable ephemeral store only with an explicit reason', async () => {
+    const store = StreamLogStore.ephemeral('interactive fallback test');
+
+    store.append('ephemeral-stream', logEntry('ephemeral-stream', 1, 100));
+    store.releaseEntries('ephemeral-stream');
+    await store.flush();
+
+    expect(store.mode).toEqual({
+      kind: 'ephemeral',
+      reason: 'interactive fallback test',
+    });
+    expect(store.get('ephemeral-stream')?.size).toBe(1);
+    expect(() => StreamLogStore.ephemeral('  ')).toThrow('requires a reason');
+  });
+
+  it('rejects when persistent storage cannot be opened', async () => {
+    vi.spyOn(StorageFS, 'ensureDir').mockRejectedValue(
+      new Error('storage permission denied'),
+    );
+
+    await expect(StreamLogStore.open()).rejects.toThrow(
+      'storage permission denied',
+    );
+  });
+
+  it('preserves live state when a transactional reload fails', async () => {
+    const logs: Record<string, unknown> = {
+      alpha: [logEntry('alpha', 1, 100)],
+    };
+    mockStorage({
+      logs,
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: false,
+        },
+      },
+    });
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+    const liveAlpha = store.get('alpha');
+    logs.beta = { corrupted: true };
+
+    await expect(store.reload()).rejects.toThrow(
+      'persisted log is not an array',
+    );
+
+    expect(store.keys()).toEqual(['alpha']);
+    expect(store.get('alpha')).toBe(liveAlpha);
+    expect(
+      store
+        .get('alpha')
+        ?.getRange(0)
+        .map((entry) => entry.id),
+    ).toEqual(['alpha-1']);
+    expect(store.getFirstTimestamp('alpha')).toBe(100);
+    expect(store.has('beta')).toBe(false);
+  });
+
   it('uses stream summaries without reading full log files at startup', async () => {
     const storage = mockStorage({
       logs: {
@@ -259,8 +329,7 @@ describe('StreamLogStore load', () => {
       },
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     expect(storage.fullLogReads()).toBe(0);
     expect(store.keys()).toEqual(['beta', 'alpha']);
@@ -288,8 +357,7 @@ describe('StreamLogStore load', () => {
       },
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     expect(storage.fullLogReads()).toBe(0);
     expect(store.keys()).toEqual(['alpha']);
@@ -305,8 +373,7 @@ describe('StreamLogStore load', () => {
       summaries: {},
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     expect(storage.fullLogReads()).toBe(1);
     expect(store.keys()).toEqual(['alpha']);
@@ -338,8 +405,7 @@ describe('StreamLogStore load', () => {
       summaryMtimes: { alpha: 10 },
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     expect(storage.fullLogReads()).toBe(1);
     expect(store.getFirstTimestamp('alpha')).toBe(200);
@@ -367,8 +433,7 @@ describe('StreamLogStore load', () => {
       },
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     expect(storage.fullLogReads()).toBe(0);
 
@@ -413,8 +478,7 @@ describe('StreamLogStore load', () => {
       },
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     const affected = await store.endRunningGroupsForStreams(['alpha'], 300);
     await store.flush();
@@ -456,8 +520,7 @@ describe('StreamLogStore load', () => {
       },
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     expect(storage.fullLogReads()).toBe(0);
 
@@ -492,8 +555,7 @@ describe('StreamLogStore load', () => {
       },
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     // A caller-supplied RunOutcome (e.g. restart repair's graceful-interrupt
     // classification, #7993 step 2) reaches the row directly — no fold to
@@ -550,8 +612,7 @@ describe('StreamLogStore load', () => {
       summaries: {},
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
     await store.ensureLoaded('delta');
 
     const entries = store.get('delta')?.getRange(0) ?? [];
@@ -595,8 +656,7 @@ describe('StreamLogStore load', () => {
       },
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     const affected = await store.endRunningGroupsForStreams(
       ['alpha', 'beta'],
@@ -649,8 +709,7 @@ describe('StreamLogStore load', () => {
       },
     });
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     const endRunningGroups = store.endRunningGroups(300);
     await waitForCondition(
@@ -694,8 +753,7 @@ describe('StreamLogStore load', () => {
         await readGate;
       },
     });
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
     const load = store.ensureLoaded('alpha');
     await readStarted;
 
@@ -731,8 +789,7 @@ describe('StreamLogStore load', () => {
       summaries: {},
       pauseLogWriteKey: 'delete-me',
     });
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     store.append('delete-me', {
       id: 'delete-me-entry',
@@ -768,8 +825,7 @@ describe('StreamLogStore load', () => {
       logs: {},
       summaries: {},
     });
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     vi.useFakeTimers();
     try {
@@ -806,8 +862,7 @@ describe('StreamLogStore load', () => {
       summaries: {},
       pauseLogWriteKey: 'reuse-me',
     });
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     store.append('reuse-me', {
       id: 'old-entry',
@@ -854,8 +909,7 @@ describe('StreamLogStore load', () => {
 
   it('writes stream summaries with dirty log flushes', async () => {
     const storage = mockStorage({ logs: {}, summaries: {} });
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     store.append('new-stream', {
       id: 'new-stream-entry',
@@ -914,8 +968,7 @@ describe('StreamLogStore load', () => {
       },
     });
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
     await store.ensureLoaded('alpha');
 
     expect(
@@ -967,8 +1020,7 @@ describe('StreamLogStore load', () => {
       },
       summaries: {},
     });
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     expect(store.keys()).toEqual(['beta']);
     expect(store.get('beta')).toBeUndefined();
@@ -990,7 +1042,7 @@ describe('StreamLogStore load', () => {
     ]);
   });
 
-  it('fails the load for a non-array persisted log and refuses to overwrite it', async () => {
+  it('surfaces a non-array stream read and refuses memory-only appends', async () => {
     const storage = mockStorage({
       logs: { gamma: { corrupted: 'not an array' } },
       summaries: {
@@ -1002,9 +1054,10 @@ describe('StreamLogStore load', () => {
       },
     });
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-    const store = new StreamLogStore();
-    await store.load();
-    await store.ensureLoaded('gamma');
+    const store = await StreamLogStore.open();
+    await expect(store.ensureLoaded('gamma')).rejects.toThrow(
+      'persisted log is not an array',
+    );
 
     // Parses-but-not-an-array is corrupt, not an empty log: the load fails
     // loudly, exactly like unparseable JSON.
@@ -1014,17 +1067,16 @@ describe('StreamLogStore load', () => {
       expect.stringContaining('Failed to reload stream gamma from disk'),
     );
 
-    // New appends stay in memory, but save() refuses to destructively
-    // rewrite the corrupt on-disk file with a fresh array (#7464).
-    store.append('gamma', {
-      id: 'gamma-new',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 400,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'new entry',
-    });
-    await store.flush();
+    expect(() =>
+      store.append('gamma', {
+        id: 'gamma-new',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 400,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'new entry',
+      }),
+    ).toThrow('failed to load');
 
     expect(
       storage.writes.get(storageFile(STREAM_LOGS_DIR, 'gamma')),
@@ -1032,19 +1084,43 @@ describe('StreamLogStore load', () => {
     expect(storage.writes.size).toBe(0);
   });
 
-  it('skips a non-array persisted log at startup with a warning', async () => {
+  it('rejects flush when a concurrent append cannot join persisted history', async () => {
+    const storage = mockStorage({
+      logs: { gamma: { corrupted: 'not an array' } },
+      summaries: {
+        gamma: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: false,
+        },
+      },
+    });
+    const store = await StreamLogStore.open();
+    const load = store.ensureLoaded('gamma');
+
+    store.append('gamma', {
+      id: 'gamma-concurrent',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 200,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'arrived while the persisted transcript was being read',
+    });
+
+    await expect(load).rejects.toThrow('persisted log is not an array');
+    await expect(store.flush()).rejects.toThrow(
+      'persisted transcripts failed to load',
+    );
+    expect(storage.writes.size).toBe(0);
+  });
+
+  it('fails persistent opening for a corrupt startup log', async () => {
     const storage = mockStorage({
       logs: { delta: 'not an array at all' },
       summaries: {},
     });
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-    const store = new StreamLogStore();
-    await store.load();
-
-    expect(store.keys()).toEqual([]);
-    expect(warnSpy).toHaveBeenCalledWith(
-      'StreamLogStore',
-      expect.stringContaining('Skipping corrupt stream log: delta'),
+    await expect(StreamLogStore.open()).rejects.toThrow(
+      'persisted log is not an array',
     );
     expect(storage.writes.size).toBe(0);
   });

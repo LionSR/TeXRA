@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // Regression coverage for subscribeStreamLog's shared createFlushableDebounce
 // migration: the "only start the batch window on its first tick" coalescing
 // behavior, and dispose() cancelling (not flushing) a still-pending batch.

@@ -88,7 +88,7 @@ describe('codex progress events', () => {
   });
 
   it('updates in-flight Codex command items in place', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     await store.clear();
 
     const logger = createRunTrace(streamId, store).trace;

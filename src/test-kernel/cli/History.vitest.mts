@@ -1,4 +1,8 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
+
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -110,6 +114,8 @@ const config = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
+let historyStoragePath: string | undefined;
+
 /** Creates a temp dir for the test body, then removes it (recursively) after. */
 async function withTempDir(
   prefix: string,
@@ -131,7 +137,18 @@ describe('CLI history runtime', () => {
         import('@platform/defaults/nodeFilesystem'),
         import('@test/support/FakePlatform'),
       ]);
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+    historyStoragePath = await mkdtemp(
+      path.join(tmpdir(), 'texra-history-storage-'),
+    );
+    initPlatform(
+      createFakePlatform(
+        {
+          storagePath: historyStoragePath,
+          globalStoragePath: historyStoragePath,
+        },
+        { fs: nodeFilesystem },
+      ),
+    );
     vi.clearAllMocks();
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
@@ -146,6 +163,12 @@ describe('CLI history runtime', () => {
     });
     mocks.readCliToolUseResumeData.mockResolvedValue(null);
     mocks.readCliToolUseResumeDataForListing.mockResolvedValue(null);
+  });
+
+  afterEach(async () => {
+    if (!historyStoragePath) return;
+    await rm(historyStoragePath, { recursive: true, force: true });
+    historyStoragePath = undefined;
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {

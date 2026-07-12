@@ -34,6 +34,7 @@ async function createExecution(options: {
   prepareMainViewExecutionRequest: (message: unknown) => unknown;
   runAgent?: RunExecutionRequest;
   onRunCompleted?: () => void;
+  transcriptOpenError?: Error;
 }): Promise<DesktopExecution> {
   vi.resetModules();
   const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
@@ -70,6 +71,7 @@ async function createExecution(options: {
       }
 
       async listKeys(): Promise<string[]> {
+        if (options.transcriptOpenError) throw options.transcriptOpenError;
         return [];
       }
     },
@@ -82,7 +84,7 @@ async function createExecution(options: {
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
   return disposeAfterTest(
-    createDesktopAgentExecution({
+    await createDesktopAgentExecution({
       postToRenderer: options.postToRenderer ?? vi.fn(),
       opener: options.opener,
       showErrorMessage: options.showErrorMessage,
@@ -101,6 +103,17 @@ describe('createDesktopAgentExecution', () => {
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
     vi.doUnmock('@logger');
     vi.restoreAllMocks();
+  });
+
+  it('fails initialization when persistent transcripts cannot be opened', async () => {
+    const failure = new Error('desktop transcript storage unavailable');
+
+    await expect(
+      createExecution({
+        transcriptOpenError: failure,
+        prepareMainViewExecutionRequest: vi.fn(),
+      }),
+    ).rejects.toBe(failure);
   });
 
   it('surfaces invalid execution requests through the host error path', async () => {

@@ -92,6 +92,7 @@ export interface SessionMeta {
   readonly apiMode: CliApiMode;
   readonly approvalPolicy: CliApprovalPolicy;
   readonly canDelegate: boolean;
+  readonly transcriptMode: 'persistent' | 'ephemeral';
   readonly teamName?: string;
   readonly version: string;
 }
@@ -291,6 +292,7 @@ const EMPTY_SESSION_META: SessionMeta = {
   apiMode: 'personal',
   approvalPolicy: 'ask',
   canDelegate: false,
+  transcriptMode: 'persistent',
   version: '',
 };
 
@@ -307,9 +309,14 @@ export function setCliSessionModelOverride(model: string): void {
   patchSessionMeta({ model, modelSource: 'explicit-override' });
 }
 
-/** Preserve the resolved CLI version across resets; everything else clears. */
+/** Preserve process-session properties across conversation resets. */
 function defaultSessionMeta(): SessionMeta {
-  return { ...EMPTY_SESSION_META, version: SESSION_META.get().version };
+  const current = SESSION_META.get();
+  return {
+    ...EMPTY_SESSION_META,
+    transcriptMode: current.transcriptMode,
+    version: current.version,
+  };
 }
 
 // ---------------------------------------------------------------------------

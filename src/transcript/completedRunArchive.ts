@@ -140,9 +140,8 @@ export interface CompletedRunConversationReadResult {
 
 export interface CompletedRunConversationReaderOptions extends CompletedRunReaderOptions {
   /**
-   * An already-`load()`ed store. When omitted a call-scoped instance is
-   * created and loaded — never pass the shared live store un-loaded, since
-   * `load()` clears a store's in-memory state (see `assembleTrace`).
+   * An already-open store. When omitted a call-scoped persistent instance is
+   * opened so this read path never reloads a shared live store.
    */
   readonly streamLogStore?: StreamLogStore;
 }
@@ -478,11 +477,7 @@ export async function readCompletedRunConversation(
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
   let streamLogStore = options.streamLogStore;
   if (!streamLogStore) {
-    // Call-scoped instance, same rationale as assembleTrace: load() clears a
-    // store's in-memory state, so the shared live store must never be
-    // re-loaded from a read path.
-    streamLogStore = new StreamLogStore();
-    await streamLogStore.load();
+    streamLogStore = await StreamLogStore.open();
   }
   const loadedStreamLogStore = streamLogStore;
 

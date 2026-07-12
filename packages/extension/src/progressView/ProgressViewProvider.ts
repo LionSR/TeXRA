@@ -189,8 +189,20 @@ export class ProgressViewProvider
 
     this._disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
-        await this.backend.load();
-        this.syncFullView({ forceRebuild: true });
+        try {
+          await this.backend.load();
+          this.syncFullView({ forceRebuild: true });
+        } catch (error) {
+          this.logger.error(
+            'Failed to reload transcripts after workspace change',
+            {
+              data: error,
+            },
+          );
+          void vscode.window.showErrorMessage(
+            'TeXRA could not reload transcript persistence for the new workspace. The previous transcript view was preserved.',
+          );
+        }
       }),
       vscode.window.onDidChangeActiveColorTheme(() => {
         if (this.isViewVisible()) {
@@ -328,10 +340,21 @@ export class ProgressViewProvider
       // syncing so the webview doesn't render an empty log. Fall back to
       // an immediate sync when the log is already resident.
       if (activeStream && !this.state.streamLogs.get(activeStream)) {
-        void this.state.streamLogs.ensureLoaded(activeStream).then(() => {
-          if (this.state.activeStream !== activeStream) return;
-          this.backend.factApplier.syncStreamContent(activeStream);
-        });
+        void this.state.streamLogs
+          .ensureLoaded(activeStream)
+          .then(() => {
+            if (this.state.activeStream !== activeStream) return;
+            this.backend.factApplier.syncStreamContent(activeStream);
+          })
+          .catch((error: unknown) => {
+            this.logger.error(
+              `Failed to load transcript ${activeStream} for display`,
+              { data: error },
+            );
+            void vscode.window.showErrorMessage(
+              'TeXRA could not read this persisted transcript.',
+            );
+          });
       } else {
         this.backend.factApplier.syncStreamContent(activeStream);
       }
