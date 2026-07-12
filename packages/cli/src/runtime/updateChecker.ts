@@ -15,6 +15,7 @@ import {
   cliEnvValue,
   readCliAmbientState,
   readCliEntrypointPath,
+  resolveCliCwd,
   type CliContext,
 } from './cliContext';
 import { CliExitCode } from './exitCodes';
@@ -170,19 +171,21 @@ type CommandRunner = (
   command: string,
   args: readonly string[],
   timeoutMs: number,
+  cwd?: string,
 ) => Promise<string | undefined>;
 
 async function readCommandStdout(
   command: string,
   args: readonly string[],
   timeoutMs: number,
+  cwd?: string,
 ): Promise<string | undefined> {
   // Runs before platform init (chat/orchestrate startup), so pass an
   // explicit cwd — the wrapper's WorkspaceFS default would throw — and
   // quiet: true so wrapper debug lines can't leak to the console sink.
   const result = await executeCommand([command, ...args], {
     timeout: timeoutMs,
-    cwd: process.cwd(),
+    cwd: cwd ?? (await resolveCliCwd(undefined)),
     quiet: true,
   });
   return result.success ? (result.stdout ?? '') : undefined;
@@ -227,16 +230,18 @@ function parseHomebrewFormulaVersion(
 export async function fetchLatestHomebrewFormulaVersion(options?: {
   formula?: string;
   timeoutMs?: number;
+  cwd?: string;
   runCommand?: CommandRunner;
 }): Promise<string | undefined> {
   const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
   const runCommand = options?.runCommand ?? readCommandStdout;
   const timeoutMs = options?.timeoutMs ?? HOMEBREW_COMMAND_TIMEOUT_MS;
-  await runCommand('brew', ['update', '--quiet'], timeoutMs);
+  await runCommand('brew', ['update', '--quiet'], timeoutMs, options?.cwd);
   const stdout = await runCommand(
     'brew',
     ['info', '--json=v2', formula],
     timeoutMs,
+    options?.cwd,
   );
   return stdout == null
     ? undefined
@@ -350,18 +355,29 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   const method = detectInstallMethod();
   // Runs before `initInteractiveCliPlatform`, so `platform()` isn't up yet —
   // open the same global `state.json` that `createCliStateStores` opens later
-  // directly (see `cliStateStores.ts`).
-  const globalState = await JsonStore.open(
-    path.join(createNodeStorageProvider().getGlobalStoragePath(), 'state.json'),
-  );
-  const latest = await checkCliUpdateAvailable({
-    currentVersion: context.version,
-    globalState,
-    fetchLatest: () =>
-      method === 'brew'
-        ? fetchLatestHomebrewFormulaVersion()
-        : fetchLatestCliVersion(),
-  });
+  // directly (see `cliStateStores.ts`). Failures here (e.g. an unreadable or
+  // unwritable global-storage directory) must stay as silent as a network
+  // failure: this whole check is best-effort and must never block `chat` /
+  // `orchestrate` startup.
+  let latest: string | undefined;
+  try {
+    const globalState = await JsonStore.open(
+      path.join(
+        createNodeStorageProvider().getGlobalStoragePath(),
+        'state.json',
+      ),
+    );
+    latest = await checkCliUpdateAvailable({
+      currentVersion: context.version,
+      globalState,
+      fetchLatest: () =>
+        method === 'brew'
+          ? fetchLatestHomebrewFormulaVersion({ cwd: context.cwd })
+          : fetchLatestCliVersion(),
+    });
+  } catch {
+    return;
+  }
   if (!latest) return;
 
   const updateCmd = formatUpdateCommand(method);

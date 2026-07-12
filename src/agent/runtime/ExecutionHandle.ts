@@ -43,6 +43,15 @@ export interface ExecutionHandle {
 /** Live run-owned capability that can receive a user stop request. */
 export interface ExecutionInterruptHandler {
   interrupt(): void;
+  /**
+   * True when `interrupt()` tears down a live background OS process (e.g. a
+   * background bash child), as opposed to merely cancelling an in-flight
+   * agent turn or a resumable native-subagent loop. Shutdown drain reads this
+   * to reach a leaked background process (see
+   * `ExecutionRegistry.killBackgroundProcesses`) without disturbing agent
+   * executions that are intentionally left running for restart recovery.
+   */
+  readonly ownsBackgroundProcess?: boolean;
 }
 
 export interface LiveToolUseFlowContext {
@@ -185,6 +194,21 @@ export class AgentExecutionHandle implements ExecutionHandle {
     const context = this.toolUseFlowContext;
     if (!context) return false;
     context.interrupt();
+    return true;
+  }
+
+  /**
+   * Interrupt this handle's attached background OS process, if any — the
+   * case shutdown drain needs, distinct from `interrupt()`'s general stop
+   * (which also covers a loop-level or in-flight-turn interrupt handler that
+   * must stay untouched on shutdown so restart recovery can find it). A
+   * background bash run (`BashBackgroundSession`, see `tools/bash.ts`) is the
+   * only handler that currently sets `ownsBackgroundProcess`. Returns whether
+   * a background-process interrupt handler was attached and interrupted.
+   */
+  interruptBackgroundProcess(): boolean {
+    if (this.interruptHandler?.ownsBackgroundProcess !== true) return false;
+    this.interruptHandler.interrupt();
     return true;
   }
 

@@ -4,7 +4,8 @@
 // (init/runInitWizard) and the command (commands/init) build on these; keeping
 // the logic here makes it unit-testable without a TTY.
 
-import { access, mkdir, readFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { access, mkdir, open, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import writeFileAtomic from 'write-file-atomic';
@@ -56,12 +57,25 @@ export async function configFileExists(filePath: string): Promise<boolean> {
   }
 }
 
+async function writeInitFileAtomic(
+  filePath: string,
+  data: string,
+): Promise<void> {
+  try {
+    const target = await open(filePath, fsConstants.O_WRONLY);
+    await target.close();
+  } catch (error: unknown) {
+    if (!isFileNotFoundError(error)) throw error;
+  }
+  await writeFileAtomic(filePath, data);
+}
+
 export async function writeInitConfig(
   filePath: string,
   config: InitConfigShape,
 ): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFileAtomic(filePath, serializeInitConfig(config));
+  await writeInitFileAtomic(filePath, serializeInitConfig(config));
 }
 
 /**
@@ -100,6 +114,6 @@ export async function ensureTexraGitignored(
   }
   const next = gitignoreWithTexra(existing);
   if (next === null) return 'present';
-  await writeFileAtomic(gitignorePath, next);
+  await writeInitFileAtomic(gitignorePath, next);
   return existed ? 'added' : 'created';
 }
