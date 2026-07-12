@@ -51,6 +51,7 @@ import {
   findActiveAgentExecutionHandle,
   getAllActiveExecutionIds,
   SessionHandle,
+  untrackActiveAgentExecution,
 } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import {
@@ -776,15 +777,31 @@ export class DesktopProgressBridge {
       const executionId = snapshot.executionId ?? allExecutionIds.get(streamId);
       if (!executionId || !activeExecutionIds.has(executionId)) continue;
       if (this.session.executions.getHandle(executionId)) continue;
-      const handle = findActiveAgentExecutionHandle(executionId);
-      if (!handle || handle.childStreamId !== streamId) continue;
+      const found = findActiveAgentExecutionHandle(executionId);
+      if (!found || found.handle.childStreamId !== streamId) continue;
+      const { handle, status } = found;
       this.session.executions.track(handle);
+      // `hydrateRestoredStreams()` already seeded this window's status from
+      // the on-disk snapshot's `lastKnownStatus`, which goes stale the moment
+      // the run transitions while headless (nothing persists it, #8148).
+      // Overwrite with the live status the owning session actually has, so
+      // display and `terminateWaitingHandle`'s WAITING/RESUMING check both
+      // see the truth instead of a possibly-wrong RUNNING carried from disk.
+      if (status) {
+        this.session.status.transition(streamId, status, 'restart-repair', {
+          trace: handle.trace,
+        });
+      }
       const detachTrace = handle.trace
         ? this.session.attachRunTrace(handle.trace, streamId)
         : undefined;
       void handle.result.finally(() => {
         detachTrace?.();
-        this.session.executions.untrack(executionId);
+        // Release from every live session that still owns this handle, not
+        // just this window's -- otherwise the session that originally
+        // launched it (retained post-dispose via `keepActiveExecutions`)
+        // never sees its own registry go idle and leaks in `liveSessions`.
+        untrackActiveAgentExecution(executionId);
       });
     }
   }
