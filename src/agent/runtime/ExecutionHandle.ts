@@ -8,6 +8,7 @@
 import pDefer from 'p-defer';
 
 import type { AgentTrace, ResultEvent } from '@agent/trace';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
@@ -94,6 +95,18 @@ export class AgentExecutionHandle implements ExecutionHandle {
 
   /** Stable tool name for UI identification (e.g. "bash", "codex"). */
   toolName?: string;
+
+  /**
+   * The launch facts a session must replay when it starts mirroring this
+   * execution after launch: `run.config` is emitted on the run's trace (and a
+   * child stream's description only on the spawning session's hub) before any
+   * cross-session rebinder can subscribe, so a late binder re-emits them from
+   * here into its own session (#8258).
+   */
+  initialRunFacts?: {
+    readonly config: AgentConfig;
+    readonly description?: string;
+  };
 
   /**
    * The run's terminal outcome, settled exactly once (by the run lifecycle, or
