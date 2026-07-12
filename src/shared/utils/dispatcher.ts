@@ -179,3 +179,96 @@ export function createDispatcher<TMessage extends CommandMessage>(
     return true;
   };
 }
+
+/**
+ * Dev/test-only outbound-message assertions. Mirrors `createDispatcher`'s
+ * inbound-side validation, but for the send side of the same schemas: a
+ * webview/desktop IPC boundary that already has an outbound Zod schema but
+ * never runs the payload through it before posting.
+ *
+ * Both `assertOutboundMessage` and `assertKnownOutboundMessage` are no-ops
+ * outside `isDevAssertionMode()` — zero `safeParse` cost in production. Some
+ * of these boundaries (desktop's single `postToRenderer` channel carries
+ * high-frequency progress-stream chunks, e.g. `LOG_DELTA`) are hot enough
+ * that even a cheap parse per message is worth avoiding outside dev/test;
+ * production keeps sending the TypeScript-typed payload as-is (a
+ * compile-time type-assert, not a runtime check) exactly as it did before
+ * this validation existed, so there is no prod behavior or wire-format
+ * change. Dev/test throws immediately on a mismatch — schema and producer
+ * have drifted — rather than logging, since these are the same runs where
+ * `npm test` / CI would otherwise treat drift as silently passing.
+ */
+function isDevAssertionMode(): boolean {
+  return (
+    process.env.NODE_ENV === 'test' || process.env.TEXRA_DEV_ASSERTIONS === '1'
+  );
+}
+
+/**
+ * True when a discriminated-union `safeParse` failure means "this message's
+ * `command` doesn't belong to this schema at all" (Zod's "no matching
+ * discriminator" case) rather than "the command matched but a field is
+ * wrong". Only the top-level `command` discriminator counts — a nested
+ * discriminated union inside a matched branch (e.g. `UpdatePermissionMessage
+ * Schema`'s `action` field) reports its own `invalid_union` issue at a
+ * different path, which is a real validation failure, not an unrecognized
+ * command.
+ */
+function isUnrecognizedCommand(error: z.ZodError): boolean {
+  const [issue, ...rest] = error.issues;
+  return (
+    rest.length === 0 &&
+    issue?.code === 'invalid_union' &&
+    issue.path.length === 1 &&
+    issue.path[0] === 'command'
+  );
+}
+
+/**
+ * Asserts (dev/test only) that `message` conforms to `schema` — for a send
+ * boundary where every message is known to belong to exactly one outbound
+ * domain (e.g. `BaseWebviewManager.postMessage`, which only ever sends
+ * `MainViewMessage`s). Throws on any mismatch, including a `command` the
+ * schema doesn't recognize at all.
+ */
+export function assertOutboundMessage<TMessage extends CommandMessage>(
+  schema: z.ZodType<TMessage>,
+  message: unknown,
+): void {
+  if (!isDevAssertionMode()) return;
+  const result = schema.safeParse(message);
+  if (!result.success) {
+    throw new Error(
+      `Outbound message failed schema validation: ${result.error.message}`,
+    );
+  }
+}
+
+/**
+ * Asserts (dev/test only) that `message` conforms to the outbound schema
+ * that recognizes its `command` — for a send boundary that multiplexes
+ * several outbound domains onto one channel (desktop's single
+ * `postToRenderer`, which carries `MainViewMessage`, `ProgressViewOutbound
+ * Message`, and desktop-only overlay/settings commands that don't have a
+ * schema here yet). `domains` is tried in order; a `command` none of them
+ * recognize is out of scope for this call and passes through unchecked —
+ * this only guards commands that already have a schema, per the "don't
+ * create new schemas" boundary for this change. A `command` a domain does
+ * recognize, but whose payload fails that domain's deeper validation, is a
+ * real mismatch and throws immediately.
+ */
+export function assertKnownOutboundMessage(
+  domains: readonly z.ZodType<CommandMessage>[],
+  message: unknown,
+): void {
+  if (!isDevAssertionMode()) return;
+  for (const schema of domains) {
+    const result = schema.safeParse(message);
+    if (result.success) return;
+    if (!isUnrecognizedCommand(result.error)) {
+      throw new Error(
+        `Outbound message failed schema validation: ${result.error.message}`,
+      );
+    }
+  }
+}
