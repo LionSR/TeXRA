@@ -17,7 +17,10 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import {
+  AgentExecutionHandle,
+  type LiveToolUseFlowContext,
+} from '@agent/runtime/executionRegistry';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
@@ -486,6 +489,46 @@ describe('runFlowWithLifecycle', () => {
       defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }
+  });
+
+  it('replays a stop requested by onRun once interruption is attached', async () => {
+    const { executionId, streamId, ctx } = lifecycleFixture(
+      'lifecycle-early-stop',
+    );
+    const interrupt = vi.fn();
+
+    const result = await runFlowWithLifecycle(
+      ctx,
+      async (handle) => {
+        expect(defaultSession().status.get(streamId)).toBe(
+          STREAM_PHASE.CANCELLED,
+        );
+        const flowContext: LiveToolUseFlowContext = {
+          session: { appendFollowUp: vi.fn() },
+          modelHandler: { supportsManualCompaction: false },
+          requestImmediateCompaction: vi.fn(),
+          modelSwitchDisabledReason: vi.fn(),
+          switchModel: vi.fn().mockResolvedValue(undefined),
+          interrupt,
+        };
+        handle.attachToolUseFlow(flowContext);
+        expect(interrupt).toHaveBeenCalledOnce();
+        handle.detachToolUseFlow(flowContext);
+        return {
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.CANCELLED,
+          executionId,
+          streamId,
+        };
+      },
+      {
+        onRun: () => {
+          expect(defaultSession().executions.kill(executionId)).toBe(true);
+        },
+      },
+    );
+
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
   });
 
   it('lets a stop/kill tear down a subagent suspended at WAITING (issue #7287)', async () => {
