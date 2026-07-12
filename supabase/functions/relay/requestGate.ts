@@ -1,20 +1,9 @@
 import { asFiniteNumber, isJsonRecord } from './json.ts';
-
-interface RpcError {
-  message?: string;
-}
+import type { RelayRpcClient } from './rpc.ts';
 
 interface RequestLimit {
   ratePerMinute: number;
   concurrent: number;
-}
-
-interface RpcClient {
-  // PromiseLike, not Promise: supabase-js rpc() returns a thenable builder.
-  rpc(
-    name: string,
-    args: Record<string, unknown>,
-  ): PromiseLike<{ data: unknown; error: RpcError | null }>;
 }
 
 interface GateDecision {
@@ -100,7 +89,7 @@ function startStreamLeaseRefresh(
 }
 
 export async function acquireRelayRequestSlot(
-  client: RpcClient,
+  client: RelayRpcClient,
   userId: string,
   limits: RequestLimit,
 ): Promise<RelayRequestSlot> {
