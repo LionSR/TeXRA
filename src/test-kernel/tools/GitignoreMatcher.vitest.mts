@@ -6,6 +6,7 @@ const fsState = vi.hoisted(() => ({
   homeDirectory: undefined as string | undefined,
   workspaceFiles: new Map<string, string>(),
   workspaceReadErrors: new Map<string, Error>(),
+  workspaceReadCounts: new Map<string, number>(),
   absoluteFiles: new Map<string, string>(),
   absoluteReadErrors: new Map<string, Error>(),
 }));
@@ -17,6 +18,10 @@ vi.mock('@utils/files', () => ({
       fsState.workspaceFiles.has(relativePath.replace(/^\/+/, '')),
     read: async (relativePath: string) => {
       const normalized = relativePath.replace(/^\/+/, '');
+      fsState.workspaceReadCounts.set(
+        normalized,
+        (fsState.workspaceReadCounts.get(normalized) ?? 0) + 1,
+      );
       const readError = fsState.workspaceReadErrors.get(normalized);
       if (readError) {
         throw readError;
@@ -72,6 +77,7 @@ describe('getGitignoreMatcher', () => {
     fsState.homeDirectory = undefined;
     fsState.workspaceFiles.clear();
     fsState.workspaceReadErrors.clear();
+    fsState.workspaceReadCounts.clear();
     fsState.absoluteFiles.clear();
     fsState.absoluteReadErrors.clear();
   });
@@ -127,6 +133,39 @@ describe('getGitignoreMatcher', () => {
     fsState.workspaceFiles.set('.gitignore', 'dist/\n');
 
     await expect(loadMatcher()).rejects.toBe(constructionError);
+  });
+
+  it('retries after a failed shared load attempt', async () => {
+    const readError = Object.assign(new Error('Temporarily unavailable'), {
+      code: 'EACCES',
+    });
+    fsState.workspaceFiles.set('.gitignore', 'dist/\n');
+    fsState.workspaceReadErrors.set('.gitignore', readError);
+    vi.resetModules();
+    const { getGitignoreMatcher } = await import('@tools/gitignore');
+
+    const failedCalls = await Promise.allSettled([
+      getGitignoreMatcher(),
+      getGitignoreMatcher(),
+    ]);
+
+    for (const result of failedCalls) {
+      expect(result.status).toBe('rejected');
+      if (result.status === 'rejected') {
+        expect(result.reason).toBe(readError);
+      }
+    }
+    expect(fsState.workspaceReadCounts.get('.gitignore')).toBe(1);
+
+    fsState.workspaceReadErrors.delete('.gitignore');
+    const [matcher, concurrentMatcher] = await Promise.all([
+      getGitignoreMatcher(),
+      getGitignoreMatcher(),
+    ]);
+
+    expect(matcher).toBe(concurrentMatcher);
+    expect(matcher.ignores('dist')).toBe(true);
+    expect(fsState.workspaceReadCounts.get('.gitignore')).toBe(2);
   });
 
   it('preserves directory-only rules for bare directory entries', async () => {

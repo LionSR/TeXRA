@@ -129,5 +129,13 @@ export async function getGitignoreMatcher(): Promise<GitignoreMatcher> {
   if (!gitignoreMatcherPromise) {
     gitignoreMatcherPromise = loadGitignoreMatcher();
   }
-  return gitignoreMatcherPromise;
+  const matcherPromise = gitignoreMatcherPromise;
+  try {
+    return await matcherPromise;
+  } catch (error) {
+    if (gitignoreMatcherPromise === matcherPromise) {
+      gitignoreMatcherPromise = undefined;
+    }
+    throw error;
+  }
 }
