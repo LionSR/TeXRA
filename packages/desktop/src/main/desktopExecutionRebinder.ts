@@ -185,6 +185,15 @@ export class DesktopExecutionRebinder {
         });
       }
     };
+    // Tear down only once the target itself holds a terminal phase, so a
+    // rejected terminal mirror doesn't strand the tab non-terminal with the
+    // mirror already detached; a still-alive binding is reaped on window
+    // close, and a re-tracked handle rebinds through it.
+    const disposeBindingIfTargetTerminal = (): void => {
+      if (isTerminalOutcomePhase(this.targetSession.status.get(streamId))) {
+        disposeBinding();
+      }
+    };
     const seedStatus = (handle: AgentExecutionHandle): void => {
       const status = ownerSession.status.get(streamId);
       if (!status) return;
@@ -236,7 +245,7 @@ export class DesktopExecutionRebinder {
         const ownerStatus = ownerSession.status.get(streamId);
         if (isTerminalOutcomePhase(ownerStatus)) {
           mirrorTerminalStatus(ownerStatus);
-          disposeBinding();
+          disposeBindingIfTargetTerminal();
         }
         return;
       }
@@ -300,6 +309,16 @@ export class DesktopExecutionRebinder {
     );
     detachOwnerStatus = ownerSession.status.onDidChange((change) => {
       if (disposed || change.streamId !== streamId) return;
+      if (isTerminalOutcomePhase(change.status)) {
+        // Terminal outcomes need `transitionToTerminal`'s choreography (a
+        // WAITING or unseeded target resumes to RUNNING first); the plain
+        // cause-preserving transition below would reject those mirrors.
+        mirrorTerminalStatus(change.status);
+        // Owner already untracked the handle (see bindOwnerHandle): this
+        // terminal mirror is the binding's last mirrored fact.
+        if (!currentHandle) disposeBindingIfTargetTerminal();
+        return;
+      }
       if (
         !this.targetSession.status.transition(
           streamId,
@@ -322,11 +341,6 @@ export class DesktopExecutionRebinder {
             current: this.targetSession.status.get(streamId),
           },
         });
-      }
-      // Owner already untracked the handle (see bindOwnerHandle): this
-      // terminal transition is the binding's last mirrored fact.
-      if (!currentHandle && isTerminalOutcomePhase(change.status)) {
-        disposeBinding();
       }
     });
     const ownerDetach = ownerSession.executions.observeHandle(

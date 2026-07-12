@@ -3916,6 +3916,38 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
+    it('mirrors a terminal owner status onto a WAITING target through resume choreography', async () => {
+      const streamId = 'rebound-stream-12' as StreamTabId;
+      const executionId = 'ec00fe' as ExecutionId;
+      const owner = await createReboundOwner({ streamId, executionId });
+      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING);
+
+      try {
+        await (bridgeB as unknown as { restartRepair: Promise<void> })
+          .restartRepair;
+
+        // A target-local wait skews the machines: the target sits at WAITING
+        // while the owner finishes from RUNNING. The terminal mirror must go
+        // through transitionToTerminal's resume choreography, not the plain
+        // cause-preserving transition (which rejects WAITING -> terminal).
+        expect(
+          bridgeB.session.status.transitionToWaiting(streamId, 'wait'),
+        ).toBe(true);
+        owner.bridgeA.session.executions.untrack(executionId);
+        expect(
+          owner.bridgeA.session.status.transitionToTerminal(
+            streamId,
+            STREAM_PHASE.COMPLETED,
+          ),
+        ).toBe(true);
+        expect(bridgeB.session.status.get(streamId)).toBe(
+          STREAM_PHASE.COMPLETED,
+        );
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
     it('replays initial run config and description for descendants bound after tracking (#8258)', async () => {
       const streamId = 'rebound-stream-9' as StreamTabId;
       const childStreamId = 'rebound-child-9' as StreamTabId;
