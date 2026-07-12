@@ -9,7 +9,11 @@ import {
   RESUMABILITY_CAUSE,
 } from '@agent/storage';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
-import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
+import {
+  FLOW_RECORD_SCHEMA_VERSION,
+  flowKey,
+  type FlowRecord,
+} from '@agent/node/persistedFlow';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
@@ -143,6 +147,28 @@ describe('deriveResumability', () => {
     });
   });
 
+  it('accepts an unstamped legacy envelope and preserves extra fields', async () => {
+    const executionId = 'legacy-extra-flow-envelope' as ExecutionId;
+    const legacyRecord = {
+      ...BASE_FLOW_RECORD,
+      legacyOwner: { host: 'extension' },
+    };
+    await getExecutionStore(executionId).write(
+      flowKey(executionId),
+      legacyRecord,
+    );
+
+    const decision = await deriveResumability(executionId);
+
+    expect(decision).toMatchObject({
+      resumable: true,
+      cause: RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
+    });
+    if (!decision.resumable) return;
+    expect(decision.flowRecord).toEqual(legacyRecord);
+    expect(Object.hasOwn(decision.flowRecord, 'schemaVersion')).toBe(false);
+  });
+
   it('reports missing flow records as not resumable', async () => {
     const executionId = 'missing-flow' as ExecutionId;
 
@@ -157,6 +183,29 @@ describe('deriveResumability', () => {
     await getExecutionStore(executionId).write(flowKey(executionId), {
       ...BASE_FLOW_RECORD,
       shared: null,
+    });
+
+    await expect(deriveResumability(executionId)).resolves.toEqual({
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.INVALID_FLOW,
+    });
+  });
+
+  it('does not conflate a stored null flow envelope with an absent key', async () => {
+    const executionId = 'null-flow-envelope' as ExecutionId;
+    await getExecutionStore(executionId).write(flowKey(executionId), null);
+
+    await expect(deriveResumability(executionId)).resolves.toEqual({
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.INVALID_FLOW,
+    });
+  });
+
+  it('rejects flow records from a future envelope schema version', async () => {
+    const executionId = 'future-flow-envelope' as ExecutionId;
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      ...BASE_FLOW_RECORD,
+      schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
     });
 
     await expect(deriveResumability(executionId)).resolves.toEqual({

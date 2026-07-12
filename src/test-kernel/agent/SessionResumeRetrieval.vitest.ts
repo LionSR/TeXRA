@@ -15,7 +15,12 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
+import {
+  FLOW_RECORD_SCHEMA_VERSION,
+  PersistedFlowStateError,
+  flowKey,
+  type FlowRecord,
+} from '@agent/node/persistedFlow';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -69,6 +74,11 @@ const TOOL_USE_SETTING = AgentToolUseSettingSchema.parse({});
 const TOOL_USE_PROMPT = AgentPromptSchema.parse({});
 const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
 const WAIT_NODE_CURSOR = 'start/default/default';
+const VALID_TOOL_USE_SHARED = {
+  messages: [],
+  shouldSkipCycle: false,
+  stateSlices: null,
+};
 type ToolUseSetupContext = Parameters<ToolUseFlowSetupCallback>[0];
 
 function createTaggedModelHandler(
@@ -172,7 +182,10 @@ describe('retrieveSessionResumeData', () => {
         shouldSkipCycle: 'false',
         stateSlices: null,
       }),
-    ).toBeNull();
+    ).toEqual({
+      success: false,
+      error: expect.objectContaining({ name: 'ZodError' }),
+    });
   });
 
   it('uses the persisted current model while preserving the original stream id', async () => {
@@ -519,6 +532,148 @@ describe('retrieveSessionResumeData', () => {
 describe('runToolUseFlow consumes the resume boundary instead of re-parsing', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
+  it('creates fresh shared state when the flow record is absent', async () => {
+    const executionId = 'abc-flow-absent' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-absent' as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+
+    const result = await runPersistedFlow(executionId, streamId, snapshot);
+
+    expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+    const stored = await getExecutionStore(executionId).read<FlowRecord>(
+      flowKey(executionId),
+    );
+    expect(ToolUseRunSharedCanonicalSchema.parse(stored?.shared)).toMatchObject(
+      {
+        messages: snapshot.messages,
+        stateSlices: {
+          runStateSnapshot: snapshot.run,
+          workspaceSnapshot: snapshot.workspace,
+          userChannels: snapshot.user,
+        },
+      },
+    );
+  });
+
+  it('releases follow-ups while preserving the record after a persistence read failure', async () => {
+    for (const resume of [true, false]) {
+      const suffix = resume ? 'resume' : 'fresh';
+      const executionId = `abc-flow-read-failure-${suffix}` as ExecutionId;
+      const streamId =
+        `chat@gpt54#abc-flow-read-failure-${suffix}` as StreamTabId;
+      const snapshot = resume
+        ? buildToolUseSnapshot(executionId, streamId)
+        : undefined;
+      const store = getExecutionStore(executionId);
+      const session = createTestSession();
+      const readFailure = new Error('flow storage unavailable');
+      const readSpy = vi
+        .spyOn(store, 'read')
+        .mockRejectedValueOnce(readFailure);
+      const deleteSpy = vi.spyOn(store, 'delete');
+
+      try {
+        await expect(
+          runPersistedFlow(
+            executionId,
+            streamId,
+            snapshot,
+            (context) => {
+              context.session.appendFollowUp({
+                text: 'queued before recovery',
+              });
+            },
+            session,
+          ),
+        ).rejects.toMatchObject({
+          name: PersistedFlowStateError.name,
+          reason: 'read-failed',
+          cause: readFailure,
+        });
+        expect(deleteSpy).not.toHaveBeenCalled();
+        expect(session.followUps.getAll(streamId)).toEqual([]);
+      } finally {
+        readSpy.mockRestore();
+        deleteSpy.mockRestore();
+        session.followUps.release(streamId);
+      }
+    }
+  });
+
+  it.each([
+    {
+      name: 'invalid shared state',
+      reason: 'invalid-shared',
+      stored: {
+        flowName: 'texra',
+        shared: {
+          messages: [],
+          shouldSkipCycle: 'false',
+          stateSlices: null,
+        },
+        createdAt: '2026-01-01T00:00:00.000Z',
+        nodes: [],
+      },
+    },
+    {
+      name: 'missing shared state',
+      reason: 'missing-shared',
+      stored: {
+        flowName: 'texra',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        nodes: [],
+      },
+    },
+    {
+      name: 'unsupported null record',
+      reason: 'unsupported-record',
+      stored: null,
+    },
+    {
+      name: 'valid shared state without nodes',
+      reason: 'unsupported-record',
+      stored: {
+        flowName: 'texra',
+        shared: VALID_TOOL_USE_SHARED,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    },
+    {
+      name: 'future envelope schema version',
+      reason: 'unsupported-record',
+      stored: {
+        schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
+        flowName: 'texra',
+        shared: VALID_TOOL_USE_SHARED,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        nodes: [],
+      },
+    },
+  ])('rejects and preserves $name', async ({ name, reason, stored }) => {
+    const slug = name.replaceAll(' ', '-');
+    const executionId = `abc-flow-${slug}` as ExecutionId;
+    const streamId = `chat@gpt54#abc-flow-${slug}` as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const store = getExecutionStore(executionId);
+    await store.write(flowKey(executionId), stored);
+    const deleteSpy = vi.spyOn(store, 'delete');
+
+    try {
+      const expectedError = {
+        name: PersistedFlowStateError.name,
+        reason,
+        cause: expect.objectContaining({ name: 'ZodError' }),
+      };
+      await expect(
+        runPersistedFlow(executionId, streamId, snapshot),
+      ).rejects.toMatchObject(expectedError);
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(await store.read(flowKey(executionId))).toEqual(stored);
+    } finally {
+      deleteSpy.mockRestore();
+    }
+  });
+
   it('skips persistence recovery when setup hands off a cancellation', async () => {
     const executionId = 'abc-cancel-setup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-setup' as StreamTabId;
@@ -547,6 +702,35 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
+  it('cleans up a fresh launch cancelled before persistence recovery', async () => {
+    const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
+    const store = getExecutionStore(executionId);
+    const session = createTestSession();
+    const readSpy = vi.spyOn(store, 'read');
+    const deleteSpy = vi.spyOn(store, 'delete');
+    const releaseSpy = vi.spyOn(session.followUps, 'release');
+
+    try {
+      const result = await runPersistedFlow(
+        executionId,
+        streamId,
+        undefined,
+        (flowContext) => flowContext.interrupt(),
+        session,
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(readSpy).not.toHaveBeenCalled();
+      expect(deleteSpy).toHaveBeenCalledWith(flowKey(executionId));
+      expect(releaseSpy).toHaveBeenCalledWith(streamId);
+    } finally {
+      readSpy.mockRestore();
+      deleteSpy.mockRestore();
+      releaseSpy.mockRestore();
+    }
+  });
+
   it('skips repair writes when cancellation arrives during the recovery read', async () => {
     const executionId = 'abc-cancel-read' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-read' as StreamTabId;
@@ -568,6 +752,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           },
         },
         createdAt: new Date().toISOString(),
+        nodes: [],
       };
     });
     const writeSpy = vi.spyOn(store, 'write');
@@ -621,7 +806,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       // Cancellation arrives while the recovery read is pending -- after
       // setupSession already appended the drained follow-up below.
       flowContext?.interrupt();
-      return null;
+      return undefined;
     });
 
     try {
