@@ -65,7 +65,8 @@ export async function selectCliModelAccessRoute(
     };
   }
 
-  if (isPreferCodexSubscription()) {
+  const status = await getCodexStatus();
+  if (status.signedIn && isPreferCodexSubscription()) {
     const update = await setPreferCodexSubscription(false);
     invalidateModelOptionsCache();
     return {
@@ -76,7 +77,6 @@ export async function selectCliModelAccessRoute(
     };
   }
 
-  const status = await getCodexStatus();
   let accountLabel = status.email ?? status.accountId ?? 'your account';
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
