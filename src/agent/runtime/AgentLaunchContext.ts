@@ -66,6 +66,7 @@ import {
 } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
+import { AgentLaunchResources } from './AgentLaunchResources';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -234,8 +235,7 @@ async function assembleAgentLaunchContext(
   executionId: ExecutionId,
   runtimeHost: AgentRuntimeHost,
   reservedStreamId: StreamTabId | undefined,
-  onActivated: (streamId: StreamTabId) => void,
-  onRunTraceCreated: (runTrace: RunTrace) => void,
+  resources: AgentLaunchResources,
 ): Promise<AgentLaunchContext> {
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
@@ -289,13 +289,15 @@ async function assembleAgentLaunchContext(
   const modelHandlerCompatibilityKey =
     input.modelHandlerCompatibilityKey ??
     (await inferLaunchModelHandlerCompatibilityKey(executionId, config.model));
-  const modelHandler = modelHandlerCompatibilityKey
-    ? await createModelHandlerForCompatibilityKey(
-        modelConfig,
-        modelHandlerCompatibilityKey,
-        setting.agentCategory,
-      )
-    : await createModelHandler(modelConfig, setting.agentCategory);
+  const modelHandler = resources.ownModelHandler(
+    modelHandlerCompatibilityKey
+      ? await createModelHandlerForCompatibilityKey(
+          modelConfig,
+          modelHandlerCompatibilityKey,
+          setting.agentCategory,
+        )
+      : await createModelHandler(modelConfig, setting.agentCategory),
+  );
 
   const streamId =
     input.streamTabIdOverride ??
@@ -312,18 +314,9 @@ async function assembleAgentLaunchContext(
     session.transcripts,
     session.flushers,
   );
-  const detachSessionTrace = session.attachRunTrace(
-    rawRunTrace.trace,
-    streamId,
+  const runTrace = resources.ownRunTrace(rawRunTrace, () =>
+    session.attachRunTrace(rawRunTrace.trace, streamId),
   );
-  const runTrace: RunTrace = {
-    trace: rawRunTrace.trace,
-    dispose: () => {
-      detachSessionTrace();
-      rawRunTrace.dispose();
-    },
-  };
-  onRunTraceCreated(runTrace);
   const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
@@ -342,7 +335,7 @@ async function assembleAgentLaunchContext(
       },
     },
   });
-  onActivated(streamId);
+  resources.markActivated(streamId);
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
@@ -360,10 +353,12 @@ async function assembleAgentLaunchContext(
         modelHandler.capabilities.supportsNativeAudio
       : modelHandler.capabilities.supportsVision);
 
-  const parentStage = await beginRunStage(
-    agentLogger,
-    `Run: ${config.agent}`,
-    initialMediaMayBeInserted ? undefined : initialInstruction,
+  const parentStage = resources.ownParentStage(
+    await beginRunStage(
+      agentLogger,
+      `Run: ${config.agent}`,
+      initialMediaMayBeInserted ? undefined : initialInstruction,
+    ),
   );
   const storageKey: StorageKey = parentStage.id
     ? normalizeRunId(parentStage.id)
@@ -582,36 +577,29 @@ export async function buildAgentLaunchContext(
     );
   }
 
-  let activatedStreamId: StreamTabId | undefined;
-  // Captured so the outer catch can dispose the trace and let
-  // `compensateFailedActivation` reuse it for the failure log. Released to the
-  // returned context on the success path (cleaned up by runFlowWithLifecycle).
-  let runTrace: RunTrace | undefined;
+  const resources = new AgentLaunchResources();
   try {
     const ctx = await assembleAgentLaunchContext(
       { ...input, session: launchSession },
       executionId,
       runtimeHost,
       reservedStreamId,
-      (streamId) => {
-        activatedStreamId = streamId;
-      },
-      (rt) => {
-        runTrace = rt;
-      },
+      resources,
     );
+    resources.transfer();
     return ctx;
   } catch (err) {
-    compensateFailedActivation({
-      configPayload,
-      reservedStreamId,
-      activatedStreamId,
-      streamStatus,
-      session: launchSession,
-      err,
-      runTrace,
+    resources.fail((activatedStreamId, runTrace) => {
+      compensateFailedActivation({
+        configPayload,
+        reservedStreamId,
+        activatedStreamId,
+        streamStatus,
+        session: launchSession,
+        err,
+        runTrace,
+      });
     });
-    runTrace?.dispose();
     if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
       runtimeHost.emit('requestShowError', {
         message: toErrorMessage(err),
