@@ -60,6 +60,7 @@ import { getCliAuthProfile, signOutCliSupabase } from '../runtime/supabaseAuth';
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
 import { setExitCode } from './_helpers/exitCode';
+import { loginInitFromArgs, runLoginCommand } from './auth';
 import {
   INTERACTIVE_AGENT_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
@@ -291,10 +292,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
             await signOutCliSupabase();
             writeTextStdout('Signed out of TeXRA.');
           } else {
-            const { runInteractiveCliLogin } = await import('./auth');
-            await runInteractiveCliLogin(launchContext, {
-              selectAccount: action.operation === 'switch',
-            });
+            await runLoginCommand(
+              launchContext,
+              loginInitFromArgs({
+                selectAccount: action.operation === 'switch',
+              }),
+            );
           }
         } catch (error: unknown) {
           writeErrorStderr(error);

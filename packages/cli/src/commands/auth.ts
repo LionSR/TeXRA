@@ -244,7 +244,7 @@ export const loginCommand = withUsageSections(
   ],
 );
 
-async function runLoginCommand(
+export async function runLoginCommand(
   context: CliContext,
   init: CliLoginInit,
 ): Promise<number> {
@@ -268,17 +268,6 @@ async function runLoginCommand(
     provider: choice,
     providerExplicit: true,
   });
-}
-
-/** Run the normal interactive TeXRA sign-in flow from another CLI surface. */
-export function runInteractiveCliLogin(
-  context: CliContext,
-  options: { readonly selectAccount?: boolean } = {},
-): Promise<number> {
-  return runLoginCommand(
-    context,
-    loginInitFromArgs({ selectAccount: options.selectAccount }),
-  );
 }
 
 export const logoutCommand = defineCliCommand({
