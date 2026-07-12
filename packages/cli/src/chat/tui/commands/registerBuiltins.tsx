@@ -336,7 +336,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'api',
-    description: 'Switch between included relay and personal API keys',
+    description: 'Choose included TeXRA access or personal API keys',
     category: 'configuration',
     formComponent: ApiModeFormAdapter,
   });

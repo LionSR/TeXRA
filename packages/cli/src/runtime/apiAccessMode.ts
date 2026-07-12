@@ -36,11 +36,11 @@ export function effectiveCliApiMode(source: {
 }
 
 export function formatCliApiMode(mode: CliApiMode): string {
-  return mode === 'included' ? 'included relay' : 'personal API keys';
+  return mode === 'included' ? 'included TeXRA access' : 'personal API keys';
 }
 
 export function shortCliApiMode(mode: CliApiMode): string {
-  return mode === 'included' ? 'relay' : 'personal';
+  return mode === 'included' ? 'included' : 'personal';
 }
 
 export function parseCliApiMode(input: string): CliApiMode | undefined {

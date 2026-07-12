@@ -19,7 +19,7 @@ import {
 export function formatRelayUsageStatus(summary: RelayUsageSummary): string {
   const used = formatPercent(summary.usagePercent, 1);
   const remaining = formatPercent(Math.max(0, 100 - summary.usagePercent), 1);
-  return `relay usage this month: ${used} used, ${remaining} remaining`;
+  return `included usage this month: ${used} used, ${remaining} remaining`;
 }
 
 export function formatCliAuthStatusLine(
@@ -49,19 +49,18 @@ const CLI_API_STATUS_ACTION_HINTS: Record<
 > = {
   included: {
     signedIn:
-      'actions: `texra login --select-account` changes account; `--api-mode personal` uses provider keys',
+      'actions: choose Model access below; `texra login --select-account` changes account',
     signedOut:
-      'actions: `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
+      'actions: choose Model access below; `texra login` signs in to Researcher Access',
     signedOutWithPersonalKey:
-      'actions: `--api-mode personal` uses provider keys; `texra auth chatgpt login` uses ChatGPT; `texra login` uses Researcher Access',
+      'actions: choose Model access below; `texra login` signs in to Researcher Access',
   },
   personal: {
-    signedIn:
-      'actions: `--api-mode included` uses relay; `texra logout` signs out',
+    signedIn: 'actions: choose Model access below; `texra logout` signs out',
     signedOut:
-      'actions: use ChatGPT, add a provider key, or sign in with Researcher Access',
+      'actions: choose Model access below, add a provider key, or sign in with Researcher Access',
     signedOutWithPersonalKey:
-      'actions: provider keys are configured; use ChatGPT or sign in with Researcher Access',
+      'actions: choose Model access below; provider keys are configured',
   },
 };
 
@@ -123,7 +122,7 @@ export async function loadCliApiStatusLines(
       (await getCliSessionAccessToken()) !== null;
     if (!canReadUsage) {
       lines.push(
-        'relay usage: not available with a CI relay token (run `texra login` to view usage)',
+        'included usage: not available with a CI relay token (run `texra login` to view usage)',
       );
     } else {
       try {
@@ -134,7 +133,7 @@ export async function loadCliApiStatusLines(
           ),
         );
       } catch (error: unknown) {
-        lines.push(`relay usage: unavailable (${toErrorMessage(error)})`);
+        lines.push(`included usage: unavailable (${toErrorMessage(error)})`);
       }
     }
   }

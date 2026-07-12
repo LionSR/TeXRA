@@ -192,7 +192,7 @@ export const loginCommand = withUsageSections(
   defineCliCommand({
     meta: {
       name: 'login',
-      description: 'Sign in with Researcher Access for included relay models',
+      description: 'Sign in with Researcher Access for included TeXRA models',
     },
     args: {
       ...GLOBAL_ARGS,
@@ -330,7 +330,7 @@ const authStatusCommand = defineCliCommand({
 });
 
 const usageCommand = defineCliCommand({
-  meta: { name: 'usage', description: 'Show relay usage for this account' },
+  meta: { name: 'usage', description: 'Show included usage for this account' },
   args: {
     ...GLOBAL_ARGS,
     month: {
@@ -363,7 +363,7 @@ const usageCommand = defineCliCommand({
       if (!sessionToken) {
         writeTextStderr(
           profile.credentialSource === 'relayToken'
-            ? '`texra auth usage` requires an interactive TeXRA session (a CI relay token cannot read usage). Run `texra login`, or inspect relay spending from the account dashboard.'
+            ? '`texra auth usage` requires an interactive TeXRA session (a CI relay token cannot read usage). Run `texra login`, or inspect included usage from the account dashboard.'
             : 'Not signed in. Run `texra login` first.',
         );
         return CliExitCode.ModelOrNetworkError;

@@ -36,6 +36,12 @@ export type CliOrchestrationAction =
       readonly model?: string;
     }
   | { readonly kind: 'resume'; readonly id: ExecutionId }
+  | { readonly kind: 'browse-resumes' }
+  | { readonly kind: 'configure-model-access' }
+  | {
+      readonly kind: 'set-model-access';
+      readonly access: CliModelAccessRoute;
+    }
   | { readonly kind: 'help' }
   | { readonly kind: 'exit' };
 
@@ -58,6 +64,21 @@ export interface BuildCliOrchestrationItemsInput {
   readonly history: readonly CliHistoryEntry[];
   readonly toolUseAgents: readonly AgentEntry[];
   readonly includeMultiAgentLoginHint?: boolean;
+  readonly modelAccess?: CliModelAccessStatus;
+}
+
+export type CliModelAccessRoute = 'chatgpt' | 'included' | 'personal';
+
+export interface CliModelAccessStatus {
+  readonly active: CliModelAccessRoute;
+  readonly chatGptSignedIn: boolean;
+  readonly chatGptAccountLabel?: string;
+}
+
+export interface CliModelAccessItem {
+  readonly value: CliModelAccessRoute;
+  readonly label: string;
+  readonly description: string;
 }
 
 export function isCliOrchestrationModelPickAction(
@@ -101,7 +122,6 @@ export function orchestrationModelAccessView(
   };
 }
 
-const MAX_RECENT_RESUME_ITEMS = 3;
 const MAX_RECENT_AGENT_ITEMS = 3;
 
 export function buildCliOrchestrationItems(
@@ -116,7 +136,18 @@ export function buildCliOrchestrationItems(
     },
   ];
 
-  items.push(...recentResumeItems(userStartedHistory));
+  if (input.modelAccess) {
+    items.push(modelAccessItem(input.modelAccess));
+  }
+
+  const resumeItems = buildCliResumeItems(userStartedHistory);
+  if (resumeItems.length > 0) {
+    items.push({
+      value: { kind: 'browse-resumes' },
+      label: 'Resume',
+      description: `${resumeItems.length} resumable ${resumeItems.length === 1 ? 'session' : 'sessions'}`,
+    });
+  }
   items.push(...recentAgentItems(userStartedHistory, input.toolUseAgents));
   items.push(
     ...presetItems(input.presetPlans, {
@@ -131,15 +162,61 @@ export function buildCliOrchestrationItems(
   return items;
 }
 
-function recentResumeItems(
+function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
+  return {
+    value: { kind: 'configure-model-access' },
+    label: 'Model access',
+    description:
+      status.active === 'chatgpt' && status.chatGptAccountLabel
+        ? `ChatGPT subscription · ${status.chatGptAccountLabel}`
+        : modelAccessRouteLabel(status.active),
+  };
+}
+
+export function modelAccessRouteLabel(route: CliModelAccessRoute): string {
+  switch (route) {
+    case 'chatgpt':
+      return 'ChatGPT subscription';
+    case 'included':
+      return 'Included TeXRA access';
+    case 'personal':
+      return 'Personal API keys';
+  }
+}
+
+export function buildModelAccessItems(
+  status: CliModelAccessStatus,
+): CliModelAccessItem[] {
+  return [
+    {
+      value: 'chatgpt',
+      label: modelAccessRouteLabel('chatgpt'),
+      description: status.chatGptSignedIn
+        ? `Use ${status.chatGptAccountLabel ?? 'your account'} with ChatGPT`
+        : 'Sign in with ChatGPT Plus/Pro/Team',
+    },
+    {
+      value: 'included',
+      label: modelAccessRouteLabel('included'),
+      description: 'Use your TeXRA account',
+    },
+    {
+      value: 'personal',
+      label: modelAccessRouteLabel('personal'),
+      description: 'Use keys configured on this computer',
+    },
+  ];
+}
+
+export function buildCliResumeItems(
   history: readonly CliHistoryEntry[],
 ): CliOrchestrationItem[] {
-  return resumableCliHistoryEntries(history)
-    .slice(0, MAX_RECENT_RESUME_ITEMS)
+  return resumableCliHistoryEntries(userStartedCliHistoryEntries(history))
+    .slice(0, 50)
     .map((entry) => ({
       value: { kind: 'resume', id: entry.id },
-      label: `Resume ${entry.id}`,
-      description: formatCliHistoryResumeSummary(entry),
+      label: entry.id,
+      description: `${entry.timestamp}; ${formatCliHistoryResumeSummary(entry)}`,
     }));
 }
 

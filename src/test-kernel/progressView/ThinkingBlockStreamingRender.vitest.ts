@@ -51,6 +51,7 @@ describe('thinking block renders as a banner while streaming', () => {
 
     const details = container.querySelector('wa-details.banner-details');
     expect(details).not.toBeNull();
+    expect(details?.getAttribute('icon-placement')).toBe('start');
     expect(container.querySelector('.log-line')).toBeNull();
     // Auto-expanded while streaming, so the growing text is actually visible.
     expect(details?.hasAttribute('open')).toBe(true);

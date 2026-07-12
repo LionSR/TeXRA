@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -11,7 +12,10 @@ import {
   type CodexSession,
 } from '@auth/codex';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
-import { CODEX_SUBSCRIPTION_CONTEXT_WINDOW } from '@model/providerCapabilities';
+import {
+  CODEX_SUBSCRIPTION_CONTEXT_WINDOW,
+  isCodexSubscriptionEligible,
+} from '@model/providerCapabilities';
 import {
   computeModelOptionsData,
   getModelUnavailableReason,
@@ -218,7 +222,7 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(model.disabled).toBe(false);
   });
 
-  it('shows subscription access before relay state when ChatGPT subscription is preferred and signed in', async () => {
+  it('enables eligible OpenAI models from ChatGPT sign-in without an API key', async () => {
     await installPlatform({
       config: {
         'texra.chatgptCodex.preferSubscription': true,
@@ -228,13 +232,16 @@ describe('computeModelOptionsData relay quota state', () => {
         [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
       },
     });
-    const access = createModelOptionsAccess({
-      useIncludedAccess: true,
-      canUseServerSideKeys: true,
-      canUseModelSync: true,
-      relayQuotaExceeded: true,
-      quotaAutoSwitched: false,
-    });
+    const access = createModelOptionsAccess(
+      {
+        useIncludedAccess: true,
+        canUseServerSideKeys: true,
+        canUseModelSync: true,
+        relayQuotaExceeded: true,
+        quotaAutoSwitched: false,
+      },
+      {},
+    );
 
     const [model] = await computeModelOptionsData(['gpt55'], access);
 
@@ -245,6 +252,52 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(model.cost).toBe('$0.000/$0.000');
     expect(model.hint).not.toContain(FAST_FIRST_RESPONSE_HINT);
     expect(model.disabled).toBe(false);
+  });
+
+  it('automatically lists every active model served by ChatGPT', async () => {
+    await installPlatform({
+      config: {
+        'texra.chatgptCodex.preferSubscription': true,
+      },
+      globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gemini31p'] },
+      secrets: {
+        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
+      },
+    });
+    const access = {
+      ...createModelOptionsAccess(
+        {
+          useIncludedAccess: false,
+          relayQuotaExceeded: false,
+          quotaAutoSwitched: false,
+        },
+        {},
+      ),
+      visibleModels: ['gemini31p'],
+    };
+
+    const models = await computeModelOptionsData(undefined, access);
+    const expected = Object.entries(MODEL_CONFIGS)
+      .filter(
+        ([, config]) =>
+          !config.retired &&
+          !config.deprecated &&
+          isCodexSubscriptionEligible(config),
+      )
+      .map(([model]) => model);
+
+    expect(models.map((model) => model.value)).toEqual(
+      expect.arrayContaining(expected),
+    );
+    for (const model of models.filter((entry) =>
+      expected.includes(entry.value),
+    )) {
+      expect(model).toMatchObject({
+        availability: 'subscription-access',
+        disabled: false,
+        requiresKey: false,
+      });
+    }
   });
 
   it('shows subscription access only for tool-use availability when the scoped switch is on', async () => {

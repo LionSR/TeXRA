@@ -223,7 +223,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'included relay',
+      api: 'included TeXRA access',
       approval: 'ask before privileged actions',
       status: 'stopped',
       goal: {
@@ -246,7 +246,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'gpt55',
-      api: 'included relay',
+      api: 'included TeXRA access',
       subscription: true,
       approval: 'ask',
       status: 'running',
@@ -255,7 +255,7 @@ describe('CLI session status formatter', () => {
 
     expect(status).toContain(
       [
-        'api: included relay',
+        'api: included TeXRA access',
         'subscription: on (Codex models use your ChatGPT plan)',
         'approval: ask',
       ].join('\n'),
@@ -266,7 +266,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'gpt55',
-      api: 'included relay',
+      api: 'included TeXRA access',
       subscription: false,
       approval: 'ask',
       status: 'running',
@@ -296,7 +296,7 @@ describe('CLI session status formatter', () => {
       formatCliSessionStatus({
         agent: 'research',
         model: 'deepseekT',
-        api: 'included relay',
+        api: 'included TeXRA access',
         approval: 'ask before privileged actions',
         status: STREAM_PHASE.WAITING,
         queuedFollowUpMessages: [],
