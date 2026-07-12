@@ -254,7 +254,10 @@ export const streamTabStyles = css`
     color: var(--wa-color-danger-on-quiet);
   }
 
-  /* Expand/collapse chevron for parent tabs with children */
+  /* Expand/collapse chevron for parent tabs with children. This
+   * component's shadow root doesn't load the shared commonViewStyles
+   * sheet, so (like .tab-delete above) the reset lives locally rather
+   * than through .action-icon-button's cross-component rules. */
   .tab-expand {
     display: flex;
     align-items: center;
@@ -262,12 +265,14 @@ export const streamTabStyles = css`
     width: 20px;
     min-width: 20px;
     height: 100%;
-    border: none;
-    background: none;
-    cursor: pointer;
     color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
     opacity: var(--opacity-muted);
+  }
+
+  .tab-expand::part(base) {
     padding: 0;
+    border: none;
+    background: none;
   }
 
   .tab-expand wa-icon {

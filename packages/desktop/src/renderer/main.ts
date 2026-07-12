@@ -59,7 +59,10 @@ import {
   applyHostBodyTheme,
   getWindowTargetOrigin,
 } from '@shared/wa/hostTheme';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@shared/wa/actionButtons';
 
 import {
   DesktopSetRouteMessageSchema,
@@ -194,22 +197,22 @@ function emptyWorkspaceTemplate(): TemplateResult {
         <li>Review progress, logs, and generated outputs in one window.</li>
       </ul>
       <div class="desktop-empty-workspace-actions">
-        <wa-button
-          appearance="filled"
-          variant="brand"
-          class="desktop-primary-button"
-          @click=${() =>
-            postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER)}
-        >
-          ${waIcon('folder-open', { slot: 'start' })} Open Folder
-        </wa-button>
-        <wa-button
-          appearance="outlined"
-          class="desktop-secondary-button"
-          @click=${openLogsDrawer}
-        >
-          ${waIcon('file-lines', { slot: 'start' })} Logs
-        </wa-button>
+        ${renderLabeledActionButton({
+          icon: 'folder-open',
+          text: 'Open Folder',
+          appearance: 'filled',
+          variant: 'brand',
+          className: 'desktop-primary-button',
+          onClick: () =>
+            postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+        })}
+        ${renderLabeledActionButton({
+          icon: 'file-lines',
+          text: 'Logs',
+          appearance: 'outlined',
+          className: 'desktop-secondary-button',
+          onClick: openLogsDrawer,
+        })}
       </div>
     </section>
   `;
@@ -258,17 +261,20 @@ function shellTemplate(): TemplateResult {
         <span class="desktop-workspace-directory" title=${workspacePath ?? ''}>
           ${workspaceDirectoryLabel}
         </span>
-        <wa-button
-          class="desktop-icon-button"
-          appearance="plain"
-          size="small"
-          ?hidden=${!showConversation}
-          title=${commandTitle('texra.showMainView', 'Back to launcher')}
-          aria-label="Back to launcher"
-          @click=${returnToLauncher}
-        >
-          ${waIcon('arrow-left', { label: 'Back to launcher' })}
-        </wa-button>
+        ${renderIconActionButton({
+          icon: 'arrow-left',
+          label: 'Back to launcher',
+          className: 'desktop-icon-button',
+          appearance: 'plain',
+          hidden: !showConversation,
+          title: commandTitle('texra.showMainView', 'Back to launcher'),
+          onClick: returnToLauncher,
+        })}
+        <!--
+          No icon in this design — renderLabeledActionButton requires one,
+          so this command-palette trigger stays hand-rolled (aria-haspopup
+          also isn't part of the shared helper's option surface).
+        -->
         <wa-button
           class="desktop-command-button"
           appearance="outlined"
@@ -279,17 +285,15 @@ function shellTemplate(): TemplateResult {
         >
           Commands
         </wa-button>
-        <wa-button
-          class="desktop-icon-button"
-          appearance="plain"
-          size="small"
-          data-route-button="logs"
-          aria-label="Logs"
-          title=${commandTitle(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS, 'Logs')}
-          @click=${openLogsDrawer}
-        >
-          ${waIcon('file-lines', { label: 'Logs' })}
-        </wa-button>
+        ${renderIconActionButton({
+          icon: 'file-lines',
+          label: 'Logs',
+          className: 'desktop-icon-button',
+          appearance: 'plain',
+          action: 'logs',
+          title: commandTitle(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS, 'Logs'),
+          onClick: openLogsDrawer,
+        })}
       </nav>
       <div class="desktop-three-pane">
         <aside class="desktop-rail" aria-label="Sessions">
@@ -297,28 +301,25 @@ function shellTemplate(): TemplateResult {
             <div class="desktop-rail-header-content">
               <span class="desktop-rail-title">Sessions</span>
             </div>
-            <wa-button
-              class="desktop-rail-new"
-              appearance="outlined"
-              size="small"
-              title=${commandTitle('texra.mainView.reset', 'New run')}
-              aria-label="New run"
-              @click=${returnToLauncher}
-            >
-              ${waIcon('plus')}
-            </wa-button>
+            ${renderIconActionButton({
+              icon: 'plus',
+              label: 'New run',
+              className: 'desktop-rail-new',
+              appearance: 'outlined',
+              title: commandTitle('texra.mainView.reset', 'New run'),
+              onClick: returnToLauncher,
+            })}
           </header>
           <div class="desktop-rail-tabs">${railTabs}</div>
           <footer class="desktop-rail-footer">
-            <wa-button
-              class="desktop-rail-settings"
-              appearance="plain"
-              size="small"
-              title=${commandTitle('texra.openSettings', 'Settings')}
-              @click=${openSettingsOverlay}
-            >
-              ${waIcon('gear', { slot: 'start' })} Settings
-            </wa-button>
+            ${renderLabeledActionButton({
+              icon: 'gear',
+              text: 'Settings',
+              className: 'desktop-rail-settings',
+              appearance: 'plain',
+              title: commandTitle('texra.openSettings', 'Settings'),
+              onClick: openSettingsOverlay,
+            })}
           </footer>
         </aside>
         <main class="desktop-center" id="desktop-center">

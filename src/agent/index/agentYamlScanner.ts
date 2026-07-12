@@ -2,7 +2,6 @@
 
 import { glob } from 'glob';
 import pMap from 'p-map';
-import * as yaml from 'yaml';
 
 import {
   AgentCategory,
@@ -11,6 +10,7 @@ import {
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
+import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';
@@ -110,12 +110,18 @@ async function readYamlDefinition(
 ): Promise<ParsedAgentYaml | null> {
   try {
     const content = await AbsoluteFS.read(yamlPath);
-    const parsed = yaml.parse(content);
-    const definition = AgentDefinitionSchema.parse(parsed);
+    const parsed = parseYamlWith(content, AgentDefinitionSchema);
+    if (parsed.isErr()) {
+      logger.warn(
+        CHANNEL,
+        `Failed to scan ${yamlPath}: ${toErrorMessage(parsed.error)}`,
+      );
+      return null;
+    }
     return {
-      name: definition.name,
+      name: parsed.value.name,
       path: yamlPath,
-      definition,
+      definition: parsed.value,
     };
   } catch (err) {
     logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${toErrorMessage(err)}`);
