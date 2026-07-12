@@ -290,6 +290,9 @@ class UsageLogServiceImpl {
 
     await this.flush();
 
+    this.quarantinedBatches = [];
+    this.quarantinedEntryCount = 0;
+
     logger.debug(CHANNEL, 'UsageLogService disposed');
   }
 }

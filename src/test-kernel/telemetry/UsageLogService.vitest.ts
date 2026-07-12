@@ -11,6 +11,7 @@ import {
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import * as logger from '@logger/logUtils';
 
 function usageEntry(model: string) {
   return {
@@ -207,6 +208,53 @@ describe('UsageLogService', () => {
 
     await expect(UsageLogService.flush()).resolves.toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds the permanent-rejection quarantine by evicting oldest batches', async () => {
+    UsageLogService.initialize({
+      batchSize: 101,
+      flushIntervalMs: 60_000,
+      enabled: true,
+    });
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+
+    const batches: unknown[] = [];
+    const fetchMock = stubFetch(
+      batches,
+      () =>
+        new Response(
+          JSON.stringify({
+            success: false,
+            accepted: 0,
+            error: 'invalid batch',
+            retryable: false,
+          }),
+          { status: 422 },
+        ),
+    );
+
+    for (let batchIndex = 0; batchIndex < 11; batchIndex += 1) {
+      for (let entryIndex = 0; entryIndex < 100; entryIndex += 1) {
+        UsageLogService.log(usageEntry(`${batchIndex}-${entryIndex}`));
+      }
+      await expect(UsageLogService.flush()).resolves.toBe(false);
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(11);
+    expect(errorSpy).toHaveBeenCalledWith(
+      'UsageLogService',
+      'Usage rejection quarantine reached its 1000-entry bound; evicted 100 oldest entries',
+    );
+
+    const quarantinedBatches = Reflect.get(
+      UsageLogService,
+      'quarantinedBatches',
+    ) as Array<{ batch: unknown }>;
+    expect(quarantinedBatches).toHaveLength(10);
+    expect(quarantinedBatches.map(({ batch }) => batchId(batch))).toEqual(
+      batches.slice(1).map(batchId),
+    );
   });
 
   it('keeps a failed batch id separate from later queued entries', async () => {

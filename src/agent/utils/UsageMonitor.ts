@@ -307,7 +307,7 @@ export class UsageMonitor {
         const flushed = await UsageLogService.flush();
         if (!flushed) {
           this.context.logger.debug(
-            'Relay usage logging is queued; spend-cap data will retry later.',
+            'Relay usage logging was not accepted; spend-cap data is not yet current.',
           );
         }
       }
