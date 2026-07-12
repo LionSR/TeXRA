@@ -21,13 +21,33 @@ import { AbsoluteFS } from '@utils/files';
 const CHANNEL = 'AgentCreator';
 logger.initialize(CHANNEL);
 
-const ParsedCreatorYamlSchema = z.object({
-  prompts: z.object({
-    systemPrompt: z.string(),
-    userRequest: z.string(),
-    retryPrompt: z.string().optional(),
+// Validation only — no .trim() transform, so multiline block-scalar prompts
+// (including their trailing newline) pass through verbatim.
+const PromptStringSchema = z.string().refine((value) => value.trim() !== '', {
+  error: 'prompt must not be empty',
+});
+
+// Top level stays non-strict: templates carry metadata (name, description,
+// settings) that this loader does not consume. The prompts block is strict so
+// a misspelled key (e.g. `retryPromt`) fails the load instead of being
+// stripped and silently replaced by the built-in fallback.
+export const ParsedCreatorYamlSchema = z.object({
+  prompts: z.strictObject({
+    systemPrompt: PromptStringSchema,
+    userRequest: PromptStringSchema,
+    retryPrompt: PromptStringSchema.optional(),
   }),
 });
+
+function parseCreatorTemplate(fileName: string, raw: string) {
+  const parsed = ParsedCreatorYamlSchema.safeParse(yaml.parse(raw));
+  if (!parsed.success) {
+    throw new Error(
+      `Invalid bundled agent-creator template ${fileName}: ${z.prettifyError(parsed.error)}`,
+    );
+  }
+  return parsed.data;
+}
 
 /** Cached after first load. Templates are bundled resources — stable for the session. */
 let creatorConfig: CreatorConfig | null = null;
@@ -50,8 +70,8 @@ async function loadCreatorConfig(
       ),
       AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
     ]);
-  const wf = ParsedCreatorYamlSchema.parse(yaml.parse(workflowYaml));
-  const tu = ParsedCreatorYamlSchema.parse(yaml.parse(toolUseYaml));
+  const wf = parseCreatorTemplate('agentCreatorWorkflow.yaml', workflowYaml);
+  const tu = parseCreatorTemplate('agentCreatorToolUse.yaml', toolUseYaml);
   const defaultRetry =
     'The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.';
   creatorConfig = {
