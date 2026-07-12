@@ -48,10 +48,20 @@ const codexPlatforms = {
     triple: 'x86_64-apple-darwin',
     binaryName: 'codex',
   },
+  'linux-arm64': {
+    packageName: '@openai/codex-linux-arm64',
+    triple: 'aarch64-unknown-linux-musl',
+    binaryName: 'codex',
+  },
   'linux-x64': {
     packageName: '@openai/codex-linux-x64',
     triple: 'x86_64-unknown-linux-musl',
     binaryName: 'codex',
+  },
+  'win32-arm64': {
+    packageName: '@openai/codex-win32-arm64',
+    triple: 'aarch64-pc-windows-msvc',
+    binaryName: 'codex.exe',
   },
   'win32-x64': {
     packageName: '@openai/codex-win32-x64',
@@ -142,9 +152,19 @@ describe('desktop Codex package payload', () => {
 
   it.each([
     {
+      platform: 'linux-arm64' as const,
+      payloadSize: '294.2 MiB',
+      budgetSize: '310.2 MiB',
+    },
+    {
       platform: 'linux-x64' as const,
       payloadSize: '335.2 MiB',
       budgetSize: '351.2 MiB',
+    },
+    {
+      platform: 'win32-arm64' as const,
+      payloadSize: '339.9 MiB',
+      budgetSize: '355.9 MiB',
     },
     {
       platform: 'win32-x64' as const,
@@ -193,6 +213,15 @@ describe('desktop Codex package payload', () => {
     const result = runVerifierResult(packageRoot);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('above the 351.2 MiB budget for linux-x64');
+  });
+
+  it('rejects a fake Codex payload smaller than its package metadata', () => {
+    expect(() =>
+      createFakeDesktopPackage(['linux-arm64'], {
+        codexPayloadSizeBytes: { 'linux-arm64': 1 },
+        target: 'linux-arm64',
+      }),
+    ).toThrow('smaller than its package metadata');
   });
 
   it('does not infer Windows from a darwin path segment', async () => {
@@ -357,8 +386,12 @@ function createFakeDesktopPackage(
     targetDirName = 'mac-universal';
   } else if (target.startsWith('darwin')) {
     targetDirName = `mac-${target.slice('darwin-'.length)}`;
+  } else if (target === 'linux-arm64') {
+    targetDirName = 'linux-arm64-unpacked';
   } else if (target.startsWith('linux')) {
     targetDirName = 'linux-unpacked';
+  } else if (target === 'win32-arm64') {
+    targetDirName = 'win-arm64-unpacked';
   } else {
     targetDirName = 'win-unpacked';
   }
@@ -458,7 +491,7 @@ function writeCodexPlatformPackage(
   const packageJsonPath = join(packageRoot, 'package.json');
   writeJson(packageJsonPath, {
     name: '@openai/codex',
-    version: `0.128.0-${platform}`,
+    version: `0.144.1-${platform}`,
   });
   const binaryPath = join(
     packageRoot,
@@ -470,7 +503,13 @@ function writeCodexPlatformPackage(
   writeText(binaryPath, 'fake codex binary\n');
 
   if (payloadSizeBytes != null) {
-    truncateSync(binaryPath, payloadSizeBytes - statSync(packageJsonPath).size);
+    const metadataSizeBytes = statSync(packageJsonPath).size;
+    if (payloadSizeBytes < metadataSizeBytes) {
+      throw new Error(
+        `Fake Codex payload for ${platform} requests ${payloadSizeBytes} bytes, smaller than its package metadata (${metadataSizeBytes} bytes).`,
+      );
+    }
+    truncateSync(binaryPath, payloadSizeBytes - metadataSizeBytes);
   }
 }
 
@@ -484,7 +523,7 @@ function writePnpmCodexPlatformPackage(
     'app.asar.unpacked',
     'node_modules',
     '.pnpm',
-    `@openai+codex@0.133.0-${platform}`,
+    `@openai+codex@0.144.1-${platform}`,
     'node_modules',
     '@openai',
     'codex',
@@ -492,7 +531,7 @@ function writePnpmCodexPlatformPackage(
 
   writeJson(join(packageRoot, 'package.json'), {
     name: '@openai/codex',
-    version: `0.133.0-${platform}`,
+    version: `0.144.1-${platform}`,
   });
   writeText(
     join(packageRoot, 'vendor', info.triple, 'bin', info.binaryName),
