@@ -4,6 +4,7 @@ import {
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
 } from '../hostBridgeChannels.js';
+import { assertDesktopOutboundMessage } from './desktopIpcTypes.js';
 
 export interface DesktopHostBridgeOptions {
   onRendererMessage?: (message: unknown, window: BrowserWindow) => void;
@@ -33,6 +34,7 @@ export function installDesktopHostBridge(
   window.once('closed', dispose);
   return {
     postToRenderer: (message) => {
+      assertDesktopOutboundMessage(message);
       if (window.isDestroyed() || window.webContents.isDestroyed()) return;
       window.webContents.send(ELECTRON_WEBVIEW_PUSH_CHANNEL, message);
     },

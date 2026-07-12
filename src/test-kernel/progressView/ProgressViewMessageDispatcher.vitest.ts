@@ -23,13 +23,19 @@ import {
   createInitialState,
   type ProgressState,
 } from '@progressView/frontend/store';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { MAIN_VIEW_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchProgressViewOutbound,
+  MainViewMessageSchema,
   ProgressViewOutboundMessageSchema,
   type ProgressViewOutboundHandlerRegistry,
 } from '@shared/schemas';
-import { UnsupportedCommandError, unsupported } from '@shared/utils/dispatcher';
+import {
+  assertKnownOutboundMessage,
+  assertOutboundMessage,
+  UnsupportedCommandError,
+  unsupported,
+} from '@shared/utils/dispatcher';
 
 /** Every command in the real outbound schema, including nested unions (UPDATE_PERMISSION). */
 function outboundCommands(): string[] {
@@ -209,5 +215,60 @@ describe('dispatchProgressViewOutbound Unsupported-command gating (@shared/utils
       1,
     );
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+// #8123: outbound webview/desktop IPC (BaseWebviewManager.postMessage,
+// desktopIpcTypes.ts's postToRenderer) now runs payloads through these
+// existing outbound schemas before sending, mirroring the inbound-side
+// validation `createDispatcher` already performs. Vitest runs with
+// `NODE_ENV=test`, so `assertOutboundMessage`/`assertKnownOutboundMessage`
+// are always in their dev/test-assertion (throwing) mode here.
+describe('assertOutboundMessage / assertKnownOutboundMessage (#8123)', () => {
+  it('does not throw for a well-formed MainView outbound message', () => {
+    expect(() =>
+      assertOutboundMessage(MainViewMessageSchema, {
+        command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
+        filePath: 'paper.tex',
+        fileType: 'input',
+      }),
+    ).not.toThrow();
+  });
+
+  it('throws when a MainView outbound message drifts from its schema (single-domain boundary, e.g. BaseWebviewManager.postMessage)', () => {
+    expect(() =>
+      assertOutboundMessage(MainViewMessageSchema, {
+        command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
+        // Missing `fileType` — required by SetCurrentFileMessageSchema.
+        filePath: 'paper.tex',
+      }),
+    ).toThrow(/Outbound message failed schema validation/);
+  });
+
+  it('lets a command unrecognized by any listed domain pass through unchecked (desktop-only messages)', () => {
+    expect(() =>
+      assertKnownOutboundMessage(
+        [MainViewMessageSchema, ProgressViewOutboundMessageSchema],
+        { command: 'desktop:showPdf', title: 'paper.pdf', pdfPath: '/x.pdf' },
+      ),
+    ).not.toThrow();
+  });
+
+  it("throws when a command matches a known domain but fails that domain's own validation", () => {
+    expect(() =>
+      assertKnownOutboundMessage(
+        [MainViewMessageSchema, ProgressViewOutboundMessageSchema],
+        { command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM }, // missing `activeStream`
+      ),
+    ).toThrow(/Outbound message failed schema validation/);
+  });
+
+  it('throws for a bad discriminator nested inside a matched command (UPDATE_PERMISSION.action), not just a top-level unknown command', () => {
+    expect(() =>
+      assertKnownOutboundMessage(
+        [MainViewMessageSchema, ProgressViewOutboundMessageSchema],
+        { command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION, action: 'bogus' },
+      ),
+    ).toThrow(/Outbound message failed schema validation/);
   });
 });
