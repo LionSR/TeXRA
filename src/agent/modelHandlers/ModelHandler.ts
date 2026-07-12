@@ -750,10 +750,15 @@ export abstract class ModelHandler<
    */
   protected validateReasoningEffort(effort: string): string {
     if (this.config.provider !== ModelProvider.XAI) return effort;
-    if (effort === 'low' || effort === 'high') return effort;
+    // Current Grok reasoning models (grok-4.3 / grok-4.5) document
+    // low/medium/high (docs.x.ai reasoning guide); xhigh only exists on the
+    // multi-agent variant where it means agent count, so clamp it to high.
+    if (effort === 'low' || effort === 'medium' || effort === 'high') {
+      return effort;
+    }
 
     this.logger.warn(
-      `xAI models only support 'low' or 'high' reasoning effort. Converting '${effort}' to 'high'.`,
+      `xAI models only support 'low', 'medium', or 'high' reasoning effort. Converting '${effort}' to 'high'.`,
     );
     return 'high';
   }
