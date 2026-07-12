@@ -30,6 +30,7 @@ import {
 import { formatCliStatusLabel } from '../sessionStatus';
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '../ui/colors';
 import { STATUS_DIAMOND } from '../ui/glyphs';
+import { KEY_HINT_SEPARATOR, keyHintText } from '../ui/KeyHints';
 import {
   STATUS_BAR_HORIZONTAL_PADDING,
   STATUS_BAR_RIGHT_PREVIEW_GAP,
@@ -377,16 +378,15 @@ function fitStatusBarLeftSegments(
   );
 }
 
-function metaShortcutLabel(modifierLabel: string, key: string): string {
-  return `[${metaChordLabel(modifierLabel, key)}]`;
-}
-
+// Bindings use the shared KeyHints vocabulary (`key action` joined with
+// KEY_HINT_SEPARATOR) so the status bar and modal footers read as one system
+// (docs/prds/cli-tui-ink/10-architecture.md § Intuitiveness conventions).
 function statusBarBindingRow(
   bindings: readonly (string | false | undefined)[],
 ): string {
-  return joinStatusBindings(
-    bindings.filter((binding): binding is string => !!binding),
-  );
+  return bindings
+    .filter((binding): binding is string => !!binding)
+    .join(KEY_HINT_SEPARATOR);
 }
 
 // Single-slot memo for the bindings cascade below: it eagerly builds ~13
@@ -420,25 +420,38 @@ function statusBarBindingsText(
     maxColumns,
   ].join('|');
   if (memoKey === lastBindingsKey) return lastBindingsText;
-  const focusBinding = metaShortcutLabel(modifierLabel, '1..9');
-  const tasksBinding = metaShortcutLabel(modifierLabel, 'p');
-  const subagentsBinding = metaShortcutLabel(modifierLabel, 's');
-  const transcriptBinding = '[Ctrl-T]transcript';
-  const streamTabs = hasMultipleStreams ? '[Tab]streams' : undefined;
-  const streamFocus = hasMultipleStreams ? `${focusBinding}focus` : undefined;
-  const transcript = transcriptAvailable ? transcriptBinding : undefined;
-  const tasks = taskControlsAvailable ? `${tasksBinding}tasks` : undefined;
-  const subagents = subagentControlsAvailable
-    ? `${subagentsBinding}subagents`
+  const streamTabs = hasMultipleStreams
+    ? keyHintText({ key: 'Tab', action: 'streams' })
     : undefined;
-  const agent = agentSelectionAvailable ? '[/agent]agents' : undefined;
-  const status = '[/status]details';
-  const model = '[/model]models';
-  const api = '[/api]api';
-  const newline = shiftEnterNewline
-    ? '[Shift-Enter]newline'
-    : '[Ctrl-J]newline';
-  const ctrlC = `[Ctrl-C]${ctrlCAction}`;
+  const streamFocus = hasMultipleStreams
+    ? keyHintText({
+        key: metaChordLabel(modifierLabel, '1..9'),
+        action: 'focus',
+      })
+    : undefined;
+  const transcript = transcriptAvailable
+    ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
+    : undefined;
+  const tasks = taskControlsAvailable
+    ? keyHintText({ key: metaChordLabel(modifierLabel, 'p'), action: 'tasks' })
+    : undefined;
+  const subagents = subagentControlsAvailable
+    ? keyHintText({
+        key: metaChordLabel(modifierLabel, 's'),
+        action: 'subagents',
+      })
+    : undefined;
+  const agent = agentSelectionAvailable
+    ? keyHintText({ key: '/agent', action: 'agents' })
+    : undefined;
+  const status = keyHintText({ key: '/status', action: 'details' });
+  const model = keyHintText({ key: '/model', action: 'models' });
+  const api = keyHintText({ key: '/api', action: 'api' });
+  const newline = keyHintText({
+    key: shiftEnterNewline ? 'Shift-Enter' : 'Ctrl-J',
+    action: 'newline',
+  });
+  const ctrlC = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const setupControlsOnly =
     agentSelectionAvailable &&
     !taskControlsAvailable &&
@@ -509,10 +522,6 @@ function statusBarBindingsText(
   return text;
 }
 
-function joinStatusBindings(bindings: readonly string[]): string {
-  return bindings.join('  ');
-}
-
 function fitsStatusBindings(text: string, maxColumns: number | undefined) {
   return maxColumns === undefined || textDisplayWidth(text) <= maxColumns;
 }
@@ -522,12 +531,16 @@ function foregroundBindingsText(
   maxColumns?: number,
   escapeAction = 'close',
 ): string {
-  const ctrlCBinding = `[Ctrl-C]${ctrlCAction}`;
-  const escBinding = `[Esc]${escapeAction}`;
-  const full = `Use foreground panel shortcuts  ${escBinding}  ${ctrlCBinding}`;
+  const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
+  const escBinding = keyHintText({ key: 'Esc', action: escapeAction });
+  const full = [
+    'Use foreground panel shortcuts',
+    escBinding,
+    ctrlCBinding,
+  ].join(KEY_HINT_SEPARATOR);
   if (fitsStatusBindings(full, maxColumns)) return full;
 
-  const compact = `${escBinding}  ${ctrlCBinding}`;
+  const compact = [escBinding, ctrlCBinding].join(KEY_HINT_SEPARATOR);
   if (fitsStatusBindings(compact, maxColumns)) return compact;
 
   return ctrlCBinding;
