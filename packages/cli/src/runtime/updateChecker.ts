@@ -220,32 +220,54 @@ function parseHomebrewFormulaVersion(
   return entry?.versions?.stable ?? undefined;
 }
 
+/** Result of one fetch attempt against the package source. */
+export interface CliUpdateFetchResult {
+  /** Latest published version, when one could be read (possibly stale). */
+  version: string | undefined;
+  /**
+   * True when the version reflects a live consultation of the source — an npm
+   * registry response, or `brew info` after a successful tap refresh. False
+   * when only stale local metadata was readable (failed `brew update`): still
+   * usable for a prompt, but the attempt must retry next launch instead of
+   * being stamped for a full throttle window.
+   */
+  refreshed: boolean;
+}
+
 /**
  * Attempt to refresh Homebrew tap metadata and fetch the latest formula
- * version, or undefined. Without the explicit update, `brew info` can report
- * stale local metadata and hide an available upgrade until the user runs
- * `brew update` manually. If the refresh fails, still read `brew info`: local
- * metadata may already be fresh enough to offer the right prompt.
+ * version. Without the explicit update, `brew info` can report stale local
+ * metadata and hide an available upgrade until the user runs `brew update`
+ * manually. If the refresh fails, still read `brew info` — local metadata may
+ * already be fresh enough to offer the right prompt — but report
+ * `refreshed: false` so the caller knows the version may be stale.
  */
 export async function fetchLatestHomebrewFormulaVersion(options?: {
   formula?: string;
   timeoutMs?: number;
   cwd?: string;
   runCommand?: CommandRunner;
-}): Promise<string | undefined> {
+}): Promise<CliUpdateFetchResult> {
   const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
   const runCommand = options?.runCommand ?? readCommandStdout;
   const timeoutMs = options?.timeoutMs ?? HOMEBREW_COMMAND_TIMEOUT_MS;
-  await runCommand('brew', ['update', '--quiet'], timeoutMs, options?.cwd);
+  const refreshStdout = await runCommand(
+    'brew',
+    ['update', '--quiet'],
+    timeoutMs,
+    options?.cwd,
+  );
   const stdout = await runCommand(
     'brew',
     ['info', '--json=v2', formula],
     timeoutMs,
     options?.cwd,
   );
-  return stdout == null
-    ? undefined
-    : parseHomebrewFormulaVersion(stdout, formula);
+  return {
+    version:
+      stdout == null ? undefined : parseHomebrewFormulaVersion(stdout, formula),
+    refreshed: refreshStdout != null,
+  };
 }
 
 function runCliUpdate(method: InstallMethod): Promise<boolean> {
@@ -287,8 +309,16 @@ function announceUpdateInstalled(latest: string, style: CliStyle): never {
 export interface CheckCliUpdateAvailableOptions {
   currentVersion: string;
   globalState: StateStore;
-  /** Fetch the latest published version, or undefined on any failure. */
-  fetchLatest: () => Promise<string | undefined>;
+  /** Fetch the latest published version plus whether the source was live. */
+  fetchLatest: () => Promise<CliUpdateFetchResult>;
+  /**
+   * Present a newer version to the user (notice + prompt). Called only when a
+   * strictly newer version was fetched, and always before the daily stamp is
+   * persisted — a throw (e.g. stdin closing mid-prompt) aborts the attempt
+   * un-stamped so the next launch re-checks instead of going silent for the
+   * full throttle window.
+   */
+  notify: (latest: string) => Promise<void>;
   now?: () => number;
 }
 
@@ -296,14 +326,20 @@ export interface CheckCliUpdateAvailableOptions {
  * At most once per day (persisted in global state), fetch the latest
  * published version and report it when newer than `currentVersion`. Mirrors
  * the desktop update checker's throttle (see `checkForDesktopUpdate` in
- * `desktopUpdateChecker.ts`): the daily stamp is only persisted after a
- * successful fetch, so a failed check (offline, registry hiccup) retries on
- * the next launch instead of being suppressed for a full day.
+ * `desktopUpdateChecker.ts`), but this is the single owner of the daily
+ * stamp: it is written in exactly one place, only once every outcome of the
+ * attempt is known — the source was genuinely consulted (`refreshed`, not a
+ * stale brew cache behind a failed tap refresh) and, when an update was
+ * available, `notify` resolved (the user actually saw it). Any other outcome
+ * (offline, registry hiccup, failed tap refresh, killed prompt) leaves the
+ * stamp unwritten so the next launch retries instead of being suppressed for
+ * a full day.
  */
 export async function checkCliUpdateAvailable({
   currentVersion,
   globalState,
   fetchLatest,
+  notify,
   now = Date.now,
 }: CheckCliUpdateAvailableOptions): Promise<string | undefined> {
   const lastCheckedAt = globalState.get<number>(
@@ -313,13 +349,19 @@ export async function checkCliUpdateAvailable({
   const nowMs = now();
   if (nowMs - lastCheckedAt < CHECK_INTERVAL_MS) return undefined;
 
-  const latest = await fetchLatest();
-  if (!latest) return undefined;
-  await globalState.update(
-    GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-    nowMs,
-  );
-  return isNewerVersion(latest, currentVersion) ? latest : undefined;
+  const { version, refreshed } = await fetchLatest();
+  const latest =
+    version !== undefined && isNewerVersion(version, currentVersion)
+      ? version
+      : undefined;
+  if (latest !== undefined) await notify(latest);
+  if (version && refreshed) {
+    await globalState.update(
+      GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
+      nowMs,
+    );
+  }
+  return latest;
 }
 
 let notified = false;
@@ -353,13 +395,16 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   if (!isPackageManagerInstall()) return;
 
   const method = detectInstallMethod();
+  const updateCmd = formatUpdateCommand(method);
+  const style = createCliStyle(context.colorEnabled);
   // Runs before `initInteractiveCliPlatform`, so `platform()` isn't up yet —
   // open the same global `state.json` that `createCliStateStores` opens later
   // directly (see `cliStateStores.ts`). Failures here (e.g. an unreadable or
-  // unwritable global-storage directory) must stay as silent as a network
-  // failure: this whole check is best-effort and must never block `chat` /
-  // `orchestrate` startup.
+  // unwritable global-storage directory, or stdin closing mid-prompt) must
+  // stay as silent as a network failure: this whole check is best-effort and
+  // must never block `chat` / `orchestrate` startup.
   let latest: string | undefined;
+  let confirmed = false;
   try {
     const globalState = await JsonStore.open(
       path.join(
@@ -370,31 +415,28 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
     latest = await checkCliUpdateAvailable({
       currentVersion: context.version,
       globalState,
-      fetchLatest: () =>
-        method === 'brew'
-          ? fetchLatestHomebrewFormulaVersion({ cwd: context.cwd })
-          : fetchLatestCliVersion(),
+      fetchLatest: async () => {
+        if (method === 'brew') {
+          return fetchLatestHomebrewFormulaVersion({ cwd: context.cwd });
+        }
+        const version = await fetchLatestCliVersion();
+        return { version, refreshed: version !== undefined };
+      },
+      notify: async (latestVersion) => {
+        writeTextStderr(
+          `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
+        );
+        const answer = await askCliQuestion(
+          `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
+        );
+        confirmed = affirmative(answer);
+      },
     });
   } catch {
     return;
   }
   if (!latest) return;
-
-  const updateCmd = formatUpdateCommand(method);
-  const style = createCliStyle(context.colorEnabled);
-  writeTextStderr(
-    `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latest))}`,
-  );
-
-  let answer: string;
-  try {
-    answer = await askCliQuestion(
-      `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
-    );
-  } catch {
-    return;
-  }
-  if (!affirmative(answer)) {
+  if (!confirmed) {
     writeTextStderr(
       style.muted('Skipped. Update later with: ') + style.command(updateCmd),
     );

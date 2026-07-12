@@ -226,23 +226,23 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
             ],
           }),
       }),
-    ).resolves.toBe('0.39.0');
+    ).resolves.toEqual({ version: '0.39.0', refreshed: true });
   });
 
-  it('returns undefined when brew info is unavailable or missing the formula', async () => {
+  it('returns no version when brew info is unavailable or missing the formula', async () => {
     await expect(
       fetchLatestHomebrewFormulaVersion({
         runCommand: async () => undefined,
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ version: undefined, refreshed: false });
     await expect(
       fetchLatestHomebrewFormulaVersion({
         runCommand: async () => JSON.stringify({ formulae: [] }),
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ version: undefined, refreshed: true });
   });
 
-  it('still reads formula info when the Homebrew tap refresh fails', async () => {
+  it('still reads formula info when the Homebrew tap refresh fails, marked stale', async () => {
     const calls: Array<{ command: string; args: readonly string[] }> = [];
     await expect(
       fetchLatestHomebrewFormulaVersion({
@@ -254,7 +254,7 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
           });
         },
       }),
-    ).resolves.toBe('0.39.0');
+    ).resolves.toEqual({ version: '0.39.0', refreshed: false });
 
     expect(calls).toEqual([
       { command: 'brew', args: ['update', '--quiet'] },
@@ -301,34 +301,49 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
 describe('checkCliUpdateAvailable', () => {
   const currentVersion = '0.39.3';
   const latestVersion = '0.40.0';
+  const noopNotify = async () => {};
 
   it('checks on a first launch (no prior lastCheckedAt) and reports a newer version', async () => {
     const globalState = new MemoryStateStore();
     let fetchCalls = 0;
+    const notified: string[] = [];
 
     const latest = await checkCliUpdateAvailable({
       currentVersion,
       globalState,
       fetchLatest: async () => {
         fetchCalls += 1;
-        return latestVersion;
+        return { version: latestVersion, refreshed: true };
+      },
+      notify: async (v) => {
+        notified.push(v);
       },
     });
 
     expect(fetchCalls).toBe(1);
     expect(latest).toBe(latestVersion);
+    expect(notified).toEqual([latestVersion]);
   });
 
-  it('returns undefined when the fetched version is not newer', async () => {
+  it('returns undefined and does not notify when the fetched version is not newer', async () => {
     const globalState = new MemoryStateStore();
+    const notified: string[] = [];
 
     const latest = await checkCliUpdateAvailable({
       currentVersion: latestVersion,
       globalState,
-      fetchLatest: async () => latestVersion,
+      fetchLatest: async () => ({ version: latestVersion, refreshed: true }),
+      notify: async (v) => {
+        notified.push(v);
+      },
     });
 
     expect(latest).toBeUndefined();
+    expect(notified).toEqual([]);
+    // The check itself completed, so the day's stamp is still persisted.
+    expect(
+      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+    ).toBeDefined();
   });
 
   it('throttles repeated checks within the same day', async () => {
@@ -346,8 +361,9 @@ describe('checkCliUpdateAvailable', () => {
         now: () => nowMs,
         fetchLatest: async () => {
           fetchCalls += 1;
-          return latestVersion;
+          return { version: latestVersion, refreshed: true };
         },
+        notify: noopNotify,
       });
 
     await run();
@@ -375,8 +391,10 @@ describe('checkCliUpdateAvailable', () => {
       now: () => nowMs,
       fetchLatest: async () => {
         fetchCalls += 1;
-        return undefined; // simulates a network/registry failure
+        // simulates a network/registry failure
+        return { version: undefined, refreshed: false };
       },
+      notify: noopNotify,
     });
 
     expect(fetchCalls).toBe(1);
@@ -392,13 +410,86 @@ describe('checkCliUpdateAvailable', () => {
       now: () => nowMs + 1000,
       fetchLatest: async () => {
         fetchCalls += 1;
-        return latestVersion;
+        return { version: latestVersion, refreshed: true };
       },
+      notify: noopNotify,
     });
 
     expect(fetchCalls).toBe(2);
     expect(
       globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
     ).toBe(nowMs + 1000);
+  });
+
+  it('does not persist the throttle stamp on a stale (unrefreshed) version, but still offers it', async () => {
+    // #8223: a failed `brew update` that still yields the locally cached
+    // formula version must not count as a completed check — the next launch
+    // retries the tap refresh instead of going silent for 24h.
+    const globalState = new MemoryStateStore();
+    const nowMs = Date.UTC(2026, 0, 1);
+    const notified: string[] = [];
+
+    const latest = await checkCliUpdateAvailable({
+      currentVersion,
+      globalState,
+      now: () => nowMs,
+      fetchLatest: async () => ({ version: latestVersion, refreshed: false }),
+      notify: async (v) => {
+        notified.push(v);
+      },
+    });
+
+    expect(latest).toBe(latestVersion);
+    expect(notified).toEqual([latestVersion]);
+    expect(
+      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+    ).toBeUndefined();
+  });
+
+  it('does not persist the throttle stamp when the notify prompt throws', async () => {
+    // #8224: the stamp must be written only after the user actually saw the
+    // notice — a prompt killed mid-way (closed stdin) leaves the attempt
+    // un-stamped so the next launch re-checks.
+    const globalState = new MemoryStateStore();
+    const nowMs = Date.UTC(2026, 0, 1);
+
+    await expect(
+      checkCliUpdateAvailable({
+        currentVersion,
+        globalState,
+        now: () => nowMs,
+        fetchLatest: async () => ({ version: latestVersion, refreshed: true }),
+        notify: async () => {
+          throw new Error('stdin closed');
+        },
+      }),
+    ).rejects.toThrow('stdin closed');
+
+    expect(
+      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+    ).toBeUndefined();
+  });
+
+  it('persists the throttle stamp only after notify completes', async () => {
+    const globalState = new MemoryStateStore();
+    const nowMs = Date.UTC(2026, 0, 1);
+    let stampAtNotifyTime: unknown = 'unread';
+
+    await checkCliUpdateAvailable({
+      currentVersion,
+      globalState,
+      now: () => nowMs,
+      fetchLatest: async () => ({ version: latestVersion, refreshed: true }),
+      notify: async () => {
+        stampAtNotifyTime = globalState.values.get(
+          GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
+        );
+      },
+    });
+
+    expect(stampAtNotifyTime).toBeUndefined();
+    expect(
+      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+    ).toBe(nowMs);
   });
 });
