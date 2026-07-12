@@ -416,12 +416,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private inFlight = false;
 
   /**
-   * One-shot guard for the live-count compaction retry in
-   * {@link createResponseImpl}: if a compaction attempt fails to shrink the
-   * transcript, the recursive attempt's recount would still be over the
-   * threshold and must not recurse again. Reset per public call.
+   * One-shot guard for the internal compact-and-retry recursions (the
+   * live-count threshold in {@link createResponseImpl} and the overflow
+   * recovery in {@link handleCreateResponseError}): if a compaction attempt
+   * fails to shrink the transcript, the recursive attempt would hit the same
+   * threshold/overflow again and must not recurse a second time. Reset per
+   * public call.
    */
-  private liveCountCompactionAttempted = false;
+  private compactionRetryAttempted = false;
 
   /** DIAGNOSTIC: Pre-flight token estimate for comparison with actual usage */
   private _diagPreFlightTokens: number | null = null;
@@ -682,6 +684,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (this.supportsTokenCounting) {
       // The live pre-flight count decides for counting-capable models.
+      // Deliberate tradeoff: if the count API soft-fails for a turn, that
+      // turn has no automatic compaction trigger at all (the stale cumulative
+      // figure is not consulted) — the API enforces the window, and an
+      // API-side overflow still recovers via handleCreateResponseError's
+      // compact-and-retry. Costs one extra round-trip in that rare failure
+      // mode; keeps the live count the single decision owner.
       return false;
     }
 
@@ -1461,7 +1469,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
     this.inFlight = true;
-    this.liveCountCompactionAttempted = false;
+    this.compactionRetryAttempted = false;
     try {
       return await run();
     } finally {
@@ -1735,7 +1743,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (
       preFlightTokens !== undefined &&
       !compactedThisCall &&
-      !this.liveCountCompactionAttempted &&
+      !this.compactionRetryAttempted &&
       this.getCompactionThresholdPercent() > 0 &&
       preFlightTokens > this.getCompactionTokenThreshold() &&
       this.canCompactRoute()
@@ -1744,7 +1752,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.logger,
         `Compacting conversation (pre-flight count ${preFlightTokens} tokens exceeds ${this.getCompactionThresholdPercent()}% threshold of ${this.getCompactionTokenThreshold()} tokens)`,
       );
-      this.liveCountCompactionAttempted = true;
+      this.compactionRetryAttempted = true;
       this.compactionRequested = true;
       this._diagPreFlightTokens = null;
       return this.createResponseImpl(options);
@@ -2240,17 +2248,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.backgroundLifecycle.clearPending();
     } else if (
       isContextWindowError(error) &&
-      this.chainState.hasPreviousResponseId() &&
-      !compactedThisCall
+      !compactedThisCall &&
+      !this.compactionRetryAttempted &&
+      (this.chainState.hasPreviousResponseId() || this.canCompactRoute())
     ) {
-      // Recovery: When using previous_response_id, accumulated reasoning tokens
-      // from prior turns are stored server-side and count against the context
-      // window, but inputTokens.count() may not fully reflect them. This causes
-      // pre-flight validation to pass while the API rejects the request.
-      //
-      // Fix: Drop server-side state (clearing previous_response_id discards the
-      // hidden reasoning tokens) and compact client-side messages, then retry.
-      // The guard !compactedThisCall prevents infinite recursion.
+      // Recovery for a context-window overflow (API-side or pre-flight):
+      // - When chaining, accumulated reasoning tokens from prior turns are
+      //   stored server-side and count against the window even where
+      //   inputTokens.count() may not fully reflect them — drop the chain
+      //   (clearing previous_response_id discards the hidden reasoning
+      //   tokens) and compact client-side messages, then retry.
+      // - Without a chain (e.g. after invalidateChain(), or a non-chaining
+      //   route), a compactable transcript still recovers via compaction
+      //   alone.
+      // Termination: compactedThisCall blocks re-entry after a successful
+      // compaction, and compactionRetryAttempted blocks it when compaction
+      // failed to shrink the transcript.
       logProgressStatus(
         this.logger,
         'Context window exceeded — compacting conversation and retrying.',
@@ -2259,6 +2272,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Don't call resetConversationState() — it zeroes cumulativeInputTokens
       // which would prevent shouldCompact() from triggering on the retry.
       this.backgroundLifecycle.clearPending();
+      this.compactionRetryAttempted = true;
       this.compactionRequested = true;
       this._diagPreFlightTokens = null;
       // Retry internally: the recursive call will compact (shouldCompact()=true)
