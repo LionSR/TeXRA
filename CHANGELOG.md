@@ -12,6 +12,13 @@ All notable changes to this project will be documented in this file.
   `engines.vscode` requirement moved from 1.106 to 1.125; users on older VS
   Code releases must update before installing this version.
 
+#### New Features
+
+- **Meta (Muse Spark) provider support** — Muse Spark 1.1 is now available as
+  a direct provider with your own Meta Model API key (dev.meta.ai), including
+  reasoning, tool calling, vision, and PDF input via Meta's Responses-compatible
+  API surface.
+
 #### Bug Fixes
 
 - **Grok models keep a medium reasoning-effort selection** — the xAI effort

@@ -16,4 +16,5 @@ export const API_KEY_PROVIDER_IDS = [
   'dashscope',
   'minimax',
   'glm',
+  'meta',
 ] as const;
