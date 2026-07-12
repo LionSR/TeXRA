@@ -42,6 +42,7 @@ import { isNonEmptyString } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 import { computeUtilizationPercent } from '../support/contextUtilization';
+import { toDataUrl } from '../support/dataUrl';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { tagOpenAISdkError } from './openAISdkError';
 
@@ -786,7 +787,7 @@ export class ModelHandlerOpenAI<
       {
         type: 'image_url',
         image_url: {
-          url: `data:${media.media_type};base64,${media.data}`,
+          url: toDataUrl(media.media_type, media.data),
           detail: 'high',
         },
       },
