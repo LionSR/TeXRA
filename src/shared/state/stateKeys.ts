@@ -97,6 +97,7 @@ export enum GlobalStateKey {
   STREAMING_DASHSCOPE = 'texra.streaming.dashscope',
   STREAMING_MINIMAX = 'texra.streaming.minimax',
   STREAMING_GLM = 'texra.streaming.glm',
+  STREAMING_META = 'texra.streaming.meta',
 
   // LaTeX settings
   LATEX_CONFIG_VERSION = 'texra.latexConfigVersion',
@@ -118,6 +119,7 @@ export enum GlobalStateKey {
   ENDPOINT_DASHSCOPE = 'texra.endpoint.dashscope',
   ENDPOINT_MINIMAX = 'texra.endpoint.minimax',
   ENDPOINT_GLM = 'texra.endpoint.glm',
+  ENDPOINT_META = 'texra.endpoint.meta',
 
   // Region settings
   DASHSCOPE_USE_CHINA = 'texra.dashscope.useChina',

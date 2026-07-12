@@ -153,6 +153,15 @@ describe('OpenAI model handler routing', () => {
     ).toBe('ModelHandlerOpenRouterNative');
   });
 
+  it('routes Meta Muse Spark to the Meta handler directly and OpenRouter when proxied', () => {
+    expect(
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.musespark11, false, false),
+    ).toBe('ModelHandlerMeta');
+    expect(
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.musespark11, true, false),
+    ).toBe('ModelHandlerOpenRouterNative');
+  });
+
   it('uses short-name routing when computing compatibility keys', async () => {
     await initFakePlatform({
       config: { 'texra.model.useOpenAIResponsesAPI': false },

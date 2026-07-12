@@ -2367,6 +2367,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
   }
 
+  /**
+   * Provider identifier for usage tracking. `openai-response` distinguishes
+   * OpenAI's Responses surface from its Chat Completions surface; non-OpenAI
+   * backends on this surface (Meta) override to their own provider.
+   */
+  protected get usageProvider(): NormalizedUsage['provider'] {
+    return 'openai-response';
+  }
+
   /** Normalizes OpenAI Responses API usage data into a unified format. */
   normalizeUsage(
     rawUsage: ResponseUsage,
@@ -2375,6 +2384,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const usage = normalizeOpenAIResponseUsage(
       rawUsage,
       responseTimeMs,
+      this.usageProvider,
       (usage) => this.computePrice(usage),
     );
     const usageRoute = this.getActiveProviderCapabilities()?.usageRoute;
