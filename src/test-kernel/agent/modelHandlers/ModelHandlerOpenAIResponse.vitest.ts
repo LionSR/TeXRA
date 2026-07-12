@@ -1035,12 +1035,11 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     ) => {
       compactCalls.push(msgs);
       const compacted = msgs.slice(-1);
-      (handler as unknown as { compactionResult: unknown }).compactionResult =
-        {
-          sourceMessages: msgs,
-          compactedMessages: compacted,
-          tokensAfter: 1000,
-        };
+      (handler as unknown as { compactionResult: unknown }).compactionResult = {
+        sourceMessages: msgs,
+        compactedMessages: compacted,
+        tokensAfter: 1000,
+      };
       return compacted;
     };
 
