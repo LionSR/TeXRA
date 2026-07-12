@@ -309,7 +309,8 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       key: 'texra.model.openaiParallelToolCalls',
       label: 'Parallel Tool Calls',
       description:
-        'Allow the model to call multiple tools in parallel. Off by default to preserve sequential tool execution.',
+        'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential execution.',
+      defaultValue: true,
     },
     {
       key: GlobalStateKey.WEBSOCKET_OPENAI,

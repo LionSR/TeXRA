@@ -34,6 +34,7 @@ import type { ToolDefinition } from '@model';
 // Local imports - tools and utils
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -336,11 +337,9 @@ export class ModelHandlerOpenAI<
     if (tools?.length) {
       const parallelToolCalls = getConfig<boolean>(
         'texra.model.openaiParallelToolCalls',
-        false,
+        DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
       );
-      if (!parallelToolCalls) {
-        baseParams.parallel_tool_calls = false;
-      }
+      baseParams.parallel_tool_calls = parallelToolCalls;
       // These tools are parsed by TeXRA after the response. The SDK's
       // auto-parse validator requires strict schemas, but several TeXRA tools
       // intentionally expose nullable or optional fields.
