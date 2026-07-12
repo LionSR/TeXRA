@@ -1,5 +1,4 @@
 import ky, { HTTPError } from 'ky';
-import yaml from 'yaml';
 import { z } from 'zod';
 
 import {
@@ -12,6 +11,7 @@ import { extractToolNames, updateAgentMeta } from '@agent/index/agentRegistry';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
 
@@ -257,7 +257,14 @@ async function fetchAgentConfig(agentName: string): Promise<{
   const configYaml = await fetchRemoteAgentConfigYaml(agentName, token);
 
   logger.debug(CHANNEL, `Parsing YAML for remote agent: ${agentName}`);
-  const validated = AgentDefinitionSchema.parse(yaml.parse(configYaml));
+  const parsedYaml = parseYamlWith(configYaml, AgentDefinitionSchema);
+  if (parsedYaml.isErr()) {
+    throw new Error(
+      `Failed to parse YAML for remote agent "${agentName}": ${parsedYaml.error.message}`,
+      { cause: parsedYaml.error },
+    );
+  }
+  const validated = parsedYaml.value;
 
   // Extract metadata before resolving tools to full definitions (for registry cache)
   const settings: AgentSettingInput = validated.settings;
