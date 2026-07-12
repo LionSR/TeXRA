@@ -11,7 +11,12 @@ import * as vscode from 'vscode';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import { createKey, getAgent, loadAgents } from '@agent/index';
+import {
+  createKey,
+  getAgent,
+  loadAgents,
+  refresh as refreshAgents,
+} from '@agent/index';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -448,7 +453,10 @@ export class AgentHandlers {
             AUTH_COMMANDS.SIGN_IN,
           );
           if (signedIn) {
-            await loadAgents();
+            // A signed-out startup may already have completed an empty remote
+            // load, so a normal cached load would not discover the newly
+            // authorized agents.
+            await refreshAgents({ includeRemote: true });
             result = await this.catalogController.applyPreset(data.presetId);
             if (!result.ok) {
               await showLoggedMessage(
