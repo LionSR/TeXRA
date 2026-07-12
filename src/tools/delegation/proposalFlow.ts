@@ -30,7 +30,7 @@ import {
 import type { ToolResult } from '@shared/schemas/toolResult';
 import {
   isApprovalBypassedForStream,
-  proposalApprovalState,
+  proposalApprovals,
 } from '@tools/approval';
 import {
   availableModelNamesFromOptions,
@@ -147,7 +147,7 @@ export async function proposeAndExecute(
   agentName: string,
   streamId: StreamTabId,
 ): Promise<ToolResult> {
-  if (proposalApprovalState.isBypassed(streamId)) {
+  if (proposalApprovals().isBypassed(streamId)) {
     return executeSubagent(proposal, agentName, streamId, {
       enableYoloOnChild: true,
       approvalMeta: { autoApproved: true },
