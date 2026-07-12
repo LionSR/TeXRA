@@ -1,20 +1,27 @@
 /**
- * Generic stream-scoped approval controller.
+ * Generic stream-scoped approval controller, owned per session.
  *
  * Encapsulates the shared concerns of bash and tool-edit approvals:
- *   - serialized request queue (one prompt at a time)
+ *   - serialized request queue (one prompt at a time within a session)
  *   - registry of in-flight pending approvals keyed by request id
  *   - per-stream bypass state announced over a bound progress event
  *   - rejection on stream cleanup
  *
  * Parameterized by the approval result type so each controller can carry
  * domain-specific result fields (e.g. tool-edit appliedContent / userPatch).
+ *
+ * Controller instances live on {@link SessionApprovals}, one per
+ * `SessionHandle` (#8144) — there is no process-global controller, so two
+ * sessions queue, resolve, and clean up approvals independently.
  */
 
 import PQueue from 'p-queue';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
+import type { ToolEditApprovalResult } from '@platform/interfaces';
+
+import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import type { HostBashApprovalResult } from './HostInteractions';
 
 /** Progress events that announce per-stream approval-bypass changes. */
 export type ApprovalBypassEvent =
@@ -86,7 +93,6 @@ export function createStreamApprovalBypass(
 
 export interface PendingApproval<R extends { accepted: boolean }> {
   streamId?: StreamTabId;
-  runtimeHost?: AgentRuntimeHost;
   isSettled: () => boolean;
   settle: (result: R) => void;
 }
@@ -94,15 +100,15 @@ export interface PendingApproval<R extends { accepted: boolean }> {
 export interface StreamApprovalController<R extends { accepted: boolean }> {
   registerPending(id: string, entry: PendingApproval<R>): void;
   unregisterPending(id: string): void;
-  getPending(id: string): PendingApproval<R> | undefined;
   bypass: StreamApprovalBypass;
   enqueue<T>(run: () => Promise<T>): Promise<T>;
   rejectPendingForStream(streamId: StreamTabId): void;
   /**
-   * Reject pending entries with no concrete stream context. When `runtimeHost`
-   * is provided, only rejects entries owned by that host.
+   * Reject pending entries with no concrete stream context (streamId is
+   * undefined or empty). The controller is session-owned, so this never
+   * reaches another session's streamless approvals.
    */
-  rejectUnscopedPending(runtimeHost?: AgentRuntimeHost): void;
+  rejectUnscopedPending(): void;
   rejectAllPending(): void;
 }
 
@@ -137,9 +143,6 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
     unregisterPending(id) {
       pending.delete(id);
     },
-    getPending(id) {
-      return pending.get(id);
-    },
     bypass: createStreamApprovalBypass(options.bypassEvent),
     enqueue<T>(run: () => Promise<T>): Promise<T> {
       // `add` widens to `T | void` to cover abort via signal/timeout; we pass
@@ -149,15 +152,58 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
     rejectPendingForStream(streamId) {
       rejectWhere((entry) => entry.streamId === streamId);
     },
-    rejectUnscopedPending(runtimeHost) {
-      rejectWhere(
-        (entry) =>
-          !entry.streamId &&
-          (runtimeHost === undefined || entry.runtimeHost === runtimeHost),
-      );
+    rejectUnscopedPending() {
+      rejectWhere((entry) => !entry.streamId);
     },
     rejectAllPending() {
       rejectWhere(() => true);
+    },
+  };
+}
+
+/**
+ * Session-owned approval state: the tool-edit and bash controllers plus the
+ * delegation-proposal (super-YOLO) bypass. One instance per `SessionHandle`
+ * (`session.approvals`); run-scoped code resolves it through
+ * `currentSession()`, host code passes its own session explicitly.
+ */
+export interface SessionApprovals {
+  readonly toolEdit: StreamApprovalController<ToolEditApprovalResult>;
+  readonly bash: StreamApprovalController<HostBashApprovalResult>;
+  /**
+   * Per-stream bypass for agent delegation proposals (super-YOLO). Proposals
+   * settle through the run coordinators rather than a stream approval queue,
+   * so unlike bash / tool-edit there is no controller — only bypass state.
+   */
+  readonly proposal: StreamApprovalBypass;
+  /**
+   * Reject every pending approval and clear all bypass + proposal state for
+   * this session. Used by session teardown and the session-wide
+   * `cleanupAllApprovals` sweep.
+   */
+  rejectAndClearAll(): void;
+}
+
+export function createSessionApprovals(): SessionApprovals {
+  const toolEdit = createStreamApprovalController<ToolEditApprovalResult>({
+    rejectionResult: () => ({ accepted: false }),
+    bypassEvent: 'updateToolEditApprovalBypassState',
+  });
+  const bash = createStreamApprovalController<HostBashApprovalResult>({
+    rejectionResult: () => ({ accepted: false }),
+    bypassEvent: 'updateBashApprovalBypassState',
+  });
+  const proposal = createStreamApprovalBypass('updateSuperYoloBypassState');
+  return {
+    toolEdit,
+    bash,
+    proposal,
+    rejectAndClearAll() {
+      toolEdit.rejectAllPending();
+      bash.rejectAllPending();
+      toolEdit.bypass.clearAll();
+      bash.bypass.clearAll();
+      proposal.clearAll();
     },
   };
 }
