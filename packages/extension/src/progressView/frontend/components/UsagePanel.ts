@@ -120,6 +120,7 @@ export class UsagePanel extends LitElement {
 
       /* Context gauge bar */
       .context-gauge {
+        --gauge-height: 6px;
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-2xs);
@@ -128,11 +129,14 @@ export class UsagePanel extends LitElement {
       .context-gauge__track {
         position: relative;
         width: 80px;
+        /* Pins the tick mark's height to the bar regardless of
+           wa-progress-bar's internal box model. */
+        height: var(--gauge-height);
       }
 
       .context-gauge__bar {
         width: 100%;
-        --track-height: 6px;
+        --track-height: var(--gauge-height);
         --track-color: var(--wa-color-surface-border);
       }
 
