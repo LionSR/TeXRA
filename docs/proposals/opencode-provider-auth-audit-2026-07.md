@@ -102,8 +102,9 @@ cost. It therefore does not present the subscription as arbitrary OpenAI API acc
 OpenCode refreshes only when a model request observes an expired token. It collapses concurrent refreshes within one
 loaded provider into a single promise, but it neither refreshes proactively nor distinguishes a revoked refresh token
 from a transient refresh failure. TeXRA's existing five-minute refresh window and terminal-versus-transient error
-classification are stronger. TeXRA cannot predict revocation before contacting the token endpoint, but it can expose
-three honest states: valid until a known time, refresh being attempted, and sign-in required after a terminal failure.
+classification are stronger. TeXRA cannot predict revocation before contacting the token endpoint, but it can
+distinguish a token known to be valid, a refresh that is due, a transient refresh failure, and a terminal failure that
+requires sign-in. The status table below gives the corresponding user presentation.
 
 ### GitHub Copilot
 
