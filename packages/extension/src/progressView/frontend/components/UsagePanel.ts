@@ -4,8 +4,9 @@ import { customElement, property } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { when } from 'lit/directives/when.js';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 // Local imports - shared schemas
 import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
@@ -127,17 +128,12 @@ export class UsagePanel extends LitElement {
       .context-gauge__track {
         position: relative;
         width: 80px;
-        height: 6px;
-        background: var(--wa-color-surface-border);
-        border-radius: var(--border-radius);
-        overflow: hidden;
       }
 
-      .context-gauge__fill {
-        display: block;
-        height: 100%;
-        border-radius: var(--border-radius);
-        transition: width var(--transition-slow);
+      .context-gauge__bar {
+        width: 100%;
+        --track-height: 6px;
+        --track-color: var(--wa-color-surface-border);
       }
 
       /* Compaction threshold tick mark */
@@ -318,13 +314,12 @@ export class UsagePanel extends LitElement {
           aria-hidden="true"
         ></wa-icon>
         <span class="context-gauge__track">
-          <span
-            class="context-gauge__fill"
-            style=${styleMap({
-              width: `${clamped}%`,
-              backgroundColor: fillColor(clamped),
-            })}
-          ></span>
+          <wa-progress-bar
+            class="context-gauge__bar"
+            value=${clamped}
+            label="${clamped.toFixed(0)}% context used"
+            style=${styleMap({ '--indicator-color': fillColor(clamped) })}
+          ></wa-progress-bar>
           <span
             class="context-gauge__tick"
             style=${styleMap({ left: `${COMPACTION_THRESHOLD}%` })}
