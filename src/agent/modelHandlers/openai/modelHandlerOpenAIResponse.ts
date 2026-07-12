@@ -51,6 +51,7 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 
 // Local imports - utils
 import { clamp, filterNotNullish } from '@utils/core';
@@ -1754,7 +1755,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Phase 4: EXECUTE - Build final params and make the API call
     const parallelToolCalls = getConfig<boolean>(
       'texra.model.openaiParallelToolCalls',
-      false,
+      DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
     );
     const params: ResponseCreateParamsBase = {
       ...baseParams,
@@ -1762,7 +1763,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       store: this.storesResponsesServerSide,
       ...(convertedTools?.length && {
         tool_choice: 'auto' as const,
-        ...(!parallelToolCalls && { parallel_tool_calls: false }),
+        parallel_tool_calls: parallelToolCalls,
       }),
     };
 
