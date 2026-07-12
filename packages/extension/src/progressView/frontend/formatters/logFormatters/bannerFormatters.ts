@@ -85,7 +85,6 @@ export function formatBannerContentTemplate(
       content: trimmedContent,
       contentId: id ? `banner:${id}` : undefined,
     },
-    summarySlot: true,
   })}${contentTemplate}</wa-details>`;
 }
 
@@ -123,6 +122,5 @@ export function formatModelResponseTemplate(
       content: trimmedContent,
       contentId: id ? `model:${id}` : undefined,
     },
-    summarySlot: true,
   })}${contentTemplate}</wa-details>`;
 }
