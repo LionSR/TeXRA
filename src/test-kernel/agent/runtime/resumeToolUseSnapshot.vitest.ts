@@ -124,6 +124,27 @@ describe('resumeToolUseSnapshot', () => {
     });
   });
 
+  it('opens late follow-up routing before draining the resume queue', async () => {
+    const onFollowUpQueueReady = vi.fn(() => {
+      defaultSession().followUps.enqueue(STREAM, {
+        text: 'queued at the ready boundary',
+      });
+    });
+
+    await resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      onFollowUpQueueReady,
+      onError: vi.fn(),
+    });
+
+    expect(onFollowUpQueueReady).toHaveBeenCalledOnce();
+    const appendFollowUp = vi.fn();
+    capturedSetupSession()({ appendFollowUp });
+    expect(appendFollowUp).toHaveBeenCalledWith({
+      text: 'queued at the ready boundary',
+      origin: 'user',
+    });
+  });
+
   it('passes snapshot parent stream identity to the leaf resume', async () => {
     const parentStreamId = 'stream:parent' as StreamTabId;
 
