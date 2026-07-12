@@ -108,6 +108,37 @@ describe('CLI secrets', () => {
     }
   });
 
+  it('serves env-provided secrets when the storage directory cannot be created', async () => {
+    if (process.platform === 'win32') return; // POSIX modes don't apply.
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
+    // `storage/` does not exist and its parent is unwritable, so any
+    // open-time `mkdir`/`chmod` on the read path throws (#8220). Reads must
+    // degrade to "nothing stored" and let env vars keep working.
+    const storageRoot = path.join(root, 'storage');
+    const secretsPath = cliSecretsPath(storageRoot);
+    await fs.chmod(root, 0o500);
+    vi.stubEnv('TEXRA_CLI_SECRETS_ENV_ONLY_KEY', 'env-value');
+
+    try {
+      const secrets = new CliSecrets(secretsPath);
+
+      await expect(secrets.get('TEXRA_CLI_SECRETS_ENV_ONLY_KEY')).resolves.toBe(
+        'env-value',
+      );
+      await expect(
+        secrets.getStored('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
+      ).resolves.toBeUndefined();
+      await expect(
+        secrets.get('TEXRA_CLI_SECRETS_MISSING_KEY'),
+      ).resolves.toBeUndefined();
+      await expect(secrets.listStoredKeys()).resolves.toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+      await fs.chmod(root, 0o700);
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('restricts the secrets file and its directory to the owner', async () => {
     if (process.platform === 'win32') return; // POSIX modes don't apply.
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
