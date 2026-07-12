@@ -237,6 +237,8 @@ describe('loadAgentSettingAndPrompts', () => {
       ].join('\n'),
     );
 
+    const actual =
+      await vi.importActual<typeof import('@agent/index')>('@agent/index');
     const resolveAgentMock = vi.mocked(resolveAgent);
     resolveAgentMock.mockImplementation(
       (identifier: string) => resolutionByName[identifier.split(':').pop()!],
@@ -250,7 +252,11 @@ describe('loadAgentSettingAndPrompts', () => {
           error.message.startsWith('Circular "inherits" chain detected:'),
       );
     } finally {
-      resolveAgentMock.mockRestore();
+      // mockRestore() only rehydrates vi.spyOn() mocks; this is a plain
+      // vi.fn(actual.resolveAgent), so restore the real implementation
+      // explicitly to avoid leaving `resolveAgent` returning undefined for
+      // any later test in this describe block.
+      resolveAgentMock.mockImplementation(actual.resolveAgent);
     }
   });
 });
