@@ -182,7 +182,10 @@ describe('retrieveSessionResumeData', () => {
         shouldSkipCycle: 'false',
         stateSlices: null,
       }),
-    ).toBeNull();
+    ).toEqual({
+      success: false,
+      error: expect.objectContaining({ name: 'ZodError' }),
+    });
   });
 
   it('uses the persisted current model while preserving the original stream id', async () => {
@@ -552,40 +555,48 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     );
   });
 
-  it('preserves the flow record and requeued follow-ups after a persistence read failure', async () => {
-    const executionId = 'abc-flow-read-failure' as ExecutionId;
-    const streamId = 'chat@gpt54#abc-flow-read-failure' as StreamTabId;
-    const snapshot = buildToolUseSnapshot(executionId, streamId);
-    const store = getExecutionStore(executionId);
-    const session = new SessionHandle();
-    const readFailure = new Error('flow storage unavailable');
-    const readSpy = vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
-    const deleteSpy = vi.spyOn(store, 'delete');
+  it('releases follow-ups while preserving the record after a persistence read failure', async () => {
+    for (const resume of [true, false]) {
+      const suffix = resume ? 'resume' : 'fresh';
+      const executionId = `abc-flow-read-failure-${suffix}` as ExecutionId;
+      const streamId =
+        `chat@gpt54#abc-flow-read-failure-${suffix}` as StreamTabId;
+      const snapshot = resume
+        ? buildToolUseSnapshot(executionId, streamId)
+        : undefined;
+      const store = getExecutionStore(executionId);
+      const session = createTestSession();
+      const readFailure = new Error('flow storage unavailable');
+      const readSpy = vi
+        .spyOn(store, 'read')
+        .mockRejectedValueOnce(readFailure);
+      const deleteSpy = vi.spyOn(store, 'delete');
 
-    try {
-      await expect(
-        runPersistedFlow(
-          executionId,
-          streamId,
-          snapshot,
-          (context) => {
-            context.session.appendFollowUp({ text: 'queued before recovery' });
-          },
-          session,
-        ),
-      ).rejects.toMatchObject({
-        name: PersistedFlowStateError.name,
-        reason: 'read-failed',
-        cause: readFailure,
-      });
-      expect(deleteSpy).not.toHaveBeenCalled();
-      expect(session.followUps.getAll(streamId)).toEqual([
-        'queued before recovery',
-      ]);
-    } finally {
-      readSpy.mockRestore();
-      deleteSpy.mockRestore();
-      session.followUps.release(streamId);
+      try {
+        await expect(
+          runPersistedFlow(
+            executionId,
+            streamId,
+            snapshot,
+            (context) => {
+              context.session.appendFollowUp({
+                text: 'queued before recovery',
+              });
+            },
+            session,
+          ),
+        ).rejects.toMatchObject({
+          name: PersistedFlowStateError.name,
+          reason: 'read-failed',
+          cause: readFailure,
+        });
+        expect(deleteSpy).not.toHaveBeenCalled();
+        expect(session.followUps.getAll(streamId)).toEqual([]);
+      } finally {
+        readSpy.mockRestore();
+        deleteSpy.mockRestore();
+        session.followUps.release(streamId);
+      }
     }
   });
 
@@ -651,9 +662,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const expectedError = {
         name: PersistedFlowStateError.name,
         reason,
-        ...(reason === 'invalid-shared'
-          ? {}
-          : { cause: expect.objectContaining({ name: 'ZodError' }) }),
+        cause: expect.objectContaining({ name: 'ZodError' }),
       };
       await expect(
         runPersistedFlow(executionId, streamId, snapshot),
@@ -697,7 +706,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
     const store = getExecutionStore(executionId);
-    const session = new SessionHandle();
+    const session = createTestSession();
     const readSpy = vi.spyOn(store, 'read');
     const deleteSpy = vi.spyOn(store, 'delete');
     const releaseSpy = vi.spyOn(session.followUps, 'release');

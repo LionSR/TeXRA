@@ -1,8 +1,9 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
 import { setupPlatform } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage';
@@ -29,7 +30,6 @@ import { ReflectionFlowStateCanonicalSchema } from '@agent/implementations/flows
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_OUTCOME,
   type ExecutionId,
@@ -75,7 +75,7 @@ async function runPersistedReflectionFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
 ): Promise<Awaited<ReturnType<typeof runReflectionFlow>>> {
-  const session = new SessionHandle();
+  const session = createTestSession();
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => CONFIG.model,
@@ -112,6 +112,16 @@ async function runPersistedReflectionFlow(
   }
 }
 
+function recoveryCase(name: string) {
+  const executionId = `reflection-flow-${name}` as ExecutionId;
+  const streamId = `workflow@gpt54#reflection-flow-${name}` as StreamTabId;
+  return {
+    key: flowKey(executionId),
+    run: () => runPersistedReflectionFlow(executionId, streamId),
+    store: getExecutionStore(executionId),
+  };
+}
+
 function flowRecord(shared: unknown): FlowRecord {
   return {
     flowName: 'texra',
@@ -140,17 +150,15 @@ function validReflectionShared(): unknown {
 
 describe('runReflectionFlow persisted-state recovery', () => {
   setupPlatform({ workspacePath: '/workspace' });
+  afterEach(() => vi.restoreAllMocks());
 
   it('creates fresh shared state when the flow record is absent', async () => {
-    const executionId = 'reflection-flow-absent' as ExecutionId;
-    const streamId = 'workflow@gpt54#reflection-flow-absent' as StreamTabId;
+    const { key, run, store } = recoveryCase('absent');
 
-    const result = await runPersistedReflectionFlow(executionId, streamId);
+    const result = await run();
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    const stored = await getExecutionStore(executionId).read<FlowRecord>(
-      flowKey(executionId),
-    );
+    const stored = await store.read<FlowRecord>(key);
     expect(
       ReflectionFlowStateCanonicalSchema.parse(stored?.shared),
     ).toMatchObject({
@@ -162,27 +170,17 @@ describe('runReflectionFlow persisted-state recovery', () => {
   });
 
   it('propagates a persistence read failure without deleting the flow record', async () => {
-    const executionId = 'reflection-flow-read-failure' as ExecutionId;
-    const streamId =
-      'workflow@gpt54#reflection-flow-read-failure' as StreamTabId;
-    const store = getExecutionStore(executionId);
+    const { run, store } = recoveryCase('read-failure');
     const readFailure = new Error('flow storage unavailable');
-    const readSpy = vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
+    vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
     const deleteSpy = vi.spyOn(store, 'delete');
 
-    try {
-      await expect(
-        runPersistedReflectionFlow(executionId, streamId),
-      ).rejects.toMatchObject({
-        name: PersistedFlowStateError.name,
-        reason: 'read-failed',
-        cause: readFailure,
-      });
-      expect(deleteSpy).not.toHaveBeenCalled();
-    } finally {
-      readSpy.mockRestore();
-      deleteSpy.mockRestore();
-    }
+    await expect(run()).rejects.toMatchObject({
+      name: PersistedFlowStateError.name,
+      reason: 'read-failed',
+      cause: readFailure,
+    });
+    expect(deleteSpy).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -223,33 +221,21 @@ describe('runReflectionFlow persisted-state recovery', () => {
       },
     },
   ])('rejects and preserves $name', async ({ name, reason, stored }) => {
-    const slug = name.replaceAll(' ', '-');
-    const executionId = `reflection-flow-${slug}` as ExecutionId;
-    const streamId = `workflow@gpt54#reflection-flow-${slug}` as StreamTabId;
-    const store = getExecutionStore(executionId);
-    await store.write(flowKey(executionId), stored);
+    const { key, run, store } = recoveryCase(name.replaceAll(' ', '-'));
+    await store.write(key, stored);
     const deleteSpy = vi.spyOn(store, 'delete');
 
-    try {
-      const expectedError = {
-        name: PersistedFlowStateError.name,
-        reason,
-        cause: expect.objectContaining({ name: 'ZodError' }),
-      };
-      await expect(
-        runPersistedReflectionFlow(executionId, streamId),
-      ).rejects.toMatchObject(expectedError);
-      expect(deleteSpy).not.toHaveBeenCalled();
-      expect(await store.read(flowKey(executionId))).toEqual(stored);
-    } finally {
-      deleteSpy.mockRestore();
-    }
+    await expect(run()).rejects.toMatchObject({
+      name: PersistedFlowStateError.name,
+      reason,
+      cause: expect.objectContaining({ name: 'ZodError' }),
+    });
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(await store.read(key)).toEqual(stored);
   });
 
   it('migrates a valid legacy workspace snapshot before canonical writes', async () => {
-    const executionId = 'reflection-flow-legacy-workspace' as ExecutionId;
-    const streamId =
-      'workflow@gpt54#reflection-flow-legacy-workspace' as StreamTabId;
+    const { key, run, store } = recoveryCase('legacy-workspace');
     const todo = {
       content: 'Preserve legacy workflow state',
       status: 'in_progress' as const,
@@ -268,13 +254,12 @@ describe('runReflectionFlow persisted-state recovery', () => {
       continueRounds: true,
       endTurn: false,
     };
-    const store = getExecutionStore(executionId);
-    await store.write(flowKey(executionId), flowRecord(legacyShared));
+    await store.write(key, flowRecord(legacyShared));
 
-    const result = await runPersistedReflectionFlow(executionId, streamId);
+    const result = await run();
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    const stored = await store.read<FlowRecord>(flowKey(executionId));
+    const stored = await store.read<FlowRecord>(key);
     const shared = ReflectionFlowStateCanonicalSchema.parse(stored?.shared);
     expect(shared.workspaceSnapshot.workPlan.todos).toEqual([todo]);
     expect(Object.hasOwn(shared.workspaceSnapshot, 'todos')).toBe(false);
