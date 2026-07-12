@@ -87,7 +87,7 @@ import {
   releaseStreamResources,
 } from '@tools/approval';
 import type { RegisteredToolName } from '@tools/registry';
-import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -115,13 +115,10 @@ import {
 import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
-type DesktopUnavailableTool =
-  RegisteredToolName | typeof DIAGNOSTICS_ADD_RUNTIME_CAPABILITY;
-
-const DESKTOP_UNAVAILABLE_TOOLS: readonly DesktopUnavailableTool[] = [
+const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
   ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
   'inline_comment',
-  DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+  DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
 ];
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
