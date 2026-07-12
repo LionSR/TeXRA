@@ -240,7 +240,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       case 'set-model-access': {
         try {
           const result = await selectCliModelAccessRoute(
-            context,
+            launchContext,
             action.access,
             { writeProgress: writeTextStdout },
           );

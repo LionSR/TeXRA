@@ -33,6 +33,8 @@ vi.mock('@model/computeModelOptions', () => ({
 }));
 
 vi.mock('@cli/runtime/apiAccessMode', () => ({
+  effectiveCliApiMode: (source: { apiMode?: 'included' | 'personal' }) =>
+    source.apiMode ?? 'included',
   setCliApiMode: mocks.setCliApiMode,
 }));
 
@@ -43,7 +45,7 @@ vi.mock('@cli/runtime/chatgptLogin', () => ({
   signInCliChatGpt: mocks.signInCliChatGpt,
 }));
 
-const context = {} as CliContext;
+const context = { apiMode: 'personal' } as CliContext;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -128,5 +130,6 @@ describe('CLI model access routes', () => {
     expect(result.message).toBe(
       'Model access set to ChatGPT subscription (user@example.com).',
     );
+    expect(result.apiMode).toBe('personal');
   });
 });

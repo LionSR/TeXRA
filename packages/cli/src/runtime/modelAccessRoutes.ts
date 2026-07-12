@@ -12,7 +12,11 @@ import {
   shouldUseChatGptDeviceCode,
   signInCliChatGpt,
 } from './chatgptLogin';
-import { setCliApiMode, type CliApiMode } from './apiAccessMode';
+import {
+  effectiveCliApiMode,
+  setCliApiMode,
+  type CliApiMode,
+} from './apiAccessMode';
 import type { CliContext } from './cliContext';
 import type {
   CliModelAccessRoute,
@@ -20,7 +24,8 @@ import type {
 } from './orchestration';
 
 export interface CliModelAccessSelectionResult {
-  readonly apiMode?: CliApiMode;
+  /** API fallback retained beneath subscription-based access. */
+  readonly apiMode: CliApiMode;
   readonly message: string;
 }
 
@@ -78,6 +83,7 @@ export async function selectCliModelAccessRoute(
   await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
   invalidateModelOptionsCache();
   return {
+    apiMode: effectiveCliApiMode(context),
     message: update.effective
       ? `Model access set to ChatGPT subscription (${accountLabel}).`
       : 'ChatGPT sign-in succeeded, but a more specific setting keeps subscription access disabled.',
