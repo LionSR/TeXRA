@@ -15,6 +15,7 @@ import { WorkspaceFS } from '@utils/files';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 import {
+  emptyExtractionResult,
   resolveLatexFileOrThrow,
   texPathField,
 } from './figureExtractionShared';
@@ -80,26 +81,24 @@ export class ExtractBibliographyTool extends defineTool({
       bibliographyFiles.length === 0 &&
       missingBibliographyFiles.length === 0
     ) {
-      const summary = `No citations or bibliography directives found in ${display}.`;
-      return {
-        status: 'executed',
-        summary,
-        output: formatToolOutput(`BibTeX entries in ${display}`, null),
-      };
+      return emptyExtractionResult(
+        `BibTeX entries in ${display}`,
+        `No citations or bibliography directives found in ${display}.`,
+      );
     }
 
     if (citationKeys.length === 0) {
-      const summary = `No citation commands found in ${display}.`;
-      const baseOutput = formatToolOutput(`BibTeX entries in ${display}`, null);
       const missingNote =
         missingBibliographyFiles.length > 0
           ? `\n\nNote: Missing bibliography files: ${formatPathList(missingBibliographyFiles)}.`
           : '';
-      return {
-        status: 'executed',
-        summary,
-        output: `${baseOutput}${missingNote}`,
-      };
+      const result = emptyExtractionResult(
+        `BibTeX entries in ${display}`,
+        `No citation commands found in ${display}.`,
+      );
+      return missingNote
+        ? { ...result, output: `${result.output}${missingNote}` }
+        : result;
     }
 
     const { entries, missingKeys } = await loadBibliographyEntries(

@@ -34,6 +34,31 @@ export function normalizeLatexPath(value: string): string {
   return toPosixPath(trimmed);
 }
 
+/**
+ * True if `target` is `base` itself or a descendant of it.
+ * Computed via path.relative — works for both absolute and relative inputs
+ * as long as both are resolved the same way by the caller.
+ */
+export function isPathWithin(base: string, target: string): boolean {
+  const relativePath = path.relative(base, target);
+  return (
+    relativePath === '' ||
+    (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+  );
+}
+
+/**
+ * True if `target` is a strict descendant of `base` (excludes `target === base`).
+ */
+export function isStrictlyWithin(base: string, target: string): boolean {
+  const relativePath = path.relative(base, target);
+  return (
+    relativePath !== '' &&
+    !relativePath.startsWith('..') &&
+    !path.isAbsolute(relativePath)
+  );
+}
+
 /** Get the file extension in lowercase (e.g. `'.tex'` for `'Paper.TEX'`). */
 export function getExtensionLowercase(filePath: string): string {
   if (!filePath) return '';

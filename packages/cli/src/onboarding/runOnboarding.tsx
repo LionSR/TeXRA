@@ -14,7 +14,7 @@
 
 import { render, Box, Text, useApp, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { platform } from '@platform/platform';
 import {
@@ -28,6 +28,7 @@ import { setPreferCodexSubscription, type CodexSession } from '@auth/codex';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { type OAuthProvider } from '@auth/sharedConfig';
 import { type SupabaseSession } from '@auth/SupabaseSession';
+import { useCancellableEffect } from '@cli/chat/tui/state/useCancellableEffect';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -608,28 +609,23 @@ interface RelayProgressCallbacks {
  * Run a sign-in exactly once on mount. Empty deps is deliberate (not the
  * captured props): re-running would open a second browser + loopback server
  * (or request a second device code), and a deps-triggered cleanup would flip
- * `cancelled` and orphan the in-flight login (eternal spinner). The captured
- * callbacks only invoke stable state setters / app.exit, so the mount-time
- * closure stays correct. `cancelled` guards against the real unmount (the
- * user navigating away); progress callbacks receive it to drop late updates.
+ * `isCancelled()` and orphan the in-flight login (eternal spinner). The
+ * captured callbacks only invoke stable state setters / app.exit, so the
+ * mount-time closure stays correct. `isCancelled()` guards against the real
+ * unmount (the user navigating away); progress callbacks receive it to drop
+ * late updates.
  */
 function useSignInOnMount(
   signIn: (isCancelled: () => boolean) => Promise<SupabaseSession>,
   callbacks: RelayProgressCallbacks,
 ): void {
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const session = await signIn(() => cancelled);
-        if (!cancelled) callbacks.onSuccess(session.account.label);
-      } catch (loginError: unknown) {
-        if (!cancelled) callbacks.onError(toErrorMessage(loginError));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  useCancellableEffect(async (isCancelled) => {
+    try {
+      const session = await signIn(isCancelled);
+      if (!isCancelled()) callbacks.onSuccess(session.account.label);
+    } catch (loginError: unknown) {
+      if (!isCancelled()) callbacks.onError(toErrorMessage(loginError));
+    }
   }, []);
 }
 
@@ -755,36 +751,30 @@ function ChatGptProgressStep(
       : 'Preparing ChatGPT sign-in...',
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const session = await signInCliChatGpt(
-          { device, noBrowser: false },
-          {
-            writeProgress: (next) => {
-              if (!cancelled) setMessage(next);
-            },
+  useCancellableEffect(async (isCancelled) => {
+    try {
+      const session = await signInCliChatGpt(
+        { device, noBrowser: false },
+        {
+          writeProgress: (next) => {
+            if (!isCancelled()) setMessage(next);
           },
-        );
-        const update = await setPreferCodexSubscription(true);
-        if (!update.effective) {
-          if (!cancelled) {
-            props.onError(
-              'Signed in with ChatGPT, but a more specific setting keeps the subscription disabled. Choose Researcher Access or a provider API key instead.',
-            );
-          }
-          return;
+        },
+      );
+      const update = await setPreferCodexSubscription(true);
+      if (!update.effective) {
+        if (!isCancelled()) {
+          props.onError(
+            'Signed in with ChatGPT, but a more specific setting keeps the subscription disabled. Choose Researcher Access or a provider API key instead.',
+          );
         }
-        invalidateModelOptionsCache();
-        if (!cancelled) props.onSuccess(session);
-      } catch (loginError: unknown) {
-        if (!cancelled) props.onError(toErrorMessage(loginError));
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      invalidateModelOptionsCache();
+      if (!isCancelled()) props.onSuccess(session);
+    } catch (loginError: unknown) {
+      if (!isCancelled()) props.onError(toErrorMessage(loginError));
+    }
   }, []);
 
   return (

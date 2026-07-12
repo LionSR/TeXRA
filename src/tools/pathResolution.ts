@@ -14,7 +14,11 @@ import { ToolError } from '@shared/schemas/toolResult';
 import { WorkspaceFS } from '@utils/files';
 import { findExternalRoot } from '@utils/files/externalRoots';
 import { locatePathInRoot } from '@utils/files/workspaceRoot';
-import { getPathSegments, toPosixPath } from '@utils/core/pathCore';
+import {
+  getPathSegments,
+  isPathWithin,
+  toPosixPath,
+} from '@utils/core/pathCore';
 
 export interface WorkspacePathResolution {
   relative: string;
@@ -94,7 +98,7 @@ export function resolveWorkspaceRelativePath(
       // Normalize to POSIX separators so .relative is consistent across platforms
       // (locatePathInRoot and WorkspaceFS.locatePath already do this).
       const relative = path.relative(root, input).replaceAll('\\', '/');
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      if (!isPathWithin(root, input)) {
         const external = externalAllowance(input);
         if (external) {
           return external;
