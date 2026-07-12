@@ -1,7 +1,7 @@
 import * as nunjucks from 'nunjucks';
-import * as yaml from 'yaml';
 import { z } from 'zod';
 
+import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
@@ -31,7 +31,14 @@ function loadPromptTemplate(): Promise<string> {
   }
   templatePromise = (async () => {
     const content = await AbsoluteFS.read(polishPromptPath);
-    return PolishYamlSchema.parse(yaml.parse(content)).prompts.userRequest;
+    const parsed = parseYamlWith(content, PolishYamlSchema);
+    if (parsed.isErr()) {
+      throw new Error(
+        `Failed to parse polish prompt YAML at ${polishPromptPath}: ${parsed.error.message}`,
+        { cause: parsed.error },
+      );
+    }
+    return parsed.value.prompts.userRequest;
   })();
   return templatePromise;
 }
