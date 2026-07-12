@@ -54,7 +54,25 @@ export const layoutStyles = css`
     padding: var(--wa-space-s) var(--wa-space-xs);
   }
 
-  .log-placeholder-actions {
+  /* Class hooks consumed by the shared renderEmptyState() helper
+     (@shared/wa/emptyState) when it renders into a .log-placeholder. */
+  .log-placeholder .empty-state-icon {
+    font-size: calc(var(--font-size) * 1.5);
+    opacity: var(--opacity-disabled);
+  }
+
+  .log-placeholder .empty-state-title {
+    margin: var(--wa-space-2xs) 0 0;
+    font-size: var(--wa-font-size-m);
+    font-weight: var(--wa-font-weight-semibold);
+    color: var(--wa-color-text-normal);
+  }
+
+  .log-placeholder .empty-state-body {
+    margin: var(--wa-space-3xs) 0 0;
+  }
+
+  .log-placeholder .empty-state-actions {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;

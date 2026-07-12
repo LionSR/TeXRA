@@ -26,6 +26,7 @@ import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
 import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatDuration } from '@utils/core';
 
 // Local imports - progress view constants
@@ -345,22 +346,17 @@ export class TaskGroupList extends LitElement {
     const suffix = revealCount === 1 ? options.label : `${options.label}s`;
     return html`
       <div class="log-reveal-row">
-        <button
-          type="button"
-          class="log-reveal-button"
+        <wa-button
+          appearance="outlined"
+          size="small"
           data-reveal-kind=${options.kind}
           data-reveal-scope=${options.scope}
           data-hidden-count=${String(options.hiddenCount)}
           @click=${this.handleRevealOlderRows}
           aria-label=${`Show ${revealCount} older ${suffix}`}
+          >${waIcon('chevron-up', { slot: 'start' })} Show ${revealCount} older
+          ${suffix}</wa-button
         >
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="chevron-up"
-            aria-hidden="true"
-          ></wa-icon>
-          <span>Show ${revealCount} older ${suffix}</span>
-        </button>
       </div>
     `;
   }
@@ -599,46 +595,47 @@ export class TaskGroupList extends LitElement {
           class="log-container"
           @scroll=${this.handleScroll}
         >
-          <div class="log-placeholder">
-            No runs yet—use TeXRA commands to start.
-            <div class="log-placeholder-actions">
-              <wa-button
-                appearance="outlined"
-                size="small"
-                @click=${() => this.handleGettingStartedAction('runSetup')}
-                >${waIcon('rocket', { slot: 'start' })} Run setup</wa-button
-              >
-              <wa-button
-                appearance="outlined"
-                size="small"
-                @click=${() =>
-                  this.handleGettingStartedAction('createSampleProject')}
-                >${waIcon('file-circle-plus', { slot: 'start' })} Sample
-                project</wa-button
-              >
-              <wa-button
-                appearance="outlined"
-                size="small"
-                @click=${() => this.handleGettingStartedAction('cloneOverleaf')}
-                >${waIcon('cloud-arrow-down', { slot: 'start' })} Import
-                Overleaf</wa-button
-              >
-              <wa-button
-                appearance="outlined"
-                size="small"
-                @click=${() => this.handleGettingStartedAction('downloadArxiv')}
-                >${waIcon('download', { slot: 'start' })} Import
-                arXiv</wa-button
-              >
-              <wa-button
-                appearance="outlined"
-                size="small"
-                @click=${() =>
-                  this.handleGettingStartedAction('openWalkthrough')}
-                >${waIcon('book', { slot: 'start' })} Walkthrough</wa-button
-              >
-            </div>
-          </div>
+          ${renderEmptyState({
+            icon: 'terminal',
+            title: 'No runs yet',
+            body: 'Use TeXRA commands to start.',
+            headingTag: 'h3',
+            className: 'log-placeholder',
+            actions: [
+              {
+                label: 'Run setup',
+                icon: 'rocket',
+                size: 'small',
+                onClick: () => this.handleGettingStartedAction('runSetup'),
+              },
+              {
+                label: 'Sample project',
+                icon: 'file-circle-plus',
+                size: 'small',
+                onClick: () =>
+                  this.handleGettingStartedAction('createSampleProject'),
+              },
+              {
+                label: 'Import Overleaf',
+                icon: 'cloud-arrow-down',
+                size: 'small',
+                onClick: () => this.handleGettingStartedAction('cloneOverleaf'),
+              },
+              {
+                label: 'Import arXiv',
+                icon: 'download',
+                size: 'small',
+                onClick: () => this.handleGettingStartedAction('downloadArxiv'),
+              },
+              {
+                label: 'Walkthrough',
+                icon: 'book',
+                size: 'small',
+                onClick: () =>
+                  this.handleGettingStartedAction('openWalkthrough'),
+              },
+            ],
+          })}
         </div>
       `;
     }

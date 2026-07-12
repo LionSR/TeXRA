@@ -16,7 +16,6 @@ import {
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 
@@ -42,7 +41,6 @@ import { modelSelectionListStyles } from './ModelSelectionList.styles';
 import { ModelSelectionEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 interface ProviderGroup {
@@ -223,11 +221,11 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="model-row${unavailableClass}">
-        <wa-checkbox
+        <wa-switch
           ?checked=${model.enabled}
           ?disabled=${!available && !model.enabled}
           @change=${(e: Event) => {
-            const checked = (e.target as WaCheckbox).checked;
+            const checked = (e.target as WaSwitch).checked;
             this.dispatchEvent(
               ModelSelectionEvents.setModelEnabled({
                 modelName: model.name,
@@ -247,7 +245,7 @@ export class ModelSelectionList extends LitElement {
                 })
               : nothing
           }
-        </wa-checkbox>
+        </wa-switch>
         ${this.renderReasoningDropdown(model)}
         <span class="model-metadata">
           ${
