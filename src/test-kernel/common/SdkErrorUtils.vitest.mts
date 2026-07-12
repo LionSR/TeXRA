@@ -12,6 +12,7 @@ import {
   APIUserAbortError as OpenAIAPIUserAbortError,
   AuthenticationError as OpenAIAuthenticationError,
   BadRequestError as OpenAIBadRequestError,
+  NotFoundError as OpenAINotFoundError,
   RateLimitError as OpenAIRateLimitError,
 } from 'openai';
 import { describe, expect, it } from 'vitest';
@@ -31,6 +32,7 @@ import {
   formatProviderHttpError,
   getSdkErrorMessage,
   isContextWindowError,
+  isPreviousResponseIdError,
   isUserAbort,
   normalizeProviderError,
   sdkErrorKindFromStatusCode,
@@ -561,6 +563,93 @@ describe('isContextWindowError', () => {
 
   it('does not misclassify an unrelated error as a context-window violation', () => {
     expect(isContextWindowError(new Error('rate limit exceeded'))).toBe(false);
+  });
+
+  it("recognizes OpenAI's native error code even when the message wording is unfamiliar", () => {
+    // The SDK flattens error.code from the JSON body onto the thrown
+    // APIError/BadRequestError instance. A future model generation could
+    // reword the message freely without breaking detection, because this
+    // never inspects `.message`.
+    const err = new OpenAIBadRequestError(
+      400,
+      { code: 'context_length_exceeded', message: 'Some brand-new wording' },
+      'Some brand-new wording',
+      new Headers(),
+    );
+
+    expect(isContextWindowError(err)).toBe(true);
+  });
+
+  it('recognizes a nested error.code (e.g. a WebSocket error wrapper) without a top-level code', () => {
+    // Mirrors OpenAIResponseWebSocketTransport's onFailed wrapper, which
+    // preserves the response's structured `error` object on the thrown
+    // Error instead of just its `.message`.
+    const err = new Error(
+      'OpenAI WebSocket response failed: overflow',
+    ) as Error & {
+      error?: unknown;
+    };
+    err.error = { code: 'context_length_exceeded', message: 'overflow' };
+
+    expect(isContextWindowError(err)).toBe(true);
+  });
+
+  it('does not match an unrelated native error code', () => {
+    const err = new OpenAIRateLimitError(
+      429,
+      { code: 'rate_limit_exceeded', message: 'Too many requests' },
+      'Too many requests',
+      new Headers(),
+    );
+
+    expect(isContextWindowError(err)).toBe(false);
+  });
+});
+
+describe('isPreviousResponseIdError', () => {
+  it("recognizes OpenAI's native param field naming previous_response_id", () => {
+    // The SDK flattens error.param from the JSON body onto the thrown
+    // APIError/BadRequestError instance — this identifies the invalid
+    // parameter directly, independent of how OpenAI phrases the message.
+    const err = new OpenAIBadRequestError(
+      400,
+      { param: 'previous_response_id', message: 'Some brand-new wording' },
+      'Some brand-new wording',
+      new Headers(),
+    );
+
+    expect(isPreviousResponseIdError(err)).toBe(true);
+  });
+
+  it('recognizes a nested error.param (e.g. a WebSocket error wrapper)', () => {
+    const err = new Error('response.create rejected') as Error & {
+      error?: unknown;
+    };
+    err.error = { param: 'previous_response_id', message: 'invalid' };
+
+    expect(isPreviousResponseIdError(err)).toBe(true);
+  });
+
+  it('falls back to message matching for a 404 with no param (missing resource, not an invalid parameter)', () => {
+    const err = new OpenAINotFoundError(
+      404,
+      { message: "Previous response with id 'resp_123' not found." },
+      "Previous response with id 'resp_123' not found.",
+      new Headers(),
+    );
+
+    expect(isPreviousResponseIdError(err)).toBe(true);
+  });
+
+  it('does not match an unrelated invalid-parameter error', () => {
+    const err = new OpenAIBadRequestError(
+      400,
+      { param: 'temperature', message: 'temperature must be between 0 and 2' },
+      'temperature must be between 0 and 2',
+      new Headers(),
+    );
+
+    expect(isPreviousResponseIdError(err)).toBe(false);
   });
 });
 
