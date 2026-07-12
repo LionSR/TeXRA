@@ -1,15 +1,9 @@
 // Standard library imports
-import { chmod, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-// Third-party imports
-import writeFileAtomic from 'write-file-atomic';
-
 // Local imports - platform
+import { JsonStore } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
-
-// Local imports - common
-import { isFileNotFoundError } from '@common/errors';
 
 // Local imports - CLI runtime
 import { cliEnvValue } from './cliContext';
@@ -17,23 +11,30 @@ import { cliEnvValue } from './cliContext';
 // Type imports - platform
 import type { PlatformSecrets } from '@platform/secrets';
 
-type SecretFileData = Record<string, string>;
-
-function isSecretFileData(value: unknown): value is SecretFileData {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.values(value).every((entry) => typeof entry === 'string')
-  );
-}
+/** Secrets file is owner-only: `0o600` (containing dir gets `0o700`). */
+const SECRETS_FILE_MODE = 0o600;
 
 /**
  * CLI secret storage.
  *
  * Environment variables remain the highest-priority source so automation can
  * keep using ephemeral keys. Values written by CLI login are persisted under
- * the user's TeXRA state directory.
+ * the user's TeXRA state directory through the shared `JsonStore` (the same
+ * owner `ElectronSecrets` wraps for the desktop host), with `strict: true`
+ * so a corrupt secrets file aborts a write instead of silently wiping every
+ * other stored credential (see `JsonStoreOptions.strict`).
+ *
+ * Each operation opens its own `JsonStore` rather than caching one for the
+ * lifetime of this instance: separate `texra` invocations are separate
+ * processes, and a fresh open re-reads the file so a concurrently running
+ * CLI invocation's write isn't clobbered by a stale in-memory snapshot.
+ *
+ * `set()`/`delete()` are additionally serialized through {@link mutationQueue}
+ * so overlapping mutations *within this process* don't each open a store off
+ * the same on-disk snapshot and flush independently — the later flush would
+ * otherwise silently drop the key the earlier one just wrote. Reads
+ * (`get`/`getStored`/`listStoredKeys`) stay outside the queue and always open
+ * a fresh store, matching prior `readSecrets()` behavior.
  */
 export class CliSecrets implements PlatformSecrets {
   private mutationQueue: Promise<void> = Promise.resolve();
@@ -45,69 +46,48 @@ export class CliSecrets implements PlatformSecrets {
   }
 
   async getStored(key: string): Promise<string | undefined> {
-    return (await this.readSecrets())[key];
+    const store = await this.openStore();
+    const value = store.get<unknown>(key, undefined);
+    return typeof value === 'string' ? value : undefined;
   }
 
   async set(key: string, value: string): Promise<void> {
-    await this.updateSecrets((data) => {
-      data[key] = value;
-    });
+    await this.mutate((store) => store.set(key, value));
   }
 
   async delete(key: string): Promise<void> {
-    await this.updateSecrets((data) => {
-      delete data[key];
-    });
+    await this.mutate((store) => store.set(key, undefined));
   }
 
   async listStoredKeys(): Promise<readonly string[]> {
-    return Object.keys(await this.readSecrets());
+    const store = await this.openStore();
+    return Object.keys(store.snapshot());
   }
 
   getEnv(name: string): string | undefined {
     return cliEnvValue(name);
   }
 
-  private async updateSecrets(
-    mutator: (data: SecretFileData) => void,
-  ): Promise<void> {
+  /**
+   * Runs `op` against a freshly opened store, chained after any mutation
+   * already queued on this instance so overlapping `set()`/`delete()` calls
+   * serialize instead of racing. The chain link is established synchronously
+   * (before the first `await`), so ordering is captured at call time, not at
+   * whatever point `openStore()`'s `mkdir`/read happens to settle.
+   */
+  private mutate(op: (store: JsonStore) => Promise<void>): Promise<void> {
     const mutation = this.mutationQueue.then(async () => {
-      const data = await this.readSecrets();
-      mutator(data);
-      await this.writeSecrets(data);
+      const store = await this.openStore();
+      await op(store);
     });
     this.mutationQueue = mutation.catch(() => {});
-    await mutation;
+    return mutation;
   }
 
-  /**
-   * Reads the secrets file. A missing file is the expected first-run state
-   * and defaults to `{}`. Any other read failure (permissions, corrupt
-   * JSON, etc.) is rethrown rather than swallowed: `updateSecrets()` does a
-   * read-mutate-write, so silently defaulting to `{}` here would make a
-   * transient read failure permanently wipe every other stored secret on
-   * the next write.
-   */
-  private async readSecrets(): Promise<SecretFileData> {
-    let raw: string;
-    try {
-      raw = await readFile(this.filePath, 'utf8');
-    } catch (error) {
-      if (isFileNotFoundError(error)) return {};
-      throw error;
-    }
-    const data = JSON.parse(raw) as unknown;
-    return isSecretFileData(data) ? data : {};
-  }
-
-  private async writeSecrets(data: SecretFileData): Promise<void> {
-    const secretsDir = path.dirname(this.filePath);
-    await mkdir(secretsDir, { recursive: true, mode: 0o700 });
-    await chmod(secretsDir, 0o700);
-    // write-file-atomic stages to a sibling temp, fsyncs, and renames over
-    // the target, so a crash mid-write can't leave a truncated secrets file.
-    await writeFileAtomic(this.filePath, `${JSON.stringify(data, null, 2)}\n`, {
-      mode: 0o600,
+  private openStore(): Promise<JsonStore> {
+    return JsonStore.open(this.filePath, {
+      mode: SECRETS_FILE_MODE,
+      strict: true,
     });
   }
 }
