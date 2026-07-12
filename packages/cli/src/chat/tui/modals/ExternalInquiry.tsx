@@ -274,6 +274,10 @@ export function ExternalInquiry(
   }
 
   async function copyQuestion(): Promise<void> {
+    // One write in flight at a time: a second Ctrl-Y while a copy is pending
+    // would race the first write's timeout reap, which kills all direct-child
+    // copy helpers -- including the second attempt's.
+    if (copyStatus === 'copying') return;
     setCopyStatus('copying');
     const result = await writeClipboardText(props.payload.question);
     if (result.ok) {
