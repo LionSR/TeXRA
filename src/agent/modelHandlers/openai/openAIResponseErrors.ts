@@ -6,6 +6,7 @@ import {
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
+import type { Response } from 'openai/resources/responses/responses';
 import type { ProviderError } from '@shared/schemas';
 
 // Local imports - model handlers
@@ -21,12 +22,10 @@ interface RequestIdTaggedError extends Error {
   provider?: string;
 }
 
-interface OpenAIBackgroundTerminalState {
-  id: string;
-  status?: string | null;
-  error?: { message?: string | null } | null;
-  incomplete_details?: { reason?: string | null } | null;
-}
+type OpenAIBackgroundTerminalState = Pick<
+  Response,
+  'id' | 'status' | 'error' | 'incomplete_details'
+>;
 
 function setProviderHint(error: unknown, provider: string): void {
   if (error && typeof error === 'object' && !('provider' in error)) {
