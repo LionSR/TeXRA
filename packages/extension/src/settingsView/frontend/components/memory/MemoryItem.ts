@@ -27,7 +27,8 @@ import {
   formatUpdatedDate,
 } from '@shared/utils/string';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
-import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 
 // Local imports - memory view events
@@ -192,9 +193,11 @@ export class MemoryItem extends LitElement {
   /**
    * Pin / Open / Delete cluster. Tooltips render after the group: a
    * wa-button-group fuses corners via CSS ::slotted(:first/:last-child), so a
-   * slotted <wa-tooltip> would break the segmenting. Each <wa-tooltip> anchors
-   * by `for` within this element's shadow root, so the static ids stay unique
-   * per instance even when many memory-item rows are on screen.
+   * slotted <wa-tooltip> would break the segmenting — hence
+   * `renderIconActionButtonParts` rather than the concatenated
+   * `renderIconActionButton`. Each <wa-tooltip> anchors by `for` within this
+   * element's shadow root, so the static ids stay unique per instance even
+   * when many memory-item rows are on screen.
    */
   private renderActionGroup(): TemplateResult {
     const pinned = this.item?.pinned === true;
@@ -220,33 +223,22 @@ export class MemoryItem extends LitElement {
         tooltip: 'Delete this memory',
         onClick: this.handleDelete,
       },
-    ];
+    ].map((action) => ({
+      id: action.id,
+      ...renderIconActionButtonParts(action),
+    }));
     return html`
       <wa-button-group label="Memory actions">
         ${repeat(
           actions,
           (action) => action.id,
-          (action) => html`
-            <wa-button
-              id=${action.id}
-              class="action-icon-button"
-              appearance="plain"
-              variant="neutral"
-              size="small"
-              type="button"
-              aria-label=${action.label}
-              @click=${action.onClick}
-            >
-              ${waIcon(action.icon)}
-            </wa-button>
-          `,
+          (action) => action.button,
         )}
       </wa-button-group>
       ${repeat(
         actions,
         (action) => action.id,
-        (action) =>
-          html`<wa-tooltip for=${action.id}>${action.tooltip}</wa-tooltip>`,
+        (action) => action.tooltip,
       )}
     `;
   }
