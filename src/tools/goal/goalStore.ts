@@ -6,7 +6,7 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import {
-  defaultSession,
+  tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas/identifiers';
@@ -47,10 +47,11 @@ function emitGoalStateChanged(
   streamId: StreamTabId,
   session?: SessionHandle,
 ): void {
-  // Preserve the old fallback rule while deleting the bus dependency:
-  // older direct-node tests may carry a partial run session.
+  // Local storage commands can update goals without composing an agent
+  // session. In that case there is no live observer to notify.
   const owner = session ?? getRunContextSession(tryUseRunContext());
-  const target = owner?.events ? owner : defaultSession();
+  const target = owner?.events ? owner : tryDefaultSession();
+  if (!target) return;
   target.events.emit({
     scope: 'session',
     event: {

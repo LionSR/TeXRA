@@ -1,3 +1,6 @@
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -63,7 +66,7 @@ describe('session description helpers', () => {
   });
 
   it('does not generate helper-model descriptions for workflow runs', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const events: SessionEvent[] = [];
     const detach = session.events.subscribe((event) => events.push(event), {
       scope: 'session',
@@ -83,7 +86,7 @@ describe('session description helpers', () => {
   });
 
   it('keeps generating compact descriptions for tool-use runs', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const events: SessionEvent[] = [];
     const detach = session.events.subscribe((event) => events.push(event), {
       scope: 'session',

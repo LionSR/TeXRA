@@ -1,5 +1,11 @@
-// Third-party imports
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
 import { strict as assert } from 'node:assert';
+import { createTestSession } from '@test/support/sessionTestUtils';
+
+// Third-party imports
 import { describe, it, afterEach } from 'vitest';
 
 // Standard library imports
@@ -457,7 +463,7 @@ describe('ToolUseFollowUp', () => {
 
     const result = { status: 'queued' as const, reason: 'waiting' as const };
 
-    const routedSession = new SessionHandle({
+    const routedSession = createTestSession({
       status: new StreamStatusMachine(),
     });
     seedStreamStatusForTest(

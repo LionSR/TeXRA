@@ -1,3 +1,6 @@
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -58,7 +61,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
 
   it('passes the owning session to subscription follow-ups', async () => {
     const registry = new ExecutionRegistry();
-    const session = new SessionHandle();
+    const session = createTestSession();
     const recorded = recordSessionEvents(session.events, { scope: 'session' });
     const explicit = createRecordingHost();
     const binder = new ExecutionSubscriptionBinder({
@@ -116,7 +119,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
     'emits the queued-follow-up fact only for delivered follow-ups: %o',
     async (sendResult, shouldEmit) => {
       const registry = new ExecutionRegistry();
-      const session = new SessionHandle();
+      const session = createTestSession();
       const recorded = recordSessionEvents(session.events, {
         scope: 'session',
       });
@@ -169,7 +172,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
 
   it('falls back to the current session when the binder has no explicit session', async () => {
     const registry = new ExecutionRegistry();
-    const session = new SessionHandle();
+    const session = createTestSession();
     const recorded = recordSessionEvents(session.events, { scope: 'session' });
     const explicit = createRecordingHost();
     const binder = new ExecutionSubscriptionBinder({
@@ -222,7 +225,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
     const registry = new ExecutionRegistry();
     const explicit = createRecordingHost();
     const logger = createLogger();
-    const session = new SessionHandle();
+    const session = createTestSession();
     const recorded = recordSessionEvents(session.events, { scope: 'session' });
     const binder = new ExecutionSubscriptionBinder({
       registry,

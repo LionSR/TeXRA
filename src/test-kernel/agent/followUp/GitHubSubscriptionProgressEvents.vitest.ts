@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -248,7 +254,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const streamId = 'stream-a' as StreamTabId;
     const host = createRecordingHost();
     const source = new RegistryTestSource();
-    const session = new SessionHandle();
+    const session = createTestSession();
     const registry = new StreamSubscriptionRegistry<string, string>({
       name: 'test subscriptions',
       source,

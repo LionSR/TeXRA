@@ -543,8 +543,10 @@ function createWindow(options: {
     }
 
     agentExecutionLoad ??= import('./desktopAgentExecution.js')
-      .then(({ createDesktopAgentExecution }) => {
-        const created = createDesktopAgentExecution(agentExecutionOptions);
+      .then(async ({ createDesktopAgentExecution }) => {
+        const created = await createDesktopAgentExecution(
+          agentExecutionOptions,
+        );
         if (windowClosed) {
           created.dispose();
           throw new Error(

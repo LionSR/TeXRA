@@ -87,8 +87,7 @@ describe('assembleTrace', () => {
     });
 
     const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
     store.append(streamId, {
       id: 'entry-1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -152,8 +151,7 @@ describe('assembleTrace', () => {
     const actualChildStreamId = `bash@tool#${executionId}`;
     expect(actualChildStreamId).not.toBe(derivedId);
 
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
     store.append(actualChildStreamId as ReturnType<typeof getStreamTabId>, {
       id: 'entry-1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -185,8 +183,7 @@ describe('assembleTrace', () => {
       executionConfig.model,
       { executionId },
     );
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
     store.append(streamId, {
       id: 'entry-1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,

@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 

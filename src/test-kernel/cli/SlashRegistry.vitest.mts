@@ -37,6 +37,7 @@ const INCLUDED_CHAT_SESSION: SessionMeta = {
   apiMode: 'included',
   approvalPolicy: 'ask',
   canDelegate: false,
+  transcriptMode: 'persistent',
   version: 'test',
 };
 
@@ -299,6 +300,7 @@ describe('slashRegistry', () => {
       apiMode: 'personal',
       approvalPolicy: 'ask',
       canDelegate: false,
+      transcriptMode: 'persistent',
       version: 'test',
     });
     registerBuiltinSlashCommands({

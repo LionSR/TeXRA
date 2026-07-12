@@ -1,3 +1,6 @@
+// Test support imports
+import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -63,7 +66,7 @@ afterEach(() => {
 });
 
 function createTestSession(): SessionHandle {
-  const session = new SessionHandle();
+  const session = createIsolatedTestSession();
   testSessions.push(session);
   return session;
 }

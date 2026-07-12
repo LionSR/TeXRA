@@ -70,8 +70,7 @@ describe('CLI StreamLog persistence (flush on exit is load-bearing)', () => {
 
   it('persists appended entries only once flush() drains the debounce window', async () => {
     const storage = emptyStorage();
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
 
     const streamId = 'reviewer@opus#e1';
     store.append(streamId, entry('a', 'first'));
@@ -92,13 +91,11 @@ describe('CLI StreamLog persistence (flush on exit is load-bearing)', () => {
     ]);
   });
 
-  it('writes nothing when load() was never called (one-shot/headless paths)', async () => {
+  it('writes nothing for an explicitly ephemeral store', async () => {
     const storage = emptyStorage();
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
 
-    // No load() — mirrors `texra run`/`resume`/`agentsRun`, which never enable
-    // persistence. append()/flush() must be inert so headless output and the
-    // on-disk store stay untouched.
+    // Ephemeral mode is deliberate and inspectable; it never reaches storage.
     store.append('main@opus#e2', entry('x', 'headless'));
     await store.flush();
 
