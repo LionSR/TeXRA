@@ -849,8 +849,10 @@ export class ProgressFactApplier {
       this.state.streamLogs.mode.kind === 'persistent' &&
       this.state.streamLogs.has(streamId) &&
       !this.state.streamLogs.get(streamId);
-    if (isInFlightStatus(status) && requiresPersistentRehydrate) {
-      await this.state.streamLogs.ensureLoaded(streamId);
+    if (isInFlightStatus(status)) {
+      if (requiresPersistentRehydrate) {
+        await this.state.streamLogs.ensureLoaded(streamId);
+      }
     } else if (streamId !== this.state.activeStream) {
       this.state.streamLogs.releaseEntries(streamId);
     }
