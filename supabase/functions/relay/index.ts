@@ -69,20 +69,24 @@
 
 import { Hono } from '@hono/hono';
 import { cors } from '@hono/hono/cors';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import {
   TIER_CONFIG,
   TIER_SPENDING_LIMITS,
+  getSpendingLimit,
   getRequestLimits,
   isRetiredModelRequest,
   isModelAllowedForTier,
-  getSpendingLimit,
   FREE_TIER_SUGGESTED_MODEL,
   ULTRA_TIER,
   FREE_TIER,
   MAX_TIER,
 } from './models.ts';
+import {
+  checkSpendingLimit,
+  requireRelayEnforcementClient,
+} from './enforcement.ts';
 import { isJsonRecord } from './json.ts';
 import {
   capOpenAIReasoningEffortForTier,
@@ -115,8 +119,8 @@ const RELAY_VERSION = '1.10.0';
 const UPSTREAM_TIMEOUT_MS = 390000;
 
 // Env and the service-role client are fixed at cold start; no per-request state.
-// adminClient is null when SUPABASE_SERVICE_ROLE_KEY is absent — spending and
-// request gates are skipped but requests are still served.
+// Public metadata remains available without the service role, but proxy routes
+// require this client before any server-side key can be used.
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -349,80 +353,6 @@ function jsonError(
   );
 }
 
-/**
- * Get the start of the current month in UTC.
- * Uses UTC for consistency with billing views.
- */
-function getCurrentMonthStartUTC(): string {
-  const now = new Date();
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  ).toISOString();
-}
-
-/**
- * Check if user has exceeded their monthly spending limit.
- * Returns { allowed: true } or { allowed: false, currentSpend, limit, remaining }.
- *
- * Uses database function for server-side aggregation (efficient).
- *
- * RACE CONDITION NOTE: Usage is logged asynchronously after requests complete.
- * Concurrent requests may pass this check before their costs are logged.
- * This is acceptable for soft limits. See migration for mitigation options.
- */
-async function checkSpendingLimit(
-  adminClient: SupabaseClient,
-  userId: string,
-  tier: string,
-): Promise<{
-  allowed: boolean;
-  currentSpend: number;
-  limit: number;
-  remaining: number;
-  spendCheckFailed?: boolean;
-}> {
-  const limit = getSpendingLimit(tier);
-  const monthStart = getCurrentMonthStartUTC();
-
-  // Call database function for efficient server-side aggregation
-  // Aggregates relay usage server-side, summing workflow streams and
-  // relying on the canonical per-stream rows maintained by
-  // 20260517100000_usage_logs_upsert_rpc.sql and
-  // 20260517100100_usage_logs_aggregate_per_stream.sql.
-  const { data, error } = await adminClient.rpc(
-    'get_user_monthly_relay_spend',
-    {
-      p_user_id: userId,
-      p_month_start: monthStart,
-    },
-  );
-
-  if (error) {
-    console.error('[RELAY] Failed to check spending:', error.message);
-    // Fail closed for the free tier (the abuse-prone path): if we can't verify
-    // spend we must not hand out free relay budget. Paid tiers fail open so a
-    // transient DB error never blocks a paying user.
-    const failClosed = tier === FREE_TIER;
-    return {
-      allowed: !failClosed,
-      currentSpend: 0,
-      limit,
-      remaining: failClosed ? 0 : limit,
-      spendCheckFailed: true,
-    };
-  }
-
-  const currentSpend = Number(data) || 0;
-  const remaining = Math.max(0, limit - currentSpend);
-
-  return {
-    allowed: currentSpend < limit,
-    currentSpend,
-    limit,
-    remaining,
-  };
-}
-
 function isFutureTimestamp(
   timestamp: string | null | undefined,
   now = new Date(),
@@ -510,32 +440,58 @@ app.get('/tier-config', async (c) => {
 
         if (profile) {
           const now = new Date();
+          const tier = profile.tier || FREE_TIER;
           const userStatus = {
             ...calculateAccessStatus(profile.tier, profile.access_expires_at),
             isBanned: isFutureTimestamp(profile.banned_until, now),
           };
 
-          // Include current spending if service role key is available
-          let spendingStatus = null;
-          if (adminClient) {
-            const spending = await checkSpendingLimit(
-              adminClient,
-              userId,
-              profile.tier || FREE_TIER,
-            );
-            spendingStatus = {
-              currentSpend: spending.currentSpend,
-              limit: spending.limit,
-              remaining: spending.remaining,
-              spendCheckFailed: spending.spendCheckFailed ?? false,
-              percentUsed:
-                spending.limit > 0
-                  ? Math.round((spending.currentSpend / spending.limit) * 100)
-                  : 100,
-            };
+          const enforcement = requireRelayEnforcementClient(adminClient);
+          if (!enforcement.ok) {
+            return c.json({
+              ...config,
+              userStatus,
+              spendingStatus: null,
+              spendingStatusError: {
+                spendCheckFailed: true,
+                failureReason: enforcement.reason,
+                limit: getSpendingLimit(tier),
+              },
+            });
           }
 
-          return c.json({ ...config, userStatus, spendingStatus });
+          const spending = await checkSpendingLimit(
+            enforcement.client,
+            userId,
+            tier,
+          );
+          if (spending.status === 'unavailable') {
+            return c.json({
+              ...config,
+              userStatus,
+              spendingStatus: null,
+              spendingStatusError: {
+                spendCheckFailed: true,
+                failureReason: spending.reason,
+                limit: spending.limit,
+              },
+            });
+          }
+
+          const spendingStatus = {
+            currentSpend: spending.currentSpend,
+            limit: spending.limit,
+            remaining: spending.remaining,
+            percentUsed:
+              spending.limit > 0
+                ? Math.round((spending.currentSpend / spending.limit) * 100)
+                : 100,
+          };
+          return c.json({
+            ...config,
+            userStatus,
+            spendingStatus,
+          });
         }
       }
     } catch {
@@ -575,16 +531,34 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     return jsonError('Server configuration error', 500);
   }
 
-  // 4. Validate the credential: a normal user JWT, or a CI relay token
+  // 4. Require every privileged enforcement dependency before authentication
+  // or server-side provider key use. Public metadata routes remain available.
+  const enforcement = requireRelayEnforcementClient(adminClient);
+  if (!enforcement.ok) {
+    console.error(
+      '[RELAY] Relay enforcement unavailable: service-role client missing',
+    );
+    return jsonError(
+      'Relay enforcement is temporarily unavailable. Please try again shortly, or switch to your own API keys.',
+      503,
+      {
+        enforcementUnavailable: true,
+        failureReason: enforcement.reason,
+      },
+    );
+  }
+  const relayAdminClient = enforcement.client;
+
+  // 5. Validate the credential: a normal user JWT, or a CI relay token
   // (texra setup-token) checked hash-at-rest against relay_ci_tokens. Both
   // resolve to the owning user id; everything below is identical.
-  const credential = await resolveRelayCredential(jwtToken, adminClient);
+  const credential = await resolveRelayCredential(jwtToken, relayAdminClient);
   if (!credential.ok) {
     return jsonError(credential.message, credential.status);
   }
   const { userId, profileClient } = credential;
 
-  // 5. Get user profile and check ban / expiration
+  // 6. Get user profile and check ban / expiration
   const { data: profile, error: profileError } = await profileClient
     .from('profiles')
     .select('tier, access_expires_at, banned_until')
@@ -622,40 +596,36 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   const userTier = profile.tier || FREE_TIER;
 
-  // 5.5. Check monthly spending limit
-  if (adminClient) {
-    const spending = await checkSpendingLimit(adminClient, userId, userTier);
-
-    if (!spending.allowed) {
-      if (spending.spendCheckFailed) {
-        return jsonError(
-          'Unable to verify your monthly relay usage right now. Please try again shortly, or switch to your own API keys.',
-          503,
-          {
-            spendCheckFailed: true,
-            currentSpend: spending.currentSpend,
-            limit: spending.limit,
-            remaining: spending.remaining,
-          },
-        );
-      }
-
-      return jsonError(
-        `Monthly spending limit reached ($${spending.limit}). ` +
-          `Current usage: $${spending.currentSpend.toFixed(2)}. ` +
-          'You can continue using your own API keys, or wait for next month.',
-        429,
-        {
-          limitReached: true,
-          currentSpend: spending.currentSpend,
-          limit: spending.limit,
-          remaining: spending.remaining,
-        },
-      );
-    }
+  // 6.5. Check monthly spending limit
+  const spending = await checkSpendingLimit(relayAdminClient, userId, userTier);
+  if (spending.status === 'unavailable') {
+    return jsonError(
+      'Unable to verify your monthly relay usage right now. Please try again shortly, or switch to your own API keys.',
+      503,
+      {
+        spendCheckFailed: true,
+        failureReason: spending.reason,
+        limit: spending.limit,
+      },
+    );
   }
 
-  // 6. Apply retired-model and tier constraints for model endpoints.
+  if (!spending.allowed) {
+    return jsonError(
+      `Monthly spending limit reached ($${spending.limit}). ` +
+        `Current usage: $${spending.currentSpend.toFixed(2)}. ` +
+        'You can continue using your own API keys, or wait for next month.',
+      429,
+      {
+        limitReached: true,
+        currentSpend: spending.currentSpend,
+        limit: spending.limit,
+        remaining: spending.remaining,
+      },
+    );
+  }
+
+  // 7. Apply retired-model and tier constraints for model endpoints.
   // Skip model validation for endpoints that don't require a model.
   const isModelFreePath = isModelFreeRelayPath(apiPath);
 
@@ -770,68 +740,66 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     }
   }
 
-  // 7. Get server-side API key
+  // 8. Get server-side API key
   const apiKey = Deno.env.get(providerConfig.envKey);
   if (!apiKey) {
     console.error(`[RELAY] API key not configured: ${providerConfig.envKey}`);
     return jsonError(`API key not configured for ${provider}`, 503);
   }
 
-  // 7.5. Enforce server-side per-user request gates. This lives after local
+  // 8.5. Enforce server-side per-user request gates. This lives after local
   // request validation so rejected requests do not consume active slots.
   let releaseRelaySlot: (() => Promise<void>) | null = null;
   let refreshRelaySlot: (() => Promise<void>) | null = null;
-  if (adminClient) {
-    try {
-      const slot = await acquireRelayRequestSlot(
-        adminClient,
-        userId,
-        getRequestLimits(userTier),
-      );
-      if (!slot.allowed) {
-        const decision = slot.decision;
-        if (decision.reason === 'concurrency') {
-          return jsonError(
-            `Too many concurrent relay requests. Limit: ${decision.concurrencyLimit ?? 'unknown'}.`,
-            429,
-            {
-              requestLimitReached: true,
-              reason: 'concurrency',
-              activeRequests: decision.activeRequests,
-              concurrencyLimit: decision.concurrencyLimit,
-              retryAfterSeconds: decision.retryAfterSeconds,
-            },
-          );
-        }
+  try {
+    const slot = await acquireRelayRequestSlot(
+      relayAdminClient,
+      userId,
+      getRequestLimits(userTier),
+    );
+    if (!slot.allowed) {
+      const decision = slot.decision;
+      if (decision.reason === 'concurrency') {
         return jsonError(
-          `Relay request rate limit reached. Limit: ${decision.rateLimitPerMinute ?? 'unknown'} requests per minute.`,
+          `Too many concurrent relay requests. Limit: ${decision.concurrencyLimit ?? 'unknown'}.`,
           429,
           {
             requestLimitReached: true,
-            reason: 'rate',
-            requestsThisMinute: decision.requestsThisMinute,
-            rateLimitPerMinute: decision.rateLimitPerMinute,
+            reason: 'concurrency',
+            activeRequests: decision.activeRequests,
+            concurrencyLimit: decision.concurrencyLimit,
             retryAfterSeconds: decision.retryAfterSeconds,
           },
         );
       }
-      releaseRelaySlot = slot.release;
-      refreshRelaySlot = slot.refresh;
-    } catch (error) {
-      console.error('[RELAY] Failed to enforce request gate:', error);
       return jsonError(
-        'Unable to verify relay request limits right now. Please try again shortly, or switch to your own API keys.',
-        503,
-        { requestLimitCheckFailed: true },
+        `Relay request rate limit reached. Limit: ${decision.rateLimitPerMinute ?? 'unknown'} requests per minute.`,
+        429,
+        {
+          requestLimitReached: true,
+          reason: 'rate',
+          requestsThisMinute: decision.requestsThisMinute,
+          rateLimitPerMinute: decision.rateLimitPerMinute,
+          retryAfterSeconds: decision.retryAfterSeconds,
+        },
       );
     }
+    releaseRelaySlot = slot.release;
+    refreshRelaySlot = slot.refresh;
+  } catch (error) {
+    console.error('[RELAY] Failed to enforce request gate:', error);
+    return jsonError(
+      'Unable to verify relay request limits right now. Please try again shortly, or switch to your own API keys.',
+      503,
+      { requestLimitCheckFailed: true },
+    );
   }
 
-  // 8. Build target URL
+  // 9. Build target URL
   const url = new URL(c.req.url);
   const targetUrl = `${providerConfig.baseUrl}${apiPath}${url.search}`;
 
-  // 9. Prepare upstream headers
+  // 10. Prepare upstream headers
   const upstreamHeaders = new Headers();
   c.req.raw.headers.forEach((value, key) => {
     if (!SKIP_REQUEST_HEADERS.has(key.toLowerCase())) {
@@ -851,7 +819,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     upstreamHeaders.set('x-goog-api-key', apiKey);
   }
 
-  // 10. Forward request with timeout
+  // 11. Forward request with timeout
   let upstreamResponse: Response;
   try {
     const bodyToSend =
@@ -880,7 +848,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     );
   }
 
-  // 11. Forward response with headers
+  // 12. Forward response with headers
   const responseHeaders = new Headers();
   upstreamResponse.headers.forEach((value, key) => {
     if (!SKIP_RESPONSE_HEADERS.has(key.toLowerCase())) {
