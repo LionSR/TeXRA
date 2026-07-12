@@ -612,7 +612,7 @@ async function validateOrchestratePreservesScrollback() {
       if (
         !exitSent &&
         promptExitTimer == null &&
-        pty.output.includes('Choose how to start this CLI session')
+        pty.output.includes('Start a session or configure model access')
       ) {
         promptExitTimer = pty.setTimer(() => sendExit(pty), 100);
       }
@@ -662,7 +662,7 @@ async function validateOrchestrateOnboardingPicker(options) {
         }
         if (
           !exitSent &&
-          pty.output.includes('Choose how to start this CLI session')
+          pty.output.includes('Start a session or configure model access')
         ) {
           exitSent = true;
           pty.write('\r');
@@ -679,7 +679,7 @@ async function validateOrchestrateOnboardingPicker(options) {
       `${options.label} should show onboarding`,
     );
     assert(
-      !result.output.includes('Choose how to start this CLI session'),
+      !result.output.includes('Start a session or configure model access'),
       `${options.label} should not show launcher actions before onboarding`,
     );
     assert(
