@@ -1716,7 +1716,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.logger.debug('Token counting failed; applying fallback cap', {
             data: buildErrorLogData(err, { operation: 'token counting' }),
           });
-          maxOutputTokens = this.applyTokenCountFailureFallback(maxOutputTokens);
+          maxOutputTokens =
+            this.applyTokenCountFailureFallback(maxOutputTokens);
         },
       });
     } catch (error) {
