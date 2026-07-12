@@ -724,13 +724,10 @@ async function validateOrchestrateOnboardingPickers() {
     args: ['orchestrate'],
     env: {},
     expected: [
-      'Not signed in, and no provider API key is configured. Choose how to power model calls:',
       'Use ChatGPT subscription',
       'Sign in with Researcher Access',
       'Use your own provider API key',
-      'Codex models through ChatGPT Plus, Pro, or Team',
-      'Free for academics; no API key needed',
-      'Anthropic, OpenAI, Google, and more',
+      'Skip for now',
     ],
     forbidden: truncatedOnboardingLabels,
   });
@@ -739,11 +736,9 @@ async function validateOrchestrateOnboardingPickers() {
     args: ['orchestrate', '--api-mode', 'included'],
     env: { ANTHROPIC_API_KEY: VALIDATION_FAKE_API_KEY },
     expected: [
-      'Subscription or included access needs sign-in for this run:',
       'Use ChatGPT subscription',
       'Sign in with Researcher Access',
-      'Codex models through ChatGPT Plus, Pro, or Team',
-      'Free for academics; no API key needed',
+      'Skip for now',
     ],
     forbidden: [
       'Use your own provider API key',
@@ -756,11 +751,9 @@ async function validateOrchestrateOnboardingPickers() {
     args: ['orchestrate', '--api-mode', 'personal'],
     env: {},
     expected: [
-      'Personal mode needs ChatGPT sign-in or a provider key for this run:',
       'Use ChatGPT subscription',
       'Use your own provider API key',
-      'Codex models through ChatGPT Plus, Pro, or Team',
-      'Anthropic, OpenAI, Google, and more',
+      'Skip for now',
     ],
     forbidden: ['Sign in with Researcher Access', ...truncatedOnboardingLabels],
   });
