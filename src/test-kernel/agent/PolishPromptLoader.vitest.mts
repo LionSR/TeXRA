@@ -1,4 +1,6 @@
 // Node imports
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,5 +37,19 @@ describe('polish prompt loader', () => {
 
     expect(prompt).toContain('Please review the following instruction text');
     expect(prompt).toContain('Fix teh typo.');
+  });
+
+  it('rejects with a wrapped error for malformed polish prompt YAML', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+
+    const dir = await mkdtemp(resolve(tmpdir(), 'texra-polish-'));
+    const brokenPath = resolve(dir, 'broken.yaml');
+    await writeFile(brokenPath, 'prompts:\n  userRequest: "unterminated\n');
+    initializePolishModel(brokenPath);
+
+    await expect(renderPolishPrompt('', 'text')).rejects.toThrow(
+      `Failed to parse polish prompt YAML at ${brokenPath}`,
+    );
   });
 });

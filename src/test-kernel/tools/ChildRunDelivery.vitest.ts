@@ -29,6 +29,8 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // Local imports - tools
 import {
   deliverChildRunFollowUp,
+  enqueueChildRunFollowUp,
+  wakeChildRunFollowUp,
   persistChildRunReport,
   persistChildRunResultMeta,
 } from '@tools/childRunDelivery';
@@ -156,5 +158,121 @@ describe('child run delivery', () => {
         wake: true,
       }),
     ).resolves.toEqual({ kind: 'dropped' });
+  });
+
+  // #8093: enqueue and wake are split so a caller can finalize its own child
+  // between them, keeping the (potentially slow) wake off the critical path
+  // that must observe the child as terminal.
+  describe('enqueueChildRunFollowUp / wakeChildRunFollowUp split', () => {
+    it('enqueueChildRunFollowUp only sends — it never calls the wake port', async () => {
+      const session = { tag: 'owner-session' };
+      mocks.sendFollowUp.mockResolvedValue({ status: 'sent' });
+
+      await expect(
+        enqueueChildRunFollowUp({
+          targetStreamId: 'parent' as StreamTabId,
+          followUp: { text: 'done', origin: 'subagent_result' },
+          session: session as never,
+        }),
+      ).resolves.toEqual({
+        kind: 'enqueued',
+        sendResult: { status: 'sent' },
+      });
+      expect(mocks.wakeOrReleaseQueuedStream).not.toHaveBeenCalled();
+    });
+
+    it('enqueueChildRunFollowUp classifies a missing parent session without waking', async () => {
+      const session = { tag: 'owner-session' };
+      mocks.sendFollowUp.mockResolvedValue({
+        status: 'no_session',
+        streamStatus: 'completed',
+      });
+
+      await expect(
+        enqueueChildRunFollowUp({
+          targetStreamId: 'parent' as StreamTabId,
+          followUp: { text: 'done', origin: 'subagent_result' },
+          session: session as never,
+        }),
+      ).resolves.toEqual({ kind: 'no_session', streamStatus: 'completed' });
+      expect(mocks.wakeOrReleaseQueuedStream).not.toHaveBeenCalled();
+    });
+
+    it('wakeChildRunFollowUp resolves a no_session enqueue result without calling the wake port', async () => {
+      const session = { tag: 'owner-session' };
+
+      await expect(
+        wakeChildRunFollowUp(
+          'parent' as StreamTabId,
+          { kind: 'no_session', streamStatus: 'completed' },
+          session as never,
+        ),
+      ).resolves.toEqual({ kind: 'no_session', streamStatus: 'completed' });
+      expect(mocks.wakeOrReleaseQueuedStream).not.toHaveBeenCalled();
+    });
+
+    it('wakeChildRunFollowUp wakes (or releases) using the enqueue result it was handed', async () => {
+      const session = { tag: 'owner-session' };
+      const sendResult = { status: 'queued', reason: 'children_running' };
+      mocks.wakeOrReleaseQueuedStream.mockResolvedValue(true);
+
+      await expect(
+        wakeChildRunFollowUp(
+          'parent' as StreamTabId,
+          { kind: 'enqueued', sendResult: sendResult as never },
+          session as never,
+        ),
+      ).resolves.toEqual({ kind: 'delivered' });
+      expect(mocks.wakeOrReleaseQueuedStream).toHaveBeenCalledWith(
+        'parent',
+        sendResult,
+        session,
+      );
+    });
+
+    it('the enqueue half settles before a slow wake half resolves', async () => {
+      // Regression shape for #8093: a caller must be able to observe the
+      // enqueue's completion (and act on it — e.g. finalize its own child)
+      // strictly before the wake half, which can hang for as long as the
+      // resumed parent's own turn takes.
+      const session = { tag: 'owner-session' };
+      mocks.sendFollowUp.mockResolvedValue({
+        status: 'queued',
+        reason: 'children_running',
+      });
+      let resolveWake: (() => void) | undefined;
+      mocks.wakeOrReleaseQueuedStream.mockImplementation(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveWake = () => resolve(true);
+          }),
+      );
+
+      const enqueueResult = await enqueueChildRunFollowUp({
+        targetStreamId: 'parent' as StreamTabId,
+        followUp: { text: 'done', origin: 'subagent_result' },
+        session: session as never,
+      });
+      // Enqueue is fully settled — the wake port has not even been called
+      // yet, proving the caller can act on this result (e.g. finalize)
+      // before ever touching the wake step.
+      expect(mocks.wakeOrReleaseQueuedStream).not.toHaveBeenCalled();
+
+      let woke = false;
+      const wakePromise = wakeChildRunFollowUp(
+        'parent' as StreamTabId,
+        enqueueResult,
+        session as never,
+      ).then((result) => {
+        woke = true;
+        return result;
+      });
+      await Promise.resolve();
+      expect(woke).toBe(false);
+
+      resolveWake?.();
+      await expect(wakePromise).resolves.toEqual({ kind: 'delivered' });
+      expect(woke).toBe(true);
+    });
   });
 });

@@ -474,11 +474,21 @@ export class ExecutionRegistry {
    * Kill only background OS processes (bash, codex) without touching agent
    * stream status. Agent executions are left in RUNNING so restart recovery can
    * restore them to WAITING (resumable) if a flow record exists.
+   *
+   * A background `bash` run is also an `AgentExecutionHandle` (see
+   * `createChildStream` in `tools/bash.ts`), not a `ProcessExecutionHandle` —
+   * killing its underlying OS process requires `interruptBackgroundProcess()`,
+   * which only fires for a handle whose attached interrupt handler declares
+   * itself as owning a live background process, leaving every other
+   * `AgentExecutionHandle` (root/native-subagent runs, loop-level interrupts)
+   * untouched (#8155).
    */
   killBackgroundProcesses(): void {
     for (const [executionId, handle] of this.handles) {
       if (handle instanceof ProcessExecutionHandle) {
         this.kill(executionId);
+      } else if (handle instanceof AgentExecutionHandle) {
+        handle.interruptBackgroundProcess();
       }
     }
   }

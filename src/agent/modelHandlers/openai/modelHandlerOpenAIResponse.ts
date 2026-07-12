@@ -27,6 +27,7 @@ import type {
   TokenCountOptions,
 } from '@agent/types/IModelHandler';
 import {
+  attachContextWindowError,
   buildErrorLogData,
   getSdkErrorMessage,
   isContextWindowError,
@@ -1369,9 +1370,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         buffer,
       )
     ) {
-      throw new Error(
+      const error = new Error(
         `Token estimate (${inputEstimate}) + output budget (${maxOutputTokens}) + safety buffer (${buffer}) exceeds context window (${contextWindow}), and this route cannot enforce a reduced output budget locally.`,
       );
+      // Tag with a typed marker so isContextWindowError() recognizes this
+      // internal case without depending on the message wording above, which
+      // this method (not a third-party provider) owns and may reword freely.
+      attachContextWindowError(error);
+      throw error;
     }
 
     this.logger.debug('Fallback: adjusting max_output_tokens', {
