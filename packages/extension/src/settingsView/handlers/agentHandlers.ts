@@ -457,14 +457,22 @@ export class AgentHandlers {
             // load, so a normal cached load would not discover the newly
             // authorized agents.
             await refreshAgents({ includeRemote: true });
-            result = await this.catalogController.applyPreset(data.presetId);
-            if (!result.ok) {
+            const reapplied = await this.catalogController.applyPreset(
+              data.presetId,
+            );
+            if (!reapplied.ok) {
+              await this.refreshAfterAgentMutation(
+                this.catalogController.getPresetToolUseRoot(
+                  result.preset.toolUseAgents,
+                ),
+              );
               await showLoggedMessage(
                 this.ctx.channel,
                 `Team no longer exists: ${data.presetId}`,
               );
               return;
             }
+            result = reapplied;
           }
         }
       }
