@@ -6,7 +6,7 @@ import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import { getComposedPathElement } from '@progressView/frontend/utils';
 import { updateRounds } from '@progressView/frontend/stateUtils';
-import { createBoundedIdSet } from '@progressView/frontend/utils/boundedIdSet';
+import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
 // ---------------------------------------------------------------------------
 // utils
