@@ -5,7 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  ink@7.1.0: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
+  ink@7.1.0:
+    hash: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
+    path: patches/ink@7.1.0.patch
 
 importers:
 
@@ -150,8 +152,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.14.0
-        version: 1.14.0(zod@4.4.3)
+        specifier: ^1.15.0
+        version: 1.15.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -630,8 +632,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.14.0
-        version: 1.14.0(zod@4.4.3)
+        specifier: ^1.15.0
+        version: 1.15.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -4601,8 +4603,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@1.14.0:
-    resolution: {integrity: sha512-b6zUcHlaQQVt0Y7doy7YNbHxP+3vrurix6QngjuCm24K9bUU4A9CjG2MqjERcAZLRKVPR4L98xrichEIHCqA/g==}
+  llm-zoo@1.15.0:
+    resolution: {integrity: sha512-hAc8oITbM3BV0kqqw/UR866bvVDDWAFfR5M/Z2Ix/KBl1hEGwqerX82xpy59I/D+LuDVlqOe3djhLfqm8bJ8+A==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -10420,7 +10422,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@1.14.0(zod@4.4.3):
+  llm-zoo@1.15.0(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
 
