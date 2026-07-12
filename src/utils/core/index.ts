@@ -5,17 +5,18 @@
  *
  * NOTE: pathCore stays a separate module because it depends on Node.js
  * 'path' while this file is used by webview frontend code (browser context).
- * The path helpers here (normalizeFilePath, getBasename, getFileStem) are
- * plain string manipulation with no Node dependency, so they're safe for
- * both browser and backend callers. Anything needing real filesystem-path
- * semantics (segment traversal, `.`/`..` resolution) should import from
- * '@utils/core/pathCore' instead.
+ * The path helpers here (normalizeFilePath, getBasename, getFileStem) build
+ * on 'pathe' — a dependency-free, browser-safe reimplementation of
+ * node:path — so they're safe for both browser and backend callers.
+ * Anything needing real filesystem-path semantics (segment traversal,
+ * `.`/`..` resolution) should import from '@utils/core/pathCore' instead.
  *
  * String validation/formatting primitives live in @utils/text/stringUtils
  * (the single home for generic string helpers) and are re-exported here for
  * existing @utils/core consumers.
  */
 import { customAlphabet, nanoid } from 'nanoid';
+import { basename as pathBasename, extname as pathExtname } from 'pathe';
 
 import type { ExecutionId } from '@shared/schemas';
 
@@ -102,13 +103,7 @@ export function normalizeFilePath(filePath: string): string {
  */
 export function getBasename(filePath: string | undefined | null): string {
   if (!filePath) return '';
-
-  const normalized = normalizeFilePath(filePath);
-  const cleaned = normalized.replace(/\/+$/, '') || '/';
-
-  if (cleaned === '/') return '';
-
-  return cleaned.split('/').at(-1) ?? '';
+  return pathBasename(normalizeFilePath(filePath));
 }
 
 /**
@@ -116,9 +111,9 @@ export function getBasename(filePath: string | undefined | null): string {
  * Dotfiles keep their name (`'.gitignore'` → `'.gitignore'`).
  */
 export function getFileStem(filePath: string | undefined | null): string {
-  const fileName = getBasename(filePath);
-  const dotIndex = fileName.lastIndexOf('.');
-  return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+  if (!filePath) return '';
+  const normalized = normalizeFilePath(filePath);
+  return pathBasename(normalized, pathExtname(normalized));
 }
 
 /** Exhaustiveness helper for discriminated unions. Call in the `default` branch of a switch. */

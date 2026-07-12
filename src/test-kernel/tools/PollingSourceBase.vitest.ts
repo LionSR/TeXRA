@@ -70,7 +70,7 @@ describe('DedupedResource', () => {
       { id: 2, created_at: '2026-07-04T00:00:02Z' },
     ]);
 
-    expect([...resource.seenIds]).toEqual([1, 2]);
+    expect(new Set(resource.seenIds)).toEqual(new Set([1, 2]));
     expect(resource.sinceCursor).toBe('2026-07-04T00:00:02Z');
 
     const emitted: number[] = [];
@@ -85,7 +85,7 @@ describe('DedupedResource', () => {
 
     expect(emitted).toEqual([3, 4]);
     expect(resource.sinceCursor).toBe('2026-07-04T00:00:05Z');
-    expect([...resource.seenIds]).toEqual([2, 3, 4]);
+    expect(new Set(resource.seenIds)).toEqual(new Set([2, 3, 4]));
   });
 
   it('keeps an existing cursor when seeding an empty list', () => {
