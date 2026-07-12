@@ -234,6 +234,7 @@ Every modal, form, palette, and approval card carries the same set of affordance
 - **`›`** for the focused row in any `Select` (Ink `figures.pointer`).
 - **`✓`** for the currently-active value (Ink `figures.tick`).
 - **Footer `<KeyHints>`** strip with scope-specific keys first, navigation in the middle, and `Enter confirm · Esc cancel` last. Implemented as a single shared component (`tui/ui/KeyHints.tsx`); ad-hoc footer text is a review-blocker.
+- **One hint vocabulary everywhere**: the status-bar bindings row (`panes/statusBarDisplay.ts`) uses the same unbracketed `key action` pairs joined by `KEY_HINT_SEPARATOR` (` · `) as `<KeyHints>` — text-only surfaces build hints through `keyHintText`, and the legacy bracketed `[key]action` format must not reappear.
 - **Sub-state indicators** are inline (`● High effort  ← / → to adjust`), never in a separate dialog layer.
 - **Numbered options** (`1.`–`9.`) so digit shortcuts are direct jumps without arrow-key counting.
 
