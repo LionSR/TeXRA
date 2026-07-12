@@ -96,8 +96,7 @@ async function writeSidecarFixture(
   ]);
   await snapshots.flush();
 
-  const logs = new StreamLogStore();
-  await logs.load();
+  const logs = await StreamLogStore.open();
   logs.ensureStream(streamId);
   logs.append(
     streamId,
@@ -396,8 +395,7 @@ describe('completedRunArchive facade', () => {
     snapshots.setTaskState(fullStream, taskState('orchestrator'), executionId);
     await snapshots.flush();
 
-    const logs = new StreamLogStore();
-    await logs.load();
+    const logs = await StreamLogStore.open();
     logs.ensureStream(emptyStream);
     logs.append(
       emptyStream,
@@ -431,8 +429,7 @@ describe('completedRunArchive facade', () => {
     snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
     await snapshots.flush();
 
-    const logs = new StreamLogStore();
-    await logs.load();
+    const logs = await StreamLogStore.open();
     logs.ensureStream(streamId);
     logs.append(
       streamId,

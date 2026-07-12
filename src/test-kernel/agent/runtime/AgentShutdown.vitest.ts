@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,8 +24,8 @@ describe('agent shutdown', () => {
   });
 
   it('drains every live session once and interrupts global CLI sessions', async () => {
-    const firstSession = new SessionHandle();
-    const secondSession = new SessionHandle();
+    const firstSession = createTestSession();
+    const secondSession = createTestSession();
     const compatibilitySession = defaultSession();
     const firstDrain = vi.spyOn(
       firstSession.executions,

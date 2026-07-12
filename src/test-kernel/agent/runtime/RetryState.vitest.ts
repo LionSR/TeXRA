@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
@@ -246,7 +252,7 @@ describe('RetryState', () => {
 
   it('resolves manual retries through the session host interactions', async () => {
     const streamId = 'retry-state-session-bridge' as StreamTabId;
-    const session = new SessionHandle();
+    const session = createTestSession();
     const recording = createRecordingHost();
     session.useHostInteractions(recording.interactions);
     const { node, streamStatus } = createRetryNode(streamId);

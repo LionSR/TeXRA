@@ -91,8 +91,7 @@ describe('trace-viewer TraceDataSchema', () => {
     });
 
     const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
     store.append(streamId, {
       id: 'entry-1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,

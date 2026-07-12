@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { AgentError } from '@common/errors';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
@@ -13,6 +12,7 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
+import { AgentError } from '@common/errors';
 import {
   EXECUTION_STATUS,
   type ExecutionId,
@@ -38,6 +38,20 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const tempDirs: string[] = [];
+
+async function installFreshDefaultSession(): Promise<void> {
+  const { installPlatform } = await import('@test/support/setupPlatform');
+  await installPlatform();
+  const [
+    { initializeDefaultSession, teardownDefaultSession },
+    { StreamLogStore },
+  ] = await Promise.all([
+    import('@agent/runtime/SessionHandle'),
+    import('@transcript'),
+  ]);
+  teardownDefaultSession();
+  initializeDefaultSession({ transcripts: await StreamLogStore.open() });
+}
 
 async function installStoragePlatform(): Promise<void> {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-run-'));
@@ -153,7 +167,10 @@ function stubRunExecutionDeps(): void {
 }
 
 describe('executeCliRequest', () => {
-  beforeEach(stubRunExecutionDeps);
+  beforeEach(async () => {
+    stubRunExecutionDeps();
+    await installFreshDefaultSession();
+  });
 
   afterEach(async () => {
     vi.restoreAllMocks();
@@ -423,15 +440,12 @@ describe('executeCliRequest', () => {
     });
   });
 
-  it('loads the stream log store before the run and flushes it after, in order', async () => {
+  it('uses an opened persistent store and flushes it after the run', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const { defaultSession } = await import('@agent/runtime/SessionHandle');
     const request = baseRequest();
     const store = defaultSession().transcripts;
     const callOrder: string[] = [];
-    vi.spyOn(store, 'load').mockImplementation(async () => {
-      callOrder.push('load');
-    });
     vi.spyOn(store, 'flush').mockImplementation(async () => {
       callOrder.push('flush');
     });
@@ -447,10 +461,8 @@ describe('executeCliRequest', () => {
 
     await executeCliRequest(request, cliContext());
 
-    // The bug this test guards: StreamLogStore.save()/flush() silently no-op
-    // until .load() has run once, so headless runs lost their whole
-    // streamLogs timeline. `load` must precede the run, `flush` must follow it.
-    expect(callOrder).toEqual(['load', 'runAgent', 'flush']);
+    expect(store.mode).toEqual({ kind: 'persistent' });
+    expect(callOrder).toEqual(['runAgent', 'flush']);
   });
 
   it('flushes the stream log store even when the run throws', async () => {
@@ -458,7 +470,6 @@ describe('executeCliRequest', () => {
     const { defaultSession } = await import('@agent/runtime/SessionHandle');
     const request = baseRequest();
     const store = defaultSession().transcripts;
-    const loadSpy = vi.spyOn(store, 'load').mockResolvedValue(undefined);
     const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
     mocks.runAgent.mockRejectedValueOnce(new AgentError('boom'));
 
@@ -469,7 +480,6 @@ describe('executeCliRequest', () => {
     const result = await executeCliRequest(request, cliContext());
 
     expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
-    expect(loadSpy).toHaveBeenCalledTimes(1);
     expect(flushSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -478,7 +488,6 @@ describe('executeCliRequest', () => {
     const { defaultSession } = await import('@agent/runtime/SessionHandle');
     const request = baseRequest();
     const store = defaultSession().transcripts;
-    const loadSpy = vi.spyOn(store, 'load').mockResolvedValue(undefined);
     const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
     // An unclassified failure (e.g. registerExecution disk I/O,
     // workspaceState.update) is genuinely unexpected — it must keep
@@ -491,7 +500,6 @@ describe('executeCliRequest', () => {
     );
 
     // Cleanup still runs via `finally` even though the error propagates.
-    expect(loadSpy).toHaveBeenCalledTimes(1);
     expect(flushSpy).toHaveBeenCalledTimes(1);
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
@@ -594,6 +602,7 @@ describe('executeCliRequest', () => {
     });
 
     try {
+      await installFreshDefaultSession();
       const { executeCliRequest } = await import('@cli/runtime/runExecution');
       const request = baseRequest();
 
@@ -605,6 +614,7 @@ describe('executeCliRequest', () => {
     } finally {
       vi.doUnmock('@transcript');
       vi.resetModules();
+      await installFreshDefaultSession();
     }
   });
 
@@ -666,7 +676,10 @@ describe('executeCliRequest', () => {
 });
 
 describe('executeCliConfig', () => {
-  beforeEach(stubRunExecutionDeps);
+  beforeEach(async () => {
+    stubRunExecutionDeps();
+    await installFreshDefaultSession();
+  });
 
   it('reports invalid configs without starting the runtime host', async () => {
     const { executeCliConfig } = await import('@cli/runtime/runExecution');

@@ -7,7 +7,7 @@ describe('AgentTrace error data', () => {
   let store: StreamLogStore;
 
   beforeEach(async () => {
-    store = new StreamLogStore();
+    store = StreamLogStore.ephemeral('test');
     await store.clear();
   });
 

@@ -1,6 +1,9 @@
+// Test support imports
+
 import { access, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,7 +65,7 @@ let activeToolEditApproval:
 const testSessions: SessionHandle[] = [];
 
 function createTestSession(): SessionHandle {
-  const session = new SessionHandle();
+  const session = createIsolatedTestSession();
   testSessions.push(session);
   return session;
 }

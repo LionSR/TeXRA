@@ -17,7 +17,7 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 function withStore(
   run: (store: StreamLogStore, logger: AgentTrace) => void,
 ): void {
-  const store = new StreamLogStore();
+  const store = StreamLogStore.ephemeral('test');
   run(store, createRunTrace('stream', store).trace);
 }
 
@@ -222,7 +222,7 @@ describe('tool-use card groupId resolution', () => {
   });
 
   it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
     const logger = createRunTrace('stream', store).trace;
     const outer = logger.openStage('outer');
     const ref = await outer.within(async () =>
@@ -247,7 +247,7 @@ describe('tool-use card groupId resolution', () => {
 
 describe('per-trace stage scope (cross-trace isolation)', () => {
   it('a run stage opened on its own trace does not inherit an active stage from another trace', async () => {
-    const store = new StreamLogStore();
+    const store = StreamLogStore.ephemeral('test');
 
     // Orchestrator trace with an active "Task:" stage — mirrors a subagent
     // launched from inside a delegation tool's stage scope.

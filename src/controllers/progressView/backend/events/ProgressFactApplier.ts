@@ -845,8 +845,14 @@ export class ProgressFactApplier {
     //    an empty getOrCreate.
     //  - leaving the in-flight set drops heavy entries; disk stays
     //    authoritative and `setActiveStream` re-reads on demand.
+    const requiresPersistentRehydrate =
+      this.state.streamLogs.mode.kind === 'persistent' &&
+      this.state.streamLogs.has(streamId) &&
+      !this.state.streamLogs.get(streamId);
     if (isInFlightStatus(status)) {
-      void this.state.streamLogs.ensureLoaded(streamId);
+      if (requiresPersistentRehydrate) {
+        await this.state.streamLogs.ensureLoaded(streamId);
+      }
     } else if (streamId !== this.state.activeStream) {
       this.state.streamLogs.releaseEntries(streamId);
     }
