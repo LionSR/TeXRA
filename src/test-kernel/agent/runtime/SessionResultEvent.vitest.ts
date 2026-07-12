@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
@@ -460,7 +466,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   });
 
   it('marks subagent runs and bridges results to session.onResult', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const logger = new TraceEmitter();
     const onResult = vi.fn();
     const { ctx, streamStatus } = createCtx({ logger });

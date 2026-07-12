@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // Slash command execution dispatch.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +17,7 @@ import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
   activeForm,
   activeStreamId,
+  patchSessionMeta,
   resetCliState,
   patchStream,
   streams,
@@ -260,5 +264,25 @@ describe('handleTuiSlashCommand', () => {
     const statusText = lastEntryText(streamId);
     expect(statusText).toContain('resume later with: texra resume exec-1');
     expect(statusText).not.toContain('--cwd');
+  });
+
+  it('does not advertise the current ephemeral session as resumable', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const streamId = 'stream-ephemeral' as StreamTabId;
+    session.streamId = streamId;
+    session.executionId = 'exec-ephemeral' as ExecutionId;
+    activeStreamId.set(streamId);
+    patchSessionMeta({ transcriptMode: 'ephemeral' });
+    patchStream(streamId, (slice) => ({
+      ...slice,
+      status: STREAM_PHASE.WAITING,
+    }));
+
+    await handleTuiSlashCommand('/status', createContext(session));
+
+    const statusText = lastEntryText(streamId);
+    expect(statusText).not.toContain('session: exec-ephemeral');
+    expect(statusText).not.toContain('resume later with:');
   });
 });

@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 import { describe, expect, it } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';

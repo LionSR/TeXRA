@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createRecordingHost } from '@test/agent/progressTestUtils';
@@ -46,8 +52,8 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   });
 
   it('routes explicit-session forget notifications only to the passed session', async () => {
-    const runSession = new SessionHandle();
-    const explicitSession = new SessionHandle();
+    const runSession = createTestSession();
+    const explicitSession = createTestSession();
     const seenRun: unknown[] = [];
     const seenExplicit: unknown[] = [];
     const seenDefault: unknown[] = [];

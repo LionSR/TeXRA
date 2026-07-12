@@ -1,3 +1,6 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // Third-party imports
 import { DEFAULT_MODEL_CAPABILITIES } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';

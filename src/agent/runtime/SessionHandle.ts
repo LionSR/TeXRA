@@ -10,10 +10,9 @@
  * optional session-scoped host channel.
  *
  * A session is one per host context: extension activation (per VS Code window),
- * CLI process, or desktop `BrowserWindow`. The default instance,
- * {@link defaultSession}, is the sanctioned single-session entry point —
- * it lazily constructs its owners on first use (module-private, process-wide)
- * exactly like any other fresh session. There is no other way to reach
+ * CLI process, or desktop `BrowserWindow`. The default instance is installed
+ * explicitly through {@link initializeDefaultSession}; {@link defaultSession}
+ * only retrieves that process-wide owner. There is no other way to reach
  * these owners: the invariant is "no session-scoped mutable module export"
  * (#7694) — a run-scoped caller resolves through {@link currentSession} /
  * {@link defaultSession}, never a standalone singleton import.
@@ -30,11 +29,7 @@
  * session is justified only as the ownership container.
  */
 
-import {
-  getActiveFlushers,
-  StreamLogStore,
-  unregisterFlushers,
-} from '@transcript';
+import { getActiveFlushers, unregisterFlushers } from '@transcript/runTrace';
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { createChannelTrace } from '@logger';
@@ -57,25 +52,26 @@ import {
   createSessionApprovals,
   type SessionApprovals,
 } from './streamApprovalQueue';
+import type { StreamLogStore } from '@transcript/StreamLogStore';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('sessionHandle');
 
-/** Members callers may inject; everything else is fresh-constructed in order. */
-export type SessionHandleInit = Partial<
-  Pick<
-    SessionHandle,
-    | 'executions'
-    | 'subscriptions'
-    | 'events'
-    | 'status'
-    | 'transcripts'
-    | 'followUps'
-    | 'flushers'
-    | 'interactions'
-    | 'hostChannel'
-  >
->;
+/** A valid transcript store is required; other owners may be injected. */
+export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
+  Partial<
+    Pick<
+      SessionHandle,
+      | 'executions'
+      | 'subscriptions'
+      | 'events'
+      | 'status'
+      | 'followUps'
+      | 'flushers'
+      | 'interactions'
+      | 'hostChannel'
+    >
+  >;
 
 export interface SessionDisposeOptions {
   /**
@@ -110,12 +106,17 @@ export class SessionHandle {
    */
   readonly hostChannel?: AgentRuntimeHost;
 
-  constructor(init: SessionHandleInit = {}) {
+  constructor(init: SessionHandleInit) {
+    if (init.transcripts.mode.kind === 'read-only') {
+      throw new Error(
+        'SessionHandle requires a writable transcript store; read-only stores are reserved for call-scoped readers.',
+      );
+    }
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
     const status = init.status ?? new StreamStatusMachine();
     const events = init.events ?? new SessionEventHub();
-    const transcripts = init.transcripts ?? new StreamLogStore();
+    const transcripts = init.transcripts;
     const followUps = init.followUps ?? new ToolUseFollowUpQueue();
     const executions =
       init.executions ??
@@ -364,6 +365,34 @@ export function killAllSessionBackgroundProcesses(): void {
 
 let cachedDefaultSession: SessionHandle | undefined;
 
+export type DefaultSessionInit = Omit<SessionHandleInit, 'flushers'>;
+
+/** Install the process-default session after its transcript store is valid. */
+export function initializeDefaultSession(
+  init: DefaultSessionInit,
+): SessionHandle {
+  if (cachedDefaultSession) {
+    throw new Error('The default session has already been initialized.');
+  }
+  cachedDefaultSession = new SessionHandle({
+    ...init,
+    flushers: getActiveFlushers(),
+  });
+  return cachedDefaultSession;
+}
+
+/** Inspect whether the host has installed its process-default session. */
+export function tryDefaultSession(): SessionHandle | undefined {
+  return cachedDefaultSession;
+}
+
+/** Clear and dispose the process-default session during host teardown. */
+export function teardownDefaultSession(): void {
+  const session = cachedDefaultSession;
+  cachedDefaultSession = undefined;
+  session?.dispose();
+}
+
 /**
  * The process-default session — the sole owner of the process-wide runtime
  * singletons (#7694). Every member the constructor doesn't receive is
@@ -371,16 +400,17 @@ let cachedDefaultSession: SessionHandle | undefined;
  * uses; there is no separate `Shared*`/`*Service` module export to alias
  * anymore, so this construction *is* where those singletons now live.
  *
- * Constructed lazily on first use rather than at module evaluation: many
- * run-scoped modules import `currentSession`, which pulls this module into
- * their import cycle, and an eager construction here would risk reading a
- * cross-module singleton before its own module finished initializing (TDZ).
- * Deferring to first call sidesteps that entirely.
+ * Hosts must initialize it explicitly after opening transcript persistence.
+ * Access before that composition step is a lifecycle error rather than an
+ * implicit memory-only session.
  */
 export function defaultSession(): SessionHandle {
-  return (cachedDefaultSession ??= new SessionHandle({
-    flushers: getActiveFlushers(),
-  }));
+  if (!cachedDefaultSession) {
+    throw new Error(
+      'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.',
+    );
+  }
+  return cachedDefaultSession;
 }
 
 /**
