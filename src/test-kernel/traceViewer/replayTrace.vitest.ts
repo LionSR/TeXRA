@@ -135,8 +135,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     const streamId = getStreamTabId(config.agent, config.model, {
       executionId,
     });
-    const store = new StreamLogStore();
-    await store.load();
+    const store = await StreamLogStore.open();
     store.append(streamId, {
       id: 'terminal-stage',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,

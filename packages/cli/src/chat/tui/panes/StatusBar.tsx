@@ -148,6 +148,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
+    transcriptMode: sessionMeta.transcriptMode,
     subscriptionActive,
     approvalPolicy: sessionMeta.approvalPolicy,
     shiftEnterNewline: caps.kittyKeyboard,

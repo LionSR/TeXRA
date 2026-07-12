@@ -31,7 +31,7 @@ async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
 async function runWithLoggerStore<T>(
   fn: (store: StreamLogStore, logger: AgentTrace) => Promise<T>,
 ): Promise<T> {
-  const store = new StreamLogStore();
+  const store = StreamLogStore.ephemeral('test');
   await store.clear();
 
   return await fn(store, createRunTrace(streamId, store).trace);

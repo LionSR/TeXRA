@@ -95,6 +95,8 @@ export interface StatusBarDisplayInput {
   readonly hasMultipleStreams: boolean;
   readonly model: string;
   readonly apiMode: string;
+  /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
+  readonly transcriptMode?: 'persistent' | 'ephemeral';
   /** True when the active model routes through the ChatGPT subscription; the
    *  mode segment then reads "subscription" instead of the api-mode. */
   readonly subscriptionActive?: boolean;
@@ -681,6 +683,14 @@ export function buildStatusBarDisplay(
   const left: StatusBarSegment[] = [
     { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
   ];
+  if (input.transcriptMode === 'ephemeral') {
+    left.push({
+      text: 'EPHEMERAL TRANSCRIPT',
+      compactText: 'EPHEMERAL',
+      badge: true,
+      badgeColor: COLOR_WARNING,
+    });
+  }
 
   if (input.pendingExitHint) {
     left.push({ text: PENDING_EXIT_HINT_TEXT, color: COLOR_WARNING });

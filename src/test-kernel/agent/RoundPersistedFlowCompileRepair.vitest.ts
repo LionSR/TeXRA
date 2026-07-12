@@ -219,7 +219,7 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
       const kv = createFakeKv();
       const logger = new TraceEmitter();
       const streamId = `stream:reflection-round-${name}` as StreamTabId;
-      const store = new StreamLogStore();
+      const store = StreamLogStore.ephemeral('test');
       const control: OutcomeControl = {
         terminalOutcome,
         interrupted: false,

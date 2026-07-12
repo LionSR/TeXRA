@@ -165,7 +165,7 @@ describe('logFileCategory', () => {
   let store: StreamLogStore;
 
   beforeEach(async () => {
-    store = new StreamLogStore();
+    store = StreamLogStore.ephemeral('test');
     await store.clear();
     const runTrace = createRunTrace('TestFileListLogger', store);
     logger = runTrace.trace;

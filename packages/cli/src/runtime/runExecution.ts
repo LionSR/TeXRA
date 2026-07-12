@@ -9,7 +9,6 @@ import {
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
@@ -18,6 +17,7 @@ import { generateExecutionId } from '@utils/core';
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
+import { initializeHeadlessTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
@@ -174,33 +174,33 @@ export async function executeCliRequest(
   | { ok: true; result: ExecuteAgentResult; terminalStatus: ExecutionStatus }
   | { ok: false; exitCode: CliExitCode }
 > {
+  // Transcript persistence is a launch prerequisite for every headless run.
+  // This executes before runtime-host construction and before runAgent.
+  const { session } = await initializeHeadlessTranscriptSession();
   const runtimeHost = createCliRuntimeHost(runContext);
   const snapshotStore = new StreamSnapshotStore();
   const detachSnapshotEvents = snapshotStore.attachSessionEvents(
-    defaultSession().events,
+    session.events,
   );
   const detachRunProgressRenderer = runtimeHost.attachRunProgressRenderer(
-    defaultSession().events,
+    session.events,
   );
-  const detachHostInteractions = defaultSession().useHostInteractions(
+  const detachHostInteractions = session.useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
     }),
   );
   const interactionHost: CliRuntimeHost = {
     ...runtimeHost,
-    interactions: defaultSession().interactions,
+    interactions: session.interactions,
   };
   // Present terminal-error toasts from the run's `result` event through the same
   // runtimeHost path the lifecycle used before (so ndjson / logger output is
   // unchanged); the lifecycle no longer emits them directly.
-  const detachResultToast = attachTerminalResultToast(
-    defaultSession(),
-    interactionHost,
-  );
+  const detachResultToast = attachTerminalResultToast(session, interactionHost);
   const detachSessionProgressProjection =
     runContext.outputFormat === 'ndjson'
-      ? attachCliSessionProgressProjection(defaultSession().events)
+      ? attachCliSessionProgressProjection(session.events)
       : () => undefined;
   const ownedExecutionId = options.registerExecution
     ? request.executionId
@@ -218,6 +218,7 @@ export async function executeCliRequest(
   const invoke = (): Promise<ExecuteAgentResult> =>
     runAgent(request, {
       runtimeHost: interactionHost,
+      session,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
       stopAfterCycle: options.stopAfterCycle,
@@ -228,19 +229,7 @@ export async function executeCliRequest(
       ],
     });
 
-  // Headless runs append to StreamLogStore the same as the interactive TUI
-  // (via createRunTrace's transcript recorder), but StreamLogStore.save()/
-  // flush() silently no-op until .load() has run once — without this, every
-  // headless run's streamLogs are appended in memory and then lost entirely
-  // when the process exits. Mirrors runChatTui.tsx's best-effort load. Done
-  // last (right before the run starts) so it can't delay the synchronous
-  // shutdown-hook registration above.
-  const streamLogStore = defaultSession().transcripts;
-  try {
-    await streamLogStore.load();
-  } catch {
-    // Persistence stays disabled; the run still executes in-memory as before.
-  }
+  const streamLogStore = session.transcripts;
 
   let runResult:
     | { readonly ok: true; readonly result: ExecuteAgentResult }

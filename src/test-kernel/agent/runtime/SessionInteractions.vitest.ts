@@ -1,3 +1,6 @@
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
@@ -94,7 +97,7 @@ function createPortSession(): {
     emit: (event) => emitted.push(event),
   };
   const handlers = createHandlerSet(uiEvents);
-  const session = new SessionHandle();
+  const session = createTestSession();
   const interactions = createDesktopHostInteractions({
     runtimeHost,
     session,

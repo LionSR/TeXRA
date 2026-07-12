@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
@@ -37,7 +43,7 @@ function trackAgent(
 describe('SessionHandle', () => {
   it('defaultSession is a stable process-wide singleton (#7694: no separate module export to alias)', () => {
     // No `Shared*`/`*Service` module export exists anymore — the process
-    // default's owners are constructed inside `defaultSession()` itself.
+    // default's owners are installed together by the test composition root.
     // What's left to verify is that repeated calls return the identical
     // session (and therefore identical members), and that the flushers
     // member still aliases the process-wide flush registry by identity
@@ -57,7 +63,7 @@ describe('SessionHandle', () => {
   });
 
   it('a fresh session shares no member with the default session', () => {
-    const fresh = new SessionHandle();
+    const fresh = createTestSession();
     try {
       expect(fresh.executions).not.toBe(defaultSession().executions);
       expect(fresh.subscriptions).not.toBe(defaultSession().subscriptions);
@@ -76,7 +82,7 @@ describe('SessionHandle', () => {
 
   it('builds fresh registries even when only a host channel is injected', () => {
     const { host } = createRecordingHost();
-    const session = new SessionHandle({ hostChannel: host });
+    const session = createTestSession({ hostChannel: host });
     try {
       expect(session.hostChannel).toBe(host);
       expect(session.executions).not.toBe(defaultSession().executions);
@@ -86,8 +92,8 @@ describe('SessionHandle', () => {
   });
 
   it('keeps execution tracking isolated between sessions', () => {
-    const a = new SessionHandle();
-    const b = new SessionHandle();
+    const a = createTestSession();
+    const b = createTestSession();
     const { host } = createRecordingHost();
     try {
       const handle = trackAgent(
@@ -110,8 +116,8 @@ describe('SessionHandle', () => {
   });
 
   it("an unfiltered cancel on one session leaves the other's pending requests", async () => {
-    const a = new SessionHandle();
-    const b = new SessionHandle();
+    const a = createTestSession();
+    const b = createTestSession();
     const hostA = createRecordingHost();
     const hostB = createRecordingHost();
     const streamId = 'stream:cleanup-scope' as StreamTabId;
@@ -172,7 +178,7 @@ describe('SessionHandle', () => {
   });
 
   it('dispose tears down each owned member', () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const interactions = vi.spyOn(session.interactions, 'dispose');
     const subscriptions = vi.spyOn(session.subscriptions, 'dispose');
     const executions = vi.spyOn(session.executions, 'dispose');
@@ -185,7 +191,7 @@ describe('SessionHandle', () => {
   });
 
   it('can keep active executions visible until they settle', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const { host } = createRecordingHost();
     const executionId = 'exec:dispose-keep-active';
     const streamId = 'stream:dispose-keep-active' as StreamTabId;
@@ -215,7 +221,7 @@ describe('SessionHandle', () => {
   });
 
   it('makes deferred dispose idempotent while executions are active', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const { host } = createRecordingHost();
     const executionId = 'exec:dispose-idempotent';
     const streamId = 'stream:dispose-idempotent' as StreamTabId;

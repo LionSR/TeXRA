@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -64,7 +70,7 @@ function runtimeHost(): AgentRuntimeHost {
 
 /** Real session whose interactions slot is the host's fake port. */
 function sessionFor(host: AgentRuntimeHost): SessionHandle {
-  const session = new SessionHandle();
+  const session = createTestSession();
   if (host.interactions) session.useHostInteractions(host.interactions);
   return session;
 }
