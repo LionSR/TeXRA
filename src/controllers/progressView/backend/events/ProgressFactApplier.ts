@@ -536,6 +536,14 @@ export class ProgressFactApplier {
     if (agentCategory) {
       this.state.getOrCreateStreamState(streamId, agentCategory);
     }
+    if (
+      payload.suppressViewSwitch === true &&
+      payload.ensureVisible === true &&
+      this.state.agentCategoryFilter !== 'all' &&
+      (!agentCategory || this.state.agentCategoryFilter !== agentCategory)
+    ) {
+      this.state.agentCategoryFilter = 'all';
+    }
     // Don't switch away from the current stream if it has pending permissions
     // (retry, tool-edit, bash approval, or agent proposal) — the user needs to
     // interact with the approval panel before losing sight of it.
@@ -575,7 +583,12 @@ export class ProgressFactApplier {
     if (shouldSwitch && this.state.activeStream !== streamId) return;
 
     const filterChanged = this.state.agentCategoryFilter !== previousFilter;
-    if (!wasKnownStream || filterChanged) {
+    if (filterChanged && payload.ensureVisible === true) {
+      this.webviewUpdater.sendStreamMetadata(
+        this.state,
+        this.state.streamStatus.getAllStreamStates(),
+      );
+    } else if (!wasKnownStream || filterChanged) {
       this.webviewUpdater.updateStreamMetadata(
         this.state,
         streamId,

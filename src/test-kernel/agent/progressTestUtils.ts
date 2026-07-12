@@ -99,17 +99,26 @@ export function createRecordingHost(): {
     string,
     { streamId?: string; settle: (result: HostUserQuestionResult) => void }
   >();
-  const activateStream = (streamId?: string | null) => {
+  // Mirrors the host contract: interaction requests register the stream
+  // without switching the active tab (#8246).
+  const revealStream = (streamId?: string | null) => {
     events.push({ event: 'requestEnsureProgressView', payload: {} });
     if (streamId) {
-      events.push({ event: 'setActiveStream', payload: { streamId } });
+      events.push({
+        event: 'setActiveStream',
+        payload: {
+          streamId,
+          suppressViewSwitch: true,
+          ensureVisible: true,
+        },
+      });
     }
   };
   const interactions: HostInteractions = {
     requestBashApproval: (request) => {
       const requestId = `bash-${pendingBashes.size + 1}`;
       const streamId = request.streamId ?? '';
-      activateStream(request.streamId);
+      revealStream(request.streamId);
       events.push({
         event: 'showBashPermission',
         payload: {
@@ -164,7 +173,7 @@ export function createRecordingHost(): {
       });
     },
     askUserQuestion: (request) => {
-      activateStream(request.streamId || undefined);
+      revealStream(request.streamId || undefined);
       events.push({
         event: 'showUserQuestion',
         payload: request,
