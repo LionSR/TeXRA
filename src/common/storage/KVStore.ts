@@ -97,6 +97,8 @@ export interface KVStoreOptions {
    * stores where repeated pretty-printing adds avoidable CPU and disk I/O.
    */
   compactJson?: boolean;
+  /** Propagate adapter failures instead of converting them to false/missing. */
+  throwOnErrors?: boolean;
 }
 
 export class KVStore {
@@ -112,6 +114,7 @@ export class KVStore {
       // The directory is the namespace; keys are stored literally.
       namespace: undefined,
       useKeyPrefix: false,
+      throwOnErrors: options.throwOnErrors,
       serialize: (data) => JSON.stringify(data.value, null, indent),
       deserialize: (raw) => ({ value: JSON.parse(raw) }),
     });

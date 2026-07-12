@@ -53,6 +53,7 @@ interface ParsedPersistedEntries {
 
 export type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
+  | { readonly kind: 'read-only' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
 
 function summaryOf(logInstance: StreamLog): StreamLogSummary {
@@ -127,9 +128,13 @@ export class StreamLogStore {
   private readonly logs = new Map<StreamTabId, StreamLog>();
   private readonly listeners = new Set<StreamLogListener>();
   private readonly dirtyStreamIds = new Set<StreamTabId>();
-  private readonly kv = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
+  private readonly kv = new KVStore(STREAM_LOGS_DIR, {
+    compactJson: true,
+    throwOnErrors: true,
+  });
   private readonly summaryKv = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
     compactJson: true,
+    throwOnErrors: true,
   });
 
   /**
@@ -189,6 +194,7 @@ export class StreamLogStore {
   private clearing = false;
   private stateRevision = 0;
   private pendingReload: Promise<void> | undefined;
+  private summaryCacheMaintenanceEnabled = true;
 
   private constructor(mode: StreamLogStoreMode) {
     this.mode = Object.freeze(mode);
@@ -197,10 +203,15 @@ export class StreamLogStore {
   /** Open and validate the persistent transcript store before exposing it. */
   static async open(): Promise<StreamLogStore> {
     const store = new StreamLogStore({ kind: 'persistent' });
-    await Promise.all([
-      StorageFS.ensureDir(STREAM_LOGS_DIR),
-      StorageFS.ensureDir(STREAM_LOG_SUMMARIES_DIR),
-    ]);
+    await StorageFS.ensureDir(STREAM_LOGS_DIR);
+    await store.prepareSummaryCache();
+    store.replaceSummaries(await store.readPersistentSummaries());
+    return store;
+  }
+
+  /** Open persisted transcripts for reading without creating or writing files. */
+  static async openReadOnly(): Promise<StreamLogStore> {
+    const store = new StreamLogStore({ kind: 'read-only' });
     store.replaceSummaries(await store.readPersistentSummaries());
     return store;
   }
@@ -238,6 +249,7 @@ export class StreamLogStore {
   }
 
   ensureStream(streamId: StreamTabId): void {
+    this.assertWritableStore('ensure a transcript stream');
     // No-op if the stream is already known — either resident in `logs` or
     // released with metadata in `summaries`. Creating a fresh empty log here
     // for a released stream would shadow the on-disk copy from
@@ -371,9 +383,9 @@ export class StreamLogStore {
   }
 
   append(streamId: StreamTabId, entry: StreamLogAppendInput): StreamLogEntry {
+    this.assertWritableStream(streamId);
     // New writes mean the stream is live again — cancel any deferred release.
     this.pendingRelease.delete(streamId);
-    this.assertWritableStream(streamId);
     if (
       this.mode.kind === 'persistent' &&
       this.summaries.has(streamId) &&
@@ -426,6 +438,7 @@ export class StreamLogStore {
   }
 
   clearDirtyUpdates(streamId: StreamTabId): void {
+    this.assertWritableStore('clear transcript update state');
     this.logs.get(streamId)?.clearDirtyUpdates();
   }
 
@@ -444,6 +457,7 @@ export class StreamLogStore {
   }
 
   async delete(streamId: StreamTabId): Promise<void> {
+    this.assertWritableStore('delete a transcript stream');
     this.writeTombstones.add(streamId);
     this.debouncedSave.cancel();
     this.forgetStreamState(streamId);
@@ -456,16 +470,15 @@ export class StreamLogStore {
       if (this.mode.kind === 'ephemeral') return;
 
       log.info(LOG_TAG, `Deleting stream: ${streamId}`);
-      await Promise.all([
-        this.kv.delete(streamId),
-        this.summaryKv.delete(streamId),
-      ]);
+      await this.kv.delete(streamId);
+      await this.deleteSummaryCache(streamId);
     } finally {
       this.writeTombstones.delete(streamId);
     }
   }
 
   async clear(): Promise<void> {
+    this.assertWritableStore('clear transcript streams');
     const count = this.summaries.size;
     this.clearing = true;
     this.writeGeneration += 1;
@@ -479,7 +492,8 @@ export class StreamLogStore {
       if (this.mode.kind === 'ephemeral') return;
 
       log.info(LOG_TAG, `Clearing all ${count} streams`);
-      await Promise.all([this.kv.deleteDir(), this.summaryKv.deleteDir()]);
+      await this.kv.deleteDir();
+      await this.clearSummaryCache();
     } finally {
       this.writeTombstones.clear();
       this.clearing = false;
@@ -491,6 +505,7 @@ export class StreamLogStore {
     streamIds: readonly StreamTabId[] = [],
     status: RunOutcome = RUN_OUTCOME.FAILED,
   ): Promise<StreamTabId[]> {
+    this.assertWritableStore('finalize running transcript groups');
     const streamsToLoad = new Set(streamIds);
     for (const [streamId, summary] of this.summaries) {
       if (
@@ -520,6 +535,7 @@ export class StreamLogStore {
     now: number = Date.now(),
     status: RunOutcome = RUN_OUTCOME.FAILED,
   ): Promise<StreamTabId[]> {
+    this.assertWritableStore('finalize running transcript groups');
     if (streamIds.length === 0) return [];
     const streamsToLoad = streamIds.filter(
       (id) =>
@@ -607,6 +623,7 @@ export class StreamLogStore {
   }
 
   save(): Promise<void> {
+    this.assertWritableStore('save transcripts');
     if (this.mode.kind === 'ephemeral' || this.dirtyStreamIds.size === 0) {
       return Promise.resolve();
     }
@@ -621,6 +638,7 @@ export class StreamLogStore {
   }
 
   async flush(): Promise<void> {
+    this.assertWritableStore('flush transcripts');
     if (this.mode.kind === 'ephemeral') return;
 
     // Drain iteratively: executeWrite may re-queue streams that are still
@@ -680,6 +698,7 @@ export class StreamLogStore {
   }
 
   private assertWritableStream(streamId: StreamTabId): void {
+    this.assertWritableStore('modify transcript entries');
     if (!this.loadFailed.has(streamId)) return;
     throw new Error(
       `Cannot modify stream ${streamId} after its persisted transcript failed to load. Retry ensureLoaded() first.`,
@@ -688,6 +707,7 @@ export class StreamLogStore {
 
   /** Shared post-mutation bookkeeping for append/update/appendText/endRunningGroups. */
   private commitChange(streamId: StreamTabId, logInstance: StreamLog): void {
+    this.assertWritableStore('commit transcript changes');
     this.refreshSummary(streamId, logInstance);
     this.stateRevision += 1;
     if (this.mode.kind === 'persistent') this.markDirty(streamId);
@@ -710,7 +730,7 @@ export class StreamLogStore {
   }
 
   private async executeReload(): Promise<void> {
-    await this.flush();
+    if (this.mode.kind === 'persistent') await this.flush();
     if (this.dirtyStreamIds.size > 0) {
       throw new Error(
         'Cannot reload transcripts while persistent writes remain unresolved.',
@@ -791,41 +811,40 @@ export class StreamLogStore {
     }
 
     const summary = this.summarizeEntries(entries.entries);
-    await this.writeSummary(streamId, summary);
+    await this.maintainSummaryCache(streamId, summary);
     return { streamId, summary };
   }
 
   private async readSummary(
     streamId: StreamTabId,
   ): Promise<StreamLogSummary | undefined> {
-    let persisted: unknown;
     try {
-      persisted = await this.summaryKv.read<unknown>(streamId);
+      const persisted = await this.summaryKv.read<unknown>(streamId);
+      const summary = this.parsePersistedSummary(persisted);
+      if (!summary) return undefined;
+
+      const [summaryMtime, logMtime] = await Promise.all([
+        this.summaryKv.modifiedAt(streamId),
+        this.kv.modifiedAt(streamId),
+      ]);
+      if (
+        summaryMtime !== undefined &&
+        logMtime !== undefined &&
+        summaryMtime < logMtime
+      ) {
+        return undefined;
+      }
+
+      return summary;
     } catch (error) {
-      if (!(error instanceof SyntaxError)) throw error;
+      const condition =
+        error instanceof SyntaxError ? 'corrupt' : 'unavailable';
       log.warn(
         LOG_TAG,
-        `Ignoring corrupt summary cache for ${streamId}; rebuilding from the stream log.`,
+        `Ignoring ${condition} summary cache for ${streamId}; rebuilding from the stream log: ${toErrorMessage(error)}`,
       );
       return undefined;
     }
-
-    const summary = this.parsePersistedSummary(persisted);
-    if (!summary) return undefined;
-
-    const [summaryMtime, logMtime] = await Promise.all([
-      this.summaryKv.modifiedAt(streamId),
-      this.kv.modifiedAt(streamId),
-    ]);
-    if (
-      summaryMtime !== undefined &&
-      logMtime !== undefined &&
-      summaryMtime < logMtime
-    ) {
-      return undefined;
-    }
-
-    return summary;
   }
 
   private summarizeEntries(
@@ -866,21 +885,15 @@ export class StreamLogStore {
     if (this.shouldSkipWrite(streamId, expectedGeneration)) return;
     await this.kv.write(streamId, logInstance.toPersistedEntries());
     if (this.shouldSkipWrite(streamId, expectedGeneration)) {
-      await Promise.all([
-        this.kv.delete(streamId),
-        this.summaryKv.delete(streamId),
-      ]);
+      await this.kv.delete(streamId);
+      await this.deleteSummaryCache(streamId);
       return;
     }
 
-    await this.writeSummary(streamId, summaryOf(logInstance)).catch(() => {
-      log.warn(LOG_TAG, `Failed to write stream summary: ${streamId}`);
-    });
+    await this.maintainSummaryCache(streamId, summaryOf(logInstance));
     if (this.shouldSkipWrite(streamId, expectedGeneration)) {
-      await Promise.all([
-        this.kv.delete(streamId),
-        this.summaryKv.delete(streamId),
-      ]);
+      await this.kv.delete(streamId);
+      await this.deleteSummaryCache(streamId);
     }
   }
 
@@ -916,11 +929,66 @@ export class StreamLogStore {
     this.pendingLoads.clear();
   }
 
-  private async writeSummary(
+  private assertWritableStore(operation: string): void {
+    if (this.mode.kind !== 'read-only') return;
+    throw new Error(`Cannot ${operation} with a read-only transcript store.`);
+  }
+
+  private async prepareSummaryCache(): Promise<void> {
+    try {
+      await StorageFS.ensureDir(STREAM_LOG_SUMMARIES_DIR);
+    } catch (error) {
+      this.disableSummaryCacheMaintenance(
+        `Failed to prepare transcript summary cache; continuing with authoritative logs: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+
+  private async maintainSummaryCache(
     streamId: StreamTabId,
     summary: StreamLogSummary,
   ): Promise<void> {
-    await this.summaryKv.write(streamId, summary);
+    if (
+      this.mode.kind !== 'persistent' ||
+      !this.summaryCacheMaintenanceEnabled
+    ) {
+      return;
+    }
+    try {
+      await this.summaryKv.write(streamId, summary);
+    } catch (error) {
+      this.disableSummaryCacheMaintenance(
+        `Failed to write transcript summary cache for ${streamId}: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+
+  private async deleteSummaryCache(streamId: StreamTabId): Promise<void> {
+    if (!this.summaryCacheMaintenanceEnabled) return;
+    try {
+      await this.summaryKv.delete(streamId);
+    } catch (error) {
+      this.disableSummaryCacheMaintenance(
+        `Failed to delete transcript summary cache for ${streamId}: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+
+  private async clearSummaryCache(): Promise<void> {
+    if (!this.summaryCacheMaintenanceEnabled) return;
+    try {
+      await this.summaryKv.deleteDir();
+    } catch (error) {
+      this.disableSummaryCacheMaintenance(
+        `Failed to clear transcript summary cache: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+
+  private disableSummaryCacheMaintenance(message: string): void {
+    if (!this.summaryCacheMaintenanceEnabled) return;
+    this.summaryCacheMaintenanceEnabled = false;
+    log.warn(LOG_TAG, message);
   }
 
   private markDirty(streamId: StreamTabId): void {

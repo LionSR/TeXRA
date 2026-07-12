@@ -107,6 +107,11 @@ export class SessionHandle {
   readonly hostChannel?: AgentRuntimeHost;
 
   constructor(init: SessionHandleInit) {
+    if (init.transcripts.mode.kind === 'read-only') {
+      throw new Error(
+        'SessionHandle requires a writable transcript store; read-only stores are reserved for call-scoped readers.',
+      );
+    }
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
     const status = init.status ?? new StreamStatusMachine();
@@ -379,6 +384,13 @@ export function initializeDefaultSession(
 /** Inspect whether the host has installed its process-default session. */
 export function tryDefaultSession(): SessionHandle | undefined {
   return cachedDefaultSession;
+}
+
+/** Clear and dispose the process-default session during host teardown. */
+export function teardownDefaultSession(): void {
+  const session = cachedDefaultSession;
+  cachedDefaultSession = undefined;
+  session?.dispose();
 }
 
 /**
