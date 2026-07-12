@@ -8,7 +8,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import { getActiveFlushers } from '@transcript';
+import { getActiveFlushers, StreamLogStore } from '@transcript';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   SessionHandle,
@@ -41,6 +41,14 @@ function trackAgent(
 }
 
 describe('SessionHandle', () => {
+  it('rejects a read-only transcript store', async () => {
+    const transcripts = await StreamLogStore.openReadOnly();
+
+    expect(() => new SessionHandle({ transcripts })).toThrow(
+      'requires a writable transcript store',
+    );
+  });
+
   it('defaultSession is a stable process-wide singleton (#7694: no separate module export to alias)', () => {
     // No `Shared*`/`*Service` module export exists anymore — the process
     // default's owners are installed together by the test composition root.
