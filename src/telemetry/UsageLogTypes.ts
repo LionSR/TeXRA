@@ -53,10 +53,18 @@ const UsageLogBatchSchema = z.object({
 
 export type UsageLogBatch = z.infer<typeof UsageLogBatchSchema>;
 
-export const UsageLogResponseSchema = z.object({
-  success: z.boolean(),
-  accepted: z.int().nonnegative(),
-  error: z.string().optional(),
-});
+export const UsageLogResponseSchema = z.discriminatedUnion('success', [
+  z.object({
+    success: z.literal(true),
+    accepted: z.int().nonnegative(),
+  }),
+  z.object({
+    success: z.literal(false),
+    accepted: z.literal(0),
+    error: z.string().optional(),
+    /** Only an explicit false permits the client to quarantine instead of retry. */
+    retryable: z.boolean().optional(),
+  }),
+]);
 
 export type UsageLogResponse = z.infer<typeof UsageLogResponseSchema>;
