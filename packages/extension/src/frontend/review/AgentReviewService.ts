@@ -31,6 +31,7 @@ import {
   type ReviewSeverity,
 } from '@agent/review/reviewIssues';
 import { runAgent } from '@agent/runtime/runAgent';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import {
@@ -44,6 +45,10 @@ import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
+import {
+  AgentReviewRunController,
+  type AgentReviewRunToken,
+} from './AgentReviewRunController';
 
 const CHANNEL = 'AgentReview';
 const COLLECTION_NAME = 'texra-agent-review';
@@ -116,7 +121,7 @@ class AgentReviewServiceImpl {
   private issues: ReviewIssue[] = [];
   /** Fingerprints of dismissed issues, kept for the session so re-reviews don't resurrect them. */
   private readonly dismissed = new Set<string>();
-  private running = false;
+  private readonly reviewRuns = new AgentReviewRunController();
   private summary: string | undefined;
   /** Repository root the current issues' paths are relative to. */
   private reviewRoot: string | undefined;
@@ -135,7 +140,7 @@ class AgentReviewServiceImpl {
 
   getState(): AgentReviewStateSnapshot {
     return {
-      running: this.running,
+      running: this.reviewRuns.isActive,
       issues: this.issues,
       summary: this.summary,
     };
@@ -169,12 +174,12 @@ class AgentReviewServiceImpl {
     trigger: AgentReviewTrigger,
     options: AgentReviewRunOptions = {},
   ): Promise<void> {
-    if (this.running) {
+    if (this.reviewRuns.isActive) {
       if (trigger === 'manual') {
         void vscode.window.showInformationMessage(
           'An agent review is already running.',
         );
-      } else {
+      } else if (!this.reviewRuns.stopRequested) {
         this.pendingCommitReview ??= options;
       }
       return;
@@ -190,7 +195,8 @@ class AgentReviewServiceImpl {
       return;
     }
 
-    this.running = true;
+    const run = this.reviewRuns.start(currentSession());
+    const generation = ++this.reviewGeneration;
     this.summary = 'Reviewing changes…';
     await this.syncContextKeys();
     this.emitter.fire();
@@ -201,7 +207,7 @@ class AgentReviewServiceImpl {
           location: { viewId: AGENT_REVIEW_VIEW_ID },
           title: 'Agent review',
         },
-        () => this.executeReview(cwd, trigger, options),
+        () => this.executeReview(cwd, trigger, options, run, generation),
       );
     } catch (err) {
       // Backstop for anything executeReview's own handling missed — the
@@ -212,14 +218,15 @@ class AgentReviewServiceImpl {
         `Agent review failed unexpectedly: ${toErrorMessage(err)}`,
       );
     } finally {
-      this.activeReview = undefined;
-      this.running = false;
-      await this.syncContextKeys();
-      this.emitter.fire();
-      const pending = this.pendingCommitReview;
-      this.pendingCommitReview = undefined;
-      if (pending) {
-        void this.runReview('commit', pending);
+      if (this.reviewRuns.finish(run)) {
+        this.activeReview = undefined;
+        const pending = this.pendingCommitReview;
+        this.pendingCommitReview = undefined;
+        this.emitter.fire();
+        await this.syncContextKeys();
+        if (pending) {
+          void this.runReview('commit', pending);
+        }
       }
     }
   }
@@ -228,11 +235,12 @@ class AgentReviewServiceImpl {
     cwd: string,
     trigger: AgentReviewTrigger,
     options: AgentReviewRunOptions,
+    run: AgentReviewRunToken,
+    generation: number,
   ): Promise<void> {
-    // `clear()` bumps the generation. Capture this before the async diff
-    // collection so a clear/checkout during collection cannot resurrect a
-    // review after the panel was intentionally reset.
-    const generation = ++this.reviewGeneration;
+    // `clear()` bumps the generation. Check before collecting so a clear that
+    // landed during the initial context-key update cannot start stale work.
+    if (generation !== this.reviewGeneration) return;
     const collected = await collectReviewDiff({
       cwd,
       includeUntracked: getConfig<boolean>(
@@ -248,6 +256,10 @@ class AgentReviewServiceImpl {
       baseBranch: options.baseBranch,
     });
     if (generation !== this.reviewGeneration) return;
+    if (run.stopRequested) {
+      this.summary = 'Review cancelled';
+      return;
+    }
 
     if (!collected.ok) {
       // Issues from the previous run stay available rather than vanishing on
@@ -336,6 +348,8 @@ class AgentReviewServiceImpl {
           runtimeHost: extensionAgentRuntimeHost,
           openWorkflowOutput: openFinalOutputIfAvailable,
           stopAfterCycle: true,
+          session: run.session,
+          onRun: (handle) => this.reviewRuns.bind(run, handle),
         },
       );
       outcome = result.outcome;
@@ -477,11 +491,12 @@ class AgentReviewServiceImpl {
   }
 
   /**
-   * Clear results and forget dismissals. A reviewer session still running
-   * is detached from the panel: its future reports are rejected (no active
-   * collector) and its outcome is discarded (stale generation).
+   * Clear results and forget dismissals. A reviewer session still running is
+   * stopped; its future reports are rejected and its outcome is discarded.
+   * The run slot stays occupied until that execution actually settles.
    */
   clear(): void {
+    this.reviewRuns.requestStop();
     this.issues = [];
     this.dismissed.clear();
     this.summary = undefined;
@@ -489,6 +504,15 @@ class AgentReviewServiceImpl {
     this.pendingCommitReview = undefined;
     this.reviewGeneration++;
     this.updateDiagnostics();
+    void this.syncContextKeys();
+    this.emitter.fire();
+  }
+
+  /** Stop the active review while preserving any findings already reported. */
+  stop(): void {
+    if (!this.reviewRuns.requestStop()) return;
+    this.pendingCommitReview = undefined;
+    this.summary = 'Stopping review…';
     void this.syncContextKeys();
     this.emitter.fire();
   }
@@ -563,7 +587,7 @@ class AgentReviewServiceImpl {
     await vscode.commands.executeCommand(
       'setContext',
       'texra.agentReview.running',
-      this.running,
+      this.reviewRuns.isActive,
     );
     await vscode.commands.executeCommand(
       'setContext',

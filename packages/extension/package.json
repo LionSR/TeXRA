@@ -1234,6 +1234,13 @@
         "icon": "$(ellipsis)"
       },
       {
+        "command": "texra.agentReview.stop",
+        "title": "Stop Agent Review",
+        "shortTitle": "Stop",
+        "category": "TeXRA",
+        "icon": "$(debug-stop)"
+      },
+      {
         "command": "texra.agentReview.fixAllIssues",
         "title": "Fix All Agent Review Issues",
         "shortTitle": "Fix All Issues",
@@ -1502,12 +1509,17 @@
         },
         {
           "command": "texra.agentReview.run",
-          "when": "texra.activated && view == texra.scmAgentReviewView",
+          "when": "texra.activated && view == texra.scmAgentReviewView && !texra.agentReview.running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "texra.agentReview.stop",
+          "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.running",
           "group": "navigation@1"
         },
         {
           "command": "texra.agentReview.runWithOptions",
-          "when": "texra.activated && view == texra.scmAgentReviewView",
+          "when": "texra.activated && view == texra.scmAgentReviewView && !texra.agentReview.running",
           "group": "navigation@2"
         },
         {
@@ -1560,11 +1572,15 @@
       "commandPalette": [
         {
           "command": "texra.agentReview.run",
-          "when": "texra.activated"
+          "when": "texra.activated && !texra.agentReview.running"
         },
         {
           "command": "texra.agentReview.runWithOptions",
-          "when": "texra.activated"
+          "when": "texra.activated && !texra.agentReview.running"
+        },
+        {
+          "command": "texra.agentReview.stop",
+          "when": "texra.activated && texra.agentReview.running"
         },
         {
           "command": "texra.agentReview.fixAllIssues",
