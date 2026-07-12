@@ -119,7 +119,11 @@ describe('executeCommand', () => {
       },
     );
 
-    for (let attempt = 0; attempt < 50 && childPid === undefined; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < 50 && childPid === undefined;
+      attempt += 1
+    ) {
       await sleep(20);
     }
     assert.ok(childPid && childPid > 0);
