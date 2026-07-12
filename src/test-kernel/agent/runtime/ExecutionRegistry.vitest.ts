@@ -58,6 +58,96 @@ describe('executionRegistry', () => {
     expect(flush).not.toHaveBeenCalled();
   });
 
+  it('drains a background-bash AgentExecutionHandle on shutdown without disturbing a resumable agent execution (issue #8155)', () => {
+    // Regression for #8155: killBackgroundProcesses() previously only walked
+    // ProcessExecutionHandles, missing a background `bash` run — which is
+    // registered as an AgentExecutionHandle (see createChildStream in
+    // tools/bash.ts) with its OS-process kill reachable only via the
+    // interrupt handler BashBackgroundSession attaches. The two AgentExecutionHandles
+    // below are tracked concurrently, mirroring the real interleaving at
+    // shutdown: a background bash child stream alongside an ordinary
+    // resumable agent execution (e.g. a native subagent loop, whose own
+    // loop-level interrupt handler must stay untouched so restart recovery
+    // can resume it). Drain must reach only the former.
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const bashExecutionId = 'exec-background-bash-drain-test';
+    const bashParentStreamId =
+      'parent-background-bash-drain-test' as StreamTabId;
+    const bashChildStreamId = 'child-background-bash-drain-test' as StreamTabId;
+    const agentExecutionId = 'exec-resumable-agent-drain-test';
+    const agentParentStreamId =
+      'parent-resumable-agent-drain-test' as StreamTabId;
+    const agentChildStreamId =
+      'child-resumable-agent-drain-test' as StreamTabId;
+    const bashInterrupt = vi.fn();
+    const agentInterrupt = vi.fn();
+    const processKillFn = vi.fn(() => true);
+
+    try {
+      // Background bash: an AgentExecutionHandle whose attached interrupt
+      // handler owns a live OS process (mirrors BashBackgroundSession).
+      const bashHandle = new AgentExecutionHandle(
+        bashExecutionId,
+        bashParentStreamId,
+        bashChildStreamId,
+        'bash',
+        'toolUse',
+        explicit.host,
+      );
+      bashHandle.attachInterruptHandler({
+        interrupt: bashInterrupt,
+        ownsBackgroundProcess: true,
+      });
+      registry.trackAgentExecution(bashHandle, {
+        status: STREAM_PHASE.RUNNING,
+      });
+
+      // Ordinary agent execution (e.g. a native-subagent loop's own
+      // loop-level interrupt handler): no ownsBackgroundProcess flag, so
+      // shutdown drain must leave it alone for restart recovery.
+      const agentHandle = new AgentExecutionHandle(
+        agentExecutionId,
+        agentParentStreamId,
+        agentChildStreamId,
+        'test-subagent',
+        'toolUse',
+        explicit.host,
+      );
+      agentHandle.attachInterruptHandler({ interrupt: agentInterrupt });
+      registry.trackAgentExecution(agentHandle, {
+        status: STREAM_PHASE.RUNNING,
+      });
+
+      // A genuine background process handle keeps working exactly as before.
+      const processHandle = new ProcessExecutionHandle(
+        'exec-process-drain-test',
+        bashParentStreamId,
+        'bash',
+        processKillFn,
+        explicit.host,
+      );
+      registry.track(processHandle);
+
+      registry.killBackgroundProcesses();
+
+      expect(bashInterrupt).toHaveBeenCalledOnce();
+      expect(processKillFn).toHaveBeenCalledOnce();
+      expect(agentInterrupt).not.toHaveBeenCalled();
+      // Neither AgentExecutionHandle's tracked status changes: killing a
+      // background OS process bypasses the generic terminate()/kill() path
+      // (and its cancelStreamStatus side effect) so restart recovery still
+      // finds both handles exactly as it would have before shutdown.
+      expect(streamStatus.get(bashChildStreamId)).toBe(STREAM_PHASE.RUNNING);
+      expect(streamStatus.get(agentChildStreamId)).toBe(STREAM_PHASE.RUNNING);
+      expect(registry.getHandle(bashExecutionId)).toBe(bashHandle);
+      expect(registry.getHandle(agentExecutionId)).toBe(agentHandle);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('uses the handle interrupt target when terminating agent handles', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();

@@ -109,6 +109,8 @@ function usesShellLevelBackgrounding(command: string): boolean {
 }
 
 class BashBackgroundSession implements ExecutionInterruptHandler {
+  /** Shutdown drain reaches this handler via `interruptBackgroundProcess()`. */
+  readonly ownsBackgroundProcess = true;
   private pid: number | undefined;
   private interrupted = false;
 
