@@ -95,12 +95,18 @@ export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
   }
 
   diff(items: readonly T[], emit: (item: T) => void): void {
+    // Classify the whole batch against pre-batch membership before adding
+    // anything, so an eviction triggered partway through this tick can't
+    // make an id already seen this tick look "new" again (`newIds` also
+    // catches the same id appearing twice within one fetched page).
+    const newIds = new Set<Id>();
     for (const item of items) {
       const id = this.getId(item);
-      if (this.seenIds.has(id)) continue;
-      this.seenIds.add(id);
+      if (this.seenIds.has(id) || newIds.has(id)) continue;
+      newIds.add(id);
       emit(item);
     }
+    for (const id of newIds) this.seenIds.add(id);
     this.advanceCursor(items);
   }
 

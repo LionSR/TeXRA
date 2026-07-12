@@ -9,10 +9,10 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
 import { clearInquiryDraft } from '../components/ExternalInquiryPanel';
 import { updateToolUseState } from '../stateUtils';
-import { createBoundedIdSet } from '../utils/boundedIdSet';
 import { permissionId, type PermissionState } from '../permissionState';
 import type {
   HandlerRegistry,
