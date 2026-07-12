@@ -1,14 +1,19 @@
 // Based on https://github.com/Yuyz0112/koala-code-reader/blob/main/src/code-reader/persisted-flow.ts
 // Enhanced to use ExecutionKVStore as first-citizen interface
 
-import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
+// Third-party imports
+import { z } from 'zod';
 
+// Local imports - agent
+import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+
+// Local imports - utilities
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+// Local imports - flow engine
 import { BaseNode, Flow, type Action } from '.';
-import type { z } from 'zod';
 
 /** Prefix for a flow record's KV key. Single source of truth for callers deriving it. */
 export const FLOW_KEY_PREFIX = 'flow_';
@@ -54,6 +59,104 @@ export interface FlowRecord {
    */
   cursor?: FlowCursor;
   nodes: NodeRecord[];
+}
+
+const PersistedFlowNodeRecordSchema = z.looseObject({
+  action: z.string().optional(),
+  nodeId: z.string().optional(),
+});
+
+const PersistedFlowCursorSchema = z.looseObject({
+  nextNodeId: z.string().nullable(),
+  lastAction: z.string().optional(),
+});
+
+const PersistedFlowRecordObjectSchema = z.looseObject({
+  schemaVersion: z.int().min(1).max(FLOW_RECORD_SCHEMA_VERSION).optional(),
+  flowName: z.string(),
+  params: z.record(z.string(), z.unknown()).optional(),
+  shared: z.unknown(),
+  createdAt: z.string(),
+  cursor: PersistedFlowCursorSchema.optional(),
+  nodes: z.array(PersistedFlowNodeRecordSchema),
+});
+
+/**
+ * Runtime envelope shared by flow recovery and resume eligibility. The first
+ * stage checks the raw input so an inherited or parser-invented `shared` key
+ * cannot satisfy the persisted own-property contract.
+ */
+export const PersistedFlowRecordEnvelopeSchema = z
+  .unknown()
+  .refine(
+    (stored) =>
+      typeof stored === 'object' &&
+      stored !== null &&
+      !Array.isArray(stored) &&
+      Object.hasOwn(stored, 'shared'),
+    { message: 'Flow record must be an object with an own shared field' },
+  )
+  .pipe(PersistedFlowRecordObjectSchema);
+
+export type PersistedFlowStateErrorReason =
+  'read-failed' | 'unsupported-record' | 'missing-shared' | 'invalid-shared';
+
+/** Persisted flow state cannot be read or resumed safely. */
+export class PersistedFlowStateError extends Error {
+  constructor(
+    readonly runId: string,
+    readonly reason: PersistedFlowStateErrorReason,
+    options?: ErrorOptions,
+  ) {
+    const message = (() => {
+      switch (reason) {
+        case 'read-failed':
+          return `Failed to read persisted flow state for run "${runId}".`;
+        case 'unsupported-record':
+          return `Persisted flow state for run "${runId}" has an unsupported record format.`;
+        case 'missing-shared':
+          return `Persisted flow state for run "${runId}" is missing its shared state.`;
+        case 'invalid-shared':
+          return `Persisted shared state for flow run "${runId}" is invalid.`;
+      }
+    })();
+    super(message, options);
+    this.name = 'PersistedFlowStateError';
+  }
+}
+
+/**
+ * Read a flow record without conflating a stored unsupported value with an
+ * absent key. Flow-specific callers remain responsible for migrating and
+ * validating `shared`.
+ */
+export async function readPersistedFlowRecord(
+  kv: ExecutionKVStore,
+  runId: string,
+): Promise<FlowRecord | null> {
+  let stored: unknown;
+  try {
+    stored = await kv.read<unknown>(flowKey(runId));
+  } catch (cause) {
+    throw new PersistedFlowStateError(runId, 'read-failed', { cause });
+  }
+
+  if (stored === undefined) return null;
+  const parsed = PersistedFlowRecordEnvelopeSchema.safeParse(stored);
+  if (!parsed.success) {
+    const missingShared =
+      typeof stored === 'object' &&
+      stored !== null &&
+      !Array.isArray(stored) &&
+      !Object.hasOwn(stored, 'shared');
+    throw new PersistedFlowStateError(
+      runId,
+      missingShared ? 'missing-shared' : 'unsupported-record',
+      { cause: parsed.error },
+    );
+  }
+
+  return parsed.data;
 }
 
 export function stampFlowRecordSchemaVersion<T extends FlowRecord>(flow: T): T {
