@@ -13,7 +13,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared
 import type { MemoryViewItem } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderEmptyState } from '@shared/wa/emptyState';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -85,14 +85,13 @@ export class MemoryList extends LitElement {
 
   override render(): TemplateResult {
     if (!this.items.length) {
-      return html`<div class="empty-state">
-        ${waIcon('database')}
-        <p>No saved memories yet.</p>
-        <p class="text-secondary">
-          Memories are created automatically when the assistant learns something
-          worth remembering across conversations.
-        </p>
-      </div>`;
+      return renderEmptyState({
+        icon: 'database',
+        title: 'No saved memories yet.',
+        body: 'Memories are created automatically when the assistant learns something worth remembering across conversations.',
+        headingTag: 'h3',
+        className: 'empty-state',
+      });
     }
 
     const { paged } = paginate(this.items, this.page, DEFAULT_PAGE_SIZE);

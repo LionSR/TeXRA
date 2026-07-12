@@ -1,10 +1,10 @@
 import { Box, Text } from 'ink';
-import { Spinner } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
 import { type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { KeyHints } from '../ui/KeyHints';
+import { LoadingIndicator } from '../ui/LoadingIndicator';
 import { Select } from '../ui/Select';
 import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
 import { isCompactFormRows } from './_shared/selectWindow';
@@ -72,7 +72,7 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
       </Text>
       <Box marginTop={1} flexDirection="column">
         {statusLines === null ? (
-          <Spinner label="loading API status..." />
+          <LoadingIndicator label="loading API status..." />
         ) : (
           statusLines.map((line, index) => (
             <Text key={`${index}:${line}`} dimColor>

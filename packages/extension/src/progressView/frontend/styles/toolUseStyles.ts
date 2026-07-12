@@ -67,6 +67,12 @@ export const toolUseStyles = css`
     color: var(--color-warning);
   }
 
+  /* Hide <wa-details>'s built-in disclosure icon when there's nothing to
+     expand (mirrors the old native-details toggle-icon visibility:hidden). */
+  wa-details.banner-details--no-toggle::part(icon) {
+    visibility: hidden;
+  }
+
   .tool-use-user-feedback > .details-summary :is(.tool-use-title, wa-icon) {
     color: var(--color-text-link);
   }
@@ -118,8 +124,17 @@ export const toolUseStyles = css`
     border: var(--border-thin) solid var(--color-border);
   }
 
-  /* Proposal restore link */
+  /* Proposal restore link — a real <button> (not a role="button" span) so
+   * wa-details' own summary click handler recognizes it as interactive and
+   * skips its toggle; reset native button chrome to keep the prior
+   * link-like appearance. */
   .proposal-restore-link {
+    background: none;
+    border: none;
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    text-align: left;
     color: var(--color-text-link);
     cursor: pointer;
     font-size: var(--font-size-sm);
