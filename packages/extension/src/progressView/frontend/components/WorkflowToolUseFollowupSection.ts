@@ -18,7 +18,10 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { STREAM_STATUS, type StreamLifecycleStatus } from '@shared/schemas';
+import {
+  DEFAULT_STREAM_METADATA_STATUS,
+  type StreamLifecycleStatus,
+} from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { selectStyles } from '@shared/styles/selectStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
@@ -226,7 +229,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
         PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS,
       ) &&
       (this.status == null ||
-        this.status === STREAM_STATUS.READY ||
+        this.status === DEFAULT_STREAM_METADATA_STATUS ||
         isTerminalOutcomePhase(this.status))
     );
   }

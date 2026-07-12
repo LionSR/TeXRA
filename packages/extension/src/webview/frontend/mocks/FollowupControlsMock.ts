@@ -10,7 +10,10 @@ import '@progressView/frontend/components/WorkflowToolUseFollowupSection';
 
 // Local imports - progress view types and shared styles
 import type { FollowupOptionsState } from '@progressView/frontend/store';
-import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import {
+  DEFAULT_STREAM_METADATA_STATUS,
+  type StreamLifecycleStatus,
+} from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 
 const SAMPLE_OPTIONS: FollowupOptionsState = {
@@ -53,7 +56,7 @@ const SAMPLE_OPTIONS: FollowupOptionsState = {
   ],
 };
 
-const SAMPLE_STATUS: StreamStatus = STREAM_STATUS.READY;
+const SAMPLE_STATUS: StreamLifecycleStatus = DEFAULT_STREAM_METADATA_STATUS;
 const SAMPLE_STREAM_MODEL = 'claude-opus-4-7';
 
 /**

@@ -30,7 +30,8 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 // Local imports
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import {
-  STREAM_STATUS,
+  DEFAULT_STREAM_METADATA_STATUS,
+  STREAM_PHASE,
   type ActiveChildInfo,
   type InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
@@ -543,8 +544,8 @@ function getTaskIcon(child: ActiveChildInfo): string {
 /** Check if a child is in a waiting/idle state rather than actively processing. */
 function isWaiting(child: ActiveChildInfo): boolean {
   return (
-    child.status === STREAM_STATUS.WAITING ||
-    child.status === STREAM_STATUS.READY
+    child.status === STREAM_PHASE.WAITING ||
+    child.status === DEFAULT_STREAM_METADATA_STATUS
   );
 }
 

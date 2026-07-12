@@ -15,7 +15,6 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_PHASE,
-  STREAM_STATUS,
   type LogMessageData,
   type OutputFileInfo,
   type StreamState,
@@ -168,7 +167,7 @@ const SAMPLE_STREAM_STATES: Map<string, StreamState> = new Map([
   [
     ACTIVE_STREAM_ID,
     createWorkflowStreamState({
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
       lastTimestamp: BASE_TIME + 41_000,
       conversationProgress: { toolCallCount: 4 },
       roundStage: { index: 1, total: 2 },
@@ -303,7 +302,7 @@ export class ProgressBoardLayoutMock extends LitElement {
         <div class="conversation">
           <stream-header
             .stream=${activeStream}
-            .status=${STREAM_STATUS.RUNNING}
+            .status=${STREAM_PHASE.RUNNING}
             .progress=${{ toolCallCount: 4 }}
             .roundStage=${{ index: 1, total: 2 }}
             .yoloActive=${true}
@@ -314,7 +313,7 @@ export class ProgressBoardLayoutMock extends LitElement {
               .groups=${SAMPLE_TASK_GROUPS}
               .messages=${SAMPLE_MESSAGES}
               .hasStreams=${true}
-              .streamStatus=${STREAM_STATUS.RUNNING}
+              .streamStatus=${STREAM_PHASE.RUNNING}
               .messageGeneration=${SAMPLE_MESSAGES.length}
             ></task-group-list>
           </div>
