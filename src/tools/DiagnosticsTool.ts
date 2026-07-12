@@ -129,9 +129,15 @@ export class DiagnosticsTool extends defineTool({
   ): Promise<ToolResult> {
     const { command, path } = input;
     const diagnosticsPath = this.resolveAbsolutePath(path);
+    const linter = platform().linter;
+    if (!linter) {
+      throw new ToolError(
+        'Diagnostics capability unavailable: this host did not configure Platform.linter.',
+      );
+    }
 
     try {
-      const messages = (await platform().linter?.(diagnosticsPath)) ?? [];
+      const messages = await linter(diagnosticsPath);
       const counts = countBySeverity(messages);
       const header = `${diagnosticsPath}: ${formatCounts(counts)}`;
       const summary = `Diagnostics ${command} for ${diagnosticsPath}`;
@@ -173,16 +179,22 @@ export class DiagnosticsTool extends defineTool({
     input: Extract<DiagnosticsInput, { command: 'add' }>,
   ): Promise<ToolResult> {
     const { path, line, message, severity, confidence } = input;
+    const addCriticismSink = platform().addCriticismSink;
+    if (!addCriticismSink) {
+      throw new ToolError(
+        'Diagnostics add capability unavailable: this host did not configure Platform.addCriticismSink.',
+      );
+    }
 
     try {
       const absolutePath = this.resolveAbsolutePath(path);
-      const result = platform().addCriticismSink?.({
+      const result = addCriticismSink({
         absolutePath,
         line,
         message,
         severity,
         confidence,
-      }) ?? { accepted: false, resolvedPath: '' };
+      });
       if (!result.accepted) {
         return {
           status: 'executed',

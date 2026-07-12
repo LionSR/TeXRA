@@ -20,7 +20,7 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
-import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
 const mocks = vi.hoisted(() => ({
@@ -257,7 +257,7 @@ describe('executeCliRequest', () => {
           'inquiry',
           ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
           'inline_comment',
-          DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+          DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
         ],
       }),
     );
@@ -278,7 +278,7 @@ describe('executeCliRequest', () => {
           'inquiry',
           ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
           'inline_comment',
-          DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+          DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
           'custom_tool',
         ],
       }),
