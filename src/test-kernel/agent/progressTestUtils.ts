@@ -21,6 +21,7 @@ import type {
   SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 /**
@@ -322,14 +323,19 @@ export function createRecordingHost(): {
 }
 
 /**
- * Minimal session stand-in exposing only `interactions` — enough for
- * run-scoped code that resolves `currentSession().interactions` (plan
- * approvals, proposals, retries) to reach the given port implementation.
+ * Minimal session stand-in exposing `interactions` plus fresh session-owned
+ * approval state — enough for run-scoped code that resolves
+ * `currentSession().interactions` (plan approvals, proposals, retries) or
+ * `currentSession().approvals` (bypass state, queues) to reach isolated
+ * instances.
  */
 export function sessionWithInteractions(
   interactions: HostInteractions | undefined,
 ): SessionHandle {
-  return { interactions } as unknown as SessionHandle;
+  return {
+    interactions,
+    approvals: createSessionApprovals(),
+  } as unknown as SessionHandle;
 }
 
 /**

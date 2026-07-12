@@ -272,7 +272,8 @@ export class DesktopProgressBridge {
         return this.postToRenderer(message) !== false;
       },
       hasTarget: () => true,
-      getStreamControls: getProgressStreamControls,
+      getStreamControls: (stream) =>
+        getProgressStreamControls(stream, this.session),
       deleteStream: (stream) => this.deleteStream(stream),
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
@@ -528,6 +529,7 @@ export class DesktopProgressBridge {
         },
         bypass: {
           runtimeHost: this.runtimeHost,
+          session: this.session,
         },
         file: {
           openFile: async (file, line) => {
@@ -1213,19 +1215,18 @@ export class DesktopProgressBridge {
       ...this.sessionProgress.restoredStreams.keys(),
     ]);
     // Approval cleanup (incl. retry/proposal/plan pending state) is scoped
-    // to THIS window's streams via the per-stream helper, NOT the process-wide
-    // `cleanupAllApprovals` reset — so one window's "delete all" can't wipe
-    // another window's pending approvals (the approval controllers are
-    // process-global and streamId-keyed; the interaction half is session-owned).
+    // to THIS window's streams via the per-stream helper. Approval state is
+    // session-owned, so none of this can touch another window's pending
+    // approvals or bypass flags.
     for (const streamId of streamIds) {
       this.deletedStreams.add(streamId);
       releaseStreamResources(streamId, this.session);
     }
     // Catch pending approvals with no concrete stream context (undefined or
     // empty streamId) — the per-stream loop skips them because they do not
-    // equal any StreamTabId. Scope this to THIS window's runtime host so a
-    // sibling window's streamless approval is not rejected.
-    cleanupUnscopedApprovals(this.runtimeHost, this.session);
+    // equal any StreamTabId. Session-scoped, so a sibling window's streamless
+    // approval is not rejected.
+    cleanupUnscopedApprovals(this.session);
     // Child/subagent interaction requests may be session-owned without a local
     // desktop stream entry, so cancel the owning window's remaining pending
     // interactions after the visible per-stream sweep. This is session-scoped

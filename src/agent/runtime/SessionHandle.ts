@@ -49,6 +49,10 @@ import {
   type HostInteractions,
 } from './HostInteractions';
 import { SessionEventHub } from './SessionEventHub';
+import {
+  createSessionApprovals,
+  type SessionApprovals,
+} from './streamApprovalQueue';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('sessionHandle');
@@ -94,6 +98,8 @@ export class SessionHandle {
   readonly flushers: Set<() => void>;
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
+  /** Session-owned approval queues, pending registries, and bypass state. */
+  readonly approvals: SessionApprovals;
   /**
    * Optional session-scoped emit surface for the non-run-scoped host-path
    * emissions (SDK Step 7d follow-on F-1). Unset ⇒ those stay on the bus.
@@ -131,6 +137,7 @@ export class SessionHandle {
     this.transcripts = transcripts;
     this.followUps = followUps;
     this.interactions = init.interactions ?? new SessionHostInteractions();
+    this.approvals = createSessionApprovals();
     // A fresh session owns its own flusher set; the default session aliases
     // the process-module set (`getActiveFlushers()`) so the process-wide
     // shutdown drain (`flushPendingRunTraces()`) still reaches it.
@@ -256,6 +263,9 @@ export class SessionHandle {
   private teardownOwners(): void {
     this.subscriptions.dispose();
     this.executions.dispose();
+    // Settle any approval still pending in this session (rejected) and drop
+    // its bypass state before the interaction slot itself is torn down.
+    this.approvals.rejectAndClearAll();
     this.interactions.dispose();
     this.resultListeners.clear();
   }

@@ -216,13 +216,16 @@ export async function nativeRequestApproval(
       };
 
       pendingApprovals.set(requestId, entry);
-      // Register with the pure module for rejection tracking
-      registerPendingApproval(requestId, {
-        streamId: streamId ?? undefined,
-        runtimeHost: getRuntimeHost(),
-        isSettled: () => approvalSettled,
-        settle,
-      });
+      // Register with the owning session's registry for rejection tracking
+      registerPendingApproval(
+        requestId,
+        {
+          streamId: streamId ?? undefined,
+          isSettled: () => approvalSettled,
+          settle,
+        },
+        options.session,
+      );
 
       // Closing the proposed diff tab (e.g. Ctrl+W) must resolve the approval
       // as a rejection. Without this the approval Promise would never settle
@@ -307,7 +310,7 @@ export async function nativeRequestApproval(
     // Get entry before deleting to access workspace temp cleanup functions
     const entry = pendingApprovals.get(requestId);
     pendingApprovals.delete(requestId);
-    unregisterPendingApproval(requestId);
+    unregisterPendingApproval(requestId, options.session);
     if (diffSession) {
       await diffViewHost.closeDiff(diffSession);
     }
