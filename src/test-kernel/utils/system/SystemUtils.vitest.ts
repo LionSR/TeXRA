@@ -102,6 +102,41 @@ describe('executeCommand', () => {
     assert.equal(result.stderr, 'Command aborted by user');
     await waitForProcessExit(childPid);
   });
+
+  it('aborts array-form commands via execa native cancelSignal', async () => {
+    if (process.platform === 'win32') return;
+
+    const controller = new AbortController();
+    let childPid: number | undefined;
+    const promise = executeCommand(
+      [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
+      {
+        signal: controller.signal,
+        timeout: 60_000,
+        onPid: (pid) => {
+          childPid = pid;
+        },
+      },
+    );
+
+    for (
+      let attempt = 0;
+      attempt < 50 && childPid === undefined;
+      attempt += 1
+    ) {
+      await sleep(20);
+    }
+    assert.ok(childPid && childPid > 0);
+
+    controller.abort();
+    const result = await promise;
+
+    assert.equal(result.success, false);
+    assert.equal(result.timedOut, false);
+    assert.equal(result.exitCode, 130);
+    assert.equal(result.stderr, 'Command aborted by user');
+    await waitForProcessExit(childPid!);
+  });
 });
 
 // ---------------------------------------------------------------------------
