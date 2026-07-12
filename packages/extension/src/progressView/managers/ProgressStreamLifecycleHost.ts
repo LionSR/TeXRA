@@ -57,9 +57,9 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   }
 
   cleanupDeletedStreams(streams: StreamTabId[]): void {
-    // Process-wide approval reset for the single-session extension host.
-    // Queues are session-owned, so they are released per stream after the
-    // approval sweep through the same helper used by single-stream deletes.
+    // Default-session approval reset for the single-session extension host.
+    // Follow-up queues are released per stream after the approval sweep
+    // through the same helper used by single-stream deletes.
     cleanupAllApprovals();
     for (const stream of streams) {
       releaseStreamResources(stream);

@@ -1,40 +1,37 @@
 /**
  * Unified approval system exports.
  *
- * This module is the coordination point for approval cleanup so that
- * bash and tool-edit modules don't form a circular dependency.
- *
- * Import cleanup helpers from here, not from individual modules.
+ * Approval queues, pending registries, and bypass state are owned per session
+ * (`session.approvals`, #8144). The cleanup helpers here sweep exactly one
+ * session's state; hosts pass their own session (desktop windows), while the
+ * single-session hosts (extension, CLI) rely on the default session.
  */
 
 import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
-import { bashApprovalController } from './bashApproval';
-import { proposalApprovalState } from './proposalApproval';
-import {
-  toolEditApprovalController,
+export {
   enableYoloOnChildStream,
   inheritBashBypassOnChildStream,
 } from './toolEditApproval';
 
 /**
- * Clean up all approval state for a deleted stream.
+ * Clean up all approval state for a deleted stream in the owning session.
  * Handles pending approvals (tool edits + bash), plan approvals, and YOLO mode state.
  */
 export function cleanupApprovalsForStream(
   streamId: StreamTabId,
   session: SessionHandle = defaultSession(),
 ): void {
-  toolEditApprovalController.rejectPendingForStream(streamId);
-  bashApprovalController.rejectPendingForStream(streamId);
-  toolEditApprovalController.bypass.clearForStream(streamId);
-  bashApprovalController.bypass.clearForStream(streamId);
-  proposalApprovalState.clearForStream(streamId);
+  const { toolEdit, bash, proposal } = session.approvals;
+  toolEdit.rejectPendingForStream(streamId);
+  bash.rejectPendingForStream(streamId);
+  toolEdit.bypass.clearForStream(streamId);
+  bash.bypass.clearForStream(streamId);
+  proposal.clearForStream(streamId);
   session.interactions.cancel({
     streamId,
     cause: 'Stream resources released.',
@@ -61,24 +58,23 @@ export function releaseStreamResources(
 }
 
 /**
- * Reject pending tool-edit, bash, and user-question approvals that have no
- * concrete stream context (streamId is undefined or empty). These would
- * otherwise survive a per-stream {@link cleanupApprovalsForStream} loop
- * because they do not equal any concrete StreamTabId, only
- * {@link cleanupAllApprovals} catches them. Bypass and proposal state are
- * always streamId-keyed and are not affected here.
+ * Reject pending tool-edit, bash, and user-question approvals in `session`
+ * that have no concrete stream context (streamId is undefined or empty).
+ * These would otherwise survive a per-stream
+ * {@link cleanupApprovalsForStream} loop because they do not equal any
+ * concrete StreamTabId. Bypass and proposal state are always streamId-keyed
+ * and are not affected here.
  *
  * Desktop `deleteAllStreams` calls this after the per-stream sweep so that
  * an approval emitted without a concrete stream is rejected rather than left
- * pending with no UI prompt to answer. Multi-session hosts pass their own
- * `runtimeHost` so sibling windows' streamless approvals stay intact.
+ * pending with no UI prompt to answer. Approval registries are session-owned,
+ * so sibling windows' streamless approvals stay intact.
  */
 export function cleanupUnscopedApprovals(
-  runtimeHost?: AgentRuntimeHost,
   session: SessionHandle = defaultSession(),
 ): void {
-  toolEditApprovalController.rejectUnscopedPending(runtimeHost);
-  bashApprovalController.rejectUnscopedPending(runtimeHost);
+  session.approvals.toolEdit.rejectUnscopedPending();
+  session.approvals.bash.rejectUnscopedPending();
   session.interactions.cancel({
     streamId: null,
     cause: 'Streamless approval cleanup.',
@@ -86,29 +82,21 @@ export function cleanupUnscopedApprovals(
 }
 
 /**
- * PROCESS-WIDE reset of all approval state — rejects every pending tool-edit /
- * bash / user-question approval, clears all bypass + proposal state, and
- * cancels `session`'s pending host interactions.
+ * Session-wide reset of approval state — rejects every pending tool-edit /
+ * bash / user-question approval in `session`, clears all of its bypass +
+ * proposal state, and cancels its pending host interactions.
  *
- * The tool/bypass controllers are process-global and streamId-keyed, so this
- * `clearAll` touches EVERY session's streams. Safe only for single-session
- * hosts (the extension's default session), test reset, and process shutdown.
- * A MULTI-SESSION host (e.g. a desktop window) must NOT use this to delete its
- * own streams — it would wipe sibling windows' pending approvals; it scopes the
- * sweep to its own streams by looping {@link cleanupApprovalsForStream} instead.
+ * Approval state is session-owned, so this never touches another session:
+ * one desktop window's reset cannot wipe a sibling window's pending
+ * approvals. For the extension and CLI the default session covers the whole
+ * process.
  */
 export function cleanupAllApprovals(
   session: SessionHandle = defaultSession(),
 ): void {
-  toolEditApprovalController.rejectAllPending();
-  bashApprovalController.rejectAllPending();
-  toolEditApprovalController.bypass.clearAll();
-  bashApprovalController.bypass.clearAll();
-  proposalApprovalState.clearAll();
+  session.approvals.rejectAndClearAll();
   session.interactions.cancel({ cause: 'All approvals cleared.' });
 }
-
-export { enableYoloOnChildStream, inheritBashBypassOnChildStream };
 
 // Re-export commonly used functions from individual modules
 export {
@@ -122,7 +110,7 @@ export {
 
 export {
   // Proposal approval
-  proposalApprovalState,
+  proposalApprovals,
 } from './proposalApproval';
 
 export {
