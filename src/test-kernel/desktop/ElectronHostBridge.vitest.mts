@@ -166,7 +166,7 @@ describe('desktop Electron host bridge', () => {
 
     // `theme` must be a real `ProgressSetThemeMessageSchema` value
     // ('dark' | 'light') — `postToRenderer` now runs every message through
-    // `assertDesktopOutboundMessage` (dev/test only), so an arbitrary
+    // `assertKnownOutboundMessage` (dev/test only), so an arbitrary
     // placeholder like the renderer-side test's `'vscode-dark'` would throw
     // here instead of exercising the channel-routing behavior under test.
     const hostMessage = { command: 'setTheme', theme: 'dark' };
