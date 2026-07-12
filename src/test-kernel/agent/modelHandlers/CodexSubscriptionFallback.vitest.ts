@@ -40,13 +40,14 @@ const config: ModelConfig = {
   inputPrice: 2,
   outputPrice: 8,
   contextWindow: 128_000,
-  // Codex eligibility is derived from the top reasoning-effort tier (see
-  // providerCapabilities.ts), not from a hardcoded fullName allowlist.
+  // Codex eligibility comes from the registry's codexSubscription flag
+  // (see providerCapabilities.ts), not from tier/naming heuristics.
   capabilities: {
     ...DEFAULT_MODEL_CAPABILITIES,
     reasoningEffort: ReasoningEffort.XHIGH,
   },
   openRouterOnly: false,
+  codexSubscription: true,
 };
 
 // gpt-5.5 declares a 1,050,000-token window over the OpenAI API, but the Codex

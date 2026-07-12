@@ -193,12 +193,13 @@ describe('OpenAI model handler routing', () => {
     }),
     name: 'gpt55-test',
     // Date-pinned fullName (as llm-zoo really ships) with the unpinned shortName
-    // the Codex backend keys on. Codex eligibility itself is derived from the
-    // top reasoning-effort tier (see providerCapabilities.ts), independent of
+    // the Codex backend keys on. Codex eligibility comes from the registry's
+    // codexSubscription flag (see providerCapabilities.ts), independent of
     // this shortName/date-pin pair.
     fullName: 'gpt-5.5-2026-04-23',
     shortName: 'gpt-5.5',
     requiresResponsesAPI: true,
+    codexSubscription: true,
   };
 
   const signedInCodexSession = (): CodexSession => ({
