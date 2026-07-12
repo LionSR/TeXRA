@@ -18,12 +18,16 @@ import { appSignals } from '@eventBus/AppSignals';
 import { createChannelTrace } from '@logger';
 
 import {
+  createBoundedIdSet,
+  type BoundedIdSet,
+} from '@utils/core/boundedIdSet';
+
+import {
   type ConditionalResponse,
   GitHubAuthError,
   GitHubPermanentError,
   GitHubRateLimitError,
 } from './githubClient';
-import { trimSet } from './formatUtils';
 import type { ZodType } from 'zod';
 
 import type { Disposable } from '@platform/interfaces';
@@ -68,21 +72,19 @@ interface DedupedResourceOptions<T, Id> {
   sinceCursor?: string;
 }
 
-export class DedupedResource<T, Id = number> {
-  readonly seenIds: Set<Id>;
+export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
+  readonly seenIds: BoundedIdSet<Id>;
   sinceCursor: string | undefined;
 
   private readonly getId: (item: T) => Id;
   private readonly getCursor:
     ((items: readonly T[]) => string | undefined) | undefined;
-  private readonly maxSeenIds: number;
 
   constructor(options: DedupedResourceOptions<T, Id>) {
     this.getId = options.getId;
     this.getCursor = options.getCursor;
-    this.maxSeenIds = options.maxSeenIds;
     this.sinceCursor = options.sinceCursor;
-    this.seenIds = new Set();
+    this.seenIds = createBoundedIdSet<Id>(options.maxSeenIds);
   }
 
   seed(items: readonly T[]): void {
@@ -90,7 +92,6 @@ export class DedupedResource<T, Id = number> {
       this.seenIds.add(this.getId(item));
     }
     this.advanceCursor(items);
-    this.trim();
   }
 
   diff(items: readonly T[], emit: (item: T) => void): void {
@@ -101,16 +102,11 @@ export class DedupedResource<T, Id = number> {
       emit(item);
     }
     this.advanceCursor(items);
-    this.trim();
   }
 
   private advanceCursor(items: readonly T[]): void {
     const newest = this.getCursor?.(items);
     if (newest) this.sinceCursor = newest;
-  }
-
-  private trim(): void {
-    trimSet(this.seenIds, this.maxSeenIds);
   }
 }
 
