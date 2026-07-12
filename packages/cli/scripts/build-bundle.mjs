@@ -29,7 +29,13 @@ try {
     platform: 'node',
     format: 'esm',
     target: 'node20',
-    external: ['fsevents'],
+    // clipboardy's Linux/Windows backends resolve their bundled fallback
+    // binaries (xsel / clipboard_*.exe) relative to `import.meta.url`, which
+    // esbuild rewrites to point at the *bundled* outfile instead of
+    // clipboardy's own package directory. Keeping it external preserves
+    // those file-relative lookups against the real `node_modules/clipboardy`
+    // install that ships alongside `dist` as a declared dependency.
+    external: ['fsevents', 'clipboardy'],
     define: {
       'process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL': JSON.stringify(
         includeInternalValidationModel ? '1' : '',
