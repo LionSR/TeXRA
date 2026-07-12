@@ -14,8 +14,10 @@
  *
  * Response contract:
  * - Complete writes return success with the exact accepted entry count.
- * - Malformed JSON and invalid batches are rejected atomically with
- *   `success: false`, `accepted: 0`, and `retryable: false`.
+ * - Invalid batches are rejected atomically over HTTP 200 with
+ *   `success: false`, `accepted: 0`, and `retryable: false`; HTTP 200 lets
+ *   clients predating the retry marker read the body during rolling deploys.
+ * - Malformed JSON uses the same permanent-rejection body with HTTP 400.
  * - Authentication and operational failures omit the permanent-rejection
  *   marker so clients retain and retry the original batch identifier.
  *
@@ -233,7 +235,11 @@ Deno.serve(async (req: Request) => {
     // 4. Validate the complete batch before any destination write.
     const batchResult = UsageBatchSchema.safeParse(body);
     if (!batchResult.success) {
-      return errorResponse(req, 'Invalid batch format or entry data', 422, {
+      // Keep the application-level rejection on HTTP 200 during the rolling
+      // client transition. Older clients let ky throw before reading 4xx
+      // bodies, which would pin this permanently invalid batch at the head of
+      // their retry queue. They already understand success:false on 2xx.
+      return errorResponse(req, 'Invalid batch format or entry data', 200, {
         retryable: false,
       });
     }
