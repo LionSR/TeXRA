@@ -161,18 +161,18 @@ const PanelStateSchema = z.object({
 });
 
 // Non-authoritative schema-level fallback (all-or-nothing)
-const config = ConfigSchema.catch(DEFAULT_CONFIG).parse(data);
+const panelState = PanelStateSchema.catch(DEFAULT_PANEL_STATE).parse(data);
 ```
 
 **Safe parsing with fallback**
 
 ```typescript
 // Old verbose pattern
-const result = Schema.safeParse(data);
-const value = result.success ? result.data : defaultValue;
+const result = PanelStateSchema.safeParse(data);
+const legacyPanelState = result.success ? result.data : DEFAULT_PANEL_STATE;
 
 // Zod v4 native
-const value = Schema.catch(defaultValue).parse(data);
+const panelState = PanelStateSchema.catch(DEFAULT_PANEL_STATE).parse(data);
 ```
 
 **Null handling from databases**
