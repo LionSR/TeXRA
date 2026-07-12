@@ -38,7 +38,7 @@ import {
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { createChannelTrace } from '@logger';
-import type { StreamTabId } from '@shared/schemas';
+import type { StreamPhase, StreamTabId } from '@shared/schemas';
 
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { AgentExecutionHandle, ExecutionRegistry } from './executionRegistry';
@@ -289,6 +289,14 @@ export function getAllActiveExecutionIds(): string[] {
   return [...ids];
 }
 
+/** A still-active execution found on some other live session, plus that
+ * session's own live status for it — authoritative over any stale on-disk
+ * snapshot a rebinding window may have separately hydrated. */
+export interface ActiveAgentExecutionLookup {
+  readonly handle: AgentExecutionHandle;
+  readonly status: StreamPhase | undefined;
+}
+
 /**
  * Look up a still-active {@link AgentExecutionHandle} by id across every live
  * session, not just one. A desktop window's own session is fresh per
@@ -299,12 +307,33 @@ export function getAllActiveExecutionIds(): string[] {
  */
 export function findActiveAgentExecutionHandle(
   executionId: string,
-): AgentExecutionHandle | undefined {
+): ActiveAgentExecutionLookup | undefined {
   for (const session of liveSessions) {
     const handle = session.executions.getHandle(executionId);
-    if (handle instanceof AgentExecutionHandle) return handle;
+    if (handle instanceof AgentExecutionHandle) {
+      return { handle, status: session.status.get(handle.childStreamId) };
+    }
   }
   return undefined;
+}
+
+/**
+ * Untrack an execution from every live session that still has it registered
+ * — not just the one session that happens to finalize it. A cross-session
+ * rebind (via {@link findActiveAgentExecutionHandle} above) tracks the same
+ * handle into a second session's registry without removing it from the
+ * first. Without this, whichever session finalizes the run (e.g. a user stop
+ * issued from a newly recreated window) only clears its own registry,
+ * leaving the original `keepActiveExecutions` session's registry non-idle
+ * forever: its `disposeWhenIdle` wait loop never observes the change and
+ * that session never leaves {@link liveSessions} (#8148).
+ */
+export function untrackActiveAgentExecution(executionId: string): void {
+  for (const session of liveSessions) {
+    if (session.executions.getHandle(executionId)) {
+      session.executions.untrack(executionId);
+    }
+  }
 }
 
 /** Stop background OS processes owned by every live runtime session. */

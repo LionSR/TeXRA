@@ -9,7 +9,7 @@ import {
 
 // Local imports - agent state
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
-import type { AgentEvent } from '@agent/trace';
+import type { AgentEvent, AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema } from '@agent/core/state/TaskState';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -3423,16 +3423,14 @@ describe('DesktopProgressBridge', () => {
             lastKnownStatus: STREAM_PHASE.WAITING,
           }),
         );
-        expect(messagesA).toEqual(
-          messagesA.filter(
+        expect(
+          messagesA.some(
             (message) =>
-              !(
-                message &&
-                typeof message === 'object' &&
-                JSON.stringify(message).includes(STREAM_PHASE.WAITING)
-              ),
+              message &&
+              typeof message === 'object' &&
+              JSON.stringify(message).includes(STREAM_PHASE.WAITING),
           ),
-        );
+        ).toBe(false);
 
         // Terminal completion untracks the handle from window B's session --
         // no execution stranded as "still active" once it actually finishes.
@@ -3458,6 +3456,89 @@ describe('DesktopProgressBridge', () => {
         expect(
           bridgeB.session.executions.getHandle(executionId),
         ).toBeUndefined();
+        // Codex P1 (#8207 review): releasing the handle must not stop at
+        // window B's own registry. Window A's session was retained post-
+        // dispose specifically so `keepActiveExecutions` guards keep seeing
+        // this execution until it truly settles -- if only window B's
+        // registry is cleared, window A's registry never goes idle and that
+        // session leaks in the cross-session `liveSessions` set forever.
+        expect(
+          bridgeA.session.executions.getHandle(executionId),
+        ).toBeUndefined();
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('seeds the rebound stream with the live owning session status, not a stale on-disk snapshot (codex P2)', async () => {
+      const streamId = 'rebound-stream-2' as StreamTabId;
+      const executionId = 'ec00dd' as ExecutionId;
+      let activeExecutionIds: readonly string[] = [];
+      const { bridgeModule } = await loadBridgeModule({
+        activeExecutionIds: () => activeExecutionIds,
+      });
+      const { AgentExecutionHandle } =
+        await import('@agent/runtime/executionRegistry');
+      const { noopAgentRuntimeHost } =
+        await import('@agent/runtime/AgentRuntimeHost');
+
+      const bridgeA = new bridgeModule.DesktopProgressBridge(
+        () => {},
+      ) as unknown as TestableBridge & { session: SessionHandle };
+      await settleProgressEvents();
+
+      const trace = makeFakeTrace();
+      const handle = new AgentExecutionHandle(
+        executionId,
+        streamId,
+        streamId,
+        'proofreader',
+        AgentCategory.Workflow,
+        noopAgentRuntimeHost,
+        trace as unknown as ConstructorParameters<
+          typeof AgentExecutionHandle
+        >[6],
+      );
+      bridgeA.session.executions.trackAgentExecution(handle, {
+        status: STREAM_PHASE.RUNNING,
+      });
+      activeExecutionIds = [executionId];
+      bridgeA.dispose();
+
+      // The run transitions to WAITING while headless. This mirrors the real
+      // lifecycle path (`ToolUseWaitNode` calling `streamStatus.transitionToWaiting`
+      // directly on the owning session, independent of whether any window is
+      // subscribed) -- window A's own `session.status` stays live and correct
+      // even with no bridge attached, unlike the on-disk snapshot which
+      // nothing persists to while no window exists (#8148).
+      expect(
+        bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
+          trace: trace as unknown as AgentTrace,
+        }),
+      ).toBe(true);
+      expect(bridgeA.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+
+      // Window B reopens with a STALE ghost snapshot still claiming RUNNING
+      // (nothing persisted the WAITING transition above to disk).
+      const streamSnapshotStoreB = createStreamSnapshotStore([
+        restoredSnapshot({
+          streamId,
+          executionId,
+          lastKnownStatus: STREAM_PHASE.RUNNING,
+        }),
+      ]);
+      const bridgeB = new bridgeModule.DesktopProgressBridge(() => {}, {
+        streamSnapshotStore: streamSnapshotStoreB,
+      }) as unknown as TestableBridge & { session: SessionHandle };
+
+      try {
+        await (bridgeB as unknown as { restartRepair: Promise<void> })
+          .restartRepair;
+
+        expect(bridgeB.session.executions.getHandle(executionId)).toBe(handle);
+        // Must reflect the live WAITING status from window A's session, not
+        // the stale RUNNING the ghost snapshot hydrated onto window B.
+        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
       } finally {
         bridgeB.dispose();
       }
