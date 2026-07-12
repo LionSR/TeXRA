@@ -23,6 +23,7 @@ import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '../render/terminalText';
+import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;
@@ -141,9 +142,11 @@ function previewInput(input: unknown): string {
   }
 }
 
-function statusColor(toolUse: NormalizedToolUse): 'green' | 'red' | undefined {
-  if (toolUse.isError) return 'red';
-  if (toolUse.status === TOOL_USE_STATUS.COMPLETED) return 'green';
+function statusColor(
+  toolUse: NormalizedToolUse,
+): typeof COLOR_SUCCESS | typeof COLOR_ERROR | undefined {
+  if (toolUse.isError) return COLOR_ERROR;
+  if (toolUse.status === TOOL_USE_STATUS.COMPLETED) return COLOR_SUCCESS;
   return undefined;
 }
 
@@ -414,7 +417,7 @@ function CornerLine({
   color,
   children,
 }: {
-  readonly color?: 'red';
+  readonly color?: typeof COLOR_ERROR;
   readonly children: React.ReactNode;
 }): React.JSX.Element {
   return (
@@ -431,7 +434,7 @@ interface ToolRowProps {
   readonly toolUse: NormalizedToolUse;
   readonly displayName?: string;
   readonly fallbackName?: string;
-  readonly previewColor?: 'cyan';
+  readonly previewColor?: typeof COLOR_HINT;
   readonly showPatch?: boolean;
   readonly showOutput?: boolean;
   readonly showExitCode?: boolean;
@@ -497,10 +500,10 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
       <OutputBlock lines={visibleOutput} />
       {patchGroups ? <PatchPreview groups={patchGroups} /> : null}
       {toolUse.isError && exitCode !== undefined ? (
-        <CornerLine color="red">{`exit ${exitCode}`}</CornerLine>
+        <CornerLine color={COLOR_ERROR}>{`exit ${exitCode}`}</CornerLine>
       ) : null}
       {toolUse.isError ? (
-        <CornerLine color="red">
+        <CornerLine color={COLOR_ERROR}>
           {truncateWithEllipsis(
             collapseWhitespace(errorText),
             MAX_ERROR_PREVIEW,
@@ -557,7 +560,7 @@ const bashRenderer: ToolRenderer = {
     <ToolRow
       toolUse={toolUse}
       fallbackName="bash"
-      previewColor="cyan"
+      previewColor={COLOR_HINT}
       showOutput={true}
       showExitCode={true}
       preferInputPreview={true}

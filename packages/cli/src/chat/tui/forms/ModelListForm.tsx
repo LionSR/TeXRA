@@ -158,7 +158,6 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   if (isCompactFormRows(props.availableRows) && items.length > 0) {
     return (
       <FormFrame
-        color="cyan"
         title={`/model · ${formatCliApiMode(props.apiMode)}`}
         showCloseHint={false}
       >
@@ -218,7 +217,6 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
 
   return (
     <FormFrame
-      color="cyan"
       title={`/model · ${formatCliApiMode(props.apiMode)}`}
       showCloseHint={false}
     >

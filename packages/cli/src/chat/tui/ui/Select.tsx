@@ -12,6 +12,7 @@ import { Box, Text, useInput } from 'ink';
 import { useEffect, useRef, useState } from 'react';
 
 import { clamp, clampIndex } from '@utils/core';
+import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
 
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
@@ -327,17 +328,17 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                 option role + state above already announce focus/active. The
                 hotkey stays audible because it is actionable. */}
             <Box flexShrink={0}>
-              <Text aria-hidden color={focused ? 'cyan' : undefined}>
+              <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
                 {pointer} {tick}{' '}
               </Text>
-              <Text color={focused ? 'cyan' : undefined}>{shortcut} </Text>
+              <Text color={focused ? COLOR_HINT : undefined}>{shortcut} </Text>
             </Box>
             <Box
               flexShrink={0}
               maxWidth={props.labelMaxCols ?? SELECT_LABEL_MAX_COLS}
             >
               <Text
-                color={focused ? 'cyan' : undefined}
+                color={focused ? COLOR_HINT : undefined}
                 dimColor={item.disabled}
                 wrap="truncate-end"
               >

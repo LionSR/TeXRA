@@ -7,6 +7,7 @@ import {
 import type { RetryPermission } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
+import { COLOR_HINT, COLOR_WARNING } from '../ui/colors';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface RetryRequestProps {
@@ -30,7 +31,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   return (
     <ConfirmCard
       borderStyle="single"
-      color="yellow"
+      color={COLOR_WARNING}
       title="Retry the failed call?"
       approveLabel="retry"
       rejectLabel="give up"
@@ -50,7 +51,9 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
       <Box marginY={1}>
         <Text dimColor>{subject}</Text>
       </Box>
-      {canSwitchToPersonalKey ? <Text color="cyan">{switchHint}</Text> : null}
+      {canSwitchToPersonalKey ? (
+        <Text color={COLOR_HINT}>{switchHint}</Text>
+      ) : null}
     </ConfirmCard>
   );
 }

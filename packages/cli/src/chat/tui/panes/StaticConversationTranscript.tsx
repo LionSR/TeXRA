@@ -28,6 +28,7 @@ import {
 import { streamViewForId } from '../state/streamViews';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
+import { COLOR_HINT } from '../ui/colors';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
   isInquiryContinuationText,
@@ -122,7 +123,7 @@ function SessionHeaderBlock({
     return (
       <Box paddingX={1}>
         <Text wrap="truncate-end">
-          <Text bold color="cyan">
+          <Text bold color={COLOR_HINT}>
             {'{ T } TeXRA'}
           </Text>{' '}
           <Text dimColor>v{meta.version}</Text>{' '}
@@ -136,13 +137,13 @@ function SessionHeaderBlock({
   return (
     <Box flexDirection="column">
       <Box>
-        <Text aria-hidden color="cyan">
+        <Text aria-hidden color={COLOR_HINT}>
           {'─'.repeat(columns)}
         </Text>
       </Box>
       <Box flexDirection="column" paddingX={1}>
         <Box gap={2}>
-          <Text bold color="cyan">
+          <Text bold color={COLOR_HINT}>
             {'{ T } TeXRA'}
           </Text>
           <Text dimColor>v{meta.version}</Text>

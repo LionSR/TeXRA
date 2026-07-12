@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
+import { COLOR_ACCENT } from '../ui/colors';
 import { KeyHints } from '../ui/KeyHints';
 import { BaseTextInput } from './BaseTextInput';
 import { isCtrlInput, isEscapeInput } from './inputKeys';
@@ -50,12 +51,12 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
   return (
     <Box
       borderStyle="round"
-      borderColor="magenta"
+      borderColor={COLOR_ACCENT}
       flexDirection="column"
       paddingX={1}
     >
       <Box>
-        <Text color="magenta">(reverse-i-search)`</Text>
+        <Text color={COLOR_ACCENT}>(reverse-i-search)`</Text>
         <BaseTextInput
           value={query}
           onChange={(value) => {
@@ -67,7 +68,7 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
             else props.onCancel();
           }}
         />
-        <Text color="magenta">`: </Text>
+        <Text color={COLOR_ACCENT}>`: </Text>
         <Text>{match?.value ?? ''}</Text>
       </Box>
       <Box marginTop={1}>

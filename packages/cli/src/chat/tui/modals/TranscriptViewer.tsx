@@ -14,6 +14,7 @@ import {
   isJumpToBottomInput,
   isJumpToTopInput,
 } from '../input/inputKeys';
+import { COLOR_HINT } from '../ui/colors';
 import { KeyHints } from '../ui/KeyHints';
 import {
   initialTranscriptScrollState,
@@ -98,7 +99,7 @@ export function TranscriptViewer({
   return (
     <Box flexDirection="column" width={width}>
       {title ? (
-        <Text bold color="cyan" wrap="truncate-end">
+        <Text bold color={COLOR_HINT} wrap="truncate-end">
           {title}
         </Text>
       ) : null}
