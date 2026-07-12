@@ -11,6 +11,7 @@ import type { AgentTrace } from '@agent/trace';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
+  COMPACTION_USER_PROMPT,
   estimateTokensFromText,
 } from '@agent/modelHandlers/contextManagementConstants';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
@@ -518,7 +519,14 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     // The client-side path summarizes via a throwaway streaming call.
     expect(streamRequests).toHaveLength(1);
     expect(streamRequests[0].instructions).toBe(COMPACTION_SYSTEM_PROMPT);
-    expect(streamRequests[0].input).toEqual(secondTurnMessages);
+    expect(streamRequests[0].input).toEqual([
+      ...secondTurnMessages,
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: COMPACTION_USER_PROMPT }],
+      },
+    ]);
 
     const expectedCompactedMessages = [
       {
