@@ -43,14 +43,6 @@ async function waitForProcessExit(pid: number): Promise<void> {
   throw new Error(`Process ${pid} was still running after abort`);
 }
 
-async function waitForCondition(condition: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    if (condition()) return;
-    await sleep(20);
-  }
-  throw new Error('Timed out waiting for condition');
-}
-
 describe('executeCommand', () => {
   const tempDirs: string[] = [];
 
@@ -127,7 +119,9 @@ describe('executeCommand', () => {
       },
     );
 
-    await waitForCondition(() => childPid !== undefined);
+    for (let attempt = 0; attempt < 50 && childPid === undefined; attempt += 1) {
+      await sleep(20);
+    }
     assert.ok(childPid && childPid > 0);
 
     controller.abort();
@@ -135,6 +129,7 @@ describe('executeCommand', () => {
 
     assert.equal(result.success, false);
     assert.equal(result.timedOut, false);
+    assert.equal(result.exitCode, 130);
     assert.equal(result.stderr, 'Command aborted by user');
     await waitForProcessExit(childPid!);
   });
