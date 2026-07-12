@@ -136,7 +136,7 @@ const SCENARIOS = [
       'agent: chat · model: harness-model',
       'chat history line to grow the transcript pane',
       '◆',
-      '[Ctrl-C]exit',
+      'Ctrl-C exit',
     ],
   },
   {
@@ -222,7 +222,7 @@ const SCENARIOS = [
       '1. First queued follow-up',
       '2. Second queued follow-up',
       'queued 2',
-      '[Ctrl-C]stop',
+      'Ctrl-C stop',
     ],
     unexpect: ['Tip: Ctrl-C exits idle chats', 'First queued follo…'],
   },
@@ -280,7 +280,7 @@ const SCENARIOS = [
       '2. Second queued follow-up',
       '│ ›',
       'queued 2',
-      '[Ctrl-C]stop',
+      'Ctrl-C stop',
     ],
     unexpect: ['Tip: Ctrl-C exits idle chats', 'agent: chat · model'],
   },
@@ -370,7 +370,7 @@ const SCENARIOS = [
       '1-9/a-z/Enter open',
       'Esc exit',
     ],
-    unexpect: ['[/model]models', 'Tip:', 'tool-use:', 'workflow:'],
+    unexpect: ['/model models', 'Tip:', 'tool-use:', 'workflow:'],
   },
   {
     name: 'orchestrate-delegated-history',
@@ -424,7 +424,7 @@ const SCENARIOS = [
     unexpect: [
       'texra multi-agent show <team-id>',
       'Researcher Access sign-in may unlock more remote team agents.',
-      '[/model]models',
+      '/model models',
       'Tip:',
       'tool-use:',
       'workflow:',
@@ -1016,22 +1016,22 @@ const SCENARIOS = [
       'Auto-approve',
       'Enter select highlighted',
       'Esc cancel',
-      '[Esc]cancel',
+      'Esc cancel',
     ],
   },
   {
     name: 'approval-policy-status-bar',
     frame: 'scrollback',
     env: { HARNESS_APPROVAL_POLICY: 'never', HARNESS_ENTRIES: '4' },
-    expect: ['personal', 'deny', '[/status]details'],
+    expect: ['personal', 'deny', '/status details'],
     unexpect: ['keys deny', 'approval: deny privileged actions'],
   },
   {
     name: 'uninterruptible-running-status-bar',
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     frame: 'viewport',
-    expect: ['◆ running', '[Ctrl-C]exit'],
-    unexpect: ['[Ctrl-C]stop'],
+    expect: ['◆ running', 'Ctrl-C exit'],
+    unexpect: ['Ctrl-C stop'],
   },
   {
     name: 'tools-form',
@@ -1172,7 +1172,7 @@ const SCENARIOS = [
       '↑/↓ navigate',
       '1-3/Enter select',
       'Esc cancel',
-      '[Esc]cancel',
+      'Esc cancel',
     ],
     unexpect: [
       'Choose when privileged actions prompt or auto-approve.',
@@ -1221,7 +1221,7 @@ const SCENARIOS = [
   {
     name: 'edit-approval',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     frame: 'viewport',
     expect: [
       'Apply edit to draft.tex?',
@@ -1230,14 +1230,14 @@ const SCENARIOS = [
       'approval',
       'Use foreground panel shortcuts',
     ],
-    unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
+    unexpect: ['Alt-p tasks', 'Option-p tasks', '/model models'],
   },
   {
     name: 'edit-approval-feedback',
     rows: 24,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: ['e', 'needs direct proof'],
     frame: 'viewport',
     expect: [
@@ -1247,14 +1247,14 @@ const SCENARIOS = [
       'Esc back',
       '1 approval',
     ],
-    unexpect: ['[/model]models'],
+    unexpect: ['/model models'],
   },
   {
     name: 'narrow-edit-approval',
     rows: 12,
     cols: 40,
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     frame: 'viewport',
     expect: [
       'Apply edit to draft.tex?',
@@ -1268,17 +1268,17 @@ const SCENARIOS = [
   {
     name: 'edit-approval-approve',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: ['y'],
     frame: 'viewport',
-    expect: ['[/status]details', '[/model]models'],
+    expect: ['/status details', '/model models'],
     unexpect: ['Apply edit to draft.tex?', '1 approval'],
   },
   {
     name: 'bash-approval',
     frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     resizes: [{ cols: 120 }],
     expect: [
       'agent: chat · model: harness-model',
@@ -1289,7 +1289,7 @@ const SCENARIOS = [
       'a commands for session',
       'Use foreground panel shortcuts',
     ],
-    unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
+    unexpect: ['Alt-p tasks', 'Option-p tasks', '/model models'],
     maxOccurrences: [{ text: '{ T } TeXRA', max: 1 }],
     ordered: [
       {
@@ -1310,7 +1310,7 @@ const SCENARIOS = [
     rows: 12,
     cols: 40,
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     frame: 'viewport',
     expect: [
       'Run command?',
@@ -1327,7 +1327,7 @@ const SCENARIOS = [
     rows: 24,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: ['e', 'use portable python3 instead'],
     frame: 'viewport',
     expect: [
@@ -1337,7 +1337,7 @@ const SCENARIOS = [
       'Esc back',
       '1 approval',
     ],
-    unexpect: ['[/model]models'],
+    unexpect: ['/model models'],
   },
   {
     name: 'long-bash-approval',
@@ -1348,7 +1348,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     expect: [
       'Run command?',
       'Directory:',
@@ -1358,7 +1358,7 @@ const SCENARIOS = [
       'y approve',
       'Use foreground panel shortcuts',
     ],
-    unexpect: ['╚═    print', '[Option-p]tasks'],
+    unexpect: ['╚═    print', 'Option-p tasks'],
   },
   {
     name: 'compact-long-bash-approval',
@@ -1368,7 +1368,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     frame: 'viewport',
     expect: [
       'Run command?',
@@ -1379,7 +1379,7 @@ const SCENARIOS = [
       'y approve',
       'Use foreground panel shortcuts',
     ],
-    unexpect: ['╚═    print', '[Option-p]tasks'],
+    unexpect: ['╚═    print', 'Option-p tasks'],
   },
   {
     name: 'compact-long-bash-approval-scroll',
@@ -1389,7 +1389,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: [DOWN, DOWN, DOWN],
     frame: 'viewport',
     expect: [
@@ -1401,7 +1401,7 @@ const SCENARIOS = [
       'scroll command',
       'y approve',
     ],
-    unexpect: ["$ python3 << 'EOF'", '[Option-p]tasks'],
+    unexpect: ["$ python3 << 'EOF'", 'Option-p tasks'],
   },
   {
     name: 'compact-long-bash-approval-page',
@@ -1411,7 +1411,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: [PAGE_DOWN],
     frame: 'viewport',
     expect: [
@@ -1422,7 +1422,7 @@ const SCENARIOS = [
       'more rows',
       'PgUp/PgDn page',
     ],
-    unexpect: ["$ python3 << 'EOF'", '[Option-p]tasks'],
+    unexpect: ["$ python3 << 'EOF'", 'Option-p tasks'],
   },
   {
     name: 'tiny-compact-long-bash-approval',
@@ -1432,18 +1432,18 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     frame: 'viewport',
     expect: ['Run command?', 'Directory:', 'rows hidden', 'y approve'],
-    unexpect: ['[Option-p]tasks'],
+    unexpect: ['Option-p tasks'],
   },
   {
     name: 'bash-approval-approve-session',
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: ['a'],
     frame: 'viewport',
-    expect: ['AUTO-BASH', '[/status]details', '[/model]models'],
+    expect: ['AUTO-BASH', '/status details', '/model models'],
     unexpect: ['AUTO-APPROVE', 'Run command?', '1 approval'],
   },
   {
@@ -1453,17 +1453,17 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_REPEATED_BASH_APPROVAL: '1',
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: ['y', { input: 'y', delayMs: 1000 }],
     settleMs: 6000,
     frame: 'viewport',
-    expect: ['SECOND-BASH-APPROVED', '[/status]details', '[/model]models'],
+    expect: ['SECOND-BASH-APPROVED', '/status details', '/model models'],
     unexpect: ['Run command?', '1 approval'],
   },
   {
     name: 'bash-approval-session-status',
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
     expect: [
@@ -1481,11 +1481,11 @@ const SCENARIOS = [
       HARNESS_CAN_DELEGATE: '1',
       HARNESS_TEAM_NAME: 'Physicist',
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
     expect: ['team: Physicist', 'auto-approvals: commands', 'AUTO-BASH'],
-    unexpect: ['Run command?', '1 approval', ']subagents'],
+    unexpect: ['Run command?', '1 approval', 's subagents'],
   },
   {
     name: 'agent-proposal-long',
@@ -1493,7 +1493,7 @@ const SCENARIOS = [
     rows: 24,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_AGENT_PROPOSAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     expect: [
       'Spawn review?',
       FULL_WIDTH_AGENT_PROPOSAL_BORDER_80,
@@ -1505,14 +1505,14 @@ const SCENARIOS = [
       'y approve',
       'n reject',
     ],
-    unexpect: ['confirmation of correctness', '[Option-p]tasks'],
+    unexpect: ['confirmation of correctness', 'Option-p tasks'],
   },
   {
     name: 'compact-agent-proposal-scroll',
     rows: 17,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_AGENT_PROPOSAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: [PAGE_DOWN, PAGE_DOWN, PAGE_DOWN, PAGE_DOWN, PAGE_DOWN, PAGE_DOWN],
     frame: 'viewport',
     expect: [
@@ -1525,14 +1525,14 @@ const SCENARIOS = [
       'y approve',
       'n reject',
     ],
-    unexpect: ['prompt rows hidden', '[Option-p]tasks'],
+    unexpect: ['prompt rows hidden', 'Option-p tasks'],
     maxLineColumns: 80,
   },
   {
     name: 'external-inquiry-long',
     rows: 24,
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
     frame: 'viewport',
     expect: [
@@ -1547,8 +1547,8 @@ const SCENARIOS = [
     ],
     unexpect: [
       '└─Degenerate triples',
-      '[/model]models',
-      '[Esc]panel',
+      '/model models',
+      'Esc panel',
       'Esc sk…',
       '1 approval',
     ],
@@ -1558,7 +1558,7 @@ const SCENARIOS = [
     rows: 24,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
     frame: 'viewport',
     expect: [
@@ -1573,8 +1573,8 @@ const SCENARIOS = [
     ],
     unexpect: [
       '└─Degenerate triples',
-      '[/model]models',
-      '[Esc]panel',
+      '/model models',
+      'Esc panel',
       'Esc sk…',
       '1 approval',
     ],
@@ -1584,7 +1584,7 @@ const SCENARIOS = [
     rows: 24,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: [EM],
     frame: 'viewport',
     fakeClipboard: {
@@ -1594,14 +1594,14 @@ const SCENARIOS = [
       ],
     },
     expect: ['Agent asks: copied to clipboard', 'Ctrl-Y copy', '1 question'],
-    unexpect: ['copy failed', '[/model]models', '1 approval'],
+    unexpect: ['copy failed', '/model models', '1 approval'],
   },
   {
     name: 'external-inquiry-submit-answer',
     rows: 24,
     cols: 120,
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: [LONG_EXTERNAL_INQUIRY_ANSWER, '\r'],
     frame: 'viewport',
     expect: [
@@ -1610,8 +1610,8 @@ const SCENARIOS = [
       'Full thread: ei_123456abcdef',
       'No other open inquiries on this stream.',
       'Proceed using the new answer.',
-      '[/status]details',
-      '[/model]models',
+      '/status details',
+      '/model models',
     ],
     unexpect: [
       'Agent asks:',
@@ -1625,7 +1625,7 @@ const SCENARIOS = [
     rows: 36,
     cols: 120,
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: [LONG_EXTERNAL_INQUIRY_ANSWER_FOR_TRUNCATION, '\r'],
     frame: 'viewport',
     expect: [
@@ -1649,7 +1649,7 @@ const SCENARIOS = [
     rows: 12,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_USER_QUESTION: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     frame: 'viewport',
     expect: [
       'Agent asks:',
@@ -1663,8 +1663,8 @@ const SCENARIOS = [
       '1 question',
     ],
     unexpect: [
-      '[/model]models',
-      '[Esc]panel',
+      '/model models',
+      'Esc panel',
       'Context detail: the candidate proof',
       '1 approval',
     ],
@@ -1674,7 +1674,7 @@ const SCENARIOS = [
     name: 'plan-approval',
     frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     expect: [
       'Approve plan?',
       'Coordinate a short math proof through CLI chat.',
@@ -1684,7 +1684,7 @@ const SCENARIOS = [
     unexpect: [
       'r approve & run',
       'Approve & run only auto-approves bash',
-      '[/model]models',
+      '/model models',
     ],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: 'Approve plan?', max: 3 },
@@ -1698,7 +1698,7 @@ const SCENARIOS = [
       HARNESS_PLAN_APPROVAL: '1',
       HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     expect: [
       'Approve plan?',
       'Coordinate a short math proof through CLI chat.',
@@ -1708,7 +1708,7 @@ const SCENARIOS = [
       'y approve',
       'n reject',
     ],
-    unexpect: ['[/model]models'],
+    unexpect: ['/model models'],
   },
   {
     name: 'plan-approval-wrap-boundary',
@@ -1732,7 +1732,7 @@ const SCENARIOS = [
         '**Stopping condition:** A summary report of all observed friction has been written to a memory note under `/memories/dogfood-friction.md` (no file edits — use the `memory` tool).',
       ].join('\n'),
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     expect: [
       'Approve plan?',
       'Approve & run only auto-approves bash',
@@ -1772,7 +1772,7 @@ const SCENARIOS = [
         '- The `review` subagent has confirmed the reasoning is sound (or flagged issues).',
       ].join('\n'),
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     expect: [
       'Approve plan?',
       'Approve & run only auto-approves bash',
@@ -1790,7 +1790,7 @@ const SCENARIOS = [
     rows: 10,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     expect: [
       'Approve plan?',
       'Coordinate a short math proof through CLI chat.',
@@ -1802,7 +1802,7 @@ const SCENARIOS = [
     unexpect: [
       'Approve & run only auto-approves bash',
       'Run auto-approves bash; edits still ask',
-      '[/model]models',
+      '/model models',
     ],
   },
   {
@@ -1815,7 +1815,7 @@ const SCENARIOS = [
       HARNESS_PLAN_APPROVAL: '1',
       HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     expect: [
       'Approve plan?',
       'Coordinate a short math proof through CLI chat.',
@@ -1827,7 +1827,7 @@ const SCENARIOS = [
       'e feedback',
       'Esc cancel',
     ],
-    unexpect: ['[/model]models'],
+    unexpect: ['/model models'],
   },
   {
     name: 'plan-approval-approve-goal',
@@ -1836,7 +1836,7 @@ const SCENARIOS = [
       HARNESS_PLAN_APPROVAL: '1',
       HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: ['r', '/status', '\r'],
     frame: 'viewport',
     expect: [
@@ -1845,8 +1845,8 @@ const SCENARIOS = [
       'status: running',
       'goal: active',
       'goal objective: Coordinate a short math proof through CLI chat.',
-      '[/status]details',
-      '[/model]models',
+      '/status details',
+      '/model models',
     ],
     unexpect: ['Approve plan?', '1 approval'],
   },
@@ -1857,18 +1857,18 @@ const SCENARIOS = [
       HARNESS_PLAN_APPROVAL: '1',
       HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: [DC2],
     frame: 'viewport',
     expect: ['Approve plan?', 'r approve & run', '1 approval'],
-    unexpect: ['PLAN-GOAL', '[/model]models'],
+    unexpect: ['PLAN-GOAL', '/model models'],
   },
   {
     name: 'retry-approval',
     frame: 'scrollback',
     cols: 120,
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     expect: [
       'Retry the failed call?',
       'HTTP 429 Too Many Requests',
@@ -1878,25 +1878,25 @@ const SCENARIOS = [
       'use API key and retry',
       '1 approval',
     ],
-    unexpect: ['[/model]models'],
+    unexpect: ['/model models'],
   },
   {
     name: 'retry-approval-switch-api',
     cols: 120,
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: ['k'],
     frame: 'viewport',
-    expect: ['RETRY-API-MODE personal', '[/status]details', '[/model]models'],
+    expect: ['RETRY-API-MODE personal', '/status details', '/model models'],
     unexpect: ['Retry the failed call?', '1 approval'],
   },
   {
     name: 'edit-approval-reject',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    bootExpect: '[Ctrl-C]',
+    bootExpect: '· Ctrl-C ',
     keys: ['n'],
     frame: 'viewport',
-    expect: ['[/status]details', '[/model]models'],
+    expect: ['/status details', '/model models'],
     unexpect: ['Apply edit to draft.tex?', '1 approval'],
   },
   {
@@ -1907,17 +1907,17 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     expect: [
       'strategy',
       'leanSolver',
       'reviewer',
       'main.tex: Proof sketch',
       '3 sub',
-      '[Tab]streams',
-      ']tasks',
+      'Tab streams',
+      'p tasks',
     ],
-    unexpect: ['[Option-p]tasks', '[Option-s]subagents'],
+    unexpect: ['Option-p tasks', 'Option-s subagents'],
   },
   // PTY ordering tests (issue #7972): the harness drives one child stream's
   // attachment/roster/edge/status/removal facts through the real
@@ -1947,11 +1947,11 @@ const SCENARIOS = [
     // Steps: A, S(running), R_P+, E_P+.
     checkpoints: [
       {
-        expect: ['[Tab]streams'],
+        expect: ['Tab streams'],
         unexpect: ['1 sub', 'orderChecker'],
       },
       {
-        expect: ['[Tab]streams'],
+        expect: ['Tab streams'],
         unexpect: ['1 sub', 'orderChecker'],
       },
       {
@@ -1961,7 +1961,7 @@ const SCENARIOS = [
         expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
       },
     ],
-    expect: ['orderChecker', '1 sub', '[Tab]streams'],
+    expect: ['orderChecker', '1 sub', 'Tab streams'],
   },
   {
     name: 'child-event-order-roster-first',
@@ -1978,10 +1978,10 @@ const SCENARIOS = [
         // Active via the roster's retained-parent fallback, before the
         // child's own StreamSlice exists — not yet focusable.
         expect: ['1 sub', 'orderChecker · 1m 4s'],
-        unexpect: ['[Tab]streams', 'orderChecker running'],
+        unexpect: ['Tab streams', 'orderChecker running'],
       },
       {
-        expect: ['[Tab]streams', '1:orderChecker'],
+        expect: ['Tab streams', '1:orderChecker'],
         unexpect: ['1:orderChecker*', 'orderChecker running'],
       },
       {
@@ -1991,7 +1991,7 @@ const SCENARIOS = [
         expect: ['orderChecker running', '1:orderChecker*'],
       },
     ],
-    expect: ['orderChecker', '1 sub', '[Tab]streams'],
+    expect: ['orderChecker', '1 sub', 'Tab streams'],
   },
   {
     name: 'child-event-order-edge-first',
@@ -2007,17 +2007,12 @@ const SCENARIOS = [
       {
         // An edge alone cannot be focused until the child's StreamSlice exists.
         expect: ['◆'],
-        unexpect: [
-          '[Tab]streams',
-          '1 sub',
-          'orderChecker',
-          'harness-child-eve',
-        ],
+        unexpect: ['Tab streams', '1 sub', 'orderChecker', 'harness-child-eve'],
       },
       {
         // Attachment creates the slice and makes the existing edge focusable;
         // the running marker still waits for the next status fact.
-        expect: ['[Tab]streams', 'harness-child-eve…'],
+        expect: ['Tab streams', 'harness-child-eve…'],
         unexpect: ['1 sub', 'orderChecker', 'harness-child-eve…*'],
       },
       {
@@ -2028,7 +2023,7 @@ const SCENARIOS = [
         expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
       },
     ],
-    expect: ['orderChecker', '1 sub', '[Tab]streams'],
+    expect: ['orderChecker', '1 sub', 'Tab streams'],
   },
   {
     name: 'child-event-order-status-first',
@@ -2042,13 +2037,13 @@ const SCENARIOS = [
     // Steps: S(running), A, E_P+, R_P+.
     checkpoints: [
       {
-        expect: ['[Tab]streams'],
+        expect: ['Tab streams'],
         unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
       },
       {
         // Attachment does not supply a parent edge, so the running slice is
         // registered but still absent from the root's focus strip.
-        expect: ['[Tab]streams'],
+        expect: ['Tab streams'],
         unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
       },
       {
@@ -2059,7 +2054,7 @@ const SCENARIOS = [
         expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
       },
     ],
-    expect: ['orderChecker', '1 sub', '[Tab]streams'],
+    expect: ['orderChecker', '1 sub', 'Tab streams'],
   },
   // The remaining four orderings correct old ambiguous transients (promotion,
   // reattachment, parent removal, completion+removal) instead of being
@@ -2075,8 +2070,8 @@ const SCENARIOS = [
     // Steps: A, S(running), R_P+, E_P+, E0 (promote to top-level), R_P+ (late,
     // stale roster from the former parent).
     checkpoints: [
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
       { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
       { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
       {
@@ -2110,14 +2105,14 @@ const SCENARIOS = [
     // (root), R_P+ (root), R_other+ (late, stale — from the child's former,
     // never-displayed parent).
     checkpoints: [
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
       // Facts scoped to the never-displayed former parent must not leak into
       // root's own view at any point.
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
       {
         expect: ['harness-child-eve…*'],
         unexpect: ['1 sub', 'orderChecker'],
@@ -2151,7 +2146,7 @@ const SCENARIOS = [
     // that late facts naming a removed parent don't resurrect it anywhere or
     // wedge the TUI.
     checkpoints: [
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
       { unexpect: ['1 sub', 'orderChecker'] },
       { unexpect: ['1 sub', 'orderChecker'] },
       { unexpect: ['1 sub', 'orderChecker'] },
@@ -2177,8 +2172,8 @@ const SCENARIOS = [
     // Steps: A, S(running), R_P+, E_P+, R_P- (roster omission), S(terminal),
     // X(child), R_P+ (late), E_P+ (late), A (late), late resume attempt.
     checkpoints: [
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
-      { expect: ['[Tab]streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
+      { expect: ['Tab streams'], unexpect: ['1 sub', 'orderChecker'] },
       { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
       { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
       {
@@ -2193,17 +2188,17 @@ const SCENARIOS = [
       },
       {
         // Removal scrubs every trace, including the retained/historical row.
-        unexpect: ['orderChecker', '1 sub', '1:orderChecker', '[Tab]streams'],
+        unexpect: ['orderChecker', '1 sub', '1:orderChecker', 'Tab streams'],
       },
       {
-        unexpect: ['orderChecker', '1 sub', '1:orderChecker', '[Tab]streams'],
+        unexpect: ['orderChecker', '1 sub', '1:orderChecker', 'Tab streams'],
       },
       {
-        unexpect: ['orderChecker', '1 sub', '1:orderChecker', '[Tab]streams'],
+        unexpect: ['orderChecker', '1 sub', '1:orderChecker', 'Tab streams'],
       },
       {
         // A late re-attachment attempt for the removed id must stay ignored.
-        unexpect: ['orderChecker', '1 sub', '1:orderChecker', '[Tab]streams'],
+        unexpect: ['orderChecker', '1 sub', '1:orderChecker', 'Tab streams'],
       },
       {
         // A late resume-transition attempt is the one status fact that would
@@ -2211,7 +2206,7 @@ const SCENARIOS = [
         // transition is a same-value no-op the status machine drops before
         // it gets there) — it must still stay suppressed by the removal
         // tombstone.
-        unexpect: ['orderChecker', '1 sub', '1:orderChecker', '[Tab]streams'],
+        unexpect: ['orderChecker', '1 sub', '1:orderChecker', 'Tab streams'],
       },
     ],
     // Prove the TUI is still interactive after the removal + late facts:
@@ -2231,14 +2226,14 @@ const SCENARIOS = [
       HARNESS_FAILED_CHILD: 'reviewer',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     expect: [
       'strategy running',
       'leanSolver waiting for you',
       'reviewer error',
       '2 sub',
-      '[Tab]streams',
-      ']tasks',
+      'Tab streams',
+      'p tasks',
     ],
     unexpect: ['reviewer running', '3 sub'],
   },
@@ -2253,15 +2248,15 @@ const SCENARIOS = [
       HARNESS_TODOS: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     expect: [
       'Waiting for leanSolver',
       '3 sub',
       '1 proc',
-      '[Tab]streams',
-      ']subagents',
-      ']tasks',
-      '[Ctrl-C]stop',
+      'Tab streams',
+      's subagents',
+      'p tasks',
+      'Ctrl-C stop',
     ],
   },
   {
@@ -2275,9 +2270,9 @@ const SCENARIOS = [
       HARNESS_TODOS: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: ']tasks',
-    expect: ['Waiting for leanSolver', ']tasks', '[Ctrl-C]stop'],
-    unexpect: [']subagents', '[Option-p]tasks'],
+    bootExpect: 'p tasks',
+    expect: ['Waiting for leanSolver', 'p tasks', 'Ctrl-C stop'],
+    unexpect: ['s subagents', 'Option-p tasks'],
   },
   {
     name: 'subagent-picker',
@@ -2287,7 +2282,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's'], // Esc/Alt-s
     expect: [
       'Subagents',
@@ -2317,7 +2312,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's', 'f', 'child follow-up on focused stream', '\r'],
     frame: 'viewport',
     expect: [
@@ -2340,7 +2335,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: ['\t'],
     expect: [
       'strategy is checking the harness-child-strategy details',
@@ -2366,7 +2361,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: ['\t', '\t', '\t', '\t'],
     expect: [
       'agent: chat · model: harness-model',
@@ -2394,7 +2389,7 @@ const SCENARIOS = [
       HARNESS_LONG_CHILD_OUTPUT: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: ['\t'],
     expect: [
       'strategy detail line 15',
@@ -2405,7 +2400,7 @@ const SCENARIOS = [
       'strategy detail line 01',
       'entry-1 chat history line',
       'entry-4 chat history line',
-      '[PgUp',
+      'PgUp',
       '[main]*',
       'signal read during notification phase',
       'ERROR',
@@ -2422,7 +2417,7 @@ const SCENARIOS = [
       HARNESS_LONG_CHILD_OUTPUT: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: ['\t', DC4, 'g'],
     expect: [
       'strategy\n› Please handle the harness-child-strategy sub-workflow.',
@@ -2446,7 +2441,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: ['\t', '/status', '\r'],
     frame: 'viewport',
     expect: [
@@ -2472,7 +2467,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's', 'f', '\t', '\t', '\t'],
     expect: [
       'entry-1 chat history line',
@@ -2497,7 +2492,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's', '\r'],
     expect: [
       'strategy',
@@ -2521,7 +2516,7 @@ const SCENARIOS = [
       HARNESS_NESTED_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's', 'f', ESC + 's', '\r'],
     expect: [
       'localChecker',
@@ -2545,7 +2540,7 @@ const SCENARIOS = [
       HARNESS_NESTED_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's', 'f', ESC + 's'],
     frame: 'viewport',
     expect: [
@@ -2569,7 +2564,7 @@ const SCENARIOS = [
       HARNESS_NESTED_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's', 'f', ESC + 'p'],
     frame: 'viewport',
     expect: [
@@ -2596,7 +2591,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p'], // Esc/Alt-p
     expect: [
       'Tasks and sub-workflows',
@@ -2622,7 +2617,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's'], // Esc/Alt-s
     frame: 'viewport',
     expect: [
@@ -2652,7 +2647,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p'], // Esc/Alt-p
     frame: 'viewport',
     expect: [
@@ -2682,7 +2677,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p', DOWN, DOWN, DOWN], // Esc/Alt-p, select process row
     frame: 'viewport',
     expect: [
@@ -2702,7 +2697,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p', '\r'],
     expect: [
       'Task details',
@@ -2779,7 +2774,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
     expect: [
       'Task details',
@@ -2799,7 +2794,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's'], // Esc/Alt-s
     frame: 'viewport',
     expect: [
@@ -2828,7 +2823,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's', DOWN], // Esc/Alt-s, select second subagent
     frame: 'viewport',
     expect: [
@@ -2857,7 +2852,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p'], // Esc/Alt-p
     frame: 'viewport',
     expect: [
@@ -2924,10 +2919,9 @@ const SCENARIOS = [
       'f focus',
       'Esc back',
       '[main]* 1:strategy*',
-      '[Esc]back',
-      '[Ctrl-C]stop',
+      'Ctrl-C stop',
     ],
-    unexpect: ['│ ›', 'Task details', 'Output:', '*    y*', '[Ctrl…'],
+    unexpect: ['│ ›', 'Task details', 'Output:', '*    y*', 'Ctrl…'],
   },
   {
     name: 'tiny-task-subworkflow-detail-wrapped-scroll',
@@ -2948,7 +2942,6 @@ const SCENARIOS = [
       'f focus',
       'Esc back',
       '[main]* 1:strategy*',
-      '[Esc]back',
     ],
     unexpect: ['│ ›', 'Task details', 'Output:', '*    y*'],
   },
@@ -2969,7 +2962,6 @@ const SCENARIOS = [
       'main.tex: Proof sketch needs one',
       'missing reference',
       'Esc back',
-      '[Esc]back',
     ],
     unexpect: ['│ ›', 'Task details', 'Output:', '*    y*'],
   },
@@ -2990,7 +2982,6 @@ const SCENARIOS = [
       'f focus',
       'k kill',
       'Esc back',
-      '[Esc]back',
     ],
     unexpect: ['Esc ba…'],
   },
@@ -3005,13 +2996,7 @@ const SCENARIOS = [
     },
     keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
     frame: 'viewport',
-    expect: [
-      'shell · latex build',
-      'reference',
-      'k kill',
-      'Esc back',
-      '[Esc]back',
-    ],
+    expect: ['shell · latex build', 'reference', 'k kill', 'Esc back'],
     unexpect: ['Esc ba…'],
   },
   {
@@ -3022,7 +3007,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p', 'k', ESC + 's'],
     expect: [
       'Subagents',
@@ -3045,7 +3030,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p', 'k', ESC + 'p'],
     expect: [
       'Tasks and sub-workflows',
@@ -3064,7 +3049,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p', 'k', ESC + 'p', '\r'],
     expect: [
       'Task details',
@@ -3082,7 +3067,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p', 'k', ESC + 's', 'f'],
     frame: 'viewport',
     expect: [
@@ -3090,7 +3075,7 @@ const SCENARIOS = [
       '◆ stopped',
       'root active',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
-      '[Ctrl-C]stop root',
+      'Ctrl-C stop root',
     ],
     expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
     unexpect: ['◆ running', '2 sub 1 proc'],
@@ -3103,7 +3088,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p', 'k', ESC + 's', 'f', { input: ESC, delayMs: 40 }, 's'],
     frame: 'viewport',
     expect: ['Subagents', 'strategy', '1. strategy — stopped', 'root active'],
@@ -3117,7 +3102,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p', 'k', ESC + 's', 'f', { input: ESC, delayMs: 40 }, '\t'],
     frame: 'viewport',
     expect: ['[2:leanSolver]', '◆ waiting for you', 'root active'],
@@ -3135,7 +3120,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 'p', 'k', ESC + 's', 'f', 'can you still receive this?', '\r'],
     frame: 'viewport',
     expect: [
@@ -3159,11 +3144,11 @@ const SCENARIOS = [
     },
     keys: [ESC + 'p'],
     frame: 'viewport',
-    expect: ['entry-4 chat history line', '[/status]details', '[Ctrl-C]exit'],
+    expect: ['entry-4 chat history line', '/status details', 'Ctrl-C exit'],
     unexpect: [
-      '[Option-p]tasks',
-      '[Alt-p]tasks',
-      '[Esc p]tasks',
+      'Option-p tasks',
+      'Alt-p tasks',
+      'Esc p tasks',
       'Tasks and sub-workflows',
       'No active tasks or sub-workflows.',
       'Enter view',
@@ -3179,7 +3164,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ESC + 's', 'f', ESC + 'p'],
     expect: [
       'Tasks and sub-workflows',
@@ -3219,7 +3204,7 @@ const SCENARIOS = [
       HARNESS_TODOS_IDLE: '1',
     },
     frame: 'viewport',
-    expect: ['idle', '[Ctrl-C]exit'],
+    expect: ['idle', 'Ctrl-C exit'],
     unexpect: [
       'Split theorem into algebraic and analytic checks',
       'Coordinate a small math proof through nested CLI work.',
@@ -3239,16 +3224,16 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: '[Tab]streams',
+    bootExpect: 'Tab streams',
     keys: [ETX],
     frame: 'viewport',
     expect: [
       'Harness interrupt requested.',
       '[main](stopped)',
       '◆ stopped personal',
-      '[Ctrl-C]exit',
+      'Ctrl-C exit',
     ],
-    unexpect: ['[Ctrl-C]stop'],
+    unexpect: ['Ctrl-C stop'],
   },
 ];
 
