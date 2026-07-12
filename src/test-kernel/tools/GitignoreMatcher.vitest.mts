@@ -2,9 +2,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fsState = vi.hoisted(() => ({
-  workspacePath: '/workspace',
+  workspacePath: '/workspace' as string | undefined,
+  homeDirectory: undefined as string | undefined,
   workspaceFiles: new Map<string, string>(),
+  workspaceReadErrors: new Map<string, Error>(),
+  workspaceReadCounts: new Map<string, number>(),
   absoluteFiles: new Map<string, string>(),
+  absoluteReadErrors: new Map<string, Error>(),
 }));
 
 vi.mock('@utils/files', () => ({
@@ -12,35 +16,156 @@ vi.mock('@utils/files', () => ({
     getPath: () => fsState.workspacePath,
     exists: async (relativePath: string) =>
       fsState.workspaceFiles.has(relativePath.replace(/^\/+/, '')),
-    read: async (relativePath: string) =>
-      fsState.workspaceFiles.get(relativePath.replace(/^\/+/, '')) ?? '',
+    read: async (relativePath: string) => {
+      const normalized = relativePath.replace(/^\/+/, '');
+      fsState.workspaceReadCounts.set(
+        normalized,
+        (fsState.workspaceReadCounts.get(normalized) ?? 0) + 1,
+      );
+      const readError = fsState.workspaceReadErrors.get(normalized);
+      if (readError) {
+        throw readError;
+      }
+      const content = fsState.workspaceFiles.get(normalized);
+      if (content === undefined) {
+        throw Object.assign(new Error(`File not found: ${normalized}`), {
+          code: 'ENOENT',
+        });
+      }
+      return content;
+    },
   },
   AbsoluteFS: {
     exists: async (absolutePath: string) =>
       fsState.absoluteFiles.has(absolutePath),
-    read: async (absolutePath: string) =>
-      fsState.absoluteFiles.get(absolutePath) ?? '',
+    read: async (absolutePath: string) => {
+      const readError = fsState.absoluteReadErrors.get(absolutePath);
+      if (readError) {
+        throw readError;
+      }
+      const content = fsState.absoluteFiles.get(absolutePath);
+      if (content === undefined) {
+        throw Object.assign(new Error(`File not found: ${absolutePath}`), {
+          code: 'ENOENT',
+        });
+      }
+      return content;
+    },
   },
 }));
 
 vi.mock('@utils/system/platformPaths', () => ({
-  safeHomedir: () => undefined,
+  safeHomedir: () => fsState.homeDirectory,
 }));
 
-async function loadWorkspaceMatcher(gitignore: string) {
+async function loadMatcher() {
   vi.resetModules();
-  fsState.workspacePath = '/workspace';
-  fsState.workspaceFiles.clear();
-  fsState.absoluteFiles.clear();
-  fsState.workspaceFiles.set('.gitignore', gitignore);
-
   const { getGitignoreMatcher } = await import('@tools/gitignore');
   return getGitignoreMatcher();
+}
+
+async function loadWorkspaceMatcher(gitignore: string) {
+  fsState.workspaceFiles.set('.gitignore', gitignore);
+  return loadMatcher();
 }
 
 describe('getGitignoreMatcher', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.doUnmock('ignore');
+    fsState.workspacePath = '/workspace';
+    fsState.homeDirectory = undefined;
+    fsState.workspaceFiles.clear();
+    fsState.workspaceReadErrors.clear();
+    fsState.workspaceReadCounts.clear();
+    fsState.absoluteFiles.clear();
+    fsState.absoluteReadErrors.clear();
+  });
+
+  it('uses an empty matcher when no workspace is available', async () => {
+    fsState.workspacePath = undefined;
+
+    const matcher = await loadMatcher();
+
+    expect(matcher.hasRules).toBe(false);
+    expect(matcher.ignoreFiles).toEqual([]);
+    expect(matcher.ignores('paper.tex')).toBe(false);
+  });
+
+  it('uses an empty matcher when all ignore policies are absent', async () => {
+    fsState.homeDirectory = '/home/user';
+
+    const matcher = await loadMatcher();
+
+    expect(matcher.hasRules).toBe(false);
+    expect(matcher.ignoreFiles).toEqual([]);
+    expect(matcher.ignores('paper.tex')).toBe(false);
+  });
+
+  it('rejects when a workspace ignore policy cannot be read', async () => {
+    const readError = Object.assign(new Error('Permission denied'), {
+      code: 'EACCES',
+    });
+    fsState.workspaceReadErrors.set('.gitignore', readError);
+
+    await expect(loadMatcher()).rejects.toBe(readError);
+  });
+
+  it('rejects when a global ignore policy cannot be read', async () => {
+    const readError = Object.assign(new Error('Permission denied'), {
+      code: 'EACCES',
+    });
+    fsState.homeDirectory = '/home/user';
+    fsState.absoluteReadErrors.set('/home/user/.gitignore_global', readError);
+
+    await expect(loadMatcher()).rejects.toBe(readError);
+  });
+
+  it('rejects when ignore policy construction fails', async () => {
+    const constructionError = new Error('Invalid ignore policy');
+    vi.doMock('ignore', () => ({
+      default: () => ({
+        add: () => {
+          throw constructionError;
+        },
+      }),
+    }));
+    fsState.workspaceFiles.set('.gitignore', 'dist/\n');
+
+    await expect(loadMatcher()).rejects.toBe(constructionError);
+  });
+
+  it('retries after a failed shared load attempt', async () => {
+    const readError = Object.assign(new Error('Temporarily unavailable'), {
+      code: 'EACCES',
+    });
+    fsState.workspaceFiles.set('.gitignore', 'dist/\n');
+    fsState.workspaceReadErrors.set('.gitignore', readError);
+    vi.resetModules();
+    const { getGitignoreMatcher } = await import('@tools/gitignore');
+
+    const failedCalls = await Promise.allSettled([
+      getGitignoreMatcher(),
+      getGitignoreMatcher(),
+    ]);
+
+    for (const result of failedCalls) {
+      expect(result.status).toBe('rejected');
+      if (result.status === 'rejected') {
+        expect(result.reason).toBe(readError);
+      }
+    }
+    expect(fsState.workspaceReadCounts.get('.gitignore')).toBe(1);
+
+    fsState.workspaceReadErrors.delete('.gitignore');
+    const [matcher, concurrentMatcher] = await Promise.all([
+      getGitignoreMatcher(),
+      getGitignoreMatcher(),
+    ]);
+
+    expect(matcher).toBe(concurrentMatcher);
+    expect(matcher.ignores('dist')).toBe(true);
+    expect(fsState.workspaceReadCounts.get('.gitignore')).toBe(2);
   });
 
   it('preserves directory-only rules for bare directory entries', async () => {
@@ -61,6 +186,14 @@ describe('getGitignoreMatcher', () => {
     const matcher = await loadWorkspaceMatcher('dist/\n!dist/.gitkeep\n');
 
     expect(matcher.ignores('dist/.gitkeep')).toBe(true);
+  });
+
+  it('propagates matcher failures', async () => {
+    const matcher = await loadWorkspaceMatcher('dist/\n');
+
+    expect(() => matcher.ignores('../outside')).toThrow(
+      'path should be a `path.relative()`d string',
+    );
   });
 });
 
