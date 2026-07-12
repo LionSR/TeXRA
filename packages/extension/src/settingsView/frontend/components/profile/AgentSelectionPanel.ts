@@ -17,7 +17,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas and events
 import {
@@ -49,6 +49,15 @@ function isBuiltIn(source: string): boolean {
     source === AGENT_SOURCE.BUILT_IN_WORKFLOW ||
     source === AGENT_SOURCE.BUILT_IN_TOOL_USE
   );
+}
+
+/** Icon + label for the non-built-in source badge shown in both the list and detail panes. */
+function sourceBadgeMeta(
+  source: AgentSourceType,
+): { icon: TeXRAIconName; label: string } | undefined {
+  if (source === AGENT_SOURCE.CUSTOM) return { icon: 'star', label: 'Custom' };
+  if (source === AGENT_SOURCE.REMOTE) return { icon: 'cloud', label: 'Remote' };
+  return undefined;
 }
 
 @customElement('agent-selection-panel')
@@ -238,6 +247,7 @@ export class AgentSelectionPanel extends LitElement {
   private renderListItem(agent: AgentSelectionItem): TemplateResult {
     const key = agentKey(agent);
     const isSelected = this.selectedKey === key;
+    const badge = sourceBadgeMeta(agent.source);
 
     let sourceTone: 'builtin' | 'custom' | 'remote';
     if (agent.source === AGENT_SOURCE.CUSTOM) {
@@ -280,16 +290,9 @@ export class AgentSelectionPanel extends LitElement {
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
           ${
-            agent.source === AGENT_SOURCE.REMOTE
-              ? html`<span title="Remote agent"
-                  >${waIcon('cloud', { label: 'Remote agent' })}</span
-                >`
-              : nothing
-          }
-          ${
-            agent.source === AGENT_SOURCE.CUSTOM
-              ? html`<span title="Custom agent"
-                  >${waIcon('star', { label: 'Custom agent' })}</span
+            badge
+              ? html`<span title="${badge.label} agent"
+                  >${waIcon(badge.icon, { label: `${badge.label} agent` })}</span
                 >`
               : nothing
           }
@@ -369,6 +372,7 @@ export class AgentSelectionPanel extends LitElement {
     const isCustom = agent.source === AGENT_SOURCE.CUSTOM;
     const showDeleteConfirm =
       isCustom && this.pendingDeleteKey === agentKey(agent);
+    const badge = sourceBadgeMeta(agent.source);
 
     return html`
       <div class="agent-detail-pane">
@@ -380,16 +384,12 @@ export class AgentSelectionPanel extends LitElement {
               : nothing
           }
           ${
-            isCustom
-              ? html`<wa-tag variant="neutral" size="small" title="Custom agent"
-                  >${waIcon('star')} Custom</wa-tag
-                >`
-              : nothing
-          }
-          ${
-            agent.source === AGENT_SOURCE.REMOTE
-              ? html`<wa-tag variant="neutral" size="small" title="Remote agent"
-                  >${waIcon('cloud')} Remote</wa-tag
+            badge
+              ? html`<wa-tag
+                  variant="neutral"
+                  size="small"
+                  title="${badge.label} agent"
+                  >${waIcon(badge.icon)} ${badge.label}</wa-tag
                 >`
               : nothing
           }
