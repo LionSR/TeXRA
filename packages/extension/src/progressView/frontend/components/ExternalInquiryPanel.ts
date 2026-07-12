@@ -42,11 +42,11 @@ import { CopyButtonController } from '@shared/litControllers/CopyButtonControlle
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
+import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 import { ProgressEvents } from '../events';
-import { createBoundedIdSet } from '../utils/boundedIdSet';
 import type { PermissionState } from '../permissionState';
 
 // ── Draft persistence ──

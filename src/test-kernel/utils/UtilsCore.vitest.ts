@@ -11,6 +11,7 @@ import {
   filterNotNull,
   filterNotNullish,
   getBasename,
+  getFileStem,
   toNewestFirstByTimestamp,
 } from '@utils/core';
 
@@ -119,6 +120,31 @@ describe('getBasename', () => {
     ['/home/user/folder/', 'folder'],
   ])('getBasename(%j) === %j', (input, expected) => {
     assert.strictEqual(getBasename(input), expected);
+  });
+});
+
+describe('getFileStem', () => {
+  it.each([
+    ['dir/paper.tex', 'paper'],
+    ['/home/user/document.pdf', 'document'],
+    ['file.txt', 'file'],
+    // Dotfiles keep their full name — a leading dot isn't an extension.
+    ['/home/user/.bashrc', '.bashrc'],
+    ['.gitignore', '.gitignore'],
+    // Only the final extension is stripped.
+    ['/path/to/file.tar.gz', 'file.tar'],
+    ['archive.backup.zip', 'archive.backup'],
+    ['C:\\Users\\report.docx', 'report'],
+    ['/path/to/', 'to'],
+    ['/path/to/dir/', 'dir'],
+    ['', ''],
+    ['/', ''],
+  ])('getFileStem(%j) === %j', (input, expected) => {
+    assert.strictEqual(getFileStem(input), expected);
+  });
+
+  it.each([[undefined], [null]])('getFileStem(%j) === ""', (input) => {
+    assert.strictEqual(getFileStem(input), '');
   });
 });
 
