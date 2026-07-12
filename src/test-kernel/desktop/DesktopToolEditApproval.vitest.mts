@@ -250,6 +250,7 @@ describe('desktop tool edit approval', () => {
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
       const runtimeHost = createRecordingRuntimeHost();
+      const emitSpy = vi.spyOn(runtimeHost, 'emit');
       const session = createTestSession();
       const sessionEvents = recordSessionEvents(session);
       const opened: string[] = [];
@@ -277,9 +278,14 @@ describe('desktop tool edit approval', () => {
           scope: 'session',
           event: {
             type: 'setActiveStream',
-            payload: { streamId: 'stream-2' },
+            payload: {
+              streamId: 'stream-2',
+              suppressViewSwitch: true,
+              ensureVisible: true,
+            },
           },
         });
+        expect(emitSpy).toHaveBeenCalledWith('requestEnsureProgressView', {});
         expect(shown[0]).toMatchObject({
           path: '/workspace/notes.txt',
           relativePath: 'notes.txt',

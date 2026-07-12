@@ -401,6 +401,47 @@ describe('ProgressBackend', () => {
     backend.dispose();
   });
 
+  it('keeps a filtered interaction stream reachable without switching', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, messages } = target;
+    const subscription = backend.setupEventListeners();
+
+    try {
+      emitActiveStream(target, {
+        streamId: 'root',
+        agentCategory: AgentCategory.Workflow,
+      });
+      await vi.waitFor(() => expect(backend.state.activeStream).toBe('root'));
+      backend.state.agentCategoryFilter = AgentCategory.Workflow;
+      messages.length = 0;
+
+      emitActiveStream(target, {
+        streamId: 'hidden-approval',
+        agentCategory: AgentCategory.ToolUse,
+        suppressViewSwitch: true,
+        ensureVisible: true,
+      });
+
+      await vi.waitFor(() =>
+        expect(backend.state.agentCategoryFilter).toBe('all'),
+      );
+      expect(backend.state.activeStream).toBe('root');
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+          activeStream: 'root',
+          agentFilter: 'all',
+          streams: expect.arrayContaining([
+            expect.objectContaining({ name: 'hidden-approval' }),
+          ]),
+        }),
+      );
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+    }
+  });
+
   it('patches one stream for subagent registration and run-start metadata', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, messages, session } = target;

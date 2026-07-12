@@ -159,9 +159,18 @@ describe('createDesktopHostInteractions', () => {
       'setActiveStream',
       expect.anything(),
     );
+    // Interaction requests register the stream without yanking the active
+    // tab away from what the user is viewing (#8246).
     expect(sessionEvents).toContainEqual({
       scope: 'session',
-      event: { type: 'setActiveStream', payload: { streamId: 'stream-a' } },
+      event: {
+        type: 'setActiveStream',
+        payload: {
+          streamId: 'stream-a',
+          suppressViewSwitch: true,
+          ensureVisible: true,
+        },
+      },
     });
   });
 
