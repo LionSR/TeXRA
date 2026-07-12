@@ -25,6 +25,7 @@ const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   dashscope: 'qwen3max',
   minimax: 'minimax01',
   glm: 'glm5',
+  meta: 'musespark11',
 };
 
 /**
@@ -44,6 +45,7 @@ const FALLBACK_MODEL_PROVIDER: Readonly<Record<string, ModelProvider>> = {
   dashscope: ModelProvider.DASHSCOPE,
   minimax: ModelProvider.MINIMAX,
   glm: ModelProvider.GLM,
+  meta: ModelProvider.META,
 };
 
 /** Whether `config` is safe to hand to the setup assistant for `setupProvider`. */
