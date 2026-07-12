@@ -78,22 +78,41 @@ export type DeleteProgressStream = (
   stream: StreamTabId,
 ) => void | Promise<void>;
 
+/**
+ * Run-scoped event types this backend handles, and the single source of truth
+ * for the `runFactHandlers` table: the `RunFactHandlers` mapped type requires
+ * exactly one handler per entry, so a listed type without a handler (or vice
+ * versa) is a compile error. `ProgressBackend` reuses this as its run-scope
+ * subscription filter, keeping delivered and handled events in sync by
+ * construction.
+ */
+const RUN_FACT_EVENT_TYPES = [
+  'conversation.progress',
+  'updateTodos',
+  'updatePlan',
+  'addOutputFiles',
+  'updateMissingOutputs',
+  'updateCompileFailures',
+  'goalPaused',
+  'run.config',
+  'usage',
+  'status',
+  'stage.start',
+  'child.activity',
+  'process.output',
+] as const satisfies readonly AgentEvent['type'][];
+
 export const PROGRESS_BACKEND_RUN_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] =
-  [
-    'conversation.progress',
-    'updateTodos',
-    'updatePlan',
-    'addOutputFiles',
-    'updateMissingOutputs',
-    'updateCompileFailures',
-    'goalPaused',
-    'run.config',
-    'usage',
-    'status',
-    'stage.start',
-    'child.activity',
-    'process.output',
-  ];
+  RUN_FACT_EVENT_TYPES;
+
+type RunFactType = (typeof RUN_FACT_EVENT_TYPES)[number];
+
+type RunFactHandlers = {
+  [K in RunFactType]: (
+    streamId: StreamTabId,
+    event: Extract<AgentEvent, { type: K }>,
+  ) => void;
+};
 
 function getDefaultProgressStreamControls(): ProgressStreamControls {
   return {
@@ -108,6 +127,119 @@ export class ProgressFactApplier {
   private readonly logger: AgentTrace;
   private progressThrottleTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingProgressUpdates = new Map<StreamTabId, ConversationProgress>();
+
+  /** Run-fact dispatch table (see `RUN_FACT_EVENT_TYPES`); keys stay exhaustive. */
+  private readonly runFactHandlers: RunFactHandlers = {
+    usage: (streamId, event) => {
+      const payload = toUpdateStreamUsagePayload(event.data, streamId);
+      if (payload) {
+        this.applyFact('failed to handle usage fact', () =>
+          this.handleUpdateStreamUsage(payload),
+        );
+      }
+    },
+    'run.config': (_streamId, event) => {
+      this.applyFact('failed to handle run.config fact', () =>
+        this.handleSetTaskState({
+          streamId: event.streamId,
+          executionId: event.executionId,
+          taskState: agentConfigToTaskState(event.config),
+        }),
+      );
+    },
+    status: (_streamId, event) => {
+      this.applyFact('failed to handle status fact', () =>
+        this.setStreamStatus(
+          event.streamId,
+          event.phase,
+          event.previousPhase,
+          event.substate,
+        ),
+      );
+    },
+    updateTodos: (_streamId, event) => {
+      this.applyFact('failed to handle updateTodos fact', () =>
+        this.handleUpdateTodos(event),
+      );
+    },
+    updatePlan: (_streamId, event) => {
+      this.applyFact('failed to handle updatePlan fact', () =>
+        this.handleUpdatePlan(event),
+      );
+    },
+    addOutputFiles: (_streamId, event) => {
+      this.applyFact('failed to handle addOutputFiles fact', () =>
+        this.handleAddOutputFiles(event),
+      );
+    },
+    updateMissingOutputs: (_streamId, event) => {
+      this.applyFact('failed to handle updateMissingOutputs fact', () =>
+        this.handleUpdateMissingOutputs(event),
+      );
+    },
+    updateCompileFailures: (_streamId, event) => {
+      this.applyFact('failed to handle updateCompileFailures fact', () =>
+        this.handleUpdateCompileFailures(event),
+      );
+    },
+    goalPaused: () => {
+      // No progress-view state change; listed only to keep the run-fact type
+      // set exhaustive (it stays in the subscription filter for parity).
+    },
+    'conversation.progress': (streamId, event) => {
+      this.applyFact('failed to handle conversation.progress fact', () =>
+        this.handleUpdateConversationProgress({
+          streamId,
+          progress: event.progress,
+        }),
+      );
+    },
+    'stage.start': (streamId, event) => {
+      if (event.kind !== 'round') return;
+      this.applyFact('failed to handle stage.start fact', () =>
+        this.handleUpdateRoundStage({
+          streamId,
+          roundStage: {
+            index: event.index ?? 0,
+            ...(event.total !== undefined && event.total > 0
+              ? { total: event.total }
+              : {}),
+          },
+        }),
+      );
+    },
+    'child.activity': (_streamId, event) => {
+      if (event.kind === 'subagents') {
+        this.applyFact('failed to handle subagent activity fact', () =>
+          this.updateActiveChildren(event.parentStreamId, {
+            activeField: 'activeSubagents',
+            countField: 'finishedSubagentCount',
+            next: [...event.children],
+          }),
+        );
+        return;
+      }
+      if (event.kind === 'processes') {
+        this.applyFact('failed to handle process activity fact', () =>
+          this.updateActiveChildren(event.parentStreamId, {
+            activeField: 'activeProcesses',
+            countField: 'finishedProcessCount',
+            next: [...event.processes],
+          }),
+        );
+      }
+    },
+    'process.output': (_streamId, event) => {
+      this.applyFact('failed to handle process.output fact', () =>
+        this.handleUpdateProcessOutput({
+          parentStreamId: event.parentStreamId,
+          executionId: event.executionId,
+          stdout: event.stdout,
+          stderr: event.stderr,
+        }),
+      );
+    },
+  };
 
   constructor(
     private state: ProgressViewState,
@@ -217,139 +349,16 @@ export class ProgressFactApplier {
   }
 
   handleRunFact(streamId: StreamTabId, event: AgentEvent): void {
-    if (event.type === 'usage') {
-      const payload = toUpdateStreamUsagePayload(event.data, streamId);
-      if (payload) {
-        this.applyFact('failed to handle usage fact', () =>
-          this.handleUpdateStreamUsage(payload),
-        );
-      }
-      return;
-    }
-
-    if (event.type === 'run.config') {
-      this.applyFact('failed to handle run.config fact', () =>
-        this.handleSetTaskState({
-          streamId: event.streamId,
-          executionId: event.executionId,
-          taskState: agentConfigToTaskState(event.config),
-        }),
-      );
-      return;
-    }
-
-    if (event.type === 'status') {
-      this.applyFact('failed to handle status fact', () =>
-        this.setStreamStatus(
-          event.streamId,
-          event.phase,
-          event.previousPhase,
-          event.substate,
-        ),
-      );
-      return;
-    }
-
-    if (event.type === 'updateTodos') {
-      this.applyFact('failed to handle updateTodos fact', () =>
-        this.handleUpdateTodos(event),
-      );
-      return;
-    }
-
-    if (event.type === 'updatePlan') {
-      this.applyFact('failed to handle updatePlan fact', () =>
-        this.handleUpdatePlan(event),
-      );
-      return;
-    }
-
-    if (event.type === 'addOutputFiles') {
-      this.applyFact('failed to handle addOutputFiles fact', () =>
-        this.handleAddOutputFiles(event),
-      );
-      return;
-    }
-
-    if (event.type === 'updateMissingOutputs') {
-      this.applyFact('failed to handle updateMissingOutputs fact', () =>
-        this.handleUpdateMissingOutputs(event),
-      );
-      return;
-    }
-
-    if (event.type === 'updateCompileFailures') {
-      this.applyFact('failed to handle updateCompileFailures fact', () =>
-        this.handleUpdateCompileFailures(event),
-      );
-      return;
-    }
-
-    if (event.type === 'goalPaused') {
-      return;
-    }
-
-    if (event.type === 'conversation.progress') {
-      this.applyFact('failed to handle conversation.progress fact', () =>
-        this.handleUpdateConversationProgress({
-          streamId,
-          progress: event.progress,
-        }),
-      );
-      return;
-    }
-
-    if (event.type === 'stage.start') {
-      if (event.kind !== 'round') return;
-      this.applyFact('failed to handle stage.start fact', () =>
-        this.handleUpdateRoundStage({
-          streamId,
-          roundStage: {
-            index: event.index ?? 0,
-            ...(event.total !== undefined && event.total > 0
-              ? { total: event.total }
-              : {}),
-          },
-        }),
-      );
-      return;
-    }
-
-    if (event.type === 'child.activity') {
-      if (event.kind === 'subagents') {
-        this.applyFact('failed to handle subagent activity fact', () =>
-          this.updateActiveChildren(event.parentStreamId, {
-            activeField: 'activeSubagents',
-            countField: 'finishedSubagentCount',
-            next: [...event.children],
-          }),
-        );
-        return;
-      }
-      if (event.kind === 'processes') {
-        this.applyFact('failed to handle process activity fact', () =>
-          this.updateActiveChildren(event.parentStreamId, {
-            activeField: 'activeProcesses',
-            countField: 'finishedProcessCount',
-            next: [...event.processes],
-          }),
-        );
-        return;
-      }
-      return;
-    }
-
-    if (event.type === 'process.output') {
-      this.applyFact('failed to handle process.output fact', () =>
-        this.handleUpdateProcessOutput({
-          parentStreamId: event.parentStreamId,
-          executionId: event.executionId,
-          stdout: event.stdout,
-          stderr: event.stderr,
-        }),
-      );
-      return;
-    }
+    // Widen the exhaustive table to the full event union so an unlisted type
+    // (not in the subscription filter, but defensively tolerated) is a no-op
+    // rather than a lookup on a missing key.
+    const handlers = this.runFactHandlers as Partial<
+      Record<
+        AgentEvent['type'],
+        (streamId: StreamTabId, event: AgentEvent) => void
+      >
+    >;
+    handlers[event.type]?.(streamId, event);
   }
 
   private applyFact(context: string, handle: () => void | Promise<void>): void {
