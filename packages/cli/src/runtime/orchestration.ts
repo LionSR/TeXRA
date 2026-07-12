@@ -67,6 +67,8 @@ export interface CliOrchestrationItem {
   readonly footerHints?: readonly string[];
 }
 
+type CliPresetLaunchBlockReason = 'delegation-denied';
+
 export interface BuildCliOrchestrationItemsInput {
   readonly presetPlans: readonly CliMultiAgentPresetRunPlan[];
   readonly history: readonly CliHistoryEntry[];
@@ -74,6 +76,7 @@ export interface BuildCliOrchestrationItemsInput {
   readonly includeMultiAgentLoginHint?: boolean;
   readonly modelAccess?: CliModelAccessStatus;
   readonly account?: CliAccountStatus;
+  readonly presetLaunchBlockReason?: CliPresetLaunchBlockReason;
 }
 
 export type CliModelAccessRoute = 'chatgpt' | 'included' | 'personal';
@@ -142,6 +145,8 @@ export function orchestrationModelAccessView(
   };
 }
 
+const TEAM_DELEGATION_DENIED_DESCRIPTION =
+  'Delegation blocked by "never"; use ask or yolo';
 export function buildCliOrchestrationItems(
   input: BuildCliOrchestrationItemsInput,
 ): CliOrchestrationItem[] {
@@ -170,10 +175,14 @@ export function buildCliOrchestrationItems(
     });
   }
   if (input.presetPlans.length > 0) {
+    const launchBlocked = input.presetLaunchBlockReason === 'delegation-denied';
     items.push({
       value: { kind: 'browse-teams' },
       label: 'Team',
-      description: 'Choose a team',
+      description: launchBlocked
+        ? TEAM_DELEGATION_DENIED_DESCRIPTION
+        : 'Choose a team',
+      disabled: launchBlocked,
     });
   }
   if (input.modelAccess) {
@@ -362,16 +371,24 @@ export function buildCliTeamItems(
   plans: readonly CliMultiAgentPresetRunPlan[],
   options: {
     readonly includeLoginHint?: boolean;
+    readonly launchBlockReason?: CliPresetLaunchBlockReason;
   },
 ): CliOrchestrationItem[] {
+  const launchBlockedDescription =
+    options.launchBlockReason === 'delegation-denied'
+      ? TEAM_DELEGATION_DENIED_DESCRIPTION
+      : undefined;
   return plans.map((plan) => ({
     value: { kind: 'preset', preset: plan.preset.id },
     label: `Team ${plan.preset.id}`,
-    description: [
-      formatCliMultiAgentPresetLauncherSummary(plan),
-      plan.preset.name,
-    ].join('; '),
-    disabled: !cliMultiAgentPresetCanLaunchTeam(plan),
+    description:
+      launchBlockedDescription ??
+      [formatCliMultiAgentPresetLauncherSummary(plan), plan.preset.name].join(
+        '; ',
+      ),
+    disabled:
+      launchBlockedDescription !== undefined ||
+      !cliMultiAgentPresetCanLaunchTeam(plan),
     footerHints: formatCliMultiAgentPresetLauncherHints(plan, {
       includeLoginHint: options.includeLoginHint,
     }),
