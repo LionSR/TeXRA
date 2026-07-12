@@ -4,6 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
+let detachHostInteractions = (): void => {};
 
 vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
@@ -53,7 +54,8 @@ function useCliHostInteractions(
   cliContext: CliContext,
   hooks: CliApprovalPromptHooks = {},
 ): void {
-  defaultSession().useHostInteractions(
+  detachHostInteractions();
+  detachHostInteractions = defaultSession().useHostInteractions(
     createHeadlessCliHostInteractions(cliContext, hooks),
   );
 }
@@ -78,7 +80,8 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  defaultSession().interactions.dispose();
+  detachHostInteractions();
+  detachHostInteractions = () => {};
   handleExternalInquiryActionMock.mockClear();
 });
 

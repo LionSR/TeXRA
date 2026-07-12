@@ -9,6 +9,7 @@ import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInte
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
+  cancelNativeToolEditApprovals,
   handleProgressViewToolEditApprovalAction,
   initializeNativeToolEditApproval,
   nativeRequestApproval,
@@ -108,6 +109,7 @@ interface StartedApproval {
   readonly approval: Promise<ToolEditApprovalResult>;
   readonly requestId: string;
   readonly runtimeHost: RecordingRuntimeHost;
+  readonly session: SessionHandle;
 }
 
 const sessions: SessionHandle[] = [];
@@ -175,7 +177,7 @@ async function startApproval(): Promise<StartedApproval> {
   if (!requestId) {
     throw new Error('Expected a tool edit approval request ID.');
   }
-  return { approval, requestId, runtimeHost };
+  return { approval, requestId, runtimeHost, session };
 }
 
 beforeEach(async () => {
@@ -207,6 +209,112 @@ afterEach(async () => {
 });
 
 describe('native tool edit approval', () => {
+  it('does not present an approval cancelled during initialization', async () => {
+    const runtimeHost = createRecordingRuntimeHost();
+    const session = createTestSession();
+    sessions.push(session);
+    initializeNativeToolEditApproval(
+      {
+        storageUri: { fsPath: storageRoot },
+        globalStorageUri: { fsPath: storageRoot },
+      } as unknown as VSCode.ExtensionContext,
+      runtimeHost,
+    );
+    const approval = nativeRequestApproval(
+      {
+        path: '/workspace/cancel-initializing.txt',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-initializing',
+      },
+      { session },
+    );
+    activeApprovals.push(approval);
+
+    cancelNativeToolEditApprovals(session, {
+      kind: 'toolEdit',
+      streamId: 'stream-initializing',
+      cause: 'Run ended.',
+    });
+
+    await expect(approval).resolves.toMatchObject({
+      accepted: false,
+      userMessage: 'Run ended.',
+    });
+    expect(runtimeHost.shown).toEqual([]);
+  });
+
+  it('does not publish a prompt after cancellation while revealing the view', async () => {
+    let revealProgress: (() => void) | undefined;
+    vscodeMocks.executeCommand.mockImplementation(
+      async (command: unknown, ...args: unknown[]) => {
+        if (command === 'vscode.diff') {
+          const proposedUri = args[1] as TestUri;
+          vscodeMocks.visibleTextEditors.push({
+            document: { uri: proposedUri },
+            selections: [],
+            revealRange: vi.fn(),
+          });
+        }
+        if (command === 'texra.showProgressView') {
+          await new Promise<void>((resolve) => {
+            revealProgress = resolve;
+          });
+        }
+      },
+    );
+    const runtimeHost = createRecordingRuntimeHost();
+    const session = createTestSession();
+    sessions.push(session);
+    initializeNativeToolEditApproval(
+      {
+        storageUri: { fsPath: storageRoot },
+        globalStorageUri: { fsPath: storageRoot },
+      } as unknown as VSCode.ExtensionContext,
+      runtimeHost,
+    );
+    const approval = nativeRequestApproval(
+      {
+        path: '/workspace/cancel-reveal.txt',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-reveal',
+      },
+      { session },
+    );
+    activeApprovals.push(approval);
+    await vi.waitFor(() => expect(revealProgress).toBeTypeOf('function'));
+
+    cancelNativeToolEditApprovals(session, {
+      kind: 'toolEdit',
+      streamId: 'stream-reveal',
+      cause: 'Run ended.',
+    });
+    revealProgress?.();
+
+    await expect(approval).resolves.toMatchObject({ accepted: false });
+    await Promise.resolve();
+    expect(runtimeHost.shown).toEqual([]);
+  });
+
+  it('cancels and cleans a selected session approval', async () => {
+    const { approval, requestId, runtimeHost, session } = await startApproval();
+
+    cancelNativeToolEditApprovals(session, {
+      kind: 'toolEdit',
+      streamId: 'stream-approval',
+      cause: 'Stream resources released.',
+    });
+
+    await expect(approval).resolves.toMatchObject({
+      accepted: false,
+      userMessage: 'Stream resources released.',
+    });
+    expect(runtimeHost.resolved).toEqual([{ requestId }]);
+  });
+
   it('restores a failed approval prompt and accepts a later retry', async () => {
     const { approval, requestId, runtimeHost } = await startApproval();
     const proposedUri = currentProposedUri();

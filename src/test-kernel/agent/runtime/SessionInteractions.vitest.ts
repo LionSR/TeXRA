@@ -2,12 +2,18 @@
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import {
+  matchesCancelSelector,
+  type HostInteractionOptions,
+  HostInteractions,
+  type HostPlanApprovalRequest,
+  type PlanApprovalResult,
+} from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createDesktopHostInteractions } from '@desktop/main/desktopHostInteractions';
 import type { DesktopToolEditApprovalController } from '@desktop/main/desktopToolEditApproval';
@@ -102,15 +108,361 @@ function createPortSession(): {
     runtimeHost,
     session,
     getApprovalHandlers: () => handlers,
-    getToolEditApprovals: () => {
-      throw new Error('tool-edit approvals are not exercised here');
-    },
+    getToolEditApprovals: () => ({
+      cancel: () => {},
+      dispose: () => {},
+      handleAction: () => false,
+      requestApproval: async () => {
+        throw new Error('tool-edit approvals are not exercised here');
+      },
+    }),
   });
   session.useHostInteractions(interactions);
   return { session, uiEvents, emitted, interactions };
 }
 
+function createControllablePlanAdapter(
+  options: { settleOnDispose?: boolean } = {},
+) {
+  const requests: HostPlanApprovalRequest[] = [];
+  const pending = new Map<
+    string,
+    {
+      readonly request: HostPlanApprovalRequest;
+      readonly cancellationScope?: object;
+      readonly settle: (result: PlanApprovalResult) => void;
+    }
+  >();
+  const dispose = vi.fn(() => {
+    if (options.settleOnDispose === false) return;
+    for (const { settle } of pending.values()) settle({ action: 'reject' });
+    pending.clear();
+  });
+  const interactions: HostInteractions = {
+    requestPlanApproval(request, requestOptions?: HostInteractionOptions) {
+      requests.push(request);
+      return new Promise((settle) =>
+        pending.set(request.approvalId, {
+          request,
+          cancellationScope: requestOptions?.cancellationScope,
+          settle,
+        }),
+      );
+    },
+    resolve(requestId, result) {
+      const entry = pending.get(requestId);
+      if (!entry || result.kind !== 'plan') return false;
+      pending.delete(requestId);
+      entry.settle(
+        result.action === 'approve'
+          ? { action: 'approve' }
+          : { action: 'reject', feedback: result.feedback },
+      );
+      return true;
+    },
+    cancel(selector = {}) {
+      for (const [requestId, entry] of pending) {
+        if (
+          !matchesCancelSelector(
+            {
+              kind: 'plan',
+              streamId: entry.request.streamId,
+              cancellationScope: entry.cancellationScope,
+            },
+            selector,
+          )
+        )
+          continue;
+        pending.delete(requestId);
+        entry.settle({ action: 'reject' });
+      }
+    },
+    dispose,
+  };
+  return { interactions, requests, dispose };
+}
+
 describe('session.interactions request bookkeeping (coordinator fold)', () => {
+  it('disposes an adapter offered after terminal slot disposal', () => {
+    const session = createTestSession();
+    const adapter = createControllablePlanAdapter();
+    session.interactions.dispose();
+    session.useHostInteractions(adapter.interactions);
+
+    expect(adapter.dispose).toHaveBeenCalledOnce();
+    session.dispose();
+  });
+
+  it('does not turn an unattached external inquiry into a parked approval', () => {
+    const session = createTestSession();
+    try {
+      expect(
+        session.interactions.openExternalInquiry({
+          requestId: 'inquiry:unattached',
+          threadId: 'inquiry:unattached',
+          question: 'Can this notification be shown?',
+          streamId,
+          mode: 'new',
+          allowBypass: false,
+          sessionLinks: null,
+          draft: null,
+          transcript: null,
+        }),
+      ).toBeUndefined();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('limits forwarded cancellation to the source owner requests', async () => {
+    const source = createTestSession();
+    const target = createTestSession();
+    const adapter = createControllablePlanAdapter();
+    const cancel = vi.fn(adapter.interactions.cancel);
+    target.useHostInteractions({ ...adapter.interactions, cancel });
+    source.useHostInteractions(target.interactions.createForwarder());
+
+    const sourceStream = 'stream:forwarded-owner' as StreamTabId;
+    const targetStream = sourceStream;
+    const sourcePending = source.interactions.requestPlanApproval({
+      approvalId: 'approval:forwarded-owner',
+      streamId: sourceStream,
+      plan,
+      goalEnabled: false,
+    });
+    const targetPending = target.interactions.requestPlanApproval({
+      approvalId: 'approval:target-owner',
+      streamId: targetStream,
+      plan,
+      goalEnabled: false,
+    });
+
+    source.dispose();
+
+    await expect(sourcePending).resolves.toEqual({
+      action: 'reject',
+      feedback: 'Session disposed.',
+    });
+    expect(cancel).toHaveBeenCalledWith({
+      kind: 'plan',
+      streamId: sourceStream,
+      cause: 'Session disposed.',
+      cancellationScope: expect.any(Object),
+    });
+    expect(
+      target.interactions.resolve('approval:target-owner', {
+        kind: 'plan',
+        action: 'approve',
+      }),
+    ).toBe(true);
+    await expect(targetPending).resolves.toEqual({ action: 'approve' });
+    target.dispose();
+  });
+
+  it('tracks forwarded ownership before presentation can cancel reentrantly', async () => {
+    const source = createTestSession();
+    const target = createTestSession();
+    let settle: ((result: PlanApprovalResult) => void) | undefined;
+    const cancel = vi.fn(() => {
+      settle?.({ action: 'reject', feedback: 'Cancelled while presenting.' });
+    });
+    target.useHostInteractions({
+      requestPlanApproval: () =>
+        new Promise<PlanApprovalResult>((resolve) => {
+          settle = resolve;
+          source.dispose();
+        }),
+      resolve: () => false,
+      cancel,
+    });
+    source.useHostInteractions(target.interactions.createForwarder());
+
+    const pending = source.interactions.requestPlanApproval({
+      approvalId: 'approval:reentrant-cancel',
+      streamId: 'stream:reentrant-cancel' as StreamTabId,
+      plan,
+      goalEnabled: false,
+    });
+
+    await expect(pending).resolves.toEqual({
+      action: 'reject',
+      feedback: 'Session disposed.',
+    });
+    expect(cancel).toHaveBeenCalledWith({
+      kind: 'plan',
+      streamId: 'stream:reentrant-cancel',
+      cause: 'Session disposed.',
+      cancellationScope: expect.any(Object),
+    });
+    target.dispose();
+  });
+
+  it('disposes attachments even when cancellation throws', () => {
+    const session = createTestSession();
+    const dispose = vi.fn();
+    session.useHostInteractions({
+      resolve: () => false,
+      cancel: () => {
+        throw new Error('cancel failed');
+      },
+      dispose,
+    });
+
+    expect(() => session.interactions.dispose()).toThrow('cancel failed');
+    expect(dispose).toHaveBeenCalledOnce();
+    session.dispose();
+  });
+
+  it('buffers a request made while no adapter is attached', async () => {
+    const session = createTestSession();
+    const adapter = createControllablePlanAdapter();
+    try {
+      const pending = session.interactions.requestPlanApproval({
+        approvalId: 'approval:unattached',
+        streamId,
+        plan,
+        goalEnabled: false,
+      });
+      expect(adapter.requests).toEqual([]);
+
+      session.useHostInteractions(adapter.interactions);
+      expect(adapter.requests).toHaveLength(1);
+      expect(
+        session.interactions.resolve('approval:unattached', {
+          kind: 'plan',
+          action: 'approve',
+        }),
+      ).toBe(true);
+      await expect(pending).resolves.toEqual({ action: 'approve' });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('keeps a pending request across adapter detach and reattach', async () => {
+    const session = createTestSession();
+    const first = createControllablePlanAdapter();
+    const second = createControllablePlanAdapter();
+    try {
+      const detach = session.useHostInteractions(first.interactions);
+      const pending = session.interactions.requestPlanApproval({
+        approvalId: 'approval:reattach',
+        streamId,
+        plan,
+        goalEnabled: false,
+      });
+      detach();
+      await Promise.resolve();
+      expect(first.dispose).toHaveBeenCalledOnce();
+
+      session.useHostInteractions(second.interactions);
+      expect(second.requests).toHaveLength(1);
+      expect(
+        session.interactions.resolve('approval:reattach', {
+          kind: 'plan',
+          action: 'approve',
+        }),
+      ).toBe(true);
+      await expect(pending).resolves.toEqual({ action: 'approve' });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('ignores a result produced by a detached adapter', async () => {
+    const session = createTestSession();
+    const first = createControllablePlanAdapter({ settleOnDispose: false });
+    const second = createControllablePlanAdapter();
+    try {
+      const detach = session.useHostInteractions(first.interactions);
+      const pending = session.interactions.requestPlanApproval({
+        approvalId: 'approval:stale',
+        streamId,
+        plan,
+        goalEnabled: false,
+      });
+      detach();
+      session.useHostInteractions(second.interactions);
+
+      expect(
+        first.interactions.resolve('approval:stale', {
+          kind: 'plan',
+          action: 'reject',
+        }),
+      ).toBe(true);
+      await Promise.resolve();
+      expect(
+        session.interactions.resolve('approval:stale', {
+          kind: 'plan',
+          action: 'approve',
+        }),
+      ).toBe(true);
+      await expect(pending).resolves.toEqual({ action: 'approve' });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('settles an explicit cancellation while unattached', async () => {
+    const session = createTestSession();
+    const pending = session.interactions.requestPlanApproval({
+      approvalId: 'approval:cancel-unattached',
+      streamId,
+      plan,
+      goalEnabled: false,
+    });
+
+    session.interactions.cancel({ streamId, cause: 'Run ended.' });
+
+    await expect(pending).resolves.toEqual({
+      action: 'reject',
+      feedback: 'Run ended.',
+    });
+    session.dispose();
+  });
+
+  it('preserves user-question feedback while unattached', async () => {
+    const session = createTestSession();
+    const pending = session.interactions.askUserQuestion({
+      requestId: 'question:cancel-unattached',
+      questions: [
+        {
+          question: 'Which normalization should be used?',
+          options: [{ label: 'Unit volume' }, { label: 'Unit mass' }],
+        },
+      ],
+      allowBypass: false,
+      streamId: '',
+    });
+
+    session.interactions.cancel({
+      streamId: null,
+      cause: 'No stream owns this question.',
+    });
+
+    await expect(pending).resolves.toEqual({
+      submitted: false,
+      feedback: 'No stream owns this question.',
+    });
+    session.dispose();
+  });
+
+  it('settles buffered requests on terminal session disposal', async () => {
+    const session = createTestSession();
+    const pending = session.interactions.requestAgentProposal({
+      proposalId: 'proposal:dispose-unattached',
+      streamId,
+      ...proposal,
+    });
+
+    session.dispose();
+
+    await expect(pending).resolves.toEqual({
+      action: 'reject',
+      feedback: 'Session disposed.',
+    });
+  });
+
   it('resolves a plan approval first-wins through the session slot', async () => {
     const { session, uiEvents, emitted } = createPortSession();
     try {
