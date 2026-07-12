@@ -155,8 +155,10 @@ export async function loadAgentSettingAndPrompts(
         `Unable to locate parent agent "${config.inherits}" in source "${entry.source}".`,
       );
     }
-    const [parentSettings, parentPrompts] =
-      await loadAgentSettingAndPrompts(parentResolution, nextSeen);
+    const [parentSettings, parentPrompts] = await loadAgentSettingAndPrompts(
+      parentResolution,
+      nextSeen,
+    );
 
     // Parent provides defaults, child overrides.
     // parentSettings has resolved ToolDefinition objects while
