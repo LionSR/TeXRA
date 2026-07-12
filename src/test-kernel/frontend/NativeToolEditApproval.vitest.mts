@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   handleProgressViewToolEditApprovalAction,
   initializeNativeToolEditApproval,
@@ -147,7 +148,7 @@ function currentProposedUri(): TestUri {
 
 async function startApproval(): Promise<StartedApproval> {
   const runtimeHost = createRecordingRuntimeHost();
-  const session = new SessionHandle();
+  const session = createTestSession();
   sessions.push(session);
   initializeNativeToolEditApproval(
     {
