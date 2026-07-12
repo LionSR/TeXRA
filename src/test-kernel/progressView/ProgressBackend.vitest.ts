@@ -1516,6 +1516,31 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('keeps resident background entries during an in-flight status update', async () => {
+    const { backend } = createRecordingBackend();
+    const stream = 'background-stream' as StreamTabId;
+    const releaseSpy = vi.spyOn(backend.state.streamLogs, 'releaseEntries');
+
+    try {
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.updateStreamHints(stream, {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
+
+      await backend.factApplier.setStreamStatus(
+        stream,
+        STREAM_PHASE.RUNNING,
+        STREAM_PHASE.RUNNING,
+      );
+
+      expect(releaseSpy).not.toHaveBeenCalled();
+      expect(backend.state.streamLogs.get(stream)).toBeDefined();
+    } finally {
+      backend.dispose();
+    }
+  });
+
   it('drops buffered conversation progress when an existing stream re-enters running', async () => {
     vi.useFakeTimers();
     const { backend, messages } = createRecordingBackend();
