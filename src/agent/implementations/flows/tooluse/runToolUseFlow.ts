@@ -542,14 +542,23 @@ export async function runToolUseFlow<C = unknown>(
     activePersistedFlow = undefined;
     teardownSetup?.();
     teardownSetup = undefined;
+    let preservationReason: string | undefined;
     if (preserveResumeRecord) {
-      logger.debug('Flow record preserved after resume startup cancellation');
+      preservationReason =
+        'Flow record preserved after resume startup cancellation';
     } else if (!persistenceRecoveryComplete) {
-      logger.debug('Flow record preserved after persistence recovery failure');
+      preservationReason =
+        'Flow record preserved after persistence recovery failure';
     } else if (outcome === STREAM_PHASE.WAITING) {
-      logger.debug('Flow record preserved for native subagent WAITING');
+      preservationReason = 'Flow record preserved for native subagent WAITING';
     } else if (shared.userCancelledRetry) {
-      logger.debug('Flow record preserved for resume after retry cancellation');
+      preservationReason =
+        'Flow record preserved for resume after retry cancellation';
+    }
+    const preserveSessionState = preservationReason !== undefined;
+
+    if (preservationReason) {
+      logger.debug(preservationReason);
     } else {
       try {
         await kv.delete(flowKey(executionId));
@@ -558,26 +567,15 @@ export async function runToolUseFlow<C = unknown>(
       }
     }
 
-    // WAITING outcome: leave the follow-up queue live, matching the flow
-    // record preserved above. A delegate_agent follow-up can race into it via
-    // sendFollowUp's 'active' branch between the WAITING transition inside
-    // ToolUseWaitNode and this teardown — the tool-use flow context detaches
-    // above, but the stream doesn't leave WAITING until resume, so the same
-    // live queue instance is what a genuine kill (see ExecutionRegistry.
-    // terminate's waiting-cleanup path) or resume drains instead of a
-    // `dispose()` here silently discarding it.
+    // Every path that preserves the resumable flow record also preserves its
+    // follow-up queue. In particular, persistence recovery can fail after
+    // resume setup has already requeued input; releasing the queue here would
+    // discard that input while retaining only the flow record.
     //
-    // Resume-startup cancellation (preserveResumeRecord): a resume's
-    // setupSession re-appends its drained follow-up batch into this same
-    // live queue before the flow is interruptible. `flowContext.interrupt()`
-    // uses `sessionLifecycle.interruptPreservingQueue()` instead of
-    // `interrupt()` for exactly this window (see its call site above), so
-    // that batch survives a cancellation landing while the recovery read is
-    // pending. Skipping `dispose()`/release here too keeps it intact for the
-    // next `resumeQueuedToolUseSnapshot` call's `drainItems()` instead of
-    // discarding the user's queued input alongside the preserved flow
-    // record.
-    if (outcome !== STREAM_PHASE.WAITING && !preserveResumeRecord) {
+    // WAITING retains its existing stronger property: the live lifecycle
+    // remains attached to the queue so a racing follow-up, a genuine kill,
+    // or the next resume observes the same queue instance.
+    if (!preserveSessionState) {
       sessionLifecycle.dispose();
     }
     runSession.interactions.cancel({ streamId, cause: 'Run ended.' });
