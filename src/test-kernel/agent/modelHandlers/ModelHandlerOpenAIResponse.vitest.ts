@@ -29,6 +29,10 @@ import {
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
+import {
+  hasContextWindowErrorMarker,
+  isContextWindowError,
+} from '@common/errors/sdkErrorUtils';
 
 // Type imports
 import { pathToLocation } from '@utils/files';
@@ -860,6 +864,56 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.deepEqual(requests[2].input, rebuiltMessages);
     assert.equal(tokenCountCalls, 3);
     assert.equal(requests[2].max_output_tokens, 99990);
+  });
+
+  it('tags the fallback hard-failure throw with the context-window marker', () => {
+    // Mirrors ModelHandler.validateTokenLimits (#8078, followed up in #8100):
+    // isContextWindowError() must recognize this throw via its typed marker,
+    // not by string-matching wording that this method owns and may reword
+    // freely. Without the marker, a future reword of "exceeds context
+    // window" would silently break the
+    // `isContextWindowError(error) && this.chainState.hasPreviousResponseId()`
+    // compaction-recovery check that reads this throw upstream.
+    class FailOnReducedBudgetHandler extends ModelHandlerOpenAIResponse {
+      protected override shouldFailWhenFallbackOutputBudgetIsReduced(): boolean {
+        return true;
+      }
+    }
+    const handler = setupHandler(
+      new FailOnReducedBudgetHandler(
+        createConfig({
+          openRouterOnly: false,
+          maxOutputTokens: 200,
+          contextWindow: 1000,
+        }),
+      ),
+    );
+    (
+      handler as unknown as {
+        chainState: { setCumulativeInputTokens: (tokens: number) => void };
+      }
+    ).chainState.setCumulativeInputTokens(900);
+
+    let caught: unknown;
+    try {
+      (
+        handler as unknown as {
+          applyTokenCountFailureFallback: (maxOutputTokens: number) => number;
+        }
+      ).applyTokenCountFailureFallback(200);
+    } catch (error) {
+      caught = error;
+    }
+
+    assert.ok(caught instanceof Error);
+    assert.match(caught.message, /exceeds context window/);
+    // Load-bearing assertion: the typed marker itself, independent of the
+    // fenced-string fallback that `isContextWindowError` also happens to
+    // match today (this exact message currently contains "exceeds context
+    // window"). The marker is what keeps classification correct if that
+    // wording is ever reworded on the assumption it's Anthropic-only.
+    assert.equal(hasContextWindowErrorMarker(caught), true);
+    assert.equal(isContextWindowError(caught), true);
   });
 });
 

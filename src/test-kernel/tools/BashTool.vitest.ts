@@ -539,6 +539,96 @@ describe('BashTool', () => {
     }
   });
 
+  it('#8093 regression: finalizes the background execution before its wake step resolves, so a resumed parent never self-stalls waiting on it', async () => {
+    // Regression: waking a WAITING parent (`agentResume.tryResumeStream`) can
+    // await the ENTIRE resumed parent turn. If that wake were awaited before
+    // this execution's own finalize (as it used to be, delivering via a
+    // single wake-aware call before `finalizeBackground`), a resumed parent
+    // that immediately calls `executions` with action=wait on this same
+    // execution could find it still RUNNING and block on itself for the
+    // whole wait budget. Prove the ordering: hold the host resume port open
+    // and confirm the execution is already untracked (terminal) by the time
+    // that port is even invoked.
+    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
+      success: true,
+      stdout: 'done\n',
+      stderr: '',
+      timedOut: false,
+      exitCode: 0,
+    });
+
+    const parentStreamId = 'bash-tool-bg-finalize-before-wake' as StreamTabId;
+    let releaseResume: (() => void) | undefined;
+    let handleAtResumeTime: unknown;
+    let executionId = '';
+    const tryResumeStream = vi.fn().mockImplementation(async () => {
+      handleAtResumeTime = defaultSession().executions.getHandle(executionId);
+      await new Promise<void>((resolve) => {
+        releaseResume = resolve;
+      });
+      return true;
+    });
+    await installPlatform(
+      {
+        workspacePath: '/workspace',
+        config: { 'texra.toolUse.requireBashApproval': false },
+      },
+      { agentResume: { tryResumeStream } },
+    );
+    seedStreamStatusForTest(
+      defaultSession().status,
+      parentStreamId,
+      STREAM_STATUS.WAITING,
+    );
+
+    const { host } = createRecordingHost();
+    const bashTool = new BashTool();
+    const recorded = recordSessionEvents(defaultSession().events);
+
+    try {
+      const launchResult = await withToolEnvironment(
+        {
+          run: { runtimeHost: host, streamId: parentStreamId },
+          call: { tracker: new FileInteractionState() },
+        },
+        () =>
+          bashTool.call({
+            command: 'make build',
+            run_in_background: true,
+          }),
+      );
+      assert.equal(launchResult.status, 'executed');
+      const executionIdMatch = /Execution ID: (\S+)/.exec(
+        String(launchResult.output ?? ''),
+      );
+      assert.ok(
+        executionIdMatch,
+        'Launch output should report an execution id',
+      );
+      executionId = executionIdMatch![1]!;
+
+      await vi.waitFor(() => {
+        assert.ok(
+          tryResumeStream.mock.calls.length > 0,
+          'Background bash completion should reach the wake step',
+        );
+      });
+      // The wake step was reached — this execution must already be untracked
+      // (finalized), never still RUNNING, so a resumed parent that waits on
+      // it right now resolves immediately instead of racing its own wake.
+      assert.equal(handleAtResumeTime, undefined);
+      assert.equal(
+        defaultSession().executions.getHandle(executionId),
+        undefined,
+      );
+    } finally {
+      releaseResume?.();
+      recorded.detach();
+      clearStreamStatusForTest(defaultSession().status, parentStreamId);
+      defaultSession().followUps.release(parentStreamId);
+    }
+  });
+
   it('accepts optional command descriptions without passing them to the shell', async () => {
     vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: true,

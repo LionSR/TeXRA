@@ -1,5 +1,7 @@
 import * as vm from 'node:vm';
 
+import pTimeout from 'p-timeout';
+
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { WorkflowScriptParseError } from './parseScript';
@@ -431,31 +433,22 @@ async function withTimeout(
   promise: Promise<unknown>,
   options: SandboxOptions,
 ): Promise<unknown> {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          try {
-            options.onTimeout?.();
-          } catch {
-            // The timeout rejection below must fire even if the abort
-            // callback throws; otherwise the race never settles.
-          }
-          // The script continuation is orphaned past this point; suppress
-          // its eventual settlement so it cannot surface as an unhandled
-          // rejection after the run already reported the timeout.
-          promise.catch(() => {});
-          reject(
-            new Error(
-              `Workflow script ${options.filename} timed out after ${options.timeoutMs}ms`,
-            ),
-          );
-        }, options.timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+  // p-timeout's `fallback` fires in place of the default TimeoutError
+  // rejection and its own promise.then(resolve, reject) attachment already
+  // absorbs the orphaned continuation's eventual settlement, so no separate
+  // promise.catch(() => {}) suppression is needed here.
+  return await pTimeout(promise, {
+    milliseconds: options.timeoutMs,
+    fallback: () => {
+      try {
+        options.onTimeout?.();
+      } catch {
+        // The timeout rejection below must fire even if the abort
+        // callback throws; otherwise the run never settles.
+      }
+      throw new Error(
+        `Workflow script ${options.filename} timed out after ${options.timeoutMs}ms`,
+      );
+    },
+  });
 }
