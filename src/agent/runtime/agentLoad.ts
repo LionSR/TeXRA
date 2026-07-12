@@ -112,6 +112,7 @@ function resolveAgentSettingTools(settings: AgentSettingInput): object {
 
 export async function loadAgentSettingAndPrompts(
   resolution: ResolvedAgent,
+  seen: ReadonlySet<string> = new Set(),
 ): Promise<[AgentSetting, AgentPrompt]> {
   const { entry } = resolution;
 
@@ -124,6 +125,17 @@ export async function loadAgentSettingAndPrompts(
     // Remote agents are already fully processed (tools resolved, validated)
     return [remoteConfig.settings, remoteConfig.prompts];
   }
+
+  // Mirrors the cycle guard in agentYamlScanner.ts's inheritedDefinitionBlock:
+  // a self- or mutually-referential `inherits` chain must fail loudly here
+  // (this is the runtime load path) rather than recurse without bound.
+  const entryKey = agentKey(entry.source, entry.name);
+  if (seen.has(entryKey)) {
+    throw new Error(
+      `Circular "inherits" chain detected: ${[...seen, entryKey].join(' -> ')}.`,
+    );
+  }
+  const nextSeen = new Set([...seen, entryKey]);
 
   const rawConfig = await loadYaml(resolution.definitionPath);
   const config = AgentDefinitionSchema.parse(rawConfig);
@@ -143,8 +155,10 @@ export async function loadAgentSettingAndPrompts(
         `Unable to locate parent agent "${config.inherits}" in source "${entry.source}".`,
       );
     }
-    const [parentSettings, parentPrompts] =
-      await loadAgentSettingAndPrompts(parentResolution);
+    const [parentSettings, parentPrompts] = await loadAgentSettingAndPrompts(
+      parentResolution,
+      nextSeen,
+    );
 
     // Parent provides defaults, child overrides.
     // parentSettings has resolved ToolDefinition objects while
