@@ -7,7 +7,11 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 
-import { rootRunStartAvailable } from './cliState';
+import {
+  rootRunPending,
+  rootRunStartAvailable,
+  rootRunStreamId,
+} from './cliState';
 
 export interface ClearableTuiSessionState {
   streamId: StreamTabId | undefined;
@@ -31,6 +35,11 @@ type PendingTuiRunSessionState = Pick<
   'runPromise' | 'runCompleted'
 >;
 
+type PublishedTuiRunSessionState = Pick<
+  ClearableTuiSessionState,
+  'runPromise' | 'runCompleted' | 'streamId'
+>;
+
 export function clearTuiSessionRunState(
   session: ClearableTuiSessionState,
 ): void {
@@ -41,7 +50,7 @@ export function clearTuiSessionRunState(
   session.runExitCode = CliExitCode.Success;
   session.runCompleted = false;
   session.stopRequested = false;
-  publishChatTuiRootRunStartAvailability(session);
+  publishChatTuiRunState(session);
 }
 
 export function markChatTuiRunPending(
@@ -55,14 +64,14 @@ export function markChatTuiRunPending(
   session.runExitCode = CliExitCode.Success;
   session.runCompleted = false;
   session.stopRequested = false;
-  publishChatTuiRootRunStartAvailability(session);
+  publishChatTuiRunState(session);
 }
 
 export function markChatTuiRunCompleted(
-  session: PendingTuiRunSessionState,
+  session: PublishedTuiRunSessionState,
 ): void {
   session.runCompleted = true;
-  publishChatTuiRootRunStartAvailability(session);
+  publishChatTuiRunState(session);
 }
 
 /**
@@ -95,22 +104,28 @@ export function chatTuiCanInterruptActiveRun(
   );
 }
 
-export function chatTuiCanStopActiveRun(
-  session: InterruptibleTuiSessionState,
-  status: StreamPhase | undefined,
-): boolean {
-  if (!session.runPromise || session.runCompleted) return false;
-  if (!session.streamId) return true;
-  return status === undefined || isActivePhase(status);
+/**
+ * Run facts the stop predicates consume. Two producers share this shape:
+ * `runChatTui` derives it from the mutable session (signal-handler paths),
+ * and the StatusBar derives it from the `rootRunPending`/`rootRunStreamId`
+ * signals so the Ctrl-C hint recomputes reactively during renders.
+ */
+export interface ChatTuiRunStopFacts {
+  readonly runPending: boolean;
+  readonly streamId: StreamTabId | undefined;
+  readonly status: StreamPhase | undefined;
 }
 
-export function chatTuiCanStopVisibleRun(
-  session: InterruptibleTuiSessionState,
-  status: StreamPhase | undefined,
-): boolean {
+export function chatTuiCanStopActiveRun(facts: ChatTuiRunStopFacts): boolean {
+  if (!facts.runPending) return false;
+  if (!facts.streamId) return true;
+  return facts.status === undefined || isActivePhase(facts.status);
+}
+
+export function chatTuiCanStopVisibleRun(facts: ChatTuiRunStopFacts): boolean {
   return (
-    chatTuiCanStopActiveRun(session, status) ||
-    Boolean(session.streamId && isActivePhase(status))
+    chatTuiCanStopActiveRun(facts) ||
+    Boolean(facts.streamId && isActivePhase(facts.status))
   );
 }
 
@@ -120,10 +135,19 @@ export function chatTuiCanStartRootRun(
   return !session.runPromise || session.runCompleted;
 }
 
-export function publishChatTuiRootRunStartAvailability(
-  session: PendingTuiRunSessionState,
+/**
+ * Single publisher of the session run-state facts into cliState signals.
+ * Every mutation of `runPromise`/`runCompleted`/`streamId` must flow through
+ * a caller of this function — renders read only the published signals, so an
+ * unpublished mutation would leave the Ctrl-C hint stale (#8273).
+ */
+export function publishChatTuiRunState(
+  session: PublishedTuiRunSessionState,
 ): void {
-  rootRunStartAvailable.set(chatTuiCanStartRootRun(session));
+  const canStart = chatTuiCanStartRootRun(session);
+  rootRunStartAvailable.set(canStart);
+  rootRunPending.set(!canStart);
+  rootRunStreamId.set(session.streamId);
 }
 
 export function chatTuiCanSelectModel(input: {

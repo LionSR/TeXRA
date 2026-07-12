@@ -59,7 +59,9 @@ import {
 } from '../src/chat/tui/commands/slashForms';
 import {
   activeStreamId as activeStreamIdSignal,
+  rootRunPending,
   rootRunStartAvailable,
+  rootRunStreamId,
   rootStreamId,
   resetCliState,
   sessionMeta,
@@ -1576,6 +1578,7 @@ if (SHOW_AGENT_PROPOSAL) {
 
 function markHarnessInterrupted(): void {
   canInterrupt = false;
+  rootRunPending.set(false);
   const childStreamIds = new Set(
     visibleSubagentRows(STREAM_ID, childStreamEntries.get(), streams.get())
       .map((child) => child.childStreamId)
@@ -1916,6 +1919,11 @@ registerBuiltinSlashCommands({
   },
 });
 rootRunStartAvailable.set(CAN_SELECT_AGENT);
+// Mirror the real publisher's run facts: an interruptible harness run is a
+// pending root-run claim on the harness stream, so the status bar derives
+// the Ctrl-C stop hint from these signals exactly as `texra chat` does.
+rootRunPending.set(canInterrupt);
+rootRunStreamId.set(canInterrupt ? STREAM_ID : undefined);
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const viewportController = createTuiViewportController(inkRef);

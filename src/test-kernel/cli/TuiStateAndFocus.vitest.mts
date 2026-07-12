@@ -10,7 +10,9 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   activeStreamId,
+  rootRunPending,
   rootRunStartAvailable,
+  rootRunStreamId,
   rootStreamId,
   removeStream,
   resetCliState,
@@ -739,6 +741,8 @@ describe('CLI TUI row allocation', () => {
     expect(session.stopRequested).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
     expect(rootRunStartAvailable.get()).toBe(false);
+    expect(rootRunPending.get()).toBe(true);
+    expect(rootRunStreamId.get()).toBeUndefined();
   });
 
   it('restores root run availability when clearing session run state', () => {
@@ -757,6 +761,8 @@ describe('CLI TUI row allocation', () => {
 
     expect(chatTuiCanStartRootRun(session)).toBe(true);
     expect(rootRunStartAvailable.get()).toBe(true);
+    expect(rootRunPending.get()).toBe(false);
+    expect(rootRunStreamId.get()).toBeUndefined();
   });
 
   it('allows model selection before start or while a tool-use chat is waiting', () => {
@@ -795,130 +801,78 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('only reports Ctrl-C stoppable while the root stream is actively responding', () => {
-    const runPromise = Promise.resolve();
-
     expect(
-      chatTuiCanStopActiveRun(
-        {
-          runCompleted: false,
-          runPromise,
-          streamId: undefined,
-        },
-        undefined,
-      ),
+      chatTuiCanStopActiveRun({
+        runPending: true,
+        streamId: undefined,
+        status: undefined,
+      }),
     ).toBe(true);
     expect(
-      chatTuiCanStopActiveRun(
-        {
-          runCompleted: false,
-          runPromise,
-          streamId: root,
-        },
-        STREAM_PHASE.RUNNING,
-      ),
+      chatTuiCanStopActiveRun({
+        runPending: true,
+        streamId: root,
+        status: STREAM_PHASE.RUNNING,
+      }),
     ).toBe(true);
     expect(
-      chatTuiCanStopActiveRun(
-        {
-          runCompleted: false,
-          runPromise,
-          streamId: root,
-        },
-        STREAM_PHASE.RUNNING,
-      ),
-    ).toBe(true);
-    expect(
-      chatTuiCanStopActiveRun(
-        {
-          runCompleted: false,
-          runPromise,
-          streamId: root,
-        },
-        STREAM_PHASE.WAITING,
-      ),
+      chatTuiCanStopActiveRun({
+        runPending: true,
+        streamId: root,
+        status: STREAM_PHASE.WAITING,
+      }),
     ).toBe(false);
     expect(
-      chatTuiCanStopActiveRun(
-        {
-          runCompleted: false,
-          runPromise,
-          streamId: root,
-        },
-        STREAM_PHASE.FAILED,
-      ),
+      chatTuiCanStopActiveRun({
+        runPending: true,
+        streamId: root,
+        status: STREAM_PHASE.FAILED,
+      }),
     ).toBe(false);
     expect(
-      chatTuiCanStopActiveRun(
-        {
-          runCompleted: false,
-          runPromise,
-          streamId: root,
-        },
-        STREAM_PHASE.CANCELLED,
-      ),
+      chatTuiCanStopActiveRun({
+        runPending: true,
+        streamId: root,
+        status: STREAM_PHASE.CANCELLED,
+      }),
     ).toBe(false);
     expect(
-      chatTuiCanStopActiveRun(
-        {
-          runCompleted: false,
-          runPromise,
-          streamId: root,
-        },
-        STREAM_PHASE.COMPLETED,
-      ),
+      chatTuiCanStopActiveRun({
+        runPending: true,
+        streamId: root,
+        status: STREAM_PHASE.COMPLETED,
+      }),
     ).toBe(false);
     expect(
-      chatTuiCanStopActiveRun(
-        {
-          runCompleted: true,
-          runPromise,
-          streamId: root,
-        },
-        STREAM_PHASE.RUNNING,
-      ),
+      chatTuiCanStopActiveRun({
+        runPending: false,
+        streamId: root,
+        status: STREAM_PHASE.RUNNING,
+      }),
     ).toBe(false);
   });
 
   it('keeps Ctrl-C stoppable when the visible stream is already live', () => {
     expect(
-      chatTuiCanStopVisibleRun(
-        {
-          runCompleted: false,
-          runPromise: undefined,
-          streamId: root,
-        },
-        STREAM_PHASE.RUNNING,
-      ),
+      chatTuiCanStopVisibleRun({
+        runPending: false,
+        streamId: root,
+        status: STREAM_PHASE.RUNNING,
+      }),
     ).toBe(true);
     expect(
-      chatTuiCanStopVisibleRun(
-        {
-          runCompleted: true,
-          runPromise: undefined,
-          streamId: root,
-        },
-        STREAM_PHASE.RUNNING,
-      ),
-    ).toBe(true);
-    expect(
-      chatTuiCanStopVisibleRun(
-        {
-          runCompleted: false,
-          runPromise: undefined,
-          streamId: undefined,
-        },
-        STREAM_PHASE.RUNNING,
-      ),
+      chatTuiCanStopVisibleRun({
+        runPending: false,
+        streamId: undefined,
+        status: STREAM_PHASE.RUNNING,
+      }),
     ).toBe(false);
     expect(
-      chatTuiCanStopVisibleRun(
-        {
-          runCompleted: false,
-          runPromise: undefined,
-          streamId: root,
-        },
-        STREAM_PHASE.WAITING,
-      ),
+      chatTuiCanStopVisibleRun({
+        runPending: false,
+        streamId: root,
+        status: STREAM_PHASE.WAITING,
+      }),
     ).toBe(false);
   });
 

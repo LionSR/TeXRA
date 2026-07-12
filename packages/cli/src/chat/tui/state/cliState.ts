@@ -324,6 +324,8 @@ function defaultSessionMeta(): SessionMeta {
 const ACTIVE_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 const ROOT_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 const ROOT_RUN_START_AVAILABLE = signal<boolean>(true);
+const ROOT_RUN_PENDING = signal<boolean>(false);
+const ROOT_RUN_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 
 /** The stream currently focused in the transcript / status bar. */
 export const activeStreamId = ACTIVE_STREAM_ID;
@@ -331,6 +333,15 @@ export const activeStreamId = ACTIVE_STREAM_ID;
 export const rootStreamId = ROOT_STREAM_ID;
 /** Whether starting a new root run is currently available. */
 export const rootRunStartAvailable = ROOT_RUN_START_AVAILABLE;
+/** Whether the root session holds an unfinished run claim (run promise
+ *  pending). Published only by `publishChatTuiRunState`, so renders read the
+ *  session run-state reactively instead of calling impure session closures
+ *  that memoized renders would cache stale (#8273). */
+export const rootRunPending = ROOT_RUN_PENDING;
+/** Run-control mirror of `TuiSession.streamId` — cleared while a new run is
+ *  pending, unlike `rootStreamId`, which stays put as the transcript anchor
+ *  across pending windows. Published only by `publishChatTuiRunState`. */
+export const rootRunStreamId = ROOT_RUN_STREAM_ID;
 
 // ---------------------------------------------------------------------------
 // foregroundOverlaySlice
@@ -468,6 +479,8 @@ export function resetCliState(
   rootStreamId.set(undefined);
   streams.set(new Map());
   rootRunStartAvailable.set(true);
+  rootRunPending.set(false);
+  rootRunStreamId.set(undefined);
   resetChildStreamEntries();
   activeForm.set(undefined);
   slashPaletteOpen.set(false);
