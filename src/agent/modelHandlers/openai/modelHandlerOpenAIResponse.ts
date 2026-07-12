@@ -82,6 +82,7 @@ import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SUMMARY_PREFIX,
   COMPACTION_SYSTEM_PROMPT,
+  COMPACTION_USER_PROMPT,
   estimateTokensFromText,
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
@@ -983,7 +984,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           {
             model: this.config.fullName,
             instructions: COMPACTION_SYSTEM_PROMPT,
-            input: conversationMessages,
+            input: [
+              ...conversationMessages,
+              {
+                type: 'message',
+                role: 'user',
+                content: [createInputText(COMPACTION_USER_PROMPT)],
+              },
+            ],
             max_output_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
             store: this.storesResponsesServerSide,
             ...(this.capabilities.supportsReasoning && {
