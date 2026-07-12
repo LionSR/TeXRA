@@ -232,8 +232,10 @@ export async function executeCommand(
     // Only the shell/string form needs this hand-rolled abort + force-kill
     // machinery: it terminates via `signalProcessGroup` (negative-PID /
     // tree-kill) so piped children don't outlive the shell. The array form
-    // spawns a single non-detached process, so it delegates straight to
-    // execa's own `cancelSignal` / `forceKillAfterDelay` natives below.
+    // spawns a single non-detached process and leaves all signalling to
+    // execa's own `cancelSignal` / `forceKillAfterDelay` natives below; its
+    // only hand-rolled piece is the signal-free stream-destroy backstop
+    // installed in its abort listener.
     const terminateSubprocess = (signal: NodeJS.Signals): void => {
       const pid = subprocess.pid;
       if (!pid) return;
@@ -251,12 +253,8 @@ export async function executeCommand(
       }
     };
 
-    const installAbortListener = (): void => {
+    const installAbortListener = (onAbort: () => void): void => {
       if (!options.signal) return;
-      const onAbort = (): void => {
-        shellAborted = true;
-        terminateSubprocess('SIGTERM');
-      };
       options.signal.addEventListener('abort', onAbort, { once: true });
       removeAbortListener = () => {
         options.signal?.removeEventListener('abort', onAbort);
@@ -315,10 +313,27 @@ export async function executeCommand(
     }
 
     if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
-    // Array-form abort is handled by execa's own `cancelSignal` (passed
-    // above); only the shell/string form needs the process-group-aware
-    // hand-rolled listener.
-    if (!Array.isArray(command)) installAbortListener();
+    if (Array.isArray(command)) {
+      // Array-form abort/force-kill is execa's (`cancelSignal` /
+      // `forceKillAfterDelay` above), but execa only signals the tracked
+      // pid: a descendant that inherited stdio (e.g. `bash -c 'work &
+      // wait'`) can keep the pipes open after the tracked process dies,
+      // hanging `await subprocess` forever. Destroy the streams once
+      // execa's force-kill delay has elapsed so the await always unblocks.
+      // No signal is sent here — the array form intentionally keeps no
+      // process-group semantics, so the descendant itself is left alone.
+      installAbortListener(() => {
+        forceKillTimeoutId = setTimeout(() => {
+          subprocess.stdout?.destroy();
+          subprocess.stderr?.destroy();
+        }, FORCE_KILL_DELAY_MS);
+      });
+    } else {
+      installAbortListener(() => {
+        shellAborted = true;
+        terminateSubprocess('SIGTERM');
+      });
+    }
 
     if (shellTimeout) {
       shellTimeoutId = setTimeout(() => {
