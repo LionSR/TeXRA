@@ -48,8 +48,10 @@ import type {
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import {
+  findActiveAgentExecutionHandle,
   getAllActiveExecutionIds,
   SessionHandle,
+  untrackActiveAgentExecution,
 } from '@agent/runtime/SessionHandle';
 import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import {
@@ -744,11 +746,64 @@ export class DesktopProgressBridge {
   } {
     const activeExecutionIds = new Set(getAllActiveExecutionIds());
     const allExecutionIds = this.getRestartRepairExecutionIdMap();
+    // Rebind BEFORE forgetting the ghost: a restored stream's executionId
+    // being "active" only means some live session still owns it -- possibly
+    // a previous window's session, retained post-dispose so headless runs
+    // stay visible to process-wide guards (`keepActiveExecutions`, #6329).
+    // Without this, forgetting the ghost here (below) leaves the run with no
+    // rail entry owner at all: the old window's bridge already stopped
+    // forwarding events (disposed), and nothing else ever subscribed this
+    // window to them. See #8148.
+    this.rebindActiveExecutions(activeExecutionIds, allExecutionIds);
     this.sessionProgress.forgetActiveRestoredStreams(
       activeExecutionIds,
       allExecutionIds,
     );
     return { activeExecutionIds, allExecutionIds };
+  }
+
+  /**
+   * Reattach every still-active execution a restored (ghost) stream points
+   * at to THIS window's session, so window recreation doesn't strand a
+   * headless-continuing run on its previous window's disposed bridge (#8148).
+   * Idempotent (guarded by `this.session.executions.getHandle`), since
+   * startup repair calls `refreshActiveExecutionIds` more than once.
+   */
+  private rebindActiveExecutions(
+    activeExecutionIds: ReadonlySet<string>,
+    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>,
+  ): void {
+    for (const [streamId, snapshot] of this.sessionProgress.restoredStreams) {
+      const executionId = snapshot.executionId ?? allExecutionIds.get(streamId);
+      if (!executionId || !activeExecutionIds.has(executionId)) continue;
+      if (this.session.executions.getHandle(executionId)) continue;
+      const found = findActiveAgentExecutionHandle(executionId);
+      if (!found || found.handle.childStreamId !== streamId) continue;
+      const { handle, status } = found;
+      this.session.executions.track(handle);
+      // `hydrateRestoredStreams()` already seeded this window's status from
+      // the on-disk snapshot's `lastKnownStatus`, which goes stale the moment
+      // the run transitions while headless (nothing persists it, #8148).
+      // Overwrite with the live status the owning session actually has, so
+      // display and `terminateWaitingHandle`'s WAITING/RESUMING check both
+      // see the truth instead of a possibly-wrong RUNNING carried from disk.
+      if (status) {
+        this.session.status.transition(streamId, status, 'restart-repair', {
+          trace: handle.trace,
+        });
+      }
+      const detachTrace = handle.trace
+        ? this.session.attachRunTrace(handle.trace, streamId)
+        : undefined;
+      void handle.result.finally(() => {
+        detachTrace?.();
+        // Release from every live session that still owns this handle, not
+        // just this window's -- otherwise the session that originally
+        // launched it (retained post-dispose via `keepActiveExecutions`)
+        // never sees its own registry go idle and leaks in `liveSessions`.
+        untrackActiveAgentExecution(executionId);
+      });
+    }
   }
 
   /**
