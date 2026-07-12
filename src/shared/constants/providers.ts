@@ -142,12 +142,22 @@ const PROVIDER_REGISTRY = [
       keyUrlWhenUnset: 'https://z.ai/',
     },
   },
+  {
+    id: ModelProvider.META,
+    displayName: 'Meta',
+    // The supabase relay does not forward to Meta yet (see
+    // supabase/functions/relay/models.ts ALL_PROVIDERS) — flip this together
+    // with the relay-side provider registration when Included Access lands.
+    hasServerKey: false,
+    keyUrl: 'https://dev.meta.ai/',
+    streamingKey: GlobalStateKey.STREAMING_META,
+    endpointKey: GlobalStateKey.ENDPOINT_META,
+  },
 ] as const satisfies readonly ProviderDef[];
 
 /** Providers not in the main registry (no server-side keys, no model selection). */
 const EXTRA_DISPLAY_NAMES: Record<string, string> = {
   openRouter: 'OpenRouter',
-  [ModelProvider.META]: 'Meta',
   [ModelProvider.COPILOT]: 'Copilot',
   [ModelProvider.OTHERS]: 'Others',
 };

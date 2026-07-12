@@ -63,6 +63,7 @@ export const PROVIDER_KEY_REDACTION_RULES = {
     patterns: [OPENAI_COMPATIBLE_API_KEY_PATTERN],
   },
   glm: OPENAI_COMPATIBLE_REDACTION,
+  meta: OPENAI_COMPATIBLE_REDACTION,
 } as const satisfies Record<ApiKeyProviderId, ProviderKeyRedactionRule>;
 
 const PROVIDER_KEY_PATTERNS = [
