@@ -481,7 +481,8 @@ contract.
 status as the source of truth but implements `persistMetaField` as a logger that
 never throws. `src/agent/runtime/AgentRunLifecycle.ts:88-132` adds another catch
 and continues. Flow-record cleanup is independently swallowed in
-`runReflectionFlow.ts:366-373` and `runToolUseFlow.ts:549-565`.
+`src/agent/implementations/flows/reflection/runReflectionFlow.ts:366-373` and
+`src/agent/implementations/flows/tooluse/runToolUseFlow.ts:549-565`.
 
 **Complexity and risk.** Completion status, output retention, and resumability
 are one lifecycle decision, but three owners persist or delete pieces with
@@ -880,8 +881,8 @@ uncertainty should fail closed.
   inferred from message shape;
 - `src/agent/runtime/AgentLaunchContext.ts:180-203`: failed flow reads can fall
   through to route inference;
-- `src/agent/implementations/flows/runToolUseFlow.ts:433-450`: launch-time repair
-  for a leftover flow without a resume snapshot;
+- `src/agent/implementations/flows/tooluse/runToolUseFlow.ts:433-450`:
+  launch-time repair for a leftover flow without a resume snapshot;
 - `packages/extension/src/MainViewProvider.ts:231-236`: producer dual-writes
   `optionsData` and `optionsDataByCategory`;
 - `src/shared/schemas/mainView/outbound.ts:21-30` and
