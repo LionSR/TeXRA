@@ -546,6 +546,31 @@ describe('CLI orchestration items', () => {
     );
   });
 
+  it('disables team presets when the approval policy blocks delegation', () => {
+    const launcherItems = buildCliOrchestrationItems({
+      presetPlans: [readyPresetPlan()],
+      history: [],
+      toolUseAgents: [],
+      presetLaunchBlockReason: 'delegation-denied',
+    });
+    const teamItems = buildCliTeamItems([readyPresetPlan()], {
+      launchBlockReason: 'delegation-denied',
+    });
+
+    expect(launcherItems.find((item) => item.label === 'Team')).toEqual(
+      expect.objectContaining({
+        description: 'Delegation blocked by "never"; use ask or yolo',
+        disabled: true,
+      }),
+    );
+    expect(teamItems.find((item) => item.label === 'Team physicist')).toEqual(
+      expect.objectContaining({
+        description: 'Delegation blocked by "never"; use ask or yolo',
+        disabled: true,
+      }),
+    );
+  });
+
   it('lists every team preset so the user can switch between teams', () => {
     const plans = [
       readyPresetPlan({ id: 'lean-project', name: 'Lean Project' }),

@@ -191,6 +191,10 @@ async function runOrchestration(context: CliContext): Promise<number> {
       includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
       modelAccess: launcherModelAccess,
       account: accountStatus,
+      presetLaunchBlockReason:
+        launchContext.approvalPolicy === 'never'
+          ? 'delegation-denied'
+          : undefined,
     });
     // Load the model registry up front so the launcher can offer a model pick
     // after an agent/team choice. Best-effort: an unavailable registry just
@@ -215,6 +219,10 @@ async function runOrchestration(context: CliContext): Promise<number> {
       agentItems: buildCliAgentItems(toolUseAgents),
       teamItems: buildCliTeamItems(presetPlanSet.plans, {
         includeLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
+        launchBlockReason:
+          launchContext.approvalPolicy === 'never'
+            ? 'delegation-denied'
+            : undefined,
       }),
       accountItems: buildCliAccountItems(accountStatus),
       apiMode,
