@@ -10,6 +10,7 @@ import {
 import type { MemoryViewItem } from '@shared/schemas';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
+import { COLOR_WARNING } from '../ui/colors';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';
@@ -50,7 +51,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
   const items = data ?? [];
   if (items.length === 0) {
     return (
-      <FormFrame color="yellow" title="/memory">
+      <FormFrame color={COLOR_WARNING} title="/memory">
         <Text>No memory files found.</Text>
       </FormFrame>
     );
@@ -67,7 +68,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
   }));
 
   return (
-    <FormFrame color="cyan" title="/memory" showCloseHint={false}>
+    <FormFrame title="/memory" showCloseHint={false}>
       <Text dimColor>Choose a memory to preview in the transcript.</Text>
       <Box marginTop={1}>
         <Select

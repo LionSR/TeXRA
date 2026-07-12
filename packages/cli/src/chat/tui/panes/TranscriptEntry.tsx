@@ -6,6 +6,7 @@
 import { memo } from 'react';
 import { Box, Text } from 'ink';
 
+import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
 import { Markdown } from '../render/Markdown';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -159,7 +160,7 @@ function InquiryContinuationRow({
       {displayLines.map((line, index) => (
         <Text
           key={index}
-          color={colorEnabled !== false && index === 0 ? 'cyan' : undefined}
+          color={colorEnabled !== false && index === 0 ? COLOR_HINT : undefined}
           dimColor={colorEnabled !== false && index > 0}
         >
           {line}
@@ -193,7 +194,7 @@ function ProcessEntryRow({
     );
   }
 
-  const color = process.isError ? 'red' : 'green';
+  const color = process.isError ? COLOR_ERROR : COLOR_SUCCESS;
   const [, ...tailLines] = completedProcessDisplayLines(process);
   return (
     <Box
@@ -208,14 +209,14 @@ function ProcessEntryRow({
         {process.elapsed ? (
           <Text dimColor>{` · ${process.elapsed}`}</Text>
         ) : null}
-        {process.isError ? <Text color="red"> · error</Text> : null}
+        {process.isError ? <Text color={COLOR_ERROR}> · error</Text> : null}
       </Box>
       {process.tailLines.length > 0 ? (
         <Box marginLeft={2} flexDirection="column">
           {tailLines.map((line, index) => (
             <Text
               key={index}
-              color={process.isError ? 'red' : undefined}
+              color={process.isError ? COLOR_ERROR : undefined}
               dimColor={!process.isError}
             >
               {line}
@@ -268,7 +269,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
       const cols = entryCols(width, 2);
       return (
         <Box paddingX={1}>
-          <Text color="red">
+          <Text color={COLOR_ERROR}>
             {compactPrefixedDisplayRows({
               fillWidth,
               prefix: ERROR_ENTRY_PREFIX,
@@ -455,7 +456,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
 
   const prefix =
     entry.role === 'error' ? ERROR_ENTRY_PREFIX : USER_ENTRY_PREFIX;
-  const color = entry.role === 'error' ? 'red' : undefined;
+  const color = entry.role === 'error' ? COLOR_ERROR : undefined;
   const cols = entryCols(width, 2);
   return (
     <Box paddingX={1}>
