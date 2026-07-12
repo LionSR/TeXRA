@@ -14,18 +14,16 @@
 // (verified via the reference `standardwebhooks` library, which also enforces
 // the spec's timestamp tolerance against replay).
 
-import { Webhook } from 'standardwebhooks';
+// Local imports
 import {
   checkEmailDomain,
   checkGitHubAccountAge,
 } from '../_shared/emailPolicy.ts';
+import { createWebhookVerifier } from './webhookVerification.ts';
 
-const HOOK_SECRET_RAW = Deno.env.get('BEFORE_USER_CREATED_HOOK_SECRET') ?? '';
-// Supabase stores the secret as "v1,whsec_<base64>"; strip the prefix.
-const HOOK_SECRET_BASE64 = HOOK_SECRET_RAW.replace(/^v1,whsec_/, '');
-
-// null = secret not configured; requests are allowed unsigned (with a warning).
-const webhook = HOOK_SECRET_BASE64 ? new Webhook(HOOK_SECRET_BASE64) : null;
+const webhook = createWebhookVerifier(
+  Deno.env.get('BEFORE_USER_CREATED_HOOK_SECRET'),
+);
 
 const GITHUB_FETCH_TIMEOUT_MS = 3000;
 
@@ -110,25 +108,18 @@ Deno.serve(async (req) => {
     return new Response('Invalid JSON', { status: 400 });
   }
 
-  if (webhook) {
-    try {
-      // verify() enforces the spec's timestamp tolerance (anti-replay) and
-      // validates the signed raw body. JSON was already parsed above so
-      // malformed payloads remain 400 rather than looking like auth failures.
-      webhook.verify(rawBody, {
-        'webhook-id': req.headers.get('webhook-id') ?? '',
-        'webhook-timestamp': req.headers.get('webhook-timestamp') ?? '',
-        'webhook-signature': req.headers.get('webhook-signature') ?? '',
-      });
-    } catch {
-      warn('Signature verification failed');
-      return new Response('Unauthorized', { status: 401 });
-    }
-  } else {
-    warn(
-      'BEFORE_USER_CREATED_HOOK_SECRET is not set; allowing unsigned requests. ' +
-        'Configure the hook secret to enforce verification.',
-    );
+  try {
+    // verify() enforces the spec's timestamp tolerance (anti-replay) and
+    // validates the signed raw body. JSON was already parsed above so
+    // malformed payloads remain 400 rather than looking like auth failures.
+    webhook.verify(rawBody, {
+      'webhook-id': req.headers.get('webhook-id') ?? '',
+      'webhook-timestamp': req.headers.get('webhook-timestamp') ?? '',
+      'webhook-signature': req.headers.get('webhook-signature') ?? '',
+    });
+  } catch {
+    warn('Signature verification failed');
+    return new Response('Unauthorized', { status: 401 });
   }
 
   const user = payload.user;
