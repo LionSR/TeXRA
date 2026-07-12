@@ -798,9 +798,19 @@ export class StreamLogStore {
   private async readSummary(
     streamId: StreamTabId,
   ): Promise<StreamLogSummary | undefined> {
-    const summary = this.parsePersistedSummary(
-      await this.summaryKv.read<unknown>(streamId),
-    );
+    let persisted: unknown;
+    try {
+      persisted = await this.summaryKv.read<unknown>(streamId);
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      log.warn(
+        LOG_TAG,
+        `Ignoring corrupt summary cache for ${streamId}; rebuilding from the stream log.`,
+      );
+      return undefined;
+    }
+
+    const summary = this.parsePersistedSummary(persisted);
     if (!summary) return undefined;
 
     const [summaryMtime, logMtime] = await Promise.all([
