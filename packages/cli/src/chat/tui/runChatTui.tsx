@@ -490,15 +490,17 @@ export async function runChat(
   const canInterruptActiveRun = (): boolean =>
     chatTuiCanInterruptActiveRun(session);
   const canStopActiveRun = (): boolean =>
-    chatTuiCanStopVisibleRun(session, rootStreamStatus());
+    chatTuiCanStopVisibleRun({
+      runPending: Boolean(session.runPromise && !session.runCompleted),
+      streamId: session.streamId,
+      status: rootStreamStatus(),
+    });
   const isResumableIdle = (): boolean =>
     chatTuiIsResumableIdleOnExit({
       canInterruptActiveRun: canInterruptActiveRun(),
       canStopActiveRun: canStopActiveRun(),
       hasActiveToolUseFlow: hasActiveToolUseFlow(),
     });
-  const canStopPendingRunWithoutStream = (): boolean =>
-    Boolean(session.runPromise && !session.runCompleted && !session.streamId);
   // Chat-session controller: owns run start/resume/stop orchestration.
   // The Ink layer never directly mutates session run-state fields — every
   // state transition flows through one of the controller's narrow commands.
@@ -779,7 +781,6 @@ export async function runChat(
       onSubmit={handleSubmit}
       canInterruptActiveRun={canInterruptActiveRun}
       canStopActiveRun={canStopActiveRun}
-      canStopPendingRunWithoutStream={canStopPendingRunWithoutStream}
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
       onInterruptActive={interruptActive}
