@@ -24,15 +24,19 @@ import {
   createModelHandler,
   createModelHandlerForCompatibilityKey,
   modelHandlerCompatibilityKey,
+  modelHandlersShareConversationFormat,
   shouldUseResponsesAPI,
 } from '@agent/runtime/ModelFactory';
 import {
   CODEX_BACKEND_BASE_URL,
   CODEX_SESSION_SECRET_KEY,
+  CodexAuthError,
+  codexCoordinator,
   resetCodexCoordinator,
   type CodexSession,
 } from '@auth/codex';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
+import { AgentCategory } from '@shared/schemas/agent';
 import type { FakePlatformOptions } from '@test/support/FakePlatform';
 
 function modelConfig(
@@ -200,9 +204,37 @@ describe('OpenAI model handler routing', () => {
   const signedInCodexSession = (): CodexSession => ({
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
-    expiresAtMs: Date.now() + 60_000,
+    expiresAtMs: Date.now() + 10 * 60_000,
     accountId: 'account-id',
   });
+
+  const initializePreferredCodexRelay = async (
+    extraConfig: Record<string, unknown> = {},
+  ): Promise<void> =>
+    initFakePlatform({
+      config: {
+        'texra.chatgptCodex.preferSubscription': true,
+        ...extraConfig,
+      },
+      globalState: { 'texra.useIncludedModelAccess': true },
+      secrets: {
+        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(signedInCodexSession()),
+      },
+    });
+
+  const createdHandlerName = async (
+    agentCategory?: AgentCategory,
+  ): Promise<string> => {
+    const handler = await createModelHandler(
+      codexEligibleConfig,
+      agentCategory,
+    );
+    try {
+      return handler.constructor.name;
+    } finally {
+      handler.dispose();
+    }
+  };
 
   it('keeps Codex-eligible subscription models on the Responses compatibility key', async () => {
     await initFakePlatform({
@@ -263,15 +295,83 @@ describe('OpenAI model handler routing', () => {
     }
   });
 
-  it('uses the Codex endpoint for a signed-in preferred subscription even when relay access is selected', async () => {
-    const codexSession = signedInCodexSession();
-    await initFakePlatform({
-      config: { 'texra.chatgptCodex.preferSubscription': true },
-      globalState: { 'texra.useIncludedModelAccess': true },
-      secrets: {
-        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
+  it('falls back when subscription re-authentication is required', async () => {
+    await initializePreferredCodexRelay();
+    const coordinator = codexCoordinator();
+    vi.spyOn(coordinator, 'getFreshAccessToken').mockImplementation(
+      async () => {
+        await coordinator.signOut();
+        throw new CodexAuthError('revoked', 'fatal', 401);
       },
+    );
+
+    expect(await createdHandlerName()).toBe('ModelHandlerOpenAIResponse');
+  });
+
+  it('propagates a superseded re-auth failure without falling back', async () => {
+    await initializePreferredCodexRelay();
+    const error = new CodexAuthError('session changed', 'expired');
+    vi.spyOn(codexCoordinator(), 'getFreshAccessToken').mockRejectedValue(
+      error,
+    );
+
+    await expect(createModelHandler(codexEligibleConfig)).rejects.toMatchObject(
+      {
+        name: 'AgentError',
+        message: expect.stringContaining('Try again in a moment'),
+        cause: { kind: 'transient' },
+      },
+    );
+  });
+
+  it('propagates session verification read failures without falling back', async () => {
+    await initializePreferredCodexRelay();
+    const coordinator = codexCoordinator();
+    const readError = new Error('keychain unavailable');
+    vi.spyOn(coordinator, 'getFreshAccessToken').mockRejectedValue(
+      new CodexAuthError('session changed', 'expired'),
+    );
+    vi.spyOn(coordinator, 'loadSession').mockRejectedValue(readError);
+
+    await expect(createModelHandler(codexEligibleConfig)).rejects.toMatchObject(
+      {
+        name: 'AgentError',
+        cause: { kind: 'transient', cause: readError },
+      },
+    );
+  });
+
+  it('wraps raw token verification failures as transient auth errors', async () => {
+    await initializePreferredCodexRelay();
+    const rawError = new Error('keychain unavailable');
+    vi.spyOn(codexCoordinator(), 'getFreshAccessToken').mockRejectedValue(
+      rawError,
+    );
+
+    await expect(createModelHandler(codexEligibleConfig)).rejects.toMatchObject(
+      {
+        name: 'AgentError',
+        cause: { name: 'CodexAuthError', kind: 'transient', cause: rawError },
+      },
+    );
+  });
+
+  it('skips subscription preflight for workflows when subscription is tool-use-only', async () => {
+    await initializePreferredCodexRelay({
+      'texra.chatgptCodex.subscriptionToolUseOnly': true,
     });
+    const refreshSpy = vi
+      .spyOn(codexCoordinator(), 'getFreshAccessToken')
+      .mockRejectedValue(new CodexAuthError('temporary outage', 'transient'));
+
+    expect(await createdHandlerName(AgentCategory.Workflow)).toBe(
+      'ModelHandlerOpenAIResponse',
+    );
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('uses the Codex endpoint for a signed-in preferred subscription even when relay access is selected', async () => {
+    await initializePreferredCodexRelay();
 
     const handler = await createModelHandler(codexEligibleConfig);
     try {
@@ -282,6 +382,23 @@ describe('OpenAI model handler routing', () => {
       );
     } finally {
       handler.dispose();
+    }
+  });
+
+  it('treats Codex and relay Responses handlers with the shared key as compatible', async () => {
+    await initializePreferredCodexRelay();
+    const codex = await createModelHandler(codexEligibleConfig);
+    await codexCoordinator().signOut();
+    const relay = await createModelHandler(codexEligibleConfig);
+    try {
+      expect(codex.constructor).not.toBe(relay.constructor);
+      expect(activeModelHandlerCompatibilityKey(codex)).toBe(
+        activeModelHandlerCompatibilityKey(relay),
+      );
+      expect(modelHandlersShareConversationFormat(codex, relay)).toBe(true);
+    } finally {
+      codex.dispose();
+      relay.dispose();
     }
   });
 

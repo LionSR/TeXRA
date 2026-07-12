@@ -5,6 +5,7 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import {
+  currentSession,
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
@@ -27,8 +28,6 @@ import {
 } from '@utils/text/diff';
 import { countLines } from '@utils/text/stringUtils';
 
-import { bashApprovalController } from './bashApproval';
-import { createStreamApprovalController } from './streamApprovalQueue';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
@@ -40,37 +39,34 @@ const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
 export const REVEAL_TIMEOUT_MS = 1500;
 
-export const toolEditApprovalController =
-  createStreamApprovalController<ToolEditApprovalResult>({
-    rejectionResult: () => ({ accepted: false }),
-    bypassEvent: 'updateToolEditApprovalBypassState',
-  });
-
 /** Register a pending approval entry for rejection tracking. */
 export function registerPendingApproval(
   id: string,
   entry: {
     streamId?: StreamTabId;
-    runtimeHost?: AgentRuntimeHost;
     isSettled: () => boolean;
     settle: (result: ToolEditApprovalResult) => void;
   },
+  session: SessionHandle = currentSession(),
 ): void {
-  toolEditApprovalController.registerPending(id, entry);
+  session.approvals.toolEdit.registerPending(id, entry);
 }
 
 /** Unregister a pending approval entry after it has been resolved. */
-export function unregisterPendingApproval(id: string): void {
-  toolEditApprovalController.unregisterPending(id);
+export function unregisterPendingApproval(
+  id: string,
+  session: SessionHandle = currentSession(),
+): void {
+  session.approvals.toolEdit.unregisterPending(id);
 }
 
 export function setToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
   runtimeHost: AgentRuntimeHost,
-  options?: { silent?: boolean },
+  options?: { silent?: boolean; session?: SessionHandle },
 ): void {
-  toolEditApprovalController.bypass.setBypass(
+  (options?.session ?? currentSession()).approvals.toolEdit.bypass.setBypass(
     streamId,
     enabled,
     runtimeHost,
@@ -88,12 +84,16 @@ export function setToolEditApprovalSessionBypass(
 export function toggleToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
+  session: SessionHandle = currentSession(),
 ): boolean {
-  return toolEditApprovalController.bypass.toggleBypass(streamId, runtimeHost);
+  return session.approvals.toolEdit.bypass.toggleBypass(streamId, runtimeHost);
 }
 
-export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
-  return toolEditApprovalController.bypass.isBypassed(streamId);
+export function isApprovalBypassedForStream(
+  streamId: StreamTabId,
+  session: SessionHandle = currentSession(),
+): boolean {
+  return session.approvals.toolEdit.bypass.isBypassed(streamId);
 }
 
 /**
@@ -124,7 +124,9 @@ export function emitToolEditApprovalPrompt(
       event: { type: 'setActiveStream', payload: { streamId } },
     });
   }
-  const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
+  const isBypassed = streamId
+    ? session.approvals.toolEdit.bypass.isBypassed(streamId)
+    : false;
   runtimeHost.emit('showToolEditPermission', {
     requestId,
     path: request.path,
@@ -227,6 +229,7 @@ export async function requestToolEditApproval(
   );
 
   const context = tryUseRunContext();
+  const session = getRunContextSession(context) ?? defaultSession();
   const contextStreamId = getRunContextStreamId(context);
   const preparedRequest =
     request.streamId || !contextStreamId
@@ -235,14 +238,13 @@ export async function requestToolEditApproval(
 
   const streamId = preparedRequest.streamId;
   const isStreamBypassed =
-    streamId && toolEditApprovalController.bypass.isBypassed(streamId);
+    streamId && session.approvals.toolEdit.bypass.isBypassed(streamId);
   if (!approvalsEnabled || isStreamBypassed) {
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
 
-  const hostInteraction = (
-    getRunContextSession(context) ?? defaultSession()
-  ).interactions.requestToolEditApproval(preparedRequest);
+  const hostInteraction =
+    session.interactions.requestToolEditApproval(preparedRequest);
   if (hostInteraction) {
     return finalizeApprovalResult(await hostInteraction, preparedRequest);
   }
@@ -499,12 +501,11 @@ export async function requestAndWriteApprovedEdit(request: {
 export function inheritBashBypassOnChildStream(
   childStreamId: StreamTabId,
   parentStreamId?: StreamTabId,
+  session: SessionHandle = currentSession(),
 ): void {
-  if (
-    parentStreamId &&
-    bashApprovalController.bypass.isBypassed(parentStreamId)
-  ) {
-    bashApprovalController.bypass.setBypass(childStreamId, true);
+  const bashBypass = session.approvals.bash.bypass;
+  if (parentStreamId && bashBypass.isBypassed(parentStreamId)) {
+    bashBypass.setBypass(childStreamId, true);
   }
 }
 
@@ -517,6 +518,9 @@ export function inheritBashBypassOnChildStream(
  * Bash bypass is handled separately by `inheritBashBypassOnChildStream` so it
  * follows the parent regardless of the tool-edit flag.
  */
-export function enableYoloOnChildStream(childStreamId: StreamTabId): void {
-  toolEditApprovalController.bypass.setBypass(childStreamId, true);
+export function enableYoloOnChildStream(
+  childStreamId: StreamTabId,
+  session: SessionHandle = currentSession(),
+): void {
+  session.approvals.toolEdit.bypass.setBypass(childStreamId, true);
 }

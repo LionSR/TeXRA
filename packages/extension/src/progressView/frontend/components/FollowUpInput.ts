@@ -25,7 +25,11 @@ import {
 } from '@shared/utils/clipboardImages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { archivedContext } from '../contexts/streamContexts';
+import {
+  archivedContext,
+  followUpEventSinkContext,
+  type FollowUpEventSink,
+} from '../contexts/streamContexts';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import {
@@ -124,6 +128,14 @@ export class FollowUpInput extends LitElement {
    */
   @consume({ context: archivedContext, subscribe: true })
   private archived = false;
+
+  private readonly inputEventSink: FollowUpEventSink = (event) => {
+    this.dispatchEvent(event);
+  };
+
+  /** Stable conversation-owned sink retained across this element's unmount. */
+  @consume({ context: followUpEventSinkContext })
+  private followUpEventSink: FollowUpEventSink = this.inputEventSink;
 
   @property({ type: Boolean, reflect: true }) visible = false;
   @property({ attribute: false }) value = '';
@@ -226,6 +238,7 @@ export class FollowUpInput extends LitElement {
     const streamId = this.streamId;
     const transientState = this.transientState;
     if (!streamId || !transientState) return;
+    const eventSink = this.followUpEventSink;
     // Suppress the default paste synchronously, before the async read below.
     event.preventDefault();
     const paste = this.attachPastedImages(
@@ -234,11 +247,12 @@ export class FollowUpInput extends LitElement {
       event,
       files,
       transientState.imagePasteRevision,
+      eventSink,
     );
     transientState.pendingImagePastes.add(paste);
     void paste.finally(() => {
       transientState.pendingImagePastes.delete(paste);
-      this.flushPendingImagePasteSend(streamId, transientState);
+      this.flushPendingImagePasteSend(streamId, transientState, eventSink);
     });
   }
 
@@ -248,6 +262,7 @@ export class FollowUpInput extends LitElement {
     event: ClipboardEvent,
     files: Array<{ file: File; type: string }>,
     pasteRevision: number,
+    eventSink: FollowUpEventSink,
   ): Promise<void> {
     const target = this.textAreaEl;
     if (!target) return;
@@ -279,18 +294,24 @@ export class FollowUpInput extends LitElement {
     insertText += chipText;
     transientState.pendingImages = [...transientState.pendingImages, ...added];
     if (
+      this.isConnected &&
       this.streamId === streamId &&
       this.transientState === transientState &&
       this.textAreaEl === target
     ) {
       insertTextAtCursor(target, insertText);
-      this.updateValue(getTextareaValue(target), streamId);
+      this.updateValue(
+        getTextareaValue(target),
+        streamId,
+        'replace',
+        eventSink,
+      );
       return;
     }
 
-    // The shared Lit instance may now display another stream. Preserve the
-    // completed paste in its source stream without touching the active box.
-    this.updateValue(insertText, streamId, 'append');
+    // The input may now be disconnected or display another stream. Preserve
+    // the completed paste in its source stream without touching stale DOM.
+    this.updateValue(insertText, streamId, 'append', eventSink);
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -405,12 +426,13 @@ export class FollowUpInput extends LitElement {
   private emitSendForStream(
     streamId: string,
     transientState: FollowUpInputTransientState,
+    eventSink: FollowUpEventSink = this.inputEventSink,
   ): void {
     if (transientState.pendingImagePastes.size > 0) {
       transientState.sendAfterImagePastes = true;
       return;
     }
-    this.dispatchEvent(
+    eventSink(
       ProgressEvents.followupSend({
         streamId,
         images: transientState.pendingImages,
@@ -423,6 +445,7 @@ export class FollowUpInput extends LitElement {
   private flushPendingImagePasteSend(
     streamId: string,
     transientState: FollowUpInputTransientState,
+    eventSink: FollowUpEventSink = this.inputEventSink,
   ): void {
     if (
       !transientState.sendAfterImagePastes ||
@@ -430,7 +453,7 @@ export class FollowUpInput extends LitElement {
     ) {
       return;
     }
-    this.emitSendForStream(streamId, transientState);
+    this.emitSendForStream(streamId, transientState, eventSink);
   }
 
   private emitPolish(): void {
@@ -453,10 +476,9 @@ export class FollowUpInput extends LitElement {
     value: string,
     streamId = this.streamId,
     mode: 'replace' | 'append' = 'replace',
+    eventSink: FollowUpEventSink = this.inputEventSink,
   ): void {
     if (!streamId) return;
-    this.dispatchEvent(
-      ProgressEvents.followupChange({ streamId, value, mode }),
-    );
+    eventSink(ProgressEvents.followupChange({ streamId, value, mode }));
   }
 }

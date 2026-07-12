@@ -38,10 +38,14 @@ import {
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { createChannelTrace } from '@logger';
-import type { StreamPhase, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 
 import { getRunContextSession, tryUseRunContext } from './RunContext';
-import { AgentExecutionHandle, ExecutionRegistry } from './executionRegistry';
+import {
+  AgentExecutionHandle,
+  ExecutionRegistry,
+  type ExecutionHandle,
+} from './executionRegistry';
 import { ExecutionSubscriptionBinder } from './ExecutionSubscriptionBinder';
 import { StreamStatusMachine } from './StreamStatusService';
 import {
@@ -49,6 +53,10 @@ import {
   type HostInteractions,
 } from './HostInteractions';
 import { SessionEventHub } from './SessionEventHub';
+import {
+  createSessionApprovals,
+  type SessionApprovals,
+} from './streamApprovalQueue';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('sessionHandle');
@@ -94,6 +102,8 @@ export class SessionHandle {
   readonly flushers: Set<() => void>;
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
+  /** Session-owned approval queues, pending registries, and bypass state. */
+  readonly approvals: SessionApprovals;
   /**
    * Optional session-scoped emit surface for the non-run-scoped host-path
    * emissions (SDK Step 7d follow-on F-1). Unset ⇒ those stay on the bus.
@@ -131,6 +141,7 @@ export class SessionHandle {
     this.transcripts = transcripts;
     this.followUps = followUps;
     this.interactions = init.interactions ?? new SessionHostInteractions();
+    this.approvals = createSessionApprovals();
     // A fresh session owns its own flusher set; the default session aliases
     // the process-module set (`getActiveFlushers()`) so the process-wide
     // shutdown drain (`flushPendingRunTraces()`) still reaches it.
@@ -256,6 +267,9 @@ export class SessionHandle {
   private teardownOwners(): void {
     this.subscriptions.dispose();
     this.executions.dispose();
+    // Settle any approval still pending in this session (rejected) and drop
+    // its bypass state before the interaction slot itself is torn down.
+    this.approvals.rejectAndClearAll();
     this.interactions.dispose();
     this.resultListeners.clear();
   }
@@ -290,11 +304,13 @@ export function getAllActiveExecutionIds(): string[] {
 }
 
 /** A still-active execution found on some other live session, plus that
- * session's own live status for it — authoritative over any stale on-disk
- * snapshot a rebinding window may have separately hydrated. */
+ * owning session itself. The owner's `status`/`executions` are the run's live
+ * runtime spine — authoritative over any stale on-disk snapshot a rebinding
+ * window may have separately hydrated — so a rebinder reads live status,
+ * walks child handles, and forwards host interactions through it. */
 export interface ActiveAgentExecutionLookup {
   readonly handle: AgentExecutionHandle;
-  readonly status: StreamPhase | undefined;
+  readonly session: SessionHandle;
 }
 
 /**
@@ -311,28 +327,31 @@ export function findActiveAgentExecutionHandle(
   for (const session of liveSessions) {
     const handle = session.executions.getHandle(executionId);
     if (handle instanceof AgentExecutionHandle) {
-      return { handle, status: session.status.get(handle.childStreamId) };
+      return { handle, session };
     }
   }
   return undefined;
 }
 
 /**
- * Untrack an execution from every live session that still has it registered
- * — not just the one session that happens to finalize it. A cross-session
- * rebind (via {@link findActiveAgentExecutionHandle} above) tracks the same
- * handle into a second session's registry without removing it from the
- * first. Without this, whichever session finalizes the run (e.g. a user stop
- * issued from a newly recreated window) only clears its own registry,
- * leaving the original `keepActiveExecutions` session's registry non-idle
- * forever: its `disposeWhenIdle` wait loop never observes the change and
- * that session never leaves {@link liveSessions} (#8148).
+ * Untrack an execution handle from every live session that still has it
+ * registered — not just the one session that happens to finalize it. A
+ * cross-session rebind (via {@link findActiveAgentExecutionHandle} above)
+ * tracks the same handle into a second session's registry without removing
+ * it from the first. Without this, whichever session finalizes the run
+ * (e.g. a user stop issued from a newly recreated window) only clears its
+ * own registry, leaving the original `keepActiveExecutions` session's
+ * registry non-idle forever: its `disposeWhenIdle` wait loop never observes
+ * the change and that session never leaves {@link liveSessions} (#8148).
+ *
+ * Matches on the handle identity, not the execution id: a resume replaces a
+ * rebound WAITING handle with a *fresh* handle under the same execution id
+ * (#8229), and releasing the superseded handle by id alone would tear the
+ * fresh, live registration out of its session's registry too.
  */
-export function untrackActiveAgentExecution(executionId: string): void {
+export function untrackActiveAgentExecution(handle: ExecutionHandle): void {
   for (const session of liveSessions) {
-    if (session.executions.getHandle(executionId)) {
-      session.executions.untrack(executionId);
-    }
+    session.executions.untrackIfCurrent(handle);
   }
 }
 

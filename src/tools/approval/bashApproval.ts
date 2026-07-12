@@ -2,17 +2,21 @@ import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
+  getRunContextSession,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import {
+  currentSession,
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireRuntimeHost } from '@tools/contextHelpers';
 import { getConfig } from '@utils/config/configUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-
-import { createStreamApprovalController } from './streamApprovalQueue';
 
 const BashApprovalRequestSchema = z.object({
   command: z.string(),
@@ -38,19 +42,13 @@ const DEFAULT_BASH_TIMEOUT_INSTRUCTION =
   'rejection. You may retry the command later if it is still needed, use a ' +
   'non-shell method, or continue without it.';
 
-export const bashApprovalController =
-  createStreamApprovalController<BashApprovalResult>({
-    rejectionResult: () => ({ accepted: false }),
-    bypassEvent: 'updateBashApprovalBypassState',
-  });
-
 export function setBashApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
   runtimeHost: AgentRuntimeHost,
-  options?: { silent?: boolean },
+  options?: { silent?: boolean; session?: SessionHandle },
 ): void {
-  bashApprovalController.bypass.setBypass(
+  (options?.session ?? currentSession()).approvals.bash.bypass.setBypass(
     streamId,
     enabled,
     runtimeHost,
@@ -61,14 +59,16 @@ export function setBashApprovalSessionBypass(
 export function toggleBashApprovalSessionBypass(
   streamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
+  session: SessionHandle = currentSession(),
 ): boolean {
-  return bashApprovalController.bypass.toggleBypass(streamId, runtimeHost);
+  return session.approvals.bash.bypass.toggleBypass(streamId, runtimeHost);
 }
 
 export function isBashApprovalBypassedForStream(
   streamId: StreamTabId,
+  session: SessionHandle = currentSession(),
 ): boolean {
-  return bashApprovalController.bypass.isBypassed(streamId);
+  return session.approvals.bash.bypass.isBypassed(streamId);
 }
 
 export async function requestBashApproval(
@@ -77,19 +77,20 @@ export async function requestBashApproval(
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
 
   const context = tryUseRunContext();
+  const session = getRunContextSession(context) ?? defaultSession();
   const streamId = request.streamId ?? getRunContextStreamId(context);
 
   if (
     !approvalsEnabled ||
-    (streamId && isBashApprovalBypassedForStream(streamId))
+    (streamId && session.approvals.bash.bypass.isBypassed(streamId))
   ) {
     return { accepted: true };
   }
 
   const runtimeHost = requireRuntimeHost('bash approval', context);
 
-  return bashApprovalController.enqueue(() =>
-    showApprovalPrompt(request, streamId, runtimeHost),
+  return session.approvals.bash.enqueue(() =>
+    showApprovalPrompt(request, streamId, runtimeHost, session),
   );
 }
 
@@ -97,8 +98,9 @@ async function showApprovalPrompt(
   request: BashApprovalRequest,
   streamId: StreamTabId | undefined,
   runtimeHost: AgentRuntimeHost,
+  session: SessionHandle,
 ): Promise<BashApprovalResult> {
-  if (streamId && isBashApprovalBypassedForStream(streamId)) {
+  if (streamId && session.approvals.bash.bypass.isBypassed(streamId)) {
     return { accepted: true };
   }
 

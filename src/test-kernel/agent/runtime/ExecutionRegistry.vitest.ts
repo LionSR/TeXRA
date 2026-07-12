@@ -37,6 +37,48 @@ import {
 setupPlatform({ workspacePath: '/workspace' });
 
 describe('executionRegistry', () => {
+  it('observes the current handle, replacements, and removal in order', () => {
+    const registry = new ExecutionRegistry();
+    const executionId = 'exec-observe-handle';
+    const streamId = 'stream-observe-handle' as StreamTabId;
+    const first = new AgentExecutionHandle(
+      executionId,
+      streamId,
+      streamId,
+      'first',
+      'workflow',
+      createRecordingHost().host,
+    );
+    const second = new AgentExecutionHandle(
+      executionId,
+      streamId,
+      streamId,
+      'second',
+      'workflow',
+      createRecordingHost().host,
+    );
+    const registrations: unknown[] = [];
+    const detachRegistrations = registry.addRegistrationListener(
+      (changedId, handle) => {
+        if (changedId === executionId) registrations.push(handle);
+      },
+    );
+    registry.track(first);
+    const seen: unknown[] = [];
+    const detach = registry.observeHandle(executionId, (handle) => {
+      seen.push(handle);
+    });
+
+    registry.track(second);
+    registry.untrack(executionId);
+
+    expect(seen).toEqual([first, second, undefined]);
+    expect(registrations).toEqual([first, second, undefined]);
+    detach();
+    detachRegistrations();
+    registry.dispose();
+  });
+
   it('owns process-output poller teardown', () => {
     const explicit = createRecordingHost();
     const processOutput = new ProcessOutputPoller();

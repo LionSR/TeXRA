@@ -67,8 +67,13 @@ export class CodexAuthError extends Error {
   readonly kind: CodexAuthErrorKind;
   readonly status?: number;
 
-  constructor(message: string, kind: CodexAuthErrorKind, status?: number) {
-    super(message);
+  constructor(
+    message: string,
+    kind: CodexAuthErrorKind,
+    status?: number,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
     this.name = 'CodexAuthError';
     this.kind = kind;
     this.status = status;
@@ -78,4 +83,14 @@ export class CodexAuthError extends Error {
   get needsReauth(): boolean {
     return this.kind === 'fatal' || this.kind === 'expired';
   }
+}
+
+/** User-facing message shared by preflight and request-time auth failures. */
+export function formatCodexAuthUnavailableMessage(
+  error: CodexAuthError,
+): string {
+  const action = error.needsReauth
+    ? 'Sign in with ChatGPT again, or turn off "Prefer ChatGPT subscription".'
+    : 'Try again in a moment, or turn off "Prefer ChatGPT subscription".';
+  return `ChatGPT subscription unavailable: ${error.message} ${action}`;
 }

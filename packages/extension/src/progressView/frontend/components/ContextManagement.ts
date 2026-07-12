@@ -127,7 +127,6 @@ export class ContextManagement extends LitElement {
           iconName: this.config.icon,
           label: this.config.label,
           labelClass: 'context-title',
-          summarySlot: true,
         })}
         <div class="context-content" data-log-id=${this.logId}>
           ${repeat(
