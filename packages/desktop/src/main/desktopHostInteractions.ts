@@ -92,7 +92,7 @@ class DesktopHostInteractions implements HostInteractions {
       streamId: streamId ?? '',
     };
     return this.showPending(requestId, { kind: 'bash', streamId }, (settle) => {
-      this.activateStream(streamId);
+      this.revealStream(streamId);
       this.options.getApprovalHandlers().bash.show(payload);
       return settle;
     });
@@ -105,7 +105,7 @@ class DesktopHostInteractions implements HostInteractions {
       request.approvalId,
       { kind: 'plan', streamId: request.streamId },
       (settle) => {
-        this.activateStream(request.streamId);
+        this.revealStream(request.streamId);
         this.options.getApprovalHandlers().planApproval.show(request);
         return settle;
       },
@@ -119,7 +119,7 @@ class DesktopHostInteractions implements HostInteractions {
       request.proposalId,
       { kind: 'proposal', streamId: request.streamId },
       (settle) => {
-        this.activateStream(request.streamId);
+        this.revealStream(request.streamId);
         this.options.getApprovalHandlers().agentProposal.show(request);
         return settle;
       },
@@ -138,7 +138,7 @@ class DesktopHostInteractions implements HostInteractions {
       request.requestId,
       { kind: 'userQuestion', streamId },
       (settle) => {
-        this.activateStream(streamId);
+        this.revealStream(streamId);
         this.options.getApprovalHandlers().userQuestion.show(request);
         return settle;
       },
@@ -235,12 +235,23 @@ class DesktopHostInteractions implements HostInteractions {
     });
   }
 
-  private activateStream(streamId: StreamTabId | undefined): void {
+  // Interaction requests surface per-stream (pending badge on the stream
+  // row); `suppressViewSwitch` registers the stream without yanking the
+  // active tab away from whatever the user is inspecting — matches the
+  // extension host contract (#8246).
+  private revealStream(streamId: StreamTabId | undefined): void {
     this.options.runtimeHost.emit('requestEnsureProgressView', {});
     if (streamId) {
       this.options.session.events.emit({
         scope: 'session',
-        event: { type: 'setActiveStream', payload: { streamId } },
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId,
+            suppressViewSwitch: true,
+            ensureVisible: true,
+          },
+        },
       });
     }
   }
