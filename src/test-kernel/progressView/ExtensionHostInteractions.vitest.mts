@@ -127,7 +127,14 @@ describe('createExtensionHostInteractions', () => {
     );
     expect(sessionEvents).toContainEqual({
       scope: 'session',
-      event: { type: 'setActiveStream', payload: { streamId: 'stream-a' } },
+      event: {
+        type: 'setActiveStream',
+        payload: {
+          streamId: 'stream-a',
+          suppressViewSwitch: true,
+          ensureVisible: true,
+        },
+      },
     });
     expect(handlers.planApproval.show).toHaveBeenCalledWith({
       approvalId: 'plan-a',
@@ -150,6 +157,41 @@ describe('createExtensionHostInteractions', () => {
     expect(
       interactions.resolve('plan-a', { kind: 'plan', action: 'approve' }),
     ).toBe(false);
+  });
+
+  it('surfaces retry requests without stealing active-stream focus (#8246)', async () => {
+    const handlers = createHandlers();
+    const session = createTestSession();
+    const sessionEvents = recordSessionEvents(session);
+    const interactions = createInteractions({ handlers, session });
+
+    void interactions.requestRetry?.({
+      streamId: 'failing-subagent' as StreamTabId,
+      operation: 'Model invocation',
+    });
+
+    // The stream is registered so its row can carry the pending badge, but
+    // the active tab must not switch — the user may be inspecting another
+    // stream while a failing subagent re-raises retry requests.
+    const activations = sessionEvents.filter(
+      (e) => e.scope === 'session' && e.event.type === 'setActiveStream',
+    );
+    expect(activations).toEqual([
+      {
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId: 'failing-subagent',
+            suppressViewSwitch: true,
+            ensureVisible: true,
+          },
+        },
+      },
+    ]);
+    expect(handlers.retry.show).toHaveBeenCalledWith(
+      expect.objectContaining({ streamId: 'failing-subagent' }),
+    );
   });
 
   it('cancels pending retry requests for a removed stream', async () => {
