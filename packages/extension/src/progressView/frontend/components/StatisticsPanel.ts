@@ -82,7 +82,6 @@ export class StatisticsPanel extends LitElement {
         ${buildDetailsSummary({
           iconName: 'graph',
           label: 'Statistics',
-          summarySlot: true,
         })}
         <div class="statistics-content">
           ${repeat(
