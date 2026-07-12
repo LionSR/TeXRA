@@ -351,7 +351,7 @@ export async function runToolUseFlow<C = unknown>(
   let totalCostUsd: number | undefined;
   let teardownSetup: (() => void) | undefined;
   let preserveResumeRecord = false;
-  let persistenceRecoveryComplete = false;
+  let persistenceRecoveryPending = false;
   const compatibilityKey = activeModelHandlerCompatibilityKey(
     services.modelHandler,
   );
@@ -372,10 +372,12 @@ export async function runToolUseFlow<C = unknown>(
       return { outcome };
     }
 
+    persistenceRecoveryPending = true;
     const flowRecord = await readPersistedFlowRecord(kv, executionId);
     // Cancellation can also arrive while the recovery read is pending. Do not
     // start a migration or repair write after that handoff.
     if (input.checkInterruption()) {
+      persistenceRecoveryPending = false;
       preserveResumeRecord = input.resumeSnapshot !== undefined;
       return { outcome };
     }
@@ -464,7 +466,7 @@ export async function runToolUseFlow<C = unknown>(
     }
     // Cleanup may delete a terminal flow record only after absence was
     // confirmed or a present record passed its migration boundary.
-    persistenceRecoveryComplete = true;
+    persistenceRecoveryPending = false;
 
     const prepareNode = new ToolUsePrepareNode<C>();
     const cycleNode = new ToolUseCycleNode<C>();
@@ -546,7 +548,7 @@ export async function runToolUseFlow<C = unknown>(
     if (preserveResumeRecord) {
       preservationReason =
         'Flow record preserved after resume startup cancellation';
-    } else if (!persistenceRecoveryComplete) {
+    } else if (persistenceRecoveryPending) {
       preservationReason =
         'Flow record preserved after persistence recovery failure';
     } else if (outcome === STREAM_PHASE.WAITING) {

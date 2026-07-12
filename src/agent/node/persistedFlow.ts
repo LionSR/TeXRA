@@ -1,14 +1,18 @@
 // Based on https://github.com/Yuyz0112/koala-code-reader/blob/main/src/code-reader/persisted-flow.ts
 // Enhanced to use ExecutionKVStore as first-citizen interface
 
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports - agent
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
-
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+
+// Local imports - utilities
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+// Local imports - flow engine
 import { BaseNode, Flow, type Action } from '.';
 
 /** Prefix for a flow record's KV key. Single source of truth for callers deriving it. */
@@ -92,11 +96,7 @@ export const PersistedFlowRecordEnvelopeSchema = z
       Object.hasOwn(stored, 'shared'),
     { message: 'Flow record must be an object with an own shared field' },
   )
-  .pipe(PersistedFlowRecordObjectSchema)
-  .transform((record): FlowRecord => ({
-    ...record,
-    shared: record.shared,
-  }));
+  .pipe(PersistedFlowRecordObjectSchema);
 
 export type PersistedFlowStateErrorReason =
   'read-failed' | 'unsupported-record' | 'missing-shared' | 'invalid-shared';
