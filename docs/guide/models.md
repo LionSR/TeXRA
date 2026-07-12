@@ -113,9 +113,9 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 
 ## Meta (Muse Spark) Models
 
-| Model ID     | Use Case                                 | Cost | Speed  |
-| :----------- | :--------------------------------------- | :--- | :----- |
-| `musespark11` | Reasoning + vision + PDF, 1M context    | $$   | Medium |
+| Model ID      | Use Case                             | Cost | Speed  |
+| :------------ | :----------------------------------- | :--- | :----- |
+| `musespark11` | Reasoning + vision + PDF, 1M context | $$   | Medium |
 
 Muse Spark always reasons (effort is adjustable but cannot be disabled). TeXRA
 talks to the Meta Model API's Responses surface, which carries reasoning across
