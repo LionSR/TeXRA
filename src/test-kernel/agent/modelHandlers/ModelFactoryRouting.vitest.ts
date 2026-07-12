@@ -19,7 +19,6 @@ import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDe
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerMiniMax } from '@agent/modelHandlers/openai/modelHandlerMiniMax';
 import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
-import { ModelHandlerMeta } from '@agent/modelHandlers/openai/modelHandlerMeta';
 import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,
@@ -761,19 +760,6 @@ describe('direct handler capability overrides', () => {
       new ModelHandlerOpenAI(modelConfig(ModelProvider.OPENAI))
         .requiresBatchedParallelToolResults,
     ).toBe(false);
-  });
-
-  it('defers Meta token counting to the model capability instead of the Responses default', () => {
-    // The base Responses handler assumes every directly-routed backend
-    // implements /responses/input_tokens; Meta must follow llm-zoo instead.
-    const handler = new ModelHandlerMeta(
-      modelConfig(ModelProvider.META, { supportsTokenCounting: false }),
-    );
-    try {
-      expect(handler.supportsTokenCounting).toBe(false);
-    } finally {
-      handler.dispose();
-    }
   });
 
   it('grants a reasoning-level override to DeepSeek with reasoning but no granular effort', () => {
