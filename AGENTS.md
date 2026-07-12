@@ -137,9 +137,17 @@ This project uses Zod v4. Follow these idiomatic patterns:
 
 **Default values**
 
-- `.prefault(val)` - Normalizes input BEFORE validation (for deserialization/loading)
-- `.default(val)` - Provides fallback AFTER validation fails
-- `.catch(val)` - Provides fallback when validation throws (field-level or schema-level)
+- `.prefault(val)` - Substitutes for `undefined` BEFORE validation and transforms; use for documented absent-input defaults, including legacy omissions
+- `.default(val)` - Returns a valid output default for `undefined` without parsing that default
+- `.catch(val)` - Substitutes after a validation error; use only where malformed present data may be discarded by policy
+
+Preserve the distinction between absent and invalid present data. In security,
+accounting, lifecycle, and durable-state schemas, use `.prefault(...)` only for
+documented absent fields with explicit product or compatibility meaning, and let
+malformed present values fail validation. Do not use `.catch(...)` to turn
+corruption or contract drift into an ordinary default.
+An absent required field is also a validation error, so `.catch(...)` replaces
+missing required data as well as invalid present data.
 
 **When to use each default pattern:**
 
@@ -150,25 +158,24 @@ const SnapshotSchema = z.object({
   items: z.array(z.string()).prefault([]),
 });
 
-// Field-level fallback (preserve valid fields) - use .catch()
-const UserSchema = z.object({
-  tier: TierSchema.catch('free'), // invalid tier → 'free', valid tier preserved
-  perms: z.array(z.string()).catch([]),
+// Non-authoritative view-state recovery - use .catch() only by policy
+const PanelStateSchema = z.object({
+  density: z.enum(['compact', 'comfortable']).catch('comfortable'),
 });
 
-// Schema-level fallback (all-or-nothing) - use .catch() on schema
-const config = ConfigSchema.catch(DEFAULT_CONFIG).parse(data);
+// Non-authoritative schema-level fallback (all-or-nothing)
+const panelState = PanelStateSchema.catch(DEFAULT_PANEL_STATE).parse(data);
 ```
 
 **Safe parsing with fallback**
 
 ```typescript
 // Old verbose pattern
-const result = Schema.safeParse(data);
-const value = result.success ? result.data : defaultValue;
+const result = PanelStateSchema.safeParse(data);
+const legacyPanelState = result.success ? result.data : DEFAULT_PANEL_STATE;
 
 // Zod v4 native
-const value = Schema.catch(defaultValue).parse(data);
+const panelState = PanelStateSchema.catch(DEFAULT_PANEL_STATE).parse(data);
 ```
 
 **Null handling from databases**
