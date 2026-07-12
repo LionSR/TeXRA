@@ -18,79 +18,17 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { z } from 'zod';
 import { bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import { versionedJsonResponse } from '../_shared/responses.ts';
+import { UsageBatchSchema, type UsageLogEntry } from './usageValidation.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const LOG_USAGE_VERSION = '1.5.0';
-
-// =============================================================================
-// Schemas
-// =============================================================================
-
-// Invalid optional fields are dropped (`.catch(undefined)`) rather than
-// rejecting the whole entry; invalid required fields reject the entry.
-function optional<T extends z.ZodType>(schema: T) {
-  return schema
-    .nullish()
-    .catch(undefined)
-    .transform((value): z.infer<T> | undefined => value ?? undefined);
-}
-const optionalString = optional(z.string());
-const optionalNonnegativeInt = optional(z.int().nonnegative());
-const optionalBoolean = optional(z.boolean());
-const UsageRouteSchema = z.enum(['chatgpt-subscription', 'relay', 'api-key']);
-
-const UsageLogEntryInputSchema = z.object({
-  timestamp: z.iso.datetime(),
-  model: z.string(),
-  provider: z.string(),
-  inputTokens: z.int().nonnegative(),
-  outputTokens: z.int().nonnegative(),
-  cost: z.number().nonnegative(),
-  agentName: optionalString,
-  agentCategory: optional(z.enum(['workflow', 'toolUse'])),
-  isMultipleOutput: optionalBoolean,
-  responseTimeMs: optionalNonnegativeInt,
-  cachedInputTokens: optionalNonnegativeInt,
-  reasoningTokens: optionalNonnegativeInt,
-  usedRelay: optionalBoolean,
-  usageRoute: optional(UsageRouteSchema),
-  viaChatGptSubscription: z
-    .boolean()
-    .nullish()
-    .catch(false)
-    .transform((value) => value ?? false),
-  // Explicit subscription source (e.g. 'copilot') for future non-ChatGPT
-  // subscription clients. Omitted entries fall back to 'chatgpt' since
-  // that's the only subscription source today.
-  subscriptionSource: optionalString,
-  streamId: optionalString,
-  extensionVersion: optionalString,
-  editorType: optionalString,
-});
-
-const UsageLogEntrySchema = UsageLogEntryInputSchema.transform(
-  ({ viaChatGptSubscription, ...entry }) => ({
-    ...entry,
-    usageRoute:
-      entry.usageRoute ??
-      (viaChatGptSubscription ? 'chatgpt-subscription' : undefined),
-  }),
-);
-
-const UsageBatchSchema = z.object({
-  entries: z.array(z.unknown()),
-  batchId: z.uuid(),
-});
-
-type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
+const LOG_USAGE_VERSION = '1.6.0';
 
 const UsageDestinations = {
   paid: {
@@ -142,11 +80,23 @@ function successResponse(
   );
 }
 
-function errorResponse(req: Request, error: string, status: number): Response {
+function errorResponse(
+  req: Request,
+  error: string,
+  status: number,
+  options?: { retryable?: boolean },
+): Response {
   return versionedJsonResponse(
     req,
     LOG_USAGE_VERSION,
-    { success: false, accepted: 0, error },
+    {
+      success: false,
+      accepted: 0,
+      error,
+      ...(options?.retryable === undefined
+        ? {}
+        : { retryable: options.retryable }),
+    },
     status,
   );
 }
@@ -268,32 +218,23 @@ Deno.serve(async (req: Request) => {
     try {
       body = await req.json();
     } catch {
-      return errorResponse(req, 'Invalid JSON body', 400);
+      return errorResponse(req, 'Invalid JSON body', 400, {
+        retryable: false,
+      });
     }
 
-    // 4. Validate batch structure
+    // 4. Validate the complete batch before any destination write.
     const batchResult = UsageBatchSchema.safeParse(body);
     if (!batchResult.success) {
-      return errorResponse(
-        req,
-        'Invalid batch format: expected { entries: [], batchId: UUID }',
-        400,
-      );
+      return errorResponse(req, 'Invalid batch format or entry data', 422, {
+        retryable: false,
+      });
     }
     const batch = batchResult.data;
 
-    // 5. Validate and transform entries
-    const validEntries: UsageLogEntry[] = [];
-    for (const entry of batch.entries) {
-      const result = UsageLogEntrySchema.safeParse(entry);
-      if (result.success) validEntries.push(result.data);
-    }
+    const entries = batch.entries;
 
-    if (validEntries.length === 0) {
-      return successResponse(req, 0, 'No valid entries in batch');
-    }
-
-    // 6. Check for duplicate batch (idempotency for client retries).
+    // 5. Check for duplicate batch (idempotency for client retries).
     // After per-stream compaction the canonical row keeps only one batch_id
     // out of the inputs that produced it, so this is best-effort: it catches
     // the common case of an immediate retry of an in-flight request. Each
@@ -301,12 +242,12 @@ Deno.serve(async (req: Request) => {
     // still fill the missing table.
     const destinationRows = await Promise.all(
       usageDestinations.map(async (destination) => {
-        const entries = validEntries.filter(destination.accepts);
+        const destinationEntries = entries.filter(destination.accepts);
         const rows =
-          entries.length === 0 ||
+          destinationEntries.length === 0 ||
           (await batchExists(destination, userId, batch.batchId))
             ? []
-            : destination.toRows(userId, batch.batchId, entries);
+            : destination.toRows(userId, batch.batchId, destinationEntries);
         return { destination, rows };
       }),
     );
@@ -314,7 +255,7 @@ Deno.serve(async (req: Request) => {
     if (destinationRows.every(({ rows }) => rows.length === 0)) {
       return successResponse(
         req,
-        validEntries.length,
+        entries.length,
         'Batch already processed (deduplicated)',
       );
     }
@@ -334,8 +275,8 @@ Deno.serve(async (req: Request) => {
       return errorResponse(req, 'Failed to store usage logs', 500);
     }
 
-    // 7. Return success response
-    return successResponse(req, validEntries.length);
+    // 6. Return success response
+    return successResponse(req, entries.length);
   } catch (error) {
     console.error('[LOG_USAGE] Unexpected error:', error);
     return errorResponse(req, 'Internal server error', 500);
