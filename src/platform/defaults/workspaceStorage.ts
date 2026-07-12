@@ -1,7 +1,9 @@
 // Node imports
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { basename, isAbsolute, join, normalize, relative } from 'node:path';
+import { basename, join, normalize, relative } from 'node:path';
+
+import { isPathWithin } from '@utils/core/pathCore';
 
 // Local imports - platform
 import type { StorageProvider } from '../interfaces';
@@ -68,7 +70,7 @@ export function resolveMemoryStoragePath(
 ): string {
   const normalized = normalize(storagePath);
   const memoryRelative = relative(MEMORY_STORAGE_DIR, normalized);
-  if (memoryRelative.startsWith('..') || isAbsolute(memoryRelative)) {
+  if (!isPathWithin(MEMORY_STORAGE_DIR, normalized)) {
     throw new Error(`Invalid memory path: ${storagePath}`);
   }
   return memoryRelative
@@ -107,8 +109,7 @@ export function resolveRunStorageRelativePath(
     '\\',
     '/',
   );
-  if (relativePath.startsWith('..') || isAbsolute(relativePath))
-    return undefined;
+  if (!isPathWithin(runDirectory, absolutePath)) return undefined;
   return relativePath || undefined;
 }
 

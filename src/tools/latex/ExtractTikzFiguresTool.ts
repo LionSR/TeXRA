@@ -13,6 +13,7 @@ import { pathToLocation } from '@utils/files';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,
+  emptyExtractionResult,
   resolveLatexFileOrThrow,
   texPathField,
 } from './figureExtractionShared';
@@ -45,12 +46,10 @@ export class ExtractTikzFiguresTool extends defineTool({
       pathToLocation(path.absolute),
     );
     if (tikzFigures.length === 0) {
-      const summary = `No TikZ figures found in ${display}.`;
-      return {
-        status: 'executed',
-        summary,
-        output: formatToolOutput('TikZ figures', null),
-      };
+      return emptyExtractionResult(
+        'TikZ figures',
+        `No TikZ figures found in ${display}.`,
+      );
     }
 
     const formattedEntries = tikzFigures.map(([label, pictures]) => {
