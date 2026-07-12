@@ -998,6 +998,131 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.deepEqual(requests[1].input, secondTurn.slice(-1));
   });
 
+  it('recovers an unchained pre-flight overflow by compacting (no previous_response_id to drop)', async () => {
+    // cursor[bot]/claude[bot] review finding on this PR: recovery used to
+    // require hasPreviousResponseId(), so after invalidateChain() or on a
+    // non-chaining route an overflow failed hard without ever attempting
+    // compaction — a regression vs the old cumulative-threshold trigger.
+    const handler = setupHandler(
+      new NonChainingResponseHandler(
+        createConfig({ openRouterOnly: false, contextWindow: 200000 }),
+      ),
+    );
+    const compactCalls: ResponseInputItem[][] = [];
+    const requests: any[] = [];
+    let tokenCountCalls = 0;
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => {
+            tokenCountCalls += 1;
+            return { input_tokens: tokenCountCalls === 2 ? 300000 : 1000 };
+          },
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse(`resp-${requests.length}`, {
+            input_tokens: 100000,
+          });
+        },
+      },
+    };
+    (
+      handler as unknown as { compactConversation: unknown }
+    ).compactConversation = async (
+      _client: unknown,
+      msgs: ResponseInputItem[],
+    ) => {
+      compactCalls.push(msgs);
+      const compacted = msgs.slice(-1);
+      (handler as unknown as { compactionResult: unknown }).compactionResult =
+        {
+          sourceMessages: msgs,
+          compactedMessages: compacted,
+          tokensAfter: 1000,
+        };
+      return compacted;
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+
+    const secondTurn = createMessages(4);
+    const result = await handler.createResponse({
+      client: client as any,
+      messages: secondTurn,
+      temperature: 0,
+    });
+
+    assert.equal(result.response.id, 'resp-2');
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].previous_response_id, undefined);
+    assert.equal(compactCalls.length, 1);
+    assert.deepEqual(requests[1].input, secondTurn.slice(-1));
+  });
+
+  it('fails fast instead of recursing when compaction cannot shrink an overflowing transcript', async () => {
+    const handler = createHandler({
+      openRouterOnly: false,
+      contextWindow: 200000,
+    });
+    const compactCalls: ResponseInputItem[][] = [];
+    const requests: any[] = [];
+    let tokenCountCalls = 0;
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => {
+            tokenCountCalls += 1;
+            // Turn 2 overflows on every attempt — compaction doesn't help.
+            return { input_tokens: tokenCountCalls >= 2 ? 300000 : 1000 };
+          },
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse(`resp-${requests.length}`, {
+            input_tokens: 100000,
+          });
+        },
+      },
+    };
+    // A compaction that fails to produce a result (compactionResult stays
+    // unset), so compactedThisCall never becomes true — only the one-shot
+    // guard stands between this and infinite recursion.
+    (
+      handler as unknown as { compactConversation: unknown }
+    ).compactConversation = async (
+      _client: unknown,
+      msgs: ResponseInputItem[],
+    ) => {
+      compactCalls.push(msgs);
+      return msgs;
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+
+    await assert.rejects(
+      handler.createResponse({
+        client: client as any,
+        messages: createMessages(4),
+        temperature: 0,
+      }),
+      /exceeds context window/,
+    );
+
+    // Exactly one recovery attempt: the failed compaction did not recurse
+    // again, and no oversized request ever reached the API.
+    assert.equal(compactCalls.length, 1);
+    assert.equal(requests.length, 1);
+  });
+
   it('tags the fallback hard-failure throw with the context-window marker', () => {
     // Mirrors ModelHandler.validateTokenLimits (#8078, followed up in #8100):
     // isContextWindowError() must recognize this throw via its typed marker,
