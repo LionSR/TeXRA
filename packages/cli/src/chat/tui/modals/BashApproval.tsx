@@ -4,6 +4,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import type { BashPermission } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
+import { COLOR_WARNING } from '../ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
@@ -168,7 +169,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
   return (
     <ConfirmCard
       borderStyle="double"
-      color="yellow"
+      color={COLOR_WARNING}
       title={COMMAND_APPROVAL_TITLE}
       alwaysAllow={{ kind: 'bash', label: 'commands for session' }}
       onDecide={props.onDecide}

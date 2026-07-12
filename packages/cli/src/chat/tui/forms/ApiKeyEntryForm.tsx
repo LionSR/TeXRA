@@ -12,6 +12,7 @@ import {
 } from '@shared/constants/providers';
 
 import { BaseTextInput } from '../input/BaseTextInput';
+import { COLOR_ERROR } from '../ui/colors';
 import { KeyHints } from '../ui/KeyHints';
 import { POINTER } from '../ui/glyphs';
 import { FormFrame } from './_shared/FormFrame';
@@ -43,11 +44,7 @@ export function ApiKeyEntryForm(
   });
 
   return (
-    <FormFrame
-      color="cyan"
-      title="Use my own provider API key"
-      showCloseHint={false}
-    >
+    <FormFrame title="Use my own provider API key" showCloseHint={false}>
       <Text dimColor>Provider: {label}</Text>
       {keyUrl ? <Text dimColor>Get a key: {keyUrl}</Text> : null}
       <Box marginTop={1}>
@@ -65,7 +62,7 @@ export function ApiKeyEntryForm(
       </Box>
       <Box marginTop={1} flexDirection="column">
         {props.error ? (
-          <Text color="red">{props.error}</Text>
+          <Text color={COLOR_ERROR}>{props.error}</Text>
         ) : (
           <Text dimColor>
             Stored in TeXRA secrets on Enter — or set{' '}
