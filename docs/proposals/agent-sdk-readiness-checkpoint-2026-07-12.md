@@ -171,7 +171,7 @@ Several map onto already-tracked standing items (noted).
 
 6. **The layered run-options bags are the real `query({...})`-alignment gap**
    _(strategic; documented tension, not a bug)_. `RunAgentOptions extends
-   Pick<ExecuteAgentOptions>` → `SubagentRunOptions`, with `AgentLaunchInput`
+Pick<ExecuteAgentOptions>` → `SubagentRunOptions`, with `AgentLaunchInput`
    and `RunFlowLifecycleOptions` re-declaring overlapping subsets. The
    `Pick<>` forwarding is deliberate drift-prevention, and `SessionHandle`'s
    own doc explicitly declines the `query()`/send/stream/resume shape
@@ -187,7 +187,7 @@ the `ResponseCycleNode`/`ToolUseCycleNode` `exec()→run inner flow→interpret`
 wrapper (**keep** — the outer node owns real per-round orchestration);
 `IModelHandler` as a "duplicate" of `ModelHandler` (**trap** — removal breaks a
 real import cycle); folding the single-caller `createResponseCycleFlow` /
-`createToolUseRoundFlow` into their nodes (**keep** — this *is* the prescribed
+`createToolUseRoundFlow` into their nodes (**keep** — this _is_ the prescribed
 `Node.exec() → createFlow() → run()` shape); `runAgent`/`executeAgent` dual
 entry (**keep** — two documented responsibilities); collapsing the
 OpenAI-compatible subclasses to a config table (**trap** — real per-provider
@@ -204,10 +204,11 @@ north-star sequences them.
 
 Delegation remains a **mature strategy-pattern subsystem**, not something to
 build: `childRunLoop.ts` (one driver per child-run type) + `ChildRunStrategy`
-+ the `src/tools/delegation/` strategies + `executionRegistry` lineage +
-`detachSubagentsOnStop` are already the SDK spawn shape (prompt/config in →
-`AgentFlowResult` out, with progress/cost/resume/interrupt/lineage). Ranked
-split points unchanged from `-06-26` → `-07-10`:
+
+- the `src/tools/delegation/` strategies + `executionRegistry` lineage +
+  `detachSubagentsOnStop` are already the SDK spawn shape (prompt/config in →
+  `AgentFlowResult` out, with progress/cost/resume/interrupt/lineage). Ranked
+  split points unchanged from `-06-26` → `-07-10`:
 
 1. Wire the existing `review` tool-use agent as a post-draft Verifier delegation.
 2. Introduce a typed `delegateTo(subagent, input, {maxDepth, tools})` over
@@ -270,6 +271,7 @@ reviewed-train items unattended.
 - Delegation depth verified still tracked-but-ungated (`delegationPolicy.ts`;
   no `maxDelegationDepth`, 0 grep hits).
 - This checkpoint is added under `docs/proposals/`, an internal directory
-  excluded from the texra.ai publish allowlist — not a root-level doc.
+excluded from the texra.ai publish allowlist — not a root-level doc.
 </content>
+
 </invoke>
