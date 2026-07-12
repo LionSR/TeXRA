@@ -17,8 +17,12 @@ export interface JsonStoreOptions {
    * POSIX mode for the store file (e.g. `0o600` to restrict a secrets file
    * to its owner). The containing directory is created/chmod'd with the
    * same owner permissions plus execute — `0o600` -> `0o700` — so it stays
-   * traversable. Left unset, `mkdir`/`writeFileAtomic` use their platform
-   * defaults, matching prior `JsonStore` behavior.
+   * traversable. Directory creation and hardening happen only on the write
+   * path (`flush`), never in `open()`: reads must keep working against
+   * read-only or unowned storage (e.g. env-var-only CLI credential checks
+   * on a container-mounted state dir — #8220). Left unset,
+   * `mkdir`/`writeFileAtomic` use their platform defaults, matching prior
+   * `JsonStore` behavior.
    */
   mode?: number;
   /**
@@ -83,11 +87,16 @@ export class JsonStore implements StateStore {
     private readonly options: JsonStoreOptions,
   ) {}
 
+  /**
+   * Opening is read-only: a missing file reads as an empty store, and the
+   * containing directory is neither created nor chmod'd here — that happens
+   * in {@link flush}, so pure reads work on storage the process can't write
+   * (see {@link JsonStoreOptions.mode}).
+   */
   static async open(
     filePath: string,
     options: JsonStoreOptions = {},
   ): Promise<JsonStore> {
-    await ensureDir(dirname(filePath), options.mode);
     return new JsonStore(
       filePath,
       await readJsonRecord(filePath, options.strict ?? false),
