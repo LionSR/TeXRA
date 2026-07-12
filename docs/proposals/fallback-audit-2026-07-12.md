@@ -103,7 +103,7 @@ then inspected the semantic owner and downstream use. The source set contains
 
 | Candidate form                                                      | Count | Files |
 | ------------------------------------------------------------------- | ----: | ----: |
-| Explicit `fallback`, `legacy`, `best effort`, or equivalent markers |   930 |     - |
+| Explicit `fallback`, `legacy`, `best effort`, or equivalent markers |   930 |   N/A |
 | Nullish coalescing (`??`)                                           | 2,436 |   713 |
 | Logical OR operator                                                 | 1,811 |   613 |
 | Default parameters                                                  |   580 |   304 |
@@ -116,10 +116,11 @@ then inspected the semantic owner and downstream use. The source set contains
 | Empty `catch` clauses                                               |    61 |    42 |
 | Zod `.prefault(...)` calls                                          |   255 |    48 |
 
-The rows overlap. They are a candidate universe, not a defect count. For
-example, `value ?? defaultValue` is correct when `value` is genuinely optional,
-and many `.catch(...)` calls are promise cleanup or schema normalization at an
-external boundary.
+The explicit-marker row is a heuristic union rather than one syntactic form, so
+a unique file count is not meaningful. The rows overlap. They are a candidate
+universe, not a defect count. For example, `value ?? defaultValue` is correct
+when `value` is genuinely optional, and many `.catch(...)` calls are promise
+cleanup or schema normalization at an external boundary.
 
 Three independent source passes covered:
 
@@ -1433,6 +1434,7 @@ of mechanically identical rows.
 | Text-connection inference           | runtime text connection                          | Failed/invalid model decision inserts a space                              | **Return unknown; caller decides**                       |
 | Legacy configuration aliases        | JSON config and file-list settings               | Ordered aliases remain writable and ambiguous                              | **Normalize once; retain read compatibility**            |
 | Workspace storage migration         | workspace storage defaults                       | Old/new directories and shared sentinel can collide                        | **Migration marker and conflict policy**                 |
+| Desktop project configuration       | desktop platform composition                     | Read/open failure selects a hidden writable configuration store            | **Only absence selects the default (P2.1)**              |
 | Completed-run archive recovery      | transcript archive                               | Mtime/order/unknown defaults choose among sidecars                         | **Generation IDs and preserved invalid rows**            |
 | Prompt/resource fallback            | goal prompt and agent creator                    | Inline duplicate or validated template replaces missing AI/resource output | **Generate/checksum duplicate; keep validated template** |
 | Proposal log reconstruction         | proposal input schema                            | Display defaults can be replayed as executable fields                      | **Separate strict input (P1.19)**                        |
