@@ -24,12 +24,14 @@ import {
   EMPTY_LOG_CONTEXT,
   EMPTY_STREAM_BY_ID,
   EMPTY_STREAM_CONTEXT,
+  followUpEventSinkContext,
   inquiryThreadsContext,
   permissionsContext,
   processOutputContext,
   streamByIdContext,
   streamLogContext,
   streamStateContext,
+  type FollowUpEventSink,
   type StreamByIdMap,
   type StreamContextValue,
   type StreamLogContextValue,
@@ -86,6 +88,11 @@ export class StreamConversation extends SignalWatcher(LitElement) {
   @state()
   private inquiryThreadsContextValue: InquiryThreadUpdatedEvent[] =
     EMPTY_INQUIRY_THREADS;
+
+  @provide({ context: followUpEventSinkContext })
+  private readonly followUpEventSink: FollowUpEventSink = (event) => {
+    this.dispatchEvent(event);
+  };
 
   /**
    * Externally settable (unlike the signal-derived contexts above): every
