@@ -122,14 +122,3 @@ export function getNewestTimestamp(
   }
   return best;
 }
-
-/**
- * Drop the oldest entries from a Set so its size doesn't exceed `maxSize`.
- * Map and Set iteration order is insertion order, so this is FIFO.
- */
-export function trimSet<T>(set: Set<T>, maxSize: number): void {
-  const excess = set.size - maxSize;
-  if (excess <= 0) return;
-  const iter = set.values();
-  for (let i = 0; i < excess; i += 1) set.delete(iter.next().value as T);
-}

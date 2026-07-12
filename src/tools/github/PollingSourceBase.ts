@@ -18,12 +18,16 @@ import { appSignals } from '@eventBus/AppSignals';
 import { createChannelTrace } from '@logger';
 
 import {
+  createBoundedIdSet,
+  type BoundedIdSet,
+} from '@utils/core/boundedIdSet';
+
+import {
   type ConditionalResponse,
   GitHubAuthError,
   GitHubPermanentError,
   GitHubRateLimitError,
 } from './githubClient';
-import { trimSet } from './formatUtils';
 import type { ZodType } from 'zod';
 
 import type { Disposable } from '@platform/interfaces';
@@ -68,21 +72,19 @@ interface DedupedResourceOptions<T, Id> {
   sinceCursor?: string;
 }
 
-export class DedupedResource<T, Id = number> {
-  readonly seenIds: Set<Id>;
+export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
+  readonly seenIds: BoundedIdSet<Id>;
   sinceCursor: string | undefined;
 
   private readonly getId: (item: T) => Id;
   private readonly getCursor:
     ((items: readonly T[]) => string | undefined) | undefined;
-  private readonly maxSeenIds: number;
 
   constructor(options: DedupedResourceOptions<T, Id>) {
     this.getId = options.getId;
     this.getCursor = options.getCursor;
-    this.maxSeenIds = options.maxSeenIds;
     this.sinceCursor = options.sinceCursor;
-    this.seenIds = new Set();
+    this.seenIds = createBoundedIdSet<Id>(options.maxSeenIds);
   }
 
   seed(items: readonly T[]): void {
@@ -90,27 +92,27 @@ export class DedupedResource<T, Id = number> {
       this.seenIds.add(this.getId(item));
     }
     this.advanceCursor(items);
-    this.trim();
   }
 
   diff(items: readonly T[], emit: (item: T) => void): void {
+    // Classify the whole batch against pre-batch membership before adding
+    // anything, so an eviction triggered partway through this tick can't
+    // make an id already seen this tick look "new" again (`newIds` also
+    // catches the same id appearing twice within one fetched page).
+    const newIds = new Set<Id>();
     for (const item of items) {
       const id = this.getId(item);
-      if (this.seenIds.has(id)) continue;
-      this.seenIds.add(id);
+      if (this.seenIds.has(id) || newIds.has(id)) continue;
+      newIds.add(id);
       emit(item);
     }
+    for (const id of newIds) this.seenIds.add(id);
     this.advanceCursor(items);
-    this.trim();
   }
 
   private advanceCursor(items: readonly T[]): void {
     const newest = this.getCursor?.(items);
     if (newest) this.sinceCursor = newest;
-  }
-
-  private trim(): void {
-    trimSet(this.seenIds, this.maxSeenIds);
   }
 }
 
