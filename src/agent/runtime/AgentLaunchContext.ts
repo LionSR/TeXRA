@@ -57,7 +57,6 @@ import {
   createRunContext,
   withRunContext,
   type CreateLaunchRunContextOptions,
-  type CreateRunContextOptions,
 } from './RunContext';
 import { createRunScope, type RunScope } from './RunScope';
 import {
@@ -67,6 +66,7 @@ import {
 } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
+import { AgentLaunchResources } from './AgentLaunchResources';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -115,37 +115,6 @@ const STATUS_MESSAGES: Record<string, string> = {
   [STREAM_PHASE.FAILED]: 'failed',
 };
 
-/**
- * Project an {@link AgentLaunchContext} onto the subset of fields that belong
- * in the ambient {@link RunContext}.
- *
- * This is the single owner of the launch-context → ambient-context mapping, so
- * new per-run flags (e.g. `stopAfterCycle`, `approvalPromptsUnavailable`,
- * `runtimeUnavailableTools`) live in one place and are never silently dropped.
- * Run identity (`streamId`/`executionId`/`agentName`/`workingDirectory`)
- * travels via `ctx.runScope` unchanged; only `AgentConfig.model` is renamed
- * here, to `RunContext.model`, reading through `getModel` so tools observe
- * model switches applied to `AgentLaunchContext.config.model` during an
- * interactive session.
- */
-function agentContextToRunContext(
-  ctx: AgentLaunchContext,
-  options: Pick<
-    CreateLaunchRunContextOptions,
-    | 'delegationDepth'
-    | 'approvalPromptsUnavailable'
-    | 'runtimeUnavailableTools'
-    | 'stopAfterCycle'
-  > = {},
-): CreateRunContextOptions {
-  return {
-    runScope: ctx.runScope,
-    modelSource: 'live' as const,
-    getModel: () => ctx.config.model,
-    ...options,
-  };
-}
-
 export async function withExecutionRunContext<T>(
   ctx: AgentLaunchContext,
   options: Pick<
@@ -157,8 +126,21 @@ export async function withExecutionRunContext<T>(
   >,
   fn: () => T | Promise<T>,
 ): Promise<T> {
+  // Single owner of the launch-context → ambient-context mapping, so new
+  // per-run flags (e.g. `stopAfterCycle`, `approvalPromptsUnavailable`,
+  // `runtimeUnavailableTools`) live in one place and are never silently
+  // dropped. Run identity (`streamId`/`executionId`/`agentName`/
+  // `workingDirectory`) travels via `ctx.runScope` unchanged; only
+  // `AgentConfig.model` is renamed here, to `RunContext.model`, reading through
+  // `getModel` so tools observe model switches applied to
+  // `AgentLaunchContext.config.model` during an interactive session.
   return await withRunContext(
-    createRunContext(agentContextToRunContext(ctx, options)),
+    createRunContext({
+      runScope: ctx.runScope,
+      modelSource: 'live' as const,
+      getModel: () => ctx.config.model,
+      ...options,
+    }),
     fn,
   );
 }
@@ -253,8 +235,7 @@ async function assembleAgentLaunchContext(
   executionId: ExecutionId,
   runtimeHost: AgentRuntimeHost,
   reservedStreamId: StreamTabId | undefined,
-  onActivated: (streamId: StreamTabId) => void,
-  onRunTraceCreated: (runTrace: RunTrace) => void,
+  resources: AgentLaunchResources,
 ): Promise<AgentLaunchContext> {
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
@@ -308,12 +289,15 @@ async function assembleAgentLaunchContext(
   const modelHandlerCompatibilityKey =
     input.modelHandlerCompatibilityKey ??
     (await inferLaunchModelHandlerCompatibilityKey(executionId, config.model));
-  const modelHandler = modelHandlerCompatibilityKey
-    ? await createModelHandlerForCompatibilityKey(
-        modelConfig,
-        modelHandlerCompatibilityKey,
-      )
-    : await createModelHandler(modelConfig);
+  const modelHandler = resources.ownModelHandler(
+    modelHandlerCompatibilityKey
+      ? await createModelHandlerForCompatibilityKey(
+          modelConfig,
+          modelHandlerCompatibilityKey,
+          setting.agentCategory,
+        )
+      : await createModelHandler(modelConfig, setting.agentCategory),
+  );
 
   const streamId =
     input.streamTabIdOverride ??
@@ -330,18 +314,9 @@ async function assembleAgentLaunchContext(
     session.transcripts,
     session.flushers,
   );
-  const detachSessionTrace = session.attachRunTrace(
-    rawRunTrace.trace,
-    streamId,
+  const runTrace = resources.ownRunTrace(rawRunTrace, () =>
+    session.attachRunTrace(rawRunTrace.trace, streamId),
   );
-  const runTrace: RunTrace = {
-    trace: rawRunTrace.trace,
-    dispose: () => {
-      detachSessionTrace();
-      rawRunTrace.dispose();
-    },
-  };
-  onRunTraceCreated(runTrace);
   const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
@@ -360,7 +335,7 @@ async function assembleAgentLaunchContext(
       },
     },
   });
-  onActivated(streamId);
+  resources.markActivated(streamId);
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
@@ -378,10 +353,12 @@ async function assembleAgentLaunchContext(
         modelHandler.capabilities.supportsNativeAudio
       : modelHandler.capabilities.supportsVision);
 
-  const parentStage = await beginRunStage(
-    agentLogger,
-    `Run: ${config.agent}`,
-    initialMediaMayBeInserted ? undefined : initialInstruction,
+  const parentStage = resources.ownParentStage(
+    await beginRunStage(
+      agentLogger,
+      `Run: ${config.agent}`,
+      initialMediaMayBeInserted ? undefined : initialInstruction,
+    ),
   );
   const storageKey: StorageKey = parentStage.id
     ? normalizeRunId(parentStage.id)
@@ -600,36 +577,29 @@ export async function buildAgentLaunchContext(
     );
   }
 
-  let activatedStreamId: StreamTabId | undefined;
-  // Captured so the outer catch can dispose the trace and let
-  // `compensateFailedActivation` reuse it for the failure log. Released to the
-  // returned context on the success path (cleaned up by runFlowWithLifecycle).
-  let runTrace: RunTrace | undefined;
+  const resources = new AgentLaunchResources();
   try {
     const ctx = await assembleAgentLaunchContext(
       { ...input, session: launchSession },
       executionId,
       runtimeHost,
       reservedStreamId,
-      (streamId) => {
-        activatedStreamId = streamId;
-      },
-      (rt) => {
-        runTrace = rt;
-      },
+      resources,
     );
+    resources.transfer();
     return ctx;
   } catch (err) {
-    compensateFailedActivation({
-      configPayload,
-      reservedStreamId,
-      activatedStreamId,
-      streamStatus,
-      session: launchSession,
-      err,
-      runTrace,
+    resources.fail((activatedStreamId, runTrace) => {
+      compensateFailedActivation({
+        configPayload,
+        reservedStreamId,
+        activatedStreamId,
+        streamStatus,
+        session: launchSession,
+        err,
+        runTrace,
+      });
     });
-    runTrace?.dispose();
     if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
       runtimeHost.emit('requestShowError', {
         message: toErrorMessage(err),

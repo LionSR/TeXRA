@@ -24,6 +24,13 @@ export interface KeyHintsProps {
 
 export const KEY_HINT_SEPARATOR = ' · ';
 
+/** Plain-text projection of one hint. Must stay in sync with the component's
+ *  rendered output below (`key action`) so width math and text-only surfaces
+ *  (status-bar bindings, picker hint fitting) measure exactly what renders. */
+export function keyHintText(hint: KeyHint): string {
+  return `${hint.key} ${hint.action}`;
+}
+
 const DEFAULT_TAIL: readonly KeyHint[] = [
   { key: 'Enter', action: 'confirm' },
   { key: 'Esc', action: 'cancel' },

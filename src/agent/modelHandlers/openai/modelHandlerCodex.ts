@@ -38,6 +38,7 @@ import {
   CODEX_ORIGINATOR_HEADER,
   CodexAuthError,
   codexCoordinator,
+  formatCodexAuthUnavailableMessage,
   isCodexSubscriptionToolUseOnly,
   isPreferCodexSubscription,
 } from '@auth/codex';
@@ -309,14 +310,10 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
       return await codexCoordinator().getFreshAccessToken();
     } catch (error) {
       if (error instanceof CodexAuthError) {
-        const action = error.needsReauth
-          ? 'Sign in with ChatGPT again, or turn off "Prefer ChatGPT subscription".'
-          : 'Try again in a moment, or turn off "Prefer ChatGPT subscription".';
         // Preserve the original CodexAuthError (kind/stack) as the cause.
-        throw new Error(
-          `ChatGPT subscription unavailable: ${error.message} ${action}`,
-          { cause: error },
-        );
+        throw new Error(formatCodexAuthUnavailableMessage(error), {
+          cause: error,
+        });
       }
       throw error;
     }

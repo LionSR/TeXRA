@@ -1,16 +1,10 @@
 // Local imports - CLI TUI
 import { textDisplayWidth } from '../render/terminalText';
-import { KEY_HINT_SEPARATOR, type KeyHint } from '../ui/KeyHints';
+import { KEY_HINT_SEPARATOR, keyHintText, type KeyHint } from '../ui/KeyHints';
 import type { ChildControlMode } from '../state/childControls';
 
-function keyHintDisplayText(hint: KeyHint): string {
-  return `${hint.key} ${hint.action}`;
-}
-
 function keyHintsDisplayWidth(hints: readonly KeyHint[]): number {
-  return textDisplayWidth(
-    hints.map(keyHintDisplayText).join(KEY_HINT_SEPARATOR),
-  );
+  return textDisplayWidth(hints.map(keyHintText).join(KEY_HINT_SEPARATOR));
 }
 
 function keyHintsFit(

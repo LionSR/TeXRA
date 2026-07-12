@@ -31,7 +31,8 @@ export const COLOR_ACCENT = 'magenta';
 export const COLOR_INFO = 'blue';
 
 /** Neutral chrome with no semantic weight: the idle input box border and
- *  the neutral "stopped" subagent status marker. */
+ *  the neutral cancelled/stopped subagent status marker (a user stop is
+ *  neither success nor failure — see TeXRA#8115/#8188). */
 export const COLOR_BORDER = 'gray';
 
 // Not migrated onto this palette — decided in TeXRA#8118:

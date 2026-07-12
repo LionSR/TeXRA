@@ -79,7 +79,13 @@ export class CodexSessionCoordinator {
   private readonly log?: CodexLogger;
   private readonly now: () => number;
   private refreshInFlight: Promise<CodexSession> | null = null;
-  private refreshStoreInFlight: Promise<void> | null = null;
+  /**
+   * Single serialized owner of every session-storage write (login store,
+   * sign-out delete, refresh store, fatal-refresh delete). Serializing the
+   * writes means a write enqueued after a session replacement can never land
+   * before the replacement's own write.
+   */
+  private sessionMutations: Promise<void> = Promise.resolve();
   private sessionGeneration = 0;
 
   constructor(init: CodexSessionCoordinatorInit) {
@@ -114,15 +120,45 @@ export class CodexSessionCoordinator {
   }
 
   /**
+   * Chain `op` after every previously queued session-storage write so
+   * replacement (login/sign-out) and refresh-originated writes settle in the
+   * order they were requested. The chain link is established synchronously
+   * (before the first `await`), so ordering is captured at call time.
+   */
+  private mutateSession(op: () => Promise<void>): Promise<void> {
+    const mutation = this.sessionMutations.then(op);
+    this.sessionMutations = mutation.catch(() => undefined);
+    return mutation;
+  }
+
+  /**
+   * Read a session only when no replacement changed its generation while the
+   * queued writes or storage read were settling.
+   */
+  private async loadStableSession(): Promise<{
+    generation: number;
+    session: CodexSession | null;
+  }> {
+    while (true) {
+      const generation = this.sessionGeneration;
+      await this.sessionMutations;
+      const session = await this.loadSession();
+      if (generation === this.sessionGeneration) {
+        return { generation, session };
+      }
+    }
+  }
+
+  /**
    * Advance the session generation and abandon any in-flight refresh so its
    * result can no longer overwrite the session that supersedes it. Shared by
-   * sign-out and every successful login.
+   * sign-out and every successful login, which must enqueue their storage
+   * write via {@link mutateSession} in the same synchronous block — that way
+   * an observed generation implies its write is already in the queue.
    */
-  private async supersedeInFlightRefresh(): Promise<void> {
+  private supersedeInFlightRefresh(): void {
     this.sessionGeneration += 1;
-    const staleStore = this.refreshStoreInFlight;
     this.refreshInFlight = null;
-    await staleStore?.catch(() => undefined);
   }
 
   /**
@@ -140,8 +176,8 @@ export class CodexSessionCoordinator {
 
   /** Forget the session (sign out). */
   async signOut(): Promise<void> {
-    await this.supersedeInFlightRefresh();
-    await this.storage.delete();
+    this.supersedeInFlightRefresh();
+    await this.mutateSession(() => this.storage.delete());
   }
 
   /** Whether a session is currently signed in (no network). */
@@ -185,8 +221,8 @@ export class CodexSessionCoordinator {
   }): Promise<CodexSession> {
     const tokens = await this.client.exchangeAuthorizationCode(params);
     const session = this.buildSession(tokens);
-    await this.supersedeInFlightRefresh();
-    await this.storeSession(session);
+    this.supersedeInFlightRefresh();
+    await this.mutateSession(() => this.storeSession(session));
     return session;
   }
 
@@ -224,7 +260,7 @@ export class CodexSessionCoordinator {
 
   /** Refresh if needed and return the live session. */
   async getFreshSession(forceRefresh = false): Promise<CodexSession> {
-    const session = await this.loadSession();
+    const { generation, session } = await this.loadStableSession();
     if (!session) {
       throw new CodexAuthError(
         'Not signed in with ChatGPT. Run sign-in first.',
@@ -232,13 +268,15 @@ export class CodexSessionCoordinator {
       );
     }
     if (!forceRefresh && !this.isExpiringSoon(session)) return session;
-    return this.refresh(session);
+    return this.refresh(session, generation);
   }
 
-  private async refresh(previous: CodexSession): Promise<CodexSession> {
+  private async refresh(
+    previous: CodexSession,
+    generation: number,
+  ): Promise<CodexSession> {
     // Single-flight: concurrent callers await the same refresh.
     if (this.refreshInFlight) return this.refreshInFlight;
-    const generation = this.sessionGeneration;
     const task = this.performRefresh(previous, generation).finally(() => {
       if (this.refreshInFlight === task) this.refreshInFlight = null;
     });
@@ -255,26 +293,26 @@ export class CodexSessionCoordinator {
       tokens = await this.client.refreshTokens(previous.refreshToken);
     } catch (error) {
       if (error instanceof CodexAuthError && error.kind === 'fatal') {
-        // Revoked / invalid refresh token: drop the dead session only if no
-        // newer login/sign-out happened while this refresh was in flight.
-        if (generation === this.sessionGeneration) {
+        // Revoked / invalid refresh token: drop the dead session unless a
+        // newer login/sign-out supersedes it. The check runs inside the
+        // serialized mutation, so a slow delete can never erase a login
+        // whose store is queued behind it.
+        await this.mutateSession(async () => {
+          if (generation !== this.sessionGeneration) return;
           this.log?.warn?.('Codex token refresh was rejected; signing out.');
           await this.storage.delete();
-        }
+        });
       }
       throw error;
     }
     const session = this.buildSession(tokens, previous);
-    this.assertSameGeneration(generation);
-    const storeTask = this.storeSession(session);
-    this.refreshStoreInFlight = storeTask;
-    try {
-      await storeTask;
-    } finally {
-      if (this.refreshStoreInFlight === storeTask) {
-        this.refreshStoreInFlight = null;
-      }
-    }
+    await this.mutateSession(async () => {
+      this.assertSameGeneration(generation);
+      await this.storeSession(session);
+    });
+    // Superseded while the store settled: the superseding write is queued
+    // after ours (so storage converges), but this caller must not hand out
+    // a token from the replaced session.
     this.assertSameGeneration(generation);
     return session;
   }

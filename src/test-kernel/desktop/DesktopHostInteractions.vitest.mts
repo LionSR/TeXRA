@@ -111,9 +111,8 @@ async function createInteractions(handlers = createHandlers()) {
 }
 
 describe('createDesktopHostInteractions', () => {
-  it('delegates tool edit approvals with this window session', async () => {
-    const { interactions, session, toolEditApprovals } =
-      await createInteractions();
+  it('delegates tool edit approvals to the window controller', async () => {
+    const { interactions, toolEditApprovals } = await createInteractions();
     const request = {
       path: '/workspace/paper.tex',
       originalContent: 'old',
@@ -125,10 +124,9 @@ describe('createDesktopHostInteractions', () => {
     await expect(
       interactions.requestToolEditApproval(request),
     ).resolves.toEqual({ accepted: true });
-    expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(
-      request,
-      session,
-    );
+    // The controller owns its window session (options.session), so the call
+    // carries only the request.
+    expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(request);
   });
 
   it('rejects a resolution whose kind does not match the pending request', async () => {
