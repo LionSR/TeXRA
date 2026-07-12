@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
@@ -54,8 +60,8 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
   });
 
   it('scopes streamless cleanup to the owning session', () => {
-    const sessionA = new SessionHandle();
-    const sessionB = new SessionHandle();
+    const sessionA = createTestSession();
+    const sessionB = createTestSession();
     const cancelA = vi.fn();
     sessionA.useHostInteractions({ resolve: () => false, cancel: cancelA });
     const settled = new Set<string>();
@@ -108,8 +114,8 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
 
 describe('session-owned approval state (#8144)', () => {
   it('keeps bypass state for equal stream ids isolated between sessions', () => {
-    const sessionA = new SessionHandle();
-    const sessionB = new SessionHandle();
+    const sessionA = createTestSession();
+    const sessionB = createTestSession();
     const streamId = sid('s:appr-same-id');
 
     try {
@@ -130,8 +136,8 @@ describe('session-owned approval state (#8144)', () => {
   });
 
   it("an unanswered approval in one session does not delay another session's queue", async () => {
-    const sessionA = new SessionHandle();
-    const sessionB = new SessionHandle();
+    const sessionA = createTestSession();
+    const sessionB = createTestSession();
 
     try {
       // Session A's prompt slot is occupied by a never-answered approval.
@@ -149,7 +155,7 @@ describe('session-owned approval state (#8144)', () => {
   });
 
   it('session disposal rejects its remaining pending approvals and clears bypass state', () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const streamId = sid('s:appr-dispose');
     const settled = new Set<string>();
 

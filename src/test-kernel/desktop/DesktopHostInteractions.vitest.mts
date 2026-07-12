@@ -1,3 +1,6 @@
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
@@ -86,7 +89,7 @@ async function createInteractions(handlers = createHandlers()) {
     moduleFileUrl(desktopSourcePath('main', 'desktopHostInteractions.ts'))
   )) as DesktopHostInteractionsModule;
   const runtimeHost = { emit: vi.fn() };
-  const session = new SessionHandle();
+  const session = createTestSession();
   const toolEditApprovals = {
     requestApproval: vi.fn(async () => ({ accepted: true })),
   };

@@ -11,7 +11,7 @@ describe('createRunTrace dispose', () => {
   let store: StreamLogStore;
 
   beforeEach(() => {
-    store = new StreamLogStore();
+    store = StreamLogStore.ephemeral('test');
   });
 
   afterEach(() => {

@@ -1,3 +1,9 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const resumeToolUseFromSnapshotMock = vi.hoisted(() => vi.fn(async () => {}));
@@ -294,7 +300,7 @@ describe('resumeToolUseSnapshot', () => {
   it('uses the supplied session status plane for resume markers', async () => {
     const failure = new Error('session-scoped resume failed');
     resumeToolUseFromSnapshotMock.mockRejectedValue(failure);
-    const session = new SessionHandle();
+    const session = createTestSession();
 
     try {
       await expect(
@@ -316,7 +322,7 @@ describe('resumeToolUseSnapshot', () => {
   it('preserves failed resume follow-ups in the supplied session queue only', async () => {
     const failure = new Error('session queue resume failed');
     resumeToolUseFromSnapshotMock.mockRejectedValue(failure);
-    const session = new SessionHandle();
+    const session = createTestSession();
 
     try {
       session.followUps.enqueue(

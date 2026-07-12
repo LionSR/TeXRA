@@ -172,7 +172,10 @@ export async function handleTuiSlashCommand(
             : undefined,
           // Only surface the resume id once a stream exists — never next to
           // a "not started" status.
-          sessionId: slice ? context.session.executionId : undefined,
+          sessionId:
+            slice && meta.transcriptMode === 'persistent'
+              ? context.session.executionId
+              : undefined,
           commandName: context.commandName,
           cwd: context.cwd,
           processCwd: context.processCwd,

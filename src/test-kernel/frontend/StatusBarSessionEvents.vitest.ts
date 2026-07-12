@@ -1,3 +1,6 @@
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,7 +14,7 @@ import { STREAM_PHASE } from '@shared/schemas';
 
 describe('subscribeStatusBarSessionEvents', () => {
   it('tracks stream status changes from the session status plane', () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const tracker = new StatusBarUsageTracker();
     const onStatusChanged = vi.fn();
     const onUsageChanged = vi.fn();
@@ -35,7 +38,7 @@ describe('subscribeStatusBarSessionEvents', () => {
   });
 
   it('records valid run usage events after an in-flight status', () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const tracker = new StatusBarUsageTracker();
     const onStatusChanged = vi.fn();
     const onUsageChanged = vi.fn();
@@ -72,7 +75,7 @@ describe('subscribeStatusBarSessionEvents', () => {
   });
 
   it('ignores malformed usage payloads and usage for unknown streams', () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const tracker = new StatusBarUsageTracker();
     const onStatusChanged = vi.fn();
     const onUsageChanged = vi.fn();

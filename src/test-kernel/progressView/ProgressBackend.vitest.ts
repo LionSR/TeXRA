@@ -1,11 +1,21 @@
-// Standard library imports
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Test support imports
 import * as path from 'node:path';
+import { createTestSession } from '@test/support/sessionTestUtils';
+
+// Standard library imports
 
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - transcript
-import { streamDataDir, StreamSnapshotStore } from '@transcript';
+import {
+  streamDataDir,
+  StreamLogStore,
+  StreamSnapshotStore,
+} from '@transcript';
 import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
 
 // Local imports - agent
@@ -111,13 +121,14 @@ function createRecordingBackend(): {
   return { backend, messages };
 }
 
-function createIsolatedRecordingBackend(): {
+function createIsolatedRecordingBackend(
+  session: SessionHandle = createTestSession(),
+): {
   backend: ProgressBackend;
   messages: ProgressViewOutboundMessage[];
   session: SessionHandle;
 } {
   const messages: ProgressViewOutboundMessage[] = [];
-  const session = new SessionHandle();
   const backend = new ProgressBackend({
     storage: new MemoryMementoStorage(),
     snapshots: new StreamSnapshotStore(),
@@ -130,6 +141,14 @@ function createIsolatedRecordingBackend(): {
     configureUi: () => createUiConfig(),
   });
   return { backend, messages, session };
+}
+
+async function createPersistentRecordingBackend(): Promise<
+  ReturnType<typeof createIsolatedRecordingBackend>
+> {
+  return createIsolatedRecordingBackend(
+    createTestSession({ transcripts: await StreamLogStore.open() }),
+  );
 }
 
 async function writeExecutionConfig(executionId: ExecutionId): Promise<void> {
@@ -241,7 +260,7 @@ describe('ProgressBackend', () => {
   });
 
   it('routes removeStream session facts through the shared lifecycle delete path', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const deletedStreams: StreamTabId[] = [];
     const backendRef: { current?: ProgressBackend } = {};
     const backend = new ProgressBackend({
@@ -284,7 +303,7 @@ describe('ProgressBackend', () => {
   });
 
   it('handles removeStream session facts before backend load', async () => {
-    const session = new SessionHandle();
+    const session = createTestSession();
     const deletedStreams: StreamTabId[] = [];
     const backend = new ProgressBackend({
       storage: new MemoryMementoStorage(),
@@ -1497,6 +1516,31 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('keeps resident background entries during an in-flight status update', async () => {
+    const { backend } = createRecordingBackend();
+    const stream = 'background-stream' as StreamTabId;
+    const releaseSpy = vi.spyOn(backend.state.streamLogs, 'releaseEntries');
+
+    try {
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.updateStreamHints(stream, {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
+
+      await backend.factApplier.setStreamStatus(
+        stream,
+        STREAM_PHASE.RUNNING,
+        STREAM_PHASE.RUNNING,
+      );
+
+      expect(releaseSpy).not.toHaveBeenCalled();
+      expect(backend.state.streamLogs.get(stream)).toBeDefined();
+    } finally {
+      backend.dispose();
+    }
+  });
+
   it('drops buffered conversation progress when an existing stream re-enters running', async () => {
     vi.useFakeTimers();
     const { backend, messages } = createRecordingBackend();
@@ -1742,7 +1786,6 @@ describe('ProgressBackend', () => {
     const { backend, session } = createIsolatedRecordingBackend();
 
     try {
-      await backend.state.streamLogs.load();
       backend.state.streamLogs.ensureStream(stream);
       await GoalStore.start(stream, 'clear this goal');
 
@@ -1762,7 +1805,7 @@ describe('ProgressBackend', () => {
     const orphanExecution = 'b6966b' as ExecutionId;
     const historyExecution = 'c6966c' as ExecutionId;
 
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend, session } = await createPersistentRecordingBackend();
     try {
       const seed = new StreamSnapshotStore();
       await seed.load([orphanStream]);
@@ -1824,7 +1867,7 @@ describe('ProgressBackend', () => {
     await writeExecutionConfig(sweptExecution);
     await seed.flush();
 
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend, session } = await createPersistentRecordingBackend();
     const originalDeleteStream = backend.state.snapshots.deleteStream.bind(
       backend.state.snapshots,
     );
@@ -1886,7 +1929,7 @@ describe('ProgressBackend', () => {
     await writeExecutionConfig(sweptExecution);
     await seed.flush();
 
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend, session } = await createPersistentRecordingBackend();
     const stores = backend.state.stores as unknown as {
       deleteExecution(executionId: ExecutionId): Promise<boolean>;
     };
@@ -1941,11 +1984,6 @@ describe('ProgressBackend', () => {
       backend: ReturnType<typeof createIsolatedRecordingBackend>['backend'],
       stream: StreamTabId,
     ): Promise<void> {
-      // `flush()` is a no-op until the store has `load()`ed once, so run an
-      // initial (empty) load first — mirrors the prior session that actually
-      // persisted this stream's log to disk before the extension restarted.
-      await backend.state.load();
-
       // A prior session's log has entries, but (as with pre-#3061 tabs) never
       // recorded a user-message entry for the run's initial instruction.
       backend.state.streamLogs.append(stream, {
@@ -1962,7 +2000,7 @@ describe('ProgressBackend', () => {
     it('hydrates the initial user message from legacyInstructions.json', async () => {
       const stream = 'polish@gpt#legacy01' as StreamTabId;
       const legacyText = 'Polish the introduction section for clarity.';
-      const { backend, session } = createIsolatedRecordingBackend();
+      const { backend, session } = await createPersistentRecordingBackend();
 
       try {
         await seedPersistedLogWithoutUserMessage(backend, stream);
@@ -1998,7 +2036,7 @@ describe('ProgressBackend', () => {
     it('falls back to the older runInstructions.json key (never migrated on disk)', async () => {
       const stream = 'polish@gpt#legacy02' as StreamTabId;
       const legacyText = 'Rewrite the abstract to lead with the contribution.';
-      const { backend, session } = createIsolatedRecordingBackend();
+      const { backend, session } = await createPersistentRecordingBackend();
 
       try {
         await seedPersistedLogWithoutUserMessage(backend, stream);
@@ -2039,7 +2077,7 @@ describe('ProgressBackend', () => {
     it('does not duplicate the backfilled message on a second load()', async () => {
       const stream = 'polish@gpt#legacy03' as StreamTabId;
       const legacyText = 'Tighten the related-work section.';
-      const { backend, session } = createIsolatedRecordingBackend();
+      const { backend, session } = await createPersistentRecordingBackend();
 
       try {
         await seedPersistedLogWithoutUserMessage(backend, stream);

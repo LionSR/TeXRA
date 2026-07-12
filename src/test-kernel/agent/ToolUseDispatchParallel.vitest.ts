@@ -75,7 +75,7 @@ interface HarnessOptions {
 function dispatchHarness(opts: HarnessOptions) {
   const runTrace = createRunTrace(
     'DispatchParallelTest' as StreamTabId,
-    new StreamLogStore(),
+    StreamLogStore.ephemeral('test'),
   );
   const services = {
     config: AgentConfigSchema.parse({
