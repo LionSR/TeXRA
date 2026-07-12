@@ -18,6 +18,7 @@ import * as logUtils from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
+import { COLOR_ERROR } from '../ui/colors';
 import { WARNING } from '../ui/glyphs';
 
 interface EntryErrorBoundaryProps {
@@ -80,7 +81,7 @@ export class EntryErrorBoundary extends Component<
     const detail = formatRenderError(this.state.error);
     return (
       <Box paddingX={1}>
-        <Text color="red" dimColor>
+        <Text color={COLOR_ERROR} dimColor>
           {`${WARNING} failed to render ${this.props.label ?? 'entry'}${detail ? `: ${detail}` : ''}`}
         </Text>
       </Box>

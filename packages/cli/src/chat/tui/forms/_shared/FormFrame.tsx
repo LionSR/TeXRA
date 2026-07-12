@@ -6,12 +6,16 @@ import { Text, useWindowSize } from 'ink';
 
 import { KeyHints, type KeyHint } from '@cli/chat/tui/ui/KeyHints';
 import { BorderedPanel } from '@cli/chat/tui/ui/BorderedPanel';
+import { COLOR_ERROR, COLOR_HINT } from '@cli/chat/tui/ui/colors';
 import { LoadingIndicator } from '@cli/chat/tui/ui/LoadingIndicator';
 import { FORM_FRAME_MAX_WIDTH } from '@cli/chat/tui/ui/theme';
 import { clamp } from '@utils/core';
 
 export interface FormFrameProps {
-  readonly color: string;
+  /** Border/title color. Defaults to the palette's informational hint —
+   *  pass an explicit color only for a non-default state (e.g. an
+   *  empty-results warning or an error transient). */
+  readonly color?: string;
   readonly title: string;
   readonly children: React.ReactNode;
   /**
@@ -34,7 +38,7 @@ export function FormFrame(props: FormFrameProps): React.JSX.Element {
 
   return (
     <BorderedPanel
-      color={props.color}
+      color={props.color ?? COLOR_HINT}
       title={props.title}
       width={formFrameWidth(columns)}
       footer={
@@ -69,11 +73,7 @@ export function renderAsyncListFormTransient(props: {
 }): React.JSX.Element | null {
   if (props.loading) {
     return (
-      <FormFrame
-        color="cyan"
-        title={props.title}
-        showCloseHint={props.showCloseHint}
-      >
+      <FormFrame title={props.title} showCloseHint={props.showCloseHint}>
         <LoadingIndicator label={props.loadingLabel} />
       </FormFrame>
     );
@@ -81,7 +81,7 @@ export function renderAsyncListFormTransient(props: {
   if (props.error !== undefined) {
     return (
       <FormFrame
-        color="red"
+        color={COLOR_ERROR}
         title={`${props.title} - error`}
         showCloseHint={props.showCloseHint}
       >

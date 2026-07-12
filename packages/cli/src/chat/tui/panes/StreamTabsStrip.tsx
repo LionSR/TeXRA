@@ -8,6 +8,7 @@ import type { StreamTabId } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
 import { textDisplayWidth, truncateToWidth } from '../render/terminalText';
+import { COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
 import {
   activeStreamId as activeStreamIdSignal,
   streams as streamsSignal,
@@ -245,9 +246,9 @@ function StreamTabsStripView(props: {
           dimColor={!segment.item.active && !segment.item.running}
           color={
             segment.item.active
-              ? 'cyan'
+              ? COLOR_HINT
               : segment.item.running
-                ? 'green'
+                ? COLOR_SUCCESS
                 : undefined
           }
         >

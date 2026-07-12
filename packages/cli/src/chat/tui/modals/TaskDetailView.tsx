@@ -30,6 +30,7 @@ import {
 } from '../state/taskDetailScroll';
 import { KeyHints, type KeyHint } from '../ui/KeyHints';
 import { BorderedPanel } from '../ui/BorderedPanel';
+import { COLOR_HINT } from '../ui/colors';
 
 export const TASK_DETAIL_LABEL_WIDTH = 13;
 const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
@@ -374,7 +375,7 @@ export function TaskDetailView({
   if (ultraCompact) {
     return (
       <Box flexDirection="column" minWidth={0} width={availableColumns}>
-        <Text bold color="cyan" wrap="truncate-end">
+        <Text bold color={COLOR_HINT} wrap="truncate-end">
           {`Task details · ${commandLabel}: ${item.command}`}
         </Text>
         <KeyHints hints={hints} confirmCancel={false} />
@@ -384,7 +385,7 @@ export function TaskDetailView({
 
   return (
     <BorderedPanel
-      color="cyan"
+      color={COLOR_HINT}
       width={availableColumns}
       title={layout.showTitle ? 'Task details' : undefined}
       footer={
@@ -404,7 +405,7 @@ export function TaskDetailView({
       ) : (
         <Text
           bold={!layout.showTitle}
-          color={!layout.showTitle ? 'cyan' : undefined}
+          color={!layout.showTitle ? COLOR_HINT : undefined}
           dimColor={layout.showTitle}
           wrap="truncate-end"
         >

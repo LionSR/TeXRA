@@ -201,7 +201,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
 
   if (isCompactFormRows(props.availableRows)) {
     return (
-      <FormFrame color="cyan" title="/agent" showCloseHint={false}>
+      <FormFrame title="/agent" showCloseHint={false}>
         {currentAgentHint ? (
           <Text dimColor wrap="truncate-end">
             {currentAgentHint}
@@ -228,7 +228,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   }
 
   return (
-    <FormFrame color="cyan" title="/agent" showCloseHint={false}>
+    <FormFrame title="/agent" showCloseHint={false}>
       <Text dimColor wrap="truncate-end">
         {props.selectable
           ? 'Choose the root agent for this chat.'
