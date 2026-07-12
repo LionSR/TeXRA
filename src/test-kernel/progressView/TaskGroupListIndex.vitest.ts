@@ -215,6 +215,9 @@ describe('task-group-list ungrouped message indexes', () => {
       '[data-reveal-kind="timeline"]',
     );
     expect(revealButton?.dataset.hiddenCount).toBe('10');
+    // Regression coverage: the reveal control renders as a themed
+    // <wa-button>, not a hand-rolled native <button> (see logEntryStyles.ts).
+    expect(revealButton?.tagName).toBe('WA-BUTTON');
 
     revealButton?.click();
     await list.updateComplete;
