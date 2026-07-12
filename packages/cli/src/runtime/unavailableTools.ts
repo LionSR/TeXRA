@@ -1,9 +1,6 @@
 import type { RegisteredToolName } from '@tools/registry';
-import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
-
-type CliUnavailableTool =
-  RegisteredToolName | typeof DIAGNOSTICS_ADD_RUNTIME_CAPABILITY;
 
 /**
  * Tools hidden from every `texra` CLI run — both the headless command paths
@@ -22,16 +19,17 @@ type CliUnavailableTool =
  * The `inline_comment` tool is backed by VS Code's CommentController, which the
  * CLI has no equivalent for, so it is hidden too.
  *
- * The `diagnostics.add` capability writes VS Code diagnostics through the
- * extension host. Keep diagnostics `list`/`count` available, but hide that
- * write sub-command from the CLI tool schema.
+ * The diagnostics tool requires a host linter for `list`/`count`. The CLI has
+ * no linter integration, so the whole tool is hidden rather than returning a
+ * successful empty result. Hosts with read support may instead hide only the
+ * `diagnostics.add` command.
  *
  * Subagents inherit these exclusions through `runtimeUnavailableTools` on the
  * run context.
  */
-export const CLI_UNAVAILABLE_TOOLS: readonly CliUnavailableTool[] = [
+export const CLI_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
   'inquiry',
   ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
   'inline_comment',
-  DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+  DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
 ];

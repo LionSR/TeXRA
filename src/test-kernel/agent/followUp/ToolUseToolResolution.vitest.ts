@@ -6,7 +6,10 @@ import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import type { ToolDefinition } from '@model';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
-import { DIAGNOSTICS_ADD_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
+import {
+  DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
+  DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
+} from '@tools/diagnosticsRuntimeCapabilities';
 
 const logger = { warn: () => {} };
 
@@ -154,6 +157,22 @@ describe('tool-use tool resolution', () => {
         confidence: 4,
       }).success,
     ).toBe(false);
+  });
+
+  it('omits diagnostics when read support is host-unavailable', async () => {
+    const diagnostics = new DiagnosticsTool();
+    const registry = new MapToolRegistry({ diagnostics });
+
+    const { tools } = await resolveAgentTools({
+      tools: [diagnostics.definition],
+      registry,
+      logger,
+      toolInjections,
+      runtimeUnavailableTools: [DIAGNOSTICS_READ_RUNTIME_CAPABILITY],
+      approvalPromptsUnavailable: false,
+    });
+
+    expect(tools).toEqual([]);
   });
 
   it('filters injected approval-gated tools when approval prompts are unavailable', async () => {
