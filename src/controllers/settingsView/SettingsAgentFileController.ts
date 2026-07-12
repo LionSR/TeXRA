@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Local imports - shared
 import type { AgentCategory } from '@shared/schemas/agent';
+import { isStrictlyWithin } from '@utils/core/pathCore';
 
 export interface SettingsAgentFileEntry {
   path: string;
@@ -121,14 +122,9 @@ export class SettingsAgentFileController {
   }
 
   private isInside(parentDir: string, candidatePath: string): boolean {
-    const relativePath = path.relative(
+    return isStrictlyWithin(
       path.resolve(parentDir),
       path.resolve(candidatePath),
-    );
-    return (
-      relativePath !== '' &&
-      !relativePath.startsWith('..') &&
-      !path.isAbsolute(relativePath)
     );
   }
 }
