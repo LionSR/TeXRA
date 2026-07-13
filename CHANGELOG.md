@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.39.4] - 2026-07-13
 
 ### Shared (all surfaces)
 
@@ -14,13 +14,16 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
-- **ChatGPT sign-in unlocks compatible OpenAI models without an API key** —
-  the CLI and extension enable subscription routing, refresh model
-  availability, and expose supported OpenAI models after sign-in.
-- **Meta (Muse Spark) provider support** — Muse Spark 1.1 is now available as
-  a direct provider with your own Meta Model API key (dev.meta.ai), including
-  reasoning, tool calling, vision, and PDF input via Meta's Responses-compatible
-  API surface.
+- **Optional ChatGPT sign-in for compatible OpenAI models** — the CLI and
+  extension can use supported ChatGPT subscription models as an alternative to
+  configuring an OpenAI API key, with availability refreshed after sign-in.
+- **Experimental Meta (Muse Spark) provider** — Muse Spark 1.1 can be tried
+  with your own Meta Model API key (dev.meta.ai). The experimental integration
+  supports reasoning, tool calling, vision, and PDF input through Meta's
+  Responses-compatible API surface.
+- **OpenAI parallel function calls are enabled by default** — supported OpenAI
+  models can plan independent tool calls together, while TeXRA continues to
+  preserve ordering for edits and other side-effectful actions.
 
 #### Bug Fixes
 
@@ -33,11 +36,32 @@ All notable changes to this project will be documented in this file.
 - **Grok models keep a medium reasoning-effort selection** — the xAI effort
   clamp no longer converts `medium` to `high`; current Grok reasoning models
   (grok-4.3, grok-4.5) support low/medium/high.
-
+- **ChatGPT subscription compaction keeps streamed summaries** — when the
+  subscription backend leaves the completed response body empty, TeXRA now
+  rebuilds the summary from streamed text so long conversations still compact.
+- **OpenAI context checks use the final request size and current model limits**
+  — GPT-5.6 requests now use the correct input and output allowances, and an
+  overflow that provider compaction cannot recover is surfaced without futile
+  automatic retries.
+- **Usage accounting preserves unsettled relay batches** — transient failures
+  and partial acknowledgements retain the same batch for retry, while permanent
+  rejection is reported instead of being treated as successful delivery.
 - **Agent runs no longer start with unavailable transcript persistence** —
   headless CLI, desktop, and extension execution now fail initialization when
   persistent transcripts cannot be opened. Interactive CLI fallback sessions
   are clearly marked as ephemeral and are not advertised as resumable.
+- **Resumed sessions restore their visible outputs** — workflow outputs,
+  missing-output notices, and compile-failure details are replayed after
+  hydration instead of disappearing from the resumed conversation.
+- **Approvals remain tied to the current session and proposal** — stale or
+  unreadable diff fallbacks cannot be approved, and concurrent sessions no
+  longer share pending approval state.
+- **Background work reconnects more reliably** — waiting parents wake when a
+  background shell task finishes, and Claude-agent sessions can recover their
+  resume state from disk after a reload or crash.
+- **Anthropic web-fetch results retain source details** — fetched titles, URLs,
+  and page content remain available to the agent instead of being flattened
+  into an incomplete result.
 
 ### Extension (VS Code)
 
@@ -55,11 +79,23 @@ All notable changes to this project will be documented in this file.
 - **Progress entries keep disclosure controls on the left** — assistant,
   thinking, tool, and file entries use Web Awesome's native left-side
   disclosure placement consistently.
+- **Agent Review stops cleanly from its owning execution** — stopping a review
+  now releases its in-progress state instead of leaving later reviews blocked.
+- **Pasted images stay with the conversation that accepted them** — switching
+  streams while an image is being prepared no longer delivers it to the wrong
+  follow-up input.
 
 ### Desktop
 
 #### Bug Fixes
 
+- **Running sessions stay connected after reopening the desktop window** —
+  active runs, later turns, subagents, status updates, and pending interactions
+  are rebound to the replacement window instead of continuing without visible
+  progress or controls.
+- **Desktop update checks follow the window lifecycle** — checks are serialized
+  so closing or replacing a window cannot leave overlapping update requests or
+  stale notifications behind.
 - **Approvals survive window replacement** — closing and reopening the desktop
   window no longer rejects or loses an approval requested by a session that is
   still running.
@@ -77,12 +113,16 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Interrupted chats retain their earlier context** — pressing Escape during
-  an active CLI response now preserves the resumable conversation, and the next
-  message continues that conversation instead of silently starting a new one.
+- **Interrupted chats retain context and queued follow-ups** — pressing Escape
+  during an active response preserves the resumable conversation; messages
+  submitted during teardown or a failed restore remain in order for the next
+  retry instead of being silently dropped.
 - **Model access choices apply to the launched session** — switching access at
   startup overrides an earlier command-line mode, and selecting ChatGPT turns
   off OpenRouter routing so requests use the chosen subscription.
+- **Terminal status stays readable during long sessions** — history omits
+  internal process bookkeeping, completed transcripts repaint after resizing,
+  and the Ctrl-C hint follows whether a run is actually active.
 
 ## [0.39.3] - 2026-07-10
 
@@ -127,11 +167,10 @@ All notable changes to this project will be documented in this file.
   until they hit the context ceiling. Both the automatic threshold-based
   compaction and the manual "compact now" action now summarize the
   conversation locally and resend a shorter history instead.
-- **Anthropic/Google tool-use sessions now receive their system prompt** —
-  persona, tool-use instructions, and delegation policy are resupplied on
-  every model call. Previously these providers received no system prompt at
-  all in tool-use mode, since the message-embedding approach used for other
-  providers doesn't apply to them.
+- **Anthropic and Google tool-use sessions keep agent instructions consistent
+  across turns** — persona, tool-use instructions, and delegation policy are
+  now resupplied on every model call, matching the continuity already provided
+  by providers that carry those instructions in message history.
 
 #### Improvements
 
