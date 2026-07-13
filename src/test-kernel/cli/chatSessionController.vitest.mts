@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   clearLocalTranscript: vi.fn(),
   moveLocalTranscriptToStream: vi.fn(),
   resolveCliResumeSnapshot: vi.fn(),
+  followUpEnqueue: vi.fn(),
+  sessionEventEmit: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -147,6 +149,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 function makeSession(overrides: Partial<TuiSession> = {}): TuiSession {
   return {
     streamId: undefined,
+    interruptedStreamId: undefined,
     executionId: undefined,
     runtimeHost: undefined,
     runPromise: undefined,
@@ -228,6 +231,34 @@ function makeResolvedResume() {
   };
 }
 
+function makeInterruptedController(
+  runPromise: Promise<void>,
+  runCompleted: boolean,
+) {
+  const session = makeSession({
+    streamId: 'stream-1' as StreamTabId,
+    interruptedStreamId: 'stream-1' as StreamTabId,
+    executionId: 'exec-1',
+    runPromise,
+    runCompleted,
+    stopRequested: true,
+  });
+  const snapshotStore = makeResumeSnapshotStore({
+    executionId: 'exec-1',
+    config: makeResumeConfig(),
+  });
+  mocks.resolveAndResumeStream.mockImplementationOnce(
+    async (
+      _streamId: StreamTabId,
+      ports: { resumeToolUseSnapshot(snapshot: unknown): Promise<boolean> },
+    ) => ports.resumeToolUseSnapshot({ version: 2 }),
+  );
+  return {
+    ctrl: createChatSessionController(makeInit({ session, snapshotStore })),
+    session,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Predicate: chatTuiCanStartRootRun
 // ---------------------------------------------------------------------------
@@ -292,7 +323,8 @@ describe('createChatSessionController', () => {
     mocks.defaultSession.mockReturnValue({
       useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
       interactions: {},
-      events: {},
+      events: { emit: mocks.sessionEventEmit },
+      followUps: { enqueue: mocks.followUpEnqueue },
       status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
       executions: { stopAgentStream: mocks.stopAgentStream },
       transcripts: { ensureLoaded: vi.fn(async () => undefined) },
@@ -300,7 +332,13 @@ describe('createChatSessionController', () => {
     mocks.resolveAndResumeStream.mockReset();
     mocks.resolveAndResumeStream.mockResolvedValue(true);
     mocks.resumeQueuedToolUseSnapshot.mockReset();
-    mocks.resumeQueuedToolUseSnapshot.mockResolvedValue(true);
+    mocks.resumeQueuedToolUseSnapshot.mockImplementation(
+      async (...args: unknown[]) => {
+        const options = args[3] as ResumeQueuedToolUseOptions;
+        options.onFollowUpQueueReady?.();
+        return true;
+      },
+    );
     mocks.projectStreamTranscript.mockReset();
     mocks.notify.mockReset();
     mocks.appendLocalAssistantTranscript.mockReset();
@@ -309,6 +347,8 @@ describe('createChatSessionController', () => {
     mocks.clearLocalTranscript.mockReset();
     mocks.moveLocalTranscriptToStream.mockReset();
     mocks.resolveCliResumeSnapshot.mockReset();
+    mocks.followUpEnqueue.mockReset();
+    mocks.sessionEventEmit.mockReset();
     mocks.resumeToolUseFromSnapshot.mockReset();
     mocks.resumeToolUseFromSnapshot.mockResolvedValue({
       category: 'toolUse',
@@ -438,6 +478,56 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
   });
 
+  it('manual resume supersedes stale interrupted recovery state', async () => {
+    const session = makeSession({
+      interruptedStreamId: 'stream-interrupted' as StreamTabId,
+      runCompleted: true,
+      stopRequested: true,
+    });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    await ctrl.resume('aaaaaa' as ExecutionId, makeResolvedResume());
+
+    expect(session.streamId).toBe('stream-resume');
+    expect(session.interruptedStreamId).toBeUndefined();
+    expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
+      kind: 'not_interrupted',
+    });
+  });
+
+  it('transfers an admitted interruption batch to manual resume', async () => {
+    const teardown = pDefer<void>();
+    const { ctrl } = makeInterruptedController(teardown.promise, true);
+    const admission = ctrl.admitInterruptedFollowUp({
+      text: 'Preserve this accepted message.',
+    });
+    expect(admission.kind).toBe('accepted');
+    if (admission.kind !== 'accepted') return;
+
+    const manualResume = ctrl.resume(
+      'aaaaaa' as ExecutionId,
+      makeResolvedResume(),
+    );
+    teardown.resolve();
+
+    await manualResume;
+    await expect(admission.completion).resolves.toBe(true);
+    await vi.waitFor(() =>
+      expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.any(Object),
+        expect.objectContaining({
+          drainedFollowUps: [
+            {
+              text: 'Preserve this accepted message.',
+              origin: 'user',
+            },
+          ],
+        }),
+      ),
+    );
+  });
+
   it('resume() suspended on the resolved snapshot keeps a concurrent follow-up wake from also claiming the root-run slot', async () => {
     // Reproduces the finding's interleaving: resume(A) suspends on
     // resolveCliResumeSnapshot (an await-suspension point) with the slot
@@ -490,7 +580,10 @@ describe('createChatSessionController', () => {
       transcripts: { ensureLoaded: () => ensureLoaded.promise },
     });
 
-    const session = makeSession({ runCompleted: true });
+    const session = makeSession({
+      interruptedStreamId: 'stream-interrupted' as StreamTabId,
+      runCompleted: true,
+    });
     const snapshotStore = makeResumeSnapshotStore({});
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
@@ -536,10 +629,14 @@ describe('createChatSessionController', () => {
 
     expect(mocks.resumeToolUseFromSnapshot).not.toHaveBeenCalled();
     expect(session.runCompleted).toBe(true);
+    expect(session.interruptedStreamId).toBe('stream-resume');
   });
 
   it('reports resume rehydration failures without rejecting the TUI submit path', async () => {
-    const session = makeSession({ runCompleted: true });
+    const session = makeSession({
+      interruptedStreamId: 'stream-interrupted' as StreamTabId,
+      runCompleted: true,
+    });
     const snapshotStore = makeResumeSnapshotStore({
       load: async () => {
         throw new Error('snapshot load failed');
@@ -559,6 +656,7 @@ describe('createChatSessionController', () => {
     expect(mocks.resumeToolUseFromSnapshot).not.toHaveBeenCalled();
     expect(session.runExitCode).toBe(CliExitCode.AgentError);
     expect(session.runCompleted).toBe(true);
+    expect(session.interruptedStreamId).toBe('stream-interrupted');
     expect(ctrl.canStartRootRun()).toBe(true);
   });
 
@@ -690,6 +788,151 @@ describe('createChatSessionController', () => {
     });
     expect(rootStreamId.get()).toBe('stream-1');
     expect(mocks.notify).not.toHaveBeenCalledWith({ kind: 'agentFinished' });
+  });
+
+  it('launcher resume supersedes stale interrupted recovery state', async () => {
+    const { ctrl, session } = makeInterruptedController(
+      Promise.resolve(),
+      true,
+    );
+
+    await expect(ctrl.tryResumeStream('stream-1')).resolves.toBe(true);
+
+    expect(session.interruptedStreamId).toBeUndefined();
+    expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
+      kind: 'not_interrupted',
+    });
+  });
+
+  it('transfers an admitted interruption batch to launcher resume', async () => {
+    const teardown = pDefer<void>();
+    const { ctrl } = makeInterruptedController(teardown.promise, true);
+    const admission = ctrl.admitInterruptedFollowUp({
+      text: 'Transfer this accepted message.',
+    });
+    expect(admission.kind).toBe('accepted');
+    if (admission.kind !== 'accepted') return;
+
+    const launcherResume = ctrl.tryResumeStream('stream-1');
+    teardown.resolve();
+
+    await expect(launcherResume).resolves.toBe(true);
+    await expect(admission.completion).resolves.toBe(true);
+    expect(mocks.followUpEnqueue).toHaveBeenCalledWith(
+      'stream-1',
+      { text: 'Transfer this accepted message.' },
+      { force: true },
+    );
+  });
+
+  it('holds a message submitted while interruption teardown finishes', async () => {
+    const teardown = pDefer<void>();
+    const { ctrl, session } = makeInterruptedController(
+      teardown.promise,
+      false,
+    );
+
+    const admission = ctrl.admitInterruptedFollowUp({
+      text: 'Do not drop this message.',
+    });
+    expect(admission.kind).toBe('accepted');
+    expect(mocks.resolveAndResumeStream).not.toHaveBeenCalled();
+
+    session.runCompleted = true;
+    teardown.resolve();
+    if (admission.kind !== 'accepted') return;
+    await expect(admission.completion).resolves.toBe(true);
+    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+      'stream-1',
+      { version: 2 },
+      expect.any(Object),
+      expect.objectContaining({
+        extraFollowUps: [{ text: 'Do not drop this message.' }],
+      }),
+    );
+    expect(session.stopRequested).toBe(false);
+  });
+
+  it('batches parallel messages into one interrupted resume', async () => {
+    const teardown = pDefer<void>();
+    const { ctrl, session } = makeInterruptedController(
+      teardown.promise,
+      false,
+    );
+
+    const first = ctrl.admitInterruptedFollowUp({ text: 'First message.' });
+    const second = ctrl.admitInterruptedFollowUp({ text: 'Second message.' });
+    expect(first.kind).toBe('accepted');
+    expect(second.kind).toBe('accepted');
+    if (first.kind !== 'accepted' || second.kind !== 'accepted') return;
+    expect(second.completion).toBe(first.completion);
+
+    session.runCompleted = true;
+    teardown.resolve();
+    await expect(first.completion).resolves.toBe(true);
+    expect(mocks.resolveAndResumeStream).toHaveBeenCalledOnce();
+    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+      'stream-1',
+      { version: 2 },
+      expect.any(Object),
+      expect.objectContaining({
+        extraFollowUps: [
+          { text: 'First message.' },
+          { text: 'Second message.' },
+        ],
+      }),
+    );
+  });
+
+  it('stops batching once ordinary follow-up routing is ready', async () => {
+    const resume = pDefer<boolean>();
+    const { ctrl } = makeInterruptedController(Promise.resolve(), true);
+    mocks.resumeQueuedToolUseSnapshot.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const options = args[3] as ResumeQueuedToolUseOptions;
+        options.onFollowUpQueueReady?.();
+        return resume.promise;
+      },
+    );
+
+    const first = ctrl.admitInterruptedFollowUp({ text: 'Resume now.' });
+    expect(first.kind).toBe('accepted');
+    if (first.kind !== 'accepted') return;
+    await vi.waitFor(() =>
+      expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledOnce(),
+    );
+
+    expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
+      kind: 'not_interrupted',
+    });
+    resume.resolve(true);
+    await expect(first.completion).resolves.toBe(true);
+  });
+
+  it('retains the interrupted conversation after a failed resume', async () => {
+    const { ctrl, session } = makeInterruptedController(
+      Promise.resolve(),
+      true,
+    );
+    mocks.resolveAndResumeStream.mockReset().mockResolvedValueOnce(false);
+
+    const failed = ctrl.admitInterruptedFollowUp({ text: 'First attempt.' });
+    expect(failed.kind).toBe('accepted');
+    if (failed.kind !== 'accepted') return;
+    await expect(failed.completion).resolves.toBe(false);
+    expect(session.interruptedStreamId).toBe('stream-1');
+
+    mocks.resolveAndResumeStream.mockImplementationOnce(
+      async (
+        _streamId: StreamTabId,
+        ports: { resumeToolUseSnapshot(snapshot: unknown): Promise<boolean> },
+      ) => ports.resumeToolUseSnapshot({ version: 2 }),
+    );
+    const retry = ctrl.admitInterruptedFollowUp({ text: 'Retry.' });
+    expect(retry.kind).toBe('accepted');
+    if (retry.kind !== 'accepted') return;
+    await expect(retry.completion).resolves.toBe(true);
+    expect(session.interruptedStreamId).toBeUndefined();
   });
 
   it('preserves root ownership when auto-resuming a child stream', async () => {

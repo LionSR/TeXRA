@@ -439,6 +439,7 @@ export async function runChat(
 
   const session: TuiSession = {
     streamId: undefined,
+    interruptedStreamId: undefined,
     executionId: undefined,
     runtimeHost: undefined,
     runPromise: undefined,
@@ -687,6 +688,23 @@ export async function runChat(
         prepared.reservedSkillActivations,
       );
     };
+    if (!childFollowUpTarget) {
+      const interruptedAdmission = chatController.admitInterruptedFollowUp({
+        text: prepared.instruction,
+        mediaFiles,
+        displayText: prepared.displayInstruction,
+      });
+      if (interruptedAdmission.kind === 'accepted') {
+        const resumed = await interruptedAdmission.completion;
+        if (resumed) return;
+        restoreReservedSkillActivations();
+        appendLocalAssistantTranscript(
+          'The interrupted conversation could not be restored. Use /resume to retry it, or /clear to start a new conversation.',
+          interruptedAdmission.streamId,
+        );
+        return;
+      }
+    }
     if (!childFollowUpTarget && chatTuiCanStartRootRun(session)) {
       const started = await startSession(
         prepared.instruction,
