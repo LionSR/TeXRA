@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  getOnboardingDeclined,
-  setOnboardingDeclined,
-} from '@controllers/onboarding/onboardingFunnel';
 import { maskDisplayValue } from '@cli/chat/tui/input/textInputEditing';
 import { formatApiKeyShadowWarning } from '@cli/runtime/apiStatus';
 import { maybeRunCliOnboarding } from '@cli/onboarding/runOnboarding';
 import { describeSavedKeyLocation } from '@cli/onboarding/onboardingState';
+import {
+  getOnboardingDeclined,
+  setOnboardingDeclined,
+} from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;

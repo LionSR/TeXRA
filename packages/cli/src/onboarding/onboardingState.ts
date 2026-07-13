@@ -1,6 +1,6 @@
 // CLI-specific onboarding messaging. The funnel flags (declined,
 // firstRunDone, default team) live host-neutrally in
-// `@controllers/onboarding/onboardingFunnel` so the extension and desktop
+// `@shared/state/onboardingState` so the extension and desktop
 // derive the same funnel from the same keys.
 
 import {

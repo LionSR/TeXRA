@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  backfillFirstRunDone,
   deriveOnboardingFunnelState,
+  planOnboardingFunnelTransition,
+} from '@controllers/onboarding/onboardingFunnel';
+import {
+  backfillFirstRunDone,
   getDefaultTeamId,
   getFirstRunDone,
-  planOnboardingFunnelTransition,
   readOnboardingFlags,
   setDefaultTeamId,
   setFirstRunDone,
-} from '@controllers/onboarding/onboardingFunnel';
+} from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import type { StateStore } from '@platform/interfaces';

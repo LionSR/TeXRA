@@ -1,7 +1,3 @@
-import {
-  getFirstRunDone,
-  setFirstRunDone,
-} from '@controllers/onboarding/onboardingFunnel';
 import { platform } from '@platform/platform';
 import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import {
@@ -31,6 +27,10 @@ import {
 } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
+import {
+  getFirstRunDone,
+  setFirstRunDone,
+} from '@shared/state/onboardingState';
 
 import {
   AgentExecutionHandle,

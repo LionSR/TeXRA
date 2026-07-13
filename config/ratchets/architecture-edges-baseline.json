@@ -3,7 +3,6 @@
   "edges": [
     { "from": "agent", "to": "auth", "kind": "value" },
     { "from": "agent", "to": "common", "kind": "value" },
-    { "from": "agent", "to": "controllers", "kind": "value" },
     { "from": "agent", "to": "latex", "kind": "value" },
     { "from": "agent", "to": "logger", "kind": "value" },
     { "from": "agent", "to": "model", "kind": "value" },

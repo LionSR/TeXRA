@@ -1,12 +1,14 @@
 import { platform } from '@platform/platform';
 import {
   planOnboardingFunnelTransition,
-  readOnboardingFlags,
-  setFirstRunDone,
-  setOnboardingDeclined,
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  readOnboardingFlags,
+  setFirstRunDone,
+  setOnboardingDeclined,
+} from '@shared/state/onboardingState';
 import {
   buildDesktopOnboardingSetStateMessage,
   DESKTOP_ONBOARDING_COMMANDS,
