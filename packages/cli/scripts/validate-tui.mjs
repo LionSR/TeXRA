@@ -242,7 +242,11 @@ const SCENARIOS = [
       '1. ✓ reviewer completed All good <ok>',
       'Queued follow-ups (1)',
     ],
-    unexpect: ['<orchestrator-followup>', '<subagent-result'],
+    unexpect: [
+      '(empty follow-up)',
+      '<orchestrator-followup>',
+      '<subagent-result',
+    ],
   },
   {
     name: 'queued-subagent-followup-status-preview',
