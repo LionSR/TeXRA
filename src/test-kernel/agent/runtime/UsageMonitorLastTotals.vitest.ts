@@ -1,8 +1,12 @@
 // Third-party imports
 import { ModelProvider } from 'llm-zoo';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import {
+  USAGE_LOG_FLUSH_OUTCOME,
+  UsageLogService,
+} from '@telemetry/UsageLogService';
 import { TraceEmitter } from '@agent/trace';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
@@ -54,6 +58,7 @@ function createMonitorWithEvents() {
   );
   return {
     monitor,
+    logger,
     events: recorded.events,
     dispose: () => {
       recorded.detach();
@@ -62,7 +67,7 @@ function createMonitorWithEvents() {
   };
 }
 
-describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
+describe('UsageMonitor', () => {
   it('is undefined before any round and caches the totals after recordUsage', async () => {
     const { dispose, monitor } = createMonitorWithEvents();
     try {
@@ -104,6 +109,38 @@ describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
       });
       expect(usageData?.usage).not.toHaveProperty('viaChatGptSubscription');
     } finally {
+      dispose();
+    }
+  });
+
+  it('reports permanent relay rejection to the spend-cap caller', async () => {
+    const { dispose, logger, monitor } = createMonitorWithEvents();
+    const error = vi.spyOn(logger, 'error');
+    const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
+    const flush = vi
+      .spyOn(UsageLogService, 'flush')
+      .mockResolvedValue(USAGE_LOG_FLUSH_OUTCOME.REJECTED);
+
+    try {
+      const state = AgentRunStateSnapshotSchema.parse({});
+      recordNormalizedUsage(state.usageAccumulator, {
+        inputTokens: 10,
+        outputTokens: 2,
+        cost: 0.01,
+        responseTimeMs: 50,
+        provider: 'openai-response',
+        usageRoute: 'relay',
+      });
+
+      await monitor.recordUsage(state);
+
+      expect(error).toHaveBeenCalledWith(
+        'Relay usage logging was permanently rejected; spend-cap accounting is incomplete.',
+      );
+    } finally {
+      error.mockRestore();
+      log.mockRestore();
+      flush.mockRestore();
       dispose();
     }
   });
