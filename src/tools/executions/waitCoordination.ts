@@ -8,20 +8,18 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import {
-  ACTIVE_STATUSES,
-  AgentExecutionHandle,
-} from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { onFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
-import { STREAM_STATUS } from '@shared/schemas';
+import { isInFlightPhase } from '@common/constants/streamStatus';
+import { STREAM_PHASE } from '@shared/schemas';
 
 /**
  * Single-pass check: should the wait endpoint skip blocking on this execution?
  *
  * Returns true when:
  * - The handle is gone (execution already untracked / completed), OR
- * - The stream left all ACTIVE_STATUSES, OR
+ * - The stream left the canonical in-flight phases, OR
  * - The execution is a *tool-use subagent* in WAITING (job done, result
  *   already delivered by the child-run loop's per-turn delivery — see
  *   childRunLoop.ts). Workflow subagents in WAITING may still be awaiting
@@ -35,7 +33,7 @@ export function shouldSkipWait(executionId: string): boolean {
   if (!handle) return true;
 
   const { status } = session.executions.getStatus(handle);
-  if (!ACTIVE_STATUSES.has(status)) return true;
+  if (!isInFlightPhase(status)) return true;
 
   // Tool-use subagent in WAITING = job delivered by the child-run loop, don't block.
   // Workflow subagent in WAITING = may be waiting for retry/user action. Blocking
@@ -43,7 +41,7 @@ export function shouldSkipWait(executionId: string): boolean {
   // technically active so we don't skip — avoids misreporting it as done.
   // Non-subagent WAITING = human input needed, keep blocking.
   if (
-    status === STREAM_STATUS.WAITING &&
+    status === STREAM_PHASE.WAITING &&
     handle instanceof AgentExecutionHandle &&
     handle.category === 'toolUse' &&
     handle.parentStreamId !== handle.childStreamId

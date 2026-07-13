@@ -13,8 +13,7 @@ export function childStatusColor(status: string | undefined): string {
   if (isChildExecutionErrorStatus(status)) return COLOR_ERROR;
   // A user stop is neither success nor error — show it neutral, matching the
   // progress view / webview (gray), not green (which reads as completed).
-  // Stream slices carry the canonical `cancelled` phase (RUN_OUTCOME); roster
-  // summaries still spell it as the legacy `stopped`.
+  // `stopped` remains accepted for historical snapshots.
   if (status === 'cancelled' || status === 'stopped') return COLOR_BORDER;
   return COLOR_SUCCESS;
 }
