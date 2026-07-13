@@ -1,3 +1,4 @@
+// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('vscode', () => ({ lm: undefined }));

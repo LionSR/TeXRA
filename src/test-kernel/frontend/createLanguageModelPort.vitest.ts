@@ -1,3 +1,4 @@
+// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 class LanguageModelTextPart {
@@ -83,12 +84,14 @@ vi.mock('vscode', () => ({
 const { createLanguageModelPort } =
   await import('@frontend/lm/createLanguageModelPort');
 
-function createPort() {
+function createPort(
+  accessInformation: object = {
+    canSendRequest: mocks.canSendRequest,
+    onDidChange: mocks.onDidChangeAccess,
+  },
+) {
   return createLanguageModelPort({
-    languageModelAccessInformation: {
-      canSendRequest: mocks.canSendRequest,
-      onDidChange: mocks.onDidChangeAccess,
-    },
+    languageModelAccessInformation: accessInformation,
   } as unknown as Parameters<typeof createLanguageModelPort>[0]);
 }
 
@@ -134,6 +137,14 @@ describe('createLanguageModelPort', () => {
     await expect(port.countTokens('missing', 'hello')).rejects.toThrow(
       'Language model "missing" is unavailable.',
     );
+    await expect(
+      createPort({}).canSendRequest('copilot-gpt-4o'),
+    ).resolves.toBeUndefined();
+    expect(() =>
+      createPort({})
+        .onDidChangeAccess(() => {})
+        .dispose(),
+    ).not.toThrow();
     expect(model.countTokens).toHaveBeenCalledWith('hello');
     expect(mocks.canSendRequest).toHaveBeenCalledWith(model);
   });

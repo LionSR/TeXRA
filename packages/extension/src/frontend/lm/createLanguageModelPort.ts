@@ -1,5 +1,7 @@
+// Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - platform
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelInfo,
@@ -8,6 +10,8 @@ import {
   type LanguageModelRequestOptions,
   type LanguageModelResponsePart,
 } from '@platform/languageModel';
+
+const NOOP_DISPOSABLE = Object.freeze({ dispose() {} });
 
 function toModelInfo(model: vscode.LanguageModelChat): LanguageModelInfo {
   return {
@@ -138,6 +142,11 @@ export function createLanguageModelPort(
     return UNAVAILABLE_LANGUAGE_MODEL_PORT;
   }
   const selectChatModels = lm.selectChatModels;
+  const accessInformation = (
+    context as {
+      languageModelAccessInformation?: Partial<vscode.LanguageModelAccessInformation>;
+    }
+  ).languageModelAccessInformation;
 
   return {
     isAvailable: () => true,
@@ -149,7 +158,7 @@ export function createLanguageModelPort(
     onDidChangeModels(listener) {
       return typeof lm.onDidChangeChatModels === 'function'
         ? lm.onDidChangeChatModels(listener)
-        : { dispose() {} };
+        : NOOP_DISPOSABLE;
     },
 
     sendRequest(modelId, messages, options, signal) {
@@ -167,14 +176,19 @@ export function createLanguageModelPort(
     },
 
     async canSendRequest(modelId) {
+      if (typeof accessInformation?.canSendRequest !== 'function') {
+        return undefined;
+      }
       const model = await findModel(selectChatModels, modelId);
       return model === undefined
         ? undefined
-        : context.languageModelAccessInformation.canSendRequest(model);
+        : accessInformation.canSendRequest(model);
     },
 
     onDidChangeAccess(listener) {
-      return context.languageModelAccessInformation.onDidChange(listener);
+      return typeof accessInformation?.onDidChange === 'function'
+        ? accessInformation.onDidChange(listener)
+        : NOOP_DISPOSABLE;
     },
   };
 }
