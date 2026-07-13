@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { isInFlightPhase } from '@common/constants/streamStatus';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import type { StreamTabId } from '@shared/schemas';
 import { cleanupAllApprovals, releaseStreamResources } from '@tools/approval';
 

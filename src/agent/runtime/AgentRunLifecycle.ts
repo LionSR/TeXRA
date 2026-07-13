@@ -14,7 +14,7 @@ import {
   classifyAgentError,
   normalizeProviderError,
 } from '@common/errors';
-import { projectRunOutcome } from '@common/constants/streamStatus';
+import { projectRunOutcome } from '@shared/streams/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   RUN_OUTCOME,

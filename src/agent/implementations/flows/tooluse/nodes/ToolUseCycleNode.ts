@@ -10,7 +10,7 @@ import {
 import { withModelClient } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { buildFailedRetryInfo } from '@common/errors';
-import { deriveRunOutcome } from '@common/constants/streamStatus';
+import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,

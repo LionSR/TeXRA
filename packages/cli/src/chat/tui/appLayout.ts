@@ -1,6 +1,6 @@
 /** Pure row allocation and visibility policy for the root CLI TUI layout. */
 
-import { isActivePhase } from '@common/constants/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import {
   TODO_STATUS,
   type StreamPhase,

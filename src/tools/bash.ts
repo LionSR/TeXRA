@@ -26,7 +26,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   deriveRunOutcome,
   projectRunOutcome,
-} from '@common/constants/streamStatus';
+} from '@shared/streams/streamStatus';
 
 // Local imports - tools
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';

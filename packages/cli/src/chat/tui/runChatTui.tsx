@@ -57,7 +57,7 @@ import {
 } from '@cli/runtime/terminalRequirements';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
-import { isActivePhase } from '@common/constants/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import {
   STREAM_PHASE,
   type ExecutionId,

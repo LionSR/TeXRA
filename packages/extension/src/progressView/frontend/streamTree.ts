@@ -1,4 +1,4 @@
-import { isInFlightPhase } from '@common/constants/streamStatus';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import {
   DEFAULT_STREAM_METADATA_STATUS,
   type StreamTabId,

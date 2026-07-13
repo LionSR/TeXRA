@@ -22,7 +22,7 @@ import type {
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { classifyAgentError, isAbortError } from '@common/errors';
-import { deriveRunOutcome } from '@common/constants/streamStatus';
+import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { createChannelTrace } from '@logger';
 import type {
   ExecutionId,

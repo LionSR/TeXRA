@@ -1,6 +1,6 @@
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { isActivePhase } from '@common/constants/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import {
   STREAM_PHASE,
   type StreamPhase,

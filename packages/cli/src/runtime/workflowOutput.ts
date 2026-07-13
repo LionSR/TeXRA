@@ -5,7 +5,7 @@ import type { AgentEntry } from '@agent/index';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
-import { runOutcomeToExecutionStatus } from '@common/constants/streamStatus';
+import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';

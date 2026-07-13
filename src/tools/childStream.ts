@@ -15,7 +15,7 @@ import {
 import { classifyAgentError } from '@common/errors';
 
 // Local imports - constants
-import { deriveRunOutcome } from '@common/constants/streamStatus';
+import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';

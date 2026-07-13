@@ -3,7 +3,7 @@ import { Box, Text } from 'ink';
 import {
   isActivePhase,
   isTerminalOutcomePhase,
-} from '@common/constants/streamStatus';
+} from '@shared/streams/streamStatus';
 import type { StreamTabId } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 

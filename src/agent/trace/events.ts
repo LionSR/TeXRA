@@ -11,7 +11,7 @@
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentErrorKind } from '@common/errors';
-import type { StreamTransitionCause } from '@common/constants/streamStatus';
+import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import type {
   ActiveChildInfo,
   AddOutputFilesPayload,

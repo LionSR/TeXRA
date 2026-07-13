@@ -18,7 +18,7 @@
 
 import type { ExecutionKVStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
-import { deriveRunOutcome } from '@common/constants/streamStatus';
+import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import {
   RUN_OUTCOME,
   type RetryErrorInfo,

@@ -17,7 +17,7 @@ import {
   STREAM_TRANSITION_CAUSE,
   terminalStreamStatusForOutcome,
   type StreamTransitionCause,
-} from '@common/constants/streamStatus';
+} from '@shared/streams/streamStatus';
 import {
   EXECUTION_STATUS,
   LIVE_ELAPSED_STREAM_STATUSES,

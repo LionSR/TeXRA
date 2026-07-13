@@ -3,7 +3,7 @@ import { runAgent } from '@agent/runtime/runAgent';
 import {
   legacyEndGroupStatusForOutcome,
   runOutcomeToExecutionStatus,
-} from '@common/constants/streamStatus';
+} from '@shared/streams/streamStatus';
 import {
   type ExecutionStatus,
   RUN_OUTCOME,

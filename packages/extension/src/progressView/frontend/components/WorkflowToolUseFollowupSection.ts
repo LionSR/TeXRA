@@ -16,7 +16,7 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
-import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   DEFAULT_STREAM_METADATA_STATUS,

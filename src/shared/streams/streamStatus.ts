@@ -14,7 +14,7 @@ import {
   type StreamPhase,
   type StreamStatus,
   type StreamStatusTrait,
-} from '@shared/schemas';
+} from '@shared/schemas/stream';
 
 // ============================================================================
 // Run-outcome algebra
@@ -198,7 +198,7 @@ export function canTransitionStreamPhase(
 // Status trait predicates (derived from STREAM_STATUS_TRAITS)
 // ============================================================================
 //
-// Membership lives in the declarative trait table in `@shared/schemas`
+// Membership lives in the declarative trait table in `@shared/schemas/stream`
 // (`STREAM_STATUS_TRAITS`); these are thin readers over it. Do not declare
 // new status lists by hand — add a trait column instead.
 

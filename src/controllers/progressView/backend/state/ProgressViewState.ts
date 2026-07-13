@@ -10,7 +10,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { isInFlightPhase } from '@common/constants/streamStatus';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   AgentCategoryFilterSchema,

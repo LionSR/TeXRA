@@ -12,7 +12,7 @@ import type {
 } from '@agent/runtime/SessionEventHub';
 
 // Local imports - shared schemas
-import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   STREAM_PHASE,
   type ActiveChildInfo,

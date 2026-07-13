@@ -30,7 +30,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { deriveRunOutcome } from '@common/constants/streamStatus';
+import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import {
   RUN_OUTCOME,

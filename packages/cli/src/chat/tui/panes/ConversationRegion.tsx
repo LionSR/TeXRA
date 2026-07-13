@@ -6,7 +6,7 @@ import { Box } from 'ink';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
-import { isActivePhase } from '@common/constants/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { type ActiveChildInfo, type StreamTabId } from '@shared/schemas';
 import { clamp } from '@utils/core';
 

@@ -14,7 +14,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 
 // Local imports - constants
-import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 
 // Local imports - shared schemas
 import {

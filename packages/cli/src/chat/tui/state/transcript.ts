@@ -1,5 +1,5 @@
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   STREAM_PHASE,
   type StreamPhase,

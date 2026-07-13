@@ -20,7 +20,7 @@ import {
   isActivePhase,
   isInFlightPhase,
   projectRunOutcome,
-} from '@common/constants/streamStatus';
+} from '@shared/streams/streamStatus';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,

@@ -13,7 +13,7 @@ import {
   canTransitionStreamPhase,
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
-} from '@common/constants/streamStatus';
+} from '@shared/streams/streamStatus';
 import {
   STREAM_PHASE,
   STREAM_STATUS,

@@ -33,7 +33,7 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,

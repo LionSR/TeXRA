@@ -9,7 +9,7 @@ import type {
 import {
   projectRunOutcome,
   STREAM_TRANSITION_CAUSE,
-} from '@common/constants/streamStatus';
+} from '@shared/streams/streamStatus';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,

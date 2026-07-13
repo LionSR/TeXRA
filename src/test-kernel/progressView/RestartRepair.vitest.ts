@@ -4,7 +4,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
 import { getExecutionStore } from '@agent/storage';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,

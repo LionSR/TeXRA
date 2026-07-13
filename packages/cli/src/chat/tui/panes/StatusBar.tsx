@@ -3,7 +3,7 @@ import { Badge } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
-import { isActivePhase } from '@common/constants/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 
 import { approvalQueueStatus } from '../state/approvalQueue';

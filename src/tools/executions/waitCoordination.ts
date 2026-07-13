@@ -11,7 +11,7 @@ import {
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { onFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
-import { isInFlightPhase } from '@common/constants/streamStatus';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { STREAM_PHASE } from '@shared/schemas';
 
 /**

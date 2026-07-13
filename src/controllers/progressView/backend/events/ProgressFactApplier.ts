@@ -18,7 +18,7 @@ import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { isInFlightPhase } from '@common/constants/streamStatus';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,

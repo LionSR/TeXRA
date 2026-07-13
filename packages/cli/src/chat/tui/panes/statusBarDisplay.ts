@@ -6,7 +6,7 @@ import {
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import { isActivePhase } from '@common/constants/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import {
   type RoundStage,
   type StreamPhase,

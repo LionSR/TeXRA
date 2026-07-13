@@ -16,7 +16,7 @@ import { TaskStateSchema } from '@agent/core/state/TaskState';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 
 // Local imports - desktop and progress schemas
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
