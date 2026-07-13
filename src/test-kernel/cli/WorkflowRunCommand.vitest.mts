@@ -141,7 +141,6 @@ describe('CLI workflow run command', () => {
         outputs: [],
         compileFailures: [],
       },
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
     });
   });
 
@@ -356,7 +355,6 @@ describe('CLI workflow run command', () => {
           outputs: [outputSummary],
           compileFailures: [compileFailure],
         },
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
       });
 
       const { runWorkflowAgent } = await import('@cli/commands/workflow');
@@ -391,6 +389,34 @@ describe('CLI workflow run command', () => {
           cost: 0,
         },
       });
+      const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+      expect(emission?.json).toMatchObject({
+        outcome: RUN_OUTCOME.COMPLETED,
+        status: EXECUTION_STATUS.COMPLETED,
+        endGroupStatus: 'stopped',
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+        workingDirectory: root,
+        runDirectory: '/tmp/runs/exec-output',
+        copiedOutput: path.join(root, 'polished.tex'),
+      });
+      expect(Object.keys(emission?.json ?? {})).toEqual([
+        'category',
+        'executionId',
+        'streamId',
+        'outcome',
+        'outputs',
+        'compileFailures',
+        'status',
+        'endGroupStatus',
+        'terminalStatus',
+        'workingDirectory',
+        'runDirectory',
+        'copiedOutput',
+      ]);
+      expect(emission?.ndjson).toEqual({
+        kind: 'result',
+        result: emission.json,
+      });
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -422,7 +448,6 @@ describe('CLI workflow run command', () => {
           outputs: [outputSummary],
           compileFailures: [],
         },
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
       });
 
       const { runWorkflowAgent } = await import('@cli/commands/workflow');
@@ -483,7 +508,6 @@ describe('CLI workflow run command', () => {
           ],
           compileFailures: [],
         },
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
       });
       mocks.writeResultMeta.mockRejectedValueOnce(
         new Error('metadata disk full'),
@@ -537,7 +561,6 @@ describe('CLI workflow run command', () => {
         outputs: [outputSummary],
         compileFailures: [],
       },
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
     });
 
     const { runWorkflowAgent } = await import('@cli/commands/workflow');
@@ -575,11 +598,10 @@ describe('CLI workflow run command', () => {
         category: AgentCategory.Workflow,
         executionId: 'exec-interrupted',
         streamId: 'stream-interrupted',
-        outcome: RUN_OUTCOME.COMPLETED,
+        outcome: RUN_OUTCOME.CANCELLED,
         outputs: [],
         compileFailures: [],
       },
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
     });
 
     const { runWorkflowAgent } = await import('@cli/commands/workflow');

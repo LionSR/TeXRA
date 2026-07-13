@@ -119,6 +119,7 @@ import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
 import type { ResumeQueuedToolUseOptions } from '@agent/runtime/resumeQueuedToolUse';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { readCliRunOutcome } from '@cli/runtime/terminalStatus';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
 import {
@@ -176,6 +177,44 @@ function makeSessionContext(): CliContext {
     apiMode: 'included',
   } as CliContext;
 }
+
+describe('CLI terminal outcome resolution', () => {
+  beforeEach(() => {
+    mocks.getExecutionStore.mockReset();
+  });
+
+  it('prefers the persisted post-shutdown outcome', async () => {
+    mocks.getExecutionStore.mockReturnValue({
+      readMeta: vi.fn().mockResolvedValue({
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
+    });
+
+    await expect(
+      readCliRunOutcome({
+        category: 'toolUse',
+        executionId: 'shutdown-race',
+        outcome: RUN_OUTCOME.COMPLETED,
+        streamId: 'shutdown-race',
+      } as Parameters<typeof readCliRunOutcome>[0]),
+    ).resolves.toBe(RUN_OUTCOME.CANCELLED);
+  });
+
+  it('surfaces storage failures instead of masking them', async () => {
+    mocks.getExecutionStore.mockReturnValue({
+      readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
+    });
+
+    await expect(
+      readCliRunOutcome({
+        category: 'toolUse',
+        executionId: 'broken-storage',
+        outcome: RUN_OUTCOME.COMPLETED,
+        streamId: 'broken-storage',
+      } as Parameters<typeof readCliRunOutcome>[0]),
+    ).rejects.toThrow('metadata read failed');
+  });
+});
 
 function makeInit(
   overrides: Partial<ChatSessionControllerInit> = {},
