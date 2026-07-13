@@ -44,12 +44,13 @@ describe('parseCodexApprovalPolicy', () => {
 });
 
 describe('parseClaudeAgentModel', () => {
-  it('maps retired Opus selections to the current Opus model', () => {
+  it('maps retired selections to their current model', () => {
     expect(parseClaudeAgentModel('claude-opus-4-7')).toBe('claude-opus-4-8');
+    expect(parseClaudeAgentModel('claude-sonnet-4-6')).toBe('claude-sonnet-5');
   });
 
   it('defaults invalid persisted selections to Sonnet', () => {
-    expect(parseClaudeAgentModel('claude-opus-3')).toBe('claude-sonnet-4-6');
+    expect(parseClaudeAgentModel('claude-opus-3')).toBe('claude-sonnet-5');
   });
 });
 
