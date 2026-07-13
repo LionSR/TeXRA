@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   getUseOpenRouter: vi.fn<() => boolean>(),
 }));
 
-vi.mock('@auth/codex', () => ({
+vi.mock('@model/codexSubscriptionActive', () => ({
   isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
 }));
 

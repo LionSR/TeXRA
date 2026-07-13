@@ -15,9 +15,9 @@
  * `platform().globalState`.
  */
 
-import { isCodexSubscriptionActive } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
+import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import type { OnboardingFunnelState } from '@shared/schemas/onboarding';
 import { isNonEmptyString } from '@utils/core';
