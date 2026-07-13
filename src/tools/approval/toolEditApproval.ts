@@ -246,7 +246,7 @@ export async function requestToolEditApproval(
       ? request
       : { ...request, streamId: contextStreamId };
 
-  const streamId = preparedRequest.streamId;
+  const streamId = preparedRequest.streamId ?? undefined;
   const isStreamBypassed =
     streamId && session.approvals.toolEdit.bypass.isBypassed(streamId);
   if (!approvalsEnabled || isStreamBypassed) {
