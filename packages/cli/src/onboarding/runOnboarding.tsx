@@ -17,12 +17,6 @@ import { Spinner } from '@inkjs/ui';
 import { useState } from 'react';
 
 import { platform } from '@platform/platform';
-import {
-  backfillFirstRunDone,
-  getFirstRunDone,
-  getOnboardingDeclined,
-  setOnboardingDeclined,
-} from '@controllers/onboarding/onboardingFunnel';
 import { listExecutions } from '@agent/storage';
 import { setPreferCodexSubscription, type CodexSession } from '@auth/codex';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
@@ -31,6 +25,12 @@ import { type SupabaseSession } from '@auth/SupabaseSession';
 import { useCancellableEffect } from '@cli/chat/tui/state/useCancellableEffect';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import {
+  backfillFirstRunDone,
+  getFirstRunDone,
+  getOnboardingDeclined,
+  setOnboardingDeclined,
+} from '@shared/state/onboardingState';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
