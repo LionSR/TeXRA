@@ -5,9 +5,9 @@
  * Per-execution isolation (executions/{id}/...) provides uniqueness;
  * agent/model/round-in-basename tokens are no longer needed.
  *
- * Legacy (pre-r{round}/) filename helpers live in
- * `@agent/output/workflowOutputLayout` — they need agent-name parsing and are
- * only used for migration reads.
+ * Filename-era compatibility helpers live separately in
+ * `@shared/constants/legacyWorkflowOutput`; they require agent-name parsing
+ * and are still consumed by workspace migration readers and one copy writer.
  */
 
 /** The fixed basename of every workflow output file (no extension). */

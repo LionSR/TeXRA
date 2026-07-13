@@ -14,7 +14,7 @@ import { listExecutions } from '@agent/storage';
 import {
   WORKFLOW_OUTPUT_BASENAME,
   parseWorkflowOutputRoundDir,
-} from '@agent/output/workflowOutputLayout';
+} from '@shared/constants/workflowOutput';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';

@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { legacyWorkflowOutputStem } from '@agent/output/workflowOutputLayout';
 import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { appSignals } from '@eventBus/AppSignals';
@@ -24,6 +23,7 @@ import {
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
+import { legacyWorkflowOutputStem } from '@shared/constants/legacyWorkflowOutput';
 import { FlexibleFS } from '@utils/files';
 
 /** Run agent/model/round used to build the legacy postfixed copy name. */
