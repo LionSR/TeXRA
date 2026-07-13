@@ -1,4 +1,4 @@
-import { isInFlightStatus } from '@common/constants/streamStatus';
+import { isInFlightPhase } from '@common/constants/streamStatus';
 import type { StreamPhase } from '@shared/schemas';
 
 /**
@@ -8,5 +8,5 @@ import type { StreamPhase } from '@shared/schemas';
 export function shouldProbePersistedFlowForFollowUp(
   status: StreamPhase | undefined,
 ): boolean {
-  return !isInFlightStatus(status);
+  return !isInFlightPhase(status);
 }
