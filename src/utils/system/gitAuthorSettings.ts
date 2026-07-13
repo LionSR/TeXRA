@@ -1,13 +1,13 @@
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_MARK_COMMITS,
   DEFAULT_GIT_WORKTREE_SUPPORT,
 } from '@shared/constants/git';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { UpdateGitAuthorSettingsMessage } from '@shared/schemas/settingsViewMessages';
-import { setWorktreeSupportEnabled } from '@tools/worktreeConfig';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { setWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 import { setGitAuthorEnv } from './gitAuthorEnv';
 import type { StateStore } from '@platform/interfaces';
 
