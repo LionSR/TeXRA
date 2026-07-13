@@ -12,10 +12,7 @@
  * `@agent/modelHandlers/openai/*`, or `@google/genai`.
  */
 
-import {
-  isAssistantMessage,
-  isToolMessage,
-} from 'openai/lib/chatCompletionUtils';
+import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 import { z } from 'zod';
 import {
@@ -31,10 +28,6 @@ import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
-import type {
-  ResponseFunctionToolCallItem,
-  ResponseInputItem,
-} from 'openai/resources/responses/responses';
 
 import type { ExportNode, UserPart } from './schemas';
 
@@ -284,13 +277,12 @@ export function normalizeConversationForExport(
     }
 
     // OpenAI Response API: top-level function_call items (not wrapped in a message)
-    const responseToolCall = asCandidate<ResponseFunctionToolCallItem>(item);
-    if (isResponseFunctionToolCallItem(responseToolCall)) {
+    if (isResponseFunctionToolCallItem(item)) {
       const args =
-        typeof responseToolCall.arguments === 'string'
-          ? responseToolCall.arguments
-          : prettyJson(responseToolCall.arguments ?? {});
-      const name = responseToolCall.name ?? 'unknown';
+        typeof item.arguments === 'string'
+          ? item.arguments
+          : prettyJson(item.arguments ?? {});
+      const name = item.name ?? 'unknown';
       nodes.push({ kind: 'tool-call', name, input: args });
       lastAssistantHadToolUse = true;
       continue;
@@ -298,9 +290,8 @@ export function normalizeConversationForExport(
 
     // OpenAI Response API: top-level function_call_output items.
     // output can be a string OR an array of input_text/input_file/input_image parts.
-    const responseInputItem = asCandidate<ResponseInputItem>(item);
-    if (isFunctionCallOutputItem(responseInputItem)) {
-      const output = responseInputItem.output;
+    if (isFunctionCallOutputItem(item)) {
+      const output = item.output;
       if (Array.isArray(output)) {
         const textParts = output.flatMap((part) => {
           const text = extractTextContentPart(part);
@@ -366,29 +357,15 @@ export function normalizeConversationForExport(
     }
 
     // OpenAI Chat Completions tool role
-    const openaiMsg = asCandidate<ChatCompletionMessageParam>(item);
-    if (role === 'tool' || isToolMessage(openaiMsg)) {
+    if (role === 'tool') {
       const text =
-        typeof openaiMsg.content === 'string'
-          ? openaiMsg.content
-          : prettyJson(openaiMsg.content);
+        typeof msg.content === 'string' ? msg.content : prettyJson(msg.content);
       nodes.push({ kind: 'tool-result', text });
       lastAssistantHadToolUse = false;
     }
   }
 
   return nodes;
-}
-
-/**
- * Bridge a raw, provider-shape-unknown item into one of the candidate SDK
- * item types so a real type-guard function (e.g. `isResponseFunctionToolCallItem`)
- * can check its `type` discriminant. `item` may legitimately be any of
- * Anthropic's, OpenAI's, or Google's shapes — the guard, not this cast, is
- * what verifies it before the caller trusts the narrowed fields.
- */
-function asCandidate<T>(item: Record<string, unknown>): T {
-  return item as unknown as T;
 }
 
 function getAssistantToolCalls(
