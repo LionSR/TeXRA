@@ -87,6 +87,9 @@ All notable changes to this project will be documented in this file.
 - **Pasted images stay with the conversation that accepted them** — switching
   streams while an image is being prepared no longer delivers it to the wrong
   follow-up input.
+- **AI-agent settings reflect current routing and models** — Claude Code now
+  defaults to Sonnet 5, and the ChatGPT tool-use-only option no longer cites an
+  outdated Codex background-mode limitation.
 
 ### Desktop
 
