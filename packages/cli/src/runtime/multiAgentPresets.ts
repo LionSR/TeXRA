@@ -1,12 +1,12 @@
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { platform } from '@platform/platform';
-import { teamHostedNamesForPreflight } from '@controllers/teams/TeamRoster';
 import {
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
   findAgentByIdentifier,
   type AgentEntry,
 } from '@agent/index';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { agentKeyOf } from '@shared/schemas/agent';

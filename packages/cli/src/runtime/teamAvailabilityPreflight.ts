@@ -2,8 +2,8 @@ import {
   preflightTeamAvailability,
   type TeamAvailabilityChoice,
   type TeamAvailabilityPreflightResult,
-} from '@controllers/teams/TeamAvailabilityPreflight';
-import { teamHostedNamesForPreflight } from '@controllers/teams/TeamRoster';
+} from '@common/teams/TeamAvailabilityPreflight';
+import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 
 import {
   cliMultiAgentTexraHostedMissingNames,

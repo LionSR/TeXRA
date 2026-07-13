@@ -30,6 +30,7 @@ import {
   setCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
 } from '@auth/codex';
+import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import {
   API_PROVIDERS,
   apiKeySecretName,
@@ -122,7 +123,6 @@ import {
   DesktopHistoryHandlers,
   type DesktopHistoryOptions,
 } from './desktopHistoryHandlers.js';
-import type { TeamAvailabilityChoice } from '@controllers/teams/TeamAvailabilityPreflight';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 
