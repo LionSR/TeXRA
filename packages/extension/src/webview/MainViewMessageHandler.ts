@@ -5,10 +5,6 @@ import {
   type MainViewCommandPlan,
 } from '@controllers/mainView/MainViewInteractionController';
 import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
-import {
-  setFirstRunDone,
-  setOnboardingDeclined,
-} from '@controllers/onboarding/onboardingFunnel';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { BaseViewMessageHandler } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
@@ -25,6 +21,10 @@ import {
   GETTING_STARTED_COMMANDS,
   MainViewInboundHandlerRegistry,
 } from '@shared/schemas';
+import {
+  setFirstRunDone,
+  setOnboardingDeclined,
+} from '@shared/state/onboardingState';
 import { PROVIDER_URLS } from '@shared/constants/providers';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';

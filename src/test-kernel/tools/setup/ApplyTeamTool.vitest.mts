@@ -9,12 +9,12 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
+import { refresh } from '@agent/index/agentRegistry';
 import {
   getDefaultTeamId,
   setDefaultTeamId,
-} from '@controllers/onboarding/onboardingFunnel';
-import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
-import { refresh } from '@agent/index/agentRegistry';
+} from '@shared/state/onboardingState';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 import {

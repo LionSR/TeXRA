@@ -18,7 +18,6 @@ import {
   registryPresetRosterState,
   resolveTeamPreset,
 } from '@controllers/onboarding/defaultTeamSeeding';
-import { setDefaultTeamId } from '@controllers/onboarding/onboardingFunnel';
 import {
   commitTeamRoster,
   resolveTeamRoster,
@@ -29,6 +28,7 @@ import { platform } from '@platform/platform';
 import { refresh } from '@agent/index/agentRegistry';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { agentName } from '@shared/schemas/agent';
+import { setDefaultTeamId } from '@shared/state/onboardingState';
 import {
   AGENT_MODE_PRESETS,
   STARTER_AGENT_MODE_PRESET,
