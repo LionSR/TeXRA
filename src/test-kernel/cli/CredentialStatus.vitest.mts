@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   lookupApiKey: vi.fn(),
 }));
 
-vi.mock('@auth/codex', () => ({
+vi.mock('@model/codexSubscriptionActive', () => ({
   isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
 }));
 

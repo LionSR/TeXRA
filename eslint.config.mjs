@@ -132,6 +132,15 @@ const AGENT_CORE_RESTRICTED_IMPORT_PATTERNS = [
   ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
 ];
 
+const AUTH_RESTRICTED_IMPORT_PATTERNS = [
+  {
+    regex: '^(?:@model(?:/|$)|(?:\\.\\./)+model(?:/|$))',
+    message:
+      'Authentication must not own or depend on model policy; move the policy to src/model.',
+  },
+  ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
+];
+
 function isUnderDir(filename, dir) {
   const relativePath = path.relative(dir, filename);
   return (
@@ -551,6 +560,21 @@ export default tseslint.config(
         {
           paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: AGENT_CORE_RESTRICTED_IMPORT_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  // Authentication owns credentials, sessions, and preferences. Model policy
+  // may consume that state, but auth must not depend back on the model layer.
+  {
+    files: ['src/auth/**/*.{ts,tsx,mts,cts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
+          patterns: AUTH_RESTRICTED_IMPORT_PATTERNS,
         },
       ],
     },
