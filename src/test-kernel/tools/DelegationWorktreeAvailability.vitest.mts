@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   computeModelOptionsData: vi.fn(),
 }));
 
-vi.mock('@tools/worktreeConfig', () => ({
+vi.mock('@utils/config/worktreeConfig', () => ({
   isWorktreeSupportEnabled: mocks.isWorktreeSupportEnabled,
 }));
 
