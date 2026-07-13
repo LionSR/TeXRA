@@ -37,14 +37,19 @@ function batchId(batch: unknown): string {
 // lets a test stall or fail a specific call before the success response.
 function stubFetch(
   batches: unknown[],
-  beforeRespond: (callCount: number) => void | Promise<void> = () => {},
+  beforeRespond: (
+    callCount: number,
+  ) => void | Response | Promise<void | Response> = () => {},
 ): Mock {
   const fetchMock = vi.fn(async (request: Request) => {
     batches.push(await request.json());
-    await beforeRespond(fetchMock.mock.calls.length);
-    return new Response(JSON.stringify({ success: true, accepted: 1 }), {
-      status: 200,
-    });
+    const response = await beforeRespond(fetchMock.mock.calls.length);
+    return (
+      response ??
+      new Response(JSON.stringify({ success: true, accepted: 1 }), {
+        status: 200,
+      })
+    );
   });
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
@@ -136,6 +141,72 @@ describe('UsageLogService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['first'], ['first']]);
     expect(batchId(batches[1])).toBe(batchId(batches[0]));
+  });
+
+  it.each([
+    ['malformed', { success: true }],
+    ['rejected', { success: false, accepted: 0, error: 'invalid batch' }],
+    ['partial', { success: true, accepted: 0 }],
+  ])(
+    'requeues entries after a %s acknowledgement',
+    async (_case, acknowledgement) => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches, (callCount) => {
+        if (callCount === 1) {
+          return new Response(JSON.stringify(acknowledgement), { status: 200 });
+        }
+      });
+
+      UsageLogService.log(usageEntry('first'));
+      await expect(UsageLogService.flush()).resolves.toBe(false);
+      await expect(UsageLogService.flush()).resolves.toBe(true);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(batches.map(batchModels)).toEqual([['first'], ['first']]);
+      expect(batchId(batches[1])).toBe(batchId(batches[0]));
+    },
+  );
+
+  it('discards a permanent rejection and continues with later entries', async () => {
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
+
+    let releaseRejection: (() => void) | undefined;
+    const rejectionReleased = new Promise<void>((resolve) => {
+      releaseRejection = resolve;
+    });
+    const batches: unknown[] = [];
+    const fetchMock = stubFetch(batches, async (callCount) => {
+      if (callCount !== 1) return;
+      await rejectionReleased;
+      return new Response(
+        JSON.stringify({
+          success: false,
+          accepted: 0,
+          error: 'invalid batch',
+          retryable: false,
+        }),
+        { status: 200 },
+      );
+    });
+
+    UsageLogService.log(usageEntry('invalid'));
+    const flush = UsageLogService.flush();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    UsageLogService.log(usageEntry('valid'));
+    releaseRejection?.();
+
+    await expect(flush).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(batches.map(batchModels)).toEqual([['invalid'], ['valid']]);
+    expect(batchId(batches[1])).not.toBe(batchId(batches[0]));
+
+    await expect(UsageLogService.flush()).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('keeps a failed batch id separate from later queued entries', async () => {
