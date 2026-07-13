@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // D8 test-LoC growth detector (issue #7684): reports the line-count delta
 // of src/test-kernel/** against the checked-in baseline
-// (test-kernel-loc-baseline.json). Unlike check-dead-code-ratchet.mjs this
+// (config/ratchets/test-kernel-loc-baseline.json). Unlike
+// check-dead-code-ratchet.mjs this
 // is WARN-ONLY — it never fails CI — because the R7 judgment rules on
 // test-kernel growth are qualitative (is a suite addition earning its
 // LoC?), not a hard ratchet; this just surfaces the number so growth isn't
@@ -16,7 +17,12 @@ const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-const baselinePath = path.join(rootDir, 'test-kernel-loc-baseline.json');
+const baselinePath = path.join(
+  rootDir,
+  'config',
+  'ratchets',
+  'test-kernel-loc-baseline.json',
+);
 const testKernelDir = path.join(rootDir, 'src', 'test-kernel');
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
@@ -71,7 +77,7 @@ function main() {
     console.log(
       'D8 warn-only report (issue #7684): test-kernel grew past its checked-in baseline. ' +
         'This does not fail CI. If the growth is a judged, earning-its-LoC addition, update ' +
-        'test-kernel-loc-baseline.json in this PR; otherwise no action is required.',
+        'config/ratchets/test-kernel-loc-baseline.json in this PR; otherwise no action is required.',
     );
   }
 }

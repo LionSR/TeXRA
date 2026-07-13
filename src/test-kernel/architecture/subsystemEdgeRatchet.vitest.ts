@@ -32,7 +32,10 @@ const REPO_ROOT = resolve(
   '../../..',
 );
 const SRC_ROOT = resolve(REPO_ROOT, 'src');
-const BASELINE_PATH = resolve(REPO_ROOT, 'architecture-edges-baseline.json');
+const BASELINE_PATH = resolve(
+  REPO_ROOT,
+  'config/ratchets/architecture-edges-baseline.json',
+);
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 

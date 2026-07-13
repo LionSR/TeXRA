@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Ratchets knip's dead-code counts: fails CI only when a PR *increases* the
 // number of unused files/exports/types or duplicate exports past the
-// checked-in baseline (knip-baseline.json), rather than blocking on the
+// checked-in baseline (config/ratchets/knip-baseline.json), rather than blocking on the
 // existing debt. Burning the baseline down is a separate, scheduled sweep.
 
 import { spawnSync } from 'node:child_process';
@@ -14,7 +14,12 @@ const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-const baselinePath = path.join(rootDir, 'knip-baseline.json');
+const baselinePath = path.join(
+  rootDir,
+  'config',
+  'ratchets',
+  'knip-baseline.json',
+);
 
 const METRICS = /** @type {const} */ ([
   ['unusedFiles', 'files'],
@@ -117,7 +122,7 @@ function main() {
     }
     console.error(
       '\nRun `npm run check:dead-code` to see the newly introduced dead code, then either ' +
-        'remove it or, if the increase is intentional, update knip-baseline.json in this PR.',
+        'remove it or, if the increase is intentional, update config/ratchets/knip-baseline.json in this PR.',
     );
     process.exit(1);
   }

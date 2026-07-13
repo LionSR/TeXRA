@@ -7,7 +7,7 @@
 // DISTINCT `@agent/*` deep-import specifiers per host and fail only when a
 // host's specifier count increases; a decrease (or an @agent restructor that
 // removes the need for a deep import) is always welcome and should shrink
-// host-agent-import-baseline.json. Armed per the issue text pending Stage-5
+// config/ratchets/host-agent-import-baseline.json. Armed per the issue text pending Stage-5
 // exit (#6968, closed); this is the deferred execution.
 
 // Node imports
@@ -32,7 +32,8 @@ const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../..',
 );
-const BASELINE_PATH = resolve(REPO_ROOT, 'host-agent-import-baseline.json');
+const BASELINE_FILE = 'config/ratchets/host-agent-import-baseline.json';
+const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
 
 const HOST_DIRS: Record<Host, string> = {
   cli: resolve(REPO_ROOT, 'packages/cli/src'),
@@ -139,7 +140,7 @@ function reportGrowth(
   return (
     `${host} @agent/* deep-import specifiers grew from ${baseline.length} to ${current.length}:\n` +
     added.map((specifier) => `  + ${specifier}`).join('\n') +
-    '\n\nIf this growth is intentional, update host-agent-import-baseline.json in this PR.'
+    `\n\nIf this growth is intentional, update ${BASELINE_FILE} in this PR.`
   );
 }
 
@@ -167,10 +168,9 @@ describe('R-b host deep-import width ratchet', () => {
       const sortedUnique = [...new Set(baseline.hosts[host])].toSorted((a, b) =>
         a.localeCompare(b),
       );
-      expect(
-        baseline.hosts[host],
-        `host-agent-import-baseline.json hosts.${host}`,
-      ).toEqual(sortedUnique);
+      expect(baseline.hosts[host], `${BASELINE_FILE} hosts.${host}`).toEqual(
+        sortedUnique,
+      );
     }
   });
 });
