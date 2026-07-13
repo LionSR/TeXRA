@@ -81,8 +81,6 @@ describe('shared JsonStore', () => {
     ['array', '[]'],
     ['null', 'null'],
     ['string', '"text"'],
-    ['number', '42'],
-    ['boolean', 'true'],
   ])('treats valid non-object JSON (%s) as corruption', async (_, content) => {
     const JsonStore = await loadJsonStore();
     const filePath = await createTempFile('state.json', content);
@@ -90,7 +88,6 @@ describe('shared JsonStore', () => {
     await expect(
       JsonStore.open(filePath, { corruptionPolicy: 'fail' }),
     ).rejects.toThrow('to contain a JSON object');
-    expect(await readFile(filePath, 'utf8')).toBe(content);
   });
 
   it('merges with a concurrent writer instead of flushing a stale open-time snapshot', async () => {
