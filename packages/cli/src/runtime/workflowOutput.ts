@@ -5,8 +5,9 @@ import type { AgentEntry } from '@agent/index';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
+import { runOutcomeToExecutionStatus } from '@common/constants/streamStatus';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { getRunDir } from '@utils/files';
@@ -16,11 +17,7 @@ import { getRunDir } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';
 
 import { CliUsageError, type CliContext } from './cliContext';
-import {
-  createCliRunResult,
-  type CliRunResult,
-  type ExecuteAgentResult,
-} from './terminalStatus';
+import { type CliRunResult, type ExecuteAgentResult } from './terminalStatus';
 import {
   isMaterializedStdinWorkflowInputPath,
   STDIN_WORKFLOW_INPUT_BASENAME,
@@ -96,7 +93,6 @@ type WorkflowAgentResult = Extract<
 interface WorkflowOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
   readonly runDirectory?: string;
-  readonly terminalStatus: ExecutionStatus;
 }
 
 function outputCopyRelativePath(output: OutputFileSummary): string {
@@ -203,13 +199,13 @@ export async function resolveWorkflowOutput(
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
 ): Promise<CliWorkflowRunResult> {
-  const { terminalStatus } = options;
+  const terminalStatus = runOutcomeToExecutionStatus(result.outcome);
   if (result.outputs.length === 0 && (outputFile || outputDir)) {
-    if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-      return createCliRunResult(result, {
-        terminalStatus,
+    if (result.outcome === RUN_OUTCOME.CANCELLED) {
+      return {
+        ...result,
         workingDirectory: context.cwd,
-      });
+      };
     }
     if (outputDir) {
       throw new Error(
@@ -258,29 +254,29 @@ export async function resolveWorkflowOutput(
       );
     }
 
-    return createCliRunResult(result, {
-      terminalStatus,
+    return {
+      ...result,
       workingDirectory: context.cwd,
       runDirectory,
       copiedOutputs,
-    });
+    };
   }
 
   if (!outputFile) {
-    return createCliRunResult(result, {
-      terminalStatus,
+    return {
+      ...result,
       workingDirectory: context.cwd,
       runDirectory,
-    });
+    };
   }
 
   const finalOutput = latestWorkflowOutput(result.outputs);
   if (!finalOutput) {
-    return createCliRunResult(result, {
-      terminalStatus,
+    return {
+      ...result,
       workingDirectory: context.cwd,
       runDirectory,
-    });
+    };
   }
 
   const targetPath = joinCwdRelative(outputFile, context.cwd);
@@ -289,12 +285,12 @@ export async function resolveWorkflowOutput(
     await fs.copyFile(finalOutput.absolutePath, targetPath);
   }
 
-  return createCliRunResult(result, {
-    terminalStatus,
+  return {
+    ...result,
     workingDirectory: context.cwd,
     runDirectory,
     copiedOutput: targetPath,
-  });
+  };
 }
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
@@ -306,7 +302,11 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   }
 
   const finalOutput = result.outputs.at(-1);
-  return finalOutput?.absolutePath ?? result.runDirectory ?? result.status;
+  return (
+    finalOutput?.absolutePath ??
+    result.runDirectory ??
+    runOutcomeToExecutionStatus(result.outcome)
+  );
 }
 
 export function resumeWorkflowOutputFile(

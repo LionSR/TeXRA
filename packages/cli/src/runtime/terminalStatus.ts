@@ -5,9 +5,8 @@ import {
   runOutcomeToExecutionStatus,
 } from '@common/constants/streamStatus';
 import {
-  EXECUTION_STATUS,
-  executionStatusToRunOutcome,
   type ExecutionStatus,
+  RUN_OUTCOME,
   type RunOutcome,
 } from '@shared/schemas';
 
@@ -17,18 +16,23 @@ import type { CliContext } from './cliContext';
 
 export type ExecuteAgentResult = Awaited<ReturnType<typeof runAgent>>;
 
-type CliRunResultFor<T extends ExecuteAgentResult> = T & {
+interface CliRunResultMetadata {
+  readonly workingDirectory?: string;
+  readonly runDirectory?: string;
+  readonly copiedOutput?: string;
+  readonly copiedOutputs?: string[];
+}
+
+type CliRunResultFor<T extends ExecuteAgentResult> = T & CliRunResultMetadata;
+
+type PublishedCliRunResultFor<T extends ExecuteAgentResult> = T & {
   /** @deprecated Use `outcome`; this is a frozen projection for JSON-output compatibility. */
   status: ExecutionStatus;
   /** @deprecated Use `outcome`; this is a frozen 2-value projection for JSON-output compatibility. */
   endGroupStatus: 'error' | 'stopped';
   /** @deprecated Use `outcome`; this is a frozen projection for JSON-output compatibility. */
   terminalStatus: ExecutionStatus;
-  workingDirectory?: string;
-  runDirectory?: string;
-  copiedOutput?: string;
-  copiedOutputs?: string[];
-};
+} & CliRunResultMetadata;
 
 export type CliRunResult = ExecuteAgentResult extends infer T
   ? T extends ExecuteAgentResult
@@ -41,68 +45,65 @@ export type CliToolUseRunResult = Extract<
   { category: 'toolUse' }
 >;
 
+export type PublishedCliRunResult = ExecuteAgentResult extends infer T
+  ? T extends ExecuteAgentResult
+    ? PublishedCliRunResultFor<T>
+    : never
+  : never;
+
 /** Display text for a finished tool-use run: the last response if present,
  *  otherwise a terse status/execution-id summary. */
 export function toolUseResultText(result: CliToolUseRunResult): string {
   return (
     result.lastResponse?.trim() ||
-    `${result.status}\nExecution: ${result.executionId}`
+    `${runOutcomeToExecutionStatus(result.outcome)}\nExecution: ${result.executionId}`
   );
 }
 
-export function cliTerminalStatus(
-  result: ExecuteAgentResult,
-  storedOutcome?: RunOutcome,
-): ExecutionStatus {
-  return runOutcomeToExecutionStatus(storedOutcome ?? result.outcome);
-}
-
-export function createCliRunResult<T extends ExecuteAgentResult>(
-  result: T,
-  extras: {
-    readonly terminalStatus?: ExecutionStatus;
-    readonly workingDirectory?: string;
-    readonly runDirectory?: string;
-    readonly copiedOutput?: string;
-    readonly copiedOutputs?: string[];
-  } = {},
-): T extends ExecuteAgentResult ? CliRunResultFor<T> : never {
-  const { terminalStatus: resolvedTerminalStatus, ...metadata } = extras;
-  const terminalStatus =
-    resolvedTerminalStatus ?? runOutcomeToExecutionStatus(result.outcome);
-  const terminalOutcome =
-    executionStatusToRunOutcome(terminalStatus) ?? result.outcome;
+/** Add the frozen v0.40 status fields at the CLI serialization boundary. */
+export function serializeCliRunResult<T extends ExecuteAgentResult>(
+  result: CliRunResultFor<T>,
+): T extends ExecuteAgentResult ? PublishedCliRunResultFor<T> : never {
+  const {
+    workingDirectory,
+    runDirectory,
+    copiedOutput,
+    copiedOutputs,
+    ...executionResult
+  } = result;
+  const terminalStatus = runOutcomeToExecutionStatus(result.outcome);
   return {
-    ...result,
+    ...executionResult,
     status: terminalStatus,
-    endGroupStatus: legacyEndGroupStatusForOutcome(terminalOutcome),
+    endGroupStatus: legacyEndGroupStatusForOutcome(result.outcome),
     terminalStatus,
-    ...metadata,
-  } as T extends ExecuteAgentResult ? CliRunResultFor<T> : never;
+    ...(Object.hasOwn(result, 'workingDirectory') ? { workingDirectory } : {}),
+    ...(Object.hasOwn(result, 'runDirectory') ? { runDirectory } : {}),
+    ...(Object.hasOwn(result, 'copiedOutput') ? { copiedOutput } : {}),
+    ...(Object.hasOwn(result, 'copiedOutputs') ? { copiedOutputs } : {}),
+  } as T extends ExecuteAgentResult ? PublishedCliRunResultFor<T> : never;
 }
 
-/** Map a terminal execution status to the CLI process exit code, treating an
+/** Map a run outcome to the CLI process exit code, treating an
  *  approval-denied error distinctly from a generic agent error. */
-export function terminalStatusExitCode(
-  terminalStatus: ExecutionStatus,
+export function runOutcomeExitCode(
+  outcome: RunOutcome,
   context: CliContext,
 ): CliExitCode {
-  if (terminalStatus === EXECUTION_STATUS.ERROR) {
+  if (outcome === RUN_OUTCOME.FAILED) {
     return hasCliApprovalDenied(context)
       ? CliExitCode.ApprovalDenied
       : CliExitCode.AgentError;
   }
-  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+  if (outcome === RUN_OUTCOME.CANCELLED) {
     return CliExitCode.Interrupted;
   }
   return CliExitCode.Success;
 }
 
-export async function readCliTerminalStatus(
+export async function readCliRunOutcome(
   result: ExecuteAgentResult,
-): Promise<ExecutionStatus> {
-  const meta = await getExecutionStore(result.executionId)
-    .readMeta()
-    .catch(() => undefined);
-  return cliTerminalStatus(result, meta?.outcome);
+): Promise<RunOutcome> {
+  const meta = await getExecutionStore(result.executionId).readMeta();
+  return meta?.outcome ?? result.outcome;
 }
