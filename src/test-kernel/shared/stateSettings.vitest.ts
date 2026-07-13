@@ -297,7 +297,7 @@ describe('state settings catalog', () => {
       'on-failure — Ask on failure',
     ]);
     assert.deepEqual(labelsFor(WorkspaceStateKey.CLAUDE_AGENT_MODEL), [
-      'claude-sonnet-4-6 — Sonnet 4.6',
+      'claude-sonnet-5 — Sonnet 5',
       'claude-fable-5 — Fable 5',
       'claude-opus-4-8 — Opus 4.8',
       'claude-haiku-4-5-20251001 — Haiku 4.5',
