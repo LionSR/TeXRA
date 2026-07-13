@@ -107,6 +107,7 @@ export async function initializeElectronPlatform(
   const userDataPath = app.getPath('userData');
   const globalStateStore = await JsonStore.open(
     join(userDataPath, 'state', 'global.json'),
+    { corruptionPolicy: 'fail' },
   );
   const workspacePath = resolveWorkspacePath({
     storedWorkspacePath: globalStateStore.get<string>(
@@ -123,9 +124,11 @@ export async function initializeElectronPlatform(
   const storage = new WorkspaceStorageProvider(dataRoot, workspacePath);
   const workspaceStateStore = await JsonStore.open(
     join(storage.getStoragePath(), 'state.json'),
+    { corruptionPolicy: 'fail' },
   );
   const globalConfigStore = await JsonStore.open(
     join(userDataPath, 'config', 'global.json'),
+    { corruptionPolicy: 'fail' },
   );
   // Workspace config lives in the project's `.texra/config.json` — the same
   // file the CLI reads and writes — so a checked-in config behaves
@@ -145,7 +148,9 @@ export async function initializeElectronPlatform(
   if (workspacePath) {
     const projectConfigPath = workspaceTexraConfigPath(workspacePath);
     try {
-      projectConfigStore = await JsonStore.open(projectConfigPath);
+      projectConfigStore = await JsonStore.open(projectConfigPath, {
+        corruptionPolicy: 'fail',
+      });
       projectConfigWritable = await canCreateOrWrite(projectConfigPath);
     } catch (error) {
       console.warn(
@@ -160,7 +165,9 @@ export async function initializeElectronPlatform(
   // degradation.
   let internalConfigStore: JsonStore | undefined;
   try {
-    internalConfigStore = await JsonStore.open(legacyWorkspaceConfigPath);
+    internalConfigStore = await JsonStore.open(legacyWorkspaceConfigPath, {
+      corruptionPolicy: 'fail',
+    });
   } catch (error) {
     if (projectConfigStore === undefined) throw error;
     console.warn(
@@ -246,7 +253,10 @@ export async function initializeElectronPlatform(
       );
     }
   }
-  const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
+  const secretsStore = await JsonStore.open(
+    join(userDataPath, 'secrets.json'),
+    { corruptionPolicy: 'fail' },
+  );
 
   repairLaunchPath();
   const agentDirectories = createPlatformAgentDirectories({

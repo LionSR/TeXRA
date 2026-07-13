@@ -420,6 +420,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
         createNodeStorageProvider().getGlobalStoragePath(),
         'state.json',
       ),
+      { corruptionPolicy: 'fail' },
     );
     latest = await checkCliUpdateAvailable({
       currentVersion: context.version,
