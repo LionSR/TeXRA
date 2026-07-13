@@ -82,7 +82,6 @@
       "@agent/index",
       "@agent/index/AgentDirectorySync",
       "@agent/modelHandlers/openai/modelHandlerOpenAI",
-      "@agent/output/workflowOutputLayout",
       "@agent/remote/remoteAgentConfigClient",
       "@agent/review/reviewDiff",
       "@agent/review/reviewIssues",
