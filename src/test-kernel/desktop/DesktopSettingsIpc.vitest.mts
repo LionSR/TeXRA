@@ -11,7 +11,7 @@ import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latex';
 import {
   isWorktreeSupportEnabled,
   setWorktreeSupportEnabled,
-} from '@tools/worktreeConfig';
+} from '@utils/config/worktreeConfig';
 import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
