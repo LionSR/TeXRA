@@ -119,11 +119,9 @@ export async function resumeQueuedToolUseSnapshot(
       onRun: options.onRun,
       isCancellationRequested: options.isCancellationRequested,
       setupSession: (session) => {
+        followUps = [...followUps, ...followUpsQueue.drainItems(streamId)];
         if (options.isCancellationRequested?.()) {
           cancelledBeforeSessionSetup = true;
-          // Capture messages accepted after the initial drain before the
-          // cancellation handoff disposes the shared stream queue.
-          followUps = [...followUps, ...followUpsQueue.drainItems(streamId)];
           return;
         }
         for (const item of followUps) {
