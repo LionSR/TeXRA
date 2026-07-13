@@ -32,10 +32,7 @@ import {
   optionalStringFlagValue,
   rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
-import {
-  cliTerminalStatus,
-  createCliRunResult,
-} from '@cli/runtime/terminalStatus';
+import { serializeCliRunResult } from '@cli/runtime/terminalStatus';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
@@ -855,53 +852,22 @@ describe('CLI root argument routing', () => {
           compileFailures: [],
         },
         cliContext(),
-        { terminalStatus: EXECUTION_STATUS.ERROR },
+        {},
       ),
     ).rejects.toThrow(
       'Workflow error without a generated output; corrected.tex was not written.',
     );
   });
 
-  it('maps run outcomes to terminal statuses by default', () => {
-    expect(
-      cliTerminalStatus({
-        outcome: RUN_OUTCOME.COMPLETED,
-      } as Parameters<typeof cliTerminalStatus>[0]),
-    ).toBe(EXECUTION_STATUS.COMPLETED);
-    expect(
-      cliTerminalStatus({
-        outcome: RUN_OUTCOME.CANCELLED,
-      } as Parameters<typeof cliTerminalStatus>[0]),
-    ).toBe(EXECUTION_STATUS.INTERRUPTED);
-    expect(
-      cliTerminalStatus({
-        outcome: RUN_OUTCOME.FAILED,
-      } as Parameters<typeof cliTerminalStatus>[0]),
-    ).toBe(EXECUTION_STATUS.ERROR);
-  });
-
-  it('honors stored cancelled outcome', () => {
-    expect(
-      cliTerminalStatus(
-        {
-          outcome: RUN_OUTCOME.COMPLETED,
-        } as Parameters<typeof cliTerminalStatus>[0],
-        RUN_OUTCOME.CANCELLED,
-      ),
-    ).toBe(EXECUTION_STATUS.INTERRUPTED);
-  });
-
-  it('includes working directory metadata in CLI run results', () => {
-    const result = createCliRunResult(
-      {
-        outcome: RUN_OUTCOME.COMPLETED,
-        category: AgentCategory.ToolUse,
-        executionId: 'completed-without-output',
-        streamId: 'stream-without-output',
-        lastResponse: 'done',
-      } as Parameters<typeof createCliRunResult>[0],
-      { workingDirectory: '/tmp/project' },
-    );
+  it('projects frozen CLI status fields before result metadata', () => {
+    const result = serializeCliRunResult({
+      outcome: RUN_OUTCOME.COMPLETED,
+      category: AgentCategory.ToolUse,
+      executionId: 'completed-without-output',
+      streamId: 'stream-without-output',
+      lastResponse: 'done',
+      workingDirectory: '/tmp/project',
+    } as Parameters<typeof serializeCliRunResult>[0]);
 
     expect(result).toMatchObject({
       executionId: 'completed-without-output',
@@ -910,22 +876,28 @@ describe('CLI root argument routing', () => {
       status: EXECUTION_STATUS.COMPLETED,
       endGroupStatus: 'stopped',
     });
+    expect(Object.keys(result)).toEqual([
+      'outcome',
+      'category',
+      'executionId',
+      'streamId',
+      'lastResponse',
+      'status',
+      'endGroupStatus',
+      'terminalStatus',
+      'workingDirectory',
+    ]);
   });
 
-  it('uses a caller-resolved terminal status in CLI run results', () => {
-    const result = createCliRunResult(
-      {
-        outcome: RUN_OUTCOME.COMPLETED,
-        category: AgentCategory.ToolUse,
-        executionId: 'completed-after-shutdown',
-        streamId: 'stream-after-shutdown',
-        lastResponse: 'done',
-      } as Parameters<typeof createCliRunResult>[0],
-      {
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-        workingDirectory: '/tmp/project',
-      },
-    );
+  it('projects a resolved cancellation with the frozen v0.40 values', () => {
+    const result = serializeCliRunResult({
+      outcome: RUN_OUTCOME.CANCELLED,
+      category: AgentCategory.ToolUse,
+      executionId: 'completed-after-shutdown',
+      streamId: 'stream-after-shutdown',
+      lastResponse: 'done',
+      workingDirectory: '/tmp/project',
+    } as Parameters<typeof serializeCliRunResult>[0]);
 
     expect(result).toMatchObject({
       executionId: 'completed-after-shutdown',
@@ -933,6 +905,22 @@ describe('CLI root argument routing', () => {
       terminalStatus: EXECUTION_STATUS.INTERRUPTED,
       status: EXECUTION_STATUS.INTERRUPTED,
       endGroupStatus: 'stopped',
+    });
+  });
+
+  it('projects a failed outcome with the frozen v0.40 values', () => {
+    const result = serializeCliRunResult({
+      outcome: RUN_OUTCOME.FAILED,
+      category: AgentCategory.ToolUse,
+      executionId: 'failed-run',
+      streamId: 'failed-stream',
+    } as Parameters<typeof serializeCliRunResult>[0]);
+
+    expect(result).toMatchObject({
+      outcome: RUN_OUTCOME.FAILED,
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      status: EXECUTION_STATUS.ERROR,
+      endGroupStatus: 'error',
     });
   });
 
@@ -1010,7 +998,7 @@ describe('CLI root argument routing', () => {
           compileFailures: [],
         },
         cliContext(),
-        { terminalStatus: EXECUTION_STATUS.COMPLETED },
+        {},
       ),
     ).rejects.toThrow(
       'Workflow completed without a generated output; corrected.tex was not written.',
@@ -1030,12 +1018,13 @@ describe('CLI root argument routing', () => {
         compileFailures: [],
       },
       cliContext(),
-      { terminalStatus: EXECUTION_STATUS.INTERRUPTED },
+      {},
     );
 
     expect(result).toMatchObject({
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
     });
+    expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
     expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
   });
 

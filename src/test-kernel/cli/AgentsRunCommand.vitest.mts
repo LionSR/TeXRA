@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
+  emitCliResult: vi.fn(),
   executeCliToolUseConfig: vi.fn(),
   withExpandedRunInputs: vi.fn(),
   initLocalCliPlatform: vi.fn(),
@@ -50,7 +53,7 @@ vi.mock('@cli/runtime/logSinks', () => ({
 }));
 
 vi.mock('@cli/commands/_helpers/output', () => ({
-  emitCliResult: vi.fn(),
+  emitCliResult: mocks.emitCliResult,
 }));
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
@@ -112,7 +115,14 @@ describe('CLI agents run command', () => {
     );
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
-      displayResult: { lastResponse: 'Correct.' },
+      result: {
+        category: AgentCategory.ToolUse,
+        executionId: 'exec-1',
+        streamId: 'stream-1',
+        outcome: RUN_OUTCOME.COMPLETED,
+        lastResponse: 'Correct.',
+        workingDirectory: '/tmp/project',
+      },
       exitCode: 0,
     });
   });
@@ -160,6 +170,64 @@ describe('CLI agents run command', () => {
     expect(config?.instruction).toContain('- "notes.md"');
     expect(config?.instruction).toContain('Additional user instruction:');
     expect(config?.instruction).toContain('Assess the proof concisely.');
+    const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+    expect(emission?.json).toEqual({
+      category: AgentCategory.ToolUse,
+      executionId: 'exec-1',
+      streamId: 'stream-1',
+      outcome: RUN_OUTCOME.COMPLETED,
+      lastResponse: 'Correct.',
+      status: EXECUTION_STATUS.COMPLETED,
+      endGroupStatus: 'stopped',
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      workingDirectory: '/tmp/project',
+    });
+    expect(Object.keys(emission?.json ?? {})).toEqual([
+      'category',
+      'executionId',
+      'streamId',
+      'outcome',
+      'lastResponse',
+      'status',
+      'endGroupStatus',
+      'terminalStatus',
+      'workingDirectory',
+    ]);
+    expect(emission?.ndjson).toEqual({
+      kind: 'agent-result',
+      result: emission.json,
+    });
+    expect(emission?.text).toBe('Correct.');
+  });
+
+  it('publishes the frozen projection for a shutdown cancellation', async () => {
+    mocks.executeCliToolUseConfig.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        category: AgentCategory.ToolUse,
+        executionId: 'exec-interrupted',
+        streamId: 'stream-interrupted',
+        outcome: RUN_OUTCOME.CANCELLED,
+        workingDirectory: '/tmp/project',
+      },
+      exitCode: CliExitCode.Interrupted,
+    });
+    const { runToolUseAgent } = await import('@cli/commands/agentsRun');
+
+    const exitCode = await runToolUseAgent(cliContext(), {
+      agent: 'chat',
+      inputFiles: ['problem.md'],
+      contextFiles: [],
+      instruction: 'Assess the proof.',
+    });
+
+    expect(exitCode).toBe(CliExitCode.Interrupted);
+    expect(mocks.emitCliResult.mock.calls[0]?.[1].json).toMatchObject({
+      outcome: RUN_OUTCOME.CANCELLED,
+      status: EXECUTION_STATUS.INTERRUPTED,
+      endGroupStatus: 'stopped',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+    });
   });
 
   it('reports missing instruction before resolving the model', async () => {

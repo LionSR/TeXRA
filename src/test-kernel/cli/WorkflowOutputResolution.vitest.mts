@@ -10,11 +10,7 @@ import {
   resolveWorkflowOutput,
 } from '@cli/runtime/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
-import {
-  END_GROUP_STATUS,
-  EXECUTION_STATUS,
-  RUN_OUTCOME,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
 
@@ -53,10 +49,11 @@ function workflowResult(
     originalPath?: string | null;
     round?: number;
   }>,
+  outcome: RunOutcome = RUN_OUTCOME.COMPLETED,
 ): WorkflowResult {
   return {
     category: AgentCategory.Workflow,
-    outcome: RUN_OUTCOME.COMPLETED,
+    outcome,
     executionId: 'workflow-output-test',
     streamId: 'workflow-output-test',
     compileFailures: [],
@@ -88,32 +85,30 @@ describe('CLI workflow output resolution', () => {
         {
           expectedOutputFiles: ['a.tex', 'b.tex'],
           runDirectory: join(cwd, 'run'),
-          terminalStatus: EXECUTION_STATUS.COMPLETED,
         },
       ),
     ).rejects.toThrow(/b\.tex/);
   });
 
-  it('uses resolved interrupted status for missing workflow output results', async () => {
+  it('carries only the cancelled outcome for missing workflow outputs', async () => {
     const cwd = await makeTempDir();
 
-    const displayResult = await resolveWorkflowOutput(
+    const result = await resolveWorkflowOutput(
       'out.tex',
       undefined,
-      workflowResult([]),
+      workflowResult([], RUN_OUTCOME.CANCELLED),
       testContext(cwd),
-      {
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-      },
+      {},
     );
 
-    expect(displayResult).toMatchObject({
-      status: EXECUTION_STATUS.INTERRUPTED,
-      endGroupStatus: END_GROUP_STATUS.STOPPED,
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+    expect(result).toMatchObject({
+      outcome: RUN_OUTCOME.CANCELLED,
       workingDirectory: cwd,
     });
-    expect(Object.hasOwn(displayResult, 'copiedOutput')).toBe(false);
+    expect(Object.hasOwn(result, 'status')).toBe(false);
+    expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
+    expect(Object.hasOwn(result, 'endGroupStatus')).toBe(false);
+    expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
   });
 
   it('copies every expected --output-dir workflow output', async () => {
@@ -127,7 +122,7 @@ describe('CLI workflow output resolution', () => {
     await writeFile(runA2, 'A2');
     await writeFile(runB, 'B');
 
-    const displayResult = await resolveWorkflowOutput(
+    const result = await resolveWorkflowOutput(
       undefined,
       'out',
       workflowResult([
@@ -139,14 +134,11 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles: ['a.tex', 'b.tex'],
         runDirectory: join(cwd, 'run'),
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
       },
     );
 
-    expect(displayResult).toMatchObject({
-      status: EXECUTION_STATUS.COMPLETED,
-      endGroupStatus: END_GROUP_STATUS.STOPPED,
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    expect(result).toMatchObject({
+      outcome: RUN_OUTCOME.COMPLETED,
       workingDirectory: cwd,
       copiedOutputs: [join(cwd, 'out', 'a.tex'), join(cwd, 'out', 'b.tex')],
     });
@@ -170,7 +162,7 @@ describe('CLI workflow output resolution', () => {
 
     expect(expectedOutputFiles).toEqual(['stdin.tex']);
 
-    const displayResult = await resolveWorkflowOutput(
+    const result = await resolveWorkflowOutput(
       undefined,
       'out',
       workflowResult([
@@ -190,11 +182,10 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles,
         runDirectory: join(cwd, 'run'),
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
       },
     );
 
-    expect(displayResult).toMatchObject({
+    expect(result).toMatchObject({
       copiedOutputs: [join(cwd, 'out', 'stdin.tex')],
     });
     await expect(readFile(join(cwd, 'out', 'stdin.tex'), 'utf8')).resolves.toBe(
@@ -210,7 +201,7 @@ describe('CLI workflow output resolution', () => {
     await writeFile(runMain, 'main');
     await writeFile(runSeries, 'series');
 
-    const displayResult = await resolveWorkflowOutput(
+    const result = await resolveWorkflowOutput(
       undefined,
       'out',
       workflowResult([
@@ -236,11 +227,10 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles: ['paper/main.tex', 'paper/chapters/series.tex'],
         runDirectory: join(cwd, 'run'),
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
       },
     );
 
-    expect(displayResult).toMatchObject({
+    expect(result).toMatchObject({
       copiedOutputs: [
         join(cwd, 'out', 'paper', 'main.tex'),
         join(cwd, 'out', 'paper', 'chapters', 'series.tex'),
@@ -263,7 +253,7 @@ describe('CLI workflow output resolution', () => {
     await writeFile(runRoot, 'root');
     await writeFile(runNested, 'nested');
 
-    const displayResult = await resolveWorkflowOutput(
+    const result = await resolveWorkflowOutput(
       undefined,
       'out',
       workflowResult([
@@ -289,11 +279,10 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles: ['paper/main.tex', 'paper/chapters/main.tex'],
         runDirectory: join(cwd, 'run'),
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
       },
     );
 
-    expect(displayResult).toMatchObject({
+    expect(result).toMatchObject({
       copiedOutputs: [
         join(cwd, 'out', 'paper', 'main.tex'),
         join(cwd, 'out', 'paper', 'chapters', 'main.tex'),
@@ -328,7 +317,6 @@ describe('CLI workflow output resolution', () => {
         {
           expectedOutputFiles: ['paper/input.tex'],
           runDirectory: join(cwd, 'run'),
-          terminalStatus: EXECUTION_STATUS.COMPLETED,
         },
       ),
     ).rejects.toThrow(/paper[/\\]input\.tex/);
@@ -378,7 +366,6 @@ describe('CLI workflow output resolution', () => {
         {
           expectedOutputFiles: ['chapters/series.tex'],
           runDirectory: join(cwd, 'run'),
-          terminalStatus: EXECUTION_STATUS.COMPLETED,
         },
       ),
     ).rejects.toThrow(/chapters[/\\]series\.tex/);
@@ -404,7 +391,6 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles: ['a.tex'],
         runDirectory: join(cwd, 'run'),
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
       },
     );
 
@@ -422,7 +408,7 @@ describe('CLI workflow output resolution', () => {
     await writeFile(runA1, 'A1');
     await writeFile(runA2, 'A2');
 
-    const displayResult = await resolveWorkflowOutput(
+    const result = await resolveWorkflowOutput(
       'out/a.tex',
       undefined,
       workflowResult([
@@ -432,11 +418,10 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       {
         runDirectory: join(cwd, 'run'),
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
       },
     );
 
-    expect(displayResult).toMatchObject({
+    expect(result).toMatchObject({
       workingDirectory: cwd,
       copiedOutput: join(cwd, 'out', 'a.tex'),
     });
