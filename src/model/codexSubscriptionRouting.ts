@@ -5,21 +5,22 @@
  *
  * Shared by the handler dispatch (ModelFactory) and the picker availability
  * gate (computeModelOptions) so the two never drift. Deliberately synchronous
- * (config + name match only) — the actual "are you signed in" check happens at
+ * (config + name match only) - the actual "are you signed in" check happens at
  * request time in the handler and in the async availability context, so the
  * conversation-compatibility key can stay sync.
  */
-import {
-  resolveProviderCapabilities,
-  type ProviderCapabilityProfile,
-} from '@model/providerCapabilities';
-import { AgentCategory } from '@shared/schemas/agent';
+import type { ModelConfig } from 'llm-zoo';
 
 import {
   isCodexSubscriptionToolUseOnly,
   isPreferCodexSubscription,
-} from './codexPreference';
-import type { ModelConfig } from 'llm-zoo';
+} from '@auth/codex';
+import { AgentCategory } from '@shared/schemas/agent';
+
+import {
+  resolveProviderCapabilities,
+  type ProviderCapabilityProfile,
+} from './providerCapabilities';
 
 export function resolveCodexSubscriptionCapabilities(
   config: ModelConfig,

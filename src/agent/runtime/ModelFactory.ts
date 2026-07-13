@@ -12,10 +12,10 @@ import {
   CodexAuthError,
   formatCodexAuthUnavailableMessage,
   isCodexSessionRoutable,
-  resolveCodexSubscriptionCapabilitiesForAgentCategory,
 } from '@auth/codex';
 import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/codexSubscriptionRouting';
 import { isGpt5ModelName } from '@model/modelNames';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type { AgentCategory } from '@shared/schemas/agent';

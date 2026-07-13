@@ -110,10 +110,6 @@ vi.mock('@controllers/onboarding/setupLaunch', () => ({
   ) => resolveSetupModelMock(includeAccessListFallback),
 }));
 
-vi.mock('@auth/codex', () => ({
-  isCodexSubscriptionActive: () => Promise.resolve(false),
-}));
-
 vi.mock('@auth/serverKeys', () => ({
   getServerSideKeyService: () => ({
     canUseServerSideKeys: () => Promise.resolve(false),
@@ -245,7 +241,6 @@ await import('@utils/config/providerConfig');
 await import('@frontend/secretManager');
 await import('@agent/runtime/SessionHandle');
 await import('@controllers/onboarding/setupLaunch');
-await import('@auth/codex');
 await import('@auth/serverKeys');
 await import('@controllers/onboarding/onboardingFunnel');
 await import('@common/state');

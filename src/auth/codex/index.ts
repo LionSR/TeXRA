@@ -65,11 +65,6 @@ export {
   type CodexSubscriptionPreferenceUpdate,
 } from './codexPreference';
 export {
-  resolveCodexSubscriptionCapabilities,
-  resolveCodexSubscriptionCapabilitiesForAgentCategory,
-} from './codexRouting';
-export { isCodexSubscriptionActive } from './codexActive';
-export {
   loginWithLoopback,
   type CodexLoopbackLoginOptions,
 } from './codexLoopbackLogin';
