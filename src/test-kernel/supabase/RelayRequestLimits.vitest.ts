@@ -17,6 +17,7 @@ import {
   acquireRelayRequestSlot,
   releaseWhenStreamCloses,
 } from '../../../supabase/functions/relay/requestGate';
+import { getRequestLimits } from '../../../supabase/functions/relay/models';
 import { isModelFreeRelayPath } from '../../../supabase/functions/relay/paths';
 
 function byteStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
@@ -31,6 +32,10 @@ function byteStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
 }
 
 describe('relay free-tier request limits', () => {
+  it('allows four concurrent free-tier requests', () => {
+    assert.equal(getRequestLimits('free').concurrent, 4);
+  });
+
   it('rejects free-tier request bodies over the byte cap', () => {
     assert.deepEqual(checkRequestBodySizeLimit('abc', 3), {
       allowed: true,
