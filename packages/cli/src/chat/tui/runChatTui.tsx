@@ -15,7 +15,6 @@ import PQueue from 'p-queue';
 
 import { flushPendingRunTraces, StreamSnapshotStore } from '@transcript';
 import { platform, tryPlatform } from '@platform/platform';
-import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
@@ -65,6 +64,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { getFirstRunDone } from '@shared/state/onboardingState';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
