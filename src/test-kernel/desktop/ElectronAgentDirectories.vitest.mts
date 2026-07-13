@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - platform
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -140,6 +141,7 @@ describe('desktop agent directory bootstrap', () => {
             globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
         },
       }),
+      languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
       toolAvailability: NO_TOOL_AVAILABILITY_HOST,
       linter: async () => [],
       addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
