@@ -15,7 +15,7 @@
  */
 
 import { create } from 'mutative';
-import { Signal, signal, select, combine } from '@shared/signals';
+import { Signal, signal, select } from '@shared/signals';
 import {
   createStreamState,
   type ProgressViewPlacement,
@@ -114,14 +114,12 @@ export const streams$ = new Signal.Computed(() => [
 ]);
 
 /** Top-level streams for the tab list (child streams excluded). */
-export const tabStreams$ = combine(
-  [streams$, streamFilter$] as const,
-  (streams, filter) => {
-    const topLevel = streams.filter((s) => !s.parentStreamId);
-    if (filter === 'all') return topLevel;
-    return topLevel.filter((s) => s.agentCategory === filter);
-  },
-);
+export const tabStreams$ = new Signal.Computed(() => {
+  const topLevel = streams$.get().filter((stream) => !stream.parentStreamId);
+  const filter = streamFilter$.get();
+  if (filter === 'all') return topLevel;
+  return topLevel.filter((stream) => stream.agentCategory === filter);
+});
 
 /**
  * Child streams grouped by parent stream ID.
