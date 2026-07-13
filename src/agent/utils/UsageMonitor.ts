@@ -7,7 +7,6 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import { usesServerSideKeysRoute } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import type {
   ExtendedTokenUsageStats,
@@ -15,6 +14,7 @@ import type {
   StreamTabId,
   UsageRoute,
 } from '@shared/schemas';
+import { UsageProviderSchema } from '@shared/schemas/usage';
 import { roundTo } from '@utils/core';
 import type { UsageLogStats } from '@telemetry/UsageLogTypes';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
