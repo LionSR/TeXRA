@@ -253,7 +253,7 @@ export async function requestToolEditApproval(
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
 
-  return session.approvals.toolEdit.enqueue(streamId, async () => {
+  return session.approvals.toolEdit.enqueue(streamId ?? undefined, async () => {
     if (streamId && session.approvals.toolEdit.bypass.isBypassed(streamId)) {
       return finalizeApprovalResult({ accepted: true }, preparedRequest);
     }
