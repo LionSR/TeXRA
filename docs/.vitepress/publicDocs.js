@@ -41,6 +41,7 @@ export const srcExclude = [
   'guide/desktop.md',
   'guide/desktop-migration.md',
   'blog/**',
+  'marketing/**',
   'design/**',
   'dev/**',
   'architecture/**',
