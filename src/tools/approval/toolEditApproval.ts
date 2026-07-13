@@ -253,15 +253,21 @@ export async function requestToolEditApproval(
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
 
-  const hostInteraction =
-    session.interactions.requestToolEditApproval(preparedRequest);
-  if (hostInteraction) {
-    return finalizeApprovalResult(await hostInteraction, preparedRequest);
-  }
+  return session.approvals.toolEdit.enqueue(streamId, async () => {
+    if (streamId && session.approvals.toolEdit.bypass.isBypassed(streamId)) {
+      return finalizeApprovalResult({ accepted: true }, preparedRequest);
+    }
 
-  throw new Error(
-    'Tool edit approval requires session.interactions.requestToolEditApproval.',
-  );
+    const hostInteraction =
+      session.interactions.requestToolEditApproval(preparedRequest);
+    if (hostInteraction) {
+      return finalizeApprovalResult(await hostInteraction, preparedRequest);
+    }
+
+    throw new Error(
+      'Tool edit approval requires session.interactions.requestToolEditApproval.',
+    );
+  });
 }
 
 function finalizeApprovalResult(
