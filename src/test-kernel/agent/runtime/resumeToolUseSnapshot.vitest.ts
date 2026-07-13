@@ -124,7 +124,7 @@ describe('resumeToolUseSnapshot', () => {
     });
   });
 
-  it('opens late follow-up routing before draining the resume queue', async () => {
+  it('keeps ready-boundary and setup-race follow-ups in order', async () => {
     const onFollowUpQueueReady = vi.fn(() => {
       defaultSession().followUps.enqueue(STREAM, {
         text: 'queued at the ready boundary',
@@ -137,10 +137,17 @@ describe('resumeToolUseSnapshot', () => {
     });
 
     expect(onFollowUpQueueReady).toHaveBeenCalledOnce();
+    defaultSession().followUps.enqueue(STREAM, {
+      text: 'queued after the initial drain',
+    });
     const appendFollowUp = vi.fn();
     capturedSetupSession()({ appendFollowUp });
-    expect(appendFollowUp).toHaveBeenCalledWith({
+    expect(appendFollowUp).toHaveBeenNthCalledWith(1, {
       text: 'queued at the ready boundary',
+      origin: 'user',
+    });
+    expect(appendFollowUp).toHaveBeenNthCalledWith(2, {
+      text: 'queued after the initial drain',
       origin: 'user',
     });
   });
