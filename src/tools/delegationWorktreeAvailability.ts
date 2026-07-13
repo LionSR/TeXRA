@@ -16,7 +16,7 @@
 
 import type { ToolDefinition } from '@model';
 import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
-import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
+import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 
 /** The single "Git worktree support:" line, anchored to a line start. */
 const WORKTREE_LINE = /^Git worktree support:.*$/m;
