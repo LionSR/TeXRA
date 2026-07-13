@@ -339,7 +339,7 @@ await initLocalCliPlatform({
 initializeDefaultSession({ transcripts: await StreamLogStore.open() });
 const harnessFollowUpQueue = defaultSession().followUps.acquire(STREAM_ID);
 for (const followUp of QUEUED_FOLLOW_UPS) {
-  harnessFollowUpQueue.enqueue(followUp);
+  harnessFollowUpQueue.enqueue({ text: followUp });
 }
 if (process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined) {
   await platform().workspaceState.update(
