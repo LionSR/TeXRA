@@ -56,6 +56,9 @@ All notable changes to this project will be documented in this file.
 - **Approvals remain tied to the current session and proposal** — stale or
   unreadable diff fallbacks cannot be approved, and concurrent sessions no
   longer share pending approval state.
+- **YOLO approval carries across parallel tool calls** — approving the first
+  command or file edit for a stream now lets the remaining queued calls observe
+  that decision instead of prompting one by one.
 - **Background work reconnects more reliably** — waiting parents wake when a
   background shell task finishes, and Claude-agent sessions can recover their
   resume state from disk after a reload or crash.
