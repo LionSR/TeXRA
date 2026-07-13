@@ -20,30 +20,9 @@ logger.initialize(CHANNEL);
 
 const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-usage`;
 const MAX_QUEUE_SIZE = 1000;
-const MAX_QUARANTINED_ENTRIES = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 
 type BatchFlushOutcome = 'processed' | 'blocked';
-
-export interface UsageLogFlushResult {
-  /** Entries still waiting for a server acknowledgement. */
-  readonly pendingEntryCount: number;
-  /** Quarantined or evicted entries no longer pending acknowledgement. */
-  readonly unacceptedEntryCount: number;
-}
-
-interface QuarantinedUsageBatch {
-  batch: UsageLogBatch;
-  reason: string;
-  rejectedAt: string;
-}
-
-class PermanentUsageBatchRejection extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'PermanentUsageBatchRejection';
-  }
-}
 
 interface UsageLogConfig {
   batchSize: number;
@@ -60,9 +39,6 @@ const DEFAULT_CONFIG: UsageLogConfig = {
 class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
   private retryBatch: UsageLogBatch | null = null;
-  private quarantinedBatches: QuarantinedUsageBatch[] = [];
-  private quarantinedEntryCount = 0;
-  private unacceptedEntryCount = 0;
   private flushTimer: NodeJS.Timeout | null = null;
   private activeFlush: Promise<BatchFlushOutcome> | null = null;
   private config: UsageLogConfig = DEFAULT_CONFIG;
@@ -93,7 +69,6 @@ class UsageLogServiceImpl {
     if (this.queue.length >= MAX_QUEUE_SIZE) {
       logger.warn(CHANNEL, 'Queue full, dropping oldest entry');
       this.queue.shift();
-      this.unacceptedEntryCount += 1;
     }
 
     this.queue.push({
@@ -112,24 +87,24 @@ class UsageLogServiceImpl {
     }
   }
 
-  async flush(): Promise<UsageLogFlushResult> {
+  async flush(): Promise<boolean> {
     while (this.retryBatch || this.queue.length > 0 || this.activeFlush) {
       if (this.activeFlush) {
         const outcome = await this.activeFlush;
-        if (outcome === 'blocked') return this.flushResult();
+        if (outcome === 'blocked') return false;
         continue;
       }
 
       this.activeFlush = this.flushQueuedBatch();
       try {
         const outcome = await this.activeFlush;
-        if (outcome === 'blocked') return this.flushResult();
+        if (outcome === 'blocked') return false;
       } finally {
         this.activeFlush = null;
       }
     }
 
-    return this.flushResult();
+    return true;
   }
 
   private async flushQueuedBatch(): Promise<BatchFlushOutcome> {
@@ -161,17 +136,20 @@ class UsageLogServiceImpl {
       );
 
       const response = await this.sendBatch(batch, token);
+      if (!response.success) {
+        const message = response.error ?? 'Usage batch was rejected';
+        if (response.retryable === false) {
+          this.reportPermanentRejection(batch, message);
+          return 'processed';
+        }
+        throw new Error(message);
+      }
       logger.debug(
         CHANNEL,
         `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
       );
       return 'processed';
     } catch (error) {
-      if (batch && error instanceof PermanentUsageBatchRejection) {
-        this.quarantineBatch(batch, error.message);
-        return 'processed';
-      }
-
       const requeued = batch?.entries.length ?? 0;
       if (batch) this.retryBatch = batch;
       const requeuedMessage =
@@ -184,54 +162,18 @@ class UsageLogServiceImpl {
     }
   }
 
-  private quarantineBatch(batch: UsageLogBatch, reason: string): void {
-    this.quarantinedBatches.push({
-      batch,
-      reason,
-      rejectedAt: new Date().toISOString(),
-    });
-    this.quarantinedEntryCount += batch.entries.length;
-    this.unacceptedEntryCount += batch.entries.length;
-
-    let evictedEntryCount = 0;
-    while (
-      this.quarantinedEntryCount > MAX_QUARANTINED_ENTRIES &&
-      this.quarantinedBatches.length > 1
-    ) {
-      const removed = this.quarantinedBatches.shift();
-      if (!removed) break;
-      const removedEntryCount = removed.batch.entries.length;
-      this.quarantinedEntryCount -= removedEntryCount;
-      evictedEntryCount += removedEntryCount;
-    }
-
-    if (evictedEntryCount > 0) {
-      logger.error(
-        CHANNEL,
-        `Usage rejection quarantine reached its ${MAX_QUARANTINED_ENTRIES}-entry bound; evicted ${evictedEntryCount} oldest entries`,
-      );
-    }
-
+  private reportPermanentRejection(batch: UsageLogBatch, reason: string): void {
     logger.error(
       CHANNEL,
-      `Usage batch ${batch.batchId} was permanently rejected; quarantined ${batch.entries.length} entries so later batches can continue`,
+      `Usage batch ${batch.batchId} was permanently rejected; discarded ${batch.entries.length} entries so later batches can continue`,
       {
         data: {
           batchId: batch.batchId,
           entryCount: batch.entries.length,
-          quarantinedEntryCount: this.quarantinedEntryCount,
           reason,
         },
       },
     );
-  }
-
-  private flushResult(): UsageLogFlushResult {
-    return {
-      pendingEntryCount:
-        (this.retryBatch?.entries.length ?? 0) + this.queue.length,
-      unacceptedEntryCount: this.unacceptedEntryCount,
-    };
   }
 
   private async sendBatch(
@@ -252,13 +194,7 @@ class UsageLogServiceImpl {
     });
     const data = await httpResponse.json<unknown>();
     const response = UsageLogResponseSchema.parse(data);
-    if (!response.success) {
-      const message = response.error ?? 'Usage batch was rejected';
-      if (response.retryable === false) {
-        throw new PermanentUsageBatchRejection(message);
-      }
-      throw new Error(message);
-    }
+    if (!response.success) return response;
     if (!httpResponse.ok) {
       throw new Error(
         `Usage endpoint returned HTTP ${httpResponse.status} with a success acknowledgement`,
@@ -304,10 +240,6 @@ class UsageLogServiceImpl {
     }
 
     await this.flush();
-
-    this.quarantinedBatches = [];
-    this.quarantinedEntryCount = 0;
-    this.unacceptedEntryCount = 0;
 
     logger.debug(CHANNEL, 'UsageLogService disposed');
   }

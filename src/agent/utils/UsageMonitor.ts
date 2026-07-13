@@ -304,13 +304,10 @@ export class UsageMonitor {
       // pre-call check sees this round's cost before the next call — bounding
       // free-tier overage to roughly one round instead of a whole session.
       if (usedRelay) {
-        const flushResult = await UsageLogService.flush();
-        if (
-          flushResult.pendingEntryCount > 0 ||
-          flushResult.unacceptedEntryCount > 0
-        ) {
+        const flushed = await UsageLogService.flush();
+        if (!flushed) {
           this.context.logger.debug(
-            `Server spend data is incomplete: ${flushResult.pendingEntryCount} usage entries remain queued and ${flushResult.unacceptedEntryCount} were not accepted.`,
+            'Relay usage logging is queued; spend-cap data will retry later.',
           );
         }
       }

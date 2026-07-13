@@ -1,9 +1,8 @@
 // Third-party imports
 import { ModelProvider } from 'llm-zoo';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { UsageLogService } from '@telemetry/UsageLogService';
 import { TraceEmitter } from '@agent/trace';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
@@ -55,7 +54,6 @@ function createMonitorWithEvents() {
   );
   return {
     monitor,
-    logger,
     events: recorded.events,
     dispose: () => {
       recorded.detach();
@@ -107,41 +105,6 @@ describe('UsageMonitor.lastTotals (SDK Step 7d PR 5)', () => {
       expect(usageData?.usage).not.toHaveProperty('viaChatGptSubscription');
     } finally {
       dispose();
-    }
-  });
-
-  it('reports pending and permanently unaccepted relay accounting separately', async () => {
-    const { dispose, logger, monitor } = createMonitorWithEvents();
-    const logSpy = vi
-      .spyOn(UsageLogService, 'log')
-      .mockImplementation(() => {});
-    const flushSpy = vi.spyOn(UsageLogService, 'flush').mockResolvedValue({
-      pendingEntryCount: 2,
-      unacceptedEntryCount: 3,
-    });
-    const debugSpy = vi.spyOn(logger, 'debug');
-
-    try {
-      const state = AgentRunStateSnapshotSchema.parse({});
-      recordNormalizedUsage(state.usageAccumulator, {
-        inputTokens: 10,
-        outputTokens: 2,
-        cost: 0.01,
-        responseTimeMs: 50,
-        provider: 'openai-response',
-        usageRoute: 'relay',
-      });
-
-      await monitor.recordUsage(state);
-
-      expect(logSpy).toHaveBeenCalledOnce();
-      expect(flushSpy).toHaveBeenCalledOnce();
-      expect(debugSpy).toHaveBeenCalledWith(
-        'Server spend data is incomplete: 2 usage entries remain queued and 3 were not accepted.',
-      );
-    } finally {
-      dispose();
-      vi.restoreAllMocks();
     }
   });
 });

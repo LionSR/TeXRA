@@ -62,7 +62,7 @@ export const UsageLogResponseSchema = z.discriminatedUnion('success', [
     success: z.literal(false),
     accepted: z.literal(0),
     error: z.string().optional(),
-    /** Only an explicit false permits the client to quarantine instead of retry. */
+    /** Only an explicit false permits the client to discard instead of retry. */
     retryable: z.boolean().optional(),
   }),
 ]);
