@@ -13,10 +13,10 @@
  * Plain text — no HTML.
  */
 export const PROMO_NOTICE_SHORT = {
-  lead: 'Free access to GPT-5, Claude, Gemini, DeepSeek, and more.',
+  lead: 'Free access to a rotating selection of leading research models.',
   fineprint:
-    'Your messages go directly to the model provider — TeXRA never stores or ' +
-    'trains on your conversations.',
+    'TeXRA forwards your messages to the model provider without permanently ' +
+    'storing them or using them for training.',
 } as const;
 
 /**
@@ -32,9 +32,9 @@ export const PROMO_NOTICE_LONG = {
   promoCode: 'gpt-5-pro',
   promoTail: ' series, which stays reserved for Ultra.',
   privacyLead:
-    'Your conversations are sent directly to the model provider: TeXRA does ',
+    'Your conversations are forwarded to the model provider: TeXRA does ',
   privacyNot: 'not',
-  privacyMiddle: ' store your prompts or responses, and they are ',
+  privacyMiddle: ' permanently store your prompts or responses, and they are ',
   privacyNever: 'never',
   privacyTrailing: ' used for training.',
   supportLead: 'Help keep the relay running for everyone — support TeXRA via ',
