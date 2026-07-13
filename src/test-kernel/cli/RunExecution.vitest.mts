@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   createCliRuntimeHost: vi.fn(),
   disposeHostInteractions: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
-  readCliTerminalStatus: vi.fn(),
+  readCliRunOutcome: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTerminalStatus: vi.fn(),
@@ -93,7 +93,7 @@ vi.mock('@cli/runtime/approvalAdapter', async (importOriginal) => ({
 
 vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/terminalStatus')>()),
-  readCliTerminalStatus: mocks.readCliTerminalStatus,
+  readCliRunOutcome: mocks.readCliRunOutcome,
 }));
 
 vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
@@ -157,11 +157,11 @@ function stubRunExecutionDeps(): void {
     prepareInteractivePrompt: mocks.prepareInteractivePrompt,
     close: mocks.close,
   });
-  mocks.readCliTerminalStatus.mockResolvedValue('completed');
+  mocks.readCliRunOutcome.mockResolvedValue('completed');
   mocks.runAgent.mockResolvedValue({
     category: 'toolUse',
     executionId: 'exec-1',
-    status: 'completed',
+    outcome: 'completed',
     streamId: 'stream-1',
   });
 }
@@ -647,10 +647,19 @@ describe('executeCliRequest', () => {
     resolveRun?.({
       category: 'toolUse',
       executionId: 'exec-1',
-      status: 'completed',
+      outcome: 'completed',
       streamId: 'stream-1',
     });
-    await run;
+    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+    await expect(run).resolves.toEqual({
+      ok: true,
+      result: {
+        category: 'toolUse',
+        executionId: 'exec-1',
+        outcome: 'cancelled',
+        streamId: 'stream-1',
+      },
+    });
     expect(mocks.writeTerminalStatus).toHaveBeenCalledTimes(2);
     expect(mocks.writeTerminalStatus).toHaveBeenLastCalledWith(
       'exec-1',
@@ -695,7 +704,7 @@ describe('executeCliConfig', () => {
     expect(mocks.runAgent).not.toHaveBeenCalled();
   });
 
-  it('derives the CLI display result and exit code for tool-use configs', async () => {
+  it('derives the internal CLI result and exit code for tool-use configs', async () => {
     const { AgentCategory } =
       await import('@agent/core/definition/AgentDataclass');
     const { executeCliToolUseConfig } =
@@ -706,9 +715,7 @@ describe('executeCliConfig', () => {
       outcome: 'completed',
       lastResponse: 'Done.',
     });
-    mocks.readCliTerminalStatus.mockResolvedValueOnce(
-      EXECUTION_STATUS.COMPLETED,
-    );
+    mocks.readCliRunOutcome.mockResolvedValueOnce('completed');
 
     const result = await executeCliToolUseConfig(
       toolUseConfig(),
@@ -722,16 +729,24 @@ describe('executeCliConfig', () => {
     expect(result).toMatchObject({
       ok: true,
       exitCode: 0,
-      displayResult: {
-        status: EXECUTION_STATUS.COMPLETED,
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
+      result: {
+        outcome: 'completed',
         workingDirectory: '/tmp/project',
         lastResponse: 'Done.',
       },
     });
+    if (result.ok) {
+      expect(Object.keys(result.result)).toEqual([
+        'category',
+        'executionId',
+        'outcome',
+        'lastResponse',
+        'workingDirectory',
+      ]);
+    }
   });
 
-  it('uses the resolved terminal status for tool-use JSON output', async () => {
+  it('carries only the resolved outcome after a shutdown interruption', async () => {
     const { AgentCategory } =
       await import('@agent/core/definition/AgentDataclass');
     const { executeCliToolUseConfig } =
@@ -742,9 +757,7 @@ describe('executeCliConfig', () => {
       outcome: 'completed',
       lastResponse: 'Done.',
     });
-    mocks.readCliTerminalStatus.mockResolvedValueOnce(
-      EXECUTION_STATUS.INTERRUPTED,
-    );
+    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
 
     const result = await executeCliToolUseConfig(
       toolUseConfig(),
@@ -758,13 +771,16 @@ describe('executeCliConfig', () => {
     expect(result).toMatchObject({
       ok: true,
       exitCode: CliExitCode.Interrupted,
-      displayResult: {
-        status: EXECUTION_STATUS.INTERRUPTED,
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-        endGroupStatus: 'stopped',
+      result: {
+        outcome: 'cancelled',
         workingDirectory: '/tmp/project',
       },
     });
+    if (result.ok) {
+      expect(Object.hasOwn(result.result, 'status')).toBe(false);
+      expect(Object.hasOwn(result.result, 'terminalStatus')).toBe(false);
+      expect(Object.hasOwn(result.result, 'endGroupStatus')).toBe(false);
+    }
   });
 
   it('marks executions errored when the resolved category is unexpected', async () => {

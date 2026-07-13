@@ -49,6 +49,7 @@ import {
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { executeCliToolUseConfig } from '../runtime/runExecution';
 import {
+  serializeCliRunResult,
   toolUseResultText,
   type CliToolUseRunResult,
 } from '../runtime/terminalStatus';
@@ -76,6 +77,7 @@ function writeMultiAgentRunResult(
   plan: CliMultiAgentPresetRunPlan,
   result: CliToolUseRunResult,
 ): void {
+  const displayResult = serializeCliRunResult(result);
   const payload = {
     preset: {
       id: plan.preset.id,
@@ -83,7 +85,7 @@ function writeMultiAgentRunResult(
       source: plan.preset.source,
     },
     rootAgent: plan.rootAgent?.name,
-    result,
+    result: displayResult,
   };
 
   emitCliResult(context, {
@@ -231,7 +233,7 @@ export async function runMultiAgentPreset(
       });
       if (!execution.ok) return execution.exitCode;
 
-      writeMultiAgentRunResult(runContext, plan, execution.displayResult);
+      writeMultiAgentRunResult(runContext, plan, execution.result);
 
       return execution.exitCode;
     },
