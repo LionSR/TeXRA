@@ -267,6 +267,7 @@ export async function initCliPlatform(
   if (!tryPlatform()) {
     const configStore = await JsonStore.open(
       workspaceTexraConfigPath(cliWorkspaceCwd),
+      { corruptionPolicy: 'fail' },
     );
     const stateStores = await createCliStateStores({
       storageRoot: context.storageRoot,
@@ -281,6 +282,7 @@ export async function initCliPlatform(
         stateStores.storage.getGlobalStoragePath(),
         TEXRA_CONFIG_FILE_NAME,
       ),
+      { corruptionPolicy: 'fail' },
     );
     // Same severity and wording as the extension/desktop hosts: a shutdown
     // handler failure is an error everywhere, not a warning in one host.

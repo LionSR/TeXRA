@@ -36,7 +36,10 @@ interface JsonConfigProvider {
 
 interface JsonStoreModule {
   JsonStore: {
-    open(filePath: string): Promise<JsonStore>;
+    open(
+      filePath: string,
+      options: { corruptionPolicy: 'fail' },
+    ): Promise<JsonStore>;
   };
 }
 
@@ -77,9 +80,12 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     const { JsonStore, JsonConfigProvider } =
       await loadDesktopConfigConstructors();
     tempDir = await mkdtemp(join(tmpdir(), 'texra-electron-config-'));
-    const globalStore = await JsonStore.open(join(tempDir, 'global.json'));
+    const globalStore = await JsonStore.open(join(tempDir, 'global.json'), {
+      corruptionPolicy: 'fail',
+    });
     const workspaceStore = await JsonStore.open(
       join(tempDir, 'workspace.json'),
+      { corruptionPolicy: 'fail' },
     );
     return {
       provider: new JsonConfigProvider({

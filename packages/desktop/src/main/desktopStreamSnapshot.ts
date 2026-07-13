@@ -20,8 +20,6 @@
  * the previous file intact rather than corrupting the snapshot.
  */
 
-import { z } from 'zod';
-
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
   RestoredStreamsFileSchema,
@@ -62,11 +60,6 @@ export interface DesktopStreamSnapshotStore {
   getAll(): RestoredStreamSnapshot[];
 }
 
-interface OpenOptions {
-  /** Optional logger override (defaults to `console`). */
-  log?: Pick<Console, 'warn'>;
-}
-
 /**
  * Open the persisted snapshot file and return a write-through store.
  * The file is created on first write — opening a non-existent file
@@ -74,10 +67,10 @@ interface OpenOptions {
  */
 export async function openDesktopStreamSnapshotStore(
   filePath: string,
-  options: OpenOptions = {},
 ): Promise<DesktopStreamSnapshotStore> {
-  const log = options.log ?? console;
-  const store = await JsonStore.open(filePath);
+  const store = await JsonStore.open(filePath, {
+    corruptionPolicy: 'fail',
+  });
   const raw = store.get<unknown>(STREAMS_KEY);
 
   // Live in-memory list keyed by streamId, seeded from the persisted file.
@@ -85,7 +78,7 @@ export async function openDesktopStreamSnapshotStore(
   // upserts share one debounced write. Destructive edits stay immediate so
   // callers can rely on durability when remove()/replaceAll() resolve.
   const live = new Map<StreamTabId, RestoredStreamSnapshot>(
-    parseHydrated(raw, log).map((s) => [s.streamId, s]),
+    parseHydrated(raw).map((s) => [s.streamId, s]),
   );
   let pendingUpsertWaiters: Array<{
     resolve(): void;
@@ -207,23 +200,14 @@ export async function openDesktopStreamSnapshotStore(
 }
 
 /**
- * Parse the persisted blob, returning a normalized list. A malformed
- * or missing file yields an empty list — never throw at startup; a
- * corrupt snapshot must not block the user from launching the app.
+ * Parse the persisted blob, returning a normalized list. A missing snapshot
+ * value yields an empty list. Invalid present data fails the open so the
+ * caller can disable snapshot persistence without overwriting the source.
  */
-function parseHydrated(
-  raw: unknown,
-  log: Pick<Console, 'warn'>,
-): RestoredStreamSnapshot[] {
+function parseHydrated(raw: unknown): RestoredStreamSnapshot[] {
   if (raw == null) return [];
   const parsed = RestoredStreamsFileSchema.safeParse(raw);
-  if (!parsed.success) {
-    log.warn(
-      '[texra-desktop] Discarding malformed stream snapshot file',
-      z.prettifyError(parsed.error),
-    );
-    return [];
-  }
+  if (!parsed.success) throw parsed.error;
   // Preserve in-flight phases so startup repair can classify them. A finished
   // or already-inert prior phase remains an inactive ghost on the next launch.
   return parsed.data.streams.map((s) => ({
