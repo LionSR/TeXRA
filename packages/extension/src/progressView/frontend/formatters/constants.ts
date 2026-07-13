@@ -51,7 +51,7 @@ export const TIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
 //
 // The edit/read/write display-kind classification (which tools show an
 // old/new diff, a file link, or a file link + content) lives in
-// `@tools/toolKind` — the single source of truth shared with the CLI chat
+// `@shared/tools/toolKind` — the single source of truth shared with the CLI chat
 // TUI's `toolRenderers.tsx` (see issue #7120). Use `toolDisplayKind()` from
 // that module instead of adding tool-name lists here.
 

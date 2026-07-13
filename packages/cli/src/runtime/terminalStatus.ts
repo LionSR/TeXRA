@@ -1,14 +1,14 @@
 import { getExecutionStore } from '@agent/storage';
 import { runAgent } from '@agent/runtime/runAgent';
 import {
-  legacyEndGroupStatusForOutcome,
-  runOutcomeToExecutionStatus,
-} from '@common/constants/streamStatus';
-import {
   type ExecutionStatus,
   RUN_OUTCOME,
   type RunOutcome,
 } from '@shared/schemas';
+import {
+  legacyEndGroupStatusForOutcome,
+  runOutcomeToExecutionStatus,
+} from '@shared/streams/streamStatus';
 
 import { hasCliApprovalDenied } from './approvalAdapter';
 import { CliExitCode } from './exitCodes';

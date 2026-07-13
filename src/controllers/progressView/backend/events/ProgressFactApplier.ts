@@ -18,7 +18,6 @@ import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { isInFlightPhase } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,
@@ -44,6 +43,7 @@ import {
   type UpdateStreamUsagePayload,
   type UpdateTodosPayload,
 } from '@shared/schemas';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { assertNever, mapToRecord } from '@utils/core';
 
