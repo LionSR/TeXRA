@@ -8,7 +8,10 @@ import {
   type Mock,
 } from 'vitest';
 
-import { UsageLogService } from '@telemetry/UsageLogService';
+import {
+  USAGE_LOG_FLUSH_OUTCOME,
+  UsageLogService,
+} from '@telemetry/UsageLogService';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
 
@@ -33,6 +36,10 @@ function batchId(batch: unknown): string {
   return (batch as { batchId: string }).batchId;
 }
 
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), { status: 200 });
+}
+
 // ky passes a Request object; read each batch body from it. `beforeRespond`
 // lets a test stall or fail a specific call before the success response.
 function stubFetch(
@@ -44,12 +51,7 @@ function stubFetch(
   const fetchMock = vi.fn(async (request: Request) => {
     batches.push(await request.json());
     const response = await beforeRespond(fetchMock.mock.calls.length);
-    return (
-      response ??
-      new Response(JSON.stringify({ success: true, accepted: 1 }), {
-        status: 200,
-      })
-    );
+    return response ?? jsonResponse({ success: true, accepted: 1 });
   });
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
@@ -94,8 +96,8 @@ describe('UsageLogService', () => {
 
     releaseFirstFetch?.();
     await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
-      true,
-      true,
+      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
     ]);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -111,65 +113,50 @@ describe('UsageLogService', () => {
     const fetchMock = stubFetch(batches);
 
     UsageLogService.log(usageEntry('first'));
-    await expect(UsageLogService.flush()).resolves.toBe(false);
+    await expect(UsageLogService.flush()).resolves.toBe(
+      USAGE_LOG_FLUSH_OUTCOME.PENDING,
+    );
 
     expect(fetchMock).not.toHaveBeenCalled();
 
-    await expect(UsageLogService.flush()).resolves.toBe(true);
+    await expect(UsageLogService.flush()).resolves.toBe(
+      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(batches.map(batchModels)).toEqual([['first']]);
   });
 
-  it('requeues entries when send fails after dequeue', async () => {
+  it.each([
+    ['network failure', new Error('network unavailable')],
+    ['malformed acknowledgement', { success: true }],
+    [
+      'retryable rejection',
+      { success: false, accepted: 0, error: 'invalid batch' },
+    ],
+    ['partial acknowledgement', { success: true, accepted: 0 }],
+  ])('requeues entries after a %s', async (_case, firstFailure) => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
     const batches: unknown[] = [];
     const fetchMock = stubFetch(batches, (callCount) => {
-      if (callCount === 1) {
-        throw new Error('network unavailable');
-      }
+      if (callCount !== 1) return;
+      if (firstFailure instanceof Error) throw firstFailure;
+      return jsonResponse(firstFailure);
     });
 
     UsageLogService.log(usageEntry('first'));
-    await expect(UsageLogService.flush()).resolves.toBe(false);
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    await expect(UsageLogService.flush()).resolves.toBe(true);
+    await expect(UsageLogService.flush()).resolves.toBe(
+      USAGE_LOG_FLUSH_OUTCOME.PENDING,
+    );
+    await expect(UsageLogService.flush()).resolves.toBe(
+      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['first'], ['first']]);
     expect(batchId(batches[1])).toBe(batchId(batches[0]));
   });
-
-  it.each([
-    ['malformed', { success: true }],
-    ['rejected', { success: false, accepted: 0, error: 'invalid batch' }],
-    ['partial', { success: true, accepted: 0 }],
-  ])(
-    'requeues entries after a %s acknowledgement',
-    async (_case, acknowledgement) => {
-      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
-        'token',
-      );
-
-      const batches: unknown[] = [];
-      const fetchMock = stubFetch(batches, (callCount) => {
-        if (callCount === 1) {
-          return new Response(JSON.stringify(acknowledgement), { status: 200 });
-        }
-      });
-
-      UsageLogService.log(usageEntry('first'));
-      await expect(UsageLogService.flush()).resolves.toBe(false);
-      await expect(UsageLogService.flush()).resolves.toBe(true);
-
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(batches.map(batchModels)).toEqual([['first'], ['first']]);
-      expect(batchId(batches[1])).toBe(batchId(batches[0]));
-    },
-  );
 
   it('discards a permanent rejection and continues with later entries', async () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
@@ -180,17 +167,15 @@ describe('UsageLogService', () => {
     });
     const batches: unknown[] = [];
     const fetchMock = stubFetch(batches, async (callCount) => {
+      if (callCount === 2) throw new Error('network unavailable');
       if (callCount !== 1) return;
       await rejectionReleased;
-      return new Response(
-        JSON.stringify({
-          success: false,
-          accepted: 0,
-          error: 'invalid batch',
-          retryable: false,
-        }),
-        { status: 200 },
-      );
+      return jsonResponse({
+        success: false,
+        accepted: 0,
+        error: 'invalid batch',
+        retryable: false,
+      });
     });
 
     UsageLogService.log(usageEntry('invalid'));
@@ -200,13 +185,20 @@ describe('UsageLogService', () => {
     UsageLogService.log(usageEntry('valid'));
     releaseRejection?.();
 
-    await expect(flush).resolves.toBe(true);
+    await expect(flush).resolves.toBe(USAGE_LOG_FLUSH_OUTCOME.REJECTED);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['invalid'], ['valid']]);
     expect(batchId(batches[1])).not.toBe(batchId(batches[0]));
 
-    await expect(UsageLogService.flush()).resolves.toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expect(UsageLogService.flush()).resolves.toBe(
+      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+    );
+    expect(batches.map(batchModels)).toEqual([
+      ['invalid'],
+      ['valid'],
+      ['valid'],
+    ]);
+    expect(batchId(batches[2])).toBe(batchId(batches[1]));
   });
 
   it('keeps a failed batch id separate from later queued entries', async () => {
@@ -220,10 +212,14 @@ describe('UsageLogService', () => {
     });
 
     UsageLogService.log(usageEntry('first'));
-    await expect(UsageLogService.flush()).resolves.toBe(false);
+    await expect(UsageLogService.flush()).resolves.toBe(
+      USAGE_LOG_FLUSH_OUTCOME.PENDING,
+    );
 
     UsageLogService.log(usageEntry('second'));
-    await expect(UsageLogService.flush()).resolves.toBe(true);
+    await expect(UsageLogService.flush()).resolves.toBe(
+      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(batches.map(batchModels)).toEqual([
