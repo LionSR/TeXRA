@@ -28,7 +28,10 @@ interface JsonStore {
 
 interface JsonStoreModule {
   JsonStore: {
-    open(filePath: string): Promise<JsonStore>;
+    open(
+      filePath: string,
+      options: { corruptionPolicy: 'fail' },
+    ): Promise<JsonStore>;
   };
 }
 
@@ -113,9 +116,11 @@ describe('desktop agent directory bootstrap', () => {
     const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
     const globalStateStore = await JsonStore.open(
       join(userDataPath, 'state', 'global.json'),
+      { corruptionPolicy: 'fail' },
     );
     const workspaceStateStore = await JsonStore.open(
       join(storage.getStoragePath(), 'state.json'),
+      { corruptionPolicy: 'fail' },
     );
 
     initPlatform({

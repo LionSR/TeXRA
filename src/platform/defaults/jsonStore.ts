@@ -4,11 +4,9 @@ import { dirname, resolve } from 'node:path';
 import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
-import * as logger from '@logger/logUtils';
 
 import type { StateStore } from '../interfaces';
 
-const CHANNEL = 'JsonStore';
 const LOCK_STALE_MS = 10_000;
 const LOCK_RETRY_OPTIONS = {
   retries: 120,
@@ -21,6 +19,13 @@ type JsonRecord = Record<string, unknown>;
 
 export interface JsonStoreOptions {
   /**
+   * Determines how a present file containing malformed or non-object JSON is
+   * handled. The current contract permits only `fail`; a recovery policy must
+   * define how the original bytes are preserved and how recovery is reported
+   * before this type is widened.
+   */
+  corruptionPolicy: 'fail';
+  /**
    * POSIX mode for the store file (e.g. `0o600` to restrict a secrets file
    * to its owner). The containing directory is created/chmod'd with the
    * same owner permissions plus execute — `0o600` -> `0o700` — so it stays
@@ -32,16 +37,6 @@ export interface JsonStoreOptions {
    * `JsonStore` behavior.
    */
   mode?: number;
-  /**
-   * When true, malformed JSON is a hard failure (rethrown) instead of being
-   * silently treated as an empty store. Callers that overwrite the whole
-   * file on every write (read-mutate-write, e.g. `CliSecrets`) need this:
-   * defaulting a transient parse failure to `{}` would permanently wipe
-   * every other stored value on the very next write. Defaults to false,
-   * preserving the self-healing behavior existing state/config stores rely
-   * on.
-   */
-  strict?: boolean;
 }
 
 /** `0o600` -> `0o700`: adds owner-execute wherever owner-read is set. */
@@ -51,25 +46,17 @@ function dirModeFor(fileMode: number): number {
 
 async function readJsonRecord(
   filePath: string,
-  strict: boolean,
-  fallback: JsonRecord = {},
+  missingFallback: JsonRecord = {},
 ): Promise<JsonRecord> {
   try {
     const content = await readFile(filePath, 'utf8');
     const parsed: unknown = JSON.parse(content);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as JsonRecord)
-      : { ...fallback };
-  } catch (error) {
-    if (isFileNotFoundError(error)) return { ...fallback };
-    if (error instanceof SyntaxError && !strict) {
-      logger.warn(
-        CHANNEL,
-        `Discarding unreadable ${filePath}; using the fallback snapshot.`,
-        { data: error },
-      );
-      return { ...fallback };
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as JsonRecord;
     }
+    throw new TypeError(`Expected ${filePath} to contain a JSON object.`);
+  } catch (error) {
+    if (isFileNotFoundError(error)) return { ...missingFallback };
     throw error;
   }
 }
@@ -115,14 +102,10 @@ export class JsonStore implements StateStore {
    */
   static async open(
     filePath: string,
-    options: JsonStoreOptions = {},
+    options: JsonStoreOptions,
   ): Promise<JsonStore> {
     const storePath = resolve(filePath);
-    return new JsonStore(
-      storePath,
-      await readJsonRecord(storePath, options.strict ?? false),
-      options,
-    );
+    return new JsonStore(storePath, await readJsonRecord(storePath), options);
   }
 
   get<T>(key: string, defaultValue?: T): T {
@@ -162,9 +145,9 @@ export class JsonStore implements StateStore {
   private enqueueFlush(
     key: string,
     value: unknown,
-    fallback: JsonRecord,
+    missingFallback: JsonRecord,
   ): Promise<void> {
-    const flush = () => this.flush(key, value, fallback);
+    const flush = () => this.flush(key, value, missingFallback);
     const chain = writeChains.get(this.filePath) ?? Promise.resolve();
     const next = chain.then(flush, flush);
     writeChains.set(this.filePath, next);
@@ -180,7 +163,7 @@ export class JsonStore implements StateStore {
   private async flush(
     key: string,
     value: unknown,
-    fallback: JsonRecord,
+    missingFallback: JsonRecord,
   ): Promise<void> {
     await ensureDir(dirname(this.filePath), this.options.mode);
     const { lock } = await import('proper-lockfile');
@@ -190,11 +173,7 @@ export class JsonStore implements StateStore {
       retries: LOCK_RETRY_OPTIONS,
     });
     try {
-      const record = await readJsonRecord(
-        this.filePath,
-        this.options.strict ?? false,
-        fallback,
-      );
+      const record = await readJsonRecord(this.filePath, missingFallback);
       if (value === undefined) {
         delete record[key];
       } else {
