@@ -24,8 +24,12 @@ export async function createCliStateStores(
     workspacePath: init.workspacePath,
   });
   const [globalStore, workspaceStore] = await Promise.all([
-    JsonStore.open(path.join(storage.getGlobalStoragePath(), 'state.json')),
-    JsonStore.open(path.join(storage.getStoragePath(), 'state.json')),
+    JsonStore.open(path.join(storage.getGlobalStoragePath(), 'state.json'), {
+      corruptionPolicy: 'fail',
+    }),
+    JsonStore.open(path.join(storage.getStoragePath(), 'state.json'), {
+      corruptionPolicy: 'fail',
+    }),
   ]);
 
   return {

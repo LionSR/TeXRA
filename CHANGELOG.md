@@ -24,6 +24,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Corrupt local state is preserved for recovery** — malformed CLI and desktop
+  state, settings, credentials, and stream snapshots now fail visibly instead
+  of being treated as empty data and overwritten by the next update.
 - **Incomplete teams are decided before roster changes** — TeXRA now offers
   sign-in, explicit partial-team continuation, or cancellation before applying
   or launching a team whose TeXRA-hosted members are unavailable.

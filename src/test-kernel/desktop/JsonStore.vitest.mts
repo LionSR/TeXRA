@@ -31,13 +31,13 @@ interface JsonStore {
 }
 
 interface JsonStoreOptions {
+  corruptionPolicy: 'fail';
   mode?: number;
-  strict?: boolean;
 }
 
 interface JsonStoreModule {
   JsonStore: {
-    open(filePath: string, options?: JsonStoreOptions): Promise<JsonStore>;
+    open(filePath: string, options: JsonStoreOptions): Promise<JsonStore>;
   };
 }
 
@@ -66,28 +66,31 @@ describe('shared JsonStore', () => {
     return filePath;
   }
 
-  it('recovers from malformed JSON stores and overwrites on the next write', async () => {
+  it('fails on malformed JSON without changing the original bytes', async () => {
     const JsonStore = await loadJsonStore();
-    const filePath = await createTempFile('state.json', '{"truncated"');
-
-    const store = await JsonStore.open(filePath);
-
-    expect(store.snapshot()).toEqual({});
-
-    await store.set('ready', true);
-
-    expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual({
-      ready: true,
-    });
-  });
-
-  it('rethrows malformed JSON instead of discarding it when opened with strict: true', async () => {
-    const JsonStore = await loadJsonStore();
-    const filePath = await createTempFile('state.json', '{"truncated"');
+    const original = '{"truncated"';
+    const filePath = await createTempFile('state.json', original);
 
     await expect(
-      JsonStore.open(filePath, { strict: true }),
+      JsonStore.open(filePath, { corruptionPolicy: 'fail' }),
     ).rejects.toBeInstanceOf(SyntaxError);
+    expect(await readFile(filePath, 'utf8')).toBe(original);
+  });
+
+  it.each([
+    ['array', '[]'],
+    ['null', 'null'],
+    ['string', '"text"'],
+    ['number', '42'],
+    ['boolean', 'true'],
+  ])('treats valid non-object JSON (%s) as corruption', async (_, content) => {
+    const JsonStore = await loadJsonStore();
+    const filePath = await createTempFile('state.json', content);
+
+    await expect(
+      JsonStore.open(filePath, { corruptionPolicy: 'fail' }),
+    ).rejects.toThrow('to contain a JSON object');
+    expect(await readFile(filePath, 'utf8')).toBe(content);
   });
 
   it('merges with a concurrent writer instead of flushing a stale open-time snapshot', async () => {
@@ -97,7 +100,9 @@ describe('shared JsonStore', () => {
       '{"keep": 1, "drop": 1}\n',
     );
 
-    const store = await JsonStore.open(filePath);
+    const store = await JsonStore.open(filePath, {
+      corruptionPolicy: 'fail',
+    });
     // Simulate another process persisting a key while this store sits open
     // (e.g. across an awaited network fetch).
     await writeFile(filePath, '{"keep": 1, "drop": 1, "foreign": 2}\n');
@@ -110,12 +115,28 @@ describe('shared JsonStore', () => {
     });
   });
 
-  it('preserves its snapshot when a non-strict flush cannot reread the file', async () => {
+  it('rejects a mutation when the file becomes corrupt and preserves its bytes', async () => {
     const JsonStore = await loadJsonStore();
     const filePath = await createTempFile('state.json', '{"keep": 1}\n');
-    const store = await JsonStore.open(filePath);
+    const store = await JsonStore.open(filePath, {
+      corruptionPolicy: 'fail',
+    });
 
-    await writeFile(filePath, '{"truncated"');
+    const corrupt = '{"truncated"';
+    await writeFile(filePath, corrupt);
+
+    await expect(store.set('added', 2)).rejects.toBeInstanceOf(SyntaxError);
+    expect(await readFile(filePath, 'utf8')).toBe(corrupt);
+  });
+
+  it('preserves loaded keys when the backing file disappears before a mutation', async () => {
+    const JsonStore = await loadJsonStore();
+    const filePath = await createTempFile('state.json', '{"keep": 1}\n');
+    const store = await JsonStore.open(filePath, {
+      corruptionPolicy: 'fail',
+    });
+
+    await rm(filePath);
     await store.set('added', 2);
 
     expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual({
@@ -129,8 +150,8 @@ describe('shared JsonStore', () => {
     const filePath = await createTempFile('state.json', '{}\n');
 
     const [a, b] = await Promise.all([
-      JsonStore.open(filePath),
-      JsonStore.open(filePath),
+      JsonStore.open(filePath, { corruptionPolicy: 'fail' }),
+      JsonStore.open(filePath, { corruptionPolicy: 'fail' }),
     ]);
     // Both instances opened off the same on-disk snapshot; without per-path
     // read-modify-write serialization the later flush drops the other's key.
@@ -186,7 +207,7 @@ describe('shared JsonStore', () => {
     const script = `
       (async () => {
         const { JsonStore } = require(${JSON.stringify(bundlePath)});
-        const store = await JsonStore.open(${JSON.stringify(filePath)});
+        const store = await JsonStore.open(${JSON.stringify(filePath)}, { corruptionPolicy: 'fail' });
         console.log('ready');
         await store.set('child', 2);
       })().catch((error) => {
@@ -239,7 +260,10 @@ describe('shared JsonStore', () => {
     await chmod(tempDir, 0o500);
 
     try {
-      const store = await JsonStore.open(filePath, { mode: 0o600 });
+      const store = await JsonStore.open(filePath, {
+        corruptionPolicy: 'fail',
+        mode: 0o600,
+      });
 
       expect(store.get('key', 'fallback')).toBe('fallback');
       await expect(stat(dir)).rejects.toMatchObject({ code: 'ENOENT' });
@@ -260,7 +284,10 @@ describe('shared JsonStore', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'texra-json-store-'));
     const filePath = join(tempDir, 'nested', 'secrets.json');
 
-    const store = await JsonStore.open(filePath, { mode: 0o600 });
+    const store = await JsonStore.open(filePath, {
+      corruptionPolicy: 'fail',
+      mode: 0o600,
+    });
     await store.set('key', 'value');
 
     const fileStat = await stat(filePath);
