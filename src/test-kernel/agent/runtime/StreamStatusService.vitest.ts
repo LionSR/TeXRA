@@ -10,17 +10,17 @@ import {
   type StreamStatusChange,
 } from '@agent/runtime/StreamStatusService';
 import {
-  canTransitionStreamPhase,
-  STREAM_TRANSITION_CAUSE,
-  type StreamTransitionCause,
-} from '@common/constants/streamStatus';
-import {
   STREAM_PHASE,
   STREAM_STATUS,
   STREAM_SUBSTATE,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import {
+  canTransitionStreamPhase,
+  STREAM_TRANSITION_CAUSE,
+  type StreamTransitionCause,
+} from '@shared/streams/streamStatus';
 
 import {
   recordSessionEvents,

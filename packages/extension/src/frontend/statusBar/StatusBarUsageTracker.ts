@@ -1,10 +1,10 @@
 // Local imports - stream state
-import { isActivePhase, isInFlightPhase } from '@common/constants/streamStatus';
 import {
   DEFAULT_STREAM_METADATA_STATUS,
   type StreamLifecycleStatus,
   type StreamPhase,
 } from '@shared/schemas';
+import { isActivePhase, isInFlightPhase } from '@shared/streams/streamStatus';
 import type { TokenUsageStats } from '@shared/schemas/usage';
 
 export interface StatusBarUsageTotals {

@@ -4,7 +4,6 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
 import { getExecutionStore } from '@agent/storage';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
@@ -13,6 +12,7 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 
 setupPlatform({ workspacePath: '/workspace' });
 

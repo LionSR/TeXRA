@@ -6,7 +6,6 @@ import {
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import { isActivePhase } from '@common/constants/streamStatus';
 import {
   type RoundStage,
   type StreamPhase,
@@ -15,6 +14,7 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import {
   clamp,
   filterNotNullish,

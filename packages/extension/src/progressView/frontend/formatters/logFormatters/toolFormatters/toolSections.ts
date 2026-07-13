@@ -39,7 +39,7 @@ import {
 } from '@shared/schemas/codex';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
-import { toolDisplayKind } from '@tools/toolKind';
+import { toolDisplayKind } from '@shared/tools/toolKind';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
 import type { TextEditorInput } from '@tools/TextEditorTool';

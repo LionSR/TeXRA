@@ -21,10 +21,6 @@ import {
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import {
-  STREAM_TRANSITION_CAUSE,
-  type StreamTransitionCause,
-} from '@common/constants/streamStatus';
-import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type ExecutionId,
@@ -32,6 +28,10 @@ import {
   type StreamTabId,
   type UpdateStreamStatusPayload,
 } from '@shared/schemas';
+import {
+  STREAM_TRANSITION_CAUSE,
+  type StreamTransitionCause,
+} from '@shared/streams/streamStatus';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const streamId = 'stream:cli-session-projection' as StreamTabId;

@@ -12,7 +12,6 @@ import type {
 } from '@agent/runtime/SessionEventHub';
 
 // Local imports - shared schemas
-import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
 import {
   STREAM_PHASE,
   type ActiveChildInfo,
@@ -21,6 +20,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { assertNever } from '@utils/core';
 
 // Local imports - CLI runtime

@@ -14,9 +14,6 @@ import {
 } from '@agent/runtime/SessionHandle';
 
 // Local imports - constants
-import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
-
-// Local imports - shared schemas
 import {
   STREAM_PHASE,
   type ExecutionId,
@@ -24,6 +21,9 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+
+// Local imports - shared schemas
 
 interface ReboundAgentBinding {
   readonly streamId: StreamTabId;
