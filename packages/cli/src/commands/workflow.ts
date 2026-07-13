@@ -5,11 +5,7 @@ import {
 } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
-  EXECUTION_STATUS,
-  RUN_OUTCOME,
-  executionStatusToRunOutcome,
-} from '@shared/schemas';
+import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -39,7 +35,10 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { executeCliConfig } from '../runtime/runExecution';
-import { terminalStatusExitCode } from '../runtime/terminalStatus';
+import {
+  serializeCliRunResult,
+  runOutcomeExitCode,
+} from '../runtime/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
   withExpandedRunInputs,
@@ -124,9 +123,7 @@ export async function runWorkflowAgent(
       });
       if (!execution.ok) return execution.exitCode;
 
-      const { executionId, result, terminalStatus } = execution;
-      const outcome =
-        executionStatusToRunOutcome(terminalStatus) ?? result.outcome;
+      const { executionId, result } = execution;
       let workflowResult: CliWorkflowRunResult;
       try {
         workflowResult = await resolveWorkflowOutput(
@@ -138,13 +135,12 @@ export async function runWorkflowAgent(
             expectedOutputFiles: init.outputDir
               ? expectedOutputFilesForOutputDir(agent, inputFiles)
               : undefined,
-            terminalStatus,
           },
         );
         await persistWorkflowResultMeta(
           executionId,
           buildCliWorkflowResultMeta(result, {
-            outcome,
+            outcome: result.outcome,
             copiedOutput: workflowResult.copiedOutput,
             copiedOutputs: workflowResult.copiedOutputs,
           }),
@@ -154,12 +150,12 @@ export async function runWorkflowAgent(
           executionId,
           buildCliWorkflowResultMeta(result, {
             outcome:
-              terminalStatus === EXECUTION_STATUS.INTERRUPTED
-                ? outcome
+              result.outcome === RUN_OUTCOME.CANCELLED
+                ? result.outcome
                 : RUN_OUTCOME.FAILED,
           }),
         );
-        if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+        if (result.outcome === RUN_OUTCOME.CANCELLED) {
           writeErrorStderr(error);
           return CliExitCode.Interrupted;
         }
@@ -169,13 +165,14 @@ export async function runWorkflowAgent(
         return CliExitCode.AgentError;
       }
 
+      const displayResult = serializeCliRunResult(workflowResult);
       emitCliResult(runContext, {
-        json: workflowResult,
-        ndjson: { kind: 'result', result: workflowResult },
+        json: displayResult,
+        ndjson: { kind: 'result', result: displayResult },
         text: formatWorkflowTextResult(workflowResult),
       });
 
-      return terminalStatusExitCode(terminalStatus, runContext);
+      return runOutcomeExitCode(result.outcome, runContext);
     },
   );
 }
