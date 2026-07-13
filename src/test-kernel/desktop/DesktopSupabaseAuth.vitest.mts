@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -159,6 +159,12 @@ function installAuthenticatedSupabaseProvider() {
 }
 
 describe('desktop Supabase auth', () => {
+  beforeEach(() => {
+    vi.spyOn(
+      agentRegistry,
+      'invalidateRemoteAgentsAfterSignOut',
+    ).mockResolvedValue(undefined);
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     SupabaseClient.resetForTests();
@@ -276,6 +282,65 @@ describe('desktop Supabase auth', () => {
 
     expect(await SupabaseClient.isAuthenticated()).toBe(false);
     auth.dispose();
+  });
+
+  it('waits for the matching callback before completing sign-in', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const oauthClient = createOAuthClient();
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient,
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+    });
+
+    let completed = false;
+    const completion = auth
+      .signInAndWaitForSession(undefined, { timeoutMs: 1_000 })
+      .then((result) => {
+        completed = true;
+        return result;
+      });
+    await vi.waitFor(() =>
+      expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalled(),
+    );
+    expect(completed).toBe(false);
+
+    router.routeUrl(
+      authCallbackUrl({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        nonce: nonceFor(oauthClient),
+      }),
+    );
+
+    await expect(completion).resolves.toBe(true);
+    expect(coordinator.storeSession).toHaveBeenCalledOnce();
+    auth.dispose();
+  });
+
+  it('cancels a waiting sign-in when its window auth is disposed', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const oauthClient = createOAuthClient();
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator: createCoordinator(),
+      oauthClient,
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+    });
+    const completion = auth.signInAndWaitForSession(undefined, {
+      timeoutMs: 1_000,
+    });
+    await vi.waitFor(() =>
+      expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalled(),
+    );
+
+    auth.dispose();
+
+    await expect(completion).resolves.toBe(false);
   });
 
   it('rejects a foreign callback whose nonce does not match the pending sign-in (login-CSRF)', async () => {
@@ -477,6 +542,40 @@ describe('desktop Supabase auth', () => {
     }
   });
 
+  it('finishes expired-state cleanup before persisting a newer attempt', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
+      const stateStore = createStateStore();
+      const initialState = createDesktopAuthCallbackState(stateStore);
+      await initialState.beginAuthAttempt('expired-nonce');
+      vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+
+      const cleanup = createDeferred<void>();
+      const update = stateStore.update.bind(stateStore);
+      vi.spyOn(stateStore, 'update').mockImplementationOnce(
+        async (key, value) => {
+          await cleanup.promise;
+          await update(key, value);
+        },
+      );
+
+      const recreatedState = createDesktopAuthCallbackState(stateStore);
+      const beginNewAttempt = recreatedState.beginAuthAttempt('new-nonce');
+      await vi.waitFor(() => {
+        expect(stateStore.update).toHaveBeenCalledOnce();
+      });
+
+      cleanup.resolve();
+      await beginNewAttempt;
+
+      const persistedState = createDesktopAuthCallbackState(stateStore);
+      expect(persistedState.matchesPendingNonce('new-nonce')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('cancels pending callback state on sign-out', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
@@ -541,15 +640,15 @@ describe('desktop Supabase auth', () => {
 
     await vi.waitFor(() => {
       expect(coordinator.createSessionFromCallback).toHaveBeenCalledTimes(1);
+      expect(coordinator.storeSession).toHaveBeenCalledTimes(1);
     });
-    expect(coordinator.storeSession).toHaveBeenCalledTimes(1);
     expect(log.debug).toHaveBeenCalledWith(
       'Desktop auth callback ignored because no sign-in is in progress',
     );
     auth.dispose();
   });
 
-  it('does not clear a newer sign-in while a claimed callback finishes', async () => {
+  it('does not store a superseded callback or clear the newer sign-in', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
     const callbackState = createDesktopAuthCallbackState();
@@ -583,10 +682,243 @@ describe('desktop Supabase auth', () => {
     await auth.signIn();
     callbackProcessing.resolve();
 
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(coordinator.storeSession).not.toHaveBeenCalled();
+    expect(callbackState.hasPendingSignIn()).toBe(true);
+    auth.dispose();
+  });
+
+  it('removes a callback session when sign-out begins during storage', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const oauthClient = createOAuthClient();
+    const sessionStorage = createDeferred<void>();
+    const storeSession = coordinator.storeSession.getMockImplementation();
+    coordinator.storeSession.mockImplementationOnce(async (session) => {
+      await sessionStorage.promise;
+      await storeSession?.(session);
+    });
+    const onSessionChanged = vi.fn(async () => {});
+    const showInfoMessage = vi.fn(async () => {});
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient,
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      onSessionChanged,
+      showInfoMessage,
+    });
+
+    await auth.signIn();
+    router.routeUrl(
+      authCallbackUrl({
+        accessToken: 'stale-access-token',
+        refreshToken: 'stale-refresh-token',
+        nonce: nonceFor(oauthClient),
+      }),
+    );
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledOnce();
     });
+
+    const signOut = auth.signOut();
+    sessionStorage.resolve();
+    await signOut;
+
+    expect(await coordinator.loadSession()).toBeNull();
+    expect(showInfoMessage).not.toHaveBeenCalledWith(
+      'Signed in as user@example.com',
+    );
+    expect(onSessionChanged).toHaveBeenCalledOnce();
+    auth.dispose();
+  });
+
+  it('removes a stored callback before starting a newer sign-in', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const callbackState = createDesktopAuthCallbackState();
+    const oauthClient = createOAuthClient();
+    const sessionStorage = createDeferred<void>();
+    const storeSession = coordinator.storeSession.getMockImplementation();
+    coordinator.storeSession.mockImplementationOnce(async (session) => {
+      await sessionStorage.promise;
+      await storeSession?.(session);
+    });
+    const onSessionChanged = vi.fn(async () => {});
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient,
+      callbackState,
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      onSessionChanged,
+    });
+
+    await auth.signIn();
+    router.routeUrl(
+      authCallbackUrl({
+        accessToken: 'stale-access-token',
+        refreshToken: 'stale-refresh-token',
+        nonce: nonceFor(oauthClient),
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(coordinator.storeSession).toHaveBeenCalledOnce();
+    });
+
+    const newerSignIn = auth.signIn();
+    expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalledOnce();
+    sessionStorage.resolve();
+    await newerSignIn;
+
+    expect(coordinator.clearSession).toHaveBeenCalledOnce();
+    expect(await coordinator.loadSession()).toBeNull();
+    expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalledTimes(2);
     expect(callbackState.hasPendingSignIn()).toBe(true);
+    expect(onSessionChanged).not.toHaveBeenCalled();
+
+    router.routeUrl(
+      authCallbackUrl({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+        nonce: nonceFor(oauthClient),
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(coordinator.storeSession).toHaveBeenCalledTimes(2);
+      expect(onSessionChanged).toHaveBeenCalledOnce();
+    });
+
+    expect(coordinator.clearSession).toHaveBeenCalledOnce();
+    expect(await coordinator.loadSession()).toMatchObject({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+    });
+    auth.dispose();
+  });
+
+  it.each(['signIn', 'dispose'] as const)(
+    'removes a callback session when %s invalidates it during session refresh',
+    async (action) => {
+      const router = createDesktopProtocolCallbackRouter();
+      const coordinator = createCoordinator();
+      const oauthClient = createOAuthClient();
+      const sessionRefresh = createDeferred<void>();
+      const onSessionChanged = vi.fn(async () => {
+        await sessionRefresh.promise;
+      });
+      const auth = createDesktopSupabaseAuth({
+        router,
+        coordinator,
+        oauthClient,
+        secrets: createSecrets(),
+        openExternalUrl: vi.fn(async () => {}),
+        onSessionChanged,
+      });
+
+      await auth.signIn();
+      router.routeUrl(
+        authCallbackUrl({
+          accessToken: 'stale-access-token',
+          refreshToken: 'stale-refresh-token',
+          nonce: nonceFor(oauthClient),
+        }),
+      );
+      await vi.waitFor(() => {
+        expect(onSessionChanged).toHaveBeenCalledOnce();
+      });
+
+      const newerSignIn = action === 'signIn' ? auth.signIn() : undefined;
+      if (action === 'dispose') auth.dispose();
+      sessionRefresh.resolve();
+      await newerSignIn;
+      await vi.waitFor(() => {
+        expect(coordinator.clearSession).toHaveBeenCalledOnce();
+      });
+
+      expect(await coordinator.loadSession()).toBeNull();
+      if (action === 'signIn') {
+        expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalledTimes(2);
+        auth.dispose();
+      }
+    },
+  );
+
+  it.each(['signOut', 'dispose'] as const)(
+    'does not store a claimed callback after %s',
+    async (action) => {
+      const router = createDesktopProtocolCallbackRouter();
+      const coordinator = createCoordinator();
+      const oauthClient = createOAuthClient();
+      const callbackProcessing = createDeferred<void>();
+      coordinator.createSessionFromCallback.mockImplementationOnce(async () => {
+        await callbackProcessing.promise;
+        return callbackSessionResult();
+      });
+      const auth = createDesktopSupabaseAuth({
+        router,
+        coordinator,
+        oauthClient,
+        secrets: createSecrets(),
+        openExternalUrl: vi.fn(async () => {}),
+      });
+
+      await auth.signIn();
+      router.routeUrl(
+        authCallbackUrl({
+          accessToken: 'access-token',
+          refreshToken: 'refresh-token',
+          nonce: nonceFor(oauthClient),
+        }),
+      );
+      await vi.waitFor(() => {
+        expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
+      });
+
+      if (action === 'signOut') await auth.signOut();
+      else auth.dispose();
+      callbackProcessing.resolve();
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(coordinator.storeSession).not.toHaveBeenCalled();
+      if (action === 'signOut') auth.dispose();
+    },
+  );
+
+  it('keeps a newer attempt valid beyond a superseded waiter timeout', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const oauthClient = createOAuthClient();
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient,
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+    });
+
+    const first = auth.signInAndWaitForSession(undefined, { timeoutMs: 10 });
+    await vi.waitFor(() => {
+      expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalledOnce();
+    });
+    const second = auth.signInAndWaitForSession(undefined, {
+      timeoutMs: 1_000,
+    });
+    await expect(first).resolves.toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    router.routeUrl(
+      authCallbackUrl({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+        nonce: nonceFor(oauthClient),
+      }),
+    );
+
+    await expect(second).resolves.toBe(true);
+    expect(coordinator.storeSession).toHaveBeenCalledOnce();
     auth.dispose();
   });
 
@@ -647,6 +979,36 @@ describe('desktop Supabase auth', () => {
 
     expect(coordinator.clearSession).toHaveBeenCalled();
     expect(clearAllCaches).toHaveBeenCalledOnce();
+    expect(
+      agentRegistry.invalidateRemoteAgentsAfterSignOut,
+    ).toHaveBeenCalledOnce();
+    auth.dispose();
+  });
+
+  it('still publishes sign-out when the local catalog rebuild fails', async () => {
+    vi.mocked(
+      agentRegistry.invalidateRemoteAgentsAfterSignOut,
+    ).mockRejectedValueOnce(new Error('local rebuild failed'));
+    const coordinator = createCoordinator();
+    const onSessionChanged = vi.fn(async () => {});
+    const log = createLog();
+    const auth = createDesktopSupabaseAuth({
+      router: createDesktopProtocolCallbackRouter(),
+      coordinator,
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      onSessionChanged,
+      log,
+    });
+
+    await expect(auth.signOut()).resolves.toBeUndefined();
+
+    expect(coordinator.clearSession).toHaveBeenCalledOnce();
+    expect(onSessionChanged).toHaveBeenCalledOnce();
+    expect(log.warn).toHaveBeenCalledWith(
+      'Local agent catalog refresh failed after sign-out: local rebuild failed',
+    );
     auth.dispose();
   });
 

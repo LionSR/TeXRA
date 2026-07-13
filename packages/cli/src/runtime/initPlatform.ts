@@ -38,6 +38,14 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 // Local imports - shared state
 import { GlobalStateKey } from '@shared/state/stateKeys';
+
+// Local imports - setup tools
+import {
+  createDefaultSetupPlatform,
+  setSetupPlatform,
+} from '@tools/setup/platform';
+
+// Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - config
@@ -49,7 +57,11 @@ import { isCliResumeInFlight, tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { flushNdjsonStdout, writeTextStderr } from './logSinks';
-import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
+import {
+  getCliAuthProvider,
+  initializeCliSupabaseAuth,
+  signInCliSupabase,
+} from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 
@@ -336,6 +348,18 @@ export async function initCliPlatform(
     );
     serverSideKeysInitialized = true;
   }
+
+  const defaultSetupPlatform = createDefaultSetupPlatform();
+  setSetupPlatform({
+    ...defaultSetupPlatform,
+    auth: {
+      ...defaultSetupPlatform.auth,
+      signIn: async () => {
+        await signInCliSupabase({ openBrowser: true });
+        return getCliAuthProvider().canAccessRemoteAgentCatalog();
+      },
+    },
+  });
 
   const useOpenRouter = getUseOpenRouter();
   if (context.apiMode === 'included' && useOpenRouter) {

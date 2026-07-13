@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
 import {
   createKey,
   getAgent,
@@ -26,13 +27,13 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
 import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
-import { REMOTE_ORCHESTRATOR_AGENT_NAMES } from '@shared/constants/agents';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -43,10 +44,6 @@ import type { SettingsAgentDirectoryController } from '@controllers/settingsView
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
-
-const REMOTE_TEAM_AGENT_NAMES = new Set<string>(
-  REMOTE_ORCHESTRATOR_AGENT_NAMES,
-);
 
 /**
  * Agent selection, directory, and team handler delegate.
@@ -67,6 +64,7 @@ export class AgentHandlers {
     private readonly ctx: SettingsHandlerContext,
     private readonly refreshAfterAgentMutation: (
       selectedToolUseAgent?: string,
+      agentCatalogAlreadyFresh?: boolean,
     ) => Promise<void>,
   ) {
     const controllers = createSettingsAgentControllers({
@@ -425,65 +423,57 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
   ): Promise<void> {
     try {
-      await loadAgents();
-      let result = await this.catalogController.applyPreset(data.presetId);
-      if (!result.ok) {
+      const result = await withAgentCatalogAuthRefreshDeferred(() =>
+        applyTeamRosterWithPreflight(data.presetId, {
+          catalog: this.catalogController,
+          loadLocalCatalog: () => loadAgents({ includeRemote: false }),
+          canAccessRemoteCatalog: () =>
+            SupabaseClient.canAccessRemoteAgentCatalog(),
+          choose: async (preset, unavailableNames) => {
+            const choice = await vscode.window.showInformationMessage(
+              `The "${preset.name}" team includes TeXRA-hosted members that are unavailable: ${unavailableNames.join(', ')}.`,
+              { modal: true },
+              'Sign in to TeXRA',
+              'Continue with available members',
+            );
+            if (choice === 'Sign in to TeXRA') return 'sign-in';
+            if (choice === 'Continue with available members') return 'continue';
+            return 'cancel';
+          },
+          signIn: async () =>
+            (await vscode.commands.executeCommand<boolean>(
+              AUTH_COMMANDS.SIGN_IN,
+            )) === true,
+          forceRefreshRemoteCatalog: () =>
+            refreshAgents({ includeRemote: true }),
+        }),
+      );
+
+      if (result.status === 'unknown') {
         await showLoggedMessage(
           this.ctx.channel,
           `Unknown team: ${data.presetId}`,
         );
         return;
       }
-
-      const unresolvedRemoteAgents = result.unresolvedNames.filter((name) =>
-        REMOTE_TEAM_AGENT_NAMES.has(name),
-      );
-      if (
-        unresolvedRemoteAgents.length > 0 &&
-        !(await SupabaseClient.isAuthenticated())
-      ) {
-        const count = unresolvedRemoteAgents.length;
-        const choice = await vscode.window.showInformationMessage(
-          `The "${result.preset.name}" team includes ${count} ${count === 1 ? 'member' : 'members'} provided through Researcher Access. Sign in to make the full team available.`,
-          'Sign in',
-          'Use available members',
+      if (result.status === 'choice-required') return;
+      if (result.status === 'cancelled') return;
+      if (result.status === 'unavailable') {
+        await showLoggedMessage(
+          this.ctx.channel,
+          `The "${result.preset.name}" team is unavailable because these TeXRA-hosted members could not be loaded: ${result.unavailableNames.join(', ')}.`,
         );
-        if (choice === 'Sign in') {
-          const signedIn = await vscode.commands.executeCommand<boolean>(
-            AUTH_COMMANDS.SIGN_IN,
-          );
-          if (signedIn) {
-            // A signed-out startup may already have completed an empty remote
-            // load, so a normal cached load would not discover the newly
-            // authorized agents.
-            await refreshAgents({ includeRemote: true });
-            const reapplied = await this.catalogController.applyPreset(
-              data.presetId,
-            );
-            if (!reapplied.ok) {
-              await this.refreshAfterAgentMutation(
-                this.catalogController.getPresetToolUseRoot(
-                  result.preset.toolUseAgents,
-                ),
-              );
-              await showLoggedMessage(
-                this.ctx.channel,
-                `Team no longer exists: ${data.presetId}`,
-              );
-              return;
-            }
-            result = reapplied;
-          }
-        }
+        return;
       }
 
       await this.refreshAfterAgentMutation(
         this.catalogController.getPresetToolUseRoot(
           result.preset.toolUseAgents,
         ),
+        true,
       );
 
-      const unresolvedCount = result.unresolvedNames.length;
+      const unresolvedCount = result.resolution.unresolvedNames.length;
       void vscode.window.showInformationMessage(
         unresolvedCount === 0
           ? `Applied "${result.preset.name}" team`

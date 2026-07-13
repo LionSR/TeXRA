@@ -93,6 +93,7 @@ function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
     icon: 'symbol-operator',
     workflowAgents: ['criticize'],
     toolUseAgents: ['orchestrator', 'review'],
+    texraHostedAgents: ['orchestrator'],
     source: 'built-in',
     ...overrides,
   };
@@ -623,6 +624,18 @@ describe('CLI orchestration items', () => {
         ],
       }),
     );
+  });
+
+  it('keeps sign-in-remediable teams actionable while signed out', () => {
+    const items = buildCliTeamItems(
+      [presetPlan({ id: 'physicist', name: 'Physicist' })],
+      { includeLoginHint: true, remoteAgentCatalogAvailable: false },
+    );
+
+    expect(items[0]).toMatchObject({
+      value: { kind: 'preset', preset: 'physicist' },
+      disabled: false,
+    });
   });
 
   it('dedupes launcher footer hints from unavailable teams', () => {

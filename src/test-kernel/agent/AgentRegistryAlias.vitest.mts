@@ -12,30 +12,37 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import * as logger from '@logger/logUtils';
 import {
   computeAgentOptionsData,
   getAgent,
+  getAgentsBySource,
   getVisibleAgent,
   getVisibleAgents,
   isAgentRegistryReady,
+  invalidateRemoteAgentsAfterSignOut,
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
 
+const listRemoteAgents = vi.hoisted(() =>
+  vi.fn(async () => [
+    {
+      id: 'remote-orchestrator',
+      name: 'orchestrator',
+      description: 'Remote team root',
+      visibility: ['researcher'],
+      tools: ['delegate_agent'],
+      agentCategory: 'toolUse',
+    },
+  ]),
+);
+
 vi.mock('@agent/remote/RemoteAgentLoader', () => ({
   RemoteAgentLoader: {
-    listRemoteAgents: vi.fn(async () => [
-      {
-        id: 'remote-orchestrator',
-        name: 'orchestrator',
-        description: 'Remote team root',
-        visibility: ['researcher'],
-        tools: ['delegate_agent'],
-        agentCategory: 'toolUse',
-      },
-    ]),
+    listRemoteAgents,
   },
 }));
 
@@ -70,6 +77,17 @@ const mutableAgentDirectories: AgentDirectoriesPort = {
   builtIn: () => activeAgentDirectories.builtIn(),
   builtInToolUse: () => activeAgentDirectories.builtInToolUse(),
 };
+
+function createDeferred<T = void>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 
 /** Point the platform at the real bundled agent YAMLs, overriding any dir. */
 function useAgentDirectories(
@@ -157,6 +175,147 @@ describe('agent registry legacy aliases', () => {
 
     releaseBuiltInToolUseDir?.();
     await pendingRefresh;
+  });
+
+  it('forces a new remote fetch after an older initialization settles', async () => {
+    useAgentDirectories();
+    await refresh({ includeRemote: false });
+
+    let releaseStaleLoad: (() => void) | undefined;
+    const staleLoadGate = new Promise<void>((resolveLoad) => {
+      releaseStaleLoad = resolveLoad;
+    });
+    let remoteCall = 0;
+    listRemoteAgents.mockImplementation(async () => {
+      remoteCall += 1;
+      if (remoteCall === 1) {
+        await staleLoadGate;
+        return [
+          {
+            id: 'stale-agent',
+            name: 'staleAgent',
+            description: 'Stale',
+            visibility: [],
+            tools: [],
+            agentCategory: 'toolUse',
+          },
+        ];
+      }
+      return [
+        {
+          id: 'fresh-agent',
+          name: 'freshAgent',
+          description: 'Fresh',
+          visibility: [],
+          tools: [],
+          agentCategory: 'toolUse',
+        },
+      ];
+    });
+
+    const staleInitialization = loadAgents({ includeRemote: true });
+    await vi.waitFor(() => expect(listRemoteAgents).toHaveBeenCalledOnce());
+    const forcedRefresh = refresh({ includeRemote: true });
+
+    releaseStaleLoad?.();
+    await staleInitialization;
+    await forcedRefresh;
+
+    expect(listRemoteAgents).toHaveBeenCalledTimes(2);
+    expect(getAgent('freshAgent')?.source).toBe('remote');
+    expect(getAgent('staleAgent')).toBeUndefined();
+
+    listRemoteAgents.mockReset();
+    listRemoteAgents.mockResolvedValue([
+      {
+        id: 'remote-orchestrator',
+        name: 'orchestrator',
+        description: 'Remote team root',
+        visibility: ['researcher'],
+        tools: ['delegate_agent'],
+        agentCategory: 'toolUse',
+      },
+    ]);
+    await refresh({ includeRemote: false });
+  });
+
+  it('reloads local-only definitions after sign-out invalidation', async () => {
+    useAgentDirectories();
+    await refresh({ includeRemote: true });
+    expect(getAgentsBySource('remote')).not.toHaveLength(0);
+    const remoteFetchCount = listRemoteAgents.mock.calls.length;
+
+    await invalidateRemoteAgentsAfterSignOut();
+
+    expect(getAgentsBySource('remote')).toEqual([]);
+    expect(listRemoteAgents).toHaveBeenCalledTimes(remoteFetchCount);
+  });
+
+  it('removes remote definitions even when the local rebuild fails', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    useAgentDirectories();
+    await refresh({ includeRemote: true });
+    expect(getAgentsBySource('remote')).not.toHaveLength(0);
+    useAgentDirectories({
+      builtIn: async () => {
+        throw new Error('local catalog unavailable');
+      },
+    });
+
+    const invalidation = invalidateRemoteAgentsAfterSignOut();
+    expect(getAgentsBySource('remote')).toEqual([]);
+    await expect(invalidation).resolves.toBeUndefined();
+    expect(getAgentsBySource('remote')).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      'agentRegistry',
+      expect.stringContaining(
+        'Local agent catalog rebuild failed after sign-out',
+      ),
+    );
+
+    useAgentDirectories();
+    await refresh({ includeRemote: false });
+    warn.mockRestore();
+  });
+
+  it('fences an in-flight remote load before rebuilding locally', async () => {
+    useAgentDirectories();
+    await refresh({ includeRemote: false });
+    const remoteLoad = createDeferred<void>();
+    const localRebuild = createDeferred<void>();
+    let builtInCalls = 0;
+    useAgentDirectories({
+      builtIn: async () => {
+        builtInCalls += 1;
+        if (builtInCalls === 2) await localRebuild.promise;
+        return BUILTIN_AGENTS_DIR;
+      },
+    });
+    listRemoteAgents.mockImplementationOnce(async () => {
+      await remoteLoad.promise;
+      return [
+        {
+          id: 'late-remote',
+          name: 'lateRemote',
+          description: 'Late remote result',
+          visibility: [],
+          tools: [],
+          agentCategory: 'toolUse',
+        },
+      ];
+    });
+
+    const staleLoad = loadAgents({ includeRemote: true });
+    await vi.waitFor(() => expect(listRemoteAgents).toHaveBeenCalled());
+    const invalidation = invalidateRemoteAgentsAfterSignOut();
+    remoteLoad.resolve();
+    await staleLoad;
+
+    expect(getAgent('lateRemote')).toBeUndefined();
+    expect(getAgentsBySource('remote')).toEqual([]);
+
+    localRebuild.resolve();
+    await invalidation;
   });
 
   it('keeps the registry marked ready when a later refresh fails', async () => {

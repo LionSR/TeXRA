@@ -49,6 +49,8 @@ export const AgentModePresetSchema = z.object({
   icon: AgentModePresetIconSchema,
   workflowAgents: z.array(z.string()),
   toolUseAgents: z.array(z.string()),
+  /** Members whose definitions may be supplied by TeXRA's remote catalog. */
+  texraHostedAgents: z.array(z.string()).optional(),
 });
 
 export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
@@ -58,9 +60,10 @@ export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
     .array(z.unknown())
     .catch([])
     .parse(raw)
-    .flatMap((preset) => {
-      const result = AgentModePresetSchema.safeParse(preset);
-      return result.success ? [result.data] : [];
+    .flatMap((rawPreset) => {
+      const result = AgentModePresetSchema.safeParse(rawPreset);
+      if (!result.success) return [];
+      return [result.data];
     });
 }
 
@@ -89,6 +92,7 @@ export const STARTER_AGENT_MODE_PRESET: AgentModePreset = {
     'setup',
     'orchestrator',
   ],
+  texraHostedAgents: ['orchestrator'],
 };
 
 /**
@@ -111,6 +115,14 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'leanSimplifier',
       'leanBlueprint',
       'latexFixer',
+      'progressCheck',
+      'leanOrchestrator',
+    ],
+    texraHostedAgents: [
+      'lean',
+      'leanSearch',
+      'leanSimplifier',
+      'leanBlueprint',
       'progressCheck',
       'leanOrchestrator',
     ],
@@ -140,6 +152,17 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'progressCheck',
       'search',
     ],
+    texraHostedAgents: [
+      'generic',
+      'devise',
+      'apply',
+      'criticize',
+      'orchestrator',
+      'presenter',
+      'simplifier',
+      'progressCheck',
+      'search',
+    ],
   },
   {
     id: 'mathematician',
@@ -156,6 +179,15 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'review',
       'simplifier',
       'latexFixer',
+      'progressCheck',
+      'orchestrator',
+    ],
+    texraHostedAgents: [
+      'generic',
+      'devise',
+      'apply',
+      'lean',
+      'simplifier',
       'progressCheck',
       'orchestrator',
     ],
@@ -180,6 +212,17 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'latexFixer',
       'progressCheck',
     ],
+    texraHostedAgents: [
+      'criticize',
+      'generic',
+      'devise',
+      'apply',
+      'orchestrator',
+      'search',
+      'presenter',
+      'simplifier',
+      'progressCheck',
+    ],
   },
   {
     id: 'software-engineer',
@@ -195,6 +238,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'testEngineer',
       'codeSimplifier',
     ],
+    texraHostedAgents: [],
   },
 ];
 

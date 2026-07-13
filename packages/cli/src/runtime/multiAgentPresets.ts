@@ -1,5 +1,6 @@
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { platform } from '@platform/platform';
+import { teamHostedNamesForPreflight } from '@controllers/teams/TeamRoster';
 import {
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
   findAgentByIdentifier,
@@ -242,6 +243,15 @@ export function cliMultiAgentPlanHasGaps(
     plan.missingWorkflowAgents.length > 0 ||
     plan.missingToolUseAgents.length > 0
   );
+}
+
+/** TeXRA-hosted definitions missing from this plan, independent of models. */
+export function cliMultiAgentTexraHostedMissingNames(
+  plan: CliMultiAgentPresetRunPlan,
+): string[] {
+  const missing = [...plan.missingWorkflowAgents, ...plan.missingToolUseAgents];
+  const hosted = teamHostedNamesForPreflight(plan.preset, missing);
+  return missing.filter((name) => hosted.has(name));
 }
 
 function cliMultiAgentPlanStatus(

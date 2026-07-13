@@ -18,7 +18,9 @@ const mocks = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
   initCliPlatform: vi.fn(),
   isAuthenticated: vi.fn(),
+  canAccessRemoteAgentCatalog: vi.fn(),
   loadAgents: vi.fn(),
+  refreshAgents: vi.fn(),
   planCliMultiAgentPresets: vi.fn(),
   planCliMultiAgentPresetRun: vi.fn(),
   writeTextStderr: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock('@agent/index', () => ({
   getAgentsByCategory: mocks.getAgentsByCategory,
   getVisibleAgents: mocks.getVisibleAgents,
   loadAgents: mocks.loadAgents,
+  refresh: mocks.refreshAgents,
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -50,6 +53,7 @@ vi.mock('@cli/runtime/logSinks', () => ({
 vi.mock('@cli/runtime/supabaseAuth', () => ({
   getCliAuthProvider: () => ({
     isAuthenticated: mocks.isAuthenticated,
+    canAccessRemoteAgentCatalog: mocks.canAccessRemoteAgentCatalog,
   }),
 }));
 
@@ -198,6 +202,7 @@ describe('CLI multi-agent run command', () => {
       toolUseAgentKeys: ['builtInToolUse:orchestrator'],
     });
     mocks.isAuthenticated.mockResolvedValue(false);
+    mocks.canAccessRemoteAgentCatalog.mockResolvedValue(false);
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
       displayResult: { lastResponse: 'The proof is correct.' },
@@ -250,7 +255,7 @@ describe('CLI multi-agent run command', () => {
     const { loadCliMultiAgentRunPlan } =
       await import('@cli/runtime/multiAgentRunPlan');
     mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
-    mocks.isAuthenticated.mockResolvedValueOnce(true);
+    mocks.canAccessRemoteAgentCatalog.mockResolvedValueOnce(true);
 
     const result = await loadCliMultiAgentRunPlan({
       preset: 'mathematician',
@@ -262,15 +267,16 @@ describe('CLI multi-agent run command', () => {
       includeRemote: false,
     });
     // The second call is the remote-inclusive reload: `loadAgents()`.
-    expect(mocks.loadAgents).toHaveBeenNthCalledWith(2);
+    expect(mocks.refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
     expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(2);
   });
 
-  it('does not mark run-plan resolution when unauthenticated gaps stay local-only', async () => {
+  it('does not load remote agents for relay-token-only model authentication', async () => {
     const { loadCliMultiAgentRunPlan } =
       await import('@cli/runtime/multiAgentRunPlan');
     mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
-    mocks.isAuthenticated.mockResolvedValueOnce(false);
+    mocks.isAuthenticated.mockResolvedValueOnce(true);
+    mocks.canAccessRemoteAgentCatalog.mockResolvedValueOnce(false);
 
     const result = await loadCliMultiAgentRunPlan({
       preset: 'mathematician',
@@ -279,6 +285,8 @@ describe('CLI multi-agent run command', () => {
     expect(result.remoteAgentLoadAttempted).toBe(false);
     expect(mocks.loadAgents).toHaveBeenCalledOnce();
     expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
+    expect(mocks.refreshAgents).not.toHaveBeenCalled();
+    expect(mocks.isAuthenticated).not.toHaveBeenCalled();
     expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(1);
   });
 
@@ -286,7 +294,7 @@ describe('CLI multi-agent run command', () => {
     const { loadCliMultiAgentPresetPlanSet } =
       await import('@cli/runtime/multiAgentRunPlan');
     mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
-    mocks.isAuthenticated.mockResolvedValueOnce(true);
+    mocks.canAccessRemoteAgentCatalog.mockResolvedValueOnce(true);
 
     const result = await loadCliMultiAgentPresetPlanSet([
       {
@@ -304,7 +312,7 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
     });
-    expect(mocks.loadAgents).toHaveBeenNthCalledWith(2);
+    expect(mocks.refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
     expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(2);
   });
 
@@ -314,7 +322,7 @@ describe('CLI multi-agent run command', () => {
     mocks.cliMultiAgentPlanHasGaps
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false);
-    mocks.isAuthenticated.mockResolvedValueOnce(true);
+    mocks.canAccessRemoteAgentCatalog.mockResolvedValueOnce(true);
     const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
     const exitCode = await runMultiAgentPreset(cliContext(), {
