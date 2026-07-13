@@ -214,17 +214,12 @@ export interface SettingsViewCommandActions {
   };
 }
 
-function mapAction(
-  action: unknown,
-  project: (data: any) => readonly unknown[],
-) {
+function mapAction<TData, TArgs extends readonly unknown[]>(
+  action: HandlerOrUnsupported<TArgs>,
+  project: (data: TData) => [...TArgs],
+): ((data: TData) => Work) | Unsupported {
   if (isUnsupported(action)) return action;
-  const handler = action as (...args: readonly unknown[]) => Work;
-  return (data: SettingsViewInboundMessage) => handler(...project(data));
-}
-
-function noDataAction(action: unknown) {
-  return mapAction(action, () => [] as const);
+  return (data) => action(...project(data));
 }
 
 /**
@@ -237,14 +232,14 @@ export function createSettingsViewCommandHandlers(
   actions: SettingsViewCommandActions,
 ): SettingsViewInboundHandlerRegistry {
   return {
-    webviewReady: noDataAction(actions.lifecycle.webviewReady),
-    openVscodeSettings: noDataAction(actions.lifecycle.openVscodeSettings),
-    getMemoryData: noDataAction(actions.memory.getData),
+    webviewReady: actions.lifecycle.webviewReady,
+    openVscodeSettings: actions.lifecycle.openVscodeSettings,
+    getMemoryData: actions.memory.getData,
     getMemoryPreview: mapAction(actions.memory.getPreview, (data) => [
       data.storagePath,
     ]),
     openMemoryFile: mapAction(actions.memory.openFile, (data) => [data]),
-    openMemoryFolder: noDataAction(actions.memory.openFolder),
+    openMemoryFolder: actions.memory.openFolder,
     deleteMemory: mapAction(actions.memory.delete, (data) => [data]),
     setMemoryEnabled: mapAction(actions.memory.setEnabled, (data) => [
       data.enabled,
@@ -257,13 +252,13 @@ export function createSettingsViewCommandHandlers(
     deleteAgent: mapAction(actions.history.deleteAgent, (data) => [
       data.historyId,
     ]),
-    clearHistory: noDataAction(actions.history.clear),
+    clearHistory: actions.history.clear,
     exportChatMd: mapAction(actions.history.exportChatMd, (data) => [data]),
     exportChatTex: mapAction(actions.history.exportChatTex, (data) => [data]),
     exportChatHtml: mapAction(actions.history.exportChatHtml, (data) => [data]),
 
-    signIn: noDataAction(actions.profile.signIn),
-    signOut: noDataAction(actions.profile.signOut),
+    signIn: actions.profile.signIn,
+    signOut: actions.profile.signOut,
     setApiAccessMode: mapAction(actions.profile.setApiAccessMode, (data) => [
       data.mode,
     ]),
@@ -362,13 +357,13 @@ export function createSettingsViewCommandHandlers(
       actions.agentSelection.viewRemotePrompt,
       (data) => [data],
     ),
-    setCustomAgentDir: noDataAction(actions.agentSelection.setCustomDir),
-    resetCustomAgentDir: noDataAction(actions.agentSelection.resetCustomDir),
+    setCustomAgentDir: actions.agentSelection.setCustomDir,
+    resetCustomAgentDir: actions.agentSelection.resetCustomDir,
     applyAgentModePreset: mapAction(
       actions.agentSelection.applyModePreset,
       (data) => [data.presetId],
     ),
-    saveAgentModePreset: noDataAction(actions.agentSelection.saveModePreset),
+    saveAgentModePreset: actions.agentSelection.saveModePreset,
     deleteAgentModePreset: mapAction(
       actions.agentSelection.deleteModePreset,
       (data) => [data.presetId],
@@ -388,15 +383,11 @@ export function createSettingsViewCommandHandlers(
       (data) => [data.enabled],
     ),
 
-    getGitHubTokenStatus: noDataAction(
-      actions.githubSubscriptions.getTokenStatus,
-    ),
-    setGitHubToken: noDataAction(actions.githubSubscriptions.setToken),
-    removeGitHubToken: noDataAction(actions.githubSubscriptions.removeToken),
-    openGitHubTokenUrl: noDataAction(actions.githubSubscriptions.openTokenUrl),
-    getPRSubscriptions: noDataAction(
-      actions.githubSubscriptions.getSubscriptions,
-    ),
+    getGitHubTokenStatus: actions.githubSubscriptions.getTokenStatus,
+    setGitHubToken: actions.githubSubscriptions.setToken,
+    removeGitHubToken: actions.githubSubscriptions.removeToken,
+    openGitHubTokenUrl: actions.githubSubscriptions.openTokenUrl,
+    getPRSubscriptions: actions.githubSubscriptions.getSubscriptions,
     unsubscribePR: mapAction(
       actions.githubSubscriptions.unsubscribe,
       (data) => [data],
@@ -406,8 +397,8 @@ export function createSettingsViewCommandHandlers(
       (data) => [data],
     ),
 
-    signInChatGpt: noDataAction(actions.chatGpt.signIn),
-    signOutChatGpt: noDataAction(actions.chatGpt.signOut),
+    signInChatGpt: actions.chatGpt.signIn,
+    signOutChatGpt: actions.chatGpt.signOut,
     setChatGptPreferSubscription: mapAction(
       actions.chatGpt.setPreferSubscription,
       (data) => [data.enabled],
@@ -452,7 +443,7 @@ export function createSettingsViewCommandHandlers(
     installToolExtension: mapAction(actions.tools.installExtension, (data) => [
       data.extensionId,
     ]),
-    recheckToolStatus: noDataAction(actions.tools.recheckStatus),
+    recheckToolStatus: actions.tools.recheckStatus,
     toggleTool: mapAction(actions.tools.toggle, (data) => [
       data.toolId,
       data.enabled,
@@ -464,7 +455,7 @@ export function createSettingsViewCommandHandlers(
     applyLatexSettings: mapAction(actions.latex.applySettings, (data) => [
       data,
     ]),
-    installLatexWorkshop: noDataAction(actions.latex.installLatexWorkshop),
+    installLatexWorkshop: actions.latex.installLatexWorkshop,
     runInstallCommand: mapAction(actions.latex.runInstallCommand, (data) => [
       data.installCommand,
     ]),
@@ -472,24 +463,22 @@ export function createSettingsViewCommandHandlers(
       { field: data.field, value: data.value },
     ]),
 
-    getInlineCriticismEnabled: noDataAction(actions.inlineCriticism.getEnabled),
+    getInlineCriticismEnabled: actions.inlineCriticism.getEnabled,
     setInlineCriticismEnabled: mapAction(
       actions.inlineCriticism.setEnabled,
       (data) => [data.enabled],
     ),
 
-    getGoalList: noDataAction(actions.goals.getList),
+    getGoalList: actions.goals.getList,
     revealGoalStream: mapAction(actions.goals.revealStream, (data) => [
       data.streamId,
     ]),
 
-    getDesktopCrashReporting: noDataAction(actions.desktopCrashReporting.get),
+    getDesktopCrashReporting: actions.desktopCrashReporting.get,
     setDesktopCrashReportingEnabled: mapAction(
       actions.desktopCrashReporting.setEnabled,
       (data) => [data.enabled],
     ),
-    setDesktopCrashReportingDsn: noDataAction(
-      actions.desktopCrashReporting.setDsn,
-    ),
+    setDesktopCrashReportingDsn: actions.desktopCrashReporting.setDsn,
   };
 }
