@@ -1,10 +1,10 @@
 import { defineCommand, showUsage } from 'citty';
 
 import { platform } from '@platform/platform';
-import { getFirstRunDone } from '@controllers/onboarding/onboardingFunnel';
 import { getVisibleAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { getFirstRunDone } from '@shared/state/onboardingState';
 
 import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';

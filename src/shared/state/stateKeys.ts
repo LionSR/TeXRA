@@ -151,7 +151,7 @@ export enum GlobalStateKey {
   // Experimental
   INLINE_CRITICISM_ENABLED = 'texra.inlineCriticism.enabled',
 
-  // Onboarding funnel (user-scoped; see @controllers/onboarding/onboardingFunnel)
+  // Onboarding funnel (user-scoped; see @shared/state/onboardingState)
   /** Legacy key string — predates the shared funnel, kept for CLI compat. */
   ONBOARDING_DECLINED = 'texra.cli.onboardingDeclined',
   ONBOARDING_FIRST_RUN_DONE = 'texra.onboarding.firstRunDone',

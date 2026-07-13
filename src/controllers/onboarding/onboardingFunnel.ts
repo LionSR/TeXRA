@@ -11,19 +11,17 @@
  * workspace-scoped: onboarding is a fact about the user, and a fresh
  * workspace must never demote a veteran back to State 0/1. Each host
  * (extension, CLI, desktop) computes `hasCredential` with its own credential
- * sources and reads the flags below from its `platform().globalState`.
+ * sources and reads the flags from `@shared/state/onboardingState` using its
+ * `platform().globalState`.
  */
 
 import { isCodexSubscriptionActive } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
-import { GlobalStateKey } from '@shared/state/stateKeys';
-
 import type { OnboardingFunnelState } from '@shared/schemas/onboarding';
 import { isNonEmptyString } from '@utils/core';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { StateStore } from '@platform/interfaces';
 
 export type { OnboardingFunnelState };
 
@@ -81,82 +79,6 @@ export function planOnboardingFunnelTransition(
     selectSetupAgent: state === 'setup' && previous !== 'setup',
     clearDeclined: inputs.declined && inputs.hasCredential,
   };
-}
-
-// ============================================================
-// User-scoped flags
-// ============================================================
-
-export function getOnboardingDeclined(state: StateStore): boolean {
-  return state.get<boolean>(GlobalStateKey.ONBOARDING_DECLINED, false) === true;
-}
-
-export async function setOnboardingDeclined(
-  state: StateStore,
-  declined: boolean,
-): Promise<void> {
-  await state.update(GlobalStateKey.ONBOARDING_DECLINED, declined);
-}
-
-export function getFirstRunDone(state: StateStore): boolean {
-  return (
-    state.get<boolean>(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, false) === true
-  );
-}
-
-export async function setFirstRunDone(
-  state: StateStore,
-  done: boolean,
-): Promise<void> {
-  await state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, done);
-}
-
-/** User-level default team id, written by the setup agent's `apply_team`. */
-export function getDefaultTeamId(state: StateStore): string | undefined {
-  const value = state.get<string>(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID);
-  return isNonEmptyString(value) ? value : undefined;
-}
-
-export async function setDefaultTeamId(
-  state: StateStore,
-  teamId: string,
-): Promise<void> {
-  await state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, teamId);
-}
-
-export function readOnboardingFlags(
-  state: StateStore,
-): Pick<OnboardingFunnelInputs, 'declined' | 'firstRunDone'> {
-  return {
-    declined: getOnboardingDeclined(state),
-    firstRunDone: getFirstRunDone(state),
-  };
-}
-
-/**
- * One-shot migration: upgraders keep their normal product. A prior install
- * with a credential, or any install with run history, never sees the welcome
- * card or the setup auto-start. Writes the key on first call (true or false)
- * so the backfill never re-evaluates — a fresh install that gains a credential
- * minutes later must still enter State 1.
- */
-export async function backfillFirstRunDone(
-  state: StateStore,
-  signals: {
-    hasCredential: boolean;
-    hasPriorInstall?: boolean;
-    hasRunHistory: boolean;
-  },
-): Promise<void> {
-  const existing = state.get<boolean | undefined>(
-    GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-  );
-  if (existing !== undefined) return;
-  await setFirstRunDone(
-    state,
-    signals.hasRunHistory ||
-      (signals.hasPriorInstall === true && signals.hasCredential),
-  );
 }
 
 // ============================================================
