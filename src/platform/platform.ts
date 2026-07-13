@@ -23,6 +23,7 @@ import type {
   LifecycleHost,
   ToolAvailabilityHost,
 } from './interfaces';
+import type { LanguageModelPort } from './languageModel';
 import type { PlatformSecrets } from './secrets';
 
 /**
@@ -46,6 +47,8 @@ export interface Platform {
   readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;
   readonly toolAvailability: ToolAvailabilityHost;
+  /** Subscription-backed models exposed by the active editor host. */
+  readonly languageModel: LanguageModelPort;
   /**
    * Linter diagnostics provider for the diagnostics tool's `list`/`count`
    * commands. Single-implementer (VS Code) — hosts without a linter

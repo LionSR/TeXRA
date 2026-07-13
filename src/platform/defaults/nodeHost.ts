@@ -31,6 +31,7 @@ import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { createNodeWorkspace } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
 import { platform } from '../platform';
 
 // Type imports
@@ -103,6 +104,7 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,
     agentDirectories: services.agentDirectories,
+    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     toolAvailability: {
       ...NO_TOOL_AVAILABILITY_HOST,
       ...services.toolAvailability,
