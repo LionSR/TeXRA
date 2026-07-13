@@ -59,6 +59,10 @@ import {
 } from './desktopSetupTerminal.js';
 import { createDesktopTerminalRunner } from './desktopTerminalRunner.js';
 import {
+  initializeDesktopSetupAuth,
+  registerDesktopSetupSignIn,
+} from './desktopSetupAuth.js';
+import {
   checkForDesktopUpdate,
   DESKTOP_RELEASES_PAGE_URL,
 } from './desktopUpdateChecker.js';
@@ -419,6 +423,7 @@ function createWindow(options: {
     // disappear.
     postToRenderer: postToRendererIfAlive,
   });
+  let teamSignInPending = false;
   const refreshDesktopAuthSurfaces = async () => {
     const authenticated = await SupabaseClient.isAuthenticated();
     ipcRef.current?.postToRenderer({
@@ -426,7 +431,9 @@ function createWindow(options: {
         ? MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER
         : MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
     });
-    await settingsIpcRef.current?.refreshAuthDependentData();
+    await settingsIpcRef.current?.refreshAuthDependentData({
+      deferAgentCatalogRefresh: teamSignInPending,
+    });
     await onboardingIpcRef.current?.refreshOnboardingFunnel();
   };
   const desktopAuth = createDesktopSupabaseAuth({
@@ -440,6 +447,21 @@ function createWindow(options: {
     log: console,
     callbackState: options.authCallbackState,
   });
+  const signInForRemoteAgentCatalog = async (): Promise<boolean> => {
+    teamSignInPending = true;
+    try {
+      return (
+        (await desktopAuth.signInAndWaitForSession()) &&
+        (await SupabaseClient.canAccessRemoteAgentCatalog())
+      );
+    } finally {
+      teamSignInPending = false;
+    }
+  };
+  initializeDesktopSetupAuth();
+  const setupSignInRegistration = registerDesktopSetupSignIn(
+    signInForRemoteAgentCatalog,
+  );
   setOpenBuildDisplay(previewHost.openBuildDisplay);
   const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
   const openLogsFolder = async () =>
@@ -627,6 +649,23 @@ function createWindow(options: {
       });
       return result.response === 0;
     },
+    chooseTeamAvailability: async ({ presetName, unavailableNames }) => {
+      const result = await dialog.showMessageBox(window, {
+        type: 'warning',
+        message: `Team "${presetName}" has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`,
+        buttons: [
+          'Sign in to TeXRA',
+          'Continue with available members',
+          'Cancel',
+        ],
+        defaultId: 0,
+        cancelId: 2,
+      });
+      if (result.response === 0) return 'sign-in';
+      if (result.response === 1) return 'continue';
+      return 'cancel';
+    },
+    signInForRemoteAgentCatalog,
     signIn: () => desktopAuth.signIn(),
     signOut: () => desktopAuth.signOut(),
     setApiAccessMode: async (mode) => {
@@ -918,6 +957,7 @@ function createWindow(options: {
         .catch(reportAsyncError);
     }
     desktopAuth.dispose();
+    setupSignInRegistration.dispose();
   });
   window.webContents.once('did-finish-load', () => {
     void options.initializeCrashReporting();

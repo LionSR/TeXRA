@@ -24,6 +24,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Incomplete teams are decided before roster changes** — TeXRA now offers
+  sign-in, explicit partial-team continuation, or cancellation before applying
+  or launching a team whose TeXRA-hosted members are unavailable.
 - **Grok models keep a medium reasoning-effort selection** — the xAI effort
   clamp no longer converts `medium` to `high`; current Grok reasoning models
   (grok-4.3, grok-4.5) support low/medium/high.

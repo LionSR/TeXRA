@@ -1156,6 +1156,7 @@ describe('desktop settings IPC', () => {
       }),
       getAgents: (category) => catalog[category],
       getVisibleAgents: (category) => catalog[category],
+      chooseTeamAvailability: async () => 'continue',
       showInfoMessage: async (message) => {
         infoMessages.push(message);
       },
@@ -1234,6 +1235,117 @@ describe('desktop settings IPC', () => {
         ],
       },
     });
+  });
+
+  it('signs in, forces one catalog refresh, then commits a desktop team once', async () => {
+    const workspaceState = new MemoryStateStore();
+    workspaceState.values.set(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
+      {
+        id: 'remote-team',
+        name: 'Remote team',
+        description: 'Uses a hosted root',
+        icon: 'tools',
+        workflowAgents: [],
+        toolUseAgents: ['orchestrator'],
+        texraHostedAgents: ['orchestrator'],
+      },
+    ]);
+    let toolUseAgents: Array<{
+      source: 'remote';
+      name: string;
+      path: string;
+      category: 'toolUse';
+      tools: string[];
+    }> = [];
+    const refreshAgents = vi.fn(async () => {
+      toolUseAgents = [
+        {
+          source: 'remote',
+          name: 'orchestrator',
+          path: '/remote/orchestrator.yaml',
+          category: 'toolUse',
+          tools: ['delegate_agent'],
+        },
+      ];
+    });
+    const signInForRemoteAgentCatalog = vi.fn(async () => true);
+    const update = vi.spyOn(workspaceState, 'update');
+    const { settings } = createSettingsFixture({
+      workspaceState,
+      loadAgents: vi.fn(async () => undefined),
+      refreshAgents,
+      getAgents: (category) => (category === 'workflow' ? [] : toolUseAgents),
+      getVisibleAgents: (category) =>
+        category === 'workflow' ? [] : toolUseAgents,
+      canAccessRemoteAgentCatalog: async () => false,
+      chooseTeamAvailability: async () => 'sign-in',
+      signInForRemoteAgentCatalog,
+    });
+    update.mockClear();
+
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
+      presetId: 'remote-team',
+    });
+    await flushAsyncWork();
+
+    expect(signInForRemoteAgentCatalog).toHaveBeenCalledOnce();
+    expect(refreshAgents).toHaveBeenCalledOnce();
+    expect(refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
+    expect(
+      update.mock.calls.filter(
+        ([key]) => key === WorkspaceStateKey.ENABLED_AGENTS,
+      ),
+    ).toHaveLength(1);
+    expect(
+      update.mock.calls.filter(
+        ([key]) => key === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      ),
+    ).toHaveLength(1);
+    expect(
+      workspaceState.values.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
+    ).toEqual(['remote:orchestrator']);
+  });
+
+  it('does not write desktop roster state when team preflight is cancelled', async () => {
+    const workspaceState = new MemoryStateStore();
+    workspaceState.values.set(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
+      {
+        id: 'legacy-remote-team',
+        name: 'Legacy remote team',
+        description: 'Legacy hosted metadata is inferred',
+        icon: 'tools',
+        workflowAgents: [],
+        toolUseAgents: ['orchestrator'],
+      },
+    ]);
+    const update = vi.spyOn(workspaceState, 'update');
+    const refreshAgents = vi.fn(async () => undefined);
+    const { settings } = createSettingsFixture({
+      workspaceState,
+      loadAgents: vi.fn(async () => undefined),
+      refreshAgents,
+      getAgents: () => [],
+      getVisibleAgents: () => [],
+      canAccessRemoteAgentCatalog: async () => false,
+      chooseTeamAvailability: async () => 'cancel',
+    });
+    update.mockClear();
+
+    settings.handleMessage({
+      command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
+      presetId: 'legacy-remote-team',
+    });
+    await flushAsyncWork();
+
+    expect(refreshAgents).not.toHaveBeenCalled();
+    expect(
+      update.mock.calls.some(
+        ([key]) =>
+          key === WorkspaceStateKey.ENABLED_AGENTS ||
+          key === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      ),
+    ).toBe(false);
   });
 
   it('saves desktop team presets from currently visible agents', async () => {
@@ -1486,6 +1598,37 @@ describe('desktop settings IPC', () => {
         MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       ]),
     );
+  });
+
+  it('defers agent catalog loading while roster sign-in owns the refresh', async () => {
+    const loadAgents = vi.fn(async () => undefined);
+    const { settings, posted } = createCapturedSettingsFixture({
+      loadAgents,
+    });
+
+    await settings.refreshAuthDependentData({
+      deferAgentCatalogRefresh: true,
+    });
+
+    expect(loadAgents).not.toHaveBeenCalled();
+    expect(
+      posted.some(
+        (message) =>
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+      ),
+    ).toBe(true);
+    expect(
+      posted.some(
+        (message) =>
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+      ),
+    ).toBe(false);
+    expect(
+      posted.some(
+        (message) =>
+          commandOf(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      ),
+    ).toBe(false);
   });
 
   it('refreshes persisted model list on desktop startup', async () => {

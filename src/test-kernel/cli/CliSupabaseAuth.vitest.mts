@@ -23,8 +23,13 @@ const mocks = vi.hoisted(() => {
     toStorableSupabaseSession: vi.fn((session) => session),
     tryPlatform: vi.fn(),
     updateGlobalState: vi.fn(),
+    invalidateRemoteAgentsAfterSignOut: vi.fn(),
   };
 });
+
+vi.mock('@agent/index', () => ({
+  invalidateRemoteAgentsAfterSignOut: mocks.invalidateRemoteAgentsAfterSignOut,
+}));
 
 vi.mock('@auth/config', () => ({
   DEFAULT_OAUTH_PROVIDER: 'github',
@@ -107,6 +112,7 @@ describe('CLI Supabase auth', () => {
     mocks.getCliSecrets.mockReturnValue({ kind: 'cli-secrets' });
     mocks.setUseIncludedModelAccess.mockResolvedValue(undefined);
     mocks.updateGlobalState.mockResolvedValue(undefined);
+    mocks.invalidateRemoteAgentsAfterSignOut.mockResolvedValue(undefined);
   });
 
   it('uses platform-owned secrets after CLI platform init', async () => {
@@ -180,6 +186,39 @@ describe('CLI Supabase auth', () => {
     expect(mocks.updateGlobalState).toHaveBeenCalledWith(
       GlobalStateKey.USE_OPENROUTER,
       false,
+    );
+  });
+
+  it('removes cached remote agents after sign-out', async () => {
+    const { signOutCliSupabase } = await loadSupabaseAuth();
+
+    await signOutCliSupabase();
+
+    expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
+    expect(mocks.invalidateRemoteAgentsAfterSignOut).toHaveBeenCalledOnce();
+  });
+
+  it('completes sign-out when the local catalog rebuild fails', async () => {
+    mocks.invalidateRemoteAgentsAfterSignOut.mockRejectedValueOnce(
+      new Error('local rebuild failed'),
+    );
+    const warn = vi.fn();
+    const { initializeCliSupabaseAuth, signOutCliSupabase } =
+      await loadSupabaseAuth();
+    initializeCliSupabaseAuth({
+      initialize: vi.fn(),
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn,
+      error: vi.fn(),
+    });
+
+    await expect(signOutCliSupabase()).resolves.toBeUndefined();
+
+    expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      'cli-auth',
+      'Local agent catalog refresh failed after sign-out: Error: local rebuild failed',
     );
   });
 });

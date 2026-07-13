@@ -390,6 +390,15 @@ export class SupabaseClient {
     return token !== null;
   }
 
+  /**
+   * Whether PostgREST-backed remote agent definitions can be queried.
+   * CI relay tokens authenticate model relay endpoints only; this capability
+   * deliberately requires a normal GoTrue session access token.
+   */
+  static async canAccessRemoteAgentCatalog(): Promise<boolean> {
+    return (await this.getAccessToken()) !== null;
+  }
+
   /** Get configuration for re-initialization. */
   static getConfig(): { url: string; publicKey: string } | null {
     return this.config;

@@ -33,7 +33,10 @@ async function assertAuthPrecedesCredentialProbe(
     auth: {
       async getStatus() {
         calls.push('auth');
-        return { authenticated: false };
+        return {
+          authenticated: false,
+          remoteAgentCatalogAvailable: false,
+        };
       },
     },
     secrets: {

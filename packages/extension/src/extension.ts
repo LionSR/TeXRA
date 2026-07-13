@@ -38,7 +38,7 @@ import {
   setExternalAuthCallbackResolver,
   setRuntimeExtensionId,
 } from '@auth/config';
-import { AUTH_PROVIDER_ID } from '@auth/constants';
+import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import { hasAnyUsableSetupCredential } from '@commands/setup';
 import {
   isResumeInFlight,
@@ -548,8 +548,16 @@ export async function activate(context: vscode.ExtensionContext) {
       } satisfies vscode.TextDocumentShowOptions,
     );
   });
+  const defaultSetupPlatform = createDefaultSetupPlatform();
   setSetupPlatform({
-    ...createDefaultSetupPlatform(),
+    ...defaultSetupPlatform,
+    auth: {
+      ...defaultSetupPlatform.auth,
+      signIn: async () =>
+        (await vscode.commands.executeCommand<boolean>(
+          AUTH_COMMANDS.SIGN_IN,
+        )) === true,
+    },
     commands: {
       invoke: (cmd, ...args) =>
         Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),

@@ -11,9 +11,9 @@
  */
 
 import {
-  applyPresetRoster,
-  type PresetRosterState,
-} from '@controllers/settingsView/SettingsAgentCatalogController';
+  applyTeamRoster,
+  type TeamRosterState,
+} from '@controllers/teams/TeamRoster';
 import { getAgentsByCategory } from '@agent/index/agentRegistry';
 import {
   AGENT_MODE_PRESETS_BY_ID,
@@ -42,7 +42,7 @@ export function resolveTeamPreset(teamId: string): AgentModePreset | undefined {
  */
 export function registryPresetRosterState(
   workspaceState: StateStore,
-): PresetRosterState {
+): TeamRosterState {
   return {
     getAgents: (category) => getAgentsByCategory(category),
     setEnabledAgentKeys: async (category, enabledKeys) => {
@@ -90,6 +90,6 @@ export async function seedRosterFromDefaultTeam(
     (defaultTeamId ? resolveTeamPreset(defaultTeamId) : undefined) ??
     (fallbackTeamId ? resolveTeamPreset(fallbackTeamId) : undefined);
   if (!preset) return false;
-  await applyPresetRoster(registryPresetRosterState(workspaceState), preset);
+  await applyTeamRoster(registryPresetRosterState(workspaceState), preset);
   return true;
 }
