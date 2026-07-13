@@ -33,7 +33,6 @@
     { "from": "controllers", "to": "tools", "kind": "value" },
     { "from": "controllers", "to": "transcript", "kind": "value" },
     { "from": "controllers", "to": "utils", "kind": "value" },
-    { "from": "housekeeping", "to": "agent", "kind": "value" },
     { "from": "housekeeping", "to": "latex", "kind": "value" },
     { "from": "housekeeping", "to": "logger", "kind": "value" },
     { "from": "housekeeping", "to": "platform", "kind": "value" },
