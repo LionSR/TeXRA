@@ -62,11 +62,11 @@ function extractMeta(input: ChatExportInput): DocumentMeta {
 }
 
 /** Render a node through a format spec's renderer table. */
-function renderNode(node: ExportNode, renderers: NodeRenderers): string {
-  // TypeScript can't narrow discriminated unions through record access,
-  // so we cast here. NodeRenderers ensures every kind has a handler.
-
-  return (renderers as Record<string, (n: any) => string>)[node.kind](node);
+function renderNode<K extends ExportNode['kind']>(
+  node: Extract<ExportNode, { kind: K }>,
+  renderers: NodeRenderers,
+): string {
+  return renderers[node.kind](node);
 }
 
 export function renderDocument(
