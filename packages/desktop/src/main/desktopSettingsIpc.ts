@@ -13,13 +13,16 @@ import {
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
 import {
   computeAgentOptionsData,
   getAgentsByCategory,
   getVisibleAgents as getVisibleRegistryAgents,
   loadAgents,
+  refresh,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   codexCoordinator,
   getChatGptAuthStatus,
@@ -119,6 +122,7 @@ import {
   DesktopHistoryHandlers,
   type DesktopHistoryOptions,
 } from './desktopHistoryHandlers.js';
+import type { TeamAvailabilityChoice } from '@controllers/teams/TeamAvailabilityPreflight';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -130,6 +134,7 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   postToRenderer(message: unknown): void;
   sendStartupCatalogData?: boolean;
   loadAgents?: typeof loadAgents;
+  refreshAgents?: typeof refresh;
   loadAgentOptionsData?: typeof computeAgentOptionsData;
   getAgents?: (category: AgentCategory) => AgentEntry[];
   getVisibleAgents?: (category: AgentCategory) => AgentEntry[];
@@ -164,6 +169,12 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   showInfoMessage?: (message: string) => Promise<void>;
   showErrorMessage?: (message: string) => Promise<void>;
   confirmAction?: (message: string, confirmLabel?: string) => Promise<boolean>;
+  chooseTeamAvailability?: (input: {
+    presetName: string;
+    unavailableNames: readonly string[];
+  }) => Promise<TeamAvailabilityChoice>;
+  canAccessRemoteAgentCatalog?: () => Promise<boolean>;
+  signInForRemoteAgentCatalog?: () => Promise<boolean>;
   signIn?: () => Promise<void>;
   signOut?: () => Promise<void>;
   setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
@@ -183,7 +194,9 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
-  refreshAuthDependentData(): Promise<void>;
+  refreshAuthDependentData(options?: {
+    deferAgentCatalogRefresh?: boolean;
+  }): Promise<void>;
   signInChatGpt(options?: { enableSubscription?: boolean }): Promise<void>;
 }
 
@@ -211,6 +224,7 @@ export function createDesktopSettingsIpc(
     onError,
   });
   const loadAgentRegistry = options.loadAgents ?? loadAgents;
+  const refreshAgentRegistry = options.refreshAgents ?? refresh;
   const loadAgentOptionsData =
     options.loadAgentOptionsData ?? computeAgentOptionsData;
   const getAgentEntries = options.getAgents ?? getAgentsByCategory;
@@ -848,15 +862,15 @@ export function createDesktopSettingsIpc(
     await finishDesktopCrashReportingSettingsChange();
   }
 
-  async function refreshAuthDependentData(): Promise<void> {
+  async function refreshAuthDependentData(
+    refreshOptions: { deferAgentCatalogRefresh?: boolean } = {},
+  ): Promise<void> {
     invalidateModelOptionsCache();
     await postModelSelectionData();
     await postMainModelOptionsData();
-    await Promise.all([
-      postProfileData(),
-      postAgentSelectionData(),
-      postMainAgentOptionsData(),
-    ]);
+    await postProfileData();
+    if (refreshOptions.deferAgentCatalogRefresh) return;
+    await Promise.all([postAgentSelectionData(), postMainAgentOptionsData()]);
   }
 
   async function updateAgentSetting(
@@ -1004,10 +1018,32 @@ export function createDesktopSettingsIpc(
   }
 
   async function applyAgentModePreset(presetId: string): Promise<void> {
-    await loadAgentRegistry();
-    const result = await agentCatalogController.applyPreset(presetId);
-    if (!result.ok) {
+    const result = await applyTeamRosterWithPreflight(presetId, {
+      catalog: agentCatalogController,
+      loadLocalCatalog: () => loadAgentRegistry({ includeRemote: false }),
+      canAccessRemoteCatalog:
+        options.canAccessRemoteAgentCatalog ??
+        (() => SupabaseClient.canAccessRemoteAgentCatalog()),
+      choose: (preset, unavailableNames) =>
+        options.chooseTeamAvailability?.({
+          presetName: preset.name,
+          unavailableNames,
+        }) ?? Promise.resolve('cancel'),
+      signIn:
+        options.signInForRemoteAgentCatalog ?? (() => Promise.resolve(false)),
+      forceRefreshRemoteCatalog: () =>
+        refreshAgentRegistry({ includeRemote: true }),
+    });
+    if (result.status === 'unknown') {
       await options.showErrorMessage?.(`Unknown team: ${presetId}`);
+      return;
+    }
+    if (result.status === 'cancelled') return;
+    if (result.status === 'choice-required') return;
+    if (result.status === 'unavailable') {
+      await options.showErrorMessage?.(
+        `Team "${result.preset.name}" is still unavailable: ${result.unavailableNames.join(', ')}`,
+      );
       return;
     }
     await Promise.all([

@@ -6,6 +6,7 @@ import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { getSetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
 
@@ -67,7 +68,9 @@ function spyOnSignalRegistration(): {
 const mocks = vi.hoisted(() => ({
   authProvider: {
     isAuthenticated: vi.fn(),
+    canAccessRemoteAgentCatalog: vi.fn(),
   },
+  signInCliSupabase: vi.fn(),
   bootstrapNodeAgentDirectories: vi.fn(),
   createPlatformAgentDirectories: vi.fn(() => ({
     custom: vi.fn(),
@@ -103,6 +106,7 @@ vi.mock('@auth/serverKeys', () => ({
 vi.mock('@cli/runtime/supabaseAuth', () => ({
   getCliAuthProvider: () => mocks.authProvider,
   initializeCliSupabaseAuth: mocks.initializeCliSupabaseAuth,
+  signInCliSupabase: mocks.signInCliSupabase,
 }));
 
 vi.mock('@logger/logUtils', () => ({
@@ -209,6 +213,7 @@ describe('CLI platform init', () => {
       },
     });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
+    mocks.authProvider.canAccessRemoteAgentCatalog.mockResolvedValue(false);
     mocks.serverSideKeyService.setUseIncludedModelAccess.mockResolvedValue(
       undefined,
     );
@@ -430,6 +435,18 @@ describe('CLI platform init', () => {
         additionalPaths: ['vendor/skills'],
       },
     });
+  });
+
+  it('wires setup sign-in to the existing CLI login implementation', async () => {
+    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+    mocks.authProvider.canAccessRemoteAgentCatalog.mockResolvedValue(true);
+    mocks.signInCliSupabase.mockResolvedValue({ account: { label: 'User' } });
+
+    await initCliPlatform(cliContext());
+
+    await expect(getSetupPlatform().auth.signIn?.()).resolves.toBe(true);
+    expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
+    expect(mocks.signInCliSupabase).toHaveBeenCalledWith({ openBrowser: true });
   });
 });
 

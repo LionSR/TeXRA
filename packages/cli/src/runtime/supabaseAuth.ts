@@ -1,6 +1,9 @@
 // Local imports - platform
 import { tryPlatform } from '@platform/platform';
 
+// Local imports - agent
+import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
+
 // Local imports - auth
 import {
   DEFAULT_OAUTH_PROVIDER,
@@ -95,6 +98,8 @@ const deferredAuthLog: LogBackend = {
 };
 const cliAuthProvider = {
   isAuthenticated: () => SupabaseClient.isAuthenticated(),
+  canAccessRemoteAgentCatalog: () =>
+    SupabaseClient.canAccessRemoteAgentCatalog(),
   getUserTier: () => SupabaseClient.getUserTier(),
   getAccessToken: () => SupabaseClient.getRelayAccessToken(),
 };
@@ -223,6 +228,12 @@ export async function signOutCliSupabase(): Promise<void> {
     await serverSideKeyService.setUseIncludedModelAccess(false);
   }
   serverSideKeyService.clearAllCaches({ resetQuotaFlip: true });
+  await invalidateRemoteAgentsAfterSignOut().catch((error: unknown) => {
+    activeAuthLog?.warn(
+      'cli-auth',
+      `Local agent catalog refresh failed after sign-out: ${String(error)}`,
+    );
+  });
 }
 
 /**

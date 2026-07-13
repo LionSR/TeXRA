@@ -1,4 +1,4 @@
-import { getAgentsByCategory, loadAgents } from '@agent/index';
+import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { missingMultiAgentPresetMessage } from './agents';
@@ -116,8 +116,11 @@ async function reloadRemoteAgentsForGaps<T>(
   hasGaps: (value: T) => boolean,
   replan: () => T,
 ): Promise<RemoteAgentPlanReloadResult<T>> {
-  if (hasGaps(value) && (await getCliAuthProvider().isAuthenticated())) {
-    await loadAgents();
+  if (
+    hasGaps(value) &&
+    (await getCliAuthProvider().canAccessRemoteAgentCatalog())
+  ) {
+    await refresh({ includeRemote: true });
     return { value: replan(), remoteAgentLoadAttempted: true };
   }
   return { value, remoteAgentLoadAttempted: false };

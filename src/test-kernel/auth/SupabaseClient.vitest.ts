@@ -88,6 +88,22 @@ describe('SupabaseClient', () => {
       assert.equal(await SupabaseClient.getAccessToken(), 'session-token');
       assert.equal(await SupabaseClient.getRelayAccessToken(), relayToken);
       assert.equal(await SupabaseClient.isAuthenticated(), true);
+      assert.equal(await SupabaseClient.canAccessRemoteAgentCatalog(), true);
+    });
+  });
+
+  it('keeps relay-only model auth separate from remote catalog access', async () => {
+    const relayToken = `${RELAY_CI_TOKEN_PREFIX}relayonly`;
+    const provider = createTokenProvider({
+      ensureFreshToken: async () => null,
+    });
+
+    await withRelayTokenEnv(relayToken, async () => {
+      SupabaseClient.setAuthProvider(provider);
+
+      assert.equal(await SupabaseClient.isAuthenticated(), true);
+      assert.equal(await SupabaseClient.getRelayAccessToken(), relayToken);
+      assert.equal(await SupabaseClient.canAccessRemoteAgentCatalog(), false);
     });
   });
 

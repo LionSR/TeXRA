@@ -11,6 +11,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { listCliHistoryEntries } from '../runtime/history';
 import { initInteractiveCliPlatform } from '../runtime/initPlatform';
 import {
+  askCliQuestion,
   writeErrorStderr,
   writeTextStderr,
   writeTextStdout,
@@ -30,6 +31,7 @@ import {
   loadCliMultiAgentPresetPlanSet,
   writeMissingPresetAgents,
 } from '../runtime/multiAgentRunPlan';
+import { preflightCliTeamAvailability } from '../runtime/teamAvailabilityPreflight';
 import {
   buildCliAccountItems,
   buildCliAgentItems,
@@ -56,7 +58,11 @@ import {
   chatGptSignOutPreferenceMessage,
   signOutCliChatGpt,
 } from '../runtime/chatgptLogin';
-import { getCliAuthProfile, signOutCliSupabase } from '../runtime/supabaseAuth';
+import {
+  getCliAuthProfile,
+  getCliAuthProvider,
+  signOutCliSupabase,
+} from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
@@ -219,6 +225,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
       agentItems: buildCliAgentItems(toolUseAgents),
       teamItems: buildCliTeamItems(presetPlanSet.plans, {
         includeLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
+        remoteAgentCatalogAvailable:
+          await getCliAuthProvider().canAccessRemoteAgentCatalog(),
         launchBlockReason:
           launchContext.approvalPolicy === 'never'
             ? 'delegation-denied'
@@ -243,19 +251,65 @@ async function runOrchestration(context: CliContext): Promise<number> {
         return result.exitCode;
       }
       case 'preset': {
-        // Match the headless path: load remote premium agents (orchestrator,
-        // delegation specialists) and replan so the team starts with its real
-        // root instead of silently degrading to the first local tool-use agent.
-        const { plan } = await loadCliMultiAgentRunPlan({
-          preset: action.preset,
+        const initialPlan =
+          presetPlanSet.plans.find(
+            (plan) => plan.preset.id === action.preset,
+          ) ??
+          (
+            await loadCliMultiAgentRunPlan(
+              { preset: action.preset },
+              { reloadRemoteAgents: false },
+            )
+          ).plan;
+        const preflight = await preflightCliTeamAvailability({
+          plan: initialPlan,
+          remoteCatalogRefreshAttempted: presetPlanSet.remoteAgentLoadAttempted,
+          canAccessRemoteCatalog: () =>
+            getCliAuthProvider().canAccessRemoteAgentCatalog(),
+          choose: async (names) => {
+            writeTextStderr(
+              `Team ${action.preset} has unavailable TeXRA-hosted members: ${names.join(', ')}.`,
+            );
+            const answer = (
+              await askCliQuestion(
+                'Choose: [s] Sign in to TeXRA, [c] Continue with available members, [q] Cancel: ',
+              )
+            )
+              .trim()
+              .toLowerCase();
+            if (answer === 's' || answer === 'sign-in') return 'sign-in';
+            if (answer === 'c' || answer === 'continue') return 'continue';
+            return 'cancel';
+          },
+          signIn: async () => {
+            const code = await runLoginCommand(
+              launchContext,
+              loginInitFromArgs({}),
+            );
+            return (
+              code === CliExitCode.Success &&
+              (await getCliAuthProvider().canAccessRemoteAgentCatalog())
+            );
+          },
+          refresh: async () =>
+            (await loadCliMultiAgentRunPlan({ preset: action.preset })).plan,
         });
+        if (preflight.status === 'choice-required') continue launcher;
+        if (preflight.status === 'cancelled') continue launcher;
+        if (preflight.status === 'unavailable') {
+          writeTextStderr(
+            `Team ${action.preset} is still unavailable after refreshing the TeXRA agent catalog: ${preflight.unavailableNames.join(', ')}.`,
+          );
+          continue launcher;
+        }
+        const plan = preflight.value;
         if (!cliMultiAgentPresetCanLaunchTeam(plan)) {
           writeTextStderr(
             formatCliMultiAgentTeamLaunchBlockMessage(plan, {
               requestedPreset: action.preset,
             }),
           );
-          return CliExitCode.Usage;
+          continue launcher;
         }
         const rootAgent = plan.rootAgent;
         writeMissingPresetAgents(plan);

@@ -71,9 +71,12 @@ export interface SetupExtensionAdapter {
 export interface SetupAuthAdapter {
   getStatus(): Promise<{
     authenticated: boolean;
+    remoteAgentCatalogAvailable: boolean;
     email?: string;
     tier?: string;
   }>;
+  /** Start the host's existing TeXRA account sign-in flow, when available. */
+  signIn?: () => Promise<boolean>;
 }
 
 /** Configuration-value surface. Reads/writes scoped to `texra.*` keys. */
@@ -134,6 +137,7 @@ function assertTexraScopedKey(key: string): void {
 
 async function defaultAuthStatus(): Promise<{
   authenticated: boolean;
+  remoteAgentCatalogAvailable: boolean;
   email?: string;
   tier?: string;
 }> {
@@ -144,13 +148,22 @@ async function defaultAuthStatus(): Promise<{
   }
 
   const authenticated = await SupabaseClient.isAuthenticated();
-  if (!authenticated) return { authenticated: false };
+  const remoteAgentCatalogAvailable =
+    await SupabaseClient.canAccessRemoteAgentCatalog();
+  if (!authenticated) {
+    return { authenticated: false, remoteAgentCatalogAvailable: false };
+  }
 
   const [user, tier] = await Promise.all([
     SupabaseClient.getUser(),
     SupabaseClient.getUserTier(),
   ]);
-  return { authenticated: true, email: user?.email, tier };
+  return {
+    authenticated: true,
+    remoteAgentCatalogAvailable,
+    email: user?.email,
+    tier,
+  };
 }
 
 /**

@@ -191,6 +191,14 @@ describe('SettingsAgentCatalogController', () => {
     assert.deepEqual(controller.getCustomPresets(), []);
   });
 
+  it('records hosted-definition ownership when saving a custom team', async () => {
+    const { controller } = createController();
+
+    const preset = await controller.saveCurrentPreset('Current Team');
+
+    assert.deepEqual(preset.texraHostedAgents, ['writer']);
+  });
+
   it('collects built-in and capability-based orchestrator agent names', () => {
     const { controller } = createController({
       agents: {
@@ -278,6 +286,7 @@ describe('SettingsAgentCatalogController', () => {
       icon: 'bookmark',
       workflowAgents: ['correct'],
       toolUseAgents: ['review'],
+      texraHostedAgents: [],
     });
     assert.equal(state.customPresets.length, 1);
   });

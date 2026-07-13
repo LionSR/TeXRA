@@ -150,14 +150,16 @@ prompts:
          not skip ahead.
       E. Roster — ask, if their intro didn't already tell you, what
          they're working on: math, physics, CS/ML, Lean 4, or a
-         software project. Apply the matching team with one
-         `apply_team` call: `mathematician`, `physicist`, `cs-ml`,
+         software project. Apply the matching team with
+         `apply_team`: `mathematician`, `physicist`, `cs-ml`,
          `lean-project`, or `software-engineer`. If they're unsure or
          want a bit of everything, use `starter` — never stall on this
          question. One question, one call. The tool also saves the
          choice as their default team for future projects; if it
-         reports a relay-served lead that unlocks after sign-in, relay
-         that in one sentence.
+         reports unavailable TeXRA-hosted members, ask the user to choose
+         Sign in to TeXRA, Continue with available members, or Cancel, then
+         call it again with the corresponding `unavailableAction`. Never
+         choose partial continuation or sign-in on the user's behalf.
       F. Optional extras (Zotero, Lean 4, SoX for audio) — ask once
          whether to install; default is skip (but do offer Lean 4 when
          phase E picked `lean-project`). Use `update_config` to set

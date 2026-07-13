@@ -27,6 +27,10 @@ import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
 import { agentDirectories } from '@frontend/agents';
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
+import {
+  isAgentCatalogAuthRefreshDeferred,
+  runAfterAgentCatalogAuthRefresh,
+} from '@frontend/auth/agentCatalogRefreshScope';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
@@ -115,6 +119,15 @@ export class MainViewProvider
 
   private setupAuthListener() {
     onTexraAuthSessionsChanged(this.context, () => {
+      if (isAgentCatalogAuthRefreshDeferred()) {
+        runAfterAgentCatalogAuthRefresh(async () => {
+          await Promise.all([
+            this.refreshModelOptions(),
+            this.refreshOnboardingFunnel(),
+          ]);
+        });
+        return;
+      }
       void this.refreshOptionsAndView();
     });
     this.context.subscriptions.push(

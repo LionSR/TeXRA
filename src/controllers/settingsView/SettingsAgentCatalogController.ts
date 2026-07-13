@@ -1,3 +1,11 @@
+// Local imports - controllers
+import {
+  applyTeamRoster,
+  commitTeamRoster,
+  resolveTeamRoster,
+  type TeamRosterResolution,
+} from '@controllers/teams/TeamRoster';
+
 // Local imports - shared
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import {
@@ -67,72 +75,6 @@ export function enabledKeysIncludeAgent(
  * subset of {@link SettingsAgentCatalogState}, so the controller's state port
  * satisfies it directly.
  */
-export interface PresetRosterState {
-  getAgents(category: AgentCategory): { name: string; source: AgentSource }[];
-  setEnabledAgentKeys(
-    category: AgentCategory,
-    enabledKeys: string[],
-  ): Promise<void>;
-}
-
-/**
- * Resolve a preset's agent names against the live catalog and write both
- * workspace roster keys. Single application path shared by the Settings
- * "apply team" action, the setup agent's `apply_team` tool, and default-team
- * seeding of fresh workspaces — so the paths can't drift.
- *
- * Resolved names are written as `source:name` keys. Names that don't resolve
- * right now (relay-served orchestrators while signed out, agents not yet
- * installed) are kept as bare names: visibility filtering matches by name, so
- * the agent joins the roster the moment it appears (e.g. after sign-in)
- * instead of being silently dropped. Returns the written keys per category
- * plus the names that didn't resolve.
- */
-export async function applyPresetRoster(
-  state: PresetRosterState,
-  preset: AgentModePreset,
-): Promise<{
-  workflowKeys: string[];
-  toolUseKeys: string[];
-  unresolvedNames: string[];
-}> {
-  const workflow = resolvePresetAgentKeys(
-    state,
-    'workflow',
-    preset.workflowAgents,
-  );
-  const toolUse = resolvePresetAgentKeys(
-    state,
-    'toolUse',
-    preset.toolUseAgents,
-  );
-  await state.setEnabledAgentKeys('workflow', workflow.keys);
-  await state.setEnabledAgentKeys('toolUse', toolUse.keys);
-  return {
-    workflowKeys: workflow.keys,
-    toolUseKeys: toolUse.keys,
-    unresolvedNames: [...workflow.unresolved, ...toolUse.unresolved],
-  };
-}
-
-function resolvePresetAgentKeys(
-  state: PresetRosterState,
-  category: AgentCategory,
-  names: string[],
-): { keys: string[]; unresolved: string[] } {
-  const entries = state.getAgents(category);
-  const unresolved: string[] = [];
-  const keys = names.map((name) => {
-    const entry = entries.find((candidate) => candidate.name === name);
-    if (entry) return agentKeyOf(entry);
-    unresolved.push(name);
-    // Keep unresolved names so relay-only team members survive until sign-in
-    // loads the source that can resolve them.
-    return name;
-  });
-  return { keys, unresolved };
-}
-
 export class SettingsAgentCatalogController {
   constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
 
@@ -175,22 +117,39 @@ export class SettingsAgentCatalogController {
     const preset = this.getPreset(presetId);
     if (!preset) return { ok: false, reason: 'unknownPreset' };
 
-    const { unresolvedNames } = await applyPresetRoster(
-      this.deps.state,
-      preset,
-    );
+    const { unresolvedNames } = await applyTeamRoster(this.deps.state, preset);
 
     return { ok: true, preset, unresolvedNames };
   }
 
+  resolvePreset(presetId: string):
+    | {
+        readonly ok: true;
+        readonly preset: AgentModePreset;
+        readonly resolution: TeamRosterResolution;
+      }
+    | { readonly ok: false; readonly reason: 'unknownPreset' } {
+    const preset = this.getPreset(presetId);
+    if (!preset) return { ok: false, reason: 'unknownPreset' };
+    return {
+      ok: true,
+      preset,
+      resolution: resolveTeamRoster(this.deps.state, preset),
+    };
+  }
+
+  async commitPresetResolution(
+    resolution: TeamRosterResolution,
+  ): Promise<void> {
+    await commitTeamRoster(this.deps.state, resolution);
+  }
+
   async saveCurrentPreset(name: string): Promise<AgentModePreset> {
     const trimmedName = name.trim();
-    const workflowAgents = this.deps.state
-      .getVisibleAgents('workflow')
-      .map((entry) => entry.name);
-    const toolUseAgents = this.deps.state
-      .getVisibleAgents('toolUse')
-      .map((entry) => entry.name);
+    const visibleWorkflow = this.deps.state.getVisibleAgents('workflow');
+    const visibleToolUse = this.deps.state.getVisibleAgents('toolUse');
+    const workflowAgents = visibleWorkflow.map((entry) => entry.name);
+    const toolUseAgents = visibleToolUse.map((entry) => entry.name);
     const preset: AgentModePreset = {
       id: `custom-${this.deps.now?.() ?? Date.now()}`,
       name: trimmedName,
@@ -198,6 +157,9 @@ export class SettingsAgentCatalogController {
       icon: 'bookmark',
       workflowAgents,
       toolUseAgents,
+      texraHostedAgents: [...visibleWorkflow, ...visibleToolUse]
+        .filter((entry) => entry.source === 'remote')
+        .map((entry) => entry.name),
     };
 
     await this.deps.state.setCustomPresets([
