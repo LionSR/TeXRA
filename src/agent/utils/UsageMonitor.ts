@@ -1,4 +1,7 @@
-import { UsageLogService } from '@telemetry/UsageLogService';
+import {
+  USAGE_LOG_FLUSH_OUTCOME,
+  UsageLogService,
+} from '@telemetry/UsageLogService';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
@@ -304,10 +307,14 @@ export class UsageMonitor {
       // pre-call check sees this round's cost before the next call — bounding
       // free-tier overage to roughly one round instead of a whole session.
       if (usedRelay) {
-        const flushed = await UsageLogService.flush();
-        if (!flushed) {
+        const flushOutcome = await UsageLogService.flush();
+        if (flushOutcome === USAGE_LOG_FLUSH_OUTCOME.PENDING) {
           this.context.logger.debug(
             'Relay usage logging is queued; spend-cap data will retry later.',
+          );
+        } else if (flushOutcome === USAGE_LOG_FLUSH_OUTCOME.REJECTED) {
+          this.context.logger.error(
+            'Relay usage logging was permanently rejected; spend-cap accounting is incomplete.',
           );
         }
       }
