@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
-import { UsageRouteSchema } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
+import { UsageProviderSchema, UsageRouteSchema } from '@shared/schemas/usage';
 
 const UsageLogMetadataSchema = z.object({
   model: z.string(),
