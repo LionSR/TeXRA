@@ -207,6 +207,9 @@ export interface ChatSessionController {
     followUp: InterruptedFollowUp,
   ): InterruptedFollowUpAdmission;
 
+  /** Discard controller-owned interruption recovery after an explicit reset. */
+  clearInterruptedRecovery(): void;
+
   /**
    * Attempt to resume a queued follow-up target from the CLI platform port.
    * Returns true only when this controller accepts the target resume.
@@ -245,13 +248,16 @@ export function createChatSessionController(
     snapshotStore,
   } = init;
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
+  let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
 
   const supersedeInterruptedRecovery = ():
     SupersededInterruptedRecovery | undefined => {
     const streamId = session.interruptedStreamId;
-    const followUps = interruptedContinuation
-      ? [...interruptedContinuation.followUps]
-      : [];
+    const followUps = [
+      ...pendingInterruptedFollowUps,
+      ...(interruptedContinuation?.followUps ?? []),
+    ];
+    pendingInterruptedFollowUps = [];
     if (interruptedContinuation) {
       interruptedContinuation.superseded = true;
       interruptedContinuation = undefined;
@@ -284,7 +290,10 @@ export function createChatSessionController(
     const streamId = session.interruptedStreamId ?? recovery?.streamId;
     if (!streamId) return;
     session.interruptedStreamId = streamId;
-    enqueueRecoveryFollowUps(recovery, streamId);
+    pendingInterruptedFollowUps = [
+      ...(recovery?.followUps ?? []),
+      ...pendingInterruptedFollowUps,
+    ];
   };
 
   // -----------------------------------------------------------------------
@@ -360,7 +369,7 @@ export function createChatSessionController(
   // -----------------------------------------------------------------------
 
   const startRootRun = (config: AgentConfigPayload): void => {
-    session.interruptedStreamId = undefined;
+    void supersedeInterruptedRecovery();
     const currentModel = config.model;
     const sessionContext = getSessionContext(currentModel);
     patchSessionMeta({
@@ -697,29 +706,29 @@ export function createChatSessionController(
 
     const batch: InterruptedContinuationBatch = {
       streamId: session.interruptedStreamId,
-      followUps: [followUp],
+      followUps: [...pendingInterruptedFollowUps, followUp],
       completion: Promise.resolve(false),
       superseded: false,
     };
+    pendingInterruptedFollowUps = [];
     batch.completion = (async () => {
       await session.runPromise?.catch(() => undefined);
       if (batch.superseded) return true;
+      let followUpQueueReady = false;
       try {
         const resumed = await tryResumeStream(batch.streamId, {
           extraFollowUps: batch.followUps,
           onFollowUpQueueReady: () => {
+            followUpQueueReady = true;
             session.interruptedStreamId = undefined;
             if (interruptedContinuation === batch) {
               interruptedContinuation = undefined;
             }
           },
         });
-        if (
-          !resumed &&
-          !batch.superseded &&
-          session.interruptedStreamId === undefined
-        ) {
+        if (!resumed && !batch.superseded && !followUpQueueReady) {
           session.interruptedStreamId = batch.streamId;
+          pendingInterruptedFollowUps.push(...batch.followUps);
         }
         return resumed;
       } finally {
@@ -750,6 +759,9 @@ export function createChatSessionController(
     resume,
     stop,
     admitInterruptedFollowUp,
+    clearInterruptedRecovery: () => {
+      void supersedeInterruptedRecovery();
+    },
     tryResumeStream,
     canStartRootRun: () => chatTuiCanStartRootRun(session),
   };
