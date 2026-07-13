@@ -3,6 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import * as assert from 'node:assert';
+import pDefer from 'p-defer';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports - tests
@@ -24,6 +25,7 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval';
+import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 
 // Test stream ID for per-stream YOLO mode tests
@@ -216,6 +218,53 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(handlerCalled, false);
     assert.strictEqual(writtenContent, 'auto');
     assert.strictEqual(result.output, 'written');
+  });
+
+  it('rechecks session bypass between concurrent approval requests', async () => {
+    const firstApproval = pDefer<ToolEditApprovalResult>();
+    const firstPrompted = pDefer<void>();
+    let handlerCalls = 0;
+
+    testApprovalHandler = async () => {
+      handlerCalls += 1;
+      firstPrompted.resolve();
+      return firstApproval.promise;
+    };
+
+    const requestInStream = (path: string) =>
+      withRunContext(
+        createRunContext({
+          runtimeHost: noopAgentRuntimeHost,
+          streamId: TEST_STREAM_ID,
+        }),
+        () =>
+          requestToolEditApproval({
+            path,
+            originalContent: '',
+            proposedContent: path,
+            sourceTool: 'write_file',
+          }),
+      );
+
+    const firstRequest = requestInStream('first.txt');
+    const secondRequest = requestInStream('second.txt');
+    await firstPrompted.promise;
+
+    assert.strictEqual(handlerCalls, 1);
+    setToolEditApprovalSessionBypass(
+      TEST_STREAM_ID,
+      true,
+      noopAgentRuntimeHost,
+      { silent: true },
+    );
+    firstApproval.resolve({ accepted: true });
+
+    const results = await Promise.all([firstRequest, secondRequest]);
+    assert.deepStrictEqual(
+      results.map((result) => result.accepted),
+      [true, true],
+    );
+    assert.strictEqual(handlerCalls, 1);
   });
 
   it('keeps text editor undo history isolated between execution ids', async () => {
