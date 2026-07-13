@@ -564,7 +564,7 @@ logs). `src/auth/` is 4,181 LoC. The debts:
   (context window clamped to a hardcoded 272k, token counting / compaction /
   uploads disabled, different pricing) — while the picker still advertises
   llm-zoo's API-key capabilities (`computeModelOptions.ts:180-189`). The
-  routing _predicate_ is properly centralized (`codexRouting.ts`); the
+  routing _predicate_ is properly centralized (`codexSubscriptionRouting.ts`); the
   _consequences_ are scattered. **Fix:** the declarative
   `ProviderCapabilities` record from A1, **keyed by (model, auth-mode)**
   with runtime resolvers — subscription becomes a capability profile the

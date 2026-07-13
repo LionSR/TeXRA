@@ -1,7 +1,7 @@
 import { platform } from '@platform/platform';
-import { isCodexSubscriptionActive } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { lookupApiKey, API_PROVIDERS } from '@model/apiProviders';
+import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import {
   decideRunModel,
   type RunModelCandidate,

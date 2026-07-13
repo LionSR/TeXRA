@@ -7,7 +7,7 @@
 
 import { platform } from '@platform/platform';
 import { hasAnyProviderApiKey } from '@controllers/onboarding/onboardingFunnel';
-import { isCodexSubscriptionActive } from '@auth/codex';
+import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 
 import { getCliAuthProfile } from './supabaseAuth';
