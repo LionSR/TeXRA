@@ -122,7 +122,7 @@ vi.mock('@auth/serverKeys', () => ({
 // predicate; stand it in with the same provider-key mock this suite already
 // drives, so the credential check keeps tracking `mocks.hasUsableApiKey`
 // instead of hitting the (unstubbed) fake platform secrets store.
-vi.mock('@controllers/onboarding/onboardingFunnel', () => ({
+vi.mock('@model/setupCredentialAccess', () => ({
   hasUsableSetupCredential: async () => {
     for (const provider of MOCK_API_PROVIDERS) {
       if (await mocks.hasUsableApiKey(provider)) return true;
@@ -242,7 +242,7 @@ await import('@frontend/secretManager');
 await import('@agent/runtime/SessionHandle');
 await import('@controllers/onboarding/setupLaunch');
 await import('@auth/serverKeys');
-await import('@controllers/onboarding/onboardingFunnel');
+await import('@model/setupCredentialAccess');
 await import('@common/state');
 
 // Module under test — imported after all mock factories are materialized.

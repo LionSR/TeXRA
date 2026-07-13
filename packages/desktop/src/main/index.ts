@@ -14,12 +14,12 @@ import {
 
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
-import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
 import { getAgent } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/uiHosts';
+import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, agentKeyOf } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';

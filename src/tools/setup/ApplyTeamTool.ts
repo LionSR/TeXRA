@@ -14,19 +14,17 @@
 
 import { z } from 'zod';
 
-import {
-  registryPresetRosterState,
-  resolveTeamPreset,
-} from '@controllers/onboarding/defaultTeamSeeding';
+import { platform } from '@platform/platform';
+import { createRegistryTeamRosterState } from '@agent/teams/registryTeamRosterState';
+import { refresh } from '@agent/index/agentRegistry';
+import { AUTH_COMMANDS } from '@auth/constants';
+import { preflightTeamAvailability } from '@common/teams/TeamAvailabilityPreflight';
 import {
   commitTeamRoster,
   resolveTeamRoster,
   teamHostedNamesForPreflight,
-} from '@controllers/teams/TeamRoster';
-import { preflightTeamAvailability } from '@controllers/teams/TeamAvailabilityPreflight';
-import { platform } from '@platform/platform';
-import { refresh } from '@agent/index/agentRegistry';
-import { AUTH_COMMANDS } from '@auth/constants';
+} from '@common/teams/TeamRoster';
+import { resolveBuiltInTeamPreset } from '@common/teams/builtInTeamPresets';
 import { agentName } from '@shared/schemas/agent';
 import { setDefaultTeamId } from '@shared/state/onboardingState';
 import {
@@ -83,7 +81,7 @@ ${describeTeams()}`,
   schema: ApplyTeamInputSchema,
 }) {
   protected async execute(input: ApplyTeamInput): Promise<ToolResult> {
-    const preset = resolveTeamPreset(input.teamId);
+    const preset = resolveBuiltInTeamPreset(input.teamId);
     if (!preset) {
       // The schema gates ids, so this only fires if the enum and the preset
       // list ever disagree — fail loudly rather than half-apply.
@@ -92,7 +90,7 @@ ${describeTeams()}`,
       );
     }
 
-    const state = registryPresetRosterState(platform().workspaceState);
+    const state = createRegistryTeamRosterState(platform().workspaceState);
     const initial = {
       preset,
       resolution: resolveTeamRoster(state, preset),
