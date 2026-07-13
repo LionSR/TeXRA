@@ -21,8 +21,7 @@ import {
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-
-import { getDefaultTeamId } from './onboardingFunnel';
+import { getDefaultTeamId } from '@shared/state/onboardingState';
 
 import type { StateStore } from '@platform/interfaces';
 

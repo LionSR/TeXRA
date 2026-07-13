@@ -4,8 +4,6 @@ import * as vscode from 'vscode';
 // Local imports - agent
 import {
   planOnboardingFunnelTransition,
-  readOnboardingFlags,
-  setOnboardingDeclined,
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
 import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
@@ -34,6 +32,10 @@ import {
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
+import {
+  readOnboardingFlags,
+  setOnboardingDeclined,
+} from '@shared/state/onboardingState';
 import { watchConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 
