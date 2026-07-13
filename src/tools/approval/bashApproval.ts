@@ -89,7 +89,7 @@ export async function requestBashApproval(
 
   const runtimeHost = requireRuntimeHost('bash approval', context);
 
-  return session.approvals.bash.enqueue(() =>
+  return session.approvals.bash.enqueue(streamId, () =>
     showApprovalPrompt(request, streamId, runtimeHost, session),
   );
 }

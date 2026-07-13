@@ -2,7 +2,7 @@
  * Generic stream-scoped approval controller, owned per session.
  *
  * Encapsulates the shared concerns of bash and tool-edit approvals:
- *   - serialized request queue (one prompt at a time within a session)
+ *   - serialized request queues (one prompt at a time per stream)
  *   - registry of in-flight pending approvals keyed by request id
  *   - per-stream bypass state announced over a bound progress event
  *   - rejection on stream cleanup
@@ -101,7 +101,10 @@ export interface StreamApprovalController<R extends { accepted: boolean }> {
   registerPending(id: string, entry: PendingApproval<R>): void;
   unregisterPending(id: string): void;
   bypass: StreamApprovalBypass;
-  enqueue<T>(run: () => Promise<T>): Promise<T>;
+  enqueue<T>(
+    streamId: StreamTabId | undefined,
+    run: () => Promise<T>,
+  ): Promise<T>;
   rejectPendingForStream(streamId: StreamTabId): void;
   /**
    * Reject pending entries with no concrete stream context (streamId is
@@ -123,8 +126,7 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
   options: StreamApprovalControllerOptions<R>,
 ): StreamApprovalController<R> {
   const pending = new Map<string, PendingApproval<R>>();
-  // Serialize approvals so only one prompt is in flight at a time.
-  const queue = new PQueue({ concurrency: 1 });
+  const queues = new Map<StreamTabId | undefined, PQueue>();
 
   function rejectWhere(
     predicate: (entry: PendingApproval<R>) => boolean,
@@ -144,10 +146,25 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
       pending.delete(id);
     },
     bypass: createStreamApprovalBypass(options.bypassEvent),
-    enqueue<T>(run: () => Promise<T>): Promise<T> {
+    enqueue<T>(streamId, run): Promise<T> {
+      let queue = queues.get(streamId);
+      if (!queue) {
+        queue = new PQueue({ concurrency: 1 });
+        queues.set(streamId, queue);
+      }
+
       // `add` widens to `T | void` to cover abort via signal/timeout; we pass
       // neither, so the task always runs and resolves with `T`.
-      return queue.add(run) as Promise<T>;
+      const task = queue.add(run) as Promise<T>;
+      return task.finally(() => {
+        if (
+          queue.pending === 0 &&
+          queue.size === 0 &&
+          queues.get(streamId) === queue
+        ) {
+          queues.delete(streamId);
+        }
+      });
     },
     rejectPendingForStream(streamId) {
       rejectWhere((entry) => entry.streamId === streamId);
