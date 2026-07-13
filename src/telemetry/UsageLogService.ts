@@ -5,8 +5,8 @@ import ky from 'ky';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import * as logger from '@logger/logUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { delay } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
 import type {
@@ -21,6 +21,8 @@ logger.initialize(CHANNEL);
 const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-usage`;
 const MAX_QUEUE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
+
+type BatchFlushOutcome = 'processed' | 'blocked';
 
 interface UsageLogConfig {
   batchSize: number;
@@ -38,7 +40,7 @@ class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
   private retryBatch: UsageLogBatch | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
-  private activeFlush: Promise<boolean> | null = null;
+  private activeFlush: Promise<BatchFlushOutcome> | null = null;
   private config: UsageLogConfig = DEFAULT_CONFIG;
   private extensionVersion: string | undefined;
   private editorType: string | undefined;
@@ -88,15 +90,15 @@ class UsageLogServiceImpl {
   async flush(): Promise<boolean> {
     while (this.retryBatch || this.queue.length > 0 || this.activeFlush) {
       if (this.activeFlush) {
-        const madeProgress = await this.activeFlush;
-        if (!madeProgress) return false;
+        const outcome = await this.activeFlush;
+        if (outcome === 'blocked') return false;
         continue;
       }
 
       this.activeFlush = this.flushQueuedBatch();
       try {
-        const madeProgress = await this.activeFlush;
-        if (!madeProgress) return false;
+        const outcome = await this.activeFlush;
+        if (outcome === 'blocked') return false;
       } finally {
         this.activeFlush = null;
       }
@@ -105,13 +107,13 @@ class UsageLogServiceImpl {
     return true;
   }
 
-  private async flushQueuedBatch(): Promise<boolean> {
+  private async flushQueuedBatch(): Promise<BatchFlushOutcome> {
     let batch: UsageLogBatch | null = null;
     try {
       const token = await SupabaseClient.getRelayAccessToken();
       if (!token) {
         logger.debug(CHANNEL, 'Skipping flush - user not authenticated');
-        return false;
+        return 'blocked';
       }
 
       batch = this.retryBatch;
@@ -120,7 +122,7 @@ class UsageLogServiceImpl {
       } else {
         const entries = this.queue;
         this.queue = [];
-        if (entries.length === 0) return false;
+        if (entries.length === 0) return 'blocked';
 
         batch = {
           entries,
@@ -134,18 +136,19 @@ class UsageLogServiceImpl {
       );
 
       const response = await this.sendBatch(batch, token);
-      if (response.success) {
-        logger.debug(
-          CHANNEL,
-          `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
-        );
-      } else {
-        logger.warn(
-          CHANNEL,
-          `Batch rejected; dropped ${batch.entries.length} queued entries: ${response.error}`,
-        );
+      if (!response.success) {
+        const message = response.error ?? 'Usage batch was rejected';
+        if (response.retryable === false) {
+          this.reportPermanentRejection(batch, message);
+          return 'processed';
+        }
+        throw new Error(message);
       }
-      return true;
+      logger.debug(
+        CHANNEL,
+        `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
+      );
+      return 'processed';
     } catch (error) {
       const requeued = batch?.entries.length ?? 0;
       if (batch) this.retryBatch = batch;
@@ -155,8 +158,22 @@ class UsageLogServiceImpl {
         CHANNEL,
         `Failed to send usage batch${requeuedMessage}: ${toErrorMessage(error)}`,
       );
-      return false;
+      return 'blocked';
     }
+  }
+
+  private reportPermanentRejection(batch: UsageLogBatch, reason: string): void {
+    logger.error(
+      CHANNEL,
+      `Usage batch ${batch.batchId} was permanently rejected; discarded ${batch.entries.length} entries so later batches can continue`,
+      {
+        data: {
+          batchId: batch.batchId,
+          entryCount: batch.entries.length,
+          reason,
+        },
+      },
+    );
   }
 
   private async sendBatch(
@@ -168,18 +185,27 @@ class UsageLogServiceImpl {
     // subsequent `.json()` read indefinitely, wedging activeFlush and dispose().
     // AbortSignal.timeout stays armed through the body read, like the previous
     // manual AbortController did.
-    const data = await ky
-      .post(USAGE_LOG_ENDPOINT, {
-        json: batch,
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: false,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      })
-      .json<unknown>();
-    return UsageLogResponseSchema.catch({
-      success: true,
-      accepted: batch.entries.length,
-    }).parse(data);
+    const httpResponse = await ky.post(USAGE_LOG_ENDPOINT, {
+      json: batch,
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: false,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      throwHttpErrors: false,
+    });
+    const data = await httpResponse.json<unknown>();
+    const response = UsageLogResponseSchema.parse(data);
+    if (!response.success) return response;
+    if (!httpResponse.ok) {
+      throw new Error(
+        `Usage endpoint returned HTTP ${httpResponse.status} with a success acknowledgement`,
+      );
+    }
+    if (response.accepted !== batch.entries.length) {
+      throw new Error(
+        `Usage batch acknowledgement accepted ${response.accepted} of ${batch.entries.length} entries`,
+      );
+    }
+    return response;
   }
 
   private startFlushTimer(): void {
