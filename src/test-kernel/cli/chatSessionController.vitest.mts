@@ -234,6 +234,10 @@ function makeResolvedResume() {
 function makeInterruptedController(
   runPromise: Promise<void>,
   runCompleted: boolean,
+  snapshotStore = makeResumeSnapshotStore({
+    executionId: 'exec-1',
+    config: makeResumeConfig(),
+  }),
 ) {
   const session = makeSession({
     streamId: 'stream-1' as StreamTabId,
@@ -242,10 +246,6 @@ function makeInterruptedController(
     runPromise,
     runCompleted,
     stopRequested: true,
-  });
-  const snapshotStore = makeResumeSnapshotStore({
-    executionId: 'exec-1',
-    config: makeResumeConfig(),
   });
   mocks.resolveAndResumeStream.mockImplementationOnce(
     async (
@@ -257,6 +257,41 @@ function makeInterruptedController(
     ctrl: createChatSessionController(makeInit({ session, snapshotStore })),
     session,
   };
+}
+
+async function retainInterruptedFollowUp(
+  ctrl: ReturnType<typeof createChatSessionController>,
+  text: string,
+): Promise<void> {
+  mocks.resolveAndResumeStream.mockReset().mockResolvedValueOnce(false);
+  const admission = ctrl.admitInterruptedFollowUp({ text });
+  expect(admission.kind).toBe('accepted');
+  if (admission.kind !== 'accepted') return;
+  await expect(admission.completion).resolves.toBe(false);
+}
+
+async function expectInterruptedRetry(
+  ctrl: ReturnType<typeof createChatSessionController>,
+  expectedTexts: readonly string[],
+): Promise<void> {
+  mocks.resolveAndResumeStream.mockImplementationOnce(
+    async (
+      _streamId: StreamTabId,
+      ports: { resumeToolUseSnapshot(snapshot: unknown): Promise<boolean> },
+    ) => ports.resumeToolUseSnapshot({ version: 2 }),
+  );
+  const retry = ctrl.admitInterruptedFollowUp({ text: 'Retry.' });
+  expect(retry.kind).toBe('accepted');
+  if (retry.kind !== 'accepted') return;
+  await expect(retry.completion).resolves.toBe(true);
+  expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+    'stream-1',
+    { version: 2 },
+    expect.any(Object),
+    expect.objectContaining({
+      extraFollowUps: expectedTexts.map((text) => ({ text })),
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -914,25 +949,38 @@ describe('createChatSessionController', () => {
       Promise.resolve(),
       true,
     );
-    mocks.resolveAndResumeStream.mockReset().mockResolvedValueOnce(false);
-
-    const failed = ctrl.admitInterruptedFollowUp({ text: 'First attempt.' });
-    expect(failed.kind).toBe('accepted');
-    if (failed.kind !== 'accepted') return;
-    await expect(failed.completion).resolves.toBe(false);
+    await retainInterruptedFollowUp(ctrl, 'First attempt.');
     expect(session.interruptedStreamId).toBe('stream-1');
-
-    mocks.resolveAndResumeStream.mockImplementationOnce(
-      async (
-        _streamId: StreamTabId,
-        ports: { resumeToolUseSnapshot(snapshot: unknown): Promise<boolean> },
-      ) => ports.resumeToolUseSnapshot({ version: 2 }),
-    );
-    const retry = ctrl.admitInterruptedFollowUp({ text: 'Retry.' });
-    expect(retry.kind).toBe('accepted');
-    if (retry.kind !== 'accepted') return;
-    await expect(retry.completion).resolves.toBe(true);
+    await expectInterruptedRetry(ctrl, ['First attempt.', 'Retry.']);
     expect(session.interruptedStreamId).toBeUndefined();
+  });
+
+  it('discards retained interrupted follow-ups when the chat is cleared', async () => {
+    const { ctrl } = makeInterruptedController(Promise.resolve(), true);
+    await retainInterruptedFollowUp(ctrl, 'Discard me.');
+    ctrl.clearInterruptedRecovery();
+
+    expect(ctrl.admitInterruptedFollowUp({ text: 'Fresh chat.' })).toEqual({
+      kind: 'not_interrupted',
+    });
+  });
+
+  it('keeps retained follow-ups ahead of a retry after manual resume rollback', async () => {
+    const snapshotStore = makeResumeSnapshotStore({
+      executionId: 'exec-1',
+      config: makeResumeConfig(),
+      load: vi
+        .fn<() => Promise<void>>()
+        .mockRejectedValueOnce(new Error('load failed')),
+    });
+    const { ctrl } = makeInterruptedController(
+      Promise.resolve(),
+      true,
+      snapshotStore,
+    );
+    await retainInterruptedFollowUp(ctrl, 'First attempt.');
+    await ctrl.resume('aaaaaa' as ExecutionId, makeResolvedResume());
+    await expectInterruptedRetry(ctrl, ['First attempt.', 'Retry.']);
   });
 
   it('preserves root ownership when auto-resuming a child stream', async () => {
