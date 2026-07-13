@@ -3,6 +3,7 @@ import { type ExecutionStatusInfo } from '@agent/runtime/executionRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   EXECUTION_STATUS,
+  ExecutionStatusSchema,
   STATUS_DISPLAY,
   TODO_STATUS,
   type TodoStatus,
@@ -58,8 +59,13 @@ export function getExecutionStatusInfo(
   const session = currentSession();
   const handle = session.executions.getHandle(executionId);
   if (handle) return session.executions.getStatus(handle);
+  const persistedStatus = ExecutionStatusSchema.safeParse(terminalStatus);
   return {
-    status: terminalStatus ?? EXECUTION_STATUS.COMPLETED,
+    status: persistedStatus.success
+      ? persistedStatus.data
+      : terminalStatus === undefined
+        ? EXECUTION_STATUS.COMPLETED
+        : 'unknown',
     elapsed: null,
   };
 }

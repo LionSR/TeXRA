@@ -899,7 +899,7 @@ describe('executionRegistry', () => {
       expect(registry.getActiveChildren(parentStreamId).subagents).toEqual([
         expect.objectContaining({
           executionId,
-          status: STREAM_STATUS.STOPPED,
+          status: STREAM_PHASE.CANCELLED,
         }),
       ]);
       expect(
