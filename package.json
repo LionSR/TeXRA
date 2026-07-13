@@ -86,7 +86,7 @@
     "clipboardy": "^5.3.1",
     "concurrently": "^10.0.3",
     "esbuild": "^0.28.1",
-    "eslint": "^10.6.0",
+    "eslint": "^10.7.0",
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-unicorn": "^71.1.0",
     "globals": "^17.7.0",
