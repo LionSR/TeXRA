@@ -17,14 +17,13 @@ import {
   type StreamStatusEmitOptions,
 } from '@agent/runtime/StreamStatusService';
 import {
-  isInFlightStatus,
-  isLiveElapsedStatus,
+  isActivePhase,
+  isInFlightPhase,
   projectRunOutcome,
 } from '@common/constants/streamStatus';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
-  STREAM_STATUS,
   STREAM_SUBSTATE,
   type ActiveChildInfo,
   type StreamPhase,
@@ -47,7 +46,6 @@ export {
   type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
   type AgentRunHandle,
-  ACTIVE_STATUSES,
   AgentExecutionHandle,
   ProcessExecutionHandle,
 } from './ExecutionHandle';
@@ -355,13 +353,15 @@ export class ExecutionRegistry {
     return this.handles.get(executionId);
   }
 
-  getStatus(handle: ExecutionHandle): ExecutionStatusInfo {
+  getStatus(
+    handle: ExecutionHandle,
+  ): ExecutionStatusInfo & { status: StreamPhase } {
     const status =
       handle instanceof AgentExecutionHandle
         ? (this.streamStatus.get(handle.childStreamId) ?? STREAM_PHASE.RUNNING)
         : STREAM_PHASE.RUNNING;
 
-    if (!isLiveElapsedStatus(status)) {
+    if (!isActivePhase(status)) {
       return { status, elapsed: null };
     }
 
@@ -435,7 +435,7 @@ export class ExecutionRegistry {
     const status = this.streamStatus.get(streamId);
     const hasActiveChildren = this.hasActiveChildren(streamId);
 
-    if (status !== undefined && !isInFlightStatus(status)) {
+    if (status !== undefined && !isInFlightPhase(status)) {
       if (hasActiveChildren) {
         return { kind: 'queue', reason: 'children_running' };
       }
@@ -783,12 +783,10 @@ export class ExecutionRegistry {
         continue;
       }
       const { status, elapsed } = this.getStatus(handle);
-      const summaryStatus =
-        status === STREAM_PHASE.CANCELLED ? STREAM_STATUS.STOPPED : status;
       const base = {
         executionId: handle.executionId,
         agentName: handle.agentName,
-        status: summaryStatus,
+        status,
         startedAt: handle.startedAt,
         elapsed: elapsed ?? null,
         ...(handle.toolName ? { toolName: handle.toolName } : {}),
