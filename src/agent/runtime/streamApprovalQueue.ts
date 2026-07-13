@@ -146,7 +146,10 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
       pending.delete(id);
     },
     bypass: createStreamApprovalBypass(options.bypassEvent),
-    enqueue<T>(streamId, run): Promise<T> {
+    enqueue<T>(
+      streamId: StreamTabId | undefined,
+      run: () => Promise<T>,
+    ): Promise<T> {
       let queue = queues.get(streamId);
       if (!queue) {
         queue = new PQueue({ concurrency: 1 });
