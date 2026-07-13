@@ -226,8 +226,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         setGlobalStreaming,
       },
     });
-    this.agentHandlers = new AgentHandlers(ctx, (selectedToolUseAgent) =>
-      this.refreshAfterAgentMutation(selectedToolUseAgent),
+    this.agentHandlers = new AgentHandlers(
+      ctx,
+      (selectedToolUseAgent, agentCatalogAlreadyFresh) =>
+        this.refreshAfterAgentMutation(
+          selectedToolUseAgent,
+          agentCatalogAlreadyFresh,
+        ),
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.historyHandlers = new HistoryHandlers(ctx);
@@ -954,6 +959,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
   private async refreshAfterAgentMutation(
     selectedToolUseAgent?: string,
+    agentCatalogAlreadyFresh = false,
   ): Promise<void> {
     await Promise.all([
       this.withActiveWebview((w) =>
@@ -961,7 +967,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       ),
       safeExecuteCommand(
         'texra.refreshAllOptions',
-        selectedToolUseAgent ? [{ selectedToolUseAgent }] : [],
+        selectedToolUseAgent || agentCatalogAlreadyFresh
+          ? [{ selectedToolUseAgent, agentCatalogAlreadyFresh }]
+          : [],
         this.viewName,
       ),
     ]);

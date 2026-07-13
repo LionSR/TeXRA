@@ -4,6 +4,7 @@ import { agentKeyOf } from '@shared/schemas/agent';
 
 import {
   cliMultiAgentPresetCanLaunchTeam,
+  cliMultiAgentTexraHostedMissingNames,
   formatCliMultiAgentPresetLauncherHints,
   formatCliMultiAgentPresetLauncherSummary,
   type CliMultiAgentPresetRunPlan,
@@ -372,6 +373,7 @@ export function buildCliTeamItems(
   options: {
     readonly includeLoginHint?: boolean;
     readonly launchBlockReason?: CliPresetLaunchBlockReason;
+    readonly remoteAgentCatalogAvailable?: boolean;
   },
 ): CliOrchestrationItem[] {
   const launchBlockedDescription =
@@ -388,7 +390,11 @@ export function buildCliTeamItems(
       ),
     disabled:
       launchBlockedDescription !== undefined ||
-      !cliMultiAgentPresetCanLaunchTeam(plan),
+      (!cliMultiAgentPresetCanLaunchTeam(plan) &&
+        !(
+          options.remoteAgentCatalogAvailable === false &&
+          cliMultiAgentTexraHostedMissingNames(plan).length > 0
+        )),
     footerHints: formatCliMultiAgentPresetLauncherHints(plan, {
       includeLoginHint: options.includeLoginHint,
     }),

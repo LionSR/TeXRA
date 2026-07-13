@@ -50,6 +50,23 @@ function findPreset(id: string) {
 }
 
 describe('CLI multi-agent presets', () => {
+  it('preserves missing hosted provenance on a legacy custom preset', () => {
+    const presets = cliMultiAgentPresets([
+      {
+        id: 'legacy',
+        name: 'Legacy',
+        description: 'Saved before hosted metadata existed',
+        icon: 'tools',
+        workflowAgents: ['generic', 'polish'],
+        toolUseAgents: ['orchestrator', 'review'],
+      },
+    ]);
+
+    expect(
+      findCliMultiAgentPreset(presets, 'legacy')?.texraHostedAgents,
+    ).toBeUndefined();
+  });
+
   it('lists planned built-in team presets with stable counts', () => {
     const presets = cliMultiAgentPresets(undefined);
     const plans = planCliMultiAgentPresets(presets, {

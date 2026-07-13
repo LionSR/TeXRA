@@ -29,6 +29,7 @@ export {
   getAgentsByCategory,
   getAgentsBySource,
   refresh,
+  invalidateRemoteAgentsAfterSignOut,
   // Typed data options
   computeAgentOptionsData,
   // Key helpers

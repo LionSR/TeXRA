@@ -105,7 +105,10 @@ function setupApiKeyToolPlatform(store: Map<string, string>): void {
     },
     auth: {
       async getStatus() {
-        return { authenticated: false };
+        return {
+          authenticated: false,
+          remoteAgentCatalogAvailable: false,
+        };
       },
     },
     config: {

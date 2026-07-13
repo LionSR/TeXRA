@@ -29,6 +29,7 @@ type ModelOptionsByCategory = Awaited<
 type AgentOptionsData = Awaited<ReturnType<typeof computeAgentOptionsData>>;
 interface RefreshAllOptionsArgs {
   readonly selectedToolUseAgent?: string;
+  readonly agentCatalogAlreadyFresh?: boolean;
 }
 
 function postModelOptions(
@@ -97,7 +98,7 @@ export function registerMainViewCommands(
       id: mainViewCommands.refreshAllOptions,
       handler: (args?: RefreshAllOptionsArgs) =>
         runRefresh('options', async (webview) => {
-          await refresh();
+          if (!args?.agentCatalogAlreadyFresh) await refresh();
           const [modelOptionsByCategory, agentOptionsData] = await Promise.all([
             loadMainViewModelOptions(),
             computeAgentOptionsData(),

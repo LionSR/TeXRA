@@ -83,6 +83,7 @@ describe('default setup platform', () => {
 
     await expect(getSetupPlatform().auth.getStatus()).resolves.toEqual({
       authenticated: false,
+      remoteAgentCatalogAvailable: false,
     });
   });
 
@@ -107,7 +108,24 @@ describe('default setup platform', () => {
 
     await expect(getSetupPlatform().auth.getStatus()).resolves.toEqual({
       authenticated: true,
+      remoteAgentCatalogAvailable: true,
       email: 'researcher@example.com',
+      tier: 'Max',
+    });
+  });
+
+  it('reports relay-only model auth without remote-catalog access', async () => {
+    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'canAccessRemoteAgentCatalog').mockResolvedValue(
+      false,
+    );
+    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('Max');
+
+    await expect(getSetupPlatform().auth.getStatus()).resolves.toEqual({
+      authenticated: true,
+      remoteAgentCatalogAvailable: false,
+      email: undefined,
       tier: 'Max',
     });
   });
@@ -118,6 +136,7 @@ describe('default setup platform', () => {
     await expect(setup.secrets.anyUsableCredentialExists()).resolves.toBe(true);
     await expect(setup.auth.getStatus()).resolves.toEqual({
       authenticated: false,
+      remoteAgentCatalogAvailable: false,
     });
   });
 });

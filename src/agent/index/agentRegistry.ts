@@ -92,6 +92,8 @@ const cache = new Map<string, AgentEntry>();
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 let cacheIncludesRemote = false;
+let refreshQueue: Promise<void> = Promise.resolve();
+let registryEpoch = 0;
 
 export interface LoadAgentsOptions {
   /** Include remote agent metadata that requires auth/network access. */
@@ -121,8 +123,10 @@ export async function loadAgents(
 
   const previousInitialized = initialized;
   const previousCacheIncludesRemote = cacheIncludesRemote;
-  initPromise = doLoad(includeRemote)
-    .then(() => {
+  const loadEpoch = registryEpoch;
+  initPromise = doLoad(includeRemote, loadEpoch)
+    .then((published) => {
+      if (!published) return;
       initialized = true;
       cacheIncludesRemote = includeRemote;
     })
@@ -138,7 +142,10 @@ export async function loadAgents(
   return initPromise;
 }
 
-async function doLoad(includeRemote: boolean): Promise<void> {
+async function doLoad(
+  includeRemote: boolean,
+  loadEpoch: number,
+): Promise<boolean> {
   const startTime = Date.now();
 
   // Migrate legacy builtIn:* → builtInWorkflow:* in persisted state
@@ -178,6 +185,8 @@ async function doLoad(includeRemote: boolean): Promise<void> {
     ),
   );
 
+  if (loadEpoch !== registryEpoch) return false;
+
   cache.clear();
   for (const entry of allEntries) {
     if (toolUseOverrides.has(entry.name)) {
@@ -196,6 +205,7 @@ async function doLoad(includeRemote: boolean): Promise<void> {
     CHANNEL,
     `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
   );
+  return true;
 }
 
 /**
@@ -468,11 +478,44 @@ export function isAgentRegistryReady(): boolean {
   return initialized;
 }
 
-/** Refresh the cache. */
-export async function refresh(options: LoadAgentsOptions = {}): Promise<void> {
-  initialized = false;
+/**
+ * Refresh the cache after every older load has settled, then force a new load.
+ * This prevents a post-sign-in refresh from joining an in-flight signed-out
+ * remote request and incorrectly treating that stale request as authoritative.
+ */
+export function refresh(options: LoadAgentsOptions = {}): Promise<void> {
+  const refreshEpoch = ++registryEpoch;
+  const run = refreshQueue.then(async () => {
+    if (refreshEpoch !== registryEpoch) return;
+    if (initPromise) await initPromise.catch(() => undefined);
+    if (refreshEpoch !== registryEpoch) return;
+    initialized = false;
+    cacheIncludesRemote = false;
+    await loadAgents(options);
+  });
+  refreshQueue = run.catch(() => undefined);
+  return run;
+}
+
+function removeRemoteEntries(): void {
+  for (const [key, entry] of cache) {
+    if (entry.source === 'remote') cache.delete(key);
+  }
   cacheIncludesRemote = false;
-  await loadAgents(options);
+}
+
+/** Remove remote definitions immediately, then rebuild the local catalog. */
+export function invalidateRemoteAgentsAfterSignOut(): Promise<void> {
+  removeRemoteEntries();
+  return refresh({ includeRemote: false }).catch((error: unknown) => {
+    // An older in-flight remote load may have settled before the rebuild.
+    // Preserve the signed-out invariant even when local directory I/O fails.
+    removeRemoteEntries();
+    logger.warn(
+      CHANNEL,
+      `Local agent catalog rebuild failed after sign-out: ${String(error)}`,
+    );
+  });
 }
 
 // =============================================================================

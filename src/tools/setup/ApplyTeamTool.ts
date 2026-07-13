@@ -7,7 +7,7 @@
  * UI is never built — the setup agent asks in conversation and calls this.
  *
  * The roster write goes through the same shared application path as the
- * Settings "apply team" action (`applyPresetRoster`), so the two can't
+ * Settings "apply team" action, so the two can't
  * drift. Relay-served leads (orchestrators) that aren't in the registry yet
  * (signed out) are reported as "after sign-in" rather than silently dropped.
  */
@@ -19,9 +19,15 @@ import {
   resolveTeamPreset,
 } from '@controllers/onboarding/defaultTeamSeeding';
 import { setDefaultTeamId } from '@controllers/onboarding/onboardingFunnel';
-import { applyPresetRoster } from '@controllers/settingsView/SettingsAgentCatalogController';
+import {
+  commitTeamRoster,
+  resolveTeamRoster,
+  teamHostedNamesForPreflight,
+} from '@controllers/teams/TeamRoster';
+import { preflightTeamAvailability } from '@controllers/teams/TeamAvailabilityPreflight';
 import { platform } from '@platform/platform';
-import { REMOTE_ORCHESTRATOR_AGENT_NAMES } from '@shared/constants/agents';
+import { refresh } from '@agent/index/agentRegistry';
+import { AUTH_COMMANDS } from '@auth/constants';
 import { agentName } from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
@@ -30,6 +36,7 @@ import {
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 import { defineTool } from '../core/define';
+import { getSetupPlatform } from './platform';
 
 /**
  * Built from the actual preset list (plus the hidden starter team) so the
@@ -55,6 +62,12 @@ const ApplyTeamInputSchema = z.strictObject({
       message: `Expected one of: ${TEAM_IDS.join(', ')}`,
     })
     .describe(`Team to apply. One of:\n${describeTeams()}`),
+  unavailableAction: z
+    .enum(['sign-in', 'continue', 'cancel'])
+    .nullish()
+    .describe(
+      'Explicit response when TeXRA-hosted members are unavailable. Omit on the first call; after asking the user, pass sign-in, continue, or cancel.',
+    ),
 });
 
 type ApplyTeamInput = z.infer<typeof ApplyTeamInputSchema>;
@@ -79,11 +92,73 @@ ${describeTeams()}`,
       );
     }
 
-    const { workflowKeys, toolUseKeys, unresolvedNames } =
-      await applyPresetRoster(
-        registryPresetRosterState(platform().workspaceState),
-        preset,
+    const state = registryPresetRosterState(platform().workspaceState);
+    const initial = {
+      preset,
+      resolution: resolveTeamRoster(state, preset),
+    };
+    const texraHostedNames = teamHostedNamesForPreflight(
+      preset,
+      initial.resolution.unresolvedNames,
+    );
+    const setupPlatform = getSetupPlatform();
+    const authenticated = await setupPlatform.auth.getStatus();
+
+    const preflight = await preflightTeamAvailability({
+      initial,
+      unresolvedNames: (value) => value.resolution.unresolvedNames,
+      texraHostedNames,
+      canAccessRemoteCatalog: async () =>
+        authenticated.remoteAgentCatalogAvailable,
+      providedChoice: input.unavailableAction ?? undefined,
+      choose: async () => undefined,
+      signIn: async () => {
+        if (setupPlatform.auth.signIn) return setupPlatform.auth.signIn();
+        if (setupPlatform.commands) {
+          return (
+            (await setupPlatform.commands.invoke(AUTH_COMMANDS.SIGN_IN)) ===
+            true
+          );
+        }
+        return false;
+      },
+      refresh: async () => {
+        await refresh({ includeRemote: true });
+        return { preset, resolution: resolveTeamRoster(state, preset) };
+      },
+    });
+
+    if (preflight.status === 'choice-required') {
+      const names = preflight.unavailableNames.join(', ');
+      return {
+        status: 'executed',
+        summary: `Team not applied; TeXRA-hosted members are unavailable: ${names}.`,
+        output: `The ${preset.name} team has unavailable TeXRA-hosted members: ${names}. Ask the user to choose one action: Sign in to TeXRA, Continue with available members, or Cancel. Then call apply_team again with unavailableAction set to "sign-in", "continue", or "cancel". No roster or default-team state was written.`,
+      };
+    }
+
+    if (preflight.status === 'cancelled') {
+      const signInAdvice =
+        input.unavailableAction === 'sign-in' &&
+        !setupPlatform.auth.signIn &&
+        !setupPlatform.commands
+          ? ' Sign-in is unavailable in this host; sign in through the host account UI, then call apply_team again.'
+          : '';
+      return {
+        status: 'executed',
+        summary: `Cancelled ${preset.name} team application.`,
+        output: `Cancelled. No roster or default-team state was written.${signInAdvice}`,
+      };
+    }
+    if (preflight.status === 'unavailable') {
+      throw new ToolError(
+        `The ${preset.name} team is still unavailable after refreshing the TeXRA agent catalog: ${preflight.unavailableNames.join(', ')}.`,
       );
+    }
+
+    const { workflowKeys, toolUseKeys, unresolvedNames } =
+      preflight.value.resolution;
+    await commitTeamRoster(state, preflight.value.resolution);
     await setDefaultTeamId(platform().globalState, preset.id);
 
     // Names that didn't resolve in the registry right now stay in the roster
@@ -93,12 +168,11 @@ ${describeTeams()}`,
     const unresolved = new Set(unresolvedNames);
     const activeWorkflow = workflowKeys.filter((key) => !unresolved.has(key));
     const activeToolUse = toolUseKeys.filter((key) => !unresolved.has(key));
-    const remoteLeadNames = new Set<string>(REMOTE_ORCHESTRATOR_AGENT_NAMES);
     const pendingRemoteLeads = unresolvedNames.filter((name) =>
-      remoteLeadNames.has(name),
+      texraHostedNames.has(name),
     );
     const pendingOther = unresolvedNames.filter(
-      (name) => !remoteLeadNames.has(name),
+      (name) => !texraHostedNames.has(name),
     );
 
     const signInNote =

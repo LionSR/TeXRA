@@ -132,7 +132,10 @@ export async function resolveCliAgent(
     return getAgent(name, lookupCategory);
   }
 
-  if (name.includes(':') || !(await getCliAuthProvider().isAuthenticated())) {
+  if (
+    name.includes(':') ||
+    !(await getCliAuthProvider().canAccessRemoteAgentCatalog())
+  ) {
     return agent;
   }
 

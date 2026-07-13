@@ -49,7 +49,10 @@ export function createFakeSetupPlatform(
     },
     auth: {
       async getStatus() {
-        return { authenticated: false };
+        return {
+          authenticated: false,
+          remoteAgentCatalogAvailable: false,
+        };
       },
       ...overrides.auth,
     },

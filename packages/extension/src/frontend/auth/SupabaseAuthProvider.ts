@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { platform } from '@platform/platform';
+import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   AUTH_BRIDGE_URL,
@@ -482,6 +483,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       await this.sessionCoordinator.clearSession();
       // Clear server-side key cache when session is removed (handles automatic invalidation)
       getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
+      await invalidateRemoteAgentsAfterSignOut().catch((error: unknown) => {
+        logger.warn(
+          'SupabaseAuthProvider',
+          `Local agent catalog refresh failed after sign-out: ${toErrorMessage(error)}`,
+        );
+      });
       this._onDidChangeSessions.fire({
         added: [],
         removed: [
