@@ -22,7 +22,14 @@ const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-u
 const MAX_QUEUE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 
-type BatchFlushOutcome = 'processed' | 'blocked';
+export const USAGE_LOG_FLUSH_OUTCOME = {
+  ACCEPTED: 'accepted',
+  PENDING: 'pending',
+  REJECTED: 'rejected',
+} as const;
+
+export type UsageLogFlushOutcome =
+  (typeof USAGE_LOG_FLUSH_OUTCOME)[keyof typeof USAGE_LOG_FLUSH_OUTCOME];
 
 interface UsageLogConfig {
   batchSize: number;
@@ -40,7 +47,7 @@ class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
   private retryBatch: UsageLogBatch | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
-  private activeFlush: Promise<BatchFlushOutcome> | null = null;
+  private activeFlush: Promise<UsageLogFlushOutcome> | null = null;
   private config: UsageLogConfig = DEFAULT_CONFIG;
   private extensionVersion: string | undefined;
   private editorType: string | undefined;
@@ -87,33 +94,42 @@ class UsageLogServiceImpl {
     }
   }
 
-  async flush(): Promise<boolean> {
+  async flush(): Promise<UsageLogFlushOutcome> {
+    let finalOutcome: UsageLogFlushOutcome = USAGE_LOG_FLUSH_OUTCOME.ACCEPTED;
+
     while (this.retryBatch || this.queue.length > 0 || this.activeFlush) {
+      let batchOutcome: UsageLogFlushOutcome;
       if (this.activeFlush) {
-        const outcome = await this.activeFlush;
-        if (outcome === 'blocked') return false;
-        continue;
+        batchOutcome = await this.activeFlush;
+      } else {
+        this.activeFlush = this.flushQueuedBatch();
+        try {
+          batchOutcome = await this.activeFlush;
+        } finally {
+          this.activeFlush = null;
+        }
       }
 
-      this.activeFlush = this.flushQueuedBatch();
-      try {
-        const outcome = await this.activeFlush;
-        if (outcome === 'blocked') return false;
-      } finally {
-        this.activeFlush = null;
+      if (batchOutcome === USAGE_LOG_FLUSH_OUTCOME.PENDING) {
+        return finalOutcome === USAGE_LOG_FLUSH_OUTCOME.REJECTED
+          ? finalOutcome
+          : batchOutcome;
+      }
+      if (batchOutcome === USAGE_LOG_FLUSH_OUTCOME.REJECTED) {
+        finalOutcome = batchOutcome;
       }
     }
 
-    return true;
+    return finalOutcome;
   }
 
-  private async flushQueuedBatch(): Promise<BatchFlushOutcome> {
+  private async flushQueuedBatch(): Promise<UsageLogFlushOutcome> {
     let batch: UsageLogBatch | null = null;
     try {
       const token = await SupabaseClient.getRelayAccessToken();
       if (!token) {
         logger.debug(CHANNEL, 'Skipping flush - user not authenticated');
-        return 'blocked';
+        return USAGE_LOG_FLUSH_OUTCOME.PENDING;
       }
 
       batch = this.retryBatch;
@@ -122,7 +138,7 @@ class UsageLogServiceImpl {
       } else {
         const entries = this.queue;
         this.queue = [];
-        if (entries.length === 0) return 'blocked';
+        if (entries.length === 0) return USAGE_LOG_FLUSH_OUTCOME.PENDING;
 
         batch = {
           entries,
@@ -140,7 +156,7 @@ class UsageLogServiceImpl {
         const message = response.error ?? 'Usage batch was rejected';
         if (response.retryable === false) {
           this.reportPermanentRejection(batch, message);
-          return 'processed';
+          return USAGE_LOG_FLUSH_OUTCOME.REJECTED;
         }
         throw new Error(message);
       }
@@ -148,7 +164,7 @@ class UsageLogServiceImpl {
         CHANNEL,
         `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
       );
-      return 'processed';
+      return USAGE_LOG_FLUSH_OUTCOME.ACCEPTED;
     } catch (error) {
       const requeued = batch?.entries.length ?? 0;
       if (batch) this.retryBatch = batch;
@@ -158,7 +174,7 @@ class UsageLogServiceImpl {
         CHANNEL,
         `Failed to send usage batch${requeuedMessage}: ${toErrorMessage(error)}`,
       );
-      return 'blocked';
+      return USAGE_LOG_FLUSH_OUTCOME.PENDING;
     }
   }
 
