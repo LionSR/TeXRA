@@ -110,7 +110,7 @@ extension-homed aliases + `@cli/*`/`@desktop/*` — one `no-restricted-imports`
 block + ~30 lines in `dependencyDirection.vitest.ts`; zero violations to fix.
 R-b (armed now, executed at the Stage-5 exit): freeze host deep-import
 _width_ with a checked-in per-host baseline list (the repo already runs this
-pattern: `knip-baseline.json`, `check-dead-code-ratchet.mjs`); new deep
+pattern: `config/ratchets/knip-baseline.json`, `check-dead-code-ratchet.mjs`); new deep
 specifiers require consciously extending the list.
 _Trackers:_ the never-built agent-sdk-readiness lint-gate step; #7152.
 
