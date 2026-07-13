@@ -104,7 +104,6 @@
     { "from": "utils", "to": "common", "kind": "value" },
     { "from": "utils", "to": "logger", "kind": "value" },
     { "from": "utils", "to": "platform", "kind": "value" },
-    { "from": "utils", "to": "shared", "kind": "value" },
-    { "from": "utils", "to": "tools", "kind": "value" }
+    { "from": "utils", "to": "shared", "kind": "value" }
   ]
 }
