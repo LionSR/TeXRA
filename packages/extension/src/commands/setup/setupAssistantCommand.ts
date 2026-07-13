@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
 import {
   resolveSetupLaunchModel,
   SETUP_INSTRUCTION,
@@ -21,6 +20,7 @@ import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import * as logger from '@logger/logUtils';
+import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { preflightTeamAvailability } from '@controllers/teams/TeamAvailabilityPreflight';
+import { preflightTeamAvailability } from '@common/teams/TeamAvailabilityPreflight';
 
 interface Resolution {
   readonly unresolvedNames: readonly string[];

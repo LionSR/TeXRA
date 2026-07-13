@@ -10,50 +10,15 @@
  * startup menus do not expose the full agent catalog by default.
  */
 
-import {
-  applyTeamRoster,
-  type TeamRosterState,
-} from '@controllers/teams/TeamRoster';
-import { getAgentsByCategory } from '@agent/index/agentRegistry';
-import {
-  AGENT_MODE_PRESETS_BY_ID,
-  STARTER_AGENT_MODE_PRESET,
-  type AgentModePreset,
-} from '@shared/schemas/agentPresets';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { createRegistryTeamRosterState } from '@agent/teams/registryTeamRosterState';
+import { applyTeamRoster } from '@common/teams/TeamRoster';
+import { resolveBuiltInTeamPreset } from '@common/teams/builtInTeamPresets';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import type { StateStore } from '@platform/interfaces';
 
 const DEFAULT_STARTUP_TEAM_ID = 'physicist';
-
-/** Resolve a team id to its built-in preset (the hidden 'starter' included). */
-export function resolveTeamPreset(teamId: string): AgentModePreset | undefined {
-  if (teamId === STARTER_AGENT_MODE_PRESET.id) return STARTER_AGENT_MODE_PRESET;
-  return AGENT_MODE_PRESETS_BY_ID.get(teamId);
-}
-
-/**
- * Roster port over the live agent registry and a workspace state store — the
- * same name-resolution and key-writing path the Settings catalog uses.
- * Requires the agent registry to be loaded; callers sequence after
- * `loadAgents`.
- */
-export function registryPresetRosterState(
-  workspaceState: StateStore,
-): TeamRosterState {
-  return {
-    getAgents: (category) => getAgentsByCategory(category),
-    setEnabledAgentKeys: async (category, enabledKeys) => {
-      await workspaceState.update(
-        category === 'workflow'
-          ? WorkspaceStateKey.ENABLED_AGENTS
-          : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-        enabledKeys,
-      );
-    },
-  };
-}
 
 /**
  * Seed this workspace's agent roster from the user-level default team.
@@ -86,9 +51,9 @@ export async function seedRosterFromDefaultTeam(
   const { fallbackTeamId = DEFAULT_STARTUP_TEAM_ID } = options;
   const defaultTeamId = getDefaultTeamId(globalState);
   const preset =
-    (defaultTeamId ? resolveTeamPreset(defaultTeamId) : undefined) ??
-    (fallbackTeamId ? resolveTeamPreset(fallbackTeamId) : undefined);
+    (defaultTeamId ? resolveBuiltInTeamPreset(defaultTeamId) : undefined) ??
+    (fallbackTeamId ? resolveBuiltInTeamPreset(fallbackTeamId) : undefined);
   if (!preset) return false;
-  await applyTeamRoster(registryPresetRosterState(workspaceState), preset);
+  await applyTeamRoster(createRegistryTeamRosterState(workspaceState), preset);
   return true;
 }

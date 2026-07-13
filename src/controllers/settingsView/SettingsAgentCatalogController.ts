@@ -4,7 +4,7 @@ import {
   commitTeamRoster,
   resolveTeamRoster,
   type TeamRosterResolution,
-} from '@controllers/teams/TeamRoster';
+} from '@common/teams/TeamRoster';
 
 // Local imports - shared
 import type { AgentModePreset } from '@shared/schemas/agentPresets';

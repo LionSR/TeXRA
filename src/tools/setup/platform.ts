@@ -9,7 +9,6 @@
  */
 
 // Local imports
-import { hasUsableSetupCredential } from '@controllers/onboarding/onboardingFunnel';
 import { platform as currentPlatform } from '@platform/platform';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -24,6 +23,7 @@ import {
   hasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
+import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 
 /** Per-provider API key surface. */
