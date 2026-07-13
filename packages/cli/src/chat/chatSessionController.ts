@@ -41,10 +41,7 @@ import {
   resolveCliResumeSnapshot,
   type CliToolUseResumeResolution,
 } from '@cli/runtime/sessionResume';
-import {
-  cliTerminalStatus,
-  terminalStatusExitCode,
-} from '@cli/runtime/terminalStatus';
+import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import {
   EXECUTION_STATUS,
@@ -408,8 +405,8 @@ export function createChatSessionController(
       })
       .then((result) => {
         agentSettled = true;
-        session.runExitCode = terminalStatusExitCode(
-          cliTerminalStatus(result),
+        session.runExitCode = runOutcomeExitCode(
+          result.outcome,
           sessionContext,
         );
         if (result.streamId) {
@@ -531,8 +528,8 @@ export function createChatSessionController(
           if (session.streamId) {
             projectStreamTranscript(session.streamId, { finalize: true });
           }
-          session.runExitCode = terminalStatusExitCode(
-            cliTerminalStatus(result),
+          session.runExitCode = runOutcomeExitCode(
+            result.outcome,
             sessionContext,
           );
           notify({ kind: 'agentFinished' });
