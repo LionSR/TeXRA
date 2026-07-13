@@ -95,7 +95,12 @@ async function* streamResponse(
 ): AsyncIterable<LanguageModelResponsePart> {
   const model = await requireModel(selectChatModels, modelId);
   const cancellation = new vscode.CancellationTokenSource();
-  const cancel = () => cancellation.cancel();
+  let cancelled = false;
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    cancellation.cancel();
+  };
   if (signal.aborted) cancel();
   signal.addEventListener('abort', cancel, { once: true });
 
@@ -119,6 +124,7 @@ async function* streamResponse(
     }
   } finally {
     signal.removeEventListener('abort', cancel);
+    cancel();
     cancellation.dispose();
   }
 }

@@ -224,9 +224,10 @@ describe('createLanguageModelPort', () => {
   });
 
   it.each([
-    ['before iteration', true],
-    ['during streaming', false],
-  ])('cancels %s when the AbortSignal fires', async (_case, preAborted) => {
+    ['before iteration', 'pre-abort'],
+    ['during streaming', 'abort'],
+    ['when the consumer stops', 'return'],
+  ])('cancels %s', async (_case, mode) => {
     mocks.selectChatModels.mockResolvedValue([
       fakeModel({
         sendRequest: vi.fn(async () => ({
@@ -237,7 +238,7 @@ describe('createLanguageModelPort', () => {
       }),
     ]);
     const controller = new AbortController();
-    if (preAborted) controller.abort();
+    if (mode === 'pre-abort') controller.abort();
     const stream = createPort().sendRequest(
       'copilot-gpt-4o',
       [],
@@ -247,9 +248,10 @@ describe('createLanguageModelPort', () => {
     const iterator = stream[Symbol.asyncIterator]();
 
     await iterator.next();
-    if (!preAborted) controller.abort();
+    if (mode === 'abort') controller.abort();
+    if (mode === 'return') await iterator.return?.();
 
     expect(cancellationSources[0]?.cancel).toHaveBeenCalledOnce();
-    await iterator.return?.();
+    if (mode !== 'return') await iterator.return?.();
   });
 });
