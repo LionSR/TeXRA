@@ -13,24 +13,16 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import {
-  STREAM_STATUS,
-  streamStatusesWithTrait,
+  type ExecutionStatus,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
 
 export interface ExecutionStatusInfo {
-  status: string;
+  status: StreamPhase | ExecutionStatus | 'unknown';
   elapsed: string | null;
 }
-
-/**
- * Statuses that represent a live execution (running, transitioning, or
- * paused). This is exactly the `inFlight` trait — derived from the shared
- * trait table rather than re-declared.
- */
-export const ACTIVE_STATUSES: ReadonlySet<string> =
-  streamStatusesWithTrait('inFlight');
 
 export interface ExecutionHandle {
   readonly executionId: string;
