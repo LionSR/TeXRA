@@ -57,13 +57,13 @@ import {
 } from '@cli/runtime/terminalRequirements';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
-import { isActivePhase } from '@common/constants/streamStatus';
 import {
   STREAM_PHASE,
   type ExecutionId,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { assertNever } from '@utils/core';

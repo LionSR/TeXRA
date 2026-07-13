@@ -19,7 +19,7 @@ export type StreamStatus = z.infer<typeof StreamStatusSchema>;
 /**
  * Declarative trait table for the live stream state machine — the single
  * source of truth for every status-membership question. Predicates and sets
- * (here and in `@common/constants/streamStatus`) are derived from this table;
+ * (here and in `@shared/streams/streamStatus`) are derived from this table;
  * never declare a new status list by hand.
  *
  * Traits:
@@ -120,7 +120,7 @@ export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
  * run end", decided exactly once at the run-lifecycle boundary. The legacy
- * vocabularies are pure projections of it (see `@common/constants/streamStatus`):
+ * vocabularies are pure projections of it (see `@shared/streams/streamStatus`):
  * `ExecutionStatus` for persisted history, `EndGroupStatus` for transcript
  * groups, `StreamStatus` for the live stream state machine.
  *

@@ -3,8 +3,8 @@ import * as vscode from 'vscode';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { isInFlightPhase } from '@common/constants/streamStatus';
 import type { StreamTabId } from '@shared/schemas';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { cleanupAllApprovals, releaseStreamResources } from '@tools/approval';
 
 import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '@controllers/progressView/ProgressStreamLifecycleController';

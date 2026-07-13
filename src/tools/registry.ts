@@ -8,6 +8,9 @@ import {
   type ToolDefinition,
 } from '@model/ToolDefinition';
 
+// Local imports - shared tools
+import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
+
 // Local imports - tools
 import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
@@ -148,6 +151,16 @@ function createDefaultTools() {
 
 /** Union of all tool names registered in the default registry. */
 export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
+
+/**
+ * Compile-time guard: every canonical tool with specialized display treatment
+ * must remain registered. The shared module excludes its documented native
+ * text-editor alias before exporting `CanonicalToolDisplayName`.
+ */
+type AssertNever<T extends never> = T;
+type _CanonicalDisplayNamesAreRegistered = AssertNever<
+  Exclude<CanonicalToolDisplayName, RegisteredToolName>
+>;
 
 /**
  * Legacy tool-name aliases — keep prior YAML configs working when a tool is

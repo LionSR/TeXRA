@@ -580,6 +580,29 @@ export default tseslint.config(
     },
   },
 
+  // Extension browser frontends may use host-neutral types from backend
+  // modules, but runtime values must come from browser-safe shared modules.
+  {
+    files: [
+      'packages/extension/src/{webview,progressView,settingsView}/frontend/**/*.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@common', '@common/**', '@tools', '@tools/**'],
+              allowTypeImports: true,
+              message:
+                'Extension browser frontends must import runtime values from browser-safe shared modules.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Configuration for JavaScript view modules
   {
     files: [
