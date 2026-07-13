@@ -1,10 +1,10 @@
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { isCodexSubscriptionActive } from '@auth/codex';
 import { formatCliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
+import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { GoalStore } from '@tools/goal';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
