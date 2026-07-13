@@ -20,9 +20,9 @@ const SECRETS_FILE_MODE = 0o600;
  * Environment variables remain the highest-priority source so automation can
  * keep using ephemeral keys. Values written by CLI login are persisted under
  * the user's TeXRA state directory through the shared `JsonStore` (the same
- * owner `ElectronSecrets` wraps for the desktop host), with `strict: true`
- * so a corrupt secrets file aborts a write instead of silently wiping every
- * other stored credential (see `JsonStoreOptions.strict`).
+ * owner `ElectronSecrets` wraps for the desktop host), with a fail-on-corrupt
+ * policy so a corrupt secrets file aborts a write instead of silently wiping
+ * every other stored credential.
  *
  * Each operation opens its own `JsonStore` rather than caching one for the
  * lifetime of this instance, so reads (`get`/`getStored`/`listStoredKeys`)
@@ -75,7 +75,7 @@ export class CliSecrets implements PlatformSecrets {
   private openStore(): Promise<JsonStore> {
     return JsonStore.open(this.filePath, {
       mode: SECRETS_FILE_MODE,
-      strict: true,
+      corruptionPolicy: 'fail',
     });
   }
 }
