@@ -3,11 +3,7 @@ import { LRUCache } from 'lru-cache';
 
 import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import {
-  isCodexSignedIn,
-  isPreferCodexSubscription,
-  resolveCodexSubscriptionCapabilitiesForAgentCategory,
-} from '@auth/codex';
+import { isCodexSignedIn, isPreferCodexSubscription } from '@auth/codex';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -19,6 +15,7 @@ import {
   isApiProvider,
   type ApiProvider,
 } from './apiProviders';
+import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from './codexSubscriptionRouting';
 import {
   buildBaseModelOption,
   buildBasicModelOptionsData,

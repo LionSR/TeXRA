@@ -2,9 +2,9 @@ import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
-import { isCodexSubscriptionActive } from '@auth/codex';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { isActivePhase } from '@common/constants/streamStatus';
+import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 
 import { approvalQueueStatus } from '../state/approvalQueue';
 import { terminalCapabilities } from '../state/terminalCapabilities';
