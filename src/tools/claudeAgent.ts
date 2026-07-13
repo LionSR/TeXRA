@@ -113,7 +113,7 @@ const ClaudeAgentInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      "Claude model to use (e.g. 'claude-sonnet-4-6', 'claude-fable-5', 'claude-opus-4-8'). Defaults to user-configured model.",
+      "Claude model to use (e.g. 'claude-sonnet-5', 'claude-fable-5', 'claude-opus-4-8'). Defaults to user-configured model.",
     ),
   effort: z
     .enum(CLAUDE_AGENT_EFFORT_LEVELS)

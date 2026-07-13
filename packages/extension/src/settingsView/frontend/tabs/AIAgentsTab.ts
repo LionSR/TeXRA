@@ -32,6 +32,7 @@ import {
   stateSettingByKey,
 } from '@shared/schemas/stateSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { CLAUDE_AGENT_DEFAULT_MODEL } from '@shared/schemas/agentCliSettings';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -168,7 +169,7 @@ export class AIAgentsTab extends LitElement {
   @property({ type: String }) codexReasoningEffort = 'high';
   @property({ type: String }) codexApprovalPolicy = 'never';
   @property({ type: String }) claudeAgentModel: ClaudeAgentModel =
-    'claude-sonnet-4-6';
+    CLAUDE_AGENT_DEFAULT_MODEL;
   @property({ type: String })
   claudeAgentPermissionMode: ClaudeAgentPermissionMode = 'acceptEdits';
   @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort = 'high';
