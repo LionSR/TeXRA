@@ -10,7 +10,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { isInFlightStatus } from '@common/constants/streamStatus';
+import { isInFlightPhase } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   AgentCategoryFilterSchema,
@@ -199,7 +199,7 @@ export class ProgressViewState {
    * call this on the stream being moved away from to close the loop.
    */
   releasePreviousActive(streamId: StreamTabId): void {
-    if (!isInFlightStatus(this.streamStatus.get(streamId))) {
+    if (!isInFlightPhase(this.streamStatus.get(streamId))) {
       this.streamLogs.releaseEntries(streamId);
     }
   }

@@ -18,7 +18,7 @@ import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { isInFlightStatus } from '@common/constants/streamStatus';
+import { isInFlightPhase } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,
@@ -849,7 +849,7 @@ export class ProgressFactApplier {
       this.state.streamLogs.mode.kind === 'persistent' &&
       this.state.streamLogs.has(streamId) &&
       !this.state.streamLogs.get(streamId);
-    if (isInFlightStatus(status)) {
+    if (isInFlightPhase(status)) {
       if (requiresPersistentRehydrate) {
         await this.state.streamLogs.ensureLoaded(streamId);
       }
