@@ -6,8 +6,8 @@
 // provider key does not suppress included-relay sign-in setup, and vice versa.
 
 import { platform } from '@platform/platform';
-import { hasAnyProviderApiKey } from '@controllers/onboarding/onboardingFunnel';
 import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
+import { hasAnyUsableProviderApiKey } from '@model/setupCredentialAccess';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 
 import { getCliAuthProfile } from './supabaseAuth';
@@ -30,11 +30,11 @@ export async function hasCliCredentialForApiMode(
     case 'included':
       return hasIncludedRelaySignIn();
     case 'personal':
-      return hasAnyProviderApiKey(platform().secrets);
+      return hasAnyUsableProviderApiKey(platform().secrets);
     default:
       return (
         (await hasIncludedRelaySignIn()) ||
-        (await hasAnyProviderApiKey(platform().secrets))
+        (await hasAnyUsableProviderApiKey(platform().secrets))
       );
   }
 }

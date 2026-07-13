@@ -15,13 +15,7 @@
  * `platform().globalState`.
  */
 
-import { getServerSideKeyService } from '@auth/serverKeys';
-import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
-import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
-import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import type { OnboardingFunnelState } from '@shared/schemas/onboarding';
-import { isNonEmptyString } from '@utils/core';
-import type { PlatformSecrets } from '@platform/secrets';
 
 export type { OnboardingFunnelState };
 
@@ -79,49 +73,4 @@ export function planOnboardingFunnelTransition(
     selectSetupAgent: state === 'setup' && previous !== 'setup',
     clearDeclined: inputs.declined && inputs.hasCredential,
   };
-}
-
-// ============================================================
-// Credential presence (shared building block)
-// ============================================================
-
-/**
- * True when any provider has a usable API key (secret or env var). Relay
- * sign-in checks stay host-specific; hosts OR this with their own check.
- */
-export async function hasAnyProviderApiKey(
-  secrets: PlatformSecrets,
-): Promise<boolean> {
-  for (const provider of API_PROVIDERS) {
-    // Sequential by design: stop at the first key found.
-    const key = await lookupApiKey(secrets, provider);
-    if (isNonEmptyString(key)) return true;
-  }
-  return false;
-}
-
-/**
- * Single source of truth for "does the user have a usable credential to
- * proceed with setup": an active ChatGPT (Codex) subscription, a non-blank
- * provider API key, or relay access to server-side keys. Provider keys are
- * checked before `canUseServerSideKeys()` deliberately: the latter is a
- * network round-trip that can prime the relay-quota cache and trigger a
- * quota auto-switch, so a cheap local key that already satisfies the gate
- * should short-circuit before that side effect fires.
- *
- * Extension and desktop call this directly, so neither can drift from the
- * other on what counts as "usable" or in what order. The CLI's credential
- * gate (`packages/cli/src/runtime/credentialStatus.ts`) does not call this
- * predicate — it needs an `apiMode`-aware policy (included-relay vs.
- * personal-key sign-in must each unlock their own mode) — but it composes
- * the same underlying primitives (`hasAnyProviderApiKey`,
- * `isCodexSubscriptionActive`) so the individual checks stay consistent even
- * though the CLI's combination policy differs.
- */
-export async function hasUsableSetupCredential(
-  secrets: PlatformSecrets,
-): Promise<boolean> {
-  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
-  if (await hasAnyProviderApiKey(secrets)) return true;
-  return getServerSideKeyService().canUseServerSideKeys();
 }

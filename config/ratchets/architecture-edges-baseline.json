@@ -79,7 +79,6 @@
     { "from": "tools", "to": "agent", "kind": "value" },
     { "from": "tools", "to": "auth", "kind": "value" },
     { "from": "tools", "to": "common", "kind": "value" },
-    { "from": "tools", "to": "controllers", "kind": "value" },
     { "from": "tools", "to": "eventBus", "kind": "value" },
     { "from": "tools", "to": "hosts", "kind": "type-only" },
     { "from": "tools", "to": "housekeeping", "kind": "value" },

@@ -1,14 +1,13 @@
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
-
 import {
   preflightTeamAvailability,
   type TeamAvailabilityChoice,
-} from './TeamAvailabilityPreflight';
+} from '@common/teams/TeamAvailabilityPreflight';
 import {
   teamHostedNamesForPreflight,
   type TeamRosterCatalog,
   type TeamRosterResolution,
-} from './TeamRoster';
+} from '@common/teams/TeamRoster';
+import type { AgentModePreset } from '@shared/schemas/agentPresets';
 
 interface ResolvedTeam {
   readonly ok: true;
