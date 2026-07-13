@@ -15,6 +15,8 @@ import {
 
 export interface ClearableTuiSessionState {
   streamId: StreamTabId | undefined;
+  /** Root conversation that remains recoverable after an interrupted turn. */
+  interruptedStreamId: StreamTabId | undefined;
   executionId: string | undefined;
   runtimeHost?: AgentRuntimeHost;
   runPromise: Promise<void> | undefined;
@@ -44,6 +46,7 @@ export function clearTuiSessionRunState(
   session: ClearableTuiSessionState,
 ): void {
   session.streamId = undefined;
+  session.interruptedStreamId = undefined;
   session.executionId = undefined;
   session.runtimeHost = undefined;
   session.runPromise = undefined;

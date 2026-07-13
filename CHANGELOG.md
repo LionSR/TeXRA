@@ -71,6 +71,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Interrupted chats retain their earlier context** — pressing Escape during
+  an active CLI response now preserves the resumable conversation, and the next
+  message continues that conversation instead of silently starting a new one.
 - **Model access choices apply to the launched session** — switching access at
   startup overrides an earlier command-line mode, and selecting ChatGPT turns
   off OpenRouter routing so requests use the chosen subscription.

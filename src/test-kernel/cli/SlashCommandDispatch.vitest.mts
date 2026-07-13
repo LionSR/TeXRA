@@ -45,6 +45,7 @@ afterEach(() => {
 function createSession(): TuiSession {
   return {
     streamId: undefined,
+    interruptedStreamId: undefined,
     executionId: undefined,
     runPromise: undefined,
     runExitCode: CliExitCode.Success,
