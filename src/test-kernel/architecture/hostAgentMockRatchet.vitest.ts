@@ -6,7 +6,8 @@
 // AST-scanning vitest pattern from LAY-1 (subsystemEdgeRatchet.vitest.ts,
 // PR #7774): baseline the current site count and fail only on an increase;
 // a decrease (or an @agent restructor removing the need for a mock) is
-// always welcome and should shrink host-agent-mock-baseline.json.
+// always welcome and should shrink
+// config/ratchets/host-agent-mock-baseline.json.
 
 // Node imports
 import { readdirSync, readFileSync } from 'node:fs';
@@ -44,7 +45,8 @@ const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../..',
 );
-const BASELINE_PATH = resolve(REPO_ROOT, 'host-agent-mock-baseline.json');
+const BASELINE_FILE = 'config/ratchets/host-agent-mock-baseline.json';
+const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
 
 const HOST_DIRS = [
   resolve(REPO_ROOT, 'src/test-kernel/cli'),
@@ -123,7 +125,7 @@ function countSitesByForm(sites: MockSite[]): Record<MockForm, number> {
   for (const { form } of sites) {
     if (!(form in counts)) {
       throw new Error(
-        `host-agent-mock-baseline.json entry has unknown form ${JSON.stringify(form)} — expected one of: ${MOCK_FORMS.join(', ')}`,
+        `${BASELINE_FILE} entry has unknown form ${JSON.stringify(form)} — expected one of: ${MOCK_FORMS.join(', ')}`,
       );
     }
     counts[form] += 1;
@@ -150,7 +152,7 @@ describe('QA-2 host-side @agent mock ratchet', () => {
             .filter((site) => site.form === form)
             .map((site) => `${site.file}: vi.${site.form}('${site.specifier}')`)
             .join('\n')}\n\n` +
-          'If this growth is intentional, update host-agent-mock-baseline.json in this PR.',
+          `If this growth is intentional, update ${BASELINE_FILE} in this PR.`,
       ).toBeLessThanOrEqual(baselineCounts[form]);
     }
   });
