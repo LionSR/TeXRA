@@ -24,6 +24,9 @@ All notable changes to this project will be documented in this file.
 - **OpenAI parallel function calls are enabled by default** — supported OpenAI
   models can plan independent tool calls together, while TeXRA continues to
   preserve ordering for edits and other side-effectful actions.
+- **Free relay accounts can run four requests concurrently** — the free-tier
+  concurrency allowance has doubled from two while existing rate and spending
+  limits remain unchanged.
 
 #### Bug Fixes
 
