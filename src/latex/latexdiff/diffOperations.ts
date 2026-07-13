@@ -11,8 +11,8 @@ import { platform } from '@platform/platform';
 import {
   legacyWorkflowOutputRoundRegex,
   midEraWorkflowOutputStem,
-  parseWorkflowOutputRoundDir,
-} from '@agent/output/workflowOutputLayout';
+} from '@shared/constants/legacyWorkflowOutput';
+import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import {
