@@ -368,14 +368,14 @@ describe('DesktopStreamSnapshot', () => {
     expect(writeFileAtomicMock).toHaveBeenCalledTimes(1);
   });
 
-  it('discards a malformed snapshot file without throwing', async () => {
+  it('rejects an invalid present snapshot value', async () => {
     const filePath = await tempFilePath();
-    await writeFile(filePath, '{ not json');
-
-    const store = await openDesktopStreamSnapshotStore(filePath, {
-      log: { warn: () => {} },
+    const invalid = JSON.stringify({
+      restoredStreams: { version: 1, streams: 'not-an-array' },
     });
-    expect(store.hydrated).toEqual([]);
+    await writeFile(filePath, invalid);
+
+    await expect(openDesktopStreamSnapshotStore(filePath)).rejects.toThrow();
   });
 
   it('writes a versioned envelope under the restoredStreams key', async () => {
