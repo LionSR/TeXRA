@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import {
   WORKFLOW_OUTPUT_BASENAME,
   workflowOutputPath,
-} from '@agent/output/workflowOutputLayout';
+} from '@shared/constants/workflowOutput';
 import { normalizeFilePath } from '@utils/core';
 
 /**
