@@ -17,6 +17,7 @@ import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
+  PersistedFlow,
   PersistedFlowStateError,
   flowKey,
   type FlowRecord,
@@ -115,6 +116,10 @@ async function runPersistedFlow(
   snapshot: ToolUseSessionSnapshot | undefined,
   onSetup?: (context: ToolUseSetupContext) => void,
   session: SessionHandle = createTestSession(),
+  options: {
+    readonly isSubagent?: boolean;
+    readonly onIdle?: () => void;
+  } = {},
 ): Promise<RunToolUseFlowResult> {
   const config = snapshot?.agentConfig ?? CONFIG;
   const userVarChannels = snapshot?.user ?? {
@@ -151,7 +156,8 @@ async function runPersistedFlow(
           },
           setAbortController: () => {},
           ...(snapshot !== undefined && { resumeSnapshot: snapshot }),
-          isSubagent: true,
+          isSubagent: options.isSubagent ?? true,
+          onIdle: options.onIdle,
           toolInjections: new ToolInjectionRegistry(),
         },
         new MapToolRegistry({}),
@@ -775,6 +781,80 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     } finally {
       readSpy.mockRestore();
       writeSpy.mockRestore();
+      deleteSpy.mockRestore();
+    }
+  });
+
+  it('preserves the resumable flow after an established run is interrupted', async () => {
+    const executionId = 'abc-interrupted-conversation' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-interrupted-conversation' as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const store = getExecutionStore(executionId);
+    let flowContext: ToolUseSetupContext | undefined;
+
+    const result = await runPersistedFlow(
+      executionId,
+      streamId,
+      snapshot,
+      (context) => {
+        flowContext = context;
+      },
+      createTestSession(),
+      {
+        isSubagent: false,
+        onIdle: () => flowContext?.interrupt(),
+      },
+    );
+
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    expect(await store.read<FlowRecord>(flowKey(executionId))).toMatchObject({
+      cursor: { nextNodeId: 'start' },
+      shared: { shouldSkipCycle: true },
+    });
+  });
+
+  it('preserves an established flow when provider cancellation rejects the run', async () => {
+    const executionId = 'abc-interrupted-provider' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-interrupted-provider' as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const store = getExecutionStore(executionId);
+    let flowContext: ToolUseSetupContext | undefined;
+    const stored = {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        ...VALID_TOOL_USE_SHARED,
+        modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    };
+    await store.write(flowKey(executionId), stored);
+    const abortError = new DOMException(
+      'This operation was aborted',
+      'AbortError',
+    );
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockImplementationOnce(async () => {
+        flowContext?.interrupt();
+        throw abortError;
+      });
+    const deleteSpy = vi.spyOn(store, 'delete');
+
+    try {
+      await expect(
+        runPersistedFlow(executionId, streamId, snapshot, (context) => {
+          flowContext = context;
+        }),
+      ).rejects.toBe(abortError);
+      expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
+      expect(await store.read<FlowRecord>(flowKey(executionId))).toMatchObject({
+        cursor: { nextNodeId: 'start' },
+        shared: { shouldSkipCycle: true },
+      });
+    } finally {
+      runSpy.mockRestore();
       deleteSpy.mockRestore();
     }
   });

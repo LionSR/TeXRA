@@ -727,6 +727,7 @@ describe('CLI TUI row allocation', () => {
     const startupPromise = new Promise<void>(() => {});
     const session = {
       streamId: root,
+      interruptedStreamId: undefined,
       executionId: 'exec-old',
       runPromise: undefined,
       runExitCode: CliExitCode.AgentError,
@@ -752,6 +753,7 @@ describe('CLI TUI row allocation', () => {
     const startupPromise = new Promise<void>(() => {});
     const session = {
       streamId: root,
+      interruptedStreamId: undefined,
       executionId: 'exec-old',
       runPromise: startupPromise,
       runExitCode: CliExitCode.AgentError,
@@ -1142,6 +1144,7 @@ describe('CLI TUI row allocation', () => {
   it('clears stale resume ids when clearing chat session run state', () => {
     const session = {
       streamId: root,
+      interruptedStreamId: root,
       executionId: 'old-execution',
       runPromise: Promise.resolve(),
       runExitCode: CliExitCode.Interrupted,
@@ -1153,6 +1156,7 @@ describe('CLI TUI row allocation', () => {
 
     expect(session).toMatchObject({
       streamId: undefined,
+      interruptedStreamId: undefined,
       executionId: undefined,
       runPromise: undefined,
       runExitCode: 0,
