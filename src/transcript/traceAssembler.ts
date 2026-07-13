@@ -12,7 +12,6 @@
 import { getExecutionStore, type ExecutionMeta } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import { runOutcomeToExecutionStatus } from '@common/constants/streamStatus';
 import type {
   ExecutionId,
   ExecutionStatus,
@@ -20,6 +19,7 @@ import type {
   StreamSnapshot,
   StreamTabId,
 } from '@shared/schemas';
+import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';

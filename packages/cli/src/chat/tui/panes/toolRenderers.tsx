@@ -5,7 +5,7 @@ import { Box, Text, useWindowSize } from 'ink';
 
 // Local imports - shared schemas and utilities
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
-import { toolDisplayKind } from '@tools/toolKind';
+import { toolDisplayKind } from '@shared/tools/toolKind';
 import { isObject } from '@utils/core';
 import {
   collapseWhitespace,

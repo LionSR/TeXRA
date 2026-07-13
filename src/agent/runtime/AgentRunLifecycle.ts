@@ -14,7 +14,6 @@ import {
   classifyAgentError,
   normalizeProviderError,
 } from '@common/errors';
-import { projectRunOutcome } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   RUN_OUTCOME,
@@ -25,6 +24,7 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import { projectRunOutcome } from '@shared/streams/streamStatus';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 import {

@@ -16,7 +16,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { STREAM_TRANSITION_CAUSE } from '@common/constants/streamStatus';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { platform, tryPlatform } from '@platform/platform';
 import {

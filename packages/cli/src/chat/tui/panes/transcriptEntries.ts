@@ -1,8 +1,8 @@
 import stripAnsi from 'strip-ansi';
 
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
-import { isActivePhase } from '@common/constants/streamStatus';
 import { type StreamPhase } from '@shared/schemas';
+import { isActivePhase } from '@shared/streams/streamStatus';
 
 import type { ConversationEntry } from '../state/cliState';
 

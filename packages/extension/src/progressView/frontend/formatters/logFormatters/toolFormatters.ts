@@ -19,7 +19,7 @@ import type { LogMessageData } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
-import { toolDisplayKind } from '@tools/toolKind';
+import { toolDisplayKind } from '@shared/tools/toolKind';
 import { isObject } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 

@@ -10,7 +10,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { isInFlightPhase } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import {
   AgentCategoryFilterSchema,
@@ -27,6 +26,7 @@ import {
   type RoundStage,
   type StreamTabId,
 } from '@shared/schemas';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import {
   PersistedState,
   createBackendStorage,

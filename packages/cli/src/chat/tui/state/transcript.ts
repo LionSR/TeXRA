@@ -1,10 +1,10 @@
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { isTerminalOutcomePhase } from '@common/constants/streamStatus';
 import {
   STREAM_PHASE,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 
 import {
   activeStreamId,

@@ -6,7 +6,6 @@
 import { signal, type Signal } from '@lit-labs/signals';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import { isActivePhase } from '@common/constants/streamStatus';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   type ActiveChildInfo,
@@ -22,6 +21,7 @@ import {
   type TodoItem,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import {
   applyChildStreamRemoval,
   isChildStreamRemoved,
