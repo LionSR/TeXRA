@@ -7,7 +7,6 @@ import {
   ProgressBackend,
   type ProgressBackendUiConfig,
 } from '@controllers/progressView/backend/ProgressBackend';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import type {
   AppSignal,
   AppSignalPayloads,
@@ -19,6 +18,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 class MemoryMementoStorage implements MementoStorage {

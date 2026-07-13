@@ -7,10 +7,6 @@ import type {
   StreamStatusMachine,
 } from '@agent/runtime/StreamStatusService';
 import {
-  projectRunOutcome,
-  STREAM_TRANSITION_CAUSE,
-} from '@shared/streams/streamStatus';
-import {
   RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
@@ -18,6 +14,10 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import {
+  projectRunOutcome,
+  STREAM_TRANSITION_CAUSE,
+} from '@shared/streams/streamStatus';
 
 interface RestartRepairLogger {
   debug(message: string): void;

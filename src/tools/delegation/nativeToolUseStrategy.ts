@@ -33,7 +33,6 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -41,6 +40,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 
 import {
   buildSubagentFailureResultMeta,

@@ -1,6 +1,13 @@
 import type { AgentTrace, StatusEvent } from '@agent/trace';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
+  type StreamPhase,
+  type StreamSubstate,
+  type StreamTabId,
+} from '@shared/schemas';
+import {
   canAcquireStreamReservation,
   canTransitionStreamPhase,
   isActivePhase,
@@ -8,13 +15,6 @@ import {
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
-import {
-  STREAM_PHASE,
-  STREAM_SUBSTATE,
-  type StreamPhase,
-  type StreamSubstate,
-  type StreamTabId,
-} from '@shared/schemas';
 
 export interface StreamStatusChange {
   streamId: StreamTabId;

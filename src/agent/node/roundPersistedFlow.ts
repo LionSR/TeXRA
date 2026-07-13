@@ -18,12 +18,12 @@
 
 import type { ExecutionKVStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
-import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import {
   RUN_OUTCOME,
   type RetryErrorInfo,
   type RunOutcome,
 } from '@shared/schemas';
+import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
 import { BaseNode } from './index';
 import { PersistedFlow } from './persistedFlow';

@@ -15,11 +15,11 @@ import {
 import { classifyAgentError } from '@common/errors';
 
 // Local imports - constants
-import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
 import { RUN_OUTCOME, STREAM_PHASE, buildRunDescriptor } from '@shared/schemas';
+import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
 // Local imports - utils
 import { formatDuration } from '@utils/core';

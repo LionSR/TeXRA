@@ -1,12 +1,12 @@
 /** Pure row allocation and visibility policy for the root CLI TUI layout. */
 
-import { isActivePhase } from '@shared/streams/streamStatus';
 import {
   TODO_STATUS,
   type StreamPhase,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { clamp } from '@utils/core';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';

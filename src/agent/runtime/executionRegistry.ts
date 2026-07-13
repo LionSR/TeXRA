@@ -17,11 +17,6 @@ import {
   type StreamStatusEmitOptions,
 } from '@agent/runtime/StreamStatusService';
 import {
-  isActivePhase,
-  isInFlightPhase,
-  projectRunOutcome,
-} from '@shared/streams/streamStatus';
-import {
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -29,6 +24,11 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import {
+  isActivePhase,
+  isInFlightPhase,
+  projectRunOutcome,
+} from '@shared/streams/streamStatus';
 import { formatDuration } from '@utils/core';
 import {
   type ExecutionHandle,

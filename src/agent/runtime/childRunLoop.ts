@@ -22,13 +22,13 @@ import type {
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { classifyAgentError, isAbortError } from '@common/errors';
-import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { createChannelTrace } from '@logger';
 import type {
   ExecutionId,
   StreamTabId,
   SubagentProgressUpdate,
 } from '@shared/schemas';
+import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
 import {
   enqueueChildRunFollowUp,

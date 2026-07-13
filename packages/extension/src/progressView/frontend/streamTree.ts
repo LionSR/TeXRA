@@ -1,9 +1,9 @@
-import { isInFlightPhase } from '@shared/streams/streamStatus';
 import {
   DEFAULT_STREAM_METADATA_STATUS,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 
 import type { StreamState } from './store';
 

@@ -2,8 +2,8 @@ import {
   defaultShortcutModifierLabel,
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 
 import { resolveChildControlDisplayTargets } from './childControls';
 import { activeStreamScope } from './streamViews';

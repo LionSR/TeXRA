@@ -14,7 +14,6 @@ import {
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import {
   STREAM_PHASE,
   type ActiveChildInfo,
@@ -25,6 +24,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 
 const mocks = vi.hoisted(() => ({
   getAgent: vi.fn(),

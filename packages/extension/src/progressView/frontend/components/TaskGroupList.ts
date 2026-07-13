@@ -8,7 +8,6 @@ import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - stream state
-import { isInFlightPhase } from '@shared/streams/streamStatus';
 
 // Local imports - shared schemas
 import {
@@ -26,6 +25,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 import { designTokens } from '@shared/styles';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';

@@ -11,7 +11,6 @@
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentErrorKind } from '@common/errors';
-import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import type {
   ActiveChildInfo,
   AddOutputFilesPayload,
@@ -28,6 +27,7 @@ import type {
   UpdatePlanPayload,
   UpdateTodosPayload,
 } from '@shared/schemas';
+import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import type { RunDescriptor } from '@shared/schemas/runDescriptor';
 
 /** Status assigned to a tool call when it completes. */

@@ -33,7 +33,6 @@ import {
   type RunFactPayloads,
 } from '@agent/runtime/runFactEvents';
 import type { TaskState } from '@agent/core/state/TaskState';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -60,6 +59,7 @@ import {
   type TodoItem,
   type UpdateStreamDescriptionPayload,
 } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { StorageFS } from '@utils/files';
 import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';

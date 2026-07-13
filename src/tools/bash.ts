@@ -23,13 +23,13 @@ import {
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import {
   deriveRunOutcome,
   projectRunOutcome,
 } from '@shared/streams/streamStatus';
 
 // Local imports - tools
-import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/constants/toolDefaults';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';

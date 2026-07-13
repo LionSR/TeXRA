@@ -3,6 +3,17 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import {
+  EXECUTION_STATUS,
+  LIVE_ELAPSED_STREAM_STATUSES,
+  RUN_OUTCOME,
+  STREAM_PHASE,
+  STREAM_STATUS,
+  StreamPhaseSchema,
+  streamStatusesWithTrait,
+  type RunOutcome,
+  type StreamPhase,
+} from '@shared/schemas';
+import {
   canAcquireStreamReservation,
   canTransitionStreamPhase,
   deriveRunOutcome,
@@ -18,17 +29,6 @@ import {
   terminalStreamStatusForOutcome,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
-import {
-  EXECUTION_STATUS,
-  LIVE_ELAPSED_STREAM_STATUSES,
-  RUN_OUTCOME,
-  STREAM_PHASE,
-  STREAM_STATUS,
-  StreamPhaseSchema,
-  streamStatusesWithTrait,
-  type RunOutcome,
-  type StreamPhase,
-} from '@shared/schemas';
 
 describe('run outcome algebra', () => {
   it('derives outcomes with failed > cancelled > completed priority', () => {

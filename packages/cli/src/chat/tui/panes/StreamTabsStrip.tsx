@@ -1,10 +1,10 @@
 import { Box, Text } from 'ink';
 
+import type { StreamTabId } from '@shared/schemas';
 import {
   isActivePhase,
   isTerminalOutcomePhase,
 } from '@shared/streams/streamStatus';
-import type { StreamTabId } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
 import { textDisplayWidth, truncateToWidth } from '../render/terminalText';

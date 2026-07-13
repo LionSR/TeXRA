@@ -1,5 +1,5 @@
-import { isInFlightPhase } from '@shared/streams/streamStatus';
 import type { StreamPhase } from '@shared/schemas';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 
 /**
  * Return true when a follow-up should check persistent flow state before
