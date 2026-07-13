@@ -544,6 +544,7 @@ export async function runChat(
     if (isRunPending) chatController.stop();
     clearApprovals();
     followUpQueue.clear();
+    chatController.clearInterruptedRecovery();
     pendingSkillActivationClearEpoch += 1;
     pendingSkillActivations.clear();
     clearTuiSessionRunState(session);
