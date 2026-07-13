@@ -26,7 +26,7 @@ import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
 import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
-} from '@agent/output/workflowOutputLayout';
+} from '@shared/constants/workflowOutput';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {

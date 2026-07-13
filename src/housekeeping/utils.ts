@@ -4,13 +4,12 @@ import * as path from 'node:path';
 // Third-party imports
 import { sync as globSync } from 'glob';
 
-// Local imports - log
+// Local imports
 import {
-  getAgentFirstNameChunk,
   legacyWorkflowOutputStem,
   midEraWorkflowOutputStem,
   normalizeLegacyModel,
-} from '@agent/output/workflowOutputLayout';
+} from '@shared/constants/legacyWorkflowOutput';
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
@@ -20,8 +19,6 @@ import { DEFAULT_MAX_ROUNDS } from './constants';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
-
-export { getAgentFirstNameChunk };
 
 /**
  * Produce an ISO-8601 timestamp stripped of separators, suitable for use in
