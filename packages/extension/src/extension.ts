@@ -70,6 +70,7 @@ import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolE
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
+import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -225,6 +226,7 @@ export async function activate(context: vscode.ExtensionContext) {
       isVscodeExtensionInstalled: (id) =>
         vscode.extensions.getExtension(id) !== undefined,
     },
+    languageModel: createLanguageModelPort(context),
     linter: getLinterMessages,
     addCriticismSink: (payload) => {
       const accepted = pushManualCriticism({

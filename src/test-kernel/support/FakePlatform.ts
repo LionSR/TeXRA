@@ -20,6 +20,7 @@ import {
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -534,6 +535,7 @@ export function createFakePlatform(
     lifecycle: createLifecycleHost(),
     agentResume: { tryResumeStream: async () => false },
     agentDirectories: FAKE_AGENT_DIRECTORIES,
+    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     toolAvailability: NO_TOOL_AVAILABILITY_HOST,
     linter: async () => [],
     addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
