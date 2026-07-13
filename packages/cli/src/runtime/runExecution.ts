@@ -11,7 +11,7 @@ import {
 import { runAgent } from '@agent/runtime/runAgent';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
@@ -22,9 +22,8 @@ import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
 import {
-  createCliRunResult,
-  readCliTerminalStatus,
-  terminalStatusExitCode,
+  readCliRunOutcome,
+  runOutcomeExitCode,
   type ExecuteAgentResult,
 } from './terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
@@ -69,7 +68,6 @@ export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
       readonly ok: true;
       readonly executionId: string;
       readonly result: ExecuteAgentResultForCategory<C>;
-      readonly terminalStatus: ExecutionStatus;
     }
   | {
       readonly ok: false;
@@ -106,7 +104,7 @@ export async function executeCliConfig<
   if (!execution.ok) {
     return execution;
   }
-  const { result, terminalStatus } = execution;
+  const { result } = execution;
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
     await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
@@ -121,7 +119,6 @@ export async function executeCliConfig<
     ok: true,
     executionId,
     result: result as ExecuteAgentResultForCategory<C>,
-    terminalStatus,
   };
 }
 
@@ -136,23 +133,23 @@ export async function executeCliToolUseConfig(
   });
   if (!execution.ok) return execution;
 
-  const { result, terminalStatus } = execution;
+  const { result } = execution;
   return {
     ok: true,
-    displayResult: createCliRunResult(result, {
-      terminalStatus,
+    result: {
+      ...result,
       workingDirectory: runContext.cwd,
-    }),
-    exitCode: terminalStatusExitCode(terminalStatus, runContext),
+    },
+    exitCode: runOutcomeExitCode(result.outcome, runContext),
   };
 }
 
 /**
  * Shared headless-execution skeleton for `run`, `agents run`, and
  * `multi-agent run`: stand up a runtime host, run the request (optionally
- * wrapped), always close the host, and resolve the terminal status.
+ * wrapped), always close the host, and resolve the terminal outcome.
  * Centralizing this stops the three runners from drifting apart on host
- * lifecycle and status handling, which is how their behavior diverged before.
+ * lifecycle and outcome handling, which is how their behavior diverged before.
  *
  * A classified run failure (AgentRunLifecycle already ran it through
  * `classifyAgentError` and wrote the terminal outcome before rethrowing an
@@ -171,7 +168,7 @@ export async function executeCliRequest(
   runContext: CliContext,
   options: CliExecuteOptions = {},
 ): Promise<
-  | { ok: true; result: ExecuteAgentResult; terminalStatus: ExecutionStatus }
+  | { ok: true; result: ExecuteAgentResult }
   | { ok: false; exitCode: CliExitCode }
 > {
   // Transcript persistence is a launch prerequisite for every headless run.
@@ -286,14 +283,14 @@ export async function executeCliRequest(
   if (!runResult.ok) {
     // The message was already presented once via the run's `result` event
     // (attachTerminalResultToast → requestShowError); nothing more to print
-    // here. Reuse the same status→exit-code mapping the non-throw ERROR path
+    // here. Reuse the same outcome-to-exit-code mapping the non-throw failure path
     // uses below, so approval-denied stays distinct from a generic failure.
     return {
       ok: false,
-      exitCode: terminalStatusExitCode(EXECUTION_STATUS.ERROR, runContext),
+      exitCode: runOutcomeExitCode(RUN_OUTCOME.FAILED, runContext),
     };
   }
 
-  const terminalStatus = await readCliTerminalStatus(runResult.result);
-  return { ok: true, result: runResult.result, terminalStatus };
+  const outcome = await readCliRunOutcome(runResult.result);
+  return { ok: true, result: { ...runResult.result, outcome } };
 }

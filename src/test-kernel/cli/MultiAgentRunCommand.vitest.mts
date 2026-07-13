@@ -5,8 +5,10 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliContext } from '@cli/runtime/cliContext';
+import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
+  emitCliResult: vi.fn(),
   executeCliToolUseConfig: vi.fn(),
   withExpandedRunInputs: vi.fn(),
   cliMultiAgentPlanHasGaps: vi.fn(),
@@ -48,6 +50,10 @@ vi.mock('@cli/runtime/logSinks', () => ({
   writeNdjsonStdout: vi.fn(),
   writeTextStderr: mocks.writeTextStderr,
   writeTextStdout: mocks.writeTextStdout,
+}));
+
+vi.mock('@cli/commands/_helpers/output', () => ({
+  emitCliResult: mocks.emitCliResult,
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', () => ({
@@ -205,7 +211,14 @@ describe('CLI multi-agent run command', () => {
     mocks.canAccessRemoteAgentCatalog.mockResolvedValue(false);
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
-      displayResult: { lastResponse: 'The proof is correct.' },
+      result: {
+        category: 'toolUse',
+        executionId: 'exec-team',
+        streamId: 'stream-team',
+        outcome: RUN_OUTCOME.COMPLETED,
+        lastResponse: 'The proof is correct.',
+        workingDirectory: '/tmp/project',
+      },
       exitCode: 0,
     });
   });
@@ -249,6 +262,34 @@ describe('CLI multi-agent run command', () => {
     expect(config?.instruction).toContain(
       'Do not end by asking the user whether to perform more work',
     );
+    const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+    expect(emission?.json.result).toEqual({
+      category: 'toolUse',
+      executionId: 'exec-team',
+      streamId: 'stream-team',
+      outcome: RUN_OUTCOME.COMPLETED,
+      lastResponse: 'The proof is correct.',
+      status: EXECUTION_STATUS.COMPLETED,
+      endGroupStatus: 'stopped',
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      workingDirectory: '/tmp/project',
+    });
+    expect(Object.keys(emission?.json.result ?? {})).toEqual([
+      'category',
+      'executionId',
+      'streamId',
+      'outcome',
+      'lastResponse',
+      'status',
+      'endGroupStatus',
+      'terminalStatus',
+      'workingDirectory',
+    ]);
+    expect(emission?.ndjson).toEqual({
+      kind: 'multi-agent-result',
+      ...emission.json,
+    });
+    expect(emission?.text).toBe('The proof is correct.');
   });
 
   it('marks run-plan resolution when authenticated gaps triggered a remote load', async () => {
