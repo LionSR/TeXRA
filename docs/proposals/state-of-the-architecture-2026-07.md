@@ -185,7 +185,7 @@ zero-violation baseline): forbid `src/**` except `src/test-kernel/**` from
 importing the 9 extension-homed aliases plus `@cli/*`/`@desktop/*` — one
 `no-restricted-imports` block + ~30 lines in `dependencyDirection.vitest.ts`.
 R-b (Stage-5 exit criterion): freeze host deep-import **width** with a
-checked-in per-host baseline list (the `knip-baseline.json` /
+checked-in per-host baseline list (the `config/ratchets/knip-baseline.json` /
 `check-dead-code-ratchet.mjs` pattern); new specifiers require consciously
 extending the list.
 
