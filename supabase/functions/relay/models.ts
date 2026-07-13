@@ -181,7 +181,7 @@ export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
  * interactive use while blocking bulk free-tier fanout before costs are logged.
  */
 export const TIER_REQUEST_LIMITS: TierRequestLimits = {
-  free: { ratePerMinute: 20, concurrent: 2 },
+  free: { ratePerMinute: 20, concurrent: 4 },
   Max: { ratePerMinute: 60, concurrent: 8 },
   Ultra: { ratePerMinute: 120, concurrent: 16 },
 };
