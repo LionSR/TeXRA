@@ -65,18 +65,19 @@ export const parseCodexApprovalPolicy = parseEnumSetting(
 
 /** Claude Code CLI model options surfaced in the picker. */
 export const ClaudeAgentModelSchema = z.enum([
-  'claude-sonnet-4-6',
+  'claude-sonnet-5',
   'claude-fable-5',
   'claude-opus-4-8',
   'claude-haiku-4-5-20251001',
 ]);
 export type ClaudeAgentModel = z.infer<typeof ClaudeAgentModelSchema>;
 
-export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-sonnet-4-6';
+export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-sonnet-5';
 
 const RETIRED_CLAUDE_AGENT_MODELS: Readonly<Record<string, ClaudeAgentModel>> =
   {
     'claude-opus-4-7': 'claude-opus-4-8',
+    'claude-sonnet-4-6': 'claude-sonnet-5',
   };
 
 export const parseClaudeAgentModel = parseEnumSetting(

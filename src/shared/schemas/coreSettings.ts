@@ -1,6 +1,9 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - shared copy
+import { CHATGPT_TOOL_USE_ONLY_DESCRIPTION } from '@shared/copy/subscriptionRouting';
+
 /**
  * Core (host-neutral) TeXRA settings.
  *
@@ -409,7 +412,7 @@ export const CoreSettingsShape = {
       ),
       subscriptionToolUseOnly: boolField(
         DEFAULT_CORE_SETTINGS.chatgptCodex.subscriptionToolUseOnly,
-        'Use the ChatGPT subscription for tool-use agents only. Workflow agents fall back to your OpenAI API key or relay, because the Codex backend has no background mode and is less stable for long workflow runs.',
+        CHATGPT_TOOL_USE_ONLY_DESCRIPTION,
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
