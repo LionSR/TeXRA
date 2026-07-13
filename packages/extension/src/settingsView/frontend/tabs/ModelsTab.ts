@@ -20,7 +20,7 @@ import type {
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
-import { CHATGPT_TOOL_USE_ONLY_DESCRIPTION } from '@shared/copy/subscriptionRouting';
+import { CHATGPT_TOOL_USE_ONLY_DESCRIPTION } from '@shared/schemas/coreSettings';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
