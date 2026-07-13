@@ -324,7 +324,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'desktop', 'cli'],
     cliConsumer: CLAUDE_AGENT_CONFIG_CONSUMER,
     cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
-    enumLabels: ['Sonnet 4.6', 'Fable 5', 'Opus 4.8', 'Haiku 4.5'],
+    enumLabels: ['Sonnet 5', 'Fable 5', 'Opus 4.8', 'Haiku 4.5'],
   },
   {
     key: WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
