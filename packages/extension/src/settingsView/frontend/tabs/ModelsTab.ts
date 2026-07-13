@@ -20,6 +20,7 @@ import type {
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
+import { CHATGPT_TOOL_USE_ONLY_DESCRIPTION } from '@shared/copy/subscriptionRouting';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
@@ -272,7 +273,7 @@ export class ModelsTab extends LitElement {
           <wa-switch
             ?checked=${subscriptionToolUseOnly}
             ?disabled=${!preferSubscription}
-            hint="Workflow agents use your API key or relay instead — the Codex backend has no background mode and is less stable for long runs."
+            hint=${CHATGPT_TOOL_USE_ONLY_DESCRIPTION}
             @change=${this.handleSubscriptionToolUseOnlyChange}
           >
             Use subscription for tool-use agents only

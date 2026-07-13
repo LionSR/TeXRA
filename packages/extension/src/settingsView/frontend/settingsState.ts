@@ -48,6 +48,7 @@ import {
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import { CLAUDE_AGENT_DEFAULT_MODEL } from '@shared/schemas/agentCliSettings';
 
 /** Target for the desktop-host "set provider key" modal. */
 export interface ProviderKeyModalTarget {
@@ -127,7 +128,9 @@ export const bashApprovalEnabled = signal(true);
 export const codexSandboxMode = signal<string>('workspace-write');
 export const codexReasoningEffort = signal<string>('high');
 export const codexApprovalPolicy = signal<string>('never');
-export const claudeAgentModel = signal<ClaudeAgentModel>('claude-sonnet-4-6');
+export const claudeAgentModel = signal<ClaudeAgentModel>(
+  CLAUDE_AGENT_DEFAULT_MODEL,
+);
 export const claudeAgentPermissionMode =
   signal<ClaudeAgentPermissionMode>('acceptEdits');
 export const claudeAgentEffort = signal<ClaudeAgentEffort>('high');
@@ -225,7 +228,7 @@ export function resetSettingsState(): void {
   codexSandboxMode.set('workspace-write');
   codexReasoningEffort.set('high');
   codexApprovalPolicy.set('never');
-  claudeAgentModel.set('claude-sonnet-4-6');
+  claudeAgentModel.set(CLAUDE_AGENT_DEFAULT_MODEL);
   claudeAgentPermissionMode.set('acceptEdits');
   claudeAgentEffort.set('high');
 
