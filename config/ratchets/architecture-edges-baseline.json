@@ -75,7 +75,6 @@
     { "from": "skills", "to": "common", "kind": "value" },
     { "from": "skills", "to": "shared", "kind": "value" },
     { "from": "skills", "to": "utils", "kind": "value" },
-    { "from": "telemetry", "to": "agent", "kind": "value" },
     { "from": "telemetry", "to": "auth", "kind": "value" },
     { "from": "telemetry", "to": "logger", "kind": "value" },
     { "from": "telemetry", "to": "shared", "kind": "value" },

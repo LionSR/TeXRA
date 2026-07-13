@@ -4,9 +4,28 @@ import {
   emptyUsageStats,
   parseUsageData,
   sumUsageStats,
+  UsageProviderSchema,
 } from '@shared/schemas';
 
 describe('stream data usage parsing', () => {
+  it('preserves the exact usage-provider wire vocabulary', () => {
+    expect(UsageProviderSchema.options).toEqual([
+      'anthropic',
+      'openai',
+      'openai-response',
+      'google',
+      'deepseek',
+      'openrouter',
+      'dashscope',
+      'xai',
+      'moonshot',
+      'minimax',
+      'glm',
+      'meta',
+      'unknown',
+    ]);
+  });
+
   it('coerces persisted usage fields and defaults missing cache counters', () => {
     const { usage } = parseUsageData({
       run: {
