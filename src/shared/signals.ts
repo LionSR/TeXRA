@@ -21,21 +21,3 @@ export function select<S, T>(
 ): Signal.Computed<T> {
   return new Signal.Computed(() => selector(source.get()));
 }
-
-/** Any signal with a `.get()` method (State or Computed). */
-type AnySignal<T> = Signal.State<T> | Signal.Computed<T>;
-
-/**
- * Derive a computed from multiple signal inputs.
- * Replaces the `void x.get()` pattern for explicit multi-signal dependency tracking.
- */
-export function combine<Inputs extends readonly AnySignal<any>[], R>(
-  inputs: [...Inputs],
-  fn: (
-    ...args: {
-      [K in keyof Inputs]: Inputs[K] extends AnySignal<infer T> ? T : never;
-    }
-  ) => R,
-): Signal.Computed<R> {
-  return new Signal.Computed(() => fn(...(inputs.map((s) => s.get()) as any)));
-}
