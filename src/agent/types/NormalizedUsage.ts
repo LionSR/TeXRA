@@ -7,25 +7,9 @@ import { z } from 'zod';
 import {
   TokenCountSchema,
   TokenUsageStatsBaseSchema,
+  UsageProviderSchema,
   UsageRouteSchema,
 } from '@shared/schemas';
-
-/** Provider identifiers for usage tracking. */
-export const UsageProviderSchema = z.enum([
-  'anthropic',
-  'openai',
-  'openai-response',
-  'google',
-  'deepseek',
-  'openrouter',
-  'dashscope',
-  'xai',
-  'moonshot',
-  'minimax',
-  'glm',
-  'meta',
-  'unknown',
-]);
 
 /**
  * Normalized usage statistics from any model provider.
