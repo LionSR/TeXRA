@@ -5,7 +5,10 @@ import {
   childStatusColor,
   resolveSessionSelectionId,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
-import { compactChildRowText } from '@cli/chat/tui/panes/SubagentList';
+import {
+  compactChildRowText,
+  subagentListRowAllocation,
+} from '@cli/chat/tui/panes/SubagentList';
 import {
   nextSelectHighlightIndex,
   visibleSelectRange,
@@ -130,5 +133,29 @@ describe('CLI session list display model', () => {
     ).toBe(
       'latex build running · 19sec · main.tex: Proof sketch needs one missing reference',
     );
+  });
+
+  it('reserves constrained-list visibility for sessions and processes', () => {
+    expect(
+      subagentListRowAllocation({
+        maxRows: 3,
+        processCount: 4,
+        sessionCount: 4,
+      }),
+    ).toEqual({ sessionRows: 2, processRows: 1 });
+    expect(
+      subagentListRowAllocation({
+        maxRows: 1,
+        processCount: 4,
+        sessionCount: 4,
+      }),
+    ).toEqual({ sessionRows: 1, processRows: 0 });
+    expect(
+      subagentListRowAllocation({
+        maxRows: 2,
+        processCount: 4,
+        sessionCount: 0,
+      }),
+    ).toEqual({ sessionRows: 0, processRows: 2 });
   });
 });

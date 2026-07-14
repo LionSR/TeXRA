@@ -2454,9 +2454,25 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN],
     resizes: [{ cols: 44, rows: 7 }],
-    expect: ['leanSolver waiting for you'],
+    expect: ['leanSolver waiti', '+3 sessions', 'latex build running'],
     unexpect: ['[main]', '1:strategy', '2:leanSolver'],
     maxOccurrences: [{ text: 'leanSolver waiting for you', max: 1 }],
+  },
+  {
+    name: 'subagent-list-tiny-resize-releases-focus',
+    frame: 'viewport',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: 'Tab sessions',
+    keys: ['draft survives resize', '\t', DOWN],
+    resizes: [{ cols: 44, rows: 5 }],
+    keysAfterResize: [' and accepts input'],
+    expect: ['draft survives resize and accepts input', 'Esc p tasks'],
+    unexpect: ['Enter focus', 'signal read during notification phase', 'ERROR'],
   },
   {
     name: 'hidden-root-approval-tab-return',
@@ -2470,13 +2486,12 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', '\t', '\t', '\t'],
+    keys: ['\t', DOWN, '\r', '\t', UP, '\r'],
     expect: [
       'agent: chat · model: harness-model',
       'Run command?',
       '$ npm run compile:safe',
       'y approve',
-      '[main]*',
       'Use foreground panel shortcuts',
     ],
     unexpect: [
@@ -2550,18 +2565,18 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', '/status', '\r'],
+    keys: ['\t', DOWN, '\r', '/status', '\r'],
     frame: 'viewport',
     expect: [
       'strategy is checking the harness-child-strategy details',
-      '[1:strategy]*',
+      '◆ running',
     ],
     unexpect: [
       'agent: harness-agent',
       'api: relay',
       'entry-1 chat history line',
       'entry-4 chat history line',
-      '[main]*',
+      '✓ ● main running',
       'signal read during notification phase',
       'ERROR',
     ],
@@ -2576,11 +2591,11 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 's', 'f', '\t', '\t', '\t'],
+    keys: [ESC + 's', 'f', '\t', UP, '\r'],
     expect: [
       'entry-1 chat history line',
       'entry-4 chat history line',
-      '[main]*',
+      '✓ ● main running',
     ],
     unexpect: [
       'Please handle the harness-child-strategy sub-workflow.',
@@ -3211,9 +3226,22 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 'p', 'k', ESC + 's', 'f', { input: ESC, delayMs: 40 }, '\t'],
+    keys: [
+      ESC + 'p',
+      'k',
+      ESC + 's',
+      'f',
+      { input: ESC, delayMs: 40 },
+      '\t',
+      DOWN,
+      '\r',
+    ],
     frame: 'viewport',
-    expect: ['[2:leanSolver]', '◆ waiting for you', 'root active'],
+    expect: [
+      '✓ ● leanSolver waiting for you',
+      '◆ waiting for you',
+      'root active',
+    ],
     unexpect: [
       'Harness interrupt requested.',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
@@ -4184,6 +4212,11 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     child.resize(Number(resize.cols ?? cols), Number(resize.rows ?? rows));
     term.resize(Number(resize.cols ?? cols), Number(resize.rows ?? rows));
     await sleep(Number(resize.delayMs ?? 500));
+  }
+  for (const key of scenario.keysAfterResize ?? []) {
+    const input = typeof key === 'string' ? key : key.input;
+    child.write(input);
+    await sleep(Number(key.delayMs ?? scenario.keyDelayMs ?? 500));
   }
 
   // Settle after keystrokes. A quiet PTY is not quite enough: under a full

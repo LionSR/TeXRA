@@ -213,6 +213,13 @@ export function ConversationRegion({
       ? Math.max(1, allocatedSidePanelRows.subagentRows)
       : allocatedSidePanelRows.subagentRows;
   const todosPlanRows = bottomPanelBudget - subagentRows;
+  const sessionListVisible =
+    snapshot.sessionViews.length > 0 && subagentRows > 0;
+  useLayoutEffect(() => {
+    if (snapshot.sessionListFocused && !sessionListVisible) {
+      onCancelSessionList();
+    }
+  }, [onCancelSessionList, sessionListVisible, snapshot.sessionListFocused]);
   const foregroundSurface = renderForegroundSurface(
     foregroundRows,
     transcriptWidth,
@@ -255,7 +262,7 @@ export function ConversationRegion({
         {bottomPanelBudget > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
-              keyboardActive={snapshot.sessionListFocused}
+              keyboardActive={snapshot.sessionListFocused && sessionListVisible}
               maxRows={subagentRows}
               onCancel={onCancelSessionList}
               onFocusStream={onFocusSession}

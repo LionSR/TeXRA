@@ -57,12 +57,16 @@ export function compactChildRowText({
 function SessionRow({
   active,
   focused,
+  hiddenSessionCount,
   nowMs,
+  processSummary,
   session,
 }: {
   readonly active: boolean;
   readonly focused: boolean;
+  readonly hiddenSessionCount: number;
   readonly nowMs: number;
+  readonly processSummary?: string;
   readonly session: StreamView;
 }): React.JSX.Element {
   const status = session.slice?.status;
@@ -87,27 +91,55 @@ function SessionRow({
         {active ? ` ${TICK} ` : '   '}
       </Text>
       <Text color={childStatusColor(status)}>{CHILD_STATUS_MARKER}</Text>
-      <Text bold={active} wrap="truncate-end">
-        {session.label}
-        {statusLabel ? ` ${statusLabel}` : ''}
-        {elapsed ? ` · ${elapsed}` : ''}
-      </Text>
+      <Box minWidth={0} flexShrink={1}>
+        <Text bold={active} wrap="truncate-end">
+          {session.label}
+          {statusLabel ? ` ${statusLabel}` : ''}
+          {elapsed ? ` · ${elapsed}` : ''}
+        </Text>
+      </Box>
+      {focused && (hiddenSessionCount > 0 || processSummary) ? (
+        <Box flexShrink={0}>
+          <Text dimColor>
+            {` · ${[
+              hiddenSessionCount > 0
+                ? `+${hiddenSessionCount} session${hiddenSessionCount === 1 ? '' : 's'}`
+                : undefined,
+              processSummary,
+            ]
+              .filter(Boolean)
+              .join(', ')}`}
+          </Text>
+        </Box>
+      ) : null}
     </Box>
   );
 }
 
 function ProcessRow({
   child,
+  hiddenProcessCount = 0,
   nowMs,
   tail,
-}: ProcessRowProps): React.JSX.Element {
+}: ProcessRowProps & {
+  readonly hiddenProcessCount?: number;
+}): React.JSX.Element {
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Text>{'    '}</Text>
       <Text color={childStatusColor(child.status)}>{CHILD_STATUS_MARKER}</Text>
-      <Text wrap="truncate-end">
-        {compactChildRowText({ child, nowMs, tail })}
-      </Text>
+      <Box minWidth={0} flexShrink={1}>
+        <Text wrap="truncate-end">
+          {compactChildRowText({ child, nowMs, tail })}
+        </Text>
+      </Box>
+      {hiddenProcessCount > 0 ? (
+        <Box flexShrink={0}>
+          <Text
+            dimColor
+          >{` · +${hiddenProcessCount} more process${hiddenProcessCount === 1 ? '' : 'es'}`}</Text>
+        </Box>
+      ) : null}
     </Box>
   );
 }
@@ -120,6 +152,40 @@ export function subagentPanelRowCount(
   activeProcesses: readonly ActiveChildInfo[],
 ): number {
   return sessions.length + activeProcesses.length;
+}
+
+export function subagentListRowAllocation({
+  maxRows,
+  processCount,
+  sessionCount,
+}: {
+  readonly maxRows: number | undefined;
+  readonly processCount: number;
+  readonly sessionCount: number;
+}): {
+  readonly processRows: number;
+  readonly sessionRows: number;
+} {
+  if (maxRows === undefined) {
+    return { processRows: processCount, sessionRows: sessionCount };
+  }
+  const rows = Math.max(0, Math.floor(maxRows));
+  if (sessionCount === 0) {
+    return { processRows: Math.min(processCount, rows), sessionRows: 0 };
+  }
+
+  // A focused list must always retain a selectable session row. When there is
+  // another row, reserve it for process visibility before filling the
+  // remaining space with sessions.
+  const reservedProcessRows = processCount > 0 && rows > 1 ? 1 : 0;
+  const sessionRows = Math.min(
+    sessionCount,
+    Math.max(0, rows - reservedProcessRows),
+  );
+  return {
+    processRows: Math.min(processCount, rows - sessionRows),
+    sessionRows,
+  };
 }
 
 export interface SubagentListProps {
@@ -152,15 +218,17 @@ export function SubagentList(
   if (sessions.length === 0 && activeProcesses.length === 0) return null;
   if (props.maxRows !== undefined && props.maxRows <= 0) return null;
 
-  const sessionRowBudget =
-    props.maxRows === undefined
-      ? sessions.length
-      : Math.min(sessions.length, Math.max(0, Math.floor(props.maxRows)));
-  const processRowBudget =
-    props.maxRows === undefined
-      ? activeProcesses.length
-      : Math.max(0, Math.floor(props.maxRows) - sessionRowBudget);
-  const visibleProcesses = activeProcesses.slice(0, processRowBudget);
+  const { processRows, sessionRows } = subagentListRowAllocation({
+    maxRows: props.maxRows,
+    processCount: activeProcesses.length,
+    sessionCount: sessions.length,
+  });
+  const visibleProcesses = activeProcesses.slice(0, processRows);
+  const hiddenProcessCount = activeProcesses.length - visibleProcesses.length;
+  const processSummary =
+    hiddenProcessCount > 0 && visibleProcesses.length === 0
+      ? `+${hiddenProcessCount} process${hiddenProcessCount === 1 ? '' : 'es'}`
+      : undefined;
   const sessionsById = new Map(
     sessions.map((session) => [session.id, session]),
   );
@@ -182,7 +250,7 @@ export function SubagentList(
             label: session.label,
             value: session.id,
           }))}
-          maxVisibleItems={sessionRowBudget}
+          maxVisibleItems={sessionRows}
           onCancel={props.onCancel ?? (() => undefined)}
           onHighlightChange={(streamId) => props.onSelectionChange?.(streamId)}
           onSelect={(streamId) => props.onFocusStream?.(streamId)}
@@ -192,17 +260,22 @@ export function SubagentList(
               <SessionRow
                 active={state.active}
                 focused={state.focused}
+                hiddenSessionCount={state.hiddenItemCount}
                 nowMs={nowMs}
+                processSummary={processSummary}
                 session={session}
               />
             ) : null;
           }}
         />
       ) : null}
-      {visibleProcesses.map((child) => (
+      {visibleProcesses.map((child, index) => (
         <ProcessRow
           key={child.executionId}
           child={child}
+          hiddenProcessCount={
+            index === visibleProcesses.length - 1 ? hiddenProcessCount : 0
+          }
           nowMs={nowMs}
           tail={processOutput?.get(child.executionId)}
         />

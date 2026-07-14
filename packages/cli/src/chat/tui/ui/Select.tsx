@@ -50,7 +50,9 @@ export interface SelectProps<T> {
     state: {
       readonly active: boolean;
       readonly focused: boolean;
+      readonly hiddenItemCount: number;
       readonly index: number;
+      readonly overflowText?: string;
     },
   ) => ReactNode;
 }
@@ -359,7 +361,15 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                 disabled: item.disabled,
               }}
             >
-              {props.renderItem(item, { active, focused, index: i })}
+              {props.renderItem(item, {
+                active,
+                focused,
+                hiddenItemCount: hiddenBefore + hiddenAfter,
+                index: i,
+                ...(showInlineOverflow
+                  ? { overflowText: inlineOverflowText }
+                  : {}),
+              })}
             </Box>
           );
         }
