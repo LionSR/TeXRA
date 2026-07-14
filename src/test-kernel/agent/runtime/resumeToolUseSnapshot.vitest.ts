@@ -18,7 +18,7 @@ import {
 } from '@test/helpers/streamStatusTestUtils';
 import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
-import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';

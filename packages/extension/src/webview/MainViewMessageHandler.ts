@@ -67,7 +67,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     });
     this.fileManager = new FileManager();
     this.diffManager = new DiffManager();
-    this.instructionManager = new InstructionManager(context);
+    this.instructionManager = new InstructionManager();
     this.interactionController = new MainViewInteractionController({
       getProviderUrl: (provider) =>
         PROVIDER_URLS[provider as keyof typeof PROVIDER_URLS],

@@ -4,9 +4,6 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - runtime events
-import { SessionHandle } from '@agent/runtime/SessionHandle';
-
 // Local imports - status bar state
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';

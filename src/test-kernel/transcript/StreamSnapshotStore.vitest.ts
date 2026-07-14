@@ -707,13 +707,7 @@ describe('StreamSnapshotStore', () => {
     );
 
     const store = new StreamSnapshotStore();
-    const taskState = TaskStateSchema.parse({
-      agentConfig: {
-        agent: 'search',
-        model: 'deepseekproT',
-        agentCategory: AgentCategory.ToolUse,
-      },
-    }) as TaskState;
+    const taskState = toolUseTaskState();
     const executionId = 'abc123' as ExecutionId;
 
     store.setTaskState(STREAM, taskState, executionId);

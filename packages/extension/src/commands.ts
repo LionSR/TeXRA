@@ -16,7 +16,6 @@ import {
 } from '@commands/housekeeping';
 import {
   registerMergeCommands,
-  registerExecuteCommand,
   registerFollowUpCommand,
   registerResumeAgentCommand,
 } from '@commands/agent';
@@ -50,7 +49,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerPackCommands(context);
   registerCleanCommands(context);
   registerMergeCommands(context);
-  registerExecuteCommand(context);
   registerAuthCommands(context);
   registerStateRestoreCommand(context);
   registerSettingsViewCommands(context);

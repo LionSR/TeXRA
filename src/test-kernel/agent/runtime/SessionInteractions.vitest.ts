@@ -16,7 +16,6 @@ import {
 } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createDesktopHostInteractions } from '@desktop/main/desktopHostInteractions';
-import type { DesktopToolEditApprovalController } from '@desktop/main/desktopToolEditApproval';
 import {
   AgentCategory,
   type AgentProposal,

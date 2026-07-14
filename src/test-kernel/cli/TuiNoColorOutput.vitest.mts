@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   sgrStrippingWriteStream,
-  stripAnsiSgrSequences,
+  stripAnsiSgrChunk,
 } from '@cli/chat/tui/render/noColorOutput';
 
 describe('TUI no-color output', () => {
@@ -24,7 +24,9 @@ describe('TUI no-color output', () => {
   it('strips SGR styling while preserving terminal control escapes', () => {
     const input = '\x1b[2mDim\x1b[22m\x1b[36m cyan\x1b[39m\x1b[2K\x1b[1;1H';
 
-    expect(stripAnsiSgrSequences(input)).toBe('Dim cyan\x1b[2K\x1b[1;1H');
+    expect(stripAnsiSgrChunk(input, { pending: '' })).toBe(
+      'Dim cyan\x1b[2K\x1b[1;1H',
+    );
   });
 
   it('strips SGR styling from byte chunks passed to write streams', () => {

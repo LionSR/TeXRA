@@ -19,7 +19,7 @@ vi.mock('@frontend/approval/nativeToolEditApproval', () => ({
   nativeRequestApproval: mocks.nativeRequestApproval,
 }));
 
-interface RecordingApprovalHandler<T extends { streamId: string }> {
+interface RecordingApprovalHandler {
   readonly show: ReturnType<typeof vi.fn>;
   readonly resolve: ReturnType<typeof vi.fn>;
   readonly replay: ReturnType<typeof vi.fn>;
@@ -30,9 +30,7 @@ interface RecordingApprovalHandler<T extends { streamId: string }> {
   readonly pendingSize: number;
 }
 
-function handler<
-  T extends { streamId: string },
->(): RecordingApprovalHandler<T> {
+function handler(): RecordingApprovalHandler {
   return {
     show: vi.fn(),
     resolve: vi.fn(),

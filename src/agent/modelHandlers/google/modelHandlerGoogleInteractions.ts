@@ -14,7 +14,6 @@ import {
 
 // Local imports - agent
 import { logProgressStatus } from '@agent/trace';
-import { hasEndTag } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';

@@ -472,8 +472,7 @@ class ResponseContinuationNode<C> extends BaseNode<
     const shouldSkip =
       shared.shouldStop || !shared.stopReason || !shared.processedResponse;
 
-    const interrupted =
-      !shouldSkip && Boolean(await this.services.checkInterruption());
+    const interrupted = !shouldSkip && this.services.checkInterruption();
 
     return {
       shouldSkip,

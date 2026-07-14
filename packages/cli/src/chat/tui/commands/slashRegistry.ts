@@ -45,9 +45,7 @@ export interface SlashCommand {
    * Set for commands that take a free-text inline argument (e.g. `/foo bar`).
    * When true, Enter in the palette *completes* the command into the input
    * (with a trailing space) so the user can type the argument, rather than
-   * running it argument-less. No built-in command needs this today — every
-   * arg-taking command uses `formComponent` instead — but it's the hook for
-   * future inline-argument commands. See `slashPickIntent`.
+   * running it argument-less (used by `/subscription`). See `slashPickIntent`.
    */
   readonly takesArgs?: boolean;
 }

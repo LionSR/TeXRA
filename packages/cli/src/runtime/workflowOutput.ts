@@ -262,16 +262,8 @@ export async function resolveWorkflowOutput(
     };
   }
 
-  if (!outputFile) {
-    return {
-      ...result,
-      workingDirectory: context.cwd,
-      runDirectory,
-    };
-  }
-
   const finalOutput = latestWorkflowOutput(result.outputs);
-  if (!finalOutput) {
+  if (!outputFile || !finalOutput) {
     return {
       ...result,
       workingDirectory: context.cwd,

@@ -18,10 +18,7 @@ import {
   selectItemRenderKey,
   visibleSelectRange,
 } from '@cli/chat/tui/ui/Select';
-import {
-  selectInlineOverflowText,
-  selectVisibleInlineOverflowText,
-} from '@cli/chat/tui/render/overflowText';
+import { selectVisibleInlineOverflowText } from '@cli/chat/tui/render/overflowText';
 
 describe('CLI ModelListForm empty state', () => {
   it('uses a truthful description for empty and non-empty model lists', () => {
@@ -203,34 +200,49 @@ describe('CLI Select visible range', () => {
 describe('CLI Select inline overflow', () => {
   it('summarizes hidden choices when separate overflow rows are disabled', () => {
     expect(
-      selectInlineOverflowText({
+      selectVisibleInlineOverflowText({
         hiddenBefore: 0,
         hiddenAfter: 3,
         showOverflow: false,
+        visibleItemCount: 3,
       }),
     ).toBe('+3 more');
     expect(
-      selectInlineOverflowText({
+      selectVisibleInlineOverflowText({
         hiddenBefore: 2,
         hiddenAfter: 0,
         showOverflow: false,
+        visibleItemCount: 3,
       }),
     ).toBe('+2 earlier');
     expect(
-      selectInlineOverflowText({
+      selectVisibleInlineOverflowText({
         hiddenBefore: 2,
         hiddenAfter: 4,
         showOverflow: false,
+        visibleItemCount: 3,
       }),
     ).toBe('+2 earlier, +4 more');
   });
 
   it('defers to separate overflow rows when they are enabled', () => {
     expect(
-      selectInlineOverflowText({
+      selectVisibleInlineOverflowText({
         hiddenBefore: 0,
         hiddenAfter: 3,
         showOverflow: true,
+        visibleItemCount: 3,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('suppresses inline overflow when there are no visible items', () => {
+    expect(
+      selectVisibleInlineOverflowText({
+        hiddenBefore: 0,
+        hiddenAfter: 3,
+        showOverflow: false,
+        visibleItemCount: 0,
       }),
     ).toBeUndefined();
   });

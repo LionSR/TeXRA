@@ -217,18 +217,6 @@ function projectCliRunFact(
   return undefined;
 }
 
-function emitProjectedProgressEvent(
-  writeRecord: CliNdjsonProgressRecordWriter,
-  projected: CliProjectedNdjsonProgressEvent,
-): void {
-  writeRecord({
-    kind: 'progress',
-    event: projected.event,
-    ts: new Date().toISOString(),
-    payload: projected.payload,
-  });
-}
-
 function statusProjectionKey(payload: UpdateStreamStatusPayload): string {
   return JSON.stringify([
     payload.streamId,
@@ -259,7 +247,12 @@ export function attachCliSessionProgressProjection(
     } else if (projected.event === 'removeStream') {
       lastStatusByStream.delete(projected.payload.streamId);
     }
-    emitProjectedProgressEvent(writeRecord, projected);
+    writeRecord({
+      kind: 'progress',
+      event: projected.event,
+      ts: new Date().toISOString(),
+      payload: projected.payload,
+    });
   }
 
   const detachSessionFacts = events.subscribe(

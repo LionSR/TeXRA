@@ -9,7 +9,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import {
   cleanupApprovalsForStream,

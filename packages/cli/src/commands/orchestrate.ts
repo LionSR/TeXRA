@@ -327,9 +327,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       case 'resume':
         return runResumeExecution(launchContext, action.id);
       case 'browse-resumes':
-        continue launcher;
       case 'configure-model-access':
-        continue launcher;
       case 'browse-agents':
       case 'browse-teams':
       case 'browse-accounts':
