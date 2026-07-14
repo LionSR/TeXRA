@@ -6,7 +6,8 @@ import { type TaskState } from '@agent/core/state/TaskState';
  * Converts an AgentConfig object to a TaskState object.
  */
 export function agentConfigToTaskState(config: AgentConfig): TaskState {
-  switch (config.agentCategory) {
+  const { agentCategory } = config;
+  switch (agentCategory) {
     case AgentCategory.ToolUse:
       return {
         agentConfig: config,
@@ -21,5 +22,9 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
           output: config.outputFiles.length > 0,
         },
       };
+    default: {
+      const _exhaustive: never = agentCategory;
+      throw new Error(`Unknown agent category: ${String(_exhaustive)}`);
+    }
   }
 }
