@@ -545,8 +545,12 @@ export function getRosterAgent(
   category: AgentCategoryType,
   identifier: string,
 ): AgentEntry | undefined {
-  const entry = getCategoryAgent(category, identifier);
-  return entry && !entry.internal ? entry : undefined;
+  const name = agentName(identifier);
+  const entry =
+    identifier === name
+      ? getCategoryAgent(category, identifier)
+      : getAgent(identifier, category);
+  return entry?.category === category && !entry.internal ? entry : undefined;
 }
 
 /**

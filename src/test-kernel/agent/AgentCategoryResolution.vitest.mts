@@ -13,6 +13,7 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   findAgentByIdentifier,
   getCategoryAgent,
+  getRosterAgent,
   getVisibleAgent,
   refresh,
   resolveAgent,
@@ -69,6 +70,18 @@ describe('cross-category agent resolution', () => {
         '  internal: true',
         'prompts:',
         '  systemPrompt: Internal agent.',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(
+      resolve(customDir, 'review.yaml'),
+      [
+        'name: review',
+        'description: Custom tool-use agent that shadows a built-in name.',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: Custom review agent.',
         '',
       ].join('\n'),
     );
@@ -204,6 +217,26 @@ describe('cross-category agent resolution', () => {
 
     expect(scoped.map((entry) => `${entry.source}:${entry.name}`)).toEqual([
       'builtInToolUse:assistant',
+    ]);
+  });
+
+  it('preserves exact source-qualified roster entries before name deduplication', () => {
+    expect(getRosterAgent('toolUse', 'custom:review')?.source).toBe('custom');
+    expect(getRosterAgent('toolUse', 'builtInToolUse:review')?.source).toBe(
+      'builtInToolUse',
+    );
+
+    const scoped = resolveDelegationScopeAgents(
+      {
+        workflowAgentKeys: [],
+        toolUseAgentKeys: ['builtInToolUse:review', 'custom:review'],
+      },
+      AgentCategory.ToolUse,
+    );
+
+    expect(scoped.map((entry) => `${entry.source}:${entry.name}`)).toEqual([
+      'builtInToolUse:review',
+      'custom:review',
     ]);
   });
 });
