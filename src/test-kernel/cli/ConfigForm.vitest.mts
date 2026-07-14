@@ -71,10 +71,9 @@ function renderConfigFormProps(): {
   ) => void | Promise<void>;
   resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
   openForm?: (formName: string) => void;
-  renderForm?: (
-    formName: string,
-    onBack: () => void,
-  ) => React.JSX.Element | undefined;
+  formRenderers?: Readonly<
+    Record<string, (onBack: () => void) => React.JSX.Element>
+  >;
   availableRows?: number;
 } {
   const node = activeForm.get()?.render(() => {}, 20) as {
@@ -433,9 +432,9 @@ describe('/config slash command wiring', () => {
     openCliSlashCommandForm('config', '');
 
     const props = renderConfigFormProps();
-    const tools = props.renderForm?.('tools', () => undefined) as
+    const tools = props.formRenderers?.tools?.(() => undefined) as
       { props?: { availableRows?: number } } | undefined;
-    const agents = props.renderForm?.('agents', () => undefined) as
+    const agents = props.formRenderers?.agents?.(() => undefined) as
       { props?: { availableRows?: number } } | undefined;
 
     expect(props.availableRows).toBe(20);

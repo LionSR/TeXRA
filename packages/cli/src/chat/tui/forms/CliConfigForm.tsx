@@ -61,22 +61,17 @@ export function createCliConfigFormProps(
         description: 'workspace roster and user default team',
       },
     ],
-    renderForm: (formName, onBack) => {
-      if (formName === 'agents') {
-        return (
-          <AgentRosterForm
-            availableRows={props.availableRows}
-            onClose={onBack}
-            onError={props.onError}
-          />
-        );
-      }
-      if (formName === 'tools') {
-        return (
-          <ToolsListForm availableRows={props.availableRows} onClose={onBack} />
-        );
-      }
-      return undefined;
+    formRenderers: {
+      agents: (onBack) => (
+        <AgentRosterForm
+          availableRows={props.availableRows}
+          onClose={onBack}
+          onError={props.onError}
+        />
+      ),
+      tools: (onBack) => (
+        <ToolsListForm availableRows={props.availableRows} onClose={onBack} />
+      ),
     },
     openForm: props.openExternalForm,
     onClose: props.onClose,

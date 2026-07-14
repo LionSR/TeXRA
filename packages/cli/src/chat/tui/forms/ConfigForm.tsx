@@ -163,10 +163,9 @@ export interface ConfigFormProps {
     readonly label: string;
     readonly description: string;
   }[];
-  readonly renderForm?: (
-    formName: string,
-    onBack: () => void,
-  ) => React.JSX.Element | undefined;
+  readonly formRenderers?: Readonly<
+    Record<string, (onBack: () => void) => React.JSX.Element>
+  >;
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
@@ -304,7 +303,9 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
 
   if (mode.kind === 'linked-form') {
     return (
-      props.renderForm?.(mode.name, () => setMode({ kind: 'categories' })) ?? (
+      props.formRenderers?.[mode.name]?.(() =>
+        setMode({ kind: 'categories' }),
+      ) ?? (
         <FormFrame title="/config">
           <Text dimColor>Configuration form unavailable.</Text>
         </FormFrame>
@@ -413,8 +414,9 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
           onSelect={(category) => {
             if (category.startsWith('form:')) {
               const name = category.slice('form:'.length);
-              if (props.renderForm) setMode({ kind: 'linked-form', name });
-              else props.openForm?.(name);
+              if (props.formRenderers?.[name]) {
+                setMode({ kind: 'linked-form', name });
+              } else props.openForm?.(name);
               return;
             }
             setMode({ kind: 'list', category });
@@ -458,8 +460,9 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     } else if (kind === 'form') {
       const formName = entry.openForm;
       if (formName) {
-        if (props.renderForm) setMode({ kind: 'linked-form', name: formName });
-        else props.openForm?.(formName);
+        if (props.formRenderers?.[formName]) {
+          setMode({ kind: 'linked-form', name: formName });
+        } else props.openForm?.(formName);
       }
     } else if (kind === 'enum') {
       setMode({ kind: 'enum', entry, category: mode.category });
