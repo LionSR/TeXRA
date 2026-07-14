@@ -241,7 +241,7 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
         });
       }
     }
-    this.options.getToolEditApprovals().approvePendingForStream(streamId);
+    await this.options.getToolEditApprovals().approvePendingForStream(streamId);
   }
 
   /**

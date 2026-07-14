@@ -108,7 +108,7 @@ function createPortSession(): {
     session,
     getApprovalHandlers: () => handlers,
     getToolEditApprovals: () => ({
-      approvePendingForStream: () => {},
+      approvePendingForStream: async () => {},
       cancel: () => {},
       dispose: () => {},
       handleAction: () => false,
