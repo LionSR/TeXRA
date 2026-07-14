@@ -1,11 +1,4 @@
-import {
-  formatConversationContent,
-  hasProviderReasoningBlock,
-  stringifyConversationValue,
-  HIDDEN_PROVIDER_REASONING_MARKER,
-  type ConversationFormatOptions,
-} from '@agent/storage/conversationFormat';
-import { isObject } from '@utils/core';
+import { formatConversationMessage } from '@agent/storage/conversationFormat';
 
 import type {
   CliHistoryConversationPreview,
@@ -16,26 +9,8 @@ const CONVERSATION_PREVIEW_MESSAGE_LIMIT = 3;
 const CONVERSATION_PREVIEW_CONTENT_LIMIT = 4000;
 
 interface ConversationMessageFormatOptions {
-  readonly includeToolUseMarkers?: boolean;
+  readonly includeToolUseMarkers: boolean;
   readonly contentLimit?: number;
-}
-
-/**
- * The shared formatter never truncates tool_use/tool_result blocks or shows
- * their input/args for the CLI (unlike the ExecutionsTool endpoint, which
- * truncates both) — the CLI truncates once, at the whole-message level, in
- * {@link toConversationPreviewMessage}. Provider-reasoning (`thinking`)
- * blocks are always hidden here (surfaced instead via
- * {@link HIDDEN_PROVIDER_REASONING_MARKER} when they're the only content).
- */
-function toBlockFormatOptions(
-  options: ConversationMessageFormatOptions,
-): ConversationFormatOptions {
-  return {
-    includeToolUseMarkers: options.includeToolUseMarkers,
-    includeToolUseInput: false,
-    hideProviderReasoning: true,
-  };
 }
 
 export function createConversationPreview(
@@ -88,9 +63,13 @@ function toConversationPreviewMessage(
   index: number,
   options: ConversationMessageFormatOptions,
 ): CliHistoryConversationPreviewMessage {
-  const raw = isObject(message) ? message : {};
-  const role = typeof raw.role === 'string' ? raw.role : 'unknown';
-  const content = formatConversationMessage(raw, options);
+  const { role, content } = formatConversationMessage(message, {
+    // The CLI truncates once at the whole-message level below and hides
+    // provider reasoning and tool inputs from history output.
+    includeToolUseMarkers: options.includeToolUseMarkers,
+    includeToolUseInput: false,
+    hideProviderReasoning: true,
+  });
   const truncated =
     options.contentLimit !== undefined && content.length > options.contentLimit;
   return {
@@ -101,30 +80,6 @@ function toConversationPreviewMessage(
       : content,
     truncated,
   };
-}
-
-function formatConversationMessage(
-  raw: Record<string, unknown>,
-  options: ConversationMessageFormatOptions,
-): string {
-  const blockOptions = toBlockFormatOptions(options);
-  const role = typeof raw.role === 'string' ? raw.role : '';
-  const parts = [
-    formatConversationContent(raw.content, blockOptions),
-    formatConversationContent(raw.parts, blockOptions),
-    ...(options.includeToolUseMarkers === true
-      ? formatTopLevelToolCalls(raw.tool_calls)
-      : []),
-  ].filter((part) => part.trim().length > 0);
-  if (parts.length > 0) return parts.join('\n').trim();
-  if (
-    isAssistantMessageRole(role) &&
-    (hasProviderReasoningBlock(raw.content) ||
-      hasProviderReasoningBlock(raw.parts))
-  ) {
-    return HIDDEN_PROVIDER_REASONING_MARKER;
-  }
-  return '';
 }
 
 function isAssistantMessageRole(role: string): boolean {
@@ -162,22 +117,4 @@ function formatConversationMessages(
     lines.push('', `[${message.role} #${message.index}]`, message.content);
   }
   return lines.join('\n');
-}
-
-function formatTopLevelToolCalls(toolCalls: unknown): string[] {
-  if (!Array.isArray(toolCalls)) return [];
-  return toolCalls.map(formatTopLevelToolCall);
-}
-
-function formatTopLevelToolCall(toolCall: unknown): string {
-  if (!isObject(toolCall))
-    return `[tool_use: ${stringifyConversationValue(toolCall)}]`;
-  const nestedFunction = isObject(toolCall.function)
-    ? toolCall.function
-    : undefined;
-  const name =
-    [nestedFunction?.name, toolCall.name].find(
-      (value): value is string => typeof value === 'string',
-    ) ?? 'unknown';
-  return `[tool_use: ${name}]`;
 }
