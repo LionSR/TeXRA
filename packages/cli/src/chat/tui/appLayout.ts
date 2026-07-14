@@ -153,6 +153,56 @@ export function allocateSidePanelRows({
   return { subagentRows, todosPlanRows: available - subagentRows };
 }
 
+export function allocateConversationBottomPanelRows({
+  maxRows,
+  processCount = 0,
+  sessionCount,
+  sessionListFocused,
+  todosPlanContentRows,
+  transcriptRows,
+}: {
+  readonly maxRows: number;
+  readonly processCount?: number;
+  readonly sessionCount: number;
+  readonly sessionListFocused: boolean;
+  readonly todosPlanContentRows: number;
+  readonly transcriptRows: number;
+}): {
+  readonly bottomPanelRows: number;
+  readonly sessionPanelRows: number;
+  readonly todosPlanRows: number;
+} {
+  const sessionPanelContentRows = sessionCount + processCount;
+  const minimumSessionRows = sessionCount > 1 ? 1 : 0;
+  const availableTranscriptRows = Math.max(0, transcriptRows);
+  const panelTranscriptLimit = sessionListFocused
+    ? availableTranscriptRows
+    : availableTranscriptRows === 0
+      ? 0
+      : Math.max(minimumSessionRows, Math.floor(availableTranscriptRows / 2));
+  const bottomPanelRows = Math.min(
+    maxRows,
+    sessionPanelContentRows + todosPlanContentRows,
+    panelTranscriptLimit,
+  );
+  const allocated = allocateSidePanelRows({
+    subagentContentRows: sessionPanelContentRows,
+    todosPlanContentRows,
+    rows: bottomPanelRows,
+  });
+  const sessionPanelRows =
+    (sessionCount > 1 || sessionListFocused) &&
+    sessionPanelContentRows > 0 &&
+    bottomPanelRows > 0
+      ? Math.max(1, allocated.subagentRows)
+      : allocated.subagentRows;
+  return {
+    bottomPanelRows,
+    sessionPanelRows,
+    todosPlanRows: bottomPanelRows - sessionPanelRows,
+  };
+}
+
 export function staticTranscriptRowBudget({
   footerRows,
   foregroundOpen,

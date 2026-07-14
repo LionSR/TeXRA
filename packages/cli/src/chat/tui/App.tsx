@@ -1,7 +1,14 @@
 // Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
 import { useApp, useInput, useStdin, useWindowSize } from 'ink';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import type { StreamTabId } from '@shared/schemas';
@@ -202,6 +209,14 @@ export function App(props: AppProps): React.JSX.Element {
       setSessionListFocused(false);
     }
   }, [sessionListFocused, sessionViews.length]);
+  const cancelSessionList = useCallback(() => {
+    setSessionListFocused(false);
+  }, []);
+  const focusSession = useCallback((streamId: StreamTabId) => {
+    setSelectedSessionId(streamId);
+    activeStreamIdSignal.set(streamId);
+    setSessionListFocused(false);
+  }, []);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
     childControlMode,
@@ -502,12 +517,8 @@ export function App(props: AppProps): React.JSX.Element {
         childExecutionPanelTarget: childControlTargets.tasks,
         transcriptViewerStreamId,
       }}
-      onCancelSessionList={() => setSessionListFocused(false)}
-      onFocusSession={(streamId) => {
-        setSelectedSessionId(streamId);
-        activeStreamIdSignal.set(streamId);
-        setSessionListFocused(false);
-      }}
+      onCancelSessionList={cancelSessionList}
+      onFocusSession={focusSession}
       onSessionSelectionChange={setSelectedSessionId}
     />
   );

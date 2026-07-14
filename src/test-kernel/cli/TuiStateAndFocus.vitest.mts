@@ -24,6 +24,7 @@ import {
   streams,
 } from '@cli/chat/tui/state/cliState';
 import {
+  allocateConversationBottomPanelRows,
   allocateMiddleRows,
   allocateSidePanelRows,
   shouldShowTipRow,
@@ -594,6 +595,55 @@ describe('CLI TUI row allocation', () => {
         rows: 1,
       }),
     ).toEqual({ subagentRows: 0, todosPlanRows: 1 });
+  });
+
+  it('keeps sessions visible beside todos in a short terminal', () => {
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        processCount: 0,
+        sessionCount: 2,
+        sessionListFocused: false,
+        todosPlanContentRows: 5,
+        transcriptRows: 1,
+      }),
+    ).toEqual({
+      bottomPanelRows: 1,
+      sessionPanelRows: 1,
+      todosPlanRows: 0,
+    });
+  });
+
+  it('allocates session rows when process slice data is absent', () => {
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 2,
+        sessionListFocused: false,
+        todosPlanContentRows: 0,
+        transcriptRows: 6,
+      }),
+    ).toEqual({
+      bottomPanelRows: 2,
+      sessionPanelRows: 2,
+      todosPlanRows: 0,
+    });
+  });
+
+  it('does not allocate session rows without transcript space', () => {
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 2,
+        sessionListFocused: false,
+        todosPlanContentRows: 5,
+        transcriptRows: 0,
+      }),
+    ).toEqual({
+      bottomPanelRows: 0,
+      sessionPanelRows: 0,
+      todosPlanRows: 0,
+    });
   });
 
   it('shows todo and plan chrome only while a stream is active', () => {

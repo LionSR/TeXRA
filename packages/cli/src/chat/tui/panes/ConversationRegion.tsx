@@ -12,8 +12,8 @@ import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
 import {
+  allocateConversationBottomPanelRows,
   allocateMiddleRows,
-  allocateSidePanelRows,
   PINNED_CHROME_ROWS,
   shouldShowTipRow,
   shouldShowTodosPlanPanel,
@@ -33,7 +33,7 @@ import {
   queuedFollowUpPanelRowCount,
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
-import { SubagentList, subagentPanelRowCount } from './SubagentList';
+import { SubagentList } from './SubagentList';
 import { TipRow } from './TipRow';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
@@ -155,10 +155,8 @@ export function ConversationRegion({
         tipVisible: tipRowVisible,
       });
   const childExecutionPanelTarget = snapshot.childExecutionPanelTarget;
-  const hasChildExecutionPanel =
-    !foregroundOpen &&
-    (snapshot.sessionViews.length > 0 ||
-      (childExecutionPanelTarget.slice?.activeProcesses.length ?? 0) > 0);
+  const activeProcesses =
+    childExecutionPanelTarget.slice?.activeProcesses ?? [];
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
     hasPlan: activeSlice?.plan != null,
@@ -179,40 +177,26 @@ export function ConversationRegion({
     tipVisible: tipRowVisible,
   });
   // The subagent/todos panels live at the bottom of the same vertical column.
-  // Reserve only as many rows as the panels actually need, capped so they
-  // never take more than half the transcript or push the input off-screen.
-  const subagentContentRows =
-    hasChildExecutionPanel && childExecutionPanelTarget.slice
-      ? subagentPanelRowCount(
-          snapshot.sessionViews,
-          childExecutionPanelTarget.slice.activeProcesses,
-        )
-      : 0;
+  // Reserve only as many rows as the panels actually need. Unfocused panels
+  // use at most half the transcript, except for the one row needed to keep a
+  // multi-session list visible in a short terminal.
   const todosPlanContentRows =
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
       : 0;
-  const panelTranscriptLimit = snapshot.sessionListFocused
-    ? transcriptRows
-    : Math.floor(transcriptRows / 2);
-  const bottomPanelBudget = Math.min(
-    BOTTOM_PANEL_MAX_ROWS,
-    subagentContentRows + todosPlanContentRows,
-    panelTranscriptLimit,
-  );
-  const conversationRows = transcriptRows - bottomPanelBudget;
-  const allocatedSidePanelRows = allocateSidePanelRows({
-    subagentContentRows,
+  const {
+    bottomPanelRows: bottomPanelBudget,
+    sessionPanelRows: subagentRows,
+    todosPlanRows,
+  } = allocateConversationBottomPanelRows({
+    maxRows: BOTTOM_PANEL_MAX_ROWS,
+    processCount: foregroundOpen ? 0 : activeProcesses.length,
+    sessionCount: foregroundOpen ? 0 : snapshot.sessionViews.length,
+    sessionListFocused: snapshot.sessionListFocused,
     todosPlanContentRows,
-    rows: bottomPanelBudget,
+    transcriptRows,
   });
-  const subagentRows =
-    snapshot.sessionListFocused &&
-    subagentContentRows > 0 &&
-    bottomPanelBudget > 0
-      ? Math.max(1, allocatedSidePanelRows.subagentRows)
-      : allocatedSidePanelRows.subagentRows;
-  const todosPlanRows = bottomPanelBudget - subagentRows;
+  const conversationRows = transcriptRows - bottomPanelBudget;
   const sessionListVisible =
     snapshot.sessionViews.length > 0 && subagentRows > 0;
   useLayoutEffect(() => {
@@ -269,7 +253,7 @@ export function ConversationRegion({
               onSelectionChange={onSessionSelectionChange}
               selectedStreamId={snapshot.selectedSessionId}
               sessions={snapshot.sessionViews}
-              activeProcesses={childExecutionPanelTarget.slice?.activeProcesses}
+              activeProcesses={activeProcesses}
               processOutput={childExecutionPanelTarget.slice?.processOutput}
             />
             <TodosPlanPanel maxRows={todosPlanRows} />

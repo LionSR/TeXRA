@@ -2334,7 +2334,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     expect: [
-      'Waiting for leanSolver',
+      '+3 sessions, +1 process',
       '3 sub',
       '1 proc',
       'Tab sessions',
