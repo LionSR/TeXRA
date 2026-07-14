@@ -928,6 +928,12 @@ function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
       bypass: { ...slice.bypass, toolEdit: true },
     }));
   }
+  if (decision.accepted && decision.bypass === 'superYolo') {
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      bypass: { bash: true, superYolo: true, toolEdit: true },
+    }));
+  }
 }
 
 function appendHarnessExternalInquiryDecision(

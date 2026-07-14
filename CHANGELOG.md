@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.5] - Unreleased
+
+### CLI
+
+#### New Features
+
+- **Delegation prompts can approve the rest of the session** — press `a` to
+  approve the current delegated task and stop repeated task, edit, and command
+  approval prompts for that stream.
+
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Delegated-task approval uses a clear name** — proposal menus now describe
+  the session-wide action directly instead of calling it “Super Yolo.”
+
 ## [0.39.4] - 2026-07-13
 
 ### Shared (all surfaces)

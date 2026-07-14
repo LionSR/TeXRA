@@ -53,6 +53,11 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { AgentCategory } from '@shared/schemas';
+import {
+  isApprovalBypassedForStream,
+  isBashApprovalBypassedForStream,
+  proposalApprovals,
+} from '@tools/approval';
 import { setGoalSessionBashAutoApproval } from '@tools/goal';
 
 function context(): CliContext {
@@ -243,7 +248,7 @@ describe('TUI retry approvals', () => {
     );
   });
 
-  it('updates TUI super-yolo bypass state at the proposal decision site', async () => {
+  it('enables the complete delegated-task approval mode at the proposal decision site', async () => {
     const { runtimeHost, interactions } = tui();
     const result = interactions.requestAgentProposal?.({
       proposalId: 'proposal-bypass',
@@ -269,12 +274,23 @@ describe('TUI retry approvals', () => {
     expect(streams.get().get('proposal-bypass-stream')?.bypass.superYolo).toBe(
       true,
     );
+    expect(streams.get().get('proposal-bypass-stream')?.bypass).toEqual({
+      superYolo: true,
+      toolEdit: true,
+      bash: true,
+    });
+    expect(proposalApprovals().isBypassed('proposal-bypass-stream')).toBe(true);
+    expect(isApprovalBypassedForStream('proposal-bypass-stream')).toBe(true);
+    expect(isBashApprovalBypassedForStream('proposal-bypass-stream')).toBe(
+      true,
+    );
     expect(runtimeHost.emit).toHaveBeenCalledWith(
       'updateSuperYoloBypassState',
-      {
-        streamId: 'proposal-bypass-stream',
-        bypassActive: true,
-      },
+      { streamId: 'proposal-bypass-stream', bypassActive: true },
+    );
+    expect(runtimeHost.emit).toHaveBeenCalledWith(
+      'updateToolEditApprovalBypassState',
+      { streamId: 'proposal-bypass-stream', bypassActive: true },
     );
   });
 

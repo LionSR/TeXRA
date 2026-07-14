@@ -96,6 +96,13 @@ describe('CLI confirm-card key handling', () => {
         maxColumns: 60,
       }),
     ).toContainEqual({ key: 'a', action: 'edit session' });
+
+    expect(
+      confirmCardKeyHintsForWidth({
+        alwaysAllowLabel: 'approve all delegated tasks for this session',
+        maxColumns: 72,
+      }),
+    ).toContainEqual({ key: 'a', action: 'all delegated tasks' });
   });
 
   it('keeps the approve-all hint on mid-width terminals', () => {

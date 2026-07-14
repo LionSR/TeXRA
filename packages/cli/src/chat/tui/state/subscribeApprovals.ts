@@ -49,8 +49,8 @@ import {
 } from '@model/apiProviders';
 import { isUpstreamCreditDepletedError } from '@shared/schemas';
 import {
-  proposalApprovals,
   setBashApprovalSessionBypass,
+  setDelegatedTaskApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
@@ -489,12 +489,14 @@ async function requestProposalInteraction(
     decision.bypass === 'superYolo' &&
     request.streamId
   ) {
-    proposalApprovals().setBypass(request.streamId, true, host);
-    setTuiApprovalBypassState({
-      streamId: request.streamId,
-      kind: 'superYolo',
-      bypassActive: true,
-    });
+    setDelegatedTaskApprovalSessionBypass(request.streamId, true, host);
+    for (const kind of ['superYolo', 'toolEdit', 'bash'] as const) {
+      setTuiApprovalBypassState({
+        streamId: request.streamId,
+        kind,
+        bypassActive: true,
+      });
+    }
   }
   const feedback = feedbackOnReject(decision);
   return decision.accepted

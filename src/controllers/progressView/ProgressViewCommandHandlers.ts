@@ -9,9 +9,10 @@ import type {
 } from '@shared/schemas/progressView';
 import {
   isApprovalBypassedForStream,
-  proposalApprovals,
   setBashApprovalSessionBypass,
+  setDelegatedTaskApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
+  toggleDelegatedTaskApprovalSessionBypass,
 } from '@tools/approval';
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
@@ -183,31 +184,9 @@ export function createProgressViewCommandHandlers(
     );
   };
 
-  // Delegated-task auto-approval (super yolo) carries the file-edit shield and
-  // bash along with it. Enabling grants edit-bypass only when it isn't already
-  // on, so it never inverts an independently-granted edit-YOLO; disabling clears
-  // it. Bash always rides silently. Callers own the proposal-state write (toggle
-  // vs force-on) before invoking this so the state event fires first.
-  const applySuperYoloBypass = async (
-    stream: StreamTabId,
+  const reportDelegatedTaskApproval = async (
     enabled: boolean,
   ): Promise<void> => {
-    const ownerSession = bypassSession(stream);
-    if (enabled) {
-      if (!isApprovalBypassedForStream(stream, ownerSession)) {
-        setToolEditApprovalSessionBypass(stream, true, runtimeHost, {
-          session: ownerSession,
-        });
-      }
-    } else {
-      setToolEditApprovalSessionBypass(stream, false, runtimeHost, {
-        session: ownerSession,
-      });
-    }
-    setBashApprovalSessionBypass(stream, enabled, runtimeHost, {
-      silent: true,
-      session: ownerSession,
-    });
     await showInfo?.(
       enabled
         ? 'Delegated task auto-approval enabled for this stream.'
@@ -274,28 +253,24 @@ export function createProgressViewCommandHandlers(
     [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: (data) =>
       applyCoupledBypass(data.stream, true),
     [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) =>
-      applySuperYoloBypass(
-        data.stream,
-        proposalApprovals(bypassSession(data.stream)).toggleBypass(
+      reportDelegatedTaskApproval(
+        toggleDelegatedTaskApprovalSessionBypass(
           data.stream,
           runtimeHost,
+          bypassSession(data.stream),
         ),
       ),
-    // Inline "Super Yolo (this session)" proposal button: force the
-    // delegated-task auto-approval bypass ON. Idempotent like
-    // ENABLE_APPROVAL_BYPASS, so selecting it (or the `a` shortcut) on a
-    // still-visible proposal can never invert an already-on bypass back off the
-    // way TOGGLE_SUPER_YOLO_BYPASS would (e.g. when super-yolo was turned on
-    // from the stream header while this prompt was open). Mirrors the toggle's
-    // enabled branch: edit bypass rides along only if not already on, bash
-    // silently.
+    // The inline proposal action forces the complete delegated-task approval
+    // mode on. It is idempotent, so it cannot invert a grant made from the
+    // stream header while the proposal was open.
     [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: (data) => {
-      proposalApprovals(bypassSession(data.stream)).setBypass(
+      setDelegatedTaskApprovalSessionBypass(
         data.stream,
         true,
         runtimeHost,
+        bypassSession(data.stream),
       );
-      return applySuperYoloBypass(data.stream, true);
+      return reportDelegatedTaskApproval(true);
     },
 
     [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) => {

@@ -107,6 +107,8 @@ function compactHintAction(action: string): string {
       return 'all';
     case 'approve edits for session':
       return 'edit session';
+    case 'approve all delegated tasks for this session':
+      return 'all delegated tasks';
     default:
       return action;
   }
