@@ -397,6 +397,40 @@ describe('DefaultDesktopAgentSettingsController', () => {
     });
   });
 
+  it('deletes custom teams and reports unknown team ids', async () => {
+    const workspaceState = new MemoryStateStore();
+    workspaceState.values.set(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
+      {
+        id: 'custom-team',
+        name: 'Custom Team',
+        description: 'test',
+        icon: 'codicon-bookmark',
+        workflowAgents: ['correct'],
+        toolUseAgents: ['review'],
+      },
+    ]);
+    const { controller, errorMessages, posted } = createControllerFixture({
+      workspaceState,
+    });
+    const deletePreset = requireAction(controller.actions.deleteModePreset) as (
+      presetId: string,
+    ) => Promise<void>;
+
+    await deletePreset('custom-team');
+
+    expect(
+      workspaceState.values.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+    ).toEqual([]);
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+      customPresets: [],
+    });
+
+    await deletePreset('missing-team');
+
+    expect(errorMessages).toEqual(['Unknown custom team: missing-team']);
+  });
+
   it('opens the custom agent directory through the required directory port', async () => {
     const { controller, opened } = createControllerFixture({
       getCustomAgentDirectory: async () => '/agents/custom',
