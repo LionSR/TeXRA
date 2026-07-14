@@ -6,6 +6,7 @@ settings:
 
 patchedDependencies:
   ink@7.1.0: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
+  openai@6.46.0: 0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e
 
 importers:
 
@@ -187,7 +188,7 @@ importers:
         version: 8.2.0
       openai:
         specifier: ^6.46.0
-        version: 6.46.0(ws@8.21.0)(zod@4.4.3)
+        version: 6.46.0(patch_hash=0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e)(ws@8.21.0)(zod@4.4.3)
       p-defer:
         specifier: ^4.0.1
         version: 4.0.1
@@ -658,7 +659,7 @@ importers:
         version: 6.0.0
       openai:
         specifier: ^6.46.0
-        version: 6.46.0(ws@8.21.0)(zod@4.4.3)
+        version: 6.46.0(patch_hash=0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e)(ws@8.21.0)(zod@4.4.3)
       p-map:
         specifier: ^7.0.5
         version: 7.0.5
@@ -10754,7 +10755,7 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@6.46.0(ws@8.21.0)(zod@4.4.3):
+  openai@6.46.0(patch_hash=0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e)(ws@8.21.0)(zod@4.4.3):
     optionalDependencies:
       ws: 8.21.0
       zod: 4.4.3
