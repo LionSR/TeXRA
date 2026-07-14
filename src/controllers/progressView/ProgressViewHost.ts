@@ -25,20 +25,16 @@ import {
 type ProgressViewFileHostActions = Pick<
   ProgressViewFileCommandActions,
   'openFile' | 'openFileCompile'
-> &
-  Partial<Omit<ProgressViewFileCommandActions, 'openFile' | 'openFileCompile'>>;
+>;
 
 type ProgressViewApprovalHostActions = Omit<
   ProgressViewApprovalCommandActions,
   'handleAgentProposalAction'
-> &
-  Partial<
-    Pick<ProgressViewApprovalCommandActions, 'handleAgentProposalAction'>
-  >;
+>;
 
 export interface ProgressViewHostCommandOptions {
   readonly lifecycle: ProgressViewLifecycleCommandActions;
-  readonly run?: Partial<ProgressViewRunCommandActions>;
+  readonly resumeStream?: ProgressViewRunCommandActions['resumeStream'];
   readonly followUp: ProgressViewFollowUpCommandActions;
   readonly bypass: ProgressViewBypassCommandOptions;
   readonly file: ProgressViewFileHostActions;
@@ -74,54 +70,38 @@ export class ProgressViewHost {
       lifecycle: options.commands.lifecycle,
       run: {
         resumeStream:
-          options.commands.run?.resumeStream ??
+          options.commands.resumeStream ??
           ((stream) => this.workflowActionsController.resume(stream)),
-        runNewStream:
-          options.commands.run?.runNewStream ??
-          ((stream) => this.workflowActionsController.runNew(stream)),
+        runNewStream: (stream) => this.workflowActionsController.runNew(stream),
       },
       followUp: options.commands.followUp,
       bypass: options.commands.bypass,
       file: {
         openFile: options.commands.file.openFile,
         openFileCompile: options.commands.file.openFileCompile,
-        openTaskStorage:
-          options.commands.file.openTaskStorage ??
-          ((stream) =>
-            this.workflowFileActionsController.openTaskStorage(stream)),
-        compareOriginal:
-          options.commands.file.compareOriginal ??
-          ((file, base) =>
-            this.workflowFileActionsController.compareOriginal(file, base)),
-        comparePrevious:
-          options.commands.file.comparePrevious ??
-          ((file, base, previous) =>
-            this.workflowFileActionsController.comparePrevious(
-              file,
-              base,
-              previous,
-            )),
-        acceptFile:
-          options.commands.file.acceptFile ??
-          ((file, base) =>
-            this.workflowFileActionsController.acceptFile(file, base)),
-        mergeFile:
-          options.commands.file.mergeFile ??
-          ((file, base) =>
-            this.workflowFileActionsController.mergeFile(file, base)),
-        latexdiffFile:
-          options.commands.file.latexdiffFile ??
-          ((file, base) =>
-            this.workflowFileActionsController.latexdiffFile(file, base)),
-        openLabel:
-          options.commands.file.openLabel ??
-          ((label) => this.workflowFileActionsController.openLabel(label)),
+        openTaskStorage: (stream) =>
+          this.workflowFileActionsController.openTaskStorage(stream),
+        compareOriginal: (file, base) =>
+          this.workflowFileActionsController.compareOriginal(file, base),
+        comparePrevious: (file, base, previous) =>
+          this.workflowFileActionsController.comparePrevious(
+            file,
+            base,
+            previous,
+          ),
+        acceptFile: (file, base) =>
+          this.workflowFileActionsController.acceptFile(file, base),
+        mergeFile: (file, base) =>
+          this.workflowFileActionsController.mergeFile(file, base),
+        latexdiffFile: (file, base) =>
+          this.workflowFileActionsController.latexdiffFile(file, base),
+        openLabel: (label) =>
+          this.workflowFileActionsController.openLabel(label),
       },
       approval: {
         ...options.commands.approval,
-        handleAgentProposalAction:
-          options.commands.approval.handleAgentProposalAction ??
-          ((message) => this.agentProposalController.handleAction(message)),
+        handleAgentProposalAction: (message) =>
+          this.agentProposalController.handleAction(message),
       },
       externalInquiry: options.commands.externalInquiry,
     });
