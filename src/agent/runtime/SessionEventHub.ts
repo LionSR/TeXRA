@@ -1,7 +1,7 @@
 import process from 'node:process';
 
 import type { AgentEvent } from '@agent/trace';
-import { createChannelTrace } from '@logger';
+import { createChannelTrace } from '@agent/trace';
 import type {
   ClearMissingOutputsPayload,
   FollowUpSentPayload,

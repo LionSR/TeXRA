@@ -10,7 +10,6 @@ import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 import {
   disposeAfterTest,
   makeFakeTrace,
-  mockLoggerModule,
   type DesktopAgentExecutionModule,
   type RunExecutionRequest,
 } from './desktopAgentExecutionTestHarness.mjs';
@@ -79,7 +78,6 @@ async function createExecution(options: {
   vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: options.prepareMainViewExecutionRequest,
   }));
-  mockLoggerModule();
   const { createDesktopAgentExecution } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
@@ -101,7 +99,6 @@ describe('createDesktopAgentExecution', () => {
     vi.doUnmock('@agent/runtime/runAgent');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
-    vi.doUnmock('@logger');
     vi.restoreAllMocks();
   });
 
