@@ -132,6 +132,25 @@ describe('CLI config command', () => {
     expect(mocks.setEnabledAgentKeys).not.toHaveBeenCalled();
   });
 
+  it('reports an unknown team id as a usage error', async () => {
+    mocks.setTeam.mockRejectedValueOnce(
+      new Error('Unknown agent team: missing-team'),
+    );
+
+    const result = await runCli([
+      'config',
+      'agents',
+      '--team',
+      'missing-team',
+      '--output-format',
+      'json',
+      '--no-input',
+    ]);
+
+    expect(result.exitCode).toBe(2);
+    expect(mocks.setTeam).toHaveBeenCalledWith('missing-team');
+  });
+
   it('canonicalizes a default chat agent from the effective roster', async () => {
     const result = await runCli([
       'config',

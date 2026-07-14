@@ -1,5 +1,6 @@
 import {
   chmod,
+  mkdir,
   mkdtemp,
   readFile as nodeReadFile,
   writeFile,
@@ -94,6 +95,32 @@ describe('setWorkspaceCliChatAgent', () => {
     expect((await loadWorkspaceCliConfig(workspace)).values.chat).toEqual({
       model: 'deepseekT',
     });
+  });
+
+  it('clears current and legacy chat-agent defaults together', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-default-'));
+    const configPath = workspaceTexraConfigPath(workspace);
+    await mkdir(path.dirname(configPath), { recursive: true });
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        'texra.chat': { agent: 'current', model: 'deepseekT' },
+        chat: { agent: 'legacy', model: 'sonnet46T' },
+      }),
+      'utf8',
+    );
+
+    await setWorkspaceCliChatAgent(workspace, undefined);
+
+    const raw = JSON.parse(await nodeReadFile(configPath, 'utf8')) as {
+      'texra.chat': { agent?: string; model: string };
+      chat: { agent?: string; model: string };
+    };
+    expect(raw['texra.chat']).toEqual({ model: 'deepseekT' });
+    expect(raw.chat).toEqual({ model: 'sonnet46T' });
+    expect((await loadWorkspaceCliConfig(workspace)).values.chat?.agent).toBe(
+      undefined,
+    );
   });
 });
 

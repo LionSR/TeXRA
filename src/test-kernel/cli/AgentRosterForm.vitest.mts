@@ -4,6 +4,7 @@ import type { AgentEntry } from '@agent/index';
 import {
   agentRosterSelectWindow,
   buildChatDefaultAgentItems,
+  setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
 
 const agents: AgentEntry[] = [
@@ -48,5 +49,11 @@ describe('AgentRosterForm', () => {
     expect(
       agentRosterSelectWindow({ availableRows: undefined, itemCount: 20 }),
     ).toEqual({ maxVisibleItems: undefined, showOverflow: false });
+  });
+
+  it('rejects default-chat selection when there is no workspace', async () => {
+    await expect(
+      setChatDefaultAgent(undefined, 'builtInToolUse:assistant'),
+    ).rejects.toThrow('Default chat-agent selection requires a workspace.');
   });
 });

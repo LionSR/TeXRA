@@ -81,6 +81,16 @@ export function agentRosterSelectWindow(args: {
   return computeSelectWindowSize({ ...args, chromeRows: 5 });
 }
 
+export async function setChatDefaultAgent(
+  workspacePath: string | undefined,
+  agent: string | undefined,
+): Promise<void> {
+  if (!workspacePath) {
+    throw new Error('Default chat-agent selection requires a workspace.');
+  }
+  await setWorkspaceCliChatAgent(workspacePath, agent);
+}
+
 async function loadRosterData(): Promise<AgentRosterData> {
   await loadAgents({ includeRemote: false });
   const { workspaceState } = platform();
@@ -263,11 +273,7 @@ export function AgentRosterForm(
       buildChatDefaultAgentItems(data.toolUse, data.record.toolUseAgentKeys),
       (value) => {
         const cwd = platform().workspace.getWorkspacePath();
-        if (!cwd) return;
-        write(
-          () => setWorkspaceCliChatAgent(cwd, value || undefined),
-          'overview',
-        );
+        write(() => setChatDefaultAgent(cwd, value || undefined), 'overview');
       },
       () => setMode('overview'),
     );

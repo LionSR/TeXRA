@@ -42,6 +42,23 @@ function formatConfigValue(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
 
+async function setAgentRosterTeam(
+  roster: ReturnType<typeof cliAgentRosterController>,
+  teamId: string,
+): Promise<void> {
+  try {
+    await roster.setTeam(teamId);
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      error.message === `Unknown agent team: ${teamId}`
+    ) {
+      throw new CliUsageError(error.message);
+    }
+    throw error;
+  }
+}
+
 async function showConfig(context: CliContext): Promise<number> {
   await initLocalCliPlatform(context);
   const agents = await readCliAgentRoster();
@@ -110,7 +127,7 @@ async function configureAgentRoster(
 
   if (input.inherit) await roster.setInherited();
   if (input.all) await roster.setAll();
-  if (input.team) await roster.setTeam(input.team);
+  if (input.team) await setAgentRosterTeam(roster, input.team);
   if (input.workflow !== undefined && input.toolUse !== undefined) {
     await roster.setCustom({
       workflowAgentKeys: parseAgentKeys(input.workflow),
