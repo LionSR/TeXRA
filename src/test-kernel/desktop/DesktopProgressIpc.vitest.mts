@@ -31,9 +31,7 @@ function fillRegistry(
 }
 
 interface DesktopProgressIpcBridgeStub {
-  completeWebviewReady(
-    onInquiryRestoreError?: (error: unknown) => void,
-  ): Promise<void>;
+  completeWebviewReady(): Promise<void>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
 }
 

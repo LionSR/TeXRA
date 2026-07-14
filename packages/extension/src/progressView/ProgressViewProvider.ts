@@ -8,7 +8,6 @@ import {
   replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import { restoreProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryRestore';
 import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { computeAgentOptionsData } from '@agent/index';
@@ -114,6 +113,7 @@ export class ProgressViewProvider
         this.approvalHandlers = buildApprovalRequestHandlerSet({
           webviewUpdater: u,
           canSend,
+          logger: this.logger,
           overrides: {
             retry: {
               show: (p) =>
@@ -363,9 +363,9 @@ export class ProgressViewProvider
     this._pendingUpdateOptions = null;
   }
 
-  public markWebviewReady(
+  public async markWebviewReady(
     view: vscode.WebviewView | vscode.WebviewPanel,
-  ): void {
+  ): Promise<void> {
     if (this.isPanelView(view)) {
       this._panelReady = true;
     } else {
@@ -379,25 +379,14 @@ export class ProgressViewProvider
     this._pendingUpdateOptions = null;
     this._panelJustDisposed = false;
     this.syncFullView({ forceRebuild: true });
-    // Manifest-backed inquiry state is durable, but handler pending state is
-    // in-memory. Fire-and-forget: replay covers warm targets, restoration covers
-    // host restarts.
-    void restoreProgressViewInquiries({
-      webviewUpdater: this.webviewUpdater,
-      externalInquiry: this.approvalHandlers.externalInquiry,
-      logger: this.logger,
-    });
-    this.replayPendingPrompts();
+    await this.replayPendingPrompts();
   }
 
-  private replayPendingPrompts(): void {
-    if (!this.webviewUpdater.isAvailable()) {
-      return;
-    }
+  private async replayPendingPrompts(): Promise<void> {
+    if (!this.webviewUpdater.isAvailable()) return;
 
-    replayApprovalRequestHandlers(this.approvalHandlers);
-    // YOLO / Super YOLO state is already sent by syncFullView() which is
-    // always called before replayPendingPrompts() in markWebviewReady().
+    await replayApprovalRequestHandlers(this.approvalHandlers);
+    // YOLO / Super YOLO state is already sent by syncFullView() before replay.
   }
 
   public getPendingAgentProposal(
@@ -517,7 +506,7 @@ export class ProgressViewProvider
       // Only replay permissions when switching from editor → sidebar.
       // If already on sidebar, the webview already has the correct permissions;
       // replaying would cause duplicates.
-      if (placementChanged) this.replayPendingPrompts();
+      if (placementChanged) await this.replayPendingPrompts();
     }
   }
 
@@ -547,7 +536,7 @@ export class ProgressViewProvider
       await this.restoreSidebarToLauncher();
       this.revealEditorPanel();
       this.syncFullView({ forceRebuild: true });
-      if (placementChanged) this.replayPendingPrompts();
+      if (placementChanged) await this.replayPendingPrompts();
       return;
     }
 

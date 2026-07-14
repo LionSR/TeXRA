@@ -8,7 +8,7 @@ import {
 import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 
 describe('ApprovalRequestHandlerSet helpers', () => {
-  it('replays every pending prompt kind', () => {
+  it('replays every pending prompt kind', async () => {
     const replayCalls = {
       toolEdit: vi.fn<() => void>(),
       bash: vi.fn<() => void>(),
@@ -27,7 +27,7 @@ describe('ApprovalRequestHandlerSet helpers', () => {
       [K in keyof typeof replayCalls]: { replay: (typeof replayCalls)[K] };
     };
 
-    replayApprovalRequestHandlers(handlers);
+    await replayApprovalRequestHandlers(handlers);
 
     for (const replay of Object.values(replayCalls)) {
       expect(replay).toHaveBeenCalledTimes(1);
