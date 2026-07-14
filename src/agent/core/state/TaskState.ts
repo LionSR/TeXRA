@@ -6,7 +6,12 @@ import {
 } from '@shared/schemas/fileTypes';
 
 import { AgentCategory } from '../definition/AgentDataclass';
-import { AgentConfigSchema, type AgentConfig } from '../definition/AgentConfig';
+import {
+  ToolUseAgentConfigSchema,
+  WorkflowAgentConfigSchema,
+  type ToolUseAgentConfig,
+  type WorkflowAgentConfig,
+} from '../definition/AgentConfig';
 
 const ActiveFilesSchema = z
   .partialRecord(z.enum(MULTIPLE_DOCUMENT_FILE_TYPES), z.boolean())
@@ -18,14 +23,6 @@ const ActiveFilesSchema = z
     return complete;
   });
 
-type WorkflowAgentConfig = AgentConfig & {
-  agentCategory: typeof AgentCategory.Workflow;
-};
-
-type ToolUseAgentConfig = AgentConfig & {
-  agentCategory: typeof AgentCategory.ToolUse;
-};
-
 export interface WorkflowTaskState {
   agentConfig: WorkflowAgentConfig;
   activeFiles: Record<MultipleDocumentFileType, boolean>;
@@ -36,16 +33,6 @@ export interface ToolUseTaskState {
 }
 
 export type TaskState = WorkflowTaskState | ToolUseTaskState;
-
-const WorkflowAgentConfigSchema = AgentConfigSchema.refine(
-  (c) => c.agentCategory === AgentCategory.Workflow,
-  { error: 'Expected Workflow category' },
-) as z.ZodType<WorkflowAgentConfig>;
-
-const ToolUseAgentConfigSchema = AgentConfigSchema.refine(
-  (c) => c.agentCategory === AgentCategory.ToolUse,
-  { error: 'Expected ToolUse category' },
-) as z.ZodType<ToolUseAgentConfig>;
 
 const WorkflowTaskStateSchema = z.object({
   agentConfig: WorkflowAgentConfigSchema,
