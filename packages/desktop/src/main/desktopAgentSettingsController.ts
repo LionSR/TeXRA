@@ -80,7 +80,7 @@ export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsSt
 export interface DesktopAgentSettingsController {
   readonly actions: SettingsViewCommandActions['agentSelection'];
   postStartupData(): Promise<void>;
-  refreshAfterAuth(): Promise<void>;
+  refreshCatalogData(): Promise<void>;
 }
 
 /** Owns the desktop settings agent catalog, directory, and roster behavior. */
@@ -159,7 +159,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     ]);
   }
 
-  async refreshAfterAuth(): Promise<void> {
+  async refreshCatalogData(): Promise<void> {
     await Promise.all([
       this.postAgentSelectionData(),
       this.postMainAgentOptionsData(),
@@ -210,7 +210,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     enabled: boolean;
   }): Promise<void> {
     await this.visibilityController.setAgentEnabled(input);
-    await this.refreshAfterAuth();
+    await this.refreshCatalogData();
   }
 
   private async updateAllAgentsEnabled(input: {
@@ -219,7 +219,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     enabled: boolean;
   }): Promise<void> {
     await this.visibilityController.setAllAgentsEnabled(input);
-    await this.refreshAfterAuth();
+    await this.refreshCatalogData();
   }
 
   private async setCustomAgentDir(): Promise<void> {

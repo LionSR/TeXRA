@@ -1114,15 +1114,15 @@ describe('desktop settings IPC', () => {
 
   it('delegates agent refresh after desktop auth model data is current', async () => {
     const agentSettingsController = createStubDesktopAgentSettingsController();
-    const refreshAfterAuth = vi.fn(async () => undefined);
-    agentSettingsController.refreshAfterAuth = refreshAfterAuth;
+    const refreshCatalogData = vi.fn(async () => undefined);
+    agentSettingsController.refreshCatalogData = refreshCatalogData;
     const { settings, posted } = createCapturedSettingsFixture({
       agentSettingsController,
     });
 
     await settings.refreshAuthDependentData();
 
-    expect(refreshAfterAuth).toHaveBeenCalledOnce();
+    expect(refreshCatalogData).toHaveBeenCalledOnce();
     expect(invalidateModelOptionsCache).toHaveBeenCalled();
     expect(computeModelOptionsData).toHaveBeenCalled();
     expect(
@@ -1130,7 +1130,7 @@ describe('desktop settings IPC', () => {
     ).toBeLessThan(computeModelOptionsData.mock.invocationCallOrder[0]);
     expect(
       computeModelOptionsData.mock.invocationCallOrder.at(-1),
-    ).toBeLessThan(refreshAfterAuth.mock.invocationCallOrder[0]);
+    ).toBeLessThan(refreshCatalogData.mock.invocationCallOrder[0]);
     expect(posted.map((message) => commandOf(message))).toEqual(
       expect.arrayContaining([
         SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
@@ -1142,8 +1142,8 @@ describe('desktop settings IPC', () => {
 
   it('defers the controller refresh while roster sign-in owns the catalog', async () => {
     const agentSettingsController = createStubDesktopAgentSettingsController();
-    const refreshAfterAuth = vi.fn(async () => undefined);
-    agentSettingsController.refreshAfterAuth = refreshAfterAuth;
+    const refreshCatalogData = vi.fn(async () => undefined);
+    agentSettingsController.refreshCatalogData = refreshCatalogData;
     const { settings, posted } = createCapturedSettingsFixture({
       agentSettingsController,
     });
@@ -1152,7 +1152,7 @@ describe('desktop settings IPC', () => {
       deferAgentCatalogRefresh: true,
     });
 
-    expect(refreshAfterAuth).not.toHaveBeenCalled();
+    expect(refreshCatalogData).not.toHaveBeenCalled();
     expect(
       posted.some(
         (message) =>

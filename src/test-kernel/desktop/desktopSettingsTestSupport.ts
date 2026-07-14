@@ -33,6 +33,6 @@ export function createStubDesktopAgentSettingsController(): DesktopAgentSettings
       deleteModePreset: noOp,
     },
     postStartupData: noOp,
-    refreshAfterAuth: noOp,
+    refreshCatalogData: noOp,
   };
 }

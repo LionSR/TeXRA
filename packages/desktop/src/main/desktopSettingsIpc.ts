@@ -763,7 +763,7 @@ export function createDesktopSettingsIpc(
     await postMainModelOptionsData();
     await postProfileData();
     if (refreshOptions.deferAgentCatalogRefresh) return;
-    await options.agentSettingsController.refreshAfterAuth();
+    await options.agentSettingsController.refreshCatalogData();
   }
 
   async function updateAgentSetting(
