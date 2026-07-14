@@ -1,4 +1,4 @@
-import { MODEL_CONFIGS, hint, type ModelConfig } from 'llm-zoo';
+import { hint, type ModelConfig } from 'llm-zoo';
 
 import type { ModelOptionData } from '@shared/schemas';
 import {
@@ -9,15 +9,16 @@ import {
   FAST_FIRST_RESPONSE_HINT,
   isFastFirstResponseModel,
 } from '@shared/constants/fastModels';
+import { getRuntimeModelConfig } from './runtimeModelRegistry';
 
 /** Return whether the registry marks a model as deprecated. */
 export function isDeprecatedModel(model: string): boolean {
-  return MODEL_CONFIGS[model]?.deprecated ?? false;
+  return getRuntimeModelConfig(model)?.deprecated ?? false;
 }
 
 /** Return whether the registry marks a model as no longer served. */
 export function isRetiredModel(model: string): boolean {
-  return MODEL_CONFIGS[model]?.retired ?? false;
+  return getRuntimeModelConfig(model)?.retired ?? false;
 }
 
 /**
@@ -215,7 +216,7 @@ export function buildBasicModelOptionsData(
   visibleModels: readonly string[],
 ): ModelOptionData[] {
   return visibleModels.map((model) => {
-    const config = MODEL_CONFIGS[model];
+    const config = getRuntimeModelConfig(model);
     if (!config) return { value: model, label: model };
     return buildBaseModelOption(model, config);
   });

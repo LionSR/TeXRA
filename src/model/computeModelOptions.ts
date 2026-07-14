@@ -1,4 +1,3 @@
-import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 import { LRUCache } from 'lru-cache';
 
 import { platform } from '@platform/platform';
@@ -22,7 +21,16 @@ import {
 } from './modelOptionsBasic';
 import { getVisibleModels } from './modelOptionsState';
 import { shouldRouteModelThroughOpenRouter } from './openRouterRouting';
+import {
+  availableRuntimeModelIds,
+  getRuntimeModelConfig,
+  isRuntimeModel,
+  refreshRuntimeModelRegistry,
+  runtimeModelAccess,
+  runtimeModelConfigEntries,
+} from './runtimeModelRegistry';
 import type { ProviderCapabilityProfile } from './providerCapabilities';
+import type { ModelConfig } from 'llm-zoo';
 import type { PlatformSecrets } from '@platform/secrets';
 
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
@@ -93,6 +101,16 @@ const AVAILABILITY_STATUS_FIELDS: Record<
   'subscription-access': {
     label: 'ChatGPT subscription',
     available: true,
+    requiresKey: false,
+  },
+  'copilot-access': {
+    label: 'Copilot subscription',
+    available: true,
+    requiresKey: false,
+  },
+  'copilot-permission-required': {
+    label: 'Copilot access required',
+    available: false,
     requiresKey: false,
   },
   'relay-quota-exhausted': {
@@ -172,6 +190,12 @@ async function resolveModelAvailability(
 ): Promise<ModelAvailabilityStatus> {
   if (config.retired) {
     return availabilityStatus('retired');
+  }
+
+  if (isRuntimeModel(model)) {
+    return runtimeModelAccess(model) === true
+      ? availabilityStatus('copilot-access')
+      : availabilityStatus('copilot-permission-required');
   }
 
   // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
@@ -286,7 +310,8 @@ export async function getModelUnavailableReason(
   access?: ModelOptionsAccess,
   options: ModelOptionsComputationOptions = {},
 ): Promise<string | null> {
-  const config = MODEL_CONFIGS[model];
+  await refreshRuntimeModelRegistry();
+  const config = getRuntimeModelConfig(model);
   if (!config) return `Model "${model}" is not recognized.`;
 
   // buildDefaultModelOptionsAccess already folds in options.agentCategory, so
@@ -315,6 +340,10 @@ export async function getModelUnavailableReason(
     return `Model "${model}" is unavailable because your monthly TeXRA relay quota is exhausted. Switch to personal API keys or wait for the next quota period.`;
   }
 
+  if (availability.kind === 'copilot-permission-required') {
+    return `Model "${model}" requires permission to use your Copilot subscription in VS Code.`;
+  }
+
   // Personal key mode or unauthenticated — missing key or keyless provider.
   const providerName =
     PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider;
@@ -329,7 +358,7 @@ async function buildModelOptionData(
   model: string,
   ctx: ModelAvailabilityContext,
 ): Promise<ModelOptionData> {
-  const config = MODEL_CONFIGS[model];
+  const config = getRuntimeModelConfig(model);
   if (!config) {
     return { value: model, label: model };
   }
@@ -448,6 +477,7 @@ async function computeModelOptionsDataUncached(
   access: ModelOptionsAccess,
   useApiKeyCache: boolean,
 ): Promise<ModelOptionData[]> {
+  await refreshRuntimeModelRegistry();
   const availabilityCtx = await buildAvailabilityContext(
     access,
     useApiKeyCache,
@@ -465,10 +495,10 @@ function visibleModelsForAccess(
   configuredModels: readonly string[],
   context: ModelAvailabilityContext,
 ): readonly string[] {
-  if (!context.codexSignedIn) return configuredModels;
+  const models = new Set([...configuredModels, ...availableRuntimeModelIds()]);
+  if (!context.codexSignedIn) return [...models];
 
-  const models = new Set(configuredModels);
-  for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
+  for (const [model, config] of runtimeModelConfigEntries()) {
     if (
       !config.retired &&
       !config.deprecated &&
