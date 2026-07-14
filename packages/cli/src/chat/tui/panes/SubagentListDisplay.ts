@@ -1,5 +1,7 @@
+// Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 
+// Local imports - TUI state and presentation
 import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
 import {
   COLOR_BORDER,
