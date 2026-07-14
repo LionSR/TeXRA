@@ -1,12 +1,12 @@
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
-import { ensureArray } from '@utils/core';
-import { loadTexraRules } from '@utils/files/rulesUtils';
-import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 
 // Local imports - utilities
-import { renderPrompt } from './promptUtils';
+import { ensureArray } from '@utils/core';
+import { renderPrompt } from '@utils/prompt';
+import { loadTexraRules } from '@utils/files/rulesUtils';
+import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 
 /** Instructions appended to tool-use agent prompts */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
