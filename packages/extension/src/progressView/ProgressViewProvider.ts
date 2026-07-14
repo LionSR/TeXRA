@@ -11,7 +11,7 @@ import {
 import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { computeAgentOptionsData } from '@agent/index';
-import type { AgentTrace } from '@agent/trace';
+import { createChannelTrace, type AgentTrace } from '@agent/trace';
 import {
   setProgressViewBridge,
   type IProgressViewBridge,
@@ -30,7 +30,6 @@ import { appSignals } from '@eventBus/AppSignals';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { setExtensionInteractionEventSink } from '@frontend/events/extensionInteractionEvents';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
-import { createChannelTrace } from '@logger';
 import {
   buildVisibleBasicModelOptionsData,
   computeModelOptionsData,
