@@ -1,5 +1,6 @@
 import {
   chmod,
+  mkdir,
   mkdtemp,
   readFile as nodeReadFile,
   writeFile,
@@ -18,6 +19,10 @@ import {
   writeInitConfig,
   type InitAnswers,
 } from '@cli/runtime/initConfig';
+import {
+  loadWorkspaceCliConfig,
+  setWorkspaceCliChatAgent,
+} from '@cli/runtime/cliConfig';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -62,6 +67,86 @@ describe('workspaceTexraConfigPath', () => {
     expect(workspaceTexraConfigPath('/projects/paper')).toBe(
       path.join('/projects/paper', '.texra', 'config.json'),
     );
+  });
+});
+
+describe('setWorkspaceCliChatAgent', () => {
+  it('updates only chat.agent and preserves other workspace defaults', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-default-'));
+    const configPath = workspaceTexraConfigPath(workspace);
+    await writeInitConfig(configPath, buildInitConfig(ANSWERS));
+
+    await setWorkspaceCliChatAgent(workspace, 'builtInToolUse:review');
+
+    const raw = JSON.parse(await nodeReadFile(configPath, 'utf8')) as {
+      model: string;
+      chat: { agent: string; model: string };
+    };
+    expect(raw.model).toBe('deepseekT');
+    expect(raw.chat).toEqual({
+      agent: 'builtInToolUse:review',
+      model: 'deepseekT',
+    });
+    expect((await loadWorkspaceCliConfig(workspace)).values.chat?.agent).toBe(
+      'builtInToolUse:review',
+    );
+
+    await setWorkspaceCliChatAgent(workspace, undefined);
+    expect((await loadWorkspaceCliConfig(workspace)).values.chat).toEqual({
+      model: 'deepseekT',
+    });
+  });
+
+  it('clears current and legacy chat-agent defaults together', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-default-'));
+    const configPath = workspaceTexraConfigPath(workspace);
+    await mkdir(path.dirname(configPath), { recursive: true });
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        'texra.chat': { agent: 'current', model: 'deepseekT' },
+        chat: { agent: 'legacy', model: 'sonnet46T' },
+      }),
+      'utf8',
+    );
+
+    await setWorkspaceCliChatAgent(workspace, undefined);
+
+    const raw = JSON.parse(await nodeReadFile(configPath, 'utf8')) as {
+      'texra.chat': { agent?: string; model: string };
+      chat: { agent?: string; model: string };
+    };
+    expect(raw['texra.chat']).toEqual({ model: 'deepseekT' });
+    expect(raw.chat).toEqual({ model: 'sonnet46T' });
+    expect((await loadWorkspaceCliConfig(workspace)).values.chat?.agent).toBe(
+      undefined,
+    );
+  });
+
+  it('removes a stale legacy chat-agent default when setting the current key', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-default-'));
+    const configPath = workspaceTexraConfigPath(workspace);
+    await mkdir(path.dirname(configPath), { recursive: true });
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        'texra.chat': { agent: 'current', model: 'deepseekT' },
+        chat: { agent: 'legacy', model: 'sonnet46T' },
+      }),
+      'utf8',
+    );
+
+    await setWorkspaceCliChatAgent(workspace, 'builtInToolUse:assistant');
+
+    const raw = JSON.parse(await nodeReadFile(configPath, 'utf8')) as {
+      'texra.chat': { agent?: string; model: string };
+      chat: { agent?: string; model: string };
+    };
+    expect(raw['texra.chat']).toEqual({
+      agent: 'builtInToolUse:assistant',
+      model: 'deepseekT',
+    });
+    expect(raw.chat).toEqual({ model: 'sonnet46T' });
   });
 });
 

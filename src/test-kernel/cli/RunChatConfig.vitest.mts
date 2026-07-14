@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAgent, type AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { buildInitialChatAgentConfig } from '@cli/chat/chatSessionController';
-import { chatToolUseAgentUsageError } from '@cli/chat/tui/commands/handlers/agentModelCommands';
+import {
+  applyInitialCliAgentSelection,
+  chatToolUseAgentUsageError,
+} from '@cli/chat/tui/commands/handlers/agentModelCommands';
+import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
   restorePendingSkillActivations,
   takePendingSkillActivations,
@@ -16,6 +20,10 @@ vi.mock('@agent/index', async (importOriginal) => {
     getAgent: vi.fn(),
   };
 });
+
+vi.mock('@cli/chat/tui/state/transcript', () => ({
+  appendLocalAssistantTranscript: vi.fn(),
+}));
 
 const mockedGetAgent = vi.mocked(getAgent);
 
@@ -53,6 +61,23 @@ describe('CLI chat run config', () => {
     });
   });
 
+  it('carries a team delegation roster in the run configuration', () => {
+    const delegationAgentScope = {
+      workflowAgentKeys: ['builtInWorkflow:correct'],
+      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    };
+
+    expect(
+      buildInitialChatAgentConfig({
+        agent: 'orchestrator',
+        model: 'deepseekT',
+        instruction: 'check the proof',
+        workingDirectory: '/tmp/project',
+        delegationAgentScope,
+      }),
+    ).toMatchObject({ delegationAgentScope });
+  });
+
   it('does not tag ordinary chats as multi-agent preset runs', () => {
     expect(
       buildInitialChatAgentConfig({
@@ -62,6 +87,32 @@ describe('CLI chat run config', () => {
         workingDirectory: '/tmp/project',
       }),
     ).not.toHaveProperty('cliMultiAgentPresetId');
+  });
+
+  it('leaves team mode when the root agent is changed explicitly', () => {
+    mockedGetAgent.mockReturnValue(registryAgent(AgentCategory.ToolUse));
+    patchSessionMeta({
+      teamName: 'Physicist',
+      cliMultiAgentPresetId: 'physicist',
+      delegationAgentScope: {
+        workflowAgentKeys: ['builtInWorkflow:polish'],
+        toolUseAgentKeys: ['builtInToolUse:assistant'],
+      },
+    });
+    const context = {
+      session: {
+        runPromise: undefined,
+        runCompleted: false,
+        stopRequested: false,
+      },
+    } as Parameters<typeof applyInitialCliAgentSelection>[1];
+
+    applyInitialCliAgentSelection('assistant', context);
+
+    expect(sessionMeta.get()).toMatchObject({ agent: 'assistant' });
+    expect(sessionMeta.get().teamName).toBeUndefined();
+    expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
+    expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
   });
 
   it('preserves display instruction separately from model instruction', () => {

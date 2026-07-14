@@ -9,12 +9,8 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { refresh } from '@agent/index/agentRegistry';
-import {
-  getDefaultTeamId,
-  setDefaultTeamId,
-} from '@shared/state/onboardingState';
+import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 import {
@@ -31,14 +27,6 @@ const REPO_ROOT = resolve(
 
 // Expected workflow rosters (sorted) for the seeded teams under test.
 const STARTER_WORKFLOW = ['builtInWorkflow:correct', 'builtInWorkflow:polish'];
-const PHYSICIST_WORKFLOW = [
-  'apply',
-  'builtInWorkflow:correct',
-  'builtInWorkflow:polish',
-  'criticize',
-  'devise',
-  'generic',
-];
 
 function workspaceRoster(): {
   workflow: string[] | undefined;
@@ -62,6 +50,10 @@ async function clearOnboardingState(): Promise<void> {
   );
   await platform().workspaceState.update(
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+    undefined,
+  );
+  await platform().workspaceState.update(
+    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     undefined,
   );
   await platform().globalState.update(
@@ -250,103 +242,5 @@ describe('apply_team', () => {
       workflow: undefined,
       toolUse: undefined,
     });
-  });
-});
-
-describe('seedRosterFromDefaultTeam', () => {
-  beforeEach(clearOnboardingState);
-
-  it('seeds a never-configured workspace from the default team', async () => {
-    await setDefaultTeamId(platform().globalState, 'starter');
-
-    const seeded = await seedRosterFromDefaultTeam({
-      globalState: platform().globalState,
-      workspaceState: platform().workspaceState,
-    });
-
-    expect(seeded).toBe(true);
-    const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual(STARTER_WORKFLOW);
-    expect(roster.toolUse).toContain('builtInToolUse:setup');
-  });
-
-  it('falls back to the Physicist team without a recorded default team', async () => {
-    const seeded = await seedRosterFromDefaultTeam({
-      globalState: platform().globalState,
-      workspaceState: platform().workspaceState,
-    });
-
-    expect(seeded).toBe(true);
-    const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual(PHYSICIST_WORKFLOW);
-    expect(roster.toolUse).toContain('builtInToolUse:review');
-    expect(roster.toolUse).toContain('builtInToolUse:research');
-    expect(roster.toolUse).toContain('orchestrator');
-  });
-
-  it('falls back to the Physicist team when the recorded default team is stale', async () => {
-    await setDefaultTeamId(platform().globalState, 'obsolete-team');
-
-    const seeded = await seedRosterFromDefaultTeam({
-      globalState: platform().globalState,
-      workspaceState: platform().workspaceState,
-    });
-
-    expect(seeded).toBe(true);
-    const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual(PHYSICIST_WORKFLOW);
-    expect(roster.toolUse).toContain('builtInToolUse:review');
-    expect(roster.toolUse).toContain('builtInToolUse:research');
-    expect(roster.toolUse).toContain('orchestrator');
-  });
-
-  it('never overwrites an already-configured roster', async () => {
-    await setDefaultTeamId(platform().globalState, 'starter');
-    await platform().workspaceState.update(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ['builtInToolUse:review'],
-    );
-
-    const seeded = await seedRosterFromDefaultTeam({
-      globalState: platform().globalState,
-      workspaceState: platform().workspaceState,
-    });
-
-    expect(seeded).toBe(false);
-    expect(workspaceRoster().toolUse).toEqual(['builtInToolUse:review']);
-    expect(workspaceRoster().workflow).toBeUndefined();
-  });
-
-  it('leaves the roster unset with fallbackTeamId null and no recorded team', async () => {
-    // CLI behavior: a fresh terminal session keeps every agent enabled (roster
-    // keys stay unset) instead of falling back to the Physicist team.
-    const seeded = await seedRosterFromDefaultTeam(
-      {
-        globalState: platform().globalState,
-        workspaceState: platform().workspaceState,
-      },
-      { fallbackTeamId: null },
-    );
-
-    expect(seeded).toBe(false);
-    expect(workspaceRoster().workflow).toBeUndefined();
-    expect(workspaceRoster().toolUse).toBeUndefined();
-  });
-
-  it('still honors a recorded default team with fallbackTeamId null', async () => {
-    await setDefaultTeamId(platform().globalState, 'starter');
-
-    const seeded = await seedRosterFromDefaultTeam(
-      {
-        globalState: platform().globalState,
-        workspaceState: platform().workspaceState,
-      },
-      { fallbackTeamId: null },
-    );
-
-    expect(seeded).toBe(true);
-    const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual(STARTER_WORKFLOW);
-    expect(roster.toolUse).toContain('builtInToolUse:setup');
   });
 });

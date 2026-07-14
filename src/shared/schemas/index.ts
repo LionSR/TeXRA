@@ -1,6 +1,7 @@
 // Layer 1: Base types (no dependencies on other schema files)
 export * from './identifiers';
 export * from './agent';
+export * from './agentRoster';
 export * from './agentCliSettings';
 export * from './fileFields';
 export * from './fileTypes';

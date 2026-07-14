@@ -74,6 +74,17 @@ export function agentName(key: string): string {
   return idx >= 0 ? key.slice(idx + 1) : key;
 }
 
+/** Match bare names by name and source-qualified keys by exact identity. */
+export function agentMatchesIdentifier(
+  entry: { source: string; name: string },
+  identifier: string,
+): boolean {
+  const name = agentName(identifier);
+  return identifier === name
+    ? entry.name === name
+    : agentKeyOf(entry) === identifier;
+}
+
 /**
  * Extract the clean agent name from an identifier.
  * Like agentName() but validates the prefix is a known AgentSource first,

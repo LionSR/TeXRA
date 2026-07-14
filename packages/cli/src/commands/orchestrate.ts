@@ -24,7 +24,6 @@ import {
   cliMultiAgentPresetCanLaunchTeam,
   formatCliMultiAgentTeamLaunchBlockMessage,
   readCliMultiAgentPresets,
-  withCliMultiAgentPresetVisibility,
 } from '../runtime/multiAgentPresets';
 import {
   loadCliMultiAgentRunPlan,
@@ -48,7 +47,6 @@ import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
-import { seedCliRosterFromDefaultTeam } from '../runtime/defaultTeamRoster';
 import {
   contextForCliModelAccess,
   readCliModelAccessStatus,
@@ -177,7 +175,6 @@ async function runOrchestration(context: CliContext): Promise<number> {
       readCliModelAccessStatus(apiMode),
       getCliAuthProfile(),
     ]);
-    await seedCliRosterFromDefaultTeam();
     const toolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
     const accountStatus = {
       texraSignedIn: authProfile.authenticated,
@@ -314,14 +311,16 @@ async function runOrchestration(context: CliContext): Promise<number> {
         const rootAgent = plan.rootAgent;
         writeMissingPresetAgents(plan);
         const { runChat } = await import('../chat/tui/runChatTui');
-        const result = await withCliMultiAgentPresetVisibility(plan, () =>
-          runChat(launchContext, {
-            agentOverride: rootAgent.name,
-            teamName: plan.preset.name,
-            modelOverride: action.model,
-            cliMultiAgentPresetId: plan.preset.id,
-          }),
-        );
+        const result = await runChat(launchContext, {
+          agentOverride: rootAgent.name,
+          teamName: plan.preset.name,
+          modelOverride: action.model,
+          cliMultiAgentPresetId: plan.preset.id,
+          delegationAgentScope: {
+            workflowAgentKeys: [...plan.workflowAgentKeys],
+            toolUseAgentKeys: [...plan.toolUseAgentKeys],
+          },
+        });
         return result.exitCode;
       }
       case 'resume':
@@ -332,6 +331,14 @@ async function runOrchestration(context: CliContext): Promise<number> {
       case 'browse-teams':
       case 'browse-accounts':
         continue launcher;
+      case 'configure-settings': {
+        const { runConfigTui } = await import('../config/runConfigTui');
+        await runConfigTui({
+          colorEnabled: resolveCliStdoutColorEnabled(context),
+          onError: writeErrorStderr,
+        });
+        continue launcher;
+      }
       case 'account': {
         try {
           if (action.provider === 'chatgpt') {

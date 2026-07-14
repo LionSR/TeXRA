@@ -27,7 +27,10 @@ export interface TeamRosterCatalog {
         readonly resolution: TeamRosterResolution;
       }
     | { readonly ok: false; readonly reason: 'unknownPreset' };
-  commitPresetResolution(resolution: TeamRosterResolution): Promise<void>;
+  commitPresetResolution(
+    preset: AgentModePreset,
+    resolution: TeamRosterResolution,
+  ): Promise<void>;
 }
 
 /** Resolve a team against the current catalog without writing roster state. */
@@ -51,15 +54,6 @@ export async function commitTeamRoster(
 ): Promise<void> {
   await state.setEnabledAgentKeys('workflow', resolution.workflowKeys);
   await state.setEnabledAgentKeys('toolUse', resolution.toolUseKeys);
-}
-
-export async function applyTeamRoster(
-  state: TeamRosterState,
-  preset: AgentModePreset,
-): Promise<TeamRosterResolution> {
-  const resolution = resolveTeamRoster(state, preset);
-  await commitTeamRoster(state, resolution);
-  return resolution;
 }
 
 /**

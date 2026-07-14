@@ -153,9 +153,17 @@ export async function executeSubagent(
 
   const executionId = generateExecutionId();
   const startedAt = Date.now();
-  const workingDirectory = configPayload.workingDirectory ?? undefined;
+  const delegationAgentScope =
+    parentContext.kind === 'launch'
+      ? parentContext.runScope.delegationAgentScope
+      : undefined;
+  const childConfigPayload: AgentConfigPayload = {
+    ...configPayload,
+    ...(delegationAgentScope ? { delegationAgentScope } : {}),
+  };
+  const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
 
-  const syntheticConfig = AgentConfigSchema.parse(configPayload);
+  const syntheticConfig = AgentConfigSchema.parse(childConfigPayload);
   await registerExecution(
     executionId,
     syntheticConfig,
@@ -205,7 +213,7 @@ export async function executeSubagent(
     };
     try {
       let subagentError: unknown;
-      const result = await executeAgent(configPayload, executionId, {
+      const result = await executeAgent(childConfigPayload, executionId, {
         runtimeHost,
         session: parentSession,
         isSubagent: true,
@@ -251,7 +259,7 @@ export async function executeSubagent(
     }
   }
 
-  const isToolUse = configPayload.agentCategory === AgentCategory.ToolUse;
+  const isToolUse = childConfigPayload.agentCategory === AgentCategory.ToolUse;
   // Must match the id `buildAgentLaunchContext` actually reserves for this
   // executionId (see AgentLaunchContext.ts's `reservedStreamId`), or the
   // loop acquires the wrong follow-up queue/interrupt slot. That reservation
@@ -262,12 +270,12 @@ export async function executeSubagent(
   // (e.g. an approved agent override's display name vs. its registry name).
   // Derive from the exact same fields, not a parallel formula.
   const childStreamId = getStreamTabId(
-    configPayload.agent,
-    configPayload.model,
+    childConfigPayload.agent,
+    childConfigPayload.model,
     { executionId },
   );
   const strategyParams = {
-    configPayload,
+    configPayload: childConfigPayload,
     executionId,
     agentName,
     orchestratorStreamId,
@@ -310,7 +318,7 @@ export async function executeSubagent(
   if (meta) {
     const modelInfo = meta.modelOverride
       ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
-      : `Model: ${configPayload.model}`;
+      : `Model: ${childConfigPayload.model}`;
     const agentInfo = meta.agentOverride
       ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
       : '';
