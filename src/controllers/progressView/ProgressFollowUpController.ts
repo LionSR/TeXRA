@@ -2,6 +2,7 @@
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
+  ToolUseAgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
@@ -172,7 +173,7 @@ export class ProgressFollowUpController {
       };
     }
 
-    const agentConfig = AgentConfigSchema.parse({
+    const agentConfig = ToolUseAgentConfigSchema.parse({
       ...input.taskState.agentConfig,
       agent: input.agent,
       model: input.model,
@@ -185,7 +186,7 @@ export class ProgressFollowUpController {
       outputFiles: [],
       editedFile: null,
       editedFiles: [],
-    }) as AgentConfig & { agentCategory: typeof AgentCategory.ToolUse };
+    });
 
     return {
       kind: 'restoreState',

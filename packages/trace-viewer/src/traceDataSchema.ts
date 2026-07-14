@@ -15,7 +15,7 @@ import { z } from 'zod';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionMeta } from '@agent/storage';
-import { AgentCategorySchema, AgentSourceSchema } from '@shared/schemas/agent';
+import { AgentCategory, AgentSourceSchema } from '@shared/schemas/agent';
 import {
   ExecutionIdSchema,
   StreamTabIdSchema,
@@ -42,14 +42,13 @@ const TraceStreamSnapshotSchema = StreamSnapshotSchema.extend({
     .prefault(STREAM_SNAPSHOT_SCHEMA_VERSION),
 });
 
-const TraceAgentConfigSchema = NullableFileFieldsSchema.extend({
+const TraceAgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
   agent: z.string(),
   agentSource: AgentSourceSchema.nullish(),
   model: z.string(),
   instruction: z.string(),
   rootUserInstruction: z.string().nullish(),
   displayInstruction: z.string().nullish(),
-  agentCategory: AgentCategorySchema,
   editedFiles: z.array(z.string()),
   toolConfig: ToolConfigSchema,
   memories: z.array(z.string()),
@@ -57,16 +56,27 @@ const TraceAgentConfigSchema = NullableFileFieldsSchema.extend({
   cliOutputFile: z.string().nullish(),
   cliMultiAgentPresetId: z.string().nullish(),
   delegationAgentScope: AgentDelegationScopeSchema.nullish(),
-}).superRefine((config, ctx) => {
-  if (config.outputFiles.length > config.inputFiles.length) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['outputFiles'],
-      message:
-        'Number of output files must not be greater than the number of input files.',
-    });
-  }
 });
+
+const TraceAgentConfigSchema = z
+  .discriminatedUnion('agentCategory', [
+    TraceAgentConfigSharedFieldsSchema.extend({
+      agentCategory: z.literal(AgentCategory.Workflow),
+    }),
+    TraceAgentConfigSharedFieldsSchema.extend({
+      agentCategory: z.literal(AgentCategory.ToolUse),
+    }),
+  ])
+  .superRefine((config, ctx) => {
+    if (config.outputFiles.length > config.inputFiles.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['outputFiles'],
+        message:
+          'Number of output files must not be greater than the number of input files.',
+      });
+    }
+  });
 
 const TraceExecutionMetaSchema = z.object({
   schemaVersion: z.literal(TRACE_EXECUTION_META_SCHEMA_VERSION).prefault(1),
