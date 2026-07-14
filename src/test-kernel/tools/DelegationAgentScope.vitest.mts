@@ -53,7 +53,9 @@ vi.mock('@agent/index/agentRegistry', () => ({
     scope: { toolUseAgentKeys: readonly string[] } | undefined,
     category: string,
   ) =>
-    scope && category === 'toolUse' && scope.toolUseAgentKeys.includes('remote:review')
+    scope &&
+    category === 'toolUse' &&
+    scope.toolUseAgentKeys.includes('remote:review')
       ? [remoteReview]
       : [],
 }));

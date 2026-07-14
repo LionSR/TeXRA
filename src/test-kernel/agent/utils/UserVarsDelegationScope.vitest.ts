@@ -43,13 +43,14 @@ const roster = vi.hoisted(() => ({
 vi.mock('@agent/index/agentRegistry', () => ({
   resolveDelegationScopeAgents: (
     scope:
-      | { workflowAgentKeys: string[]; toolUseAgentKeys: string[] }
-      | undefined,
+      { workflowAgentKeys: string[]; toolUseAgentKeys: string[] } | undefined,
     category: string,
   ) => {
     if (!scope) return roster.entries.filter((e) => e.category === category);
     const keys =
-      category === 'workflow' ? scope.workflowAgentKeys : scope.toolUseAgentKeys;
+      category === 'workflow'
+        ? scope.workflowAgentKeys
+        : scope.toolUseAgentKeys;
     return keys.flatMap((key) => {
       const entry = roster.entries.find(
         (e) => e.category === category && `${e.source}:${e.name}` === key,
