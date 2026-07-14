@@ -16,7 +16,10 @@ import { z } from 'zod';
 
 import { platform } from '@platform/platform';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
-import { getAgentsByCategory } from '@agent/index/agentRegistry';
+import {
+  getAgentsByCategory,
+  getRosterAgent,
+} from '@agent/index/agentRegistry';
 import { refresh } from '@agent/index/agentRegistry';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { preflightTeamAvailability } from '@common/teams/TeamAvailabilityPreflight';
@@ -166,6 +169,7 @@ ${describeTeams()}`,
         parseAgentModePresets(
           workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
         ),
+      resolveAgent: getRosterAgent,
       fallbackTeamId: null,
     });
     await roster.setTeam(preset.id);
