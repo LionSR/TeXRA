@@ -545,27 +545,23 @@ export function getRosterAgent(
   category: AgentCategoryType,
   identifier: string,
 ): AgentEntry | undefined {
-  const entry = getAgent(identifier, category);
-  return entry?.category === category && !entry.internal ? entry : undefined;
+  const entry = getCategoryAgent(category, identifier);
+  return entry && !entry.internal ? entry : undefined;
 }
 
 /**
- * Resolve a delegation scope's agent keys to roster entries via `resolveOne`,
- * deduped by canonical key. Internal to `resolveDelegationScopeAgents` below —
- * that function is the single exported entry point for scope resolution.
+ * Resolve a delegation scope's agent keys to roster entries, deduped by
+ * canonical key. Internal to `resolveDelegationScopeAgents` below, which is
+ * the single exported entry point for scope resolution.
  */
 function resolveScopedAgentKeys(
   keys: readonly string[],
   category: AgentCategoryType,
-  resolveOne: (
-    category: AgentCategoryType,
-    key: string,
-  ) => AgentEntry | undefined,
 ): AgentEntry[] {
   const resolved: AgentEntry[] = [];
   const seen = new Set<string>();
   for (const key of keys) {
-    const entry = resolveOne(category, key);
+    const entry = getRosterAgent(category, key);
     if (!entry) continue;
     const canonicalKey = agentKeyOf(entry);
     if (seen.has(canonicalKey)) continue;
@@ -637,7 +633,7 @@ export function resolveDelegationScopeAgents(
     category === AgentCategory.Workflow
       ? scope.workflowAgentKeys
       : scope.toolUseAgentKeys;
-  return resolveScopedAgentKeys(keys, category, getRosterAgent);
+  return resolveScopedAgentKeys(keys, category);
 }
 
 /**

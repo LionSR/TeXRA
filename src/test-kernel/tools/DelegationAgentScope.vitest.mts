@@ -81,18 +81,4 @@ describe('execution-scoped delegation agents', () => {
     expect(getDelegationAgent('toolUse', 'review')).toBe(remoteReview);
     expect(getDelegationAgent('toolUse', 'custom:review')).toBeUndefined();
   });
-
-  it('excludes internal agents from an execution-scoped roster', () => {
-    mocks.context = {
-      kind: 'launch',
-      runScope: {
-        delegationAgentScope: {
-          workflowAgentKeys: [],
-          toolUseAgentKeys: ['remote:review', 'builtInToolUse:internalReview'],
-        },
-      },
-    };
-
-    expect(getDelegationAgents('toolUse')).toEqual([remoteReview]);
-  });
 });

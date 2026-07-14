@@ -17,6 +17,7 @@ import {
   refresh,
   resolveAgent,
   resolveAgentForLaunch,
+  resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index/agentEntry';
@@ -185,6 +186,25 @@ describe('cross-category agent resolution', () => {
     // …but a command launch (no pinned source) still reaches them by name.
     expect(resolveAgent('secretAgent')?.entry.name).toBe('secretAgent');
     expect(getCategoryAgent('toolUse', 'secretAgent')?.internal).toBe(true);
+  });
+
+  it('resolves scoped names within category and excludes internal agents', () => {
+    const scoped = resolveDelegationScopeAgents(
+      {
+        workflowAgentKeys: [],
+        toolUseAgentKeys: [
+          'assistant',
+          'builtInToolUse:assistant',
+          'secretAgent',
+          'missing-agent',
+        ],
+      },
+      AgentCategory.ToolUse,
+    );
+
+    expect(scoped.map((entry) => `${entry.source}:${entry.name}`)).toEqual([
+      'builtInToolUse:assistant',
+    ]);
   });
 });
 
