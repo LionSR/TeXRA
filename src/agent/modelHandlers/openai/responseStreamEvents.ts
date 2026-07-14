@@ -21,9 +21,14 @@ import type {
 
 /** Type guard for function-call output items. */
 export function isResponseFunctionToolCallItem(
-  item: ResponseOutputItem | undefined,
+  item: unknown,
 ): item is ResponseFunctionToolCallItem {
-  return item?.type === 'function_call';
+  return (
+    typeof item === 'object' &&
+    item !== null &&
+    'type' in item &&
+    item.type === 'function_call'
+  );
 }
 
 /** Type guard for reasoning delta events (both raw and summary). */
