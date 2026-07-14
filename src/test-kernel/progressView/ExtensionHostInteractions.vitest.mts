@@ -10,11 +10,13 @@ import type { StreamTabId } from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 
 const mocks = vi.hoisted(() => ({
+  approveNativeToolEditApprovals: vi.fn(async () => undefined),
   cancelNativeToolEditApprovals: vi.fn(),
   nativeRequestApproval: vi.fn(),
 }));
 
 vi.mock('@frontend/approval/nativeToolEditApproval', () => ({
+  approveNativeToolEditApprovals: mocks.approveNativeToolEditApprovals,
   cancelNativeToolEditApprovals: mocks.cancelNativeToolEditApprovals,
   nativeRequestApproval: mocks.nativeRequestApproval,
 }));
@@ -99,6 +101,91 @@ function recordSessionEvents(session: SessionHandle): SessionEvent[] {
 }
 
 describe('createExtensionHostInteractions', () => {
+  it('approves already-pending delegated work only in the selected stream', async () => {
+    const handlers = createHandlers();
+    const session = createTestSession();
+    const interactions = createInteractions({ handlers, session });
+
+    const initiatingProposal = interactions.requestAgentProposal?.({
+      proposalId: 'proposal-current',
+      streamId: 'stream-a' as StreamTabId,
+      agent: 'assistant',
+      model: 'gpt-5',
+      instruction: 'Begin the calculation.',
+      memories: [],
+      workingDirectory: null,
+      agentSource: null,
+      agentCategory: 'toolUse',
+    });
+    const parallelProposal = interactions.requestAgentProposal?.({
+      proposalId: 'proposal-parallel',
+      streamId: 'stream-a' as StreamTabId,
+      agent: 'assistant',
+      model: 'gpt-5',
+      instruction: 'Check the calculation.',
+      memories: [],
+      workingDirectory: null,
+      agentSource: null,
+      agentCategory: 'toolUse',
+    });
+    const parallelBash = interactions.requestBashApproval?.({
+      command: 'lake build',
+      streamId: 'stream-a' as StreamTabId,
+    });
+    const otherStream = interactions.requestBashApproval?.({
+      command: 'npm test',
+      streamId: 'stream-b' as StreamTabId,
+    });
+
+    await expect(
+      interactions.approvePendingDelegatedWork(
+        'stream-a' as StreamTabId,
+        'proposal-current',
+      ),
+    ).resolves.toBeUndefined();
+    await expect(parallelProposal).resolves.toEqual({ action: 'approve' });
+    await expect(parallelBash).resolves.toEqual({
+      accepted: true,
+      userMessage: undefined,
+    });
+    expect(handlers.agentProposal.resolve).toHaveBeenCalledWith(
+      'proposal-parallel',
+    );
+    expect(mocks.approveNativeToolEditApprovals).toHaveBeenCalledWith(
+      session,
+      'stream-a',
+    );
+
+    expect(initiatingProposal).toBeDefined();
+    expect(otherStream).toBeDefined();
+    expect(
+      interactions.resolve('proposal-current', {
+        kind: 'proposal',
+        action: 'approve',
+      }),
+    ).toBe(true);
+    const bashShow = handlers.bash.show as unknown as ReturnType<typeof vi.fn>;
+    const otherRequestId = firstShowRequestId(bashShow);
+    const streamBRequestId = (
+      bashShow.mock.calls.find(
+        ([request]) => request.streamId === 'stream-b',
+      )?.[0] as { requestId?: string } | undefined
+    )?.requestId;
+    expect(streamBRequestId).toBeDefined();
+    expect(otherRequestId).not.toBe(streamBRequestId);
+    expect(
+      interactions.resolve(streamBRequestId!, {
+        kind: 'bash',
+        action: 'reject',
+      }),
+    ).toBe(true);
+    await expect(initiatingProposal).resolves.toEqual({ action: 'approve' });
+    await expect(otherStream).resolves.toEqual({
+      accepted: false,
+      userMessage: undefined,
+    });
+  });
+
   it('shows and resolves plan approvals through existing handlers', async () => {
     const runtimeHost = createRuntimeHost();
     const handlers = createHandlers();

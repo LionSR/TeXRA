@@ -16,6 +16,10 @@ import type { StreamTabId } from '@shared/schemas';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 interface DesktopHostInteractions {
+  approvePendingDelegatedWork(
+    streamId: StreamTabId,
+    initiatingProposalId: string,
+  ): Promise<void>;
   requestToolEditApproval(request: {
     path: string;
     originalContent: string;
@@ -49,6 +53,7 @@ interface DesktopHostInteractionsModule {
     session: SessionHandle;
     getApprovalHandlers(): unknown;
     getToolEditApprovals(): {
+      approvePendingForStream: ReturnType<typeof vi.fn>;
       cancel: ReturnType<typeof vi.fn>;
       requestApproval: ReturnType<typeof vi.fn>;
     };
@@ -92,6 +97,7 @@ async function createInteractions(handlers = createHandlers()) {
   const runtimeHost = { emit: vi.fn() };
   const session = createTestSession();
   const toolEditApprovals = {
+    approvePendingForStream: vi.fn(),
     cancel: vi.fn(),
     requestApproval: vi.fn(async () => ({ accepted: true })),
   };
@@ -116,6 +122,68 @@ async function createInteractions(handlers = createHandlers()) {
 }
 
 describe('createDesktopHostInteractions', () => {
+  it('approves already-pending delegated work only in the selected stream', async () => {
+    const { interactions, handlers, toolEditApprovals } =
+      await createInteractions();
+    const current = interactions.requestAgentProposal({
+      proposalId: 'proposal-current',
+      streamId: 'stream-a',
+    });
+    const parallel = interactions.requestAgentProposal({
+      proposalId: 'proposal-parallel',
+      streamId: 'stream-a',
+    });
+    const bash = interactions.requestBashApproval({
+      command: 'lake build',
+      streamId: 'stream-a',
+    });
+    const other = interactions.requestBashApproval({
+      command: 'npm test',
+      streamId: 'stream-b',
+    });
+
+    await interactions.approvePendingDelegatedWork(
+      'stream-a',
+      'proposal-current',
+    );
+
+    await expect(parallel).resolves.toEqual({ action: 'approve' });
+    await expect(bash).resolves.toEqual({
+      accepted: true,
+      userMessage: undefined,
+    });
+    expect(toolEditApprovals.approvePendingForStream).toHaveBeenCalledWith(
+      'stream-a',
+    );
+    expect(handlers.agentProposal.resolve).toHaveBeenCalledWith(
+      'proposal-parallel',
+    );
+
+    expect(
+      interactions.resolve('proposal-current', {
+        kind: 'proposal',
+        action: 'approve',
+      }),
+    ).toBe(true);
+    const streamBRequestId = (
+      handlers.bash.show.mock.calls.find(
+        ([request]) => request.streamId === 'stream-b',
+      )?.[0] as { requestId?: string } | undefined
+    )?.requestId;
+    expect(streamBRequestId).toBeDefined();
+    expect(
+      interactions.resolve(streamBRequestId!, {
+        kind: 'bash',
+        action: 'reject',
+      }),
+    ).toBe(true);
+    await expect(current).resolves.toEqual({ action: 'approve' });
+    await expect(other).resolves.toEqual({
+      accepted: false,
+      userMessage: undefined,
+    });
+  });
+
   it('delegates tool edit approvals to the window controller', async () => {
     const { interactions, toolEditApprovals } = await createInteractions();
     const request = {

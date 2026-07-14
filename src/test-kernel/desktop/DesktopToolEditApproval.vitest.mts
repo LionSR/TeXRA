@@ -42,6 +42,7 @@ interface DesktopToolEditApprovalModule {
     showErrorMessage?: (message: string) => Promise<void> | void;
     tempRoot?: string;
   }): {
+    approvePendingForStream(streamId: string): void;
     cancel(selector?: {
       streamId?: string | null;
       kind?: string;
@@ -250,6 +251,60 @@ describe('desktop tool edit approval', () => {
     vi.doUnmock('@utils/files');
     vi.restoreAllMocks();
   });
+
+  approvalTest(
+    'approves pending edits only in the selected stream',
+    async () => {
+      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const { desktopModule } = await loadApprovalModules();
+      const runtimeHost = createRecordingRuntimeHost();
+      const session = createTestSession();
+      const controller = desktopModule.createDesktopToolEditApprovalController({
+        runtimeHost,
+        session,
+        tempRoot,
+      });
+
+      try {
+        const target = controller.requestApproval({
+          path: '/workspace/target.txt',
+          originalContent: 'old target\n',
+          proposedContent: 'new target\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-target',
+        });
+        const other = controller.requestApproval({
+          path: '/workspace/other.txt',
+          originalContent: 'old other\n',
+          proposedContent: 'new other\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-other',
+        });
+        await vi.waitFor(() =>
+          expect(runtimeHost.shownToolEditPermissions).toHaveLength(2),
+        );
+
+        controller.approvePendingForStream('stream-target');
+        await expect(target).resolves.toMatchObject({
+          accepted: true,
+          appliedContent: 'new target\n',
+        });
+
+        const otherRequest = runtimeHost.shownToolEditPermissions.find(
+          (request) => request.streamId === 'stream-other',
+        );
+        expect(otherRequest).toBeDefined();
+        controller.handleAction({
+          requestId: otherRequest!.requestId,
+          action: 'reject',
+        });
+        await expect(other).resolves.toMatchObject({ accepted: false });
+      } finally {
+        controller.dispose();
+        await rm(tempRoot, { recursive: true, force: true });
+      }
+    },
+  );
 
   approvalTest(
     'routes preview and diff actions through desktop temp files before rejection',

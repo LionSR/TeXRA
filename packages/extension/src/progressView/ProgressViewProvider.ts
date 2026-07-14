@@ -156,20 +156,20 @@ export class ProgressViewProvider
         styleKey: 'progressStyleUri',
       },
     );
+    const interactions = createExtensionHostInteractions({
+      runtimeHost: extensionAgentRuntimeHost,
+      session: defaultSession(),
+      getApprovalHandlers: () => this.approvalHandlers,
+    });
     this.messageHandler = new ProgressViewMessageHandler(
       this,
       context,
       new VscodePromptHost(),
-      defaultSession().interactions,
+      interactions,
     );
     const progressBackendSubscription = this.backend.setupEventListeners();
-    this.detachHostInteractions = defaultSession().useHostInteractions(
-      createExtensionHostInteractions({
-        runtimeHost: extensionAgentRuntimeHost,
-        session: defaultSession(),
-        getApprovalHandlers: () => this.approvalHandlers,
-      }),
-    );
+    this.detachHostInteractions =
+      defaultSession().useHostInteractions(interactions);
     const detachExtensionInteractionEvents = setExtensionInteractionEventSink(
       (event, payload) => {
         this.backend.handleInteractionEvent(
