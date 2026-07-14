@@ -14,14 +14,25 @@ import {
 
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
-import { getAgent } from '@agent/index/agentRegistry';
+import {
+  computeAgentOptionsData,
+  getAgent,
+  getAgentsByCategory,
+  getVisibleAgents,
+  loadAgents,
+  refresh,
+} from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { AgentCategory, agentKeyOf } from '@shared/schemas/agent';
+import {
+  AgentCategory,
+  agentKeyOf,
+  type AgentSource,
+} from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
@@ -48,6 +59,7 @@ import {
 import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
+import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopGitHost } from './desktopGitHost.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
@@ -619,8 +631,74 @@ function createWindow(options: {
   // Workspace-explorer sidebar removed in PR 3 (PRD § 7.D + § 8). File staging
   // happens entirely inside <main-app>'s built-in panel; the duplicate tree
   // sidebar and its IPC are gone.
+  const agentSettingsController = new DefaultDesktopAgentSettingsController(
+    {
+      workspaceState: platform().workspaceState,
+      globalState: platform().globalState,
+    },
+    {
+      loadAgents,
+      refreshAgents: refresh,
+      loadAgentOptionsData: computeAgentOptionsData,
+      getAgents: getAgentsByCategory,
+      getVisibleAgents,
+    },
+    {
+      getCustomAgentDirectory: () => platform().agentDirectories.custom(),
+      getSourceDirectory: (source: AgentSource) => {
+        switch (source) {
+          case 'custom':
+            return platform().agentDirectories.custom();
+          case 'builtInWorkflow':
+            return platform().agentDirectories.builtIn();
+          case 'builtInToolUse':
+            return platform().agentDirectories.builtInToolUse();
+          case 'remote':
+            return Promise.resolve(undefined);
+        }
+      },
+      selectCustomAgentDirectory: async () => {
+        const result = await dialog.showOpenDialog(window, {
+          title: 'Select Custom Agents Folder',
+          defaultPath: folderPickerDefaultPath,
+          properties: ['openDirectory', 'createDirectory'],
+        });
+        return result.canceled ? undefined : result.filePaths[0];
+      },
+      openPath: previewHost.openPath,
+      revealPath: async (filePath) => {
+        shell.showItemInFolder(filePath);
+      },
+    },
+    { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
+    {
+      promptText: (input) => promptInRenderer(window, input),
+      chooseTeamAvailability: async ({ presetName, unavailableNames }) => {
+        const result = await dialog.showMessageBox(window, {
+          type: 'warning',
+          message: `Team "${presetName}" has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`,
+          buttons: [
+            'Sign in to TeXRA',
+            'Continue with available members',
+            'Cancel',
+          ],
+          defaultId: 0,
+          cancelId: 2,
+        });
+        if (result.response === 0) return 'sign-in';
+        if (result.response === 1) return 'continue';
+        return 'cancel';
+      },
+    },
+    {
+      canAccess: () => SupabaseClient.canAccessRemoteAgentCatalog(),
+      signIn: signInForRemoteAgentCatalog,
+    },
+    { showInfoMessage, showErrorMessage },
+  );
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    agentSettingsController,
     sendStartupCatalogData: true,
     modelListRefresh,
     resourcesPath: options.resourcesPath,
@@ -634,7 +712,6 @@ function createWindow(options: {
       (await getAgentExecution()).progress.restoreTaskState(taskState),
     promptSecret: (input) =>
       promptInRenderer(window, { ...input, password: true }),
-    promptText: (input) => promptInRenderer(window, input),
     showInfoMessage,
     showErrorMessage,
     confirmAction: async (message, confirmLabel = 'OK') => {
@@ -647,23 +724,6 @@ function createWindow(options: {
       });
       return result.response === 0;
     },
-    chooseTeamAvailability: async ({ presetName, unavailableNames }) => {
-      const result = await dialog.showMessageBox(window, {
-        type: 'warning',
-        message: `Team "${presetName}" has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`,
-        buttons: [
-          'Sign in to TeXRA',
-          'Continue with available members',
-          'Cancel',
-        ],
-        defaultId: 0,
-        cancelId: 2,
-      });
-      if (result.response === 0) return 'sign-in';
-      if (result.response === 1) return 'continue';
-      return 'cancel';
-    },
-    signInForRemoteAgentCatalog,
     signIn: () => desktopAuth.signIn(),
     signOut: () => desktopAuth.signOut(),
     setApiAccessMode: async (mode) => {
@@ -672,18 +732,7 @@ function createWindow(options: {
       );
     },
     initializeCrashReporting: options.initializeCrashReporting,
-    selectCustomAgentDirectory: async () => {
-      const result = await dialog.showOpenDialog(window, {
-        title: 'Select Custom Agents Folder',
-        defaultPath: folderPickerDefaultPath,
-        properties: ['openDirectory', 'createDirectory'],
-      });
-      return result.canceled ? undefined : result.filePaths[0];
-    },
     openPath: previewHost.openPath,
-    revealPath: async (filePath) => {
-      shell.showItemInFolder(filePath);
-    },
     revealStream: async (streamId) => {
       try {
         const execution = await getAgentExecution();
