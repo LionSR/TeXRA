@@ -9,10 +9,10 @@ import type {
 } from '@shared/schemas/progressView';
 import {
   isApprovalBypassedForStream,
+  proposalApprovals,
   setBashApprovalSessionBypass,
   setDelegatedWorkApprovalBypasses,
   setToolEditApprovalSessionBypass,
-  toggleDelegatedWorkApprovalBypasses,
 } from '@tools/approval';
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
@@ -256,14 +256,17 @@ export function createProgressViewCommandHandlers(
     // where edit-YOLO and bash inheritance were granted independently).
     [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: (data) =>
       applyCoupledBypass(data.stream, true),
-    [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) =>
-      reportDelegatedWorkApproval(
-        toggleDelegatedWorkApprovalBypasses(
-          data.stream,
-          runtimeHost,
-          bypassSession(data.stream),
-        ),
-      ),
+    [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) => {
+      const ownerSession = bypassSession(data.stream);
+      const enabled = !proposalApprovals(ownerSession).isBypassed(data.stream);
+      setDelegatedWorkApprovalBypasses(
+        data.stream,
+        enabled,
+        runtimeHost,
+        ownerSession,
+      );
+      return reportDelegatedWorkApproval(enabled);
+    },
     // The inline proposal action forces the complete delegated-task approval
     // mode on. It is idempotent, so it cannot invert a grant made from the
     // stream header while the proposal was open.

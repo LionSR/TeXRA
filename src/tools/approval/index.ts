@@ -112,7 +112,6 @@ export {
   // Proposal approval
   proposalApprovals,
   setDelegatedWorkApprovalBypasses,
-  toggleDelegatedWorkApprovalBypasses,
 } from './proposalApproval';
 
 export {

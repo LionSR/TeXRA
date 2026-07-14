@@ -44,14 +44,3 @@ export function setDelegatedWorkApprovalBypasses(
   }
   bash.bypass.setBypass(streamId, enabled, runtimeHost, { silent: true });
 }
-
-/** Toggle the complete delegated-work approval mode for one stream. */
-export function toggleDelegatedWorkApprovalBypasses(
-  streamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost,
-  session: SessionHandle = currentSession(),
-): boolean {
-  const enabled = !session.approvals.proposal.isBypassed(streamId);
-  setDelegatedWorkApprovalBypasses(streamId, enabled, runtimeHost, session);
-  return enabled;
-}
