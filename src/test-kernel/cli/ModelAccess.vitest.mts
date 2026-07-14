@@ -613,6 +613,35 @@ describe('CLI model access resolution', () => {
     );
   });
 
+  it('keeps defaults for omitted and nullish recovery actions', () => {
+    expect(
+      formatCliNoAvailableModelsRecovery('included', {
+        personalModeAction: 'choose personal access',
+      }),
+    ).toBe(
+      'Run `texra login` for included TeXRA access, or choose personal access after configuring a provider API key.',
+    );
+
+    const runtimeNullishActions = {
+      includedModeAction: null,
+      loginAction: undefined,
+      personalModeAction: null,
+      configureKeyAction: undefined,
+    };
+    expect(
+      // @ts-expect-error JavaScript callers can supply null at this boundary.
+      formatCliNoAvailableModelsRecovery(undefined, runtimeNullishActions),
+    ).toBe(
+      'Run `texra login` for included TeXRA access, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
+    );
+    expect(
+      // @ts-expect-error JavaScript callers can supply null at this boundary.
+      formatCliNoRunnableModelsMessage('included', runtimeNullishActions),
+    ).toBe(
+      'No included TeXRA models are runnable. Retry with `--api-mode personal` or try again later.',
+    );
+  });
+
   it('formats empty model picker messages with caller-owned recovery actions', () => {
     expect(
       emptyModelListMessageForCliMode(
