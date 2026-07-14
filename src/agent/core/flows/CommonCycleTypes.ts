@@ -135,15 +135,14 @@ export interface ExtractedModelResponse {
   stopReason: ProviderStopReason;
   thinking: string | null;
   useStreaming: boolean;
-  /** `undefined` when the caller chooses to skip nullish raw usage. */
+  /** `undefined` when raw usage is skipped or the handler reports none. */
   normalizedUsage: NormalizedUsage | undefined;
 }
 
 export type ExtractModelResponseOptions = {
   /**
-   * Response flows historically normalized null provider usage into a zero
-   * snapshot. Tool-use flows historically skipped missing usage. Keep that
-   * distinction explicit at the call site.
+   * Ask the handler to normalize nullish provider usage. A handler may still
+   * return undefined when its provider exposes no usage data.
    */
   normalizeNullUsage?: boolean;
 };
@@ -166,10 +165,12 @@ export function extractModelResponse(
   let normalizedUsage: NormalizedUsage | undefined;
   if (usage != null || options.normalizeNullUsage === true) {
     normalizedUsage = modelHandler.normalizeUsage(usage, responseTimeMs ?? 0);
-    const { inputTokens } = normalizedUsage;
-    const contextWindow = modelHandler.getEffectiveContextWindow();
-    if (inputTokens > 0 && contextWindow > 0) {
-      logContextStateSnapshot(logger, inputTokens, contextWindow);
+    if (normalizedUsage) {
+      const { inputTokens } = normalizedUsage;
+      const contextWindow = modelHandler.getEffectiveContextWindow();
+      if (inputTokens > 0 && contextWindow > 0) {
+        logContextStateSnapshot(logger, inputTokens, contextWindow);
+      }
     }
   }
 

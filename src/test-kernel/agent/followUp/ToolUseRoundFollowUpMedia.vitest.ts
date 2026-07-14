@@ -97,6 +97,13 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     } as ProviderMessage;
   }
 
+  function vscodeLmToolResultMessage(callId: string): ProviderMessage {
+    return {
+      role: 'user',
+      content: [{ kind: 'toolResult', callId, text: 'tool completed' }],
+    } as ProviderMessage;
+  }
+
   function createShared(
     messages: ProviderMessage[],
     systemPrompt?: string,
@@ -268,6 +275,30 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     expect(createResponse).toHaveBeenCalledTimes(2);
     expect(createUserFollowUpMessages).toHaveBeenCalledWith(
       [expect.objectContaining({ type: 'function_result' })],
+      expect.stringContaining('previous assistant turn after a tool result'),
+    );
+    expect(shared.messages.at(-1)).toEqual({
+      type: 'message',
+      role: 'assistant',
+      content: 'Final answer: 3842.',
+    });
+    expect(shared.endTurn).toBe(true);
+  });
+
+  it('continues when a VS Code language model returns blank text after a tool result', async () => {
+    const { createResponse, createUserFollowUpMessages, services } =
+      createBlankTurnServices([
+        { id: 'blank', text: '' },
+        { id: 'final', text: 'Final answer: 3842.' },
+      ]);
+    const toolResult = vscodeLmToolResultMessage('executions-1');
+    const shared = createShared([toolResult]);
+
+    await runRound(services, shared);
+
+    expect(createResponse).toHaveBeenCalledTimes(2);
+    expect(createUserFollowUpMessages).toHaveBeenCalledWith(
+      [toolResult],
       expect.stringContaining('previous assistant turn after a tool result'),
     );
     expect(shared.messages.at(-1)).toEqual({

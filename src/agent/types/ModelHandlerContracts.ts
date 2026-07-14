@@ -11,6 +11,7 @@ import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/re
 import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
 import type { ChatToolCall as ORChatToolCall } from '@openrouter/sdk/models';
+import type { LanguageModelToolCallPart } from '@platform/languageModel';
 
 /**
  * Plain data contracts shared between the {@link ModelHandler} base class and
@@ -165,13 +166,22 @@ export type OpenRouterToolCall = {
   raw: ORChatToolCall;
 };
 
+export type VscodeLmToolCall = {
+  provider: 'vscode-lm';
+  callId: string;
+  name: string;
+  input: object;
+  raw: LanguageModelToolCallPart;
+};
+
 export type SdkToolCall =
   | OpenAIToolCall
   | DeepSeekToolCall
   | OpenAIResponseToolCall
   | GoogleToolCall
   | AnthropicToolCall
-  | OpenRouterToolCall;
+  | OpenRouterToolCall
+  | VscodeLmToolCall;
 
 // Note: SdkToolCall is a discriminated union on 'provider'.
 // Use `call.provider === 'openai'` directly for type narrowing instead of

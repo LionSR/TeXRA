@@ -6,6 +6,7 @@ import * as logger from '@logger/logUtils';
 
 // Type imports
 import type { ToolDefinition } from '@model';
+import type { LanguageModelToolDefinition } from '@platform/languageModel';
 import type {
   Tool as AnthropicTool,
   ToolUnion,
@@ -368,4 +369,18 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   }));
 
   return [{ functionDeclarations: declarations }];
+}
+
+/** Convert generic tool definitions to the host-neutral editor LM format. */
+export function toVscodeLmTools(
+  defs: ToolDefinition[],
+): LanguageModelToolDefinition[] {
+  return defs.map((def) => {
+    const inputSchema = convertToolSchema(def);
+    return {
+      name: def.name,
+      description: def.description ?? '',
+      ...(inputSchema ? { inputSchema } : {}),
+    };
+  });
 }

@@ -5,9 +5,10 @@ import type { Content, Interactions } from '@google/genai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 import type { ChatMessages as OpenRouterMessage } from '@openrouter/sdk/models';
+import type { LanguageModelMessage } from '@platform/languageModel';
 
 /**
- * Message formats supported by the various model providers.
+ * Message formats supported by the provider SDKs and host language-model port.
  */
 export type ProviderMessage =
   | ChatCompletionMessageParam
@@ -15,13 +16,15 @@ export type ProviderMessage =
   | MessageParam
   | Content
   | Interactions.Step
-  | OpenRouterMessage;
+  | OpenRouterMessage
+  | LanguageModelMessage;
 
 /**
  * Zod schema for ProviderMessage validation.
  *
  * Uses z.custom() because ProviderMessage is a union of external SDK types
- * (Anthropic, OpenAI, Google) that cannot be represented as native Zod schemas.
+ * (Anthropic, OpenAI, Google, OpenRouter, and VS Code LM) that cannot be
+ * represented as native Zod schemas.
  * This is the correct and intentional use of z.custom() for external type unions.
  *
  * The predicate stops short of full SDK shape validation (the union members

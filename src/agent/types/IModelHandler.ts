@@ -24,6 +24,7 @@ export type {
   GoogleToolCall,
   AnthropicToolCall,
   OpenRouterToolCall,
+  VscodeLmToolCall,
   SdkToolCall,
 } from './ModelHandlerContracts';
 
