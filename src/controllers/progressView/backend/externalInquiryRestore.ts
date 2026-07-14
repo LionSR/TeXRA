@@ -12,9 +12,9 @@ import {
 import type { ApprovalRequestHandlerSet } from './progressBackendUiConfig';
 import type { WebviewUpdater } from './WebviewUpdater';
 
-const MAX_INQUIRY_THREAD_HYDRATION = 100;
+const MAX_RESTORED_INQUIRY_THREADS = 100;
 
-type InquiryHydrationWebview = Pick<
+type InquiryRestoreWebview = Pick<
   WebviewUpdater,
   'isAvailable' | 'syncInquiryThreads'
 >;
@@ -24,8 +24,8 @@ type ExternalInquiryHandler = Pick<
   'pendingSize' | 'show'
 >;
 
-export interface ProgressInquiryHydrationParams {
-  webviewUpdater: InquiryHydrationWebview;
+interface ProgressInquiryRestoreParams {
+  webviewUpdater: InquiryRestoreWebview;
   externalInquiry: ExternalInquiryHandler;
   logger?: Pick<AgentTrace, 'debug'>;
 }
@@ -35,8 +35,8 @@ export interface ProgressInquiryHydrationParams {
  * manifest should not prevent stream or prompt replay, so storage errors are
  * intentionally swallowed here.
  */
-export async function syncProgressInquiryThreads(
-  params: Pick<ProgressInquiryHydrationParams, 'webviewUpdater'>,
+async function syncProgressInquiryThreads(
+  params: Pick<ProgressInquiryRestoreParams, 'webviewUpdater'>,
 ): Promise<void> {
   if (!params.webviewUpdater.isAvailable()) return;
 
@@ -44,7 +44,7 @@ export async function syncProgressInquiryThreads(
     const threads: InquiryThreadUpdatedEvent[] = await listThreadsByStatus({
       status: 'any',
       scope: 'all',
-      limit: MAX_INQUIRY_THREAD_HYDRATION,
+      limit: MAX_RESTORED_INQUIRY_THREADS,
     });
     params.webviewUpdater.syncInquiryThreads(threads);
   } catch {
@@ -57,8 +57,8 @@ export async function syncProgressInquiryThreads(
  * in-memory handler owns delivery idempotency for the current webview target;
  * this function only reconstructs missing pending entries from durable storage.
  */
-export async function hydrateOpenInquiryPermissions(
-  params: ProgressInquiryHydrationParams,
+async function restoreOpenInquiryPermissions(
+  params: ProgressInquiryRestoreParams,
 ): Promise<void> {
   if (!params.webviewUpdater.isAvailable()) return;
   if (params.externalInquiry.pendingSize > 0) return;
@@ -77,7 +77,7 @@ export async function hydrateOpenInquiryPermissions(
       const lastTurn = manifest.turns.at(-1);
       if (!lastTurn || lastTurn.kind !== 'open') continue;
 
-      const hydrationFields = {
+      const restoredFields = {
         sessionLinks: collectKnownSessionLinks(manifest),
         draft: getOpenTurnDraft(manifest),
         transcript: manifestToTranscript(manifest),
@@ -96,12 +96,12 @@ export async function hydrateOpenInquiryPermissions(
         manifest.turns.length > 1
           ? {
               ...basePermission,
-              ...hydrationFields,
+              ...restoredFields,
               mode: 'followUp',
             }
           : {
               ...basePermission,
-              ...hydrationFields,
+              ...restoredFields,
               mode: 'new',
             },
       );
@@ -111,11 +111,11 @@ export async function hydrateOpenInquiryPermissions(
   }
 }
 
-export async function hydrateProgressViewInquiries(
-  params: ProgressInquiryHydrationParams,
+export async function restoreProgressViewInquiries(
+  params: ProgressInquiryRestoreParams,
 ): Promise<void> {
   await Promise.all([
     syncProgressInquiryThreads(params),
-    hydrateOpenInquiryPermissions(params),
+    restoreOpenInquiryPermissions(params),
   ]);
 }

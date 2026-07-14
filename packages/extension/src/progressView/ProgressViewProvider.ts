@@ -8,7 +8,7 @@ import {
   replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import { hydrateProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryHydration';
+import { restoreProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryRestore';
 import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { computeAgentOptionsData } from '@agent/index';
@@ -380,18 +380,14 @@ export class ProgressViewProvider
     this._panelJustDisposed = false;
     this.syncFullView({ forceRebuild: true });
     // Manifest-backed inquiry state is durable, but handler pending state is
-    // in-memory. Fire-and-forget: replay covers warm targets, hydration covers
+    // in-memory. Fire-and-forget: replay covers warm targets, restoration covers
     // host restarts.
-    void this.hydrateProgressViewInquiries();
-    this.replayPendingPrompts();
-  }
-
-  public async hydrateProgressViewInquiries(): Promise<void> {
-    await hydrateProgressViewInquiries({
+    void restoreProgressViewInquiries({
       webviewUpdater: this.webviewUpdater,
       externalInquiry: this.approvalHandlers.externalInquiry,
       logger: this.logger,
     });
+    this.replayPendingPrompts();
   }
 
   private replayPendingPrompts(): void {
