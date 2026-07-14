@@ -9,7 +9,11 @@ import path from 'node:path';
 import { render } from 'ink';
 import React from 'react';
 
-import { getAgentsByCategory, loadAgents } from '@agent/index';
+import {
+  getAgentsByCategory,
+  getVisibleAgents,
+  loadAgents,
+} from '@agent/index';
 import {
   defaultSession,
   initializeDefaultSession,
@@ -403,24 +407,27 @@ function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
 }
 
 const HARNESS_ORCHESTRATION_HISTORY = harnessOrchestrationHistory();
-const HARNESS_TOOL_USE_AGENTS = getAgentsByCategory(AgentCategory.ToolUse);
+const HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES = getVisibleAgents(
+  AgentCategory.ToolUse,
+);
+const HARNESS_ALL_TOOL_USE_AGENTS = getAgentsByCategory(AgentCategory.ToolUse);
 const HARNESS_PRESET_PLANS = planCliMultiAgentPresets(
   cliMultiAgentPresets(undefined),
   {
     workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: HARNESS_TOOL_USE_AGENTS,
+    toolUseAgents: HARNESS_ALL_TOOL_USE_AGENTS,
   },
 );
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   presetPlans: HARNESS_PRESET_PLANS,
   history: HARNESS_ORCHESTRATION_HISTORY,
-  toolUseAgents: HARNESS_TOOL_USE_AGENTS,
+  toolUseAgents: HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
 });
 const HARNESS_ORCHESTRATION_RESUME_ITEMS = buildCliResumeItems(
   HARNESS_ORCHESTRATION_HISTORY,
 );
 const HARNESS_ORCHESTRATION_AGENT_ITEMS = buildCliAgentItems(
-  HARNESS_TOOL_USE_AGENTS,
+  HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
 );
 const HARNESS_ORCHESTRATION_TEAM_ITEMS = buildCliTeamItems(
   HARNESS_PRESET_PLANS,
