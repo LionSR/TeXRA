@@ -12,13 +12,13 @@ import {
 } from '@controllers/progressView/backend/state/ProgressViewState';
 import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import type { AgentEvent, AgentTrace } from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { createChannelTrace } from '@logger';
 import {
   STREAM_PHASE,
   type AddOutputFilesPayload,

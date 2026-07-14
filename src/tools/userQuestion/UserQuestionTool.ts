@@ -1,12 +1,12 @@
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
+import { createChannelTrace } from '@agent/trace';
 import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { createChannelTrace } from '@logger';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,

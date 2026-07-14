@@ -1,5 +1,5 @@
 import { LRUCache } from 'lru-cache';
-import { createChannelTrace } from '@logger';
+import { createChannelTrace } from '@agent/trace';
 import type { StreamTabId } from '@shared/schemas';
 import {
   FollowUpQueue,

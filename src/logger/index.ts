@@ -1,1 +1,0 @@
-export { createChannelTrace } from './channelTrace';

@@ -16,6 +16,7 @@ import {
   RESUMABILITY_CAUSE,
   type ResumabilityDecision,
 } from '@agent/storage';
+import { createChannelTrace } from '@agent/trace';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -29,7 +30,6 @@ import {
 import { currentModelFromUserChannels } from '@agent/implementations/flows/tooluse/modelSwitchState';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { createChannelTrace } from '@logger';
 import {
   ExecutionIdSchema,
   type StreamTabId,

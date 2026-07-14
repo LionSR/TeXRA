@@ -18,6 +18,7 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 // Local imports - tools
+import { createChannelTrace } from '@agent/trace';
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import {
@@ -29,7 +30,6 @@ import {
   getCurrentToolContexts,
   type CurrentToolContexts,
 } from '@agent/followUp/ToolFileInteractionContext';
-import { createChannelTrace } from '@logger';
 import type { Plan } from '@shared/schemas';
 import {
   formatGoalTime,

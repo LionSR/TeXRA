@@ -11,13 +11,13 @@
  * from the registry) and when the subscriber stream's queue is released.
  */
 
+import { createChannelTrace } from '@agent/trace';
 import type {
   ExecutionHandle,
   ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { createChannelTrace } from '@logger';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { StreamTabId } from '@shared/schemas';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';

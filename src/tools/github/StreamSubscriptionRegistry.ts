@@ -12,13 +12,13 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';

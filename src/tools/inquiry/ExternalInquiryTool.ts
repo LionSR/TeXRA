@@ -17,6 +17,7 @@
 
 import { z } from 'zod';
 
+import { createChannelTrace } from '@agent/trace';
 import {
   getRunContextExecutionId,
   getRunContextSession,
@@ -27,7 +28,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { createChannelTrace } from '@logger';
 import {
   ExternalInquiryThreadIdSchema,
   type ExternalInquiryPermission,
