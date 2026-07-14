@@ -427,13 +427,7 @@ export function App(props: AppProps): React.JSX.Element {
     // Tab transfers keyboard ownership from the input to the session list.
     if (key.tab) {
       if (sessionViews.length > 0) {
-        setSelectedSessionId(
-          resolveSessionSelectionId(
-            sessionViews,
-            activeStreamId,
-            activeStreamId,
-          ),
-        );
+        setSelectedSessionId(resolvedSelectedSessionId);
         setSessionListFocused(true);
       }
       return;
