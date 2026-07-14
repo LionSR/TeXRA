@@ -169,16 +169,6 @@ export function foregroundEscapeAction({
   }
 }
 
-function childControlForegroundMaxRows({
-  hasItems,
-}: {
-  readonly hasItems: boolean;
-}): number {
-  return hasItems
-    ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
-    : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
-}
-
 function approvalForegroundMaxRows(
   approvalKind: ApprovalKind | undefined,
 ): number | undefined {
@@ -210,7 +200,9 @@ export function foregroundMaxRowsForKind({
 }): number | undefined {
   switch (kind) {
     case 'childControls':
-      return childControlForegroundMaxRows({ hasItems: childControlHasItems });
+      return childControlHasItems
+        ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
+        : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
     case 'form':
       return FORM_FOREGROUND_MAX_ROWS;
     case 'approval':

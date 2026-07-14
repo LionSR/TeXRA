@@ -12,14 +12,6 @@ export function commandOnly<T extends string>(command: T) {
   return z.object({ command: z.literal(command) });
 }
 
-/** Schema with `command` + optional `filePath`. */
-export function withOptionalFilePath<T extends string>(command: T) {
-  return z.object({
-    command: z.literal(command),
-    filePath: z.string().optional(),
-  });
-}
-
 /** Schema with `command` + required `files` string array. */
 export function withFilesArray<T extends string>(command: T) {
   return z.object({ command: z.literal(command), files: z.array(z.string()) });

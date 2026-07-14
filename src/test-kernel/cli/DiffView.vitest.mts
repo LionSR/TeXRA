@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  boundedDiffDisplayLines,
   buildHunks,
   diffVisualRowCount,
   maxDiffScrollOffset,
@@ -30,7 +29,7 @@ describe('CLI diff display', () => {
       'zeta',
     ]);
 
-    const lines = boundedDiffDisplayLines(hunks, 30, 4);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 30, 4, 0);
 
     expect(lines).toHaveLength(4);
     expect(lines.at(-1)).toMatchObject({
@@ -106,7 +105,7 @@ describe('CLI diff display', () => {
     expect(rendered).toContain('after $2n-1$.');
     expect(rendered).not.toContain('…');
     expect(diffVisualRowCount(hunks, 36)).toBeGreaterThan(
-      boundedDiffDisplayLines(hunks).length,
+      scrollBoundedDiffDisplayLines(hunks, 0, 0, 0).length,
     );
   });
 

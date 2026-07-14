@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import {
-  clearRuntimeSkillSources,
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog,
   setRuntimeSkillSources,
@@ -44,7 +43,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  clearRuntimeSkillSources();
+  setRuntimeSkillSources([]);
   await Promise.all(
     tempRoots.splice(0).map((root) => {
       return fs.rm(root, { recursive: true, force: true });

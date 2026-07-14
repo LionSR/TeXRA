@@ -403,15 +403,10 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const categoryEntries = props.entries.filter(
     (entry) => entry.category === mode.category,
   );
+  // `mode.category` always comes from `buildConfigCategoryItems(props.entries)`,
+  // so a selected category always has at least one entry — no empty-list guard
+  // needed here (the categories view above handles empty `props.entries`).
   const items = buildConfigListItems(categoryEntries, effective);
-
-  if (items.length === 0) {
-    return (
-      <FormFrame title="/config">
-        <Text dimColor>No configurable settings are available here yet.</Text>
-      </FormFrame>
-    );
-  }
 
   const window = computeSelectWindowSize({
     availableRows: props.availableRows,

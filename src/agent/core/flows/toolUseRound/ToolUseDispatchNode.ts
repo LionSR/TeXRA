@@ -11,10 +11,6 @@ import {
   type ExtractedToolAttachments,
 } from '@agent/core/tools/toolAttachmentExtraction';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import type {
-  FileInteractionState,
-  WorkPlanState,
-} from '@agent/core/state/AgentWorkspaceState';
 
 // Local imports - logging
 import type { FileLocation } from '@shared/schemas';
@@ -304,16 +300,9 @@ export class ToolUseDispatchNode<C> extends Node<
       return null;
     }
 
-    const { workspace } = this.services;
-    workspace.interactions.recordToolCall();
+    this.services.workspace.interactions.recordToolCall();
 
-    return this.executeToolCall(
-      call,
-      this.services,
-      workspace.interactions,
-      workspace.workPlan,
-      batchSignal,
-    );
+    return this.executeToolCall(call, this.services, batchSignal);
   }
 
   /**
@@ -362,8 +351,6 @@ export class ToolUseDispatchNode<C> extends Node<
     tool: { call(input: unknown): Promise<ToolResult> } | undefined,
     parsedInput: unknown,
     options: ToolUseRoundServices<C>,
-    tracker: FileInteractionState,
-    workPlanState: WorkPlanState,
     onExecutionReady?: () => void,
     onToolOutput?: (chunk: string) => void,
     signal?: AbortSignal,
@@ -378,8 +365,8 @@ export class ToolUseDispatchNode<C> extends Node<
     try {
       return await withToolFileInteractionContext(
         {
-          tracker,
-          workPlanState,
+          tracker: options.workspace.interactions,
+          workPlanState: options.workspace.workPlan,
           userInstruction:
             options.config.rootUserInstruction ?? this._currentUserInstruction,
           toolCallId: call.callId,
@@ -413,8 +400,6 @@ export class ToolUseDispatchNode<C> extends Node<
   private async executeToolCall(
     call: SdkToolCall,
     options: ToolUseRoundServices<C>,
-    tracker: FileInteractionState,
-    workPlanState: WorkPlanState,
     batchSignal: AbortSignal | null,
   ): Promise<ToolExecutionResult | null> {
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
@@ -491,8 +476,6 @@ export class ToolUseDispatchNode<C> extends Node<
         tool,
         parsedInput,
         options,
-        tracker,
-        workPlanState,
         onExecutionReady,
         onToolOutput,
         controller.signal,
@@ -524,7 +507,7 @@ export class ToolUseDispatchNode<C> extends Node<
       return null;
     }
 
-    const trackedEdits = tracker.recordEdits(
+    const trackedEdits = options.workspace.interactions.recordEdits(
       result.status === 'executed' ? result.edits : undefined,
     );
     if (
@@ -551,20 +534,6 @@ export class ToolUseDispatchNode<C> extends Node<
       editedFiles,
       logRef,
     };
-  }
-
-  /**
-   * Build a synthetic "cancelled" result for a tool_use that never executed
-   * (interrupted before dispatch, or aborted mid-flight and returned `null`
-   * from `exec()`). Mirrors the duplicate-call synthetic result shape so it
-   * flows through the same follow-up-message construction unchanged.
-   */
-  private buildCancelledResult(call: SdkToolCall): ToolExecutionResult {
-    const cancelledResult: ToolResult = {
-      status: 'error',
-      error: CANCELLED_CALL_ERROR,
-    };
-    return this.makeSyntheticResult(call, cancelledResult, call.input);
   }
 
   private async logAndProcessMediaFiles(
@@ -664,7 +633,11 @@ export class ToolUseDispatchNode<C> extends Node<
       const execResult = execResults[index];
       if (execResult) return execResult;
       interrupted = true;
-      return this.buildCancelledResult(call);
+      return this.makeSyntheticResult(
+        call,
+        { status: 'error', error: CANCELLED_CALL_ERROR },
+        call.input,
+      );
     });
 
     if (interrupted) {

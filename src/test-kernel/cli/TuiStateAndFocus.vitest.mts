@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { EventEmitter } from 'node:events';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createRunTrace } from '@transcript';
 import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';

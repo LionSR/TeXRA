@@ -124,8 +124,6 @@ export class FileDropController implements ReactiveController {
     return this.active;
   }
 
-  hostConnected(): void {}
-
   hostDisconnected(): void {
     this.reset();
   }

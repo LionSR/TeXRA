@@ -47,38 +47,6 @@ export function taskDetailWrappedRowCount(
   return Math.max(1, wrapAnsiToWidth(line, outputColumns).split('\n').length);
 }
 
-export function taskDetailVisibleLineCountFromOffsetForColumns({
-  availableColumns,
-  compact,
-  tailLines,
-  visibleRowBudget,
-  offset,
-}: {
-  readonly availableColumns?: number;
-  readonly compact: boolean;
-  readonly tailLines: readonly string[];
-  readonly visibleRowBudget: number;
-  readonly offset: number;
-}): number {
-  if (visibleRowBudget <= 0) return 0;
-  if (!compact || tailLines.length === 0) return visibleRowBudget;
-
-  const outputColumns = taskDetailOutputColumnCount(availableColumns);
-  if (outputColumns === undefined) return visibleRowBudget;
-
-  const start = clamp(offset, 0, tailLines.length - 1);
-  let usedRows = 0;
-  let visibleLines = 0;
-  for (let index = start; index < tailLines.length; index += 1) {
-    const rowCount = taskDetailWrappedRowCount(tailLines[index], outputColumns);
-    if (visibleLines > 0 && usedRows + rowCount > visibleRowBudget) break;
-    visibleLines += 1;
-    usedRows += rowCount;
-    if (usedRows >= visibleRowBudget) break;
-  }
-  return Math.max(1, visibleLines);
-}
-
 export function taskDetailScrollableOutputRowCountForColumns({
   availableColumns,
   compact,

@@ -31,7 +31,7 @@ type ClipboardImageMessage = Extract<
 export class InstructionManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
-  constructor(_context: vscode.ExtensionContext) {
+  constructor() {
     super();
     setTimeout(async () => {
       try {

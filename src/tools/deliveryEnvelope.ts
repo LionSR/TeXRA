@@ -19,21 +19,6 @@ interface DeliveryEnvelopeAttribute {
   readonly value: string | number | boolean | null | undefined;
 }
 
-interface DeliveryEnvelopeParams {
-  readonly tag: string;
-  readonly attributes: readonly DeliveryEnvelopeAttribute[];
-  readonly bodyLines: readonly string[];
-}
-
-function formatDeliveryEnvelope(params: DeliveryEnvelopeParams): string {
-  const attrs = params.attributes
-    .filter((attr) => attr.value != null)
-    .map((attr) => `${attr.name}="${escapeAttr(String(attr.value))}"`)
-    .join(' ');
-  const open = attrs ? `<${params.tag} ${attrs}>` : `<${params.tag}>`;
-  return [open, ...params.bodyLines, `</${params.tag}>`].join('\n');
-}
-
 /** Maximum prompt length echoed back in a delivery/error XML attribute. */
 const DELIVERY_PROMPT_MAX = 200;
 
@@ -54,22 +39,24 @@ function childRunEnvelopeXml(
   envelope: ChildRunEnvelope,
   bodyLines: readonly string[],
 ): string {
-  return formatDeliveryEnvelope({
-    tag: envelope.tag,
-    attributes: [
-      { name: 'id', value: envelope.executionId },
-      ...(envelope.prompt !== undefined
-        ? [
-            {
-              name: 'prompt',
-              value: envelope.prompt.slice(0, DELIVERY_PROMPT_MAX),
-            },
-          ]
-        : []),
-      ...(envelope.attributes ?? []),
-    ],
-    bodyLines,
-  });
+  const attributes: readonly DeliveryEnvelopeAttribute[] = [
+    { name: 'id', value: envelope.executionId },
+    ...(envelope.prompt !== undefined
+      ? [
+          {
+            name: 'prompt',
+            value: envelope.prompt.slice(0, DELIVERY_PROMPT_MAX),
+          },
+        ]
+      : []),
+    ...(envelope.attributes ?? []),
+  ];
+  const attrs = attributes
+    .filter((attr) => attr.value != null)
+    .map((attr) => `${attr.name}="${escapeAttr(String(attr.value))}"`)
+    .join(' ');
+  const open = attrs ? `<${envelope.tag} ${attrs}>` : `<${envelope.tag}>`;
+  return [open, ...bodyLines, `</${envelope.tag}>`].join('\n');
 }
 
 interface ChildRunDeliveryFacts {

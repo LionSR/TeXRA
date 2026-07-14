@@ -25,10 +25,6 @@ export function listRuntimeSkillSources(): SkillSource[] {
   return runtimeSkillSources.map((source) => ({ ...source }));
 }
 
-export function clearRuntimeSkillSources(): void {
-  runtimeSkillSources.length = 0;
-}
-
 function formatRuntimeSkillCatalog(skills: readonly SourcedSkill[]): string {
   return skills
     .map(({ skill, source }) => {

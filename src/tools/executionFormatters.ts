@@ -59,15 +59,17 @@ export function getExecutionStatusInfo(
   const session = currentSession();
   const handle = session.executions.getHandle(executionId);
   if (handle) return session.executions.getStatus(handle);
+
   const persistedStatus = ExecutionStatusSchema.safeParse(terminalStatus);
-  return {
-    status: persistedStatus.success
-      ? persistedStatus.data
-      : terminalStatus === undefined
-        ? EXECUTION_STATUS.COMPLETED
-        : 'unknown',
-    elapsed: null,
-  };
+  let status: ExecutionStatusInfo['status'];
+  if (persistedStatus.success) {
+    status = persistedStatus.data;
+  } else if (terminalStatus === undefined) {
+    status = EXECUTION_STATUS.COMPLETED;
+  } else {
+    status = 'unknown';
+  }
+  return { status, elapsed: null };
 }
 
 /** Format a listing entry as a single summary line. */

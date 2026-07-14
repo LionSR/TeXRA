@@ -44,24 +44,10 @@ function inlineOverflowCountText(
   return `+${hiddenAfter} more`;
 }
 
-/** Select's inline overflow suffix on the focused row. Suppressed when the
- *  list already shows dedicated `... N earlier` / `... N more` marker rows
- *  (`showOverflow`), since that would double up the count. */
-export function selectInlineOverflowText({
-  hiddenAfter,
-  hiddenBefore,
-  showOverflow,
-}: {
-  readonly hiddenAfter: number;
-  readonly hiddenBefore: number;
-  readonly showOverflow: boolean | undefined;
-}): string | undefined {
-  if (showOverflow) return undefined;
-  return inlineOverflowCountText(hiddenBefore, hiddenAfter);
-}
-
-/** As {@link selectInlineOverflowText}, but suppressed entirely when there
- *  are no visible items to attach the suffix to. */
+/** Select's inline overflow suffix on the focused row. Suppressed when there
+ *  are no visible items to attach the suffix to, or when the list already
+ *  shows dedicated `... N earlier` / `... N more` marker rows (`showOverflow`),
+ *  since that would double up the count. */
 export function selectVisibleInlineOverflowText({
   hiddenAfter,
   hiddenBefore,
@@ -73,8 +59,8 @@ export function selectVisibleInlineOverflowText({
   readonly showOverflow: boolean | undefined;
   readonly visibleItemCount: number;
 }): string | undefined {
-  if (visibleItemCount <= 0) return undefined;
-  return selectInlineOverflowText({ hiddenAfter, hiddenBefore, showOverflow });
+  if (visibleItemCount <= 0 || showOverflow) return undefined;
+  return inlineOverflowCountText(hiddenBefore, hiddenAfter);
 }
 
 /** ChildControlPicker's ultra-compact title suffix: the same "+N earlier,

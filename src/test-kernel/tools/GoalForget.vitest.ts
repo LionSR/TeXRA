@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createRecordingHost } from '@test/agent/progressTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 

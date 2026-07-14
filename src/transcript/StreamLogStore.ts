@@ -861,20 +861,13 @@ export class StreamLogStore {
   private parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
     const result = StreamLogSummarySchema.safeParse(value);
     if (!result.success) return undefined;
-    const {
-      firstTimestamp,
-      lastTimestamp,
-      hasRunningGroup,
-      hasRunningStreamingText,
-    } = result.data;
-    if (firstTimestamp === undefined && lastTimestamp === undefined)
+    if (
+      result.data.firstTimestamp === undefined &&
+      result.data.lastTimestamp === undefined
+    ) {
       return undefined;
-    return {
-      firstTimestamp,
-      lastTimestamp,
-      hasRunningGroup,
-      hasRunningStreamingText,
-    };
+    }
+    return result.data;
   }
 
   private async writeStream(

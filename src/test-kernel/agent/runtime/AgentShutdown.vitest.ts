@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 // Local imports - runtime
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
-import { SessionHandle, defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 // Local imports - CLI session stores
 import {
   ClaudeAgentSessions,
