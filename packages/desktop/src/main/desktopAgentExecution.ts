@@ -98,7 +98,10 @@ import {
   createDesktopToolEditApprovalController,
   type DesktopToolEditApprovalController,
 } from './desktopToolEditApproval.js';
-import { createDesktopHostInteractions } from './desktopHostInteractions.js';
+import {
+  createDesktopHostInteractions,
+  type DesktopHostInteractions,
+} from './desktopHostInteractions.js';
 import { DesktopExecutionRebinder } from './desktopExecutionRebinder.js';
 import { toLogData } from './desktopLogUtils.js';
 import {
@@ -214,6 +217,7 @@ export class DesktopProgressBridge {
   private readonly deletedStreams = new Set<StreamTabId>();
   private readonly unsubscribe: () => void;
   private readonly toolEditApprovals: DesktopToolEditApprovalController;
+  private readonly hostInteractions: DesktopHostInteractions;
   private readonly fileActions: DesktopProgressFileActions;
   /**
    * Extracted session-progress bridge that owns ghost-stream hydration,
@@ -267,13 +271,14 @@ export class DesktopProgressBridge {
       openDiff: options.openDiff,
       showErrorMessage: this.options.showErrorMessage,
     });
+    this.hostInteractions = createDesktopHostInteractions({
+      runtimeHost: this.runtimeHost,
+      session: this.session,
+      getApprovalHandlers: () => this.approvalHandlers,
+      getToolEditApprovals: () => this.toolEditApprovals,
+    });
     this.detachHostInteractions = this.session.useHostInteractions(
-      createDesktopHostInteractions({
-        runtimeHost: this.runtimeHost,
-        session: this.session,
-        getApprovalHandlers: () => this.approvalHandlers,
-        getToolEditApprovals: () => this.toolEditApprovals,
-      }),
+      this.hostInteractions,
     );
     setProgressViewBridge({ isViewVisible: () => true });
     this.backend = new ProgressBackend({
@@ -544,6 +549,11 @@ export class DesktopProgressBridge {
           openFileCompile: (file) => this.openFileCompile(file),
         },
         approval: {
+          approvePendingDelegatedWork: (stream, initiatingProposalId) =>
+            this.hostInteractions.approvePendingDelegatedWork(
+              stream,
+              initiatingProposalId,
+            ),
           handleToolEditApprovalAction: (message) =>
             this.toolEditApprovals.handleAction(message),
           onUnsupportedToolEditApproval: (message) => {

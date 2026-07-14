@@ -86,6 +86,10 @@ export interface ProgressViewBypassCommandOptions {
 }
 
 export interface ProgressViewApprovalCommandActions {
+  approvePendingDelegatedWork(
+    stream: StreamTabId,
+    initiatingProposalId: string,
+  ): Promise<void>;
   handleToolEditApprovalAction(
     message: ProgressViewMessage<
       typeof PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
@@ -263,14 +267,18 @@ export function createProgressViewCommandHandlers(
     // The inline proposal action forces the complete delegated-task approval
     // mode on. It is idempotent, so it cannot invert a grant made from the
     // stream header while the proposal was open.
-    [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: (data) => {
+    [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: async (data) => {
       setDelegatedWorkApprovalBypasses(
         data.stream,
         true,
         runtimeHost,
         bypassSession(data.stream),
       );
-      return reportDelegatedWorkApproval(true);
+      await approval.approvePendingDelegatedWork(
+        data.stream,
+        data.initiatingProposalId,
+      );
+      await reportDelegatedWorkApproval(true);
     },
 
     [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) => {

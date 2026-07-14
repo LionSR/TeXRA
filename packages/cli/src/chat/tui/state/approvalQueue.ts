@@ -249,6 +249,20 @@ export function clearRetryApprovalsForStream(streamId: string): void {
   );
 }
 
+/** Approve delegated requests that were queued before stream bypass began. */
+export function approveQueuedDelegatedWorkForStream(
+  streamId: StreamTabId,
+): number {
+  return clearApprovalsWhere(
+    (payload) =>
+      approvalPayloadStreamId(payload) === streamId &&
+      (payload.kind === 'proposal' ||
+        payload.kind === 'toolEdit' ||
+        payload.kind === 'bash'),
+    { accepted: true },
+  );
+}
+
 export function clearApprovalsWhere(
   predicate: (payload: ApprovalPayload) => boolean,
   decision: ApprovalDecision = INTERRUPT,

@@ -13,7 +13,6 @@ import {
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   validateExecutionRequest,
@@ -53,6 +52,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ProgressStreamLifecycleHost } from './managers/ProgressStreamLifecycleHost';
 import type { ProgressViewProvider } from './ProgressViewProvider';
+import type { ExtensionHostInteractions } from './extensionHostInteractions';
 
 // Type helper for extracting specific message types
 type MessageFor<C extends ProgressViewInboundMessage['command']> = Extract<
@@ -88,7 +88,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     private readonly provider: ProgressViewProvider,
     context: vscode.ExtensionContext,
     private readonly host: PromptHost,
-    private readonly interactions: HostInteractions,
+    private readonly interactions: ExtensionHostInteractions,
   ) {
     super('ProgressView', { trackActiveView: true });
 
@@ -520,6 +520,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           },
         },
         approval: {
+          approvePendingDelegatedWork: (stream, initiatingProposalId) =>
+            this.interactions.approvePendingDelegatedWork(
+              stream,
+              initiatingProposalId,
+            ),
           handleToolEditApprovalAction: async (message) => {
             await handleProgressViewToolEditApprovalAction(message);
             return true;

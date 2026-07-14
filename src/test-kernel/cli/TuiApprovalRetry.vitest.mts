@@ -296,6 +296,52 @@ describe('TUI retry approvals', () => {
     );
   });
 
+  it('approves delegated work already queued in the same stream', async () => {
+    const { interactions } = tui();
+    const streamId = 'parallel-approval-stream';
+    const proposal = interactions.requestAgentProposal?.({
+      proposalId: 'proposal-current',
+      streamId,
+      agent: 'critic',
+      agentSource: null,
+      model: 'kimi26T',
+      instruction: 'Check the local compactness claim.',
+      memories: [],
+      workingDirectory: null,
+      agentCategory: AgentCategory.ToolUse,
+    });
+    const edit = interactions.requestToolEditApproval?.({
+      path: '/work/main.tex',
+      originalContent: 'old',
+      proposedContent: 'new',
+      sourceTool: 'edit',
+      streamId,
+    });
+    const bash = interactions.requestBashApproval?.({
+      command: 'lake build',
+      streamId,
+    });
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'proposal',
+        payload: { proposalId: 'proposal-current' },
+      });
+    });
+    currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
+
+    await expect(proposal).resolves.toEqual({ action: 'approve' });
+    await expect(edit).resolves.toEqual({
+      accepted: true,
+      appliedContent: 'new',
+    });
+    await expect(bash).resolves.toEqual({
+      accepted: true,
+      userMessage: undefined,
+    });
+    expect(currentApproval.get()).toBeUndefined();
+  });
+
   it('keeps an ordinary proposal approval limited to the current request', async () => {
     const { interactions } = tui();
     const streamId = 'proposal-one-off-stream';

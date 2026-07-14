@@ -60,6 +60,7 @@ import { patchSessionMeta, patchStream } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
   type ApprovalBypassKind,
+  approveQueuedDelegatedWorkForStream,
   approvalPayloadStreamId,
   clearApprovalsWhere,
   clearRetryApprovalsForStream,
@@ -497,6 +498,7 @@ async function requestProposalInteraction(
         bypassActive: true,
       });
     }
+    approveQueuedDelegatedWorkForStream(request.streamId);
   }
   const feedback = feedbackOnReject(decision);
   return decision.accepted

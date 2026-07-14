@@ -388,6 +388,7 @@ export function handlePermissionAction(
       if (approveAllDelegatedWork) {
         postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS, {
           stream: permission.data.streamId,
+          initiatingProposalId: permission.data.proposalId,
         });
       }
       postMessage(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {

@@ -83,6 +83,12 @@ const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
   chatgptSubscription: z.boolean().optional(),
 });
 
+const EnableDelegatedWorkApprovalMessageSchema = StreamScopedBaseSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS),
+  /** The proposal whose ordinary approval message follows this command. */
+  initiatingProposalId: z.string().min(1),
+});
+
 const SendFollowUpMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
   text: TrimmedStringSchema,
@@ -266,12 +272,10 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
       PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
     ),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS),
-    // Set-on (idempotent) super-yolo enable, the proposal counterpart to
-    // ENABLE_APPROVAL_BYPASS: the inline "Super Yolo (this session)" prompt
-    // button means "enable", never "flip", so it can't invert an already-on
-    // bypass that was turned on from the stream header while the prompt was
-    // still visible.
-    streamScopedCommand(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS),
+    // Set-on (idempotent) delegated-work approval. The initiating proposal is
+    // excluded from the pending-request sweep because its ordinary approval
+    // message follows and may carry model or agent overrides.
+    EnableDelegatedWorkApprovalMessageSchema,
     // Set-on (idempotent) bypass enable, distinct from the shield's toggle: the
     // inline "Yolo (this session)" prompt button means "enable", never "flip".
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS),
