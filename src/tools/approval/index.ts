@@ -111,8 +111,8 @@ export {
 export {
   // Proposal approval
   proposalApprovals,
-  setDelegatedTaskApprovalSessionBypass,
-  toggleDelegatedTaskApprovalSessionBypass,
+  setDelegatedWorkApprovalBypasses,
+  toggleDelegatedWorkApprovalBypasses,
 } from './proposalApproval';
 
 export {

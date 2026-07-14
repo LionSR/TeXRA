@@ -10,9 +10,9 @@ import type {
 import {
   isApprovalBypassedForStream,
   setBashApprovalSessionBypass,
-  setDelegatedTaskApprovalSessionBypass,
+  setDelegatedWorkApprovalBypasses,
   setToolEditApprovalSessionBypass,
-  toggleDelegatedTaskApprovalSessionBypass,
+  toggleDelegatedWorkApprovalBypasses,
 } from '@tools/approval';
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
@@ -184,13 +184,13 @@ export function createProgressViewCommandHandlers(
     );
   };
 
-  const reportDelegatedTaskApproval = async (
+  const reportDelegatedWorkApproval = async (
     enabled: boolean,
   ): Promise<void> => {
     await showInfo?.(
       enabled
-        ? 'Delegated task auto-approval enabled for this stream.'
-        : 'Delegated task auto-approval disabled for this stream.',
+        ? 'Task, file-edit, and command auto-approval enabled for this stream.'
+        : 'Task, file-edit, and command auto-approval disabled for this stream.',
     );
   };
 
@@ -253,8 +253,8 @@ export function createProgressViewCommandHandlers(
     [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: (data) =>
       applyCoupledBypass(data.stream, true),
     [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) =>
-      reportDelegatedTaskApproval(
-        toggleDelegatedTaskApprovalSessionBypass(
+      reportDelegatedWorkApproval(
+        toggleDelegatedWorkApprovalBypasses(
           data.stream,
           runtimeHost,
           bypassSession(data.stream),
@@ -264,13 +264,13 @@ export function createProgressViewCommandHandlers(
     // mode on. It is idempotent, so it cannot invert a grant made from the
     // stream header while the proposal was open.
     [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: (data) => {
-      setDelegatedTaskApprovalSessionBypass(
+      setDelegatedWorkApprovalBypasses(
         data.stream,
         true,
         runtimeHost,
         bypassSession(data.stream),
       );
-      return reportDelegatedTaskApproval(true);
+      return reportDelegatedWorkApproval(true);
     },
 
     [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) => {

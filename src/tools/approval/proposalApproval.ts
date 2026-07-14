@@ -30,7 +30,7 @@ export function proposalApprovals(
  * the same stream. The owning session is explicit so the grant cannot leak to
  * another CLI, extension, or desktop session.
  */
-export function setDelegatedTaskApprovalSessionBypass(
+export function setDelegatedWorkApprovalBypasses(
   streamId: StreamTabId,
   enabled: boolean,
   runtimeHost: AgentRuntimeHost,
@@ -45,18 +45,13 @@ export function setDelegatedTaskApprovalSessionBypass(
   bash.bypass.setBypass(streamId, enabled, runtimeHost, { silent: true });
 }
 
-/** Toggle the complete delegated-task approval mode for one stream. */
-export function toggleDelegatedTaskApprovalSessionBypass(
+/** Toggle the complete delegated-work approval mode for one stream. */
+export function toggleDelegatedWorkApprovalBypasses(
   streamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
   session: SessionHandle = currentSession(),
 ): boolean {
   const enabled = !session.approvals.proposal.isBypassed(streamId);
-  setDelegatedTaskApprovalSessionBypass(
-    streamId,
-    enabled,
-    runtimeHost,
-    session,
-  );
+  setDelegatedWorkApprovalBypasses(streamId, enabled, runtimeHost, session);
   return enabled;
 }

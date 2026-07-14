@@ -72,6 +72,16 @@ function dispatchKey(target: Element, key: string): void {
   );
 }
 
+function recordPermissionActions(
+  element: ProposalRequestPanel,
+): Array<{ action: string }> {
+  const actions: Array<{ action: string }> = [];
+  element.addEventListener('permission-action', (event) => {
+    actions.push((event as CustomEvent<{ action: string }>).detail);
+  });
+  return actions;
+}
+
 /**
  * Regression coverage for the a11y-clickables audit: clickable file-name
  * spans relied on a container `@click` delegate with no role/tabindex/
@@ -86,6 +96,30 @@ describe('proposal-request-panel file-name keyboard activation', () => {
 
   beforeEach(() => {
     posted = [];
+  });
+
+  it('maps the menu and a shortcut to approve-all while y stays one-off', async () => {
+    const element = await mountPanel();
+    const actions = recordPermissionActions(element);
+    const split = element.shadowRoot?.querySelector<
+      HTMLElement & { canApproveAllDelegatedWork?: boolean }
+    >('approve-split-button');
+
+    expect(split?.canApproveAllDelegatedWork).toBe(true);
+    split?.dispatchEvent(
+      new CustomEvent('approve-all-delegated-work', {
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(element.handleKeyboardShortcut('a')).toBe(true);
+    expect(element.handleKeyboardShortcut('y')).toBe(true);
+
+    expect(actions.map(({ action }) => action)).toEqual([
+      'approveSuperYolo',
+      'approveSuperYolo',
+      'approve',
+    ]);
   });
 
   it('exposes role=button and tabindex=0 on every clickable file-name span', async () => {

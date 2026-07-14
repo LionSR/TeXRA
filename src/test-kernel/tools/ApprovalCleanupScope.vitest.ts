@@ -15,7 +15,7 @@ import {
   cleanupUnscopedApprovals,
   isBashApprovalBypassedForStream,
   proposalApprovals,
-  setDelegatedTaskApprovalSessionBypass,
+  setDelegatedWorkApprovalBypasses,
   setBashApprovalSessionBypass,
 } from '@tools/approval';
 import {
@@ -120,7 +120,7 @@ describe('session-owned approval state (#8144)', () => {
     const streamId = sid('s:delegated-approval-same-id');
 
     try {
-      setDelegatedTaskApprovalSessionBypass(
+      setDelegatedWorkApprovalBypasses(
         streamId,
         true,
         noopAgentRuntimeHost,

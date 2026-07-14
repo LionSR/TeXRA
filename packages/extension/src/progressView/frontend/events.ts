@@ -64,15 +64,15 @@ export interface FollowupCommandDetail {
 export const APPROVE_SESSION_ACTION = 'approveSession';
 
 /**
- * Frontend-only panel action emitted by the approve-all-delegated-tasks item on
+ * Frontend-only panel action emitted by the approve-all-delegated-work item on
  * the agent-proposal Approve menu. Like {@link APPROVE_SESSION_ACTION},
  * `handlePermissionAction` decomposes it — into a normal proposal approve plus a
- * per-stream delegated-task bypass enable (`ENABLE_SUPER_YOLO_BYPASS`) — so it
+ * per-stream delegated-work bypass enable (`ENABLE_SUPER_YOLO_BYPASS`) — so it
  * never reaches the backend proposal protocol (whose action enum stays
  * `approve | reject | setup`). Single source of truth shared by the panel that
  * emits it and the handler that consumes it.
  */
-export const APPROVE_ALL_DELEGATED_TASKS_ACTION = 'approveSuperYolo';
+export const APPROVE_ALL_DELEGATED_WORK_ACTION = 'approveSuperYolo';
 
 export interface PermissionActionDetail {
   permission: PermissionState;

@@ -19,7 +19,7 @@ import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './components/ExternalInquiryPanel';
 import {
   APPROVE_SESSION_ACTION,
-  APPROVE_ALL_DELEGATED_TASKS_ACTION,
+  APPROVE_ALL_DELEGATED_WORK_ACTION,
   type FilterEventDetail,
   type FollowUpClearDetail,
   type FollowupCommandDetail,
@@ -383,16 +383,16 @@ export function handlePermissionAction(
       // from the stream header while this prompt is still visible (which does not
       // auto-resolve the open proposal), and a toggle would then flip bypass back
       // OFF here — the opposite of "enable". Mirrors edit/bash ENABLE_APPROVAL_BYPASS.
-      const approveAllDelegatedTasks =
-        action === APPROVE_ALL_DELEGATED_TASKS_ACTION;
-      if (approveAllDelegatedTasks) {
+      const approveAllDelegatedWork =
+        action === APPROVE_ALL_DELEGATED_WORK_ACTION;
+      if (approveAllDelegatedWork) {
         postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS, {
           stream: permission.data.streamId,
         });
       }
       postMessage(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
         proposalId: permission.data.proposalId,
-        action: approveAllDelegatedTasks ? 'approve' : action,
+        action: approveAllDelegatedWork ? 'approve' : action,
         feedback,
         model: modelOverride,
         agent: agentOverride,

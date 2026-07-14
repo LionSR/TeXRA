@@ -54,6 +54,7 @@ import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { AgentCategory } from '@shared/schemas';
 import {
+  cleanupAllApprovals,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   proposalApprovals,
@@ -137,6 +138,7 @@ function chatGptSubscriptionRetry(
 
 afterEach(() => {
   clearApprovals();
+  cleanupAllApprovals();
   resetCliState();
   mocks.lookupApiKey.mockReset();
   mocks.notify.mockReset();
@@ -292,6 +294,35 @@ describe('TUI retry approvals', () => {
       'updateToolEditApprovalBypassState',
       { streamId: 'proposal-bypass-stream', bypassActive: true },
     );
+  });
+
+  it('keeps an ordinary proposal approval limited to the current request', async () => {
+    const { interactions } = tui();
+    const streamId = 'proposal-one-off-stream';
+    const result = interactions.requestAgentProposal?.({
+      proposalId: 'proposal-one-off',
+      streamId,
+      agent: 'critic',
+      agentSource: null,
+      model: 'kimi26T',
+      instruction: 'Check one calculation.',
+      memories: [],
+      workingDirectory: null,
+      agentCategory: AgentCategory.ToolUse,
+    });
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload.kind).toBe('proposal');
+    });
+    currentApproval.get()?.decide({ accepted: true });
+
+    await expect(result).resolves.toEqual({ action: 'approve' });
+    expect(streams.get().get(streamId)?.bypass.superYolo ?? false).toBe(false);
+    expect(streams.get().get(streamId)?.bypass.toolEdit ?? false).toBe(false);
+    expect(streams.get().get(streamId)?.bypass.bash ?? false).toBe(false);
+    expect(proposalApprovals().isBypassed(streamId)).toBe(false);
+    expect(isApprovalBypassedForStream(streamId)).toBe(false);
+    expect(isBashApprovalBypassedForStream(streamId)).toBe(false);
   });
 
   it('auto-switches provider-less relay retries when any personal key exists', async () => {

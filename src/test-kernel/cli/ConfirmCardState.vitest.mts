@@ -7,6 +7,7 @@ import {
   confirmCardKeyHints,
   confirmCardKeyHintsForWidth,
 } from '@cli/chat/tui/modals/ConfirmCardState';
+import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
 describe('CLI confirm-card key handling', () => {
   it('approves with y, collects rejection feedback with n, and cancels with escape', () => {
@@ -99,10 +100,13 @@ describe('CLI confirm-card key handling', () => {
 
     expect(
       confirmCardKeyHintsForWidth({
-        alwaysAllowLabel: 'approve all delegated tasks for this session',
+        alwaysAllowLabel: DELEGATION_APPROVAL_COPY.cliAction,
         maxColumns: 72,
       }),
-    ).toContainEqual({ key: 'a', action: 'all delegated tasks' });
+    ).toContainEqual({
+      key: 'a',
+      action: DELEGATION_APPROVAL_COPY.cliCompactAction,
+    });
   });
 
   it('keeps the approve-all hint on mid-width terminals', () => {

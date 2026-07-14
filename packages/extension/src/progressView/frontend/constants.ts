@@ -141,8 +141,9 @@ const SUPER_YOLO_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
   icon: 'rocket',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
-  title: 'Auto-approve delegated tasks (skip task-by-task approval)',
-  titleActive: 'Auto-approve active — click to resume manual approval',
+  title: 'Auto-approve tasks, file edits, and commands in this stream',
+  titleActive:
+    'Task, edit, and command auto-approval active — click to resume prompts',
   className: 'super-yolo-toggle-button',
   isToggle: true,
 });

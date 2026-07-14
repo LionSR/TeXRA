@@ -1,3 +1,5 @@
+import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+
 import { KEY_HINT_SEPARATOR } from '../ui/KeyHints';
 import { isEscapeInput } from '../input/inputKeys';
 
@@ -107,8 +109,8 @@ function compactHintAction(action: string): string {
       return 'all';
     case 'approve edits for session':
       return 'edit session';
-    case 'approve all delegated tasks for this session':
-      return 'all delegated tasks';
+    case DELEGATION_APPROVAL_COPY.cliAction:
+      return DELEGATION_APPROVAL_COPY.cliCompactAction;
     default:
       return action;
   }

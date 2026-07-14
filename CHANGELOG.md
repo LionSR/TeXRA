@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
-- **Delegation prompts can approve the rest of the session** — press `a` to
+- **Delegation prompts can approve the rest of a stream** — press `a` to
   approve the current delegated task and stop repeated task, edit, and command
   approval prompts for that stream.
 
@@ -16,8 +16,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Delegated-task approval uses a clear name** — proposal menus now describe
-  the session-wide action directly instead of calling it “Super Yolo.”
+- **Delegated-work approval uses a clear name** — proposal menus now describe
+  the stream-scoped task, edit, and command grant instead of calling it
+  “Super Yolo.”
 
 ## [0.39.4] - 2026-07-13
 

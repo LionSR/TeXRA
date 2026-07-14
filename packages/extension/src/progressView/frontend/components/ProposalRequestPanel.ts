@@ -48,7 +48,7 @@ import { getBasename } from '@utils/core';
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
-import { APPROVE_ALL_DELEGATED_TASKS_ACTION } from '../events';
+import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '../events';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
@@ -112,17 +112,17 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
       <approve-split-button
         .approveTitle=${approveTitle}
         .canBypass=${false}
-        .canApproveAllDelegatedTasks=${true}
+        .canApproveAllDelegatedWork=${true}
         @approve=${() => this.emitAction('approve')}
-        @approve-all-delegated-tasks=${() =>
-          this.emitAction(APPROVE_ALL_DELEGATED_TASKS_ACTION)}
+        @approve-all-delegated-work=${() =>
+          this.emitAction(APPROVE_ALL_DELEGATED_WORK_ACTION)}
       ></approve-split-button>
     `;
   }
 
   protected override handleApproveSessionKey(): boolean {
     if (this.showFeedback) return false;
-    this.emitAction(APPROVE_ALL_DELEGATED_TASKS_ACTION);
+    this.emitAction(APPROVE_ALL_DELEGATED_WORK_ACTION);
     return true;
   }
 
@@ -342,7 +342,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
   protected override emitAction(action: string, feedback?: string): void {
     // Approve-all also accepts this proposal, so it carries the same model and
     // agent overrides as a plain approval.
-    if (action !== 'approve' && action !== APPROVE_ALL_DELEGATED_TASKS_ACTION) {
+    if (action !== 'approve' && action !== APPROVE_ALL_DELEGATED_WORK_ACTION) {
       super.emitAction(action, feedback);
       return;
     }

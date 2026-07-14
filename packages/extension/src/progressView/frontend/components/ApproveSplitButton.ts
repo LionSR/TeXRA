@@ -22,7 +22,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 /** Internal dropdown-item value for the edit/bash session-bypass entry. */
 const YOLO_VALUE = 'approve-session';
 /** Internal dropdown-item value for the delegated-task approval entry. */
-const DELEGATED_TASKS_VALUE = 'approve-all-delegated-tasks';
+const DELEGATED_WORK_VALUE = 'approve-all-delegated-work';
 
 /**
  * Approve control for approval prompts, used declaratively:
@@ -35,11 +35,11 @@ const DELEGATED_TASKS_VALUE = 'approve-all-delegated-tasks';
  *   ></approve-split-button>
  *
  * With no bypass flags it renders a plain Approve button. When `canBypass`
- * (edit/bash prompts) or `canApproveAllDelegatedTasks` (agent proposals) is set
+ * (edit/bash prompts) or `canApproveAllDelegatedWork` (agent proposals) is set
  * it becomes a
  * split button: the main click emits `approve`; the ▾ caret opens a menu whose
- * "Yolo (this session)" item emits `approve-session` and whose delegated-task
- * item emits `approve-all-delegated-tasks`. Selection is handled via Web
+ * "Yolo (this session)" item emits `approve-session` and whose delegated-work
+ * item emits `approve-all-delegated-work`. Selection is handled via Web
  * Awesome's `wa-select` (Enter/Space dispatch `wa-select`, not a DOM click on
  * the item), so the menu stays keyboard-accessible. Layout/colors are scoped
  * here; the host is width-capped to match the `.action-button` rule in
@@ -157,7 +157,7 @@ export class ApproveSplitButton extends LitElement {
   @property({ type: Boolean }) canBypass = false;
 
   /** When true, surface the proposal's stream-scoped approve-all action. */
-  @property({ type: Boolean }) canApproveAllDelegatedTasks = false;
+  @property({ type: Boolean }) canApproveAllDelegatedWork = false;
 
   /** Read-only trace-viewer export: render inert, no bypass split-menu. */
   @property({ type: Boolean }) disabled = false;
@@ -174,7 +174,7 @@ export class ApproveSplitButton extends LitElement {
     });
     if (
       this.disabled ||
-      (!this.canBypass && !this.canApproveAllDelegatedTasks)
+      (!this.canBypass && !this.canApproveAllDelegatedWork)
     ) {
       return approveButton;
     }
@@ -206,18 +206,17 @@ export class ApproveSplitButton extends LitElement {
               </wa-dropdown-item>`,
           )}
           ${when(
-            this.canApproveAllDelegatedTasks,
+            this.canApproveAllDelegatedWork,
             () =>
-              html`<wa-dropdown-item value=${DELEGATED_TASKS_VALUE}>
-                ${waIcon('rocket')}
-                ${DELEGATION_APPROVAL_COPY.sessionMenuAction}
+              html`<wa-dropdown-item value=${DELEGATED_WORK_VALUE}>
+                ${waIcon('rocket')} ${DELEGATION_APPROVAL_COPY.streamMenuAction}
               </wa-dropdown-item>`,
           )}
         </wa-dropdown>
         <wa-tooltip for="approve-split-trigger-button">
           ${
-            this.canApproveAllDelegatedTasks
-              ? `${DELEGATION_APPROVAL_COPY.sessionMenuAction} (a)`
+            this.canApproveAllDelegatedWork
+              ? `${DELEGATION_APPROVAL_COPY.streamMenuAction} (a)`
               : 'Approve and stop asking this session (a)'
           }
         </wa-tooltip>
@@ -230,13 +229,13 @@ export class ApproveSplitButton extends LitElement {
       (event.detail?.item as HTMLElement & { value?: string })?.value ?? '';
     if (value === YOLO_VALUE) {
       this.emit('approve-session');
-    } else if (value === DELEGATED_TASKS_VALUE) {
-      this.emit('approve-all-delegated-tasks');
+    } else if (value === DELEGATED_WORK_VALUE) {
+      this.emit('approve-all-delegated-work');
     }
   };
 
   private emit(
-    type: 'approve' | 'approve-session' | 'approve-all-delegated-tasks',
+    type: 'approve' | 'approve-session' | 'approve-all-delegated-work',
   ): void {
     // Dispatch via the shared typed factory (bubbles + composed) like every
     // other ProgressView component, not a hand-rolled CustomEvent.

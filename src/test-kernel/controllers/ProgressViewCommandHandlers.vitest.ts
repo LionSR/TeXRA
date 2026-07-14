@@ -542,8 +542,22 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       },
     ]);
     expect(showInfo).toHaveBeenCalledWith(
-      'Delegated task auto-approval enabled for this stream.',
+      'Task, file-edit, and command auto-approval enabled for this stream.',
     );
+
+    expect(
+      dispatchProgressViewInbound(
+        {
+          command: PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS,
+          stream,
+        },
+        handlers,
+      ),
+    ).toBe(true);
+    await Promise.resolve();
+    expect(proposalApprovals().isBypassed(stream)).toBe(true);
+    expect(isApprovalBypassedForStream(stream)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream)).toBe(true);
 
     expect(
       dispatchProgressViewInbound(
