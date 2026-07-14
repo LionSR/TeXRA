@@ -1,17 +1,9 @@
 /**
  * Channel-keyed logging primitives.
  *
- * Two surfaces:
- *
- *   1. Functional `debug/info/warn/error(channel, message, options)` — used
- *      by ~70 non-trace callers (utils, housekeeping, common, auth, etc.)
- *      that just want to write a line to a per-channel output sink.
- *
- *   2. `attachChannelSubscriber(trace, { channel, isAgent })` — subscribes
- *      the same sink machinery to an {@link AgentTrace}. Used by
- *      `createChannelTrace` / `createRunTrace` so the trace channel
- *      converges on the same output sinks. Replaces the former
- *      `consoleSubscriber.ts` pass-through.
+ * Functional callers use `debug/info/warn/error(channel, message, options)`.
+ * Protocol adapters use `createChannelWriter(channel, isAgent)` to reach the
+ * same sink without making this module depend on their event types.
  *
  * Output-channel creation is host-injected via {@link setOutputChannelFactory};
  * the VS Code extension provides a factory that returns VS Code
@@ -27,13 +19,9 @@
  * stdout/stderr sinks in `logSinks.ts` are a deliberate non-redacting exception —
  * they target the operator's own terminal, not a persisted/exported artifact.)
  */
-// Type-only imports from the leaf trace modules (not the `@agent/trace`
-// barrel, which pulls in TraceEmitter and would cycle back into this logger).
 import { format } from 'date-fns';
 
-import type { AgentTrace, AgentTraceSubscriber } from '@agent/trace/AgentTrace';
-import type { AgentEvent } from '@agent/trace/events';
-import { LOG_LEVELS, MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
+import { LOG_LEVELS, type LogLevel } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';
 
@@ -103,8 +91,8 @@ export function isDebugModeEnabled(): boolean {
 }
 
 /**
- * Write one line to the per-channel sink. Single emission point — both the
- * functional logger API and the trace subscriber funnel through this.
+ * Write one line to the per-channel sink. Single emission point for both the
+ * functional logger API and channel writers.
  */
 function writeLine(
   level: LogLevel,
@@ -128,6 +116,25 @@ function writeLine(
       ? normalizedData
       : JSON.stringify(normalizedData, null, 2),
   );
+}
+
+export type ChannelWriter = (
+  level: LogLevel,
+  message: string,
+  data?: unknown,
+) => void;
+
+/**
+ * Create a protocol-neutral writer for one shared or agent channel.
+ * Channel creation is eager, matching `initialize`.
+ */
+export function createChannelWriter(
+  channel: string,
+  isAgent: boolean,
+): ChannelWriter {
+  ensureChannel(channel, isAgent);
+  return (level, message, data) =>
+    writeLine(level, channel, isAgent, message, data);
 }
 
 /** Errors don't survive `JSON.stringify`, so flatten them before emit. */
@@ -166,9 +173,7 @@ function logAt(
   message: string,
   options: LogUtilsOptions,
 ): void {
-  // Functional callers (housekeeping, utils, common) never write to the
-  // per-stream agent channels — that's exclusively the trace subscriber
-  // path via `attachChannelSubscriber`.
+  // Functional callers write to the shared output channel.
   writeLine(level, channel, /* isAgent */ false, message, options.data);
 }
 
@@ -204,45 +209,3 @@ export const debug = makeLogFn(LOG_LEVELS.DEBUG);
 export const info = makeLogFn(LOG_LEVELS.INFO);
 export const warn = makeLogFn(LOG_LEVELS.WARN);
 export const error = makeLogFn(LOG_LEVELS.ERROR);
-
-// ─── Trace subscriber ────────────────────────────────────────────────────
-
-export interface ChannelSubscriberOptions {
-  /** Channel name used for the per-channel output sink. */
-  readonly channel: string;
-  /** Whether to route writes to the agent-specific output channel. */
-  readonly isAgent: boolean;
-}
-
-/**
- * Subscribe to a trace and route every `log` event to the per-channel
- * output sink. Non-log events are ignored — they are for structured
- * subscribers (transcript recorder, Supabase, SDK consumers).
- *
- * Replaces the former `attachConsoleSubscriber` shim: there is no longer
- * a `consoleSubscriber.ts` module sitting between the trace and the
- * sink-write boundary.
- */
-export function attachChannelSubscriber(
-  trace: AgentTrace,
-  options: ChannelSubscriberOptions,
-): () => void {
-  ensureChannel(options.channel, options.isAgent);
-
-  const subscriber: AgentTraceSubscriber = (event: AgentEvent) => {
-    if (event.type !== 'log') return;
-    // Internal-tagged log lines never reach the console — they exist for
-    // upstream subscribers (debug telemetry, transcript) that opt in.
-    if (event.messageType === MESSAGE_TYPES.INTERNAL) return;
-
-    writeLine(
-      event.level,
-      options.channel,
-      options.isAgent,
-      event.message,
-      event.data,
-    );
-  };
-
-  return trace.subscribe(subscriber);
-}

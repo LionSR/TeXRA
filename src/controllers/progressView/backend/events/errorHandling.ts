@@ -1,5 +1,5 @@
 // Local imports - logger
-import { createChannelTrace } from '@logger';
+import { createChannelTrace } from '@agent/trace';
 import { serializeError } from '@utils/core';
 
 // Shared logger for all event handlers

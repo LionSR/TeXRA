@@ -1,15 +1,18 @@
 /**
  * The TeXRA "run trace": an {@link AgentTrace} wired with the product
- * subscribers an agent run needs — per-channel output (from `@logger`) AND
- * the webview/CLI transcript recorder (this package).
+ * subscribers an agent run needs: per-channel output and the webview/CLI
+ * transcript recorder (this package).
  *
  * This lives in `@transcript` rather than `@logger` so the logger package
  * stays free of any transcript/product dependency: SDK consumers use the
- * pure `@agent/trace` channel plus `createChannelTrace`, and attach their own
- * subscribers — they never pull in `StreamLogStore`.
+ * pure `@agent/trace` channel and attach their own subscribers; they never
+ * pull in `StreamLogStore`.
  */
-import { TraceEmitter, type AgentTrace } from '@agent/trace';
-import { attachChannelSubscriber } from '@logger/logUtils';
+import {
+  attachChannelSubscriber,
+  TraceEmitter,
+  type AgentTrace,
+} from '@agent/trace';
 import type { StreamTabId } from '@shared/schemas';
 
 import { attachTranscriptRecorder } from './TexraTranscriptRecorder';

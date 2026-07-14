@@ -28,6 +28,11 @@ export type {
 export { TraceEmitter } from './TraceEmitter';
 export { noopTrace } from './noopTrace';
 export {
+  attachChannelSubscriber,
+  createChannelTrace,
+  type ChannelSubscriberOptions,
+} from './channelTrace';
+export {
   startToolUseCard,
   endToolUseCard,
   emitToolUseCard,

@@ -31,8 +31,8 @@
 
 import { getActiveFlushers, unregisterFlushers } from '@transcript/runTrace';
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
 import { getRunContextSession, tryUseRunContext } from './RunContext';

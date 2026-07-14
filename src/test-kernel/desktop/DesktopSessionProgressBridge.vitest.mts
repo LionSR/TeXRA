@@ -126,9 +126,6 @@ async function loadBridgeModule(): Promise<
   typeof import('@desktop/main/desktopSessionProgressBridge')
 > {
   vi.resetModules();
-  vi.doMock('@logger', () => ({
-    createChannelTrace: () => makeLogger(),
-  }));
   vi.doMock('@tools/goal', () => ({
     GoalStore: {
       getForStream: vi.fn(() => undefined),

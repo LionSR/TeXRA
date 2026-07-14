@@ -12,6 +12,7 @@
  * forward it to the UI via the `inquiryThreadUpdated` event.
  */
 
+import { createChannelTrace } from '@agent/trace';
 import {
   sendFollowUp,
   wakeQueuedFollowUpStream,
@@ -25,7 +26,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { createChannelTrace } from '@logger';
 import type {
   ExternalInquiryThreadId,
   ExternalInquiryThreadSummary,

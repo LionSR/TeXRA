@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { StreamSnapshotStore, type StreamLogStore } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -10,7 +11,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { createChannelTrace } from '@logger';
 import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
