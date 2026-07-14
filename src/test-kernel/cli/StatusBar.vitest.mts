@@ -36,7 +36,7 @@ function statusInput(
     activeProcesses: 0,
     approvalDepth: 0,
     subagentControlsAvailable: false,
-    hasMultipleStreams: false,
+    sessionNavigationAvailable: false,
     model: 'deepseekT',
     apiMode: PERSONAL_API_MODE_LABEL,
     shortcutModifierLabel: 'Alt',
@@ -196,7 +196,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Ctrl-C stop');
     expect(display.bindings).not.toContain('Alt-s subagents');
     // Stream-navigation hints stay hidden in a single-stream chat.
-    expect(display.bindings).not.toContain('Tab streams');
+    expect(display.bindings).not.toContain('Tab sessions');
     expect(display.bindings).not.toContain('Alt-1..9 focus');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
   });
@@ -205,7 +205,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         transcriptAvailable: true,
       }),
     );
@@ -220,22 +220,37 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         transcriptAvailable: true,
         width: 80,
       }),
     );
 
-    expect(display.bindings).toContain('Tab streams');
+    expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Ctrl-T transcript');
     expect(display.bindings).toContain('Alt-s subagents');
+  });
+
+  it('advertises list-owned keys while the session list has focus', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        sessionNavigationAvailable: true,
+        sessionListFocused: true,
+        width: 80,
+      }),
+    );
+
+    expect(display.bindings).toContain('Up/Down select');
+    expect(display.bindings).toContain('Enter focus');
+    expect(display.bindings).toContain('Esc input');
+    expect(display.bindings).not.toContain('Tab sessions');
   });
 
   it('keeps the transcript shortcut in narrow stream views', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         taskControlsAvailable: false,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         transcriptAvailable: true,
         width: 60,
       }),
@@ -249,7 +264,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         taskControlsAvailable: false,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         transcriptAvailable: true,
         width: 42,
       }),
@@ -309,13 +324,13 @@ describe('CLI StatusBar display model', () => {
         agentSelectionAvailable: true,
         taskControlsAvailable: true,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         transcriptAvailable: true,
         width: 80,
       }),
     );
 
-    expect(display.bindings).toContain('Tab streams');
+    expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Alt-p tasks');
     expect(display.bindings).toContain('Alt-s subagents');
     expect(display.bindings).not.toContain('/model models');
@@ -363,7 +378,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 1,
         taskControlsAvailable: false,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         apiMode: 'relay',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
@@ -387,7 +402,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 1,
         taskControlsAvailable: false,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         apiMode: 'relay',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop root',
@@ -397,7 +412,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).not.toContain('PgUp');
     expect(display.bindings).not.toContain('scroll');
-    expect(display.bindings).toContain('Tab streams');
+    expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Ctrl-C stop root');
   });
 
@@ -424,7 +439,7 @@ describe('CLI StatusBar display model', () => {
         activeProcesses: 1,
         approvalDepth: 3,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         apiMode: 'relay',
         ctrlCAction: 'stop',
       }),
@@ -447,7 +462,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Alt-s subagents');
     expect(display.bindings).toContain('Ctrl-C stop');
     // Stream-navigation hints appear once more than one stream is live.
-    expect(display.bindings).toContain('Tab streams');
+    expect(display.bindings).toContain('Tab sessions');
     expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
@@ -459,7 +474,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop',
         transcriptAvailable: true,
         width: 60,
@@ -467,7 +482,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Tab streams · Alt-p tasks · Alt-s subagents · Ctrl-C stop',
+      'Tab sessions · Alt-p tasks · Alt-s subagents · Ctrl-C stop',
     );
     expect(display.bindings).toContain('Ctrl-C stop');
   });
@@ -480,7 +495,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
         transcriptAvailable: true,
@@ -500,7 +515,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop',
         width: 34,
         shortcutsActive: false,
@@ -619,7 +634,7 @@ describe('CLI StatusBar display model', () => {
     const baseDisplayInput = statusInput({
       status: STREAM_PHASE.CANCELLED,
       subagentControlsAvailable: true,
-      hasMultipleStreams: true,
+      sessionNavigationAvailable: true,
       ctrlCAction: 'stop root',
     });
     const display = buildStatusBarDisplay(baseDisplayInput);
@@ -660,7 +675,7 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.WAITING,
         isChildStream: true,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop root',
       }),
     );
@@ -976,7 +991,7 @@ describe('CLI StatusBar display model', () => {
         activeProcesses: 1,
         approvalDepth: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop',
         shortcutsActive: false,
       }),
@@ -1024,7 +1039,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop',
         shortcutsActive: false,
         width: 40,
@@ -1041,7 +1056,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop',
         shortcutsActive: false,
         width: 15,
@@ -1259,7 +1274,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         shortcutModifierLabel: defaultShortcutModifierLabel('darwin'),
       }),
     );

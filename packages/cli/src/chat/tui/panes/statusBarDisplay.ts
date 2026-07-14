@@ -89,10 +89,8 @@ export interface StatusBarDisplayInput {
   readonly taskControlsAvailable?: boolean;
   readonly agentSelectionAvailable?: boolean;
   readonly subagentControlsAvailable: boolean;
-  /** True when more than the root stream exists, i.e. a subagent or
-   *  child stream is live. Gates the stream-navigation hints, which are
-   *  no-ops in a plain single-stream chat. */
-  readonly hasMultipleStreams: boolean;
+  /** True when the current stream tree has selectable session rows. */
+  readonly sessionNavigationAvailable: boolean;
   readonly model: string;
   readonly apiMode: string;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
@@ -121,6 +119,8 @@ export interface StatusBarDisplayInput {
   /** Label for the foreground surface's Escape action while shortcutsActive is
    *  false. */
   readonly foregroundEscapeAction?: string;
+  /** True while the persistent session list, rather than the input, owns keys. */
+  readonly sessionListFocused?: boolean;
 }
 
 interface StatusBarDisplay {
@@ -403,7 +403,7 @@ function statusBarBindingsText(
   taskControlsAvailable = true,
   agentSelectionAvailable = false,
   subagentControlsAvailable: boolean,
-  hasMultipleStreams: boolean,
+  sessionNavigationAvailable: boolean,
   modifierLabel = defaultShortcutModifierLabel(),
   shiftEnterNewline = false,
   transcriptAvailable = false,
@@ -414,7 +414,7 @@ function statusBarBindingsText(
     taskControlsAvailable,
     agentSelectionAvailable,
     subagentControlsAvailable,
-    hasMultipleStreams,
+    sessionNavigationAvailable,
     modifierLabel,
     shiftEnterNewline,
     transcriptAvailable,
@@ -422,10 +422,10 @@ function statusBarBindingsText(
     maxColumns,
   ].join('|');
   if (memoKey === lastBindingsKey) return lastBindingsText;
-  const streamTabs = hasMultipleStreams
-    ? keyHintText({ key: 'Tab', action: 'streams' })
+  const streamTabs = sessionNavigationAvailable
+    ? keyHintText({ key: 'Tab', action: 'sessions' })
     : undefined;
-  const streamFocus = hasMultipleStreams
+  const streamFocus = sessionNavigationAvailable
     ? keyHintText({
         key: metaChordLabel(modifierLabel, '1..9'),
         action: 'focus',
@@ -458,10 +458,10 @@ function statusBarBindingsText(
     agentSelectionAvailable &&
     !taskControlsAvailable &&
     !subagentControlsAvailable &&
-    !hasMultipleStreams;
+    !sessionNavigationAvailable;
   const candidates = [
-    // Stream cycling / numeric focus only do something when there is more
-    // than one stream — hide the hints in a plain single-stream chat.
+    // Session navigation only applies when the current tree has selectable
+    // rows; unrelated or not-yet-attached streams do not make Tab actionable.
     statusBarBindingRow([
       streamTabs,
       streamFocus,
@@ -499,7 +499,7 @@ function statusBarBindingsText(
       subagentControlsAvailable ||
       agentSelectionAvailable) &&
       statusBarBindingRow([streamTabs, tasks, subagents, agent, ctrlC]),
-    hasMultipleStreams &&
+    sessionNavigationAvailable &&
       taskControlsAvailable &&
       statusBarBindingRow([streamTabs, transcript, tasks, ctrlC]),
     taskControlsAvailable && statusBarBindingRow([transcript, tasks, ctrlC]),
@@ -546,6 +546,31 @@ function foregroundBindingsText(
   if (fitsStatusBindings(compact, maxColumns)) return compact;
 
   return ctrlCBinding;
+}
+
+function sessionListBindingsText(
+  ctrlCAction: CtrlCAction,
+  maxColumns?: number,
+): string {
+  const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
+  const candidates = [
+    [
+      keyHintText({ key: 'Up/Down', action: 'select' }),
+      keyHintText({ key: 'Enter', action: 'focus' }),
+      keyHintText({ key: 'Esc', action: 'input' }),
+      ctrlCBinding,
+    ].join(KEY_HINT_SEPARATOR),
+    [
+      keyHintText({ key: 'Up/Down', action: 'select' }),
+      keyHintText({ key: 'Enter', action: 'focus' }),
+      ctrlCBinding,
+    ].join(KEY_HINT_SEPARATOR),
+    ctrlCBinding,
+  ];
+  return (
+    candidates.find((candidate) => fitsStatusBindings(candidate, maxColumns)) ??
+    ctrlCBinding
+  );
 }
 
 export function ctrlCActionForFocus({
@@ -806,26 +831,33 @@ export function buildStatusBarDisplay(
             input.pendingExitResumeId,
             { approvalPolicy: input.approvalPolicy },
           )}`
-        : input.shortcutsActive === false
-          ? foregroundBindingsText(
+        : input.sessionListFocused
+          ? sessionListBindingsText(
               input.ctrlCAction ?? 'exit',
               input.width === undefined
                 ? undefined
                 : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
-              input.foregroundEscapeAction,
             )
-          : statusBarBindingsText(
-              input.taskControlsAvailable ?? true,
-              input.agentSelectionAvailable ?? false,
-              input.subagentControlsAvailable,
-              input.hasMultipleStreams,
-              input.shortcutModifierLabel,
-              input.shiftEnterNewline,
-              input.transcriptAvailable,
-              input.ctrlCAction,
-              input.width === undefined
-                ? undefined
-                : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
-            ),
+          : input.shortcutsActive === false
+            ? foregroundBindingsText(
+                input.ctrlCAction ?? 'exit',
+                input.width === undefined
+                  ? undefined
+                  : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
+                input.foregroundEscapeAction,
+              )
+            : statusBarBindingsText(
+                input.taskControlsAvailable ?? true,
+                input.agentSelectionAvailable ?? false,
+                input.subagentControlsAvailable,
+                input.sessionNavigationAvailable,
+                input.shortcutModifierLabel,
+                input.shiftEnterNewline,
+                input.transcriptAvailable,
+                input.ctrlCAction,
+                input.width === undefined
+                  ? undefined
+                  : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
+              ),
   };
 }
