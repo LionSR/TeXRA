@@ -94,7 +94,6 @@
     { "from": "transcript", "to": "logger", "kind": "value" },
     { "from": "transcript", "to": "shared", "kind": "value" },
     { "from": "transcript", "to": "utils", "kind": "value" },
-    { "from": "utils", "to": "agent", "kind": "type-only" },
     { "from": "utils", "to": "common", "kind": "value" },
     { "from": "utils", "to": "logger", "kind": "value" },
     { "from": "utils", "to": "platform", "kind": "value" },
