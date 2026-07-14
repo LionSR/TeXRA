@@ -347,9 +347,14 @@ export function formatConversationMessage(
 ) {
   const raw = isObject(message) ? message : {};
   const role = asText(raw.role) || 'unknown';
+  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
   const content = [
     formatConversationContent(raw.content, options),
-    formatConversationContent(raw.parts, options),
+    truncate(
+      formatConversationContent(raw.parts, options),
+      options.textLimit,
+      marker,
+    ),
     formatTopLevelToolCalls(raw.tool_calls, options),
   ]
     .filter((part) => part.trim().length > 0)
