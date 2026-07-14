@@ -438,7 +438,7 @@ export async function runChat(
   const disposers: Array<() => void> = [];
   // Ink registers one stdout "resize" listener per mounted useWindowSize()
   // hook. The chat TUI can legitimately mount more than Node's default ten
-  // while approvals, status, stream tabs, and child-stream views are visible.
+  // while approvals, status and child-stream views are visible.
   disposers.push(installTuiStdoutListenerLimit(process.stdout));
   // Crash safety: if the process dies outside the orderly teardown below
   // (uncaught exception, stray process.exit), still restore the terminal so

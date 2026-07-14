@@ -1,6 +1,6 @@
 // Test-only builder for the CLI TUI's `ChildStreamEntries` map
 // (`packages/cli/src/chat/tui/state/childExecutions.ts`). Selector-level
-// suites (ChildControls, StreamTabsStrip, ResumeHint, ConversationPane) build
+// suites (ChildControls, ResumeHint, ConversationPane) build
 // an already-settled map directly here instead of driving
 // `applySubagentRoster`/`setParentStream` through a real event sequence —
 // ordering/race-transition coverage belongs to the ordered matrix in

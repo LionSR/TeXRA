@@ -48,6 +48,8 @@ export interface InputBarProps {
   readonly prompt?: string;
   /** Persistent input history (optional — undefined disables Ctrl-R). */
   readonly history?: InputHistory;
+  /** Whether the input currently owns terminal keys. */
+  readonly keyboardActive?: boolean;
 }
 
 function slashSubmitText(
@@ -91,6 +93,7 @@ export function submitSlashCommandWhenReady({
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, onSubmit, prompt } = props;
+  const keyboardActive = props.keyboardActive ?? true;
   const [value, setValueState] = useState('');
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const [attachNotice, setAttachNotice] = useState<string | null>(null);
@@ -201,7 +204,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         reverseSearchOpenSignal.set(true);
       }
     },
-    { isActive: !disabled },
+    { isActive: !disabled && keyboardActive },
   );
 
   const handleSubmit = useCallback(
@@ -299,17 +302,20 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     isTypingSlashCommandName &&
     hasPaletteMatches &&
     !reverseSearchOpen &&
-    !disabled;
+    !disabled &&
+    keyboardActive;
 
   useEffect(() => {
     // Auto-close the reverse-search overlay when the input is disabled —
     // an approval modal taking focus shouldn't trap the user in the
     // search prompt.
-    if (disabled && reverseSearchOpen) reverseSearchOpenSignal.set(false);
-  }, [disabled, reverseSearchOpen]);
+    if ((!keyboardActive || disabled) && reverseSearchOpen) {
+      reverseSearchOpenSignal.set(false);
+    }
+  }, [disabled, keyboardActive, reverseSearchOpen]);
 
-  // Surface palette visibility so the App-level Tab handler (focus cycle)
-  // can stand down while the palette owns Tab for "accept selection".
+  // Surface palette visibility so the App-level Tab handler (session-list
+  // focus) can stand down while the palette owns Tab for "accept selection".
   useEffect(() => {
     slashPaletteOpen.set(showPalette);
     return () => slashPaletteOpen.set(false);
@@ -360,7 +366,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         ) : (
           <BaseTextInput
             value={value}
-            focus={!disabled && !reverseSearchOpen}
+            focus={keyboardActive && !disabled && !reverseSearchOpen}
             onChange={setValue}
             // While the slash palette is open it owns ↑/↓ for row selection;
             // history recall would clobber the draft mid-navigation.
