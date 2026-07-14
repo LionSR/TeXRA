@@ -12,7 +12,6 @@ import { repairRestartedStreams } from '@controllers/progressView/backend/restar
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import {
   setProgressViewBridge,
   type IProgressViewBridge,
@@ -31,6 +30,7 @@ import { appSignals } from '@eventBus/AppSignals';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { setExtensionInteractionEventSink } from '@frontend/events/extensionInteractionEvents';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
+import { createChannelTrace } from '@logger';
 import {
   buildVisibleBasicModelOptionsData,
   computeModelOptionsData,
@@ -363,9 +363,9 @@ export class ProgressViewProvider
     this._pendingUpdateOptions = null;
   }
 
-  public markWebviewReady(
+  public async markWebviewReady(
     view: vscode.WebviewView | vscode.WebviewPanel,
-  ): void {
+  ): Promise<void> {
     if (this.isPanelView(view)) {
       this._panelReady = true;
     } else {
@@ -379,13 +379,13 @@ export class ProgressViewProvider
     this._pendingUpdateOptions = null;
     this._panelJustDisposed = false;
     this.syncFullView({ forceRebuild: true });
-    this.replayPendingPrompts();
+    await this.replayPendingPrompts();
   }
 
-  private replayPendingPrompts(): void {
+  private async replayPendingPrompts(): Promise<void> {
     if (!this.webviewUpdater.isAvailable()) return;
 
-    void replayApprovalRequestHandlers(this.approvalHandlers);
+    await replayApprovalRequestHandlers(this.approvalHandlers);
     // YOLO / Super YOLO state is already sent by syncFullView() before replay.
   }
 
@@ -506,7 +506,7 @@ export class ProgressViewProvider
       // Only replay permissions when switching from editor → sidebar.
       // If already on sidebar, the webview already has the correct permissions;
       // replaying would cause duplicates.
-      if (placementChanged) this.replayPendingPrompts();
+      if (placementChanged) await this.replayPendingPrompts();
     }
   }
 
@@ -536,7 +536,7 @@ export class ProgressViewProvider
       await this.restoreSidebarToLauncher();
       this.revealEditorPanel();
       this.syncFullView({ forceRebuild: true });
-      if (placementChanged) this.replayPendingPrompts();
+      if (placementChanged) await this.replayPendingPrompts();
       return;
     }
 

@@ -144,15 +144,16 @@ function createReplayShellWithPendingInquiry(): {
     logger: { debug: vi.fn() },
   });
   handler.show({
-    requestId: 'pending',
-    threadId: 'pending' as ExternalInquiryThreadId,
-    question: 'Pending',
+    requestId: OPEN_THREAD,
+    threadId: OPEN_THREAD,
+    question: 'Stale question',
     allowBypass: false,
     streamId: STREAM,
     sessionLinks: [],
     transcript: [],
     mode: 'new',
   });
+  show.mockClear();
   return {
     replay: () => handler.replay(),
     show,
@@ -235,7 +236,13 @@ describe('external inquiry read boundary', () => {
     await replay();
 
     expect(show).toHaveBeenCalledWith(
-      expect.objectContaining({ threadId: OPEN_THREAD }),
+      expect.objectContaining({
+        threadId: OPEN_THREAD,
+        question: 'Follow-up Q',
+        transcript: expect.arrayContaining([
+          expect.objectContaining({ question: 'Legacy Q', answer: 'Legacy A' }),
+        ]),
+      }),
     );
   });
 });

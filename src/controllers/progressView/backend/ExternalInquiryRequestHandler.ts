@@ -38,10 +38,10 @@ export class ExternalInquiryRequestHandler extends ApprovalRequestHandler<
   }
 
   override async replay(): Promise<void> {
-    super.replay();
     if (!this.options.canSend()) return;
 
     await Promise.all([this.syncThreadList(), this.replayOpenPermissions()]);
+    super.replay();
   }
 
   private async syncThreadList(): Promise<void> {
@@ -87,7 +87,7 @@ export class ExternalInquiryRequestHandler extends ApprovalRequestHandler<
           draft: getOpenTurnDraft(manifest),
           transcript: manifestToTranscript(manifest),
         };
-        this.show(
+        this.setPending(
           manifest.turns.length > 1
             ? { ...basePermission, mode: 'followUp' }
             : { ...basePermission, mode: 'new' },

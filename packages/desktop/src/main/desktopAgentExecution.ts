@@ -26,7 +26,6 @@ import {
   RESTART_REPAIR_PHASES,
 } from '@controllers/progressView/backend/restartRepair';
 import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
@@ -66,6 +65,7 @@ import {
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
+import { createChannelTrace } from '@logger';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   STREAM_PHASE,
@@ -165,7 +165,6 @@ interface DesktopRunExecutionOptions {
 
 export interface DesktopProgressBridgeOptions {
   transcripts: StreamLogStore;
-  logger?: AgentTrace;
   openPath?: (filePath: string, line?: number) => Promise<void>;
   openBuildDisplay?: BuildDisplayFn;
   openDiff?: DiffViewHost['openDiff'];
@@ -197,7 +196,9 @@ class MemoryProgressStorage implements MementoStorage {
 }
 
 export class DesktopProgressBridge {
-  private readonly logger: AgentTrace;
+  private readonly logger: AgentTrace = createChannelTrace(
+    'DesktopProgressBridge',
+  );
   private readonly backend: ProgressBackend;
   private readonly state: ProgressBackend['state'];
   readonly streamLogs: ProgressBackend['state']['streamLogs'];
@@ -243,7 +244,6 @@ export class DesktopProgressBridge {
     private readonly postToRenderer: (message: unknown) => boolean | void,
     private readonly options: DesktopProgressBridgeOptions,
   ) {
-    this.logger = options.logger ?? createChannelTrace('DesktopProgressBridge');
     const hostChannel: AgentRuntimeHost = {
       emit: (event, payload) => this.handleInteractionEvent(event, payload),
     };
@@ -1081,7 +1081,7 @@ export class DesktopProgressBridge {
   async completeWebviewReady(): Promise<void> {
     await this.restartRepair;
     this.syncFullView();
-    void replayApprovalRequestHandlers(this.approvalHandlers);
+    await replayApprovalRequestHandlers(this.approvalHandlers);
   }
 
   setActiveStream(streamId: StreamTabId): void {
