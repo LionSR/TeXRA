@@ -30,7 +30,7 @@ const DEFAULT_TRUNCATION_MARKER = '...';
 const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
 
 export interface ConversationFormatOptions {
-  /** Truncate string/JSON-ish top-level message content at this many chars. Omit for no limit. */
+  /** Truncate each string/text message value at this many chars. Omit for no limit. */
   readonly textLimit?: number;
   /** Truncate tool_use/tool_result (and Google functionCall/functionResponse) block text at this many chars. Omit for no limit. */
   readonly toolBlockLimit?: number;
@@ -195,7 +195,9 @@ function formatConversationBlock(
   options: ConversationFormatOptions = {},
 ): string {
   const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
-  if (typeof block === 'string') return block;
+  if (typeof block === 'string') {
+    return truncate(block, options.textLimit, marker);
+  }
   if (!isObject(block)) {
     return truncate(
       stringifyConversationValue(block),
@@ -205,7 +207,7 @@ function formatConversationBlock(
   }
   switch (block.kind) {
     case 'text':
-      return asText(block.text);
+      return truncate(asText(block.text), options.textLimit, marker);
     case 'toolCall':
       return formatToolUseMarker(
         asText(block.name) || 'unknown',
@@ -217,7 +219,9 @@ function formatConversationBlock(
   }
   // Google's `parts` entries have no `type` discriminator at all — a plain
   // `text` field is the only signal, so check it before the `type` switch.
-  if (typeof block.text === 'string') return block.text;
+  if (typeof block.text === 'string') {
+    return truncate(block.text, options.textLimit, marker);
+  }
 
   if (
     isObject(block.inlineData) ||
@@ -257,7 +261,7 @@ function formatConversationBlock(
     case 'text':
       // A recognized text block whose `text` failed the duck-type check
       // above (missing/non-string) — render empty, not its JSON form.
-      return asText(block.text);
+      return truncate(asText(block.text), options.textLimit, marker);
     case 'image':
     case 'image_url':
     case 'input_image':
@@ -347,14 +351,9 @@ export function formatConversationMessage(
 ) {
   const raw = isObject(message) ? message : {};
   const role = asText(raw.role) || 'unknown';
-  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
   const content = [
     formatConversationContent(raw.content, options),
-    truncate(
-      formatConversationContent(raw.parts, options),
-      options.textLimit,
-      marker,
-    ),
+    formatConversationContent(raw.parts, options),
     formatTopLevelToolCalls(raw.tool_calls, options),
   ]
     .filter((part) => part.trim().length > 0)

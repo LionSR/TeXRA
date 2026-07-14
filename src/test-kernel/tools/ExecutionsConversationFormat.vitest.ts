@@ -47,11 +47,18 @@ describe('formatConversation', () => {
 
   it('bounds Google part text with the message text limit', () => {
     const output = formatConversation([
-      { role: 'model', parts: [{ text: 'x'.repeat(501) }] },
+      {
+        role: 'model',
+        parts: [
+          { text: 'x'.repeat(501) },
+          { functionCall: { name: 'ls', args: { path: '.' } } },
+        ],
+      },
     ]);
 
     expect(output).toContain(`${'x'.repeat(497)}...`);
     expect(output).not.toContain('x'.repeat(498));
+    expect(output).toContain('[tool_use: ls({"path":"."})]');
   });
 
   it('formats OpenAI top-level tool calls at the shared message boundary', () => {
