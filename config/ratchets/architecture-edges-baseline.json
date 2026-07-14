@@ -67,7 +67,6 @@
     { "from": "shared", "to": "logger", "kind": "value" },
     { "from": "shared", "to": "platform", "kind": "type-only" },
     { "from": "shared", "to": "utils", "kind": "value" },
-    { "from": "skills", "to": "agent", "kind": "type-only" },
     { "from": "skills", "to": "common", "kind": "value" },
     { "from": "skills", "to": "shared", "kind": "value" },
     { "from": "skills", "to": "utils", "kind": "value" },
