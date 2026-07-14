@@ -2,10 +2,11 @@
  * Provider-shape normalization: raw provider messages → format-agnostic
  * `ExportNode[]`.
  *
- * Collapses Anthropic, OpenAI (Chat Completions and Response API), and Google
- * GenAI message shapes into a single intermediate representation consumed by
- * every chat-export renderer. This module lives alongside the model handlers so
- * provider SDK type changes don't propagate into the command layer.
+ * Collapses Anthropic, OpenAI (Chat Completions and Response API), Google
+ * GenAI, and VS Code language-model message shapes into a single intermediate
+ * representation consumed by every chat-export renderer. This module lives
+ * alongside the model handlers so provider SDK type changes don't propagate
+ * into the command layer.
  *
  * The command-layer export package imports only `normalizeConversationForExport`
  * and the IR types from `@agent/export/schemas` — never `openai/*`,
@@ -99,12 +100,38 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
     return [{ type: 'text', text: msg.content }];
   }
   if (Array.isArray(msg.content)) {
-    return msg.content as ContentBlock[];
+    return msg.content.flatMap(normalizeContentBlock);
   }
   if (msg.content != null) {
     return [{ type: 'text', text: prettyJson(msg.content) }];
   }
   return [];
+}
+
+/** Convert host-neutral VS Code language-model parts to the shared block form. */
+function normalizeContentBlock(block: unknown): ContentBlock[] {
+  if (!isObject(block)) return [];
+  switch (block.kind) {
+    case 'text':
+      return [
+        {
+          type: 'text',
+          text: typeof block.text === 'string' ? block.text : undefined,
+        },
+      ];
+    case 'toolCall':
+      return [
+        {
+          type: 'tool_use',
+          name: typeof block.name === 'string' ? block.name : undefined,
+          input: block.input,
+        },
+      ];
+    case 'toolResult':
+      return [{ type: 'tool_result', content: block.text }];
+    default:
+      return [block as ContentBlock];
+  }
 }
 
 /** Convert a Google GenAI Part (field-based discrimination) to type-based ContentBlock(s). */
@@ -260,9 +287,9 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
 /**
  * Normalize raw provider messages into a format-agnostic {@link ExportNode[]}.
  *
- * Handles Anthropic, OpenAI (Chat Completions and Response API), and Google
- * GenAI message shapes. The resulting nodes are consumed by every format
- * renderer (markdown, LaTeX, HTML).
+ * Handles Anthropic, OpenAI (Chat Completions and Response API), Google GenAI,
+ * and VS Code language-model message shapes. The resulting nodes are consumed
+ * by every format renderer (markdown, LaTeX, HTML).
  */
 export function normalizeConversationForExport(
   messages: unknown[],

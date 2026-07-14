@@ -12,6 +12,10 @@ import {
 } from 'llm-zoo';
 
 import { installPlatform } from '@test/support/setupPlatform';
+import {
+  LANGUAGE_MODEL_PORT_ERROR_CODE,
+  type LanguageModelPort,
+} from '@platform/languageModel';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
@@ -64,6 +68,57 @@ function modelConfig(
 function initFakePlatform(options?: FakePlatformOptions): Promise<void> {
   return installPlatform(options);
 }
+
+const AVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = {
+  isAvailable: () => true,
+  selectModels: async () => [],
+  onDidChangeModels: () => ({ dispose() {} }),
+  sendRequest: () =>
+    (async function* () {
+      // Factory tests do not make model requests.
+    })(),
+  countTokens: async () => 0,
+  canSendRequest: async () => true,
+  onDidChangeAccess: () => ({ dispose() {} }),
+};
+
+describe('Copilot model handler routing', () => {
+  const copilotConfig = modelConfig(ModelProvider.COPILOT, {
+    supportsFunctionCalling: true,
+  });
+
+  it('takes precedence over the global OpenRouter route', () => {
+    expect(modelHandlerCompatibilityKey(copilotConfig, true, false)).toBe(
+      'ModelHandlerVscodeLm',
+    );
+  });
+
+  it('fails clearly when the host language-model port is unavailable', async () => {
+    await initFakePlatform();
+
+    await expect(createModelHandler(copilotConfig)).rejects.toMatchObject({
+      name: 'LanguageModelPortError',
+      code: LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
+    });
+  });
+
+  it('constructs the VS Code handler even when OpenRouter is enabled', async () => {
+    await installPlatform(
+      { globalState: { 'texra.useOpenRouter': true } },
+      { languageModel: AVAILABLE_LANGUAGE_MODEL_PORT },
+    );
+
+    const handler = await createModelHandler(copilotConfig);
+    try {
+      expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
+      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+        'ModelHandlerVscodeLm',
+      );
+    } finally {
+      handler.dispose();
+    }
+  });
+});
 
 describe('OpenAI model handler routing', () => {
   afterEach(() => {
@@ -795,7 +850,7 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
   // produce — otherwise the key a restored session keys on could disagree with
   // the handler actually built. For every registered model the key tagged onto
   // the created handler must equal the predicted key, and a model with no
-  // handler route (predicted `undefined`, e.g. Copilot) must make
+  // handler route (predicted `undefined`) must make
   // `createModelHandler` reject rather than silently build a mismatched
   // handler. Default routing (no OpenRouter proxy) is the shared baseline both
   // paths observe. The Codex-subscription override in `createModelHandler` is
@@ -809,7 +864,7 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
     // desync the statically-imported factory from the platform it reads; this
     // also makes the block robust to isolated `--grep` runs rather than
     // free-riding on a prior test's initPlatform.
-    await initFakePlatform();
+    await installPlatform({}, { languageModel: AVAILABLE_LANGUAGE_MODEL_PORT });
     const {
       modelHandlerCompatibilityKey: compatKey,
       createModelHandler: create,

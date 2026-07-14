@@ -181,6 +181,49 @@ describe('OpenAI Responses API', () => {
   });
 });
 
+describe('VS Code language-model messages', () => {
+  it('normalizes text, tool calls, and tool results', () => {
+    expect(
+      normalize([
+        {
+          role: 'user',
+          content: [{ kind: 'text', text: 'Inspect the proof.' }],
+        },
+        {
+          role: 'assistant',
+          content: [
+            { kind: 'text', text: 'I will inspect it.' },
+            {
+              kind: 'toolCall',
+              callId: 'call-1',
+              name: 'read_file',
+              input: { path: 'Main.lean' },
+            },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
+            { kind: 'toolResult', callId: 'call-1', text: 'file contents' },
+          ],
+        },
+      ]),
+    ).toEqual([
+      {
+        kind: 'user-message',
+        parts: [{ type: 'text', text: 'Inspect the proof.' }],
+      },
+      { kind: 'assistant-text', text: 'I will inspect it.' },
+      {
+        kind: 'tool-call',
+        name: 'read_file',
+        input: '{\n  "path": "Main.lean"\n}',
+      },
+      { kind: 'tool-result', text: 'file contents' },
+    ]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Google GenAI — thought parts
 // ---------------------------------------------------------------------------
