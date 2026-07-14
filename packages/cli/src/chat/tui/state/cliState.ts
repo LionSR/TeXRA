@@ -21,6 +21,7 @@ import {
   type TodoItem,
   type TokenUsageStats,
 } from '@shared/schemas';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import {
   applyChildStreamRemoval,
@@ -94,6 +95,8 @@ export interface SessionMeta {
   readonly canDelegate: boolean;
   readonly transcriptMode: 'persistent' | 'ephemeral';
   readonly teamName?: string;
+  readonly cliMultiAgentPresetId?: string;
+  readonly delegationAgentScope?: AgentDelegationScope;
   readonly version: string;
 }
 

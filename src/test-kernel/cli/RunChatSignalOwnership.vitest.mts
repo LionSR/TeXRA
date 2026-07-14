@@ -5,8 +5,12 @@ import { createRequire } from 'node:module';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -33,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   runCliPlatformShutdownSequence: vi.fn(),
   selectCliRunnableModel: vi.fn(),
   setCliHelperModel: vi.fn(),
+  startRootRun: vi.fn(),
   subscribeStreamLog: vi.fn(),
   subscribeStreamStatus: vi.fn(),
   supportsTerminalJobControl: vi.fn(),
@@ -248,9 +253,11 @@ describe('runChat signal ownership wiring', () => {
     mocks.supportsTerminalJobControl.mockReturnValue(false);
     mocks.tuiOutputStreamForColor.mockImplementation((stream) => stream);
     mocks.createChatSessionController.mockReturnValue({
+      admitInterruptedFollowUp: vi.fn(() => ({ kind: 'not_interrupted' })),
       canStartRootRun: vi.fn(() => true),
+      clearInterruptedRecovery: vi.fn(),
       resume: vi.fn(async () => undefined),
-      startRootRun: vi.fn(),
+      startRootRun: mocks.startRootRun,
       stop: vi.fn(),
       tryResumeStream: vi.fn(async () => false),
     });
@@ -349,6 +356,75 @@ describe('runChat signal ownership wiring', () => {
           process.removeListener(signal, listener);
         }
       }
+      loadAgentsSpy.mockRestore();
+      getVisibleAgentsSpy.mockRestore();
+    }
+  });
+
+  it('uses a resumed team scope for subsequent root runs', async () => {
+    const exitTui = deferred();
+    let onSubmit: ((line: string) => void) | undefined;
+    mocks.waitUntilExit.mockReturnValue(exitTui.promise);
+    mocks.render.mockImplementationOnce(
+      (element: {
+        readonly props?: { readonly onSubmit?: (line: string) => void };
+      }) => {
+        onSubmit = element.props?.onSubmit;
+        return {
+          clear: vi.fn(),
+          rerender: vi.fn(),
+          unmount: mocks.unmount,
+          waitUntilExit: mocks.waitUntilExit,
+        };
+      },
+    );
+    const agents = await import('@agent/index');
+    const loadAgentsSpy = vi
+      .spyOn(agents, 'loadAgents')
+      .mockResolvedValue(undefined);
+    const getVisibleAgentsSpy = vi
+      .spyOn(agents, 'getVisibleAgents')
+      .mockReturnValue([]);
+    const delegationAgentScope = {
+      workflowAgentKeys: ['builtInWorkflow:physicsReviewer'],
+      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    } as const;
+    const streamId = 'stream-resume' as StreamTabId;
+    const resolution: CliToolUseResumeResolution = {
+      kind: 'toolUse',
+      streamId,
+      snapshot: { streamId } as ToolUseSessionSnapshot,
+      config: AgentConfigSchema.parse({
+        agent: 'orchestrator',
+        model: 'gpt-test',
+        agentCategory: 'toolUse',
+        cliMultiAgentPresetId: 'physicist',
+        delegationAgentScope,
+      }),
+    };
+    const { runChat } = await import('@cli/chat/tui/runChatTui');
+    const runPromise = runChat(INTERACTIVE_CONTEXT, {
+      initialResume: {
+        id: 'exec-resume' as ExecutionId,
+        resolution,
+      },
+    });
+
+    try {
+      await vi.waitFor(() => expect(onSubmit).toBeTypeOf('function'));
+      if (!onSubmit) throw new Error('TUI input did not mount');
+      onSubmit('continue the team session');
+
+      await vi.waitFor(() => expect(mocks.startRootRun).toHaveBeenCalled());
+      expect(mocks.startRootRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cliMultiAgentPresetId: 'physicist',
+          delegationAgentScope,
+        }),
+      );
+    } finally {
+      exitTui.resolve();
+      await runPromise;
       loadAgentsSpy.mockRestore();
       getVisibleAgentsSpy.mockRestore();
     }

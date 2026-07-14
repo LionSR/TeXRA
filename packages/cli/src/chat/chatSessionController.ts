@@ -251,6 +251,23 @@ export function createChatSessionController(
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
 
+  const activateAgentConfig = (
+    config: Pick<
+      AgentConfig,
+      'agent' | 'model' | 'cliMultiAgentPresetId' | 'delegationAgentScope'
+    >,
+    modelSource?: 'history',
+  ): void => {
+    patchSessionMeta({
+      agent: config.agent,
+      model: config.model,
+      ...(modelSource ? { modelSource } : {}),
+      canDelegate: chatAgentSupportsDelegation(config.agent),
+      cliMultiAgentPresetId: config.cliMultiAgentPresetId ?? undefined,
+      delegationAgentScope: config.delegationAgentScope ?? undefined,
+    });
+  };
+
   const supersedeInterruptedRecovery = ():
     SupersededInterruptedRecovery | undefined => {
     const streamId = session.interruptedStreamId;
@@ -373,11 +390,7 @@ export function createChatSessionController(
     void supersedeInterruptedRecovery();
     const currentModel = config.model;
     const sessionContext = getSessionContext(currentModel);
-    patchSessionMeta({
-      agent: config.agent,
-      model: config.model,
-      canDelegate: chatAgentSupportsDelegation(config.agent),
-    });
+    activateAgentConfig(config);
     const { runtimeHost, approvalsUnavailable, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
@@ -476,12 +489,7 @@ export function createChatSessionController(
 
       const currentModel = resolution.config.model;
       const sessionContext = getSessionContext(currentModel);
-      patchSessionMeta({
-        agent: resolution.config.agent,
-        model: resolution.config.model,
-        modelSource: 'history',
-        canDelegate: chatAgentSupportsDelegation(resolution.config.agent),
-      });
+      activateAgentConfig(resolution.config, 'history');
 
       await defaultSession().transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
@@ -596,12 +604,7 @@ export function createChatSessionController(
 
         const currentModel = config.model;
         const sessionContext = getSessionContext(currentModel);
-        patchSessionMeta({
-          agent: config.agent,
-          model: config.model,
-          modelSource: 'history',
-          canDelegate: chatAgentSupportsDelegation(config.agent),
-        });
+        activateAgentConfig(config, 'history');
 
         const runHost = setupRunHost(sessionContext);
         finalize = runHost.finalize;

@@ -123,9 +123,11 @@ import { readCliRunOutcome } from '@cli/runtime/terminalStatus';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
 import {
+  patchSessionMeta,
   rootRunPending,
   rootRunStreamId,
   rootStreamId,
+  sessionMeta,
 } from '@cli/chat/tui/state/cliState';
 import {
   chatTuiCanInterruptActiveRun,
@@ -552,6 +554,27 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
   });
 
+  it('retains the configuration of a manually resumed conversation', async () => {
+    const config = makeResumeConfig({
+      cliMultiAgentPresetId: 'physicist',
+      delegationAgentScope: {
+        workflowAgentKeys: ['builtInWorkflow:physicsReviewer'],
+        toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+      },
+    });
+    const ctrl = createChatSessionController(makeInit());
+
+    await ctrl.resume('exec-resume' as ExecutionId, {
+      ...makeResolvedResume(),
+      config,
+    });
+
+    expect(sessionMeta.get()).toMatchObject({
+      cliMultiAgentPresetId: 'physicist',
+      delegationAgentScope: config.delegationAgentScope,
+    });
+  });
+
   it('manual resume supersedes stale interrupted recovery state', async () => {
     const session = makeSession({
       interruptedStreamId: 'stream-interrupted' as StreamTabId,
@@ -816,6 +839,13 @@ describe('createChatSessionController', () => {
   it('allows WAITING results when auto-resuming queued tool-use snapshots', async () => {
     const session = makeSession({ runCompleted: true });
     const config = makeResumeConfig();
+    patchSessionMeta({
+      cliMultiAgentPresetId: 'stale-team',
+      delegationAgentScope: {
+        workflowAgentKeys: ['custom:stale'],
+        toolUseAgentKeys: ['custom:stale'],
+      },
+    });
     const snapshotStore = makeResumeSnapshotStore({
       executionId: 'exec-1',
       config,
@@ -862,6 +892,8 @@ describe('createChatSessionController', () => {
     });
     expect(rootStreamId.get()).toBe('stream-1');
     expect(mocks.notify).not.toHaveBeenCalledWith({ kind: 'agentFinished' });
+    expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
+    expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
   });
 
   it('launcher resume supersedes stale interrupted recovery state', async () => {

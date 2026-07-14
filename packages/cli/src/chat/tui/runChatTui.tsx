@@ -393,6 +393,12 @@ export async function runChat(
     canDelegate: chatAgentSupportsDelegation(agent),
     transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
     teamName: init.teamName,
+    cliMultiAgentPresetId: initialResume
+      ? (initialResume.resolution.config.cliMultiAgentPresetId ?? undefined)
+      : init.cliMultiAgentPresetId,
+    delegationAgentScope: initialResume
+      ? (initialResume.resolution.config.delegationAgentScope ?? undefined)
+      : init.delegationAgentScope,
     version,
   });
   if (transcriptLifecycle.warning) {
@@ -628,8 +634,8 @@ export async function runChat(
             displayInstruction,
             mediaFiles,
             workingDirectory: context.cwd,
-            cliMultiAgentPresetId: init.cliMultiAgentPresetId,
-            delegationAgentScope: init.delegationAgentScope,
+            cliMultiAgentPresetId: meta.cliMultiAgentPresetId,
+            delegationAgentScope: meta.delegationAgentScope,
           }),
         );
         started = true;
