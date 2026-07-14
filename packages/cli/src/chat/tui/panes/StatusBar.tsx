@@ -40,6 +40,8 @@ interface StatusBarProps {
   readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
   readonly queuedFollowUpPreview?: boolean;
+  readonly sessionNavigationAvailable: boolean;
+  readonly sessionListFocused?: boolean;
   readonly shortcutsActive?: boolean;
   readonly subagentControlsAvailable: boolean;
   readonly taskControlsAvailable: boolean;
@@ -145,7 +147,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     taskControlsAvailable: props.taskControlsAvailable,
     agentSelectionAvailable: props.agentSelectionAvailable,
     subagentControlsAvailable: props.subagentControlsAvailable,
-    hasMultipleStreams: streams.size > 1,
+    sessionNavigationAvailable: props.sessionNavigationAvailable,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
     transcriptMode: sessionMeta.transcriptMode,
@@ -158,6 +160,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     isChildStream: target.isChildStream,
     foregroundEscapeAction: props.foregroundEscapeAction,
     shortcutsActive: props.shortcutsActive,
+    sessionListFocused: props.sessionListFocused,
   });
 
   return (

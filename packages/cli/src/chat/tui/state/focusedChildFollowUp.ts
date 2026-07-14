@@ -70,7 +70,7 @@ export function focusedChildInputDisabledMessage(init: {
     );
   }
   const base =
-    'Subagent is no longer accepting follow-ups; press Tab to switch streams';
+    'Subagent is no longer accepting follow-ups; press Tab to select a session';
   if (alternateActions.length === 0) return `${base}.`;
   const alternateText = alternateActions.join(', or ');
   return `${base} or ${alternateText}.`;
