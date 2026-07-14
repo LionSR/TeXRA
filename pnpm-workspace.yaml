@@ -21,6 +21,7 @@ allowBuilds:
   unrs-resolver: true
 patchedDependencies:
   ink@7.1.0: patches/ink@7.1.0.patch
+  openai@6.46.0: patches/openai@6.46.0.patch
 # pnpm 11 enables a 24h minimumReleaseAge supply-chain quarantine by default,
 # which blocked same-day dependency bumps (e.g. a fresh llm-zoo for a new model)
 # until they aged out, forcing a per-package allowlist. Disable it repo-wide so
