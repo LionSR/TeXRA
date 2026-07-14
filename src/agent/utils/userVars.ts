@@ -6,7 +6,11 @@ import {
 } from '@skills/runtimeSkills';
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
+import {
+  getRosterAgent,
+  getVisibleAgents,
+  type AgentEntry,
+} from '@agent/index/agentRegistry';
 import {
   AgentSetting,
   AgentPrompt,
@@ -14,6 +18,8 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import type { FileListEntry } from '@shared/schemas';
+import { agentKeyOf } from '@shared/schemas/agent';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, isNonEmptyString, unique } from '@utils/core';
@@ -130,6 +136,11 @@ export interface ModelProviderFlags {
   isGoogle: boolean;
 }
 
+export interface BuildUserVarsOptions {
+  workspacePath?: string;
+  delegationAgentScope?: AgentDelegationScope | null;
+}
+
 /**
  * Result of loading file-based variables
  */
@@ -151,7 +162,8 @@ function formatRuntimeSkillIssue(issue: SkillLoadIssue): string {
 /**
  * Build all user variables needed for prompt rendering.
  *
- * @param workspacePath - Workspace root path override. Defaults to VS Code workspace.
+ * @param options.workspacePath - Workspace root path override. Defaults to the active workspace.
+ * @param options.delegationAgentScope - Run-scoped delegation roster. Defaults to the workspace roster.
  */
 export async function buildUserVars(
   agentConfig: AgentConfig,
@@ -160,7 +172,7 @@ export async function buildUserVars(
   agentPath: string,
   providerFlags: ModelProviderFlags,
   logger: AgentTrace,
-  workspacePath?: string,
+  options: BuildUserVarsOptions = {},
 ): Promise<UserVars> {
   // Parallelize independent I/O: required files, pattern files, rules, and memories
   const [
@@ -195,7 +207,7 @@ export async function buildUserVars(
   // Merge all variable sources using spread operator.
   // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.
   const userVars: UserVars = {
-    ...getBasicVars(agentConfig, providerFlags, workspacePath),
+    ...getBasicVars(agentConfig, providerFlags, options),
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
     ...patternVars,
@@ -218,7 +230,7 @@ export async function buildUserVars(
 function getBasicVars(
   agentConfig: AgentConfig,
   providerFlags: ModelProviderFlags,
-  workspacePath?: string,
+  options: BuildUserVarsOptions,
 ): UserVars {
   // Build agent lists for template use. Tool-use agents append their tools.
   function formatAgentList(
@@ -234,13 +246,37 @@ function getBasicVars(
       .join('\n');
   }
 
+  function getPromptAgents(category: AgentCategory): AgentEntry[] {
+    const scope = options.delegationAgentScope;
+    if (!scope) return getVisibleAgents(category);
+
+    const keys =
+      category === AgentCategory.Workflow
+        ? scope.workflowAgentKeys
+        : scope.toolUseAgentKeys;
+    const seen = new Set<string>();
+    return keys.flatMap((key) => {
+      const entry = getRosterAgent(category, key);
+      if (!entry) return [];
+
+      const canonicalKey = agentKeyOf(entry);
+      if (seen.has(canonicalKey)) return [];
+      seen.add(canonicalKey);
+      return [entry];
+    });
+  }
+
   // Filter out the current agent so it doesn't see itself as a delegation target
   const selfName = agentConfig.agent;
   const workflowAgentsList = formatAgentList(
-    getVisibleAgents('workflow').filter((a) => a.name !== selfName),
+    getPromptAgents(AgentCategory.Workflow).filter(
+      (agent) => agent.name !== selfName,
+    ),
   );
   const toolUseAgentsList = formatAgentList(
-    getVisibleAgents('toolUse').filter((a) => a.name !== selfName),
+    getPromptAgents(AgentCategory.ToolUse).filter(
+      (agent) => agent.name !== selfName,
+    ),
     true,
   );
 
@@ -255,7 +291,7 @@ function getBasicVars(
     IS_GOOGLE_MODEL: providerFlags.isGoogle,
     WORKFLOW_AGENTS: workflowAgentsList,
     TOOL_USE_AGENTS: toolUseAgentsList,
-    CWD: workspacePath ?? WorkspaceFS.getPath() ?? '.',
+    CWD: options.workspacePath ?? WorkspaceFS.getPath() ?? '.',
     DEFAULT_BIB_PATH: defaultBibPath,
     ...getAgentDirectoryVars(),
   };

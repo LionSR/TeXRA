@@ -67,6 +67,9 @@ export function applyInitialCliAgentSelection(
   patchSessionMeta({
     agent: nextAgent,
     canDelegate: chatAgentSupportsDelegation(nextAgent),
+    teamName: undefined,
+    cliMultiAgentPresetId: undefined,
+    delegationAgentScope: undefined,
   });
   appendLocalAssistantTranscript(`Root agent set to ${nextAgent}.`);
 }

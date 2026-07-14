@@ -31,6 +31,7 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   createCliRuntimeHost,
@@ -50,6 +51,7 @@ import {
   type StreamTabId,
   sumUsageStats,
 } from '@shared/schemas';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -124,6 +126,7 @@ export interface BuildInitialChatAgentConfigInput {
   readonly workingDirectory: string;
   readonly mediaFiles?: readonly string[];
   readonly cliMultiAgentPresetId?: string;
+  readonly delegationAgentScope?: AgentDelegationScope;
 }
 
 export function buildInitialChatAgentConfig({
@@ -134,6 +137,7 @@ export function buildInitialChatAgentConfig({
   workingDirectory,
   mediaFiles,
   cliMultiAgentPresetId,
+  delegationAgentScope,
 }: BuildInitialChatAgentConfigInput): AgentConfigPayload {
   return {
     agent,
@@ -144,6 +148,7 @@ export function buildInitialChatAgentConfig({
     workingDirectory,
     ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
     ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
+    ...(delegationAgentScope ? { delegationAgentScope } : {}),
   };
 }
 
@@ -246,6 +251,26 @@ export function createChatSessionController(
   } = init;
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
+
+  const activateAgentConfig = (
+    config: Pick<
+      AgentConfig,
+      'agent' | 'model' | 'cliMultiAgentPresetId' | 'delegationAgentScope'
+    >,
+    modelSource?: 'history',
+  ): void => {
+    patchSessionMeta({
+      agent: config.agent,
+      model: config.model,
+      ...(modelSource ? { modelSource } : {}),
+      canDelegate: chatAgentSupportsDelegation(config.agent),
+      teamName: readCliMultiAgentPresetName(
+        config.cliMultiAgentPresetId ?? undefined,
+      ),
+      cliMultiAgentPresetId: config.cliMultiAgentPresetId ?? undefined,
+      delegationAgentScope: config.delegationAgentScope ?? undefined,
+    });
+  };
 
   const supersedeInterruptedRecovery = ():
     SupersededInterruptedRecovery | undefined => {
@@ -369,11 +394,7 @@ export function createChatSessionController(
     void supersedeInterruptedRecovery();
     const currentModel = config.model;
     const sessionContext = getSessionContext(currentModel);
-    patchSessionMeta({
-      agent: config.agent,
-      model: config.model,
-      canDelegate: chatAgentSupportsDelegation(config.agent),
-    });
+    activateAgentConfig(config);
     const { runtimeHost, approvalsUnavailable, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
@@ -472,12 +493,7 @@ export function createChatSessionController(
 
       const currentModel = resolution.config.model;
       const sessionContext = getSessionContext(currentModel);
-      patchSessionMeta({
-        agent: resolution.config.agent,
-        model: resolution.config.model,
-        modelSource: 'history',
-        canDelegate: chatAgentSupportsDelegation(resolution.config.agent),
-      });
+      activateAgentConfig(resolution.config, 'history');
 
       await defaultSession().transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
@@ -592,12 +608,7 @@ export function createChatSessionController(
 
         const currentModel = config.model;
         const sessionContext = getSessionContext(currentModel);
-        patchSessionMeta({
-          agent: config.agent,
-          model: config.model,
-          modelSource: 'history',
-          canDelegate: chatAgentSupportsDelegation(config.agent),
-        });
+        activateAgentConfig(config, 'history');
 
         const runHost = setupRunHost(sessionContext);
         finalize = runHost.finalize;

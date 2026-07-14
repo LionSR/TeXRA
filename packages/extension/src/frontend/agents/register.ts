@@ -4,8 +4,16 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { platform } from '@platform/platform';
+import {
+  AgentRosterController,
+  getAgentsByCategory,
+  getRosterAgent,
+} from '@agent/index';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import * as logger from '@logger/logUtils';
+import { parseAgentModePresets } from '@shared/schemas/agentPresets';
+import type { AgentSource } from '@shared/schemas/agent';
 
 const CHANNEL = 'AgentRegister';
 logger.initialize(CHANNEL);
@@ -24,14 +32,22 @@ export function getAgentRegistrationSkipReason(
 
 export async function promptToAddAgentToConfig(
   agentName: string,
+  source: AgentSource,
   autoAdd = false,
   category: 'workflow' | 'toolUse' = 'workflow',
 ): Promise<void> {
-  const stateKey =
-    category === 'toolUse'
-      ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
-      : WorkspaceStateKey.ENABLED_AGENTS;
-  const current = workspaceSM.get<string[]>(stateKey, []);
+  const roster = new AgentRosterController({
+    workspaceState: workspaceSM,
+    globalState: platform().globalState,
+    getAgents: getAgentsByCategory,
+    getPresets: () =>
+      parseAgentModePresets(
+        workspaceSM.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
+      ),
+    resolveAgent: getRosterAgent,
+    fallbackTeamId: null,
+  });
+  const current = roster.getVisibleAgents(category).map((entry) => entry.name);
 
   const skipReason = getAgentRegistrationSkipReason(agentName, current);
   if (skipReason) {
@@ -48,8 +64,12 @@ export async function promptToAddAgentToConfig(
     )) === 'Add Agent';
 
   if (shouldAdd) {
-    current.push(agentName);
-    await workspaceSM.update(stateKey, current);
+    await roster.setAgentEnabled({
+      category,
+      source,
+      name: agentName,
+      enabled: true,
+    });
     await vscode.commands.executeCommand('texra.refreshAllOptions');
     vscode.window.showInformationMessage(`Agent "${agentName}" is now visible`);
   }

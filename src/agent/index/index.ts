@@ -18,6 +18,12 @@ export { GlobalStorageAgentDirectoryStorage } from './AgentDirectorySync';
 export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 
 export {
+  AgentRosterController,
+  type AgentRosterControllerDeps,
+  type AgentRosterSnapshot,
+} from '../roster/AgentRosterController';
+
+export {
   // Types
   type AgentEntry,
   type ResolvedAgent,
@@ -35,6 +41,7 @@ export {
   // Key helpers
   createKey,
   resolveAgentKey,
+  getRosterAgent,
   // Source helpers
   isRemoteAgent,
   // Visible agents (for dropdowns and tools)

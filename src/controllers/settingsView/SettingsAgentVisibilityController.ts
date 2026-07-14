@@ -2,9 +2,6 @@
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import { agentKeyOf } from '@shared/schemas/agent';
 
-// Local imports - controllers
-import { enabledKeysIncludeAgent } from './SettingsAgentCatalogController';
-
 export interface SettingsAgentVisibilityEntry {
   source: AgentSource;
   name: string;
@@ -12,6 +9,12 @@ export interface SettingsAgentVisibilityEntry {
 
 interface SettingsAgentVisibilityState {
   getEnabledAgentKeys(category: AgentCategory): string[] | undefined;
+  setAgentEnabled(input: {
+    category: AgentCategory;
+    source: AgentSource;
+    name: string;
+    enabled: boolean;
+  }): Promise<void>;
   setEnabledAgentKeys(
     category: AgentCategory,
     enabledKeys: string[],
@@ -32,27 +35,7 @@ export class SettingsAgentVisibilityController {
     name: string;
     enabled: boolean;
   }): Promise<void> {
-    const raw = this.deps.state.getEnabledAgentKeys(input.category);
-    const current = raw ?? [];
-    const key = agentKeyOf(input);
-
-    let updated: string[];
-    if (input.enabled) {
-      updated = enabledKeysIncludeAgent(current, input)
-        ? current
-        : [...current, key];
-    } else if (raw === undefined) {
-      updated = this.deps.state
-        .getAgents(input.category)
-        .map((entry) => agentKeyOf(entry))
-        .filter((candidate) => candidate !== key);
-    } else {
-      updated = current.filter(
-        (entry) => entry !== key && entry !== input.name,
-      );
-    }
-
-    await this.deps.state.setEnabledAgentKeys(input.category, updated);
+    await this.deps.state.setAgentEnabled(input);
   }
 
   async setAllAgentsEnabled(input: {
@@ -83,6 +66,12 @@ export class SettingsAgentVisibilityController {
       );
     }
 
+    if (
+      updated.length === current.length &&
+      updated.every((key, index) => key === current[index])
+    ) {
+      return;
+    }
     await this.deps.state.setEnabledAgentKeys(input.category, updated);
   }
 }

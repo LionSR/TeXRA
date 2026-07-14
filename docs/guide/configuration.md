@@ -13,9 +13,11 @@ TeXRA provides extensive configuration options that allow you to customize its b
 ::: tip CLI
 This page describes the VS Code extension's Dashboard and settings. The same
 setting names apply in the CLI, but they live in different places: the **CLI**
-reads a per-project `.texra/config.json` (run `texra init` to scaffold one) and
-exposes models, tools, and agents through `texra models`, `texra tools`, and
-`texra agents`.
+reads a per-project `.texra/config.json` (run `texra init` to scaffold one).
+Run `texra config` for the unified interactive settings view; it is also
+available from the launcher's **Settings** row and as `/config` in a chat.
+Inspection and execution remain under `texra models`, `texra tools`,
+`texra agents`, and `texra multi-agent`.
 :::
 
 ## The TeXRA Dashboard
@@ -43,7 +45,7 @@ The Dashboard tabs are the recommended way to manage agents, models, tools, and 
 
 ## Where Settings Live
 
-Most configuration happens in the **Dashboard** (above) — open it with `TeXRA: Show Settings Dashboard`. The CLI keeps project defaults in a per-project `.texra/config.json` (`texra init` scaffolds one).
+Most configuration happens in the **Dashboard** (above) — open it with `TeXRA: Show Settings Dashboard`. The CLI exposes the corresponding configuration view through `texra config`, the launcher, and `/config`; project command defaults remain in `.texra/config.json` (`texra init` scaffolds one).
 
 Many `texra.*` keys share the same **name** across the VS Code extension and the CLI's `.texra/config.json` (most of the file-, LaTeX-, and model-connection settings below), so the same documentation applies to both. They don't share storage, though — the extension persists settings in VS Code's config/global state, while the CLI reads `.texra/config.json`. Some keys are extension-only (for example the LaTeX formatter and extension model visibility settings); the CLI warns on any key it doesn't recognize.
 
@@ -62,6 +64,12 @@ Agent visibility is managed through the **Agents** tab in the TeXRA Dashboard
 you toggle individual agents on or off for the current workspace. Agents that
 declare `defaultOutputFiles` (and so can produce more than one output file in a
 single run) are flagged with a multi-output badge.
+
+In the CLI, open `texra config` and choose **Agents**, or use
+`texra config agents` non-interactively. The roster can inherit a user default,
+show the complete catalog, use a named team, or contain an exact custom list.
+These choices are host-local: changing the CLI roster does not silently rewrite
+the VS Code extension's workspace state, and conversely.
 
 ### Model Configuration
 

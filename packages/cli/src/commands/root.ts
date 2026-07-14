@@ -38,6 +38,7 @@ import {
 } from './auth';
 import { chatCommand } from './chat';
 import { completionCommand } from './completion';
+import { configCommand } from './config';
 import { doctorCommand } from './doctor';
 import { helpCommand } from './help';
 import { HISTORY_SUBCOMMAND_NAMES, historyCommand } from './history';
@@ -85,6 +86,7 @@ export const rootCommand = withUsageSections(
       resume: resumeCommand,
       setup: setupCommand,
       init: initCommand,
+      config: configCommand,
       'install-github-action': installGithubActionCommand,
       history: historyCommand,
       memory: memoryCommand,
@@ -120,6 +122,7 @@ export const rootCommand = withUsageSections(
         ['texra chat', 'start an interactive tool-use session'],
         ['texra run <agent> --input file.tex', 'run a workflow agent headless'],
         ['texra agents list', 'list the available agents'],
+        ['texra config agents --all', 'show all agents in this workspace'],
         ['texra init', 'save workspace defaults to .texra/config.json'],
         [
           'texra install-github-action',
