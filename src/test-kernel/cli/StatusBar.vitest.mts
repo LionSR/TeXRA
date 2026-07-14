@@ -242,6 +242,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).toContain('Up/Down select');
     expect(display.bindings).toContain('Enter focus');
+    expect(display.bindings).toContain('Tab input');
     expect(display.bindings).toContain('Esc input');
     expect(display.bindings).not.toContain('Tab sessions');
   });
