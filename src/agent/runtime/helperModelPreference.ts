@@ -8,11 +8,10 @@
  * orchestrator delegation) leaves the flag off and keeps the chosen model.
  */
 
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
+import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
 import { getHelperModelName } from './helperModelName';
 
@@ -28,6 +27,8 @@ export async function applyHelperModelPreference(
   const helperModel = getHelperModelName();
   if (helperModel === config.model) return config;
 
+  const helperModelConfig = await resolveRuntimeModelConfig(helperModel);
+
   // A tool-use agent (e.g. latexFixer) needs its tools. The tool-use flow drops
   // every tool unless the model positively declares function calling
   // (`responseCycleToolsForModel` returns nothing when
@@ -35,7 +36,7 @@ export async function applyHelperModelPreference(
   // unless the helper model declares it — not only on an explicit `=== false`.
   if (
     config.agentCategory === AgentCategory.ToolUse &&
-    !MODEL_CONFIGS[helperModel]?.capabilities.supportsFunctionCalling
+    !helperModelConfig?.capabilities.supportsFunctionCalling
   ) {
     return config;
   }

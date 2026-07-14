@@ -115,6 +115,8 @@ const INCLUDED_ACCESS_STATUS_BY_AVAILABILITY = {
   'openrouter-key': 'included: unavailable; OpenRouter key set',
   'missing-key': 'included: unavailable; missing API key',
   'subscription-access': 'chatgpt subscription',
+  'copilot-access': 'copilot: unavailable in CLI',
+  'copilot-permission-required': 'copilot: unavailable in CLI',
   retired: 'retired',
 } satisfies Record<ModelAvailabilityKind, string>;
 

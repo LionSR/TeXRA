@@ -1,9 +1,8 @@
 import * as path from 'node:path';
 
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
 import { AgentCategory, getCleanAgentName } from '@shared/schemas/agent';
 import { isProcessAgent } from '@shared/streams/agentKind';
@@ -120,7 +119,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
         kind: 'agent',
         model: config?.model,
         modelLabel: config?.model
-          ? (MODEL_CONFIGS[config.model]?.label ?? config.model)
+          ? (getRuntimeModelConfig(config.model)?.label ?? config.model)
           : undefined,
       };
 }
