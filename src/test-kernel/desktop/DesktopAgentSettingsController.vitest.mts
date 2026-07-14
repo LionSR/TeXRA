@@ -169,7 +169,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     ).toBe(true);
   });
 
-  it('posts startup catalog data to settings and main renderer surfaces', async () => {
+  it('posts startup agent data to the settings renderer', async () => {
     const loadAgents = vi.fn(async () => undefined);
     const { controller, posted } = createControllerFixture({
       catalog: physicistCatalog(),
