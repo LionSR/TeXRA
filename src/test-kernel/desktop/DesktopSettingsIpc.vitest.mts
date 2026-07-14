@@ -15,6 +15,7 @@ import {
 import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { createStubDesktopAgentSettingsController } from './desktopSettingsTestSupport';
 import type { StateStore } from '@platform/interfaces';
 
 const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
@@ -42,8 +43,9 @@ type RendererMessage = Parameters<
 
 type SettingsFixtureOverrides = Omit<
   DesktopSettingsIpcOptions,
-  'postToRenderer'
+  'agentSettingsController' | 'postToRenderer'
 > & {
+  agentSettingsController?: DesktopSettingsIpcOptions['agentSettingsController'];
   postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
 };
 
@@ -151,6 +153,9 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const workspaceState = overrides.workspaceState ?? new MemoryStateStore();
   const settings = createDesktopSettingsIpc({
     ...overrides,
+    agentSettingsController:
+      overrides.agentSettingsController ??
+      createStubDesktopAgentSettingsController(),
     globalState,
     postToRenderer: overrides.postToRenderer ?? (() => undefined),
     workspaceState,
@@ -282,6 +287,34 @@ describe('desktop settings IPC', () => {
       },
     ]);
   }, 15_000);
+
+  it('delegates agent-selection commands to the required controller', async () => {
+    const baseController = createStubDesktopAgentSettingsController();
+    const setEnabled = vi.fn(async () => undefined);
+    const agentSettingsController = {
+      ...baseController,
+      actions: { ...baseController.actions, setEnabled },
+    };
+    const { settings } = createSettingsFixture({ agentSettingsController });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
+        category: 'workflow',
+        agentSource: 'custom',
+        agentName: 'proofreader',
+        enabled: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(setEnabled).toHaveBeenCalledWith({
+      category: 'workflow',
+      source: 'custom',
+      name: 'proofreader',
+      enabled: false,
+    });
+  });
 
   it('round-trips Git author writes through workspace state and refreshes the renderer', async () => {
     const workspaceState = new MemoryStateStore();
@@ -822,13 +855,15 @@ describe('desktop settings IPC', () => {
     );
     const config = new MemoryConfigStore();
     config.values.set('texra.toolUse.requireBashApproval', false);
+    const agentSettingsController = createStubDesktopAgentSettingsController();
+    const postStartupData = vi.fn(async () => undefined);
+    agentSettingsController.postStartupData = postStartupData;
 
     const { settings, posted } = createCapturedSettingsFixture({
+      agentSettingsController,
       workspaceState,
       config,
       sendStartupCatalogData: true,
-      loadAgents: async () => undefined,
-      getCustomAgentDirectory: async () => '',
       buildToolDashboardItems: async () => [
         {
           id: 'file-ops',
@@ -851,6 +886,8 @@ describe('desktop settings IPC', () => {
       }),
     ).toBe(false);
     await flushAsyncWork();
+
+    expect(postStartupData).toHaveBeenCalledOnce();
 
     expect(
       posted.find(
@@ -879,8 +916,6 @@ describe('desktop settings IPC', () => {
 
     const { settings, posted } = createCapturedSettingsFixture({
       config,
-      loadAgents: async () => undefined,
-      getCustomAgentDirectory: async () => '',
       detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
       onError: () => undefined,
     });
@@ -918,8 +953,6 @@ describe('desktop settings IPC', () => {
       config: new MemoryConfigStore(),
       sendStartupCatalogData: true,
       modelListRefresh: modelListRefresh.promise,
-      loadAgents: async () => undefined,
-      getCustomAgentDirectory: async () => '',
       buildToolDashboardItems: async () => [],
       detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
       onError: () => undefined,
@@ -1021,493 +1054,6 @@ describe('desktop settings IPC', () => {
     expect(buildCalls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('refreshes launcher agent options after agent visibility changes', async () => {
-    const workspaceState = new MemoryStateStore();
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
-      loadAgents: async () => undefined,
-      loadAgentOptionsData: async () => ({
-        workflow: [{ value: 'builtInWorkflow:correct', label: 'correct' }],
-        toolUse: [],
-      }),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-        category: 'workflow',
-        agentSource: 'builtInWorkflow',
-        agentName: 'polish',
-        enabled: false,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(workspaceState.values.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
-      expect.not.arrayContaining(['builtInWorkflow:polish', 'polish']),
-    );
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      ),
-    ).toBe(true);
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      ),
-    ).toBe(true);
-  });
-
-  it('opens the desktop custom agent directory through the shell opener', async () => {
-    const openPath = vi.fn(async (_filePath: string) => undefined);
-
-    const { settings } = createSettingsFixture({
-      getCustomAgentDirectory: async () => '/agents/custom',
-      openPath,
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER,
-        folderType: 'custom',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(openPath).toHaveBeenCalledWith('/agents/custom');
-  });
-
-  it('applies desktop team presets and refreshes settings plus launcher options', async () => {
-    const workspaceState = new MemoryStateStore();
-
-    const infoMessages: string[] = [];
-    const errorMessages: string[] = [];
-    let loadCount = 0;
-
-    const catalog = {
-      workflow: [
-        {
-          source: 'builtInWorkflow' as const,
-          name: 'correct',
-          path: '/agents/correct.yaml',
-          category: 'workflow' as const,
-        },
-        {
-          source: 'builtInWorkflow' as const,
-          name: 'polish',
-          path: '/agents/polish.yaml',
-          category: 'workflow' as const,
-        },
-      ],
-      toolUse: [
-        {
-          source: 'builtInToolUse' as const,
-          name: 'orchestrator',
-          path: '/agents/orchestrator.yaml',
-          category: 'toolUse' as const,
-          tools: ['delegate'],
-        },
-        {
-          source: 'custom' as const,
-          name: 'research',
-          path: '/agents/research.yaml',
-          category: 'toolUse' as const,
-        },
-        {
-          source: 'builtInToolUse' as const,
-          name: 'numerics',
-          path: '/agents/numerics.yaml',
-          category: 'toolUse' as const,
-        },
-        {
-          source: 'builtInToolUse' as const,
-          name: 'review',
-          path: '/agents/review.yaml',
-          category: 'toolUse' as const,
-        },
-        {
-          source: 'builtInToolUse' as const,
-          name: 'presenter',
-          path: '/agents/presenter.yaml',
-          category: 'toolUse' as const,
-        },
-        {
-          source: 'builtInToolUse' as const,
-          name: 'latexFixer',
-          path: '/agents/latexFixer.yaml',
-          category: 'toolUse' as const,
-        },
-      ],
-    };
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
-      loadAgents: async () => {
-        loadCount += 1;
-      },
-      loadAgentOptionsData: async () => ({
-        workflow: [{ value: 'builtInWorkflow:correct', label: 'correct' }],
-        toolUse: [
-          { value: 'builtInToolUse:orchestrator', label: 'orchestrator' },
-        ],
-      }),
-      getAgents: (category) => catalog[category],
-      getVisibleAgents: (category) => catalog[category],
-      chooseTeamAvailability: async () => 'continue',
-      showInfoMessage: async (message) => {
-        infoMessages.push(message);
-      },
-      showErrorMessage: async (message) => {
-        errorMessages.push(message);
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-        presetId: 'physicist',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(loadCount).toBeGreaterThanOrEqual(1);
-    // Catalog-resolved names become source-qualified keys, preserving the
-    // winning source when a custom agent overrides a built-in name.
-    expect(workspaceState.values.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
-      [
-        'builtInWorkflow:correct',
-        'builtInWorkflow:polish',
-        'generic',
-        'devise',
-        'apply',
-        'criticize',
-      ],
-    );
-    expect(
-      workspaceState.values.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-    ).toEqual([
-      'builtInToolUse:orchestrator',
-      'custom:research',
-      'builtInToolUse:numerics',
-      'builtInToolUse:review',
-      'builtInToolUse:presenter',
-      'simplifier',
-      'builtInToolUse:latexFixer',
-      'progressCheck',
-      'search',
-    ]);
-    expect(errorMessages).toEqual([]);
-    expect(infoMessages).toEqual(['Applied "Physicist" team']);
-
-    expect(
-      posted.find(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      ),
-    ).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      workflow: expect.arrayContaining([
-        expect.objectContaining({ name: 'correct', enabled: true }),
-        expect.objectContaining({ name: 'polish', enabled: true }),
-      ]),
-      toolUse: expect.arrayContaining([
-        expect.objectContaining({ name: 'orchestrator', enabled: true }),
-        expect.objectContaining({ name: 'research', enabled: true }),
-      ]),
-    });
-    expect(
-      posted.find(
-        (message) =>
-          commandOf(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      ),
-    ).toMatchObject({
-      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      selectedToolUseAgent: 'orchestrator',
-      optionsData: {
-        workflow: [
-          expect.objectContaining({ value: 'builtInWorkflow:correct' }),
-        ],
-        toolUse: [
-          expect.objectContaining({ value: 'builtInToolUse:orchestrator' }),
-        ],
-      },
-    });
-  });
-
-  it('signs in, forces one catalog refresh, then commits a desktop team once', async () => {
-    const workspaceState = new MemoryStateStore();
-    workspaceState.values.set(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
-      {
-        id: 'remote-team',
-        name: 'Remote team',
-        description: 'Uses a hosted root',
-        icon: 'tools',
-        workflowAgents: [],
-        toolUseAgents: ['orchestrator'],
-        texraHostedAgents: ['orchestrator'],
-      },
-    ]);
-    let toolUseAgents: Array<{
-      source: 'remote';
-      name: string;
-      path: string;
-      category: 'toolUse';
-      tools: string[];
-    }> = [];
-    const refreshAgents = vi.fn(async () => {
-      toolUseAgents = [
-        {
-          source: 'remote',
-          name: 'orchestrator',
-          path: '/remote/orchestrator.yaml',
-          category: 'toolUse',
-          tools: ['delegate_agent'],
-        },
-      ];
-    });
-    const signInForRemoteAgentCatalog = vi.fn(async () => true);
-    const update = vi.spyOn(workspaceState, 'update');
-    const { settings } = createSettingsFixture({
-      workspaceState,
-      loadAgents: vi.fn(async () => undefined),
-      refreshAgents,
-      getAgents: (category) => (category === 'workflow' ? [] : toolUseAgents),
-      getVisibleAgents: (category) =>
-        category === 'workflow' ? [] : toolUseAgents,
-      canAccessRemoteAgentCatalog: async () => false,
-      chooseTeamAvailability: async () => 'sign-in',
-      signInForRemoteAgentCatalog,
-    });
-    update.mockClear();
-
-    settings.handleMessage({
-      command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-      presetId: 'remote-team',
-    });
-    await flushAsyncWork();
-
-    expect(signInForRemoteAgentCatalog).toHaveBeenCalledOnce();
-    expect(refreshAgents).toHaveBeenCalledOnce();
-    expect(refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
-    expect(
-      update.mock.calls.filter(
-        ([key]) => key === WorkspaceStateKey.ENABLED_AGENTS,
-      ),
-    ).toHaveLength(1);
-    expect(
-      update.mock.calls.filter(
-        ([key]) => key === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ),
-    ).toHaveLength(1);
-    expect(
-      workspaceState.values.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-    ).toEqual(['remote:orchestrator']);
-  });
-
-  it('does not write desktop roster state when team preflight is cancelled', async () => {
-    const workspaceState = new MemoryStateStore();
-    workspaceState.values.set(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
-      {
-        id: 'legacy-remote-team',
-        name: 'Legacy remote team',
-        description: 'Legacy hosted metadata is inferred',
-        icon: 'tools',
-        workflowAgents: [],
-        toolUseAgents: ['orchestrator'],
-      },
-    ]);
-    const update = vi.spyOn(workspaceState, 'update');
-    const refreshAgents = vi.fn(async () => undefined);
-    const { settings } = createSettingsFixture({
-      workspaceState,
-      loadAgents: vi.fn(async () => undefined),
-      refreshAgents,
-      getAgents: () => [],
-      getVisibleAgents: () => [],
-      canAccessRemoteAgentCatalog: async () => false,
-      chooseTeamAvailability: async () => 'cancel',
-    });
-    update.mockClear();
-
-    settings.handleMessage({
-      command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-      presetId: 'legacy-remote-team',
-    });
-    await flushAsyncWork();
-
-    expect(refreshAgents).not.toHaveBeenCalled();
-    expect(
-      update.mock.calls.some(
-        ([key]) =>
-          key === WorkspaceStateKey.ENABLED_AGENTS ||
-          key === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ),
-    ).toBe(false);
-  });
-
-  it('saves desktop team presets from currently visible agents', async () => {
-    const workspaceState = new MemoryStateStore();
-
-    const infoMessages: string[] = [];
-    const catalog = {
-      workflow: [
-        {
-          source: 'builtInWorkflow' as const,
-          name: 'correct',
-          path: '/agents/correct.yaml',
-          category: 'workflow' as const,
-        },
-        {
-          source: 'builtInWorkflow' as const,
-          name: 'polish',
-          path: '/agents/polish.yaml',
-          category: 'workflow' as const,
-        },
-      ],
-      toolUse: [
-        {
-          source: 'builtInToolUse' as const,
-          name: 'review',
-          path: '/agents/review.yaml',
-          category: 'toolUse' as const,
-        },
-        {
-          source: 'builtInToolUse' as const,
-          name: 'latexFixer',
-          path: '/agents/latexFixer.yaml',
-          category: 'toolUse' as const,
-        },
-      ],
-    };
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
-      loadAgents: async () => undefined,
-      getAgents: (category) => catalog[category],
-      getVisibleAgents: (category) =>
-        category === 'workflow' ? [catalog.workflow[0]] : [catalog.toolUse[0]],
-      promptText: async () => '  Paper Team  ',
-      showInfoMessage: async (message) => {
-        infoMessages.push(message);
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(
-      workspaceState.values.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
-    ).toEqual([
-      expect.objectContaining({
-        id: expect.stringMatching(/^custom-/),
-        name: 'Paper Team',
-        workflowAgents: ['correct'],
-        toolUseAgents: ['review'],
-      }),
-    ]);
-    expect(infoMessages).toEqual(['Saved team "Paper Team"']);
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-      orchestratorAgents: expect.arrayContaining([
-        'engineer',
-        'leanOrchestrator',
-        'orchestrator',
-      ]),
-      customPresets: [
-        expect.objectContaining({
-          name: 'Paper Team',
-          workflowAgents: ['correct'],
-          toolUseAgents: ['review'],
-        }),
-      ],
-    });
-  });
-
-  it('deletes desktop custom team presets and reports unknown team ids', async () => {
-    const workspaceState = new MemoryStateStore();
-
-    const errorMessages: string[] = [];
-    workspaceState.values.set(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
-      {
-        id: 'custom-team',
-        name: 'Custom Team',
-        description: 'test',
-        icon: 'codicon-bookmark',
-        workflowAgents: ['correct'],
-        toolUseAgents: ['review'],
-      },
-    ]);
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
-      showErrorMessage: async (message) => {
-        errorMessages.push(message);
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
-        presetId: 'custom-team',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(
-      workspaceState.values.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
-    ).toEqual([]);
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-      customPresets: [],
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
-        presetId: 'missing-team',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(errorMessages).toEqual(['Unknown custom team: missing-team']);
-  });
-
-  it('surfaces a visible desktop error for unknown team presets', async () => {
-    const workspaceState = new MemoryStateStore();
-    const errorMessages: string[] = [];
-
-    const { settings } = createSettingsFixture({
-      workspaceState,
-      loadAgents: async () => undefined,
-      showErrorMessage: async (message) => {
-        errorMessages.push(message);
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-        presetId: 'missing-team',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(errorMessages).toEqual(['Unknown team: missing-team']);
-    expect(workspaceState.values.has(WorkspaceStateKey.ENABLED_AGENTS)).toBe(
-      false,
-    );
-    expect(
-      workspaceState.values.has(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-    ).toBe(false);
-  });
-
   it('persists desktop API access mode changes before refreshing settings data', async () => {
     const persistedModes: string[] = [];
 
@@ -1566,51 +1112,47 @@ describe('desktop settings IPC', () => {
     expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
   });
 
-  it('refreshes agent and model options after desktop auth changes', async () => {
-    let loadCount = 0;
-
+  it('delegates agent refresh after desktop auth model data is current', async () => {
+    const agentSettingsController = createStubDesktopAgentSettingsController();
+    const refreshCatalogData = vi.fn(async () => undefined);
+    agentSettingsController.refreshCatalogData = refreshCatalogData;
     const { settings, posted } = createCapturedSettingsFixture({
-      loadAgents: async () => {
-        loadCount += 1;
-      },
-      loadAgentOptionsData: async () => ({
-        workflow: [
-          { value: 'remote:remote-workflow', label: 'remote-workflow' },
-        ],
-        toolUse: [{ value: 'remote:remote-tool', label: 'remote-tool' }],
-      }),
+      agentSettingsController,
     });
 
     await settings.refreshAuthDependentData();
 
-    expect(loadCount).toBe(1);
+    expect(refreshCatalogData).toHaveBeenCalledOnce();
     expect(invalidateModelOptionsCache).toHaveBeenCalled();
     expect(computeModelOptionsData).toHaveBeenCalled();
     expect(
       invalidateModelOptionsCache.mock.invocationCallOrder[0],
     ).toBeLessThan(computeModelOptionsData.mock.invocationCallOrder[0]);
+    expect(
+      computeModelOptionsData.mock.invocationCallOrder.at(-1),
+    ).toBeLessThan(refreshCatalogData.mock.invocationCallOrder[0]);
     expect(posted.map((message) => commandOf(message))).toEqual(
       expect.arrayContaining([
         SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-        SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
         SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-        MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
         MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       ]),
     );
   });
 
-  it('defers agent catalog loading while roster sign-in owns the refresh', async () => {
-    const loadAgents = vi.fn(async () => undefined);
+  it('defers the controller refresh while roster sign-in owns the catalog', async () => {
+    const agentSettingsController = createStubDesktopAgentSettingsController();
+    const refreshCatalogData = vi.fn(async () => undefined);
+    agentSettingsController.refreshCatalogData = refreshCatalogData;
     const { settings, posted } = createCapturedSettingsFixture({
-      loadAgents,
+      agentSettingsController,
     });
 
     await settings.refreshAuthDependentData({
       deferAgentCatalogRefresh: true,
     });
 
-    expect(loadAgents).not.toHaveBeenCalled();
+    expect(refreshCatalogData).not.toHaveBeenCalled();
     expect(
       posted.some(
         (message) =>
