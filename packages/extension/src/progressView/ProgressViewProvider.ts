@@ -11,7 +11,8 @@ import {
 import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { computeAgentOptionsData } from '@agent/index';
-import { createChannelTrace, type AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import {
   setProgressViewBridge,
   type IProgressViewBridge,
