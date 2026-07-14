@@ -154,12 +154,19 @@ function startSentence(text: string): string {
 function cliModelRecoveryActions(
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): Required<CliNoAvailableModelsRecoveryOptions> {
-  // Drop null/undefined overrides so each missing field keeps its default,
-  // matching the per-field `?? DEFAULT` fallback this replaced.
-  const overrides = Object.fromEntries(
-    Object.entries(options).filter(([, value]) => value != null),
-  ) as Partial<CliNoAvailableModelsRecoveryOptions>;
-  return { ...DEFAULT_CLI_MODEL_RECOVERY_ACTIONS, ...overrides };
+  return {
+    includedModeAction:
+      options.includedModeAction ??
+      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.includedModeAction,
+    loginAction:
+      options.loginAction ?? DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.loginAction,
+    personalModeAction:
+      options.personalModeAction ??
+      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.personalModeAction,
+    configureKeyAction:
+      options.configureKeyAction ??
+      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.configureKeyAction,
+  };
 }
 
 function isCliModelOptionBasicallyAvailable(model: ModelOptionData): boolean {
