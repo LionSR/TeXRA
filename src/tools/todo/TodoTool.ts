@@ -10,8 +10,8 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { createChannelTrace } from '@agent/trace';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { createChannelTrace } from '@logger';
 import {
   TODO_STATUS,
   STATUS_DISPLAY,

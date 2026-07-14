@@ -10,13 +10,13 @@
  * orchestrator owns the guard, retrieval, and tool-use/workflow branch; the
  * extension supplies only how it resolves persisted state and launches a run.
  */
+import { createChannelTrace } from '@agent/trace';
 import {
   isResumeInFlight,
   resolveAndResumeStream,
 } from '@agent/runtime/resolveAndResumeStream';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
-import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
 

@@ -4,8 +4,8 @@ import { Mutex } from 'async-mutex';
 import { z } from 'zod';
 
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import { createChannelTrace } from '@agent/trace';
 import { isFileNotFoundError } from '@common/errors';
-import { createChannelTrace } from '@logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   ExternalInquirySessionLinksSchema,

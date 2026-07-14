@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 
 import { logConversationProgress } from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
   getToolUseFlowErrorResult,
@@ -26,7 +27,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
-import { createChannelTrace } from '@logger';
 import {
   type RequestEnsureProgressViewPayload,
   type StreamTabId,

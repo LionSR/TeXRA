@@ -1,10 +1,20 @@
+// Third-party imports
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createChannelTrace } from '@logger';
+// Local imports - agent trace
+import {
+  attachChannelSubscriber,
+  createChannelTrace,
+  TraceEmitter,
+} from '@agent/trace';
+
+// Local imports - logger
 import * as logUtils from '@logger/logUtils';
+
+// Local imports - shared schemas
 import { MESSAGE_TYPES } from '@shared/schemas';
 
-describe('createChannelTrace', () => {
+describe('channel trace adapters', () => {
   afterEach(() => {
     logUtils.setOutputChannelFactory(null);
   });
@@ -35,7 +45,7 @@ describe('createChannelTrace', () => {
     expect(output).toContain('an error line');
   });
 
-  it('suppresses INTERNAL-tagged lines, matching the TraceEmitter + attachChannelSubscriber path', () => {
+  it('suppresses INTERNAL-tagged lines', () => {
     const lines = captureLines();
     const trace = createChannelTrace('TestChannel');
 
@@ -47,11 +57,9 @@ describe('createChannelTrace', () => {
     expect(output).toContain('visible line');
   });
 
-  it('is inert on non-log AgentTrace members (no subscribers, no stage/stream side effects)', () => {
+  it('keeps non-log AgentTrace members inert', () => {
     const trace = createChannelTrace('TestChannel');
 
-    // Subscribing and emitting must not throw and must not somehow route
-    // back through the functional logger (only debug/info/warn/error do).
     const unsubscribe = trace.subscribe(() => {
       throw new Error('a channel trace must never fan out to subscribers');
     });
@@ -68,5 +76,26 @@ describe('createChannelTrace', () => {
     const stream = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     stream.append('chunk');
     expect(stream.finalize()).toBe('');
+  });
+
+  it('routes public emitter logs until the subscriber is detached', () => {
+    const lines = captureLines();
+    const trace = new TraceEmitter();
+    const detach = attachChannelSubscriber(trace, {
+      channel: 'AgentChannel',
+      isAgent: true,
+    });
+
+    trace.info('visible emitter line');
+    trace.info('internal emitter line', {
+      messageType: MESSAGE_TYPES.INTERNAL,
+    });
+    detach();
+    trace.info('detached emitter line');
+
+    const output = lines.join('\n');
+    expect(output).toContain('visible emitter line');
+    expect(output).not.toContain('internal emitter line');
+    expect(output).not.toContain('detached emitter line');
   });
 });

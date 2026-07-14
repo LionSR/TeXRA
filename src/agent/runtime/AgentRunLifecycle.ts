@@ -6,6 +6,7 @@ import {
   type ResultEvent,
   type StageHandle,
 } from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import { flowKey } from '@agent/node/persistedFlow';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -14,7 +15,6 @@ import {
   classifyAgentError,
   normalizeProviderError,
 } from '@common/errors';
-import { createChannelTrace } from '@logger';
 import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,

@@ -1,10 +1,10 @@
+import { createChannelTrace } from '@agent/trace';
 import { isToolUseTaskState } from '@agent/core/state/TaskState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { createChannelTrace } from '@logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

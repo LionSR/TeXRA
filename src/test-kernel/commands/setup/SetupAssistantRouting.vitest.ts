@@ -226,6 +226,7 @@ vi.mock('@frontend/agentRuntime/extensionAgentRuntimeHost', () => ({
 }));
 
 vi.mock('@logger/logUtils', () => ({
+  createChannelWriter: () => () => {},
   initialize: () => {},
   error: mocks.logError,
   warn: () => {},

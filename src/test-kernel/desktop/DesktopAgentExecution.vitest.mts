@@ -10,7 +10,7 @@ import {
 
 // Local imports - agent state
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
-import type { AgentEvent, AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentEvent, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema } from '@agent/core/state/TaskState';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -48,7 +48,6 @@ import {
 import {
   disposeAfterTest,
   makeFakeTrace,
-  mockLoggerModule,
   type DesktopAgentExecutionModule,
   type RunExecutionRequest,
 } from './desktopAgentExecutionTestHarness.mjs';
@@ -171,7 +170,7 @@ type CreateBridgeOptions = {
   showErrorMessage?: (message: string) => Promise<void> | void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
   /** Captures `this.logger.error(...)` calls made by the bridge under test. */
-  loggerErrorSpy?: ReturnType<typeof vi.fn>;
+  loggerErrorSpy?: ReturnType<typeof vi.fn<AgentTrace['error']>>;
 };
 
 type ProgressMessage = {
@@ -305,7 +304,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: vi.fn(),
   }));
-  mockLoggerModule(options.loggerErrorSpy);
   vi.doMock('vscode', () => ({
     commands: {
       executeCommand: vi.fn(),
@@ -409,6 +407,9 @@ async function createBridge(
       },
       {
         transcripts,
+        logger: options.loggerErrorSpy
+          ? { ...noopTrace, error: options.loggerErrorSpy }
+          : undefined,
         streamSnapshotStore: options.streamSnapshotStore,
         progressSnapshotStore,
         showErrorMessage: options.showErrorMessage,
@@ -596,7 +597,6 @@ describe('DesktopProgressBridge', () => {
     vi.doUnmock('@agent/storage/detectWaitingStreams');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
-    vi.doUnmock('@logger');
     vi.doUnmock('vscode');
     vi.restoreAllMocks();
   });
@@ -2824,7 +2824,7 @@ describe('DesktopProgressBridge', () => {
   it('surfaces an error when restoreState fails to build main-view state (cursor[bot] #7827)', async () => {
     const messages: unknown[] = [];
     const errors: string[] = [];
-    const loggerErrorSpy = vi.fn();
+    const loggerErrorSpy = vi.fn<AgentTrace['error']>();
     const bridge = await createBridge(messages, {
       showErrorMessage: async (message) => {
         errors.push(message);

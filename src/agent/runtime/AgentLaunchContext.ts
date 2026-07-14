@@ -16,6 +16,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
+import { createChannelTrace } from '@agent/trace';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import {
   AgentConfigSchema,
@@ -40,7 +41,6 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
-import { createChannelTrace } from '@logger';
 import { INSTRUCTION_ACTION } from '@shared/schemas';
 import {
   STREAM_PHASE,
