@@ -92,7 +92,9 @@ import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
+import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { migrateLegacyGlobalBashApprovalOverride } from '@shared/settingsView/handlers/approvalHandlers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -207,6 +209,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }),
   });
   lifecycleHost = lifecycle;
+  const languageModel = createLanguageModelPort(context);
   initPlatform({
     config: new VscodeConfigProvider(),
     globalState: context.globalState,
@@ -226,7 +229,7 @@ export async function activate(context: vscode.ExtensionContext) {
       isVscodeExtensionInstalled: (id) =>
         vscode.extensions.getExtension(id) !== undefined,
     },
-    languageModel: createLanguageModelPort(context),
+    languageModel,
     linter: getLinterMessages,
     addCriticismSink: (payload) => {
       const accepted = pushManualCriticism({
@@ -262,6 +265,14 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     },
   });
+  const invalidateLanguageModels = () => {
+    invalidateRuntimeModelRegistry();
+    invalidateModelOptionsCache();
+  };
+  context.subscriptions.push(
+    languageModel.onDidChangeModels(invalidateLanguageModels),
+    languageModel.onDidChangeAccess(invalidateLanguageModels),
+  );
   initializeDefaultSession({ transcripts: await StreamLogStore.open() });
   registerAgentFeatures();
   // Mirrors the CLI/desktop Node-host wiring (`nodeHost.ts`'s

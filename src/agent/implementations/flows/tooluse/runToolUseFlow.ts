@@ -1,8 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage';
 import {
@@ -31,6 +29,7 @@ import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -237,8 +236,8 @@ export async function runToolUseFlow<C = unknown>(
   const modelSwitchDisabledReason = (model: string): string | undefined => {
     if (services.config.model === model) return undefined;
 
-    const nextConfig = MODEL_CONFIGS[model];
-    if (!nextConfig) return `Model ${model} not found in MODEL_CONFIGS`;
+    const nextConfig = getRuntimeModelConfig(model);
+    if (!nextConfig) return `Model ${model} is not registered`;
 
     const activeKey = activeModelHandlerCompatibilityKey(services.modelHandler);
     if (!activeKey) {
@@ -254,9 +253,9 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   const switchModel = async (model: string): Promise<void> => {
-    const nextConfig = MODEL_CONFIGS[model];
+    const nextConfig = getRuntimeModelConfig(model);
     if (!nextConfig) {
-      throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
+      throw new Error(`Model ${model} is not registered`);
     }
     if (services.config.model === model) return;
 

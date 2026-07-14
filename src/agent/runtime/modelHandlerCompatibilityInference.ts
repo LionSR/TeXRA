@@ -1,9 +1,10 @@
-import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
 import {
   normalizeProviderMessages,
   type ProviderMessage,
 } from '@agent/types/ProviderMessage';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { isObject } from '@utils/core';
 import {
   ModelHandlerCompatibilityKeySchema,
@@ -51,7 +52,7 @@ export function inferPersistedModelHandlerCompatibilityKey(
   model: string,
   messages: readonly ProviderMessage[],
 ): ModelHandlerCompatibilityKey | undefined {
-  const modelConfig = MODEL_CONFIGS[model];
+  const modelConfig = getRuntimeModelConfig(model);
   // Copilot had no direct handler before ModelHandlerVscodeLm. Its only
   // runnable legacy route was OpenRouter, so a keyless persisted transcript
   // necessarily uses the OpenRouter message format. New Copilot sessions
