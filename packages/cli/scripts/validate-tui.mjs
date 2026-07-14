@@ -378,6 +378,27 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'orchestrate-agent-submenu',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ORCHESTRATION: '1',
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: 'assistant||review',
+    },
+    bootExpect: 'Agent — Choose one agent',
+    keys: ['2'],
+    exitKeys: [ESC, ESC],
+    expectExit: true,
+    expect: [
+      'Agent',
+      'Choose one agent for this session.',
+      'assistant',
+      'review',
+      '1-9/a-z/Enter select',
+      'Esc back',
+    ],
+    unexpect: ['coder —', 'Resume aaaaaaaaaaaa'],
+  },
+  {
     name: 'orchestrate-delegated-history',
     frame: 'scrollback',
     env: {
@@ -401,6 +422,27 @@ const SCENARIOS = [
       'Chat with search',
       'Chat with review',
     ],
+  },
+  {
+    name: 'orchestrate-resume-submenu',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ORCHESTRATION: '1',
+      HARNESS_DELEGATED_ORCHESTRATION_HISTORY: '1',
+    },
+    bootExpect: 'Resume — 1 resumable session',
+    keys: ['2'],
+    exitKeys: [ESC, ESC],
+    expectExit: true,
+    expect: [
+      'Resume',
+      'Choose a previous session to continue.',
+      'cccccccccccc',
+      'orchestrator',
+      '1-9/a-z/Enter resume',
+      'Esc back',
+    ],
+    unexpect: ['aaaaaaaaaaaa', 'bbbbbbbbbbbb'],
   },
   {
     name: 'compact-orchestrate-launcher',

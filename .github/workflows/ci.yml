@@ -115,7 +115,8 @@ jobs:
           pnpm --filter @texra-ai/cli validate:tui -- \
             --snapshot-dir "$GITHUB_WORKSPACE/artifacts/tui-frames" \
             edit-approval subagent-picker hidden-root-approval-tab-return \
-            orchestrate-launcher orchestrate-delegated-history \
+            orchestrate-launcher orchestrate-agent-submenu \
+            orchestrate-delegated-history orchestrate-resume-submenu \
             compact-orchestrate-launcher
 
       - name: Upload CLI TUI smoke frames
