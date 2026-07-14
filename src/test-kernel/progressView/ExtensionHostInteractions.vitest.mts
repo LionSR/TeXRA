@@ -27,7 +27,6 @@ interface RecordingApprovalHandler {
   readonly hasPendingForStream: ReturnType<typeof vi.fn>;
   readonly releaseForStream: ReturnType<typeof vi.fn>;
   readonly clear: ReturnType<typeof vi.fn>;
-  readonly pendingSize: number;
 }
 
 function handler(): RecordingApprovalHandler {
@@ -39,7 +38,6 @@ function handler(): RecordingApprovalHandler {
     hasPendingForStream: vi.fn(() => false),
     releaseForStream: vi.fn(),
     clear: vi.fn(),
-    pendingSize: 0,
   };
 }
 
