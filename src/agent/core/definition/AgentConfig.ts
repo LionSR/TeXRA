@@ -124,14 +124,6 @@ export type AgentConfigInput = z.input<typeof AgentConfigSharedFieldsSchema> & {
   agentCategory?: AgentCategory;
 };
 
-/** Agent configuration payload with required agent and model fields. */
-const AgentConfigPayloadSchema = AgentConfigSharedFieldsSchema.extend({
-  agentCategory: z.enum(AgentCategory).optional(),
-})
-  .partial()
-  .required({
-    agent: true,
-    model: true,
-  });
-
-export type AgentConfigPayload = z.infer<typeof AgentConfigPayloadSchema>;
+/** Partial agent configuration accepted before launch-time normalization. */
+export type AgentConfigPayload = Partial<AgentConfig> &
+  Pick<AgentConfig, 'agent' | 'model'>;
