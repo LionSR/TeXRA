@@ -28,7 +28,10 @@ export interface ApprovalRequestHandlerSet {
   retry: ApprovalRequestHandler<RetryPermission, 'streamId'>;
   agentProposal: ApprovalRequestHandler<AgentProposalPermission, 'proposalId'>;
   planApproval: ApprovalRequestHandler<PlanApprovalPermission, 'approvalId'>;
-  externalInquiry: ExternalInquiryRequestHandler;
+  externalInquiry: ApprovalRequestHandler<
+    ExternalInquiryPermission,
+    'requestId'
+  >;
   userQuestion: ApprovalRequestHandler<UserQuestionPermission, 'requestId'>;
 }
 
