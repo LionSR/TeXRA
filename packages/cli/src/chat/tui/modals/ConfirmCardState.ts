@@ -6,10 +6,17 @@ import { isEscapeInput } from '../input/inputKeys';
 export type ConfirmCardKeyAction =
   'approve' | 'reject' | 'approveAlways' | 'feedback' | 'ignore';
 
+export type ConfirmCardRejectionMode = 'feedback' | 'immediate';
+
 export interface ConfirmCardKey {
   readonly escape?: boolean;
   readonly ctrl?: boolean;
   readonly meta?: boolean;
+}
+
+export interface ConfirmCardKeyOptions {
+  readonly allowAlways: boolean;
+  readonly rejectionMode: ConfirmCardRejectionMode;
 }
 
 export interface ConfirmCardHintAction {
@@ -42,7 +49,7 @@ export interface ConfirmCardCompactHintLayout {
 export function confirmCardKeyAction(
   input: string,
   key: ConfirmCardKey,
-  allowAlways: boolean,
+  options: ConfirmCardKeyOptions,
 ): ConfirmCardKeyAction {
   if (isEscapeInput(input, key)) return 'reject';
   if (key.ctrl || key.meta) return 'ignore';
@@ -50,9 +57,9 @@ export function confirmCardKeyAction(
     case 'y':
       return 'approve';
     case 'n':
-      return 'feedback';
+      return options.rejectionMode === 'feedback' ? 'feedback' : 'reject';
     case 'a':
-      return allowAlways ? 'approveAlways' : 'ignore';
+      return options.allowAlways ? 'approveAlways' : 'ignore';
     default:
       return 'ignore';
   }

@@ -226,6 +226,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       borderStyle="double"
       color={COLOR_ACCENT}
       title={title}
+      rejectionMode="feedback"
       alwaysAllow={{
         kind: 'superYolo',
         label: DELEGATION_APPROVAL_COPY.cliAction,

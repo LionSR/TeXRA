@@ -149,6 +149,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       borderStyle="double"
       color={COLOR_HINT}
       title={title}
+      rejectionMode="feedback"
       alwaysAllow={{ kind: 'toolEdit', label: 'approve edits for session' }}
       feedbackPlaceholder={EDIT_APPROVAL_FEEDBACK_PLACEHOLDER}
       compact={compactCard}
