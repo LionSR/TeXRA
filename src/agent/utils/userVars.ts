@@ -1,6 +1,9 @@
 import * as path from 'node:path';
 
-import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
+import {
+  loadRuntimeSkillCatalog,
+  type SkillLoadIssue,
+} from '@skills/runtimeSkills';
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
@@ -140,6 +143,11 @@ type AttachedMemoriesResult = {
   misses: AttachedMemoryMiss[];
 };
 
+function formatRuntimeSkillIssue(issue: SkillLoadIssue): string {
+  const location = issue.path ? ` (${issue.path})` : '';
+  return `${issue.severity}: ${issue.message}${location}`;
+}
+
 /**
  * Build all user variables needed for prompt rendering.
  *
@@ -160,7 +168,7 @@ export async function buildUserVars(
     { vars: patternVars, files: patternFiles },
     latexStyleRules,
     attachedMemories,
-    availableSkills,
+    runtimeSkills,
   ] = await Promise.all([
     getRequiredFileVars(agentSetting, agentPath),
     getPatternBasedFileVars(agentConfig, agentSetting),
@@ -175,10 +183,14 @@ export async function buildUserVars(
     // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
     agentSetting.agentCategory === AgentCategory.ToolUse &&
     getConfig<boolean>('texra.skills.enabled', true)
-      ? loadRuntimeSkillCatalog(logger)
-      : Promise.resolve(''),
+      ? loadRuntimeSkillCatalog()
+      : Promise.resolve({ catalog: '', issues: [] }),
   ]);
   const allLoadedFiles: LoadedFileEntry[] = [...requiredFiles, ...patternFiles];
+
+  for (const issue of runtimeSkills.issues) {
+    logger.warn(`Skill import ${formatRuntimeSkillIssue(issue)}`);
+  }
 
   // Merge all variable sources using spread operator.
   // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.
@@ -192,7 +204,7 @@ export async function buildUserVars(
     LATEX_STYLE_RULES: latexStyleRules,
     ATTACHED_MEMORIES: attachedMemories.xml,
     ATTACHED_MEMORY_MISSES: attachedMemories.misses,
-    AVAILABLE_SKILLS: availableSkills,
+    AVAILABLE_SKILLS: runtimeSkills.catalog,
   };
 
   // Emit aggregated file list if any files were loaded

@@ -172,8 +172,8 @@ landed → convergence.
 ### FS5. `texra.skills.enabled` is an advertised VS Code setting that does nothing
 
 - Extension contributes it (`package.json:832-840`) but never calls
-  `setRuntimeSkillSources`; `loadRuntimeSkillCatalog` returns `''` on empty
-  sources (`runtimeSkills.ts:62-63`) — the setting toggles an already-no-op.
+  `setRuntimeSkillSources`; `loadRuntimeSkillCatalog` returns an empty catalog
+  on empty sources (`runtimeSkills.ts:62-63`) — the setting toggles an already-no-op.
   CLI is the only production setter (`initPlatform.ts:341`) with full
   `/skills` + `texra skills`. Desktop: **not decided-for-free** — #7692
   (CLOSED) explicitly deferred the skill-sources fold as a product decision.

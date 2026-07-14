@@ -91,13 +91,36 @@ describe('runtime skills', () => {
       { scope: 'project', path: root, label: 'project' },
     ]);
 
-    const catalog = await loadRuntimeSkillCatalog();
+    const result = await loadRuntimeSkillCatalog();
 
-    expect(catalog).toContain(
+    expect(result.catalog).toContain(
       '- manuscript-review: Review mathematical manuscripts.',
     );
-    expect(catalog).toContain('Source: project');
-    expect(catalog).toContain(`Path: ${skillPath}`);
+    expect(result.catalog).toContain('Source: project');
+    expect(result.catalog).toContain(`Path: ${skillPath}`);
+    expect(result.issues).toEqual([]);
+  });
+
+  it('returns structured issues when a required source is unavailable', async () => {
+    const root = path.join(os.tmpdir(), 'texra-missing-runtime-skill-source');
+    await fs.rm(root, { recursive: true, force: true });
+    setRuntimeSkillSources([
+      { scope: 'bundled', path: root, label: 'bundled', required: true },
+    ]);
+
+    const result = await loadRuntimeSkillCatalog();
+
+    expect(result).toEqual({
+      catalog: '',
+      issues: [
+        {
+          severity: 'error',
+          code: 'missing_source',
+          message: 'Skill source does not exist',
+          path: root,
+        },
+      ],
+    });
   });
 
   it('injects the available skill catalog into tool-use instructions', async () => {
