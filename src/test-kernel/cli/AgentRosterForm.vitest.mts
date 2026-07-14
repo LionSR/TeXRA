@@ -4,6 +4,7 @@ import type { AgentEntry } from '@agent/index';
 import {
   agentRosterSelectWindow,
   buildChatDefaultAgentItems,
+  selectedAgentKeys,
   setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
 import { formatCliAgentRoster } from '@cli/runtime/agentRoster';
@@ -40,6 +41,12 @@ describe('AgentRosterForm', () => {
         label: 'assistant',
         description: 'General assistant',
       },
+    ]);
+  });
+
+  it('resolves legacy bare selections to the catalog identity', () => {
+    expect(selectedAgentKeys(['assistant'], agents)).toEqual([
+      'builtInToolUse:assistant',
     ]);
   });
 

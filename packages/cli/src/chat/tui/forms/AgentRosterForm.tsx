@@ -9,7 +9,11 @@ import {
   type CliAgentRosterRecord,
 } from '@cli/runtime/agentRoster';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
-import { agentKeyOf, type AgentCategory } from '@shared/schemas/agent';
+import {
+  agentKeyOf,
+  agentMatchesIdentifier,
+  type AgentCategory,
+} from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
   STARTER_AGENT_MODE_PRESET,
@@ -74,11 +78,17 @@ export function buildChatDefaultAgentItems(
   ];
 }
 
-function selectedAgentKeys(
+export function selectedAgentKeys(
   selection: CliAgentRosterRecord['workflowAgentKeys'],
   agents: readonly AgentEntry[],
 ): readonly string[] {
-  return selection === 'all' ? agents.map(agentKeyOf) : selection;
+  if (selection === 'all') return agents.map(agentKeyOf);
+  return selection.map((identifier) => {
+    const agent = agents.find((candidate) =>
+      agentMatchesIdentifier(candidate, identifier),
+    );
+    return agent ? agentKeyOf(agent) : identifier;
+  });
 }
 
 function selectionSizeLabel(
