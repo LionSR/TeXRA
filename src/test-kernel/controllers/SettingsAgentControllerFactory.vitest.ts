@@ -40,6 +40,31 @@ const agents = {
 } as const;
 
 describe('createSettingsAgentControllers', () => {
+  it('preserves a symbolic roster when an individual toggle is a no-op', async () => {
+    const workspaceState = memoryStore({
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'all' },
+    });
+    const controllers = createSettingsAgentControllers({
+      workspaceState,
+      globalState: memoryStore(),
+      getCustomAgentDirectory: async () => '/agents/custom',
+      getSourceDirectory: async () => undefined,
+      getAgents: (category: AgentCategory) => [...agents[category]],
+      getVisibleAgents: (category: AgentCategory) => [...agents[category]],
+    });
+
+    await controllers.visibility.setAgentEnabled({
+      category: 'toolUse',
+      source: 'builtInToolUse',
+      name: 'assistant',
+      enabled: true,
+    });
+
+    expect(
+      workspaceState.values.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toEqual({ kind: 'all' });
+  });
+
   it('writes visibility changes through the canonical roster controller', async () => {
     const workspaceState = memoryStore();
     const controllers = createSettingsAgentControllers({

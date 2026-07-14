@@ -112,6 +112,7 @@ export function createSettingsAgentControllers(
   const visibility = new SettingsAgentVisibilityController({
     state: {
       getEnabledAgentKeys: state.getEnabledAgentKeys,
+      setAgentEnabled: (input) => roster.setAgentEnabled(input),
       setEnabledAgentKeys: state.setEnabledAgentKeys,
       getAgents: (category) =>
         getAgents(category).map((entry) => ({
