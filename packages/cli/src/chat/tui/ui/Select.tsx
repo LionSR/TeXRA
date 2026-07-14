@@ -8,10 +8,14 @@
 // receive a single-key shortcut prefix so the row can be jumped to directly:
 // `1`-`9` for the first nine rows, then `a`-`z` for rows 10-35.
 
+// Third-party imports
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+// Local imports - shared utilities
 import { clamp, clampIndex } from '@utils/core';
+
+// Local imports - TUI input and presentation
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
 
