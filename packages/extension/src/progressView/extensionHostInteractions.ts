@@ -26,6 +26,7 @@ import {
 } from '@agent/runtime/hostInteractionResultMappers';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  approveNativeToolEditApprovals,
   cancelNativeToolEditApprovals,
   nativeRequestApproval,
 } from '@frontend/approval/nativeToolEditApproval';
@@ -40,6 +41,14 @@ export interface ExtensionHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;
   session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
+}
+
+export interface ExtensionHostInteractions extends HostInteractions {
+  /** Approve work requests that were already pending when stream bypass began. */
+  approvePendingDelegatedWork(
+    streamId: StreamTabId,
+    initiatingProposalId: string,
+  ): Promise<void>;
 }
 
 type PendingKind = Extract<
@@ -64,7 +73,7 @@ type PendingExtensionInteractionValue =
 
 export function createExtensionHostInteractions(
   options: ExtensionHostInteractionsOptions,
-): HostInteractions {
+): ExtensionHostInteractions {
   const pendingRequests = new Map<
     string,
     PendingExtensionInteraction<PendingExtensionInteractionValue>
@@ -176,7 +185,45 @@ export function createExtensionHostInteractions(
     }
   };
 
+  const approvePendingDelegatedWork = async (
+    streamId: StreamTabId,
+    initiatingProposalId: string,
+  ): Promise<void> => {
+    for (const pending of [...pendingRequests.values()]) {
+      if (
+        pending.streamId !== streamId ||
+        (pending.kind === 'proposal' && pending.id === initiatingProposalId)
+      ) {
+        continue;
+      }
+      switch (pending.kind) {
+        case 'bash':
+          resolvePending(
+            pending.id,
+            'bash',
+            toBashApprovalResult({ kind: 'bash', action: 'approve' }),
+            () => handlers().bash.resolve(pending.id),
+          );
+          break;
+        case 'proposal':
+          resolvePending(
+            pending.id,
+            'proposal',
+            toProposalResult({ kind: 'proposal', action: 'approve' }),
+            () => handlers().agentProposal.resolve(pending.id),
+          );
+          break;
+        case 'plan':
+        case 'retry':
+        case 'userQuestion':
+          break;
+      }
+    }
+    await approveNativeToolEditApprovals(options.session, streamId);
+  };
+
   return {
+    approvePendingDelegatedWork,
     requestToolEditApproval(
       request: ToolEditApprovalRequest,
       interactionOptions?: HostInteractionOptions,

@@ -137,12 +137,13 @@ const YOLO_TOGGLE_BUTTON = Object.freeze({
   isToggle: true,
 });
 
-const SUPER_YOLO_TOGGLE_BUTTON = Object.freeze({
+const DELEGATED_WORK_APPROVAL_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
   icon: 'rocket',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
-  title: 'Auto-approve delegated tasks (skip task-by-task approval)',
-  titleActive: 'Auto-approve active — click to resume manual approval',
+  title: 'Auto-approve tasks, file edits, and commands in this stream',
+  titleActive:
+    'Task, edit, and command auto-approval active — click to resume prompts',
   className: 'super-yolo-toggle-button',
   isToggle: true,
 });
@@ -160,7 +161,7 @@ const COMPACT_RESPONSE_BUTTON = Object.freeze({
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
   YOLO_TOGGLE_BUTTON,
-  SUPER_YOLO_TOGGLE_BUTTON,
+  DELEGATED_WORK_APPROVAL_TOGGLE_BUTTON,
   COMPACT_RESPONSE_BUTTON,
   RESTORE_STATE_BUTTON,
   OPEN_TASK_STORAGE_BUTTON,

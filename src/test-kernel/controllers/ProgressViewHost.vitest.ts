@@ -90,6 +90,7 @@ describe('ProgressViewHost', () => {
           openFileCompile: vi.fn(),
         },
         approval: {
+          approvePendingDelegatedWork: vi.fn(async () => undefined),
           handleToolEditApprovalAction: vi.fn(),
           handleBashApprovalAction: vi.fn(),
           handlePlanApprovalAction: vi.fn(),

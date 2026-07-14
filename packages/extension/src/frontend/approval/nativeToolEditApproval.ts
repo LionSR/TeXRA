@@ -68,7 +68,7 @@ interface InitializingNativeApproval {
   readonly request: ToolEditApprovalRequest;
   readonly session: SessionHandle;
   readonly cancellationScope?: object;
-  cancellation?: ToolEditApprovalResult;
+  earlyResolution?: ToolEditApprovalResult;
 }
 
 interface ToolEditApprovalActionPayload {
@@ -91,7 +91,7 @@ export function cancelNativeToolEditApprovals(
   for (const initialization of initializingApprovals.values()) {
     if (
       initialization.session !== session ||
-      initialization.cancellation ||
+      initialization.earlyResolution ||
       !matchesCancelSelector(
         {
           kind: 'toolEdit',
@@ -103,7 +103,7 @@ export function cancelNativeToolEditApprovals(
     ) {
       continue;
     }
-    initialization.cancellation = {
+    initialization.earlyResolution = {
       accepted: false,
       userMessage: selector.cause,
     };
@@ -124,6 +124,43 @@ export function cancelNativeToolEditApprovals(
     }
     entry.settle({ accepted: false, userMessage: selector.cause });
   }
+}
+
+/** Approve native edit requests already pending for one session stream. */
+export async function approveNativeToolEditApprovals(
+  session: SessionHandle,
+  streamId: StreamTabId,
+): Promise<void> {
+  for (const initialization of initializingApprovals.values()) {
+    if (
+      initialization.session !== session ||
+      initialization.earlyResolution ||
+      initialization.request.streamId !== streamId
+    ) {
+      continue;
+    }
+    initialization.earlyResolution = {
+      accepted: true,
+      appliedContent: initialization.request.proposedContent,
+    };
+  }
+
+  const requestIds = [...pendingApprovals]
+    .filter(
+      ([, entry]) =>
+        entry.session === session &&
+        entry.streamId === streamId &&
+        !entry.isSettled(),
+    )
+    .map(([requestId]) => requestId);
+  await Promise.all(
+    requestIds.map((requestId) =>
+      handleProgressViewToolEditApprovalAction({
+        requestId,
+        action: 'approve',
+      }),
+    ),
+  );
 }
 
 function getStorageDir(): string {
@@ -265,12 +302,12 @@ export async function nativeRequestApproval(
     proposedPath,
     cleanup: cleanupApprovalSources,
   } = approvalSources;
-  if (initialization.cancellation) {
+  if (initialization.earlyResolution) {
     initializingApprovals.delete(requestId);
     await cleanupApprovalSources();
     return {
-      ...initialization.cancellation,
-      lineChanges: initialization.cancellation.lineChanges ?? lineChanges,
+      ...initialization.earlyResolution,
+      lineChanges: initialization.earlyResolution.lineChanges ?? lineChanges,
     };
   }
   const originalSource: DiffSource = { filePath: originalPath };
@@ -302,8 +339,8 @@ export async function nativeRequestApproval(
     );
     diffSession = openedSession;
 
-    if (initialization.cancellation) {
-      result = initialization.cancellation;
+    if (initialization.earlyResolution) {
+      result = initialization.earlyResolution;
       return {
         ...result,
         lineChanges: result.lineChanges ?? lineChanges,
