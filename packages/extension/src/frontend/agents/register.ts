@@ -32,9 +32,9 @@ export function getAgentRegistrationSkipReason(
 
 export async function promptToAddAgentToConfig(
   agentName: string,
+  source: AgentSource,
   autoAdd = false,
   category: 'workflow' | 'toolUse' = 'workflow',
-  source: AgentSource = 'custom',
 ): Promise<void> {
   const roster = new AgentRosterController({
     workspaceState: workspaceSM,

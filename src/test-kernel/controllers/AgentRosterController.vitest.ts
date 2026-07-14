@@ -167,6 +167,49 @@ describe('AgentRosterController', () => {
     });
   });
 
+  it('preserves symbolic roster semantics when a toggle changes nothing', async () => {
+    const inheritedState = memoryStore();
+    const inherited = controller(
+      inheritedState,
+      memoryStore({
+        [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
+      }),
+    );
+    await inherited.setAgentEnabled({
+      category: 'workflow',
+      source: 'builtInWorkflow',
+      name: 'write',
+      enabled: true,
+    });
+    expect(inherited.getSelection()).toEqual({ kind: 'inherit' });
+    expect(
+      inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toBeUndefined();
+
+    const team = controller(memoryStore());
+    await team.setTeam('test-team');
+    await team.setAgentEnabled({
+      category: 'toolUse',
+      source: 'builtInToolUse',
+      name: 'lead',
+      enabled: true,
+    });
+    expect(team.getSelection()).toEqual({
+      kind: 'team',
+      teamId: 'test-team',
+    });
+
+    const all = controller(memoryStore());
+    await all.setAll();
+    await all.setAgentEnabled({
+      category: 'toolUse',
+      source: 'custom',
+      name: 'search',
+      enabled: true,
+    });
+    expect(all.getSelection()).toEqual({ kind: 'all' });
+  });
+
   it('preserves unresolved team members when another category changes', async () => {
     const unavailablePreset: AgentModePreset = {
       ...preset,
@@ -296,14 +339,14 @@ describe('AgentRosterController', () => {
   });
 
   it('resolves an exact source key hidden by the display projection', () => {
-    const custom = {
-      category: 'toolUse' as const,
-      source: 'custom' as const,
+    const custom: AgentRosterEntry = {
+      category: 'toolUse',
+      source: 'custom',
       name: 'review',
     };
-    const remote = {
-      category: 'toolUse' as const,
-      source: 'remote' as const,
+    const remote: AgentRosterEntry = {
+      category: 'toolUse',
+      source: 'remote',
       name: 'review',
     };
     const roster = new AgentRosterController({

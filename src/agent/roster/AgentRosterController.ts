@@ -30,16 +30,18 @@ export interface AgentRosterEntry {
   readonly internal?: boolean;
 }
 
-export interface AgentRosterControllerDeps {
+export interface AgentRosterControllerDeps<
+  Entry extends AgentRosterEntry = AgentRosterEntry,
+> {
   readonly workspaceState: StateStore;
   readonly globalState: StateStore;
-  readonly getAgents: (category: AgentCategory) => AgentRosterEntry[];
+  readonly getAgents: (category: AgentCategory) => Entry[];
   readonly getPresets?: () => readonly AgentModePreset[];
   /** Resolve one stored identifier without collapsing exact source identity. */
   readonly resolveAgent?: (
     category: AgentCategory,
     identifier: string,
-  ) => AgentRosterEntry | undefined;
+  ) => Entry | undefined;
   /** Host policy used only when an inherited roster has no user default. */
   readonly fallbackTeamId?: string | null;
 }
@@ -64,15 +66,17 @@ function serializeWorkspaceWrite(
   return run;
 }
 
-export interface AgentRosterSnapshot {
+export interface AgentRosterSnapshot<
+  Entry extends AgentRosterEntry = AgentRosterEntry,
+> {
   readonly selection: AgentRosterSelection;
   readonly effectiveSelection: Exclude<
     AgentRosterSelection,
     { readonly kind: 'inherit' }
   >;
   readonly defaultTeamId?: string;
-  readonly workflowAgents: AgentRosterEntry[];
-  readonly toolUseAgents: AgentRosterEntry[];
+  readonly workflowAgents: Entry[];
+  readonly toolUseAgents: Entry[];
   readonly unresolvedNames: string[];
 }
 
@@ -162,8 +166,10 @@ function selectedIdentifiers(
   return category === 'workflow' ? preset.workflowAgents : preset.toolUseAgents;
 }
 
-export class AgentRosterController {
-  constructor(private readonly deps: AgentRosterControllerDeps) {}
+export class AgentRosterController<
+  Entry extends AgentRosterEntry = AgentRosterEntry,
+> {
+  constructor(private readonly deps: AgentRosterControllerDeps<Entry>) {}
 
   getSelection(): AgentRosterSelection {
     return readAgentRosterSelection(
@@ -176,12 +182,12 @@ export class AgentRosterController {
     return getDefaultTeamId(this.deps.globalState);
   }
 
-  getEffectiveSelection(): AgentRosterSnapshot['effectiveSelection'] {
+  getEffectiveSelection(): AgentRosterSnapshot<Entry>['effectiveSelection'] {
     const selection = this.getSelection();
     return this.resolveEffectiveSelection(selection);
   }
 
-  getVisibleAgents(category: AgentCategory): AgentRosterEntry[] {
+  getVisibleAgents(category: AgentCategory): Entry[] {
     const effective = this.getEffectiveSelection();
     const identifiers = selectedIdentifiers(
       effective,
@@ -192,7 +198,7 @@ export class AgentRosterController {
 
     const resolved = identifiers
       .map((identifier) => this.resolveEntry(category, identifier))
-      .filter((entry): entry is AgentRosterEntry => entry !== undefined);
+      .filter((entry): entry is Entry => entry !== undefined);
     return [
       ...new Map(resolved.map((entry) => [agentKeyOf(entry), entry])).values(),
     ];
@@ -203,7 +209,7 @@ export class AgentRosterController {
     return this.selectionKeys(this.getEffectiveSelection(), category);
   }
 
-  snapshot(): AgentRosterSnapshot {
+  snapshot(): AgentRosterSnapshot<Entry> {
     const selection = this.getSelection();
     const effectiveSelection = this.getEffectiveSelection();
     const presets = this.deps.getPresets?.() ?? [];
@@ -253,7 +259,7 @@ export class AgentRosterController {
   private resolveEntry(
     category: AgentCategory,
     identifier: string,
-  ): AgentRosterEntry | undefined {
+  ): Entry | undefined {
     const resolved = this.deps.resolveAgent?.(category, identifier);
     if (resolved) {
       return resolved.category === category && !resolved.internal
@@ -267,7 +273,7 @@ export class AgentRosterController {
 
   private resolveEffectiveSelection(
     selection: AgentRosterSelection,
-  ): AgentRosterSnapshot['effectiveSelection'] {
+  ): AgentRosterSnapshot<Entry>['effectiveSelection'] {
     if (selection.kind === 'inherit') {
       const teamId = this.getDefaultTeamId() ?? this.deps.fallbackTeamId;
       if (!teamId) return { kind: 'all' };
@@ -427,6 +433,8 @@ export class AgentRosterController {
       const index = target.findIndex((candidate) =>
         agentMatchesIdentifier(input, candidate),
       );
+      const alreadyEnabled = index >= 0;
+      if (input.enabled === alreadyEnabled) return;
       if (input.enabled && index < 0) target.push(key);
       if (!input.enabled && index >= 0) target.splice(index, 1);
       await this.writeSelection({

@@ -580,7 +580,7 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
       ),
     resolveAgent: getRosterAgent,
     fallbackTeamId: null,
-  }).getVisibleAgents(category) as AgentEntry[];
+  }).getVisibleAgents(category);
 }
 
 /**
