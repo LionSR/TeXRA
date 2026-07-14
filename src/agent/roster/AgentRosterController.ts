@@ -201,6 +201,11 @@ export class AgentRosterController {
     );
   }
 
+  /** Return the effective stored identifiers, including unavailable members. */
+  getEnabledAgentKeys(category: AgentCategory): string[] | undefined {
+    return this.selectionKeys(this.getEffectiveSelection(), category);
+  }
+
   snapshot(): AgentRosterSnapshot {
     const selection = this.getSelection();
     const effectiveSelection = this.getEffectiveSelection();

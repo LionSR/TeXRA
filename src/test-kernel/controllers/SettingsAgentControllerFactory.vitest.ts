@@ -5,8 +5,10 @@ import type { AgentCategory } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { StateStore } from '@platform/interfaces';
 
-function memoryStore(): StateStore & { values: Map<string, unknown> } {
-  const values = new Map<string, unknown>();
+function memoryStore(
+  initial: Record<string, unknown> = {},
+): StateStore & { values: Map<string, unknown> } {
+  const values = new Map(Object.entries(initial));
   return {
     values,
     get: <T>(key: string, fallback?: T): T =>
@@ -59,6 +61,39 @@ describe('createSettingsAgentControllers', () => {
       kind: 'custom',
       workflowAgentKeys: 'all',
       toolUseAgentKeys: ['builtInToolUse:assistant'],
+    });
+  });
+
+  it('preserves unavailable members when settings toggles a visible agent', async () => {
+    const workspaceState = memoryStore({
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+        kind: 'custom',
+        workflowAgentKeys: 'all',
+        toolUseAgentKeys: ['builtInToolUse:assistant', 'future-assistant'],
+      },
+    });
+    const controllers = createSettingsAgentControllers({
+      workspaceState,
+      globalState: memoryStore(),
+      getCustomAgentDirectory: async () => '/agents/custom',
+      getSourceDirectory: async () => undefined,
+      getAgents: (category: AgentCategory) => [...agents[category]],
+      getVisibleAgents: (category: AgentCategory) => [...agents[category]],
+    });
+
+    await controllers.visibility.setAgentEnabled({
+      category: 'toolUse',
+      source: 'builtInToolUse',
+      name: 'assistant',
+      enabled: false,
+    });
+
+    expect(
+      workspaceState.values.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toEqual({
+      kind: 'custom',
+      workflowAgentKeys: 'all',
+      toolUseAgentKeys: ['future-assistant'],
     });
   });
 });

@@ -183,6 +183,11 @@ describe('AgentRosterController', () => {
     });
     await roster.setTeam(unavailablePreset.id);
 
+    expect(roster.getEnabledAgentKeys('workflow')).toEqual([
+      'builtInWorkflow:write',
+      'future-reviewer',
+    ]);
+
     await roster.setAgentEnabled({
       category: 'toolUse',
       source: 'custom',

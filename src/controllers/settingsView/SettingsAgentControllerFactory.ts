@@ -64,8 +64,7 @@ export function createSettingsAgentControllers(
   });
 
   const state: SettingsAgentCatalogState = {
-    getEnabledAgentKeys: (category) =>
-      roster.getVisibleAgents(category).map(agentKeyOf),
+    getEnabledAgentKeys: (category) => roster.getEnabledAgentKeys(category),
     setEnabledAgentKeys: (category, enabledKeys) =>
       roster.setEnabledAgentKeys(category, enabledKeys),
     setTeamRoster: (preset) => roster.setTeam(preset.id),
