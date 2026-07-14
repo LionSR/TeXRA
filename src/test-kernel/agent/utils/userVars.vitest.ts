@@ -116,7 +116,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       '/agents/generic',
       { isOpenai: false, isAnthropic: false, isGoogle: false },
       { ...noopTrace, warn },
-      '/workspace',
+      { workspacePath: '/workspace' },
     );
 
     expect(vars.AVAILABLE_SKILLS).toBe('');

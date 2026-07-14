@@ -381,6 +381,16 @@ async function assembleAgentLaunchContext(
   }
 
   const agentPath = path.dirname(resolution.definitionPath);
+  const workingDirectory = configPayload.workingDirectory?.trim() || undefined;
+  const runScope = createRunScope({
+    runtimeHost,
+    streamId,
+    executionId,
+    agentName: config.agent,
+    workingDirectory,
+    delegationAgentScope: fullConfig.delegationAgentScope,
+    session,
+  });
   const buildVars = () =>
     buildUserVars(
       config,
@@ -393,6 +403,7 @@ async function assembleAgentLaunchContext(
         isGoogle: modelHandler.config.provider === ModelProvider.GOOGLE,
       },
       agentLogger,
+      { delegationAgentScope: runScope.delegationAgentScope },
     );
 
   const baseVars =
@@ -416,17 +427,6 @@ async function assembleAgentLaunchContext(
       agentCategory: setting.agentCategory,
     },
   );
-  const workingDirectory = configPayload.workingDirectory?.trim() || undefined;
-  const runScope = createRunScope({
-    runtimeHost,
-    streamId,
-    executionId,
-    agentName: config.agent,
-    workingDirectory,
-    delegationAgentScope: fullConfig.delegationAgentScope,
-    session,
-  });
-
   return {
     config,
     setting,
