@@ -149,6 +149,11 @@ All notable changes to this project will be documented in this file.
 - **Startup and settings lists are easier to scan** — resumable sessions,
   agents, and teams now live behind one entry each; the launcher also provides
   account sign-in and sign-out controls. `/config` groups settings by subject.
+- **Agent configuration has one CLI interface** — `texra config`, the launcher
+  Settings row, and `/config` now share controls for inherited, complete,
+  team-based, and custom workspace rosters, the user default team, and the
+  workspace default chat agent. Headless scripts can use
+  `texra config agents` with the corresponding flags.
 
 #### Bug Fixes
 
@@ -162,6 +167,11 @@ All notable changes to this project will be documented in this file.
 - **Terminal status stays readable during long sessions** — history omits
   internal process bookkeeping, completed transcripts repaint after resizing,
   and the Ctrl-C hint follows whether a run is actually active.
+- **Team runs no longer rewrite workspace visibility** — each execution now
+  carries its own delegation roster, inherited by its child agents, so
+  concurrent sessions cannot overwrite or restore one another's folder
+  settings. Listing agents, initializing a project, and starting chat are now
+  read-only with respect to roster configuration.
 
 ## [0.39.3] - 2026-07-10
 

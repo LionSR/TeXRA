@@ -117,6 +117,10 @@ describe('AgentLaunchContext', () => {
   it('compensates a late launch-assembly failure before trace disposal', async () => {
     const order: string[] = [];
     const failure = new Error('user vars unavailable');
+    const delegationAgentScope = {
+      workflowAgentKeys: ['builtInWorkflow:correct'],
+      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    };
     const session = createTestSession();
     const detachEvents = session.events.subscribe(() => undefined);
     const detachStatus = session.status.onDidChange(({ status }) => {
@@ -154,6 +158,7 @@ describe('AgentLaunchContext', () => {
             agent: 'chat',
             model: 'gpt55',
             agentCategory: AgentCategory.ToolUse,
+            delegationAgentScope,
           },
           runtimeHost: createRecordingHost().host,
           session,
@@ -163,6 +168,9 @@ describe('AgentLaunchContext', () => {
         }),
       ).rejects.toBe(failure);
 
+      expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
+        delegationAgentScope,
+      });
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
       expect(handler.dispose).toHaveBeenCalledOnce();
       expect(session.status.get('late-assembly-stream')).toBe(

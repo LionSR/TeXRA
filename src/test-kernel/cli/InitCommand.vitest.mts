@@ -5,12 +5,10 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  clearCliSeededRoster: vi.fn(),
   getCliModelAccessList: vi.fn(),
   getVisibleAgents: vi.fn(),
   initCliPlatform: vi.fn(),
   loadAgents: vi.fn(),
-  seedCliRosterFromDefaultTeam: vi.fn(),
 }));
 
 vi.mock('@agent/index', async (importOriginal) => {
@@ -21,11 +19,6 @@ vi.mock('@agent/index', async (importOriginal) => {
     loadAgents: mocks.loadAgents,
   };
 });
-
-vi.mock('@cli/runtime/defaultTeamRoster', () => ({
-  clearCliSeededRoster: mocks.clearCliSeededRoster,
-  seedCliRosterFromDefaultTeam: mocks.seedCliRosterFromDefaultTeam,
-}));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
@@ -101,7 +94,6 @@ describe('CLI init command', () => {
   beforeEach(() => {
     stdout = '';
     stderr = '';
-    mocks.clearCliSeededRoster.mockReset().mockResolvedValue(undefined);
     mocks.getCliModelAccessList
       .mockReset()
       .mockResolvedValue([modelAccess('deepseekproT')]);
@@ -112,7 +104,6 @@ describe('CLI init command', () => {
       ]);
     mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
     mocks.loadAgents.mockReset().mockResolvedValue(undefined);
-    mocks.seedCliRosterFromDefaultTeam.mockReset().mockResolvedValue(false);
     stdoutSpy = vi
       .spyOn(process.stdout, 'write')
       .mockImplementation((chunk: unknown, ...rest: unknown[]) => {

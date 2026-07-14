@@ -12,32 +12,30 @@ import {
 import type { AgentCategory } from '@shared/schemas/agent';
 
 describe('SettingsAgentVisibilityController', () => {
-  it('removes legacy bare-name entries when disabling a source-qualified agent', async () => {
-    const enabledByCategory = new Map<AgentCategory, string[]>();
-    enabledByCategory.set('workflow', ['criticize', 'builtInWorkflow:other']);
+  it('delegates individual toggles to the canonical roster state', async () => {
+    let received:
+      | Parameters<SettingsAgentVisibilityController['setAgentEnabled']>[0]
+      | undefined;
     const controller = new SettingsAgentVisibilityController({
       state: {
-        getEnabledAgentKeys: (category) => enabledByCategory.get(category),
-        setEnabledAgentKeys: async (category, enabledKeys) => {
-          enabledByCategory.set(category, enabledKeys);
+        getEnabledAgentKeys: () => undefined,
+        setAgentEnabled: async (input) => {
+          received = input;
         },
-        getAgents: () => [
-          { source: 'builtInWorkflow', name: 'criticize' },
-          { source: 'builtInWorkflow', name: 'other' },
-        ],
+        setEnabledAgentKeys: async () => undefined,
+        getAgents: () => [],
       },
     });
 
-    await controller.setAgentEnabled({
+    const input = {
       category: 'workflow',
       source: 'builtInWorkflow',
       name: 'criticize',
       enabled: false,
-    });
+    } as const;
+    await controller.setAgentEnabled(input);
 
-    expect(enabledByCategory.get('workflow')).toEqual([
-      'builtInWorkflow:other',
-    ]);
+    expect(received).toEqual(input);
   });
 });
 
@@ -58,78 +56,28 @@ function createController(options?: {
 }): {
   controller: SettingsAgentVisibilityController;
   enabled: Partial<Record<AgentCategory, string[] | undefined>>;
+  writes: string[][];
 } {
   const enabled = { ...(options?.enabled ?? {}) };
+  const writes: string[][] = [];
   return {
     controller: new SettingsAgentVisibilityController({
       state: {
         getEnabledAgentKeys: (category) => enabled[category],
+        setAgentEnabled: async () => undefined,
         setEnabledAgentKeys: async (category, enabledKeys) => {
+          writes.push(enabledKeys);
           enabled[category] = enabledKeys;
         },
         getAgents: (category) => AGENTS[category],
       },
     }),
     enabled,
+    writes,
   };
 }
 
 describe('SettingsAgentVisibilityController', () => {
-  it('seeds all other agents when disabling from never-configured state', async () => {
-    const { controller, enabled } = createController();
-
-    await controller.setAgentEnabled({
-      category: 'workflow',
-      source: 'custom',
-      name: 'customWriter',
-      enabled: false,
-    });
-
-    assert.deepEqual(enabled.workflow, [
-      'builtInWorkflow:correct',
-      'remote:remoteWriter',
-    ]);
-  });
-
-  it('removes canonical and legacy names from configured state', async () => {
-    const { controller, enabled } = createController({
-      enabled: {
-        workflow: [
-          'builtInWorkflow:correct',
-          'customWriter',
-          'remote:remoteWriter',
-        ],
-      },
-    });
-
-    await controller.setAgentEnabled({
-      category: 'workflow',
-      source: 'custom',
-      name: 'customWriter',
-      enabled: false,
-    });
-
-    assert.deepEqual(enabled.workflow, [
-      'builtInWorkflow:correct',
-      'remote:remoteWriter',
-    ]);
-  });
-
-  it('adds canonical keys without duplicating legacy enabled entries', async () => {
-    const { controller, enabled } = createController({
-      enabled: { workflow: ['customWriter'] },
-    });
-
-    await controller.setAgentEnabled({
-      category: 'workflow',
-      source: 'custom',
-      name: 'customWriter',
-      enabled: true,
-    });
-
-    assert.deepEqual(enabled.workflow, ['customWriter']);
-  });
-
   it('disables every agent from a source while preserving other sources', async () => {
     const { controller, enabled } = createController({
       enabled: {
@@ -168,5 +116,25 @@ describe('SettingsAgentVisibilityController', () => {
       'builtInWorkflow:correct',
       'custom:customWriter',
     ]);
+  });
+
+  it('does not replace a symbolic selection for a no-op source toggle', async () => {
+    const { controller, writes } = createController({
+      enabled: {
+        workflow: [
+          'builtInWorkflow:correct',
+          'custom:customWriter',
+          'remote:remoteWriter',
+        ],
+      },
+    });
+
+    await controller.setAllAgentsEnabled({
+      category: 'workflow',
+      source: 'custom',
+      enabled: true,
+    });
+
+    expect(writes).toEqual([]);
   });
 });

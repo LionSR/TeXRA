@@ -31,6 +31,8 @@ const payload = z.unknown();
 
 export const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('agent'), agent: payload }),
+  z.looseObject({ kind: z.literal('agent-roster'), roster: payload }),
+  z.looseObject({ kind: z.literal('config'), config: payload }),
   z.looseObject({ kind: z.literal('tool-status'), tool: payload }),
   z.looseObject({ kind: z.literal('tool-toggle'), tool: payload }),
   z.looseObject({ kind: z.literal('tool-guide'), guide: payload }),

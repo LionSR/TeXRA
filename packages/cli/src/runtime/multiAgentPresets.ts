@@ -1,4 +1,3 @@
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import {
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
@@ -99,6 +98,14 @@ export function readCliMultiAgentPresets(): CliMultiAgentPreset[] {
     WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
   );
   return cliMultiAgentPresets(customRaw);
+}
+
+/** Resolve the current display name for a persisted team identity. */
+export function readCliMultiAgentPresetName(
+  presetId: string | undefined,
+): string | undefined {
+  if (!presetId) return undefined;
+  return findCliMultiAgentPreset(readCliMultiAgentPresets(), presetId)?.name;
 }
 
 export function cliMultiAgentPresets(
@@ -432,59 +439,6 @@ export function planCliMultiAgentPresetRun(
     missingWorkflowAgents: workflow.missing,
     missingToolUseAgents: toolUse.missing,
   };
-}
-
-export async function withCliMultiAgentPresetVisibility<T>(
-  plan: CliMultiAgentPresetRunPlan,
-  operation: () => Promise<T>,
-): Promise<T> {
-  const { lifecycle, workspaceState } = platform();
-  const previousWorkflowAgents = workspaceState.get<string[] | undefined>(
-    WorkspaceStateKey.ENABLED_AGENTS,
-  );
-  const previousToolUseAgents = workspaceState.get<string[] | undefined>(
-    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-  );
-
-  const visibilityApplied = (async () => {
-    await workspaceState.update(WorkspaceStateKey.ENABLED_AGENTS, [
-      ...plan.workflowAgentKeys,
-    ]);
-    await workspaceState.update(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, [
-      ...plan.toolUseAgentKeys,
-    ]);
-  })();
-  let restorePromise: Promise<void> | undefined;
-  const restoreVisibility = (): Promise<void> => {
-    restorePromise ??= (async () => {
-      // A partial apply still needs rollback; the original error continues from the try block.
-      await visibilityApplied.catch(() => undefined);
-      await workspaceState.update(
-        WorkspaceStateKey.ENABLED_AGENTS,
-        previousWorkflowAgents,
-      );
-      await workspaceState.update(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-        previousToolUseAgents,
-      );
-    })();
-    return restorePromise;
-  };
-  const shutdownRestore = lifecycle.onShutdown(
-    SHUTDOWN_PHASE.BEFORE,
-    restoreVisibility,
-  );
-
-  try {
-    await visibilityApplied;
-    return await operation();
-  } finally {
-    try {
-      await restoreVisibility();
-    } finally {
-      shutdownRestore.dispose();
-    }
-  }
 }
 
 function resolvePresetAgents(

@@ -41,6 +41,7 @@ export type CliOrchestrationAction =
   | { readonly kind: 'browse-agents' }
   | { readonly kind: 'browse-teams' }
   | { readonly kind: 'browse-accounts' }
+  | { readonly kind: 'configure-settings' }
   | {
       readonly kind: 'account';
       readonly provider: CliAccountProvider;
@@ -196,6 +197,11 @@ export function buildCliOrchestrationItems(
       description: accountSummary(input.account),
     });
   }
+  items.push({
+    value: { kind: 'configure-settings' },
+    label: 'Settings',
+    description: 'Agents and CLI configuration',
+  });
   items.push({
     value: { kind: 'help' },
     label: 'Help',

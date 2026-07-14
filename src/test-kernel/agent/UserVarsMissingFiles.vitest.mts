@@ -31,7 +31,7 @@ function buildVars(
     '/agents/generic',
     providerFlags,
     noopTrace,
-    '/workspace',
+    { workspacePath: '/workspace' },
   );
 }
 

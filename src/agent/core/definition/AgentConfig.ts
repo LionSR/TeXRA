@@ -6,6 +6,7 @@ import {
   migrateLegacyContextFileFields,
 } from '@shared/schemas/fileFields';
 import { AgentSourceSchema } from '@shared/schemas/agent';
+import { AgentDelegationScopeSchema } from '@shared/schemas/agentRoster';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 import { AgentCategory } from './AgentDataclass';
 
@@ -45,6 +46,8 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
    * `texra chat` session. Preserved across resume.
    */
   cliMultiAgentPresetId: z.string().nullish(),
+  /** Execution-scoped delegation roster used by team runs and their children. */
+  delegationAgentScope: AgentDelegationScopeSchema.nullish(),
 });
 
 /**

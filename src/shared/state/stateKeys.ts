@@ -22,6 +22,9 @@ export enum WorkspaceStateKey {
   // Agent visibility (migrated from VS Code config)
   ENABLED_AGENTS = 'texra.enabledAgents',
   ENABLED_TOOL_USE_AGENTS = 'texra.enabledToolUseAgents',
+  /** Canonical workspace agent-roster selection. Legacy enabled-agent arrays
+   * remain compatibility mirrors and are ignored when this key is present. */
+  AGENT_ROSTER_SELECTION = 'texra.agentRosterSelection',
   SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
   ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
   DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
