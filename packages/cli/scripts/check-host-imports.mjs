@@ -22,6 +22,7 @@ const processInputAllowedFiles = new Set([
   'packages/cli/src/chat/tui/runChatTui.tsx',
   'packages/cli/src/orchestration/runOrchestrationTui.tsx',
   'packages/cli/src/init/runInitWizard.tsx',
+  'packages/cli/src/config/runConfigTui.tsx',
 ]);
 
 const processTerminalInputAllowedFiles = new Set([
@@ -43,6 +44,7 @@ const processOutputAllowedFiles = new Set([
   'packages/cli/src/init/runInitWizard.tsx',
   'packages/cli/src/onboarding/runOnboarding.tsx',
   'packages/cli/src/commands/loginProviderPicker.tsx',
+  'packages/cli/src/config/runConfigTui.tsx',
 ]);
 
 const processOutputPatterns = [
