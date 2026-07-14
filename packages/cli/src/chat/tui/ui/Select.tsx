@@ -212,8 +212,9 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
     items: props.items,
   });
   const [highlight, setHighlight] = useState(initial);
-  // Select cancel handlers close their foreground form, so the component
-  // unmounts after this flips. Future persistent Select users should reset it.
+  // Drop input after cancel until React commits the resulting transition. A
+  // parent may reuse this Select instance for the destination screen, so the
+  // guard must not remain latched across renders.
   const cancelledRef = useRef(false);
 
   function cancelAndDrop(): void {
@@ -224,6 +225,10 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   useEffect(() => {
     setHighlight((h) => clampIndex(h, props.items.length));
   }, [props.items.length]);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+  });
 
   const visibleRange = visibleSelectRange({
     itemCount: props.items.length,
