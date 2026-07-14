@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { InvalidAgentTeamError } from '@agent/roster/AgentRosterController';
+import { InvalidAgentTeamError } from '@agent/index';
 import { readSetting } from '@shared/config/settingsAccess';
 import { agentKeyOf } from '@shared/schemas/agent';
 import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
