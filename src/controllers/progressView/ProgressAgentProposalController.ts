@@ -1,8 +1,5 @@
 // Local imports - agent
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
 
@@ -79,35 +76,24 @@ export class ProgressAgentProposalController {
   }
 
   private buildTaskState(proposal: AgentProposal): TaskState | null {
-    const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
-    const activeFiles = isWorkflow
-      ? {
-          input: proposal.inputFiles.length > 0,
-          context: proposal.contextFiles.length > 0,
-          media: proposal.mediaFiles.length > 0,
-          output: proposal.outputFiles.length > 0,
-        }
-      : undefined;
-
-    const result = AgentConfigSchema.safeParse({
-      ...proposal,
-      ...(activeFiles && {
-        inputFilesActive: activeFiles.input,
-        contextFilesActive: activeFiles.context,
-        mediaFilesActive: activeFiles.media,
-        outputFilesActive: activeFiles.output,
-      }),
-    });
+    const result = AgentConfigSchema.safeParse(proposal);
 
     if (!result.success) {
       this.deps.onInvalidProposal?.(result.error.issues);
       return null;
     }
 
-    return (
-      activeFiles
-        ? { agentConfig: result.data, activeFiles }
-        : { agentConfig: result.data }
-    ) as TaskState & { agentConfig: AgentConfig };
+    if (result.data.agentCategory === AgentCategory.Workflow) {
+      return {
+        agentConfig: result.data,
+        activeFiles: {
+          input: result.data.inputFiles.length > 0,
+          context: result.data.contextFiles.length > 0,
+          media: result.data.mediaFiles.length > 0,
+          output: result.data.outputFiles.length > 0,
+        },
+      };
+    }
+    return { agentConfig: result.data };
   }
 }

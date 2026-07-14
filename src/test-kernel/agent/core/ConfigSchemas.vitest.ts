@@ -6,7 +6,11 @@ import { describe, it } from 'vitest';
 
 // Local imports - agent core
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  ToolUseAgentConfigSchema,
+  WorkflowAgentConfigSchema,
+} from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { MainViewPersistedStateSchema } from '@shared/schemas/mainView';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
@@ -58,6 +62,27 @@ describe('AgentConfigSchema', () => {
     const parsed = AgentConfigSchema.parse({});
 
     assert.strictEqual(parsed.agentCategory, AgentCategory.Workflow);
+  });
+
+  it('keeps category-specific parsers aligned with the discriminated union', () => {
+    const workflow = WorkflowAgentConfigSchema.parse({});
+    const toolUse = ToolUseAgentConfigSchema.parse({
+      agentCategory: AgentCategory.ToolUse,
+    });
+
+    assert.strictEqual(workflow.agentCategory, AgentCategory.Workflow);
+    assert.strictEqual(toolUse.agentCategory, AgentCategory.ToolUse);
+    assert.throws(() => ToolUseAgentConfigSchema.parse(workflow));
+    assert.throws(() => WorkflowAgentConfigSchema.parse(toolUse));
+  });
+
+  it('applies shared output-file validation to category-specific parsers', () => {
+    assert.throws(() =>
+      ToolUseAgentConfigSchema.parse({
+        agentCategory: AgentCategory.ToolUse,
+        outputFiles: ['result.tex'],
+      }),
+    );
   });
 
   it('migrates legacy single file slots into canonical file lists', () => {

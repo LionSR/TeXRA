@@ -11,8 +11,14 @@ import {
 // Local imports - agent state
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { noopTrace, type AgentEvent, type AgentTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { TaskStateSchema } from '@agent/core/state/TaskState';
+import {
+  WorkflowAgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
+import {
+  TaskStateSchema,
+  type WorkflowTaskState,
+} from '@agent/core/state/TaskState';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -488,23 +494,20 @@ function createStreamSnapshotStore(
   };
 }
 
-function workflowTaskState(): {
-  agentConfig: {
-    agent: string;
-    model: string;
-    agentCategory: typeof AgentCategory.Workflow;
-    toolConfig: typeof DEFAULT_TOOL_CONFIG;
-  };
-  activeFiles: Record<string, boolean>;
-} {
+function workflowTaskState(): WorkflowTaskState {
   return {
-    agentConfig: {
+    agentConfig: WorkflowAgentConfigSchema.parse({
       agent: 'proofreader',
       model: 'deepseekproT',
       agentCategory: AgentCategory.Workflow,
       toolConfig: DEFAULT_TOOL_CONFIG,
+    }),
+    activeFiles: {
+      input: false,
+      context: false,
+      media: false,
+      output: false,
     },
-    activeFiles: {},
   };
 }
 

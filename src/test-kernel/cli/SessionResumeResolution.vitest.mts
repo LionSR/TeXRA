@@ -7,7 +7,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import type { ExecutionId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
@@ -32,22 +35,19 @@ const EXECUTION_ID = 'exec-1' as ExecutionId;
 const STREAM_ID = 'stream-1';
 
 function toolUseConfig(): AgentConfig {
-  // Minimal config: the resolver only reads `agentCategory`, `agent`, `model`.
-  return {
+  return AgentConfigSchema.parse({
     agent: 'planner',
     model: 'gpt-5',
     agentCategory: AgentCategory.ToolUse,
-  } as unknown as AgentConfig;
+  });
 }
 
 function workflowConfig(): AgentConfig {
-  return {
+  return AgentConfigSchema.parse({
     agent: 'correct',
     model: 'gemini31p',
     agentCategory: AgentCategory.Workflow,
-    inputFiles: [],
-    outputFiles: [],
-  } as unknown as AgentConfig;
+  });
 }
 
 async function resolve(id: ExecutionId = EXECUTION_ID) {
