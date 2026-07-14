@@ -88,6 +88,16 @@ describe('AgentRosterController', () => {
     expect(roster.getVisibleAgents('workflow')).toEqual(agents.workflow);
   });
 
+  it('rejects malformed canonical state instead of treating corruption as inheritance', () => {
+    const roster = controller(
+      memoryStore({
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'invalid' },
+      }),
+    );
+
+    expect(() => roster.getSelection()).toThrow();
+  });
+
   it('uses the user default only for inherited workspaces', () => {
     const workspaceState = memoryStore();
     const globalState = memoryStore({
@@ -393,5 +403,53 @@ describe('AgentRosterController', () => {
       workflowAgentKeys: ['builtInWorkflow:write'],
       toolUseAgentKeys: ['builtInToolUse:lead'],
     });
+  });
+
+  it('surfaces rollback failures together with the original write error', async () => {
+    const originalError = new Error('canonical write failed');
+    const rollbackError = new Error('mirror rollback failed');
+    const initialSelection = {
+      kind: 'custom' as const,
+      workflowAgentKeys: ['builtInWorkflow:write'],
+      toolUseAgentKeys: ['builtInToolUse:lead'],
+    };
+    const storedState = memoryStore({
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: initialSelection,
+      [WorkspaceStateKey.ENABLED_AGENTS]: initialSelection.workflowAgentKeys,
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]:
+        initialSelection.toolUseAgentKeys,
+    });
+    const workspaceState: StateStore = {
+      get: storedState.get.bind(storedState),
+      update: async (key, value) => {
+        if (
+          key === WorkspaceStateKey.AGENT_ROSTER_SELECTION &&
+          (value as { readonly kind?: string } | undefined)?.kind === 'all'
+        ) {
+          throw originalError;
+        }
+        if (
+          key === WorkspaceStateKey.ENABLED_AGENTS &&
+          value === initialSelection.workflowAgentKeys
+        ) {
+          throw rollbackError;
+        }
+        await storedState.update(key, value);
+      },
+    };
+    const roster = controller(workspaceState);
+
+    let thrown: unknown;
+    try {
+      await roster.setAll();
+    } catch (error: unknown) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(AggregateError);
+    expect((thrown as AggregateError).errors).toEqual([
+      originalError,
+      expect.objectContaining({ cause: rollbackError }),
+    ]);
   });
 });

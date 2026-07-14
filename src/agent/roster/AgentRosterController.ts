@@ -340,20 +340,41 @@ export class AgentRosterController<
         parsed,
       );
     } catch (error: unknown) {
-      await Promise.allSettled([
-        this.deps.workspaceState.update(
-          WorkspaceStateKey.ENABLED_AGENTS,
-          previous.workflow,
+      const rollbackWrites = [
+        {
+          key: WorkspaceStateKey.ENABLED_AGENTS,
+          value: previous.workflow,
+        },
+        {
+          key: WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+          value: previous.toolUse,
+        },
+        {
+          key: WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+          value: previous.selection,
+        },
+      ] as const;
+      const rollbackResults = await Promise.allSettled(
+        rollbackWrites.map(({ key, value }) =>
+          this.deps.workspaceState.update(key, value),
         ),
-        this.deps.workspaceState.update(
-          WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-          previous.toolUse,
-        ),
-        this.deps.workspaceState.update(
-          WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-          previous.selection,
-        ),
-      ]);
+      );
+      const rollbackErrors = rollbackResults.flatMap((result, index) =>
+        result.status === 'rejected'
+          ? [
+              new Error(
+                `Failed to restore agent roster state "${rollbackWrites[index]?.key ?? 'unknown'}".`,
+                { cause: result.reason },
+              ),
+            ]
+          : [],
+      );
+      if (rollbackErrors.length > 0) {
+        throw new AggregateError(
+          [error, ...rollbackErrors],
+          'Agent roster update failed and rollback was incomplete.',
+        );
+      }
       throw error;
     }
   }
