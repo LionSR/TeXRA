@@ -262,6 +262,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       color={COLOR_INFO}
       compact={compact}
       title={PLAN_APPROVAL_TITLE}
+      rejectionMode="feedback"
       extraActions={
         goalActionVisible
           ? [
