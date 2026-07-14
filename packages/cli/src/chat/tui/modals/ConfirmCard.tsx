@@ -10,6 +10,7 @@ import {
   confirmCardFeedbackHints,
   confirmCardKeyAction,
   confirmCardKeyHintsForWidth,
+  type ConfirmCardRejectionMode,
 } from './ConfirmCardState';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
@@ -27,6 +28,7 @@ export interface ConfirmCardProps {
   readonly title: string;
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
+  readonly rejectionMode: ConfirmCardRejectionMode;
   readonly alwaysAllow?: {
     readonly kind: ApprovalBypassKind;
     readonly label: string;
@@ -50,6 +52,7 @@ export function ConfirmCard({
   title,
   approveLabel = 'approve',
   rejectLabel = 'reject & note',
+  rejectionMode,
   alwaysAllow,
   extraActions = [],
   feedbackPlaceholder = 'Feedback to send with rejection',
@@ -98,7 +101,12 @@ export function ConfirmCard({
         }
         return;
       }
-      switch (confirmCardKeyAction(input, key, Boolean(alwaysAllow))) {
+      switch (
+        confirmCardKeyAction(input, key, {
+          allowAlways: alwaysAllow != null,
+          rejectionMode,
+        })
+      ) {
         case 'approve':
           onDecide({ accepted: true });
           return;
