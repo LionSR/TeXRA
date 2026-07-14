@@ -56,26 +56,18 @@ export function groupPermissions(
   return groups;
 }
 
-/**
- * Resolve the external inquiry carousel index after the permissions list
- * changes. When a tracked permission key is provided, try to find it in
- * the updated list so the carousel stays on the same inquiry even when
- * earlier entries are resolved. Falls back to clamping when the tracked
- * entry is no longer present.
- */
-export function resolveExternalInquiryIndex(
-  prevIndex: number,
-  permissions: PermissionState[],
-  trackedKey: string | null,
-): number {
-  if (permissions.length === 0) return 0;
-  if (trackedKey) {
-    const found = permissions.findIndex(
-      (p) => getPermissionKey(p) === trackedKey,
-    );
-    if (found >= 0) return found;
-  }
-  return Math.min(prevIndex, permissions.length - 1);
+/** Keep a selected inquiry by key, choosing its nearest successor if removed. */
+export function selectExternalInquiryKey(
+  selectedKey: string | null,
+  previousKeys: readonly string[],
+  keys: readonly string[],
+): string | null {
+  if (keys.length === 0) return null;
+  if (selectedKey && keys.includes(selectedKey)) return selectedKey;
+
+  const previousIndex = selectedKey ? previousKeys.indexOf(selectedKey) : 0;
+  const fallbackIndex = Math.min(Math.max(previousIndex, 0), keys.length - 1);
+  return keys[fallbackIndex] ?? null;
 }
 
 export function isTextInput(el: Element | null): boolean {

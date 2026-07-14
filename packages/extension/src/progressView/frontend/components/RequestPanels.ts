@@ -40,7 +40,7 @@ import {
   groupPermissions,
   isActiveExternalInquiryCarousel,
   isTextInput,
-  resolveExternalInquiryIndex,
+  selectExternalInquiryKey,
   type PermissionGroups,
 } from './RequestPanelsState';
 
@@ -131,11 +131,8 @@ export class RequestPanels extends LitElement {
 
   @property({ attribute: false }) permissions: PermissionState[] = [];
 
-  /** Currently displayed external inquiry index (carousel). */
-  @state() private _eiIndex = 0;
-
-  /** Key of the currently viewed external inquiry, for stable tracking across list changes. */
-  private _eiTrackedKey: string | null = null;
+  /** Canonical selection for the external-inquiry carousel. */
+  @state() private selectedExternalInquiryKey: string | null = null;
 
   /** Memoized permission groups - recomputed in willUpdate() when permissions change. */
   private permissionGroups: PermissionGroups = createEmptyPermissionGroups();
@@ -143,13 +140,18 @@ export class RequestPanels extends LitElement {
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
     if (!changedProperties.has('permissions')) return;
 
+    const previousPermissions = changedProperties.get('permissions') ?? [];
+    const previousKeys =
+      groupPermissions(previousPermissions).externalInquiry.map(
+        getPermissionKey,
+      );
     this.permissionGroups = groupPermissions(this.permissions);
-    this._eiIndex = resolveExternalInquiryIndex(
-      this._eiIndex,
-      this.permissionGroups.externalInquiry,
-      this._eiTrackedKey,
+    const keys = this.permissionGroups.externalInquiry.map(getPermissionKey);
+    this.selectedExternalInquiryKey = selectExternalInquiryKey(
+      this.selectedExternalInquiryKey,
+      previousKeys,
+      keys,
     );
-    this._updateTrackedKey();
   }
 
   override connectedCallback(): void {
@@ -246,14 +248,15 @@ export class RequestPanels extends LitElement {
     }
 
     const config = SECTION_CONFIGS.externalInquiry;
-    const current = perms[this._eiIndex];
+    const index = this.externalInquiryIndex;
+    const current = perms[index];
     const nav = html`
       <div class="external-inquiry-requests__nav">
         <wa-button
           appearance="plain"
           size="small"
           title="Previous inquiry"
-          ?disabled=${this._eiIndex === 0}
+          ?disabled=${index === 0}
           @click=${this._eiPrev}
         >
           <wa-icon
@@ -263,13 +266,13 @@ export class RequestPanels extends LitElement {
           ></wa-icon>
         </wa-button>
         <span class="external-inquiry-requests__counter">
-          ${this._eiIndex + 1} / ${perms.length}
+          ${index + 1} / ${perms.length}
         </span>
         <wa-button
           appearance="plain"
           size="small"
           title="Next inquiry"
-          ?disabled=${this._eiIndex === perms.length - 1}
+          ?disabled=${index === perms.length - 1}
           @click=${this._eiNext}
         >
           <wa-icon
@@ -291,23 +294,30 @@ export class RequestPanels extends LitElement {
     `;
   }
 
-  private _updateTrackedKey(): void {
-    const ei = this.permissionGroups.externalInquiry;
-    this._eiTrackedKey =
-      ei.length > 0 ? getPermissionKey(ei[this._eiIndex]) : null;
+  private get externalInquiryIndex(): number {
+    const index = this.permissionGroups.externalInquiry.findIndex(
+      (permission) =>
+        getPermissionKey(permission) === this.selectedExternalInquiryKey,
+    );
+    return Math.max(index, 0);
   }
 
-  private _eiPrev(): void {
-    if (this._eiIndex > 0) {
-      this._eiIndex--;
-      this._updateTrackedKey();
+  private selectExternalInquiry(index: number): void {
+    const permission = this.permissionGroups.externalInquiry[index];
+    if (permission) {
+      this.selectedExternalInquiryKey = getPermissionKey(permission);
     }
   }
 
+  private _eiPrev(): void {
+    const index = this.externalInquiryIndex;
+    if (index > 0) this.selectExternalInquiry(index - 1);
+  }
+
   private _eiNext(): void {
-    if (this._eiIndex < this.permissionGroups.externalInquiry.length - 1) {
-      this._eiIndex++;
-      this._updateTrackedKey();
+    const index = this.externalInquiryIndex;
+    if (index < this.permissionGroups.externalInquiry.length - 1) {
+      this.selectExternalInquiry(index + 1);
     }
   }
 
@@ -371,7 +381,7 @@ export class RequestPanels extends LitElement {
     const target = getActivePermission({
       permissions: this.permissions,
       externalInquiryPermissions: this.permissionGroups.externalInquiry,
-      externalInquiryIndex: this._eiIndex,
+      externalInquiryIndex: this.externalInquiryIndex,
     });
     return findPanelForPermission(this.renderRoot, target);
   }
