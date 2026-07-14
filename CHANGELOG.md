@@ -20,6 +20,12 @@ All notable changes to this project will be documented in this file.
 
 ### Extension (VS Code)
 
+#### New Features
+
+- **Copilot subscription models appear alongside other model choices** — TeXRA
+  discovers compatible models from VS Code and uses the user's existing
+  Copilot access without requiring a provider API key.
+
 #### Bug Fixes
 
 - **Delegated-work approval uses a clear name** — proposal menus now describe

@@ -52,6 +52,10 @@ const ModelAvailabilityKindSchema = z.enum([
   // distinct from relay `included-access` because it is the user's own
   // credential and runs regardless of relay-vs-personal API mode.
   'subscription-access',
+  // Editor-hosted Copilot access is keyless but distinct from ChatGPT and the
+  // TeXRA relay. Permission state is reported by the VS Code host.
+  'copilot-access',
+  'copilot-permission-required',
 ]);
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 

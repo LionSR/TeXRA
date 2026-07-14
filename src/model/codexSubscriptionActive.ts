@@ -7,12 +7,11 @@
  * never disagree, and the single place that pairs the routing predicate with
  * `getUseOpenRouter()` - keeping that config read out of the CLI render path.
  */
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 import { isCodexSignedIn } from '@auth/codex';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { resolveCodexSubscriptionCapabilities } from './codexSubscriptionRouting';
+import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
 
 /**
  * Whether a request for `modelId` would be served by the ChatGPT subscription
@@ -22,7 +21,7 @@ import { resolveCodexSubscriptionCapabilities } from './codexSubscriptionRouting
 export async function isCodexSubscriptionActive(
   modelId: string,
 ): Promise<boolean> {
-  const config = MODEL_CONFIGS[modelId];
+  const config = await resolveRuntimeModelConfig(modelId);
   if (!config) return false;
   if (!resolveCodexSubscriptionCapabilities(config, getUseOpenRouter())) {
     return false;
