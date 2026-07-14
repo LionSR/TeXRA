@@ -6,6 +6,7 @@ import {
   buildChatDefaultAgentItems,
   setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
+import { formatCliAgentRoster } from '@cli/runtime/agentRoster';
 
 const agents: AgentEntry[] = [
   {
@@ -55,5 +56,17 @@ describe('AgentRosterForm', () => {
     await expect(
       setChatDefaultAgent(undefined, 'builtInToolUse:assistant'),
     ).rejects.toThrow('Default chat-agent selection requires a workspace.');
+  });
+
+  it('reports open categories without materializing the current catalog', () => {
+    expect(
+      formatCliAgentRoster({
+        selection: { kind: 'all' },
+        effectiveSelection: { kind: 'all' },
+        workflowAgentKeys: 'all',
+        toolUseAgentKeys: ['future-assistant'],
+        unresolvedNames: ['future-assistant'],
+      }),
+    ).toContain('Workflow agents: all');
   });
 });

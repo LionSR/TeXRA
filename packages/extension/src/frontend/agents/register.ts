@@ -5,10 +5,15 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { platform } from '@platform/platform';
-import { AgentRosterController, getAgentsByCategory } from '@agent/index';
+import {
+  AgentRosterController,
+  getAgentsByCategory,
+  getRosterAgent,
+} from '@agent/index';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import * as logger from '@logger/logUtils';
 import { parseAgentModePresets } from '@shared/schemas/agentPresets';
+import type { AgentSource } from '@shared/schemas/agent';
 
 const CHANNEL = 'AgentRegister';
 logger.initialize(CHANNEL);
@@ -29,6 +34,7 @@ export async function promptToAddAgentToConfig(
   agentName: string,
   autoAdd = false,
   category: 'workflow' | 'toolUse' = 'workflow',
+  source: AgentSource = 'custom',
 ): Promise<void> {
   const roster = new AgentRosterController({
     workspaceState: workspaceSM,
@@ -38,6 +44,7 @@ export async function promptToAddAgentToConfig(
       parseAgentModePresets(
         workspaceSM.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
       ),
+    resolveAgent: getRosterAgent,
     fallbackTeamId: null,
   });
   const current = roster.getVisibleAgents(category).map((entry) => entry.name);
@@ -59,7 +66,7 @@ export async function promptToAddAgentToConfig(
   if (shouldAdd) {
     await roster.setAgentEnabled({
       category,
-      source: 'custom',
+      source,
       name: agentName,
       enabled: true,
     });

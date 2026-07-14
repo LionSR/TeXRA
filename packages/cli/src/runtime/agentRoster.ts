@@ -5,9 +5,11 @@ import {
   getRosterAgent,
   loadAgents,
 } from '@agent/index';
-import { agentKeyOf } from '@shared/schemas/agent';
 import { parseAgentModePresets } from '@shared/schemas/agentPresets';
-import type { AgentRosterSelection } from '@shared/schemas/agentRoster';
+import type {
+  AgentRosterCategorySelection,
+  AgentRosterSelection,
+} from '@shared/schemas/agentRoster';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { loadWorkspaceCliConfig, resolveConfiguredAgent } from './cliConfig';
 
@@ -19,8 +21,8 @@ export interface CliAgentRosterRecord {
   >;
   readonly defaultTeamId?: string;
   readonly defaultChatAgent?: string;
-  readonly workflowAgentKeys: readonly string[];
-  readonly toolUseAgentKeys: readonly string[];
+  readonly workflowAgentKeys: AgentRosterCategorySelection;
+  readonly toolUseAgentKeys: AgentRosterCategorySelection;
   readonly unresolvedNames: readonly string[];
 }
 
@@ -42,7 +44,8 @@ export function cliAgentRosterController(): AgentRosterController {
 
 export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
   await loadAgents({ includeRemote: false });
-  const snapshot = cliAgentRosterController().snapshot();
+  const roster = cliAgentRosterController();
+  const snapshot = roster.snapshot();
   const cwd = platform().workspace.getWorkspacePath();
   const config = cwd ? await loadWorkspaceCliConfig(cwd) : undefined;
   return {
@@ -50,8 +53,8 @@ export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
     effectiveSelection: snapshot.effectiveSelection,
     defaultTeamId: snapshot.defaultTeamId,
     defaultChatAgent: resolveConfiguredAgent(config?.values, 'chat'),
-    workflowAgentKeys: snapshot.workflowAgents.map(agentKeyOf),
-    toolUseAgentKeys: snapshot.toolUseAgents.map(agentKeyOf),
+    workflowAgentKeys: roster.getEnabledAgentKeys('workflow') ?? 'all',
+    toolUseAgentKeys: roster.getEnabledAgentKeys('toolUse') ?? 'all',
     unresolvedNames: snapshot.unresolvedNames,
   };
 }
@@ -70,13 +73,15 @@ function formatSelection(selection: AgentRosterSelection): string {
 }
 
 export function formatCliAgentRoster(record: CliAgentRosterRecord): string {
+  const formatCategory = (selection: AgentRosterCategorySelection): string =>
+    selection === 'all' ? 'all' : selection.join(', ') || '(none)';
   const lines = [
     `Workspace roster: ${formatSelection(record.selection)}`,
     `Effective roster: ${formatSelection(record.effectiveSelection)}`,
     `Default team: ${record.defaultTeamId ?? '(none)'}`,
     `Default chat agent: ${record.defaultChatAgent ?? '(automatic)'}`,
-    `Workflow agents: ${record.workflowAgentKeys.join(', ') || '(none)'}`,
-    `Tool-use agents: ${record.toolUseAgentKeys.join(', ') || '(none)'}`,
+    `Workflow agents: ${formatCategory(record.workflowAgentKeys)}`,
+    `Tool-use agents: ${formatCategory(record.toolUseAgentKeys)}`,
   ];
   if (record.unresolvedNames.length > 0) {
     lines.push(`Unavailable members: ${record.unresolvedNames.join(', ')}`);

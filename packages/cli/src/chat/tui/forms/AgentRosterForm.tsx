@@ -74,6 +74,19 @@ export function buildChatDefaultAgentItems(
   ];
 }
 
+function selectedAgentKeys(
+  selection: CliAgentRosterRecord['workflowAgentKeys'],
+  agents: readonly AgentEntry[],
+): readonly string[] {
+  return selection === 'all' ? agents.map(agentKeyOf) : selection;
+}
+
+function selectionSizeLabel(
+  selection: CliAgentRosterRecord['workflowAgentKeys'],
+): string {
+  return selection === 'all' ? 'all' : String(selection.length);
+}
+
 export function agentRosterSelectWindow(args: {
   readonly availableRows: number | undefined;
   readonly itemCount: number;
@@ -203,7 +216,7 @@ export function AgentRosterForm(
         {
           value: 'custom-category',
           label: 'Custom selection',
-          description: `${data.record.workflowAgentKeys.length} workflow, ${data.record.toolUseAgentKeys.length} tool-use`,
+          description: `${selectionSizeLabel(data.record.workflowAgentKeys)} workflow, ${selectionSizeLabel(data.record.toolUseAgentKeys)} tool-use`,
         },
       ],
       (value) => setMode(value as AgentRosterFormMode),
@@ -270,7 +283,10 @@ export function AgentRosterForm(
 
   if (mode === 'chat-default') {
     return frame(
-      buildChatDefaultAgentItems(data.toolUse, data.record.toolUseAgentKeys),
+      buildChatDefaultAgentItems(
+        data.toolUse,
+        selectedAgentKeys(data.record.toolUseAgentKeys, data.toolUse),
+      ),
       (value) => {
         const cwd = platform().workspace.getWorkspacePath();
         write(() => setChatDefaultAgent(cwd, value || undefined), 'overview');
@@ -300,9 +316,12 @@ export function AgentRosterForm(
 
   const agents = data[mode];
   const selected = new Set(
-    mode === 'workflow'
-      ? data.record.workflowAgentKeys
-      : data.record.toolUseAgentKeys,
+    selectedAgentKeys(
+      mode === 'workflow'
+        ? data.record.workflowAgentKeys
+        : data.record.toolUseAgentKeys,
+      agents,
+    ),
   );
   return frame(
     agents.map((agent) => ({
