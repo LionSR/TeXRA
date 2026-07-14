@@ -29,6 +29,17 @@ describe('model handler compatibility inference', () => {
     ).toBe('ModelHandlerOpenRouterNative');
   });
 
+  it('keeps keyless legacy Copilot transcripts on OpenRouter', () => {
+    expect(
+      inferPersistedModelHandlerCompatibilityKey('copilot4o', [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'continue' }],
+        } as ProviderMessage,
+      ]),
+    ).toBe('ModelHandlerOpenRouterNative');
+  });
+
   it('infers from raw persisted flow state before launch constructs a handler', () => {
     expect(
       inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {

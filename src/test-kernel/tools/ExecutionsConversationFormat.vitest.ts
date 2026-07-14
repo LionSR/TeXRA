@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { formatConversationContent } from '@agent/storage/conversationFormat';
 import { formatConversation } from '@tools/executions/conversationFormat';
 
 describe('formatConversation', () => {
@@ -27,6 +28,33 @@ describe('formatConversation', () => {
     expect(output).toContain('hello');
     expect(output).toContain('[tool_use: read({"path":"a.tex"})]');
     expect(output).toContain('[tool_result: done]');
+  });
+
+  it('formats VS Code language-model tool parts through the shared policy', () => {
+    const toolCall = {
+      kind: 'toolCall',
+      callId: 'call-1',
+      name: 'read',
+      input: { path: 'secret.tex' },
+    };
+
+    expect(
+      formatConversationContent([toolCall], {
+        includeToolUseMarkers: false,
+        includeToolUseInput: false,
+      }),
+    ).toBe('');
+    expect(
+      formatConversationContent([toolCall], {
+        includeToolUseMarkers: true,
+        includeToolUseInput: false,
+      }),
+    ).toBe('[tool_use: read]');
+    expect(
+      formatConversationContent([
+        { kind: 'toolResult', callId: 'call-1', text: 'done' },
+      ]),
+    ).toBe('[tool_result: done]');
   });
 
   it('formats media blocks as readable attachment markers', () => {

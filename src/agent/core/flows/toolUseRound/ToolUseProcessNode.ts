@@ -27,7 +27,11 @@ function hasToolResultContent(value: unknown): boolean {
   if (!Array.isArray(value)) return false;
   return value.some((item) => {
     if (!isObject(item)) return false;
-    return item.type === 'tool_result' || isObject(item.functionResponse);
+    return (
+      item.type === 'tool_result' ||
+      item.kind === 'toolResult' ||
+      isObject(item.functionResponse)
+    );
   });
 }
 
