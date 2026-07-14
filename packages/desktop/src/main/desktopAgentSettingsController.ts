@@ -1,8 +1,8 @@
-// Controller imports
+// Local imports - settings controllers
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
 
-// Shared imports
+// Local imports - agent registry
 import type {
   computeAgentOptionsData,
   loadAgents,
@@ -10,18 +10,20 @@ import type {
   AgentEntry,
 } from '@agent/index/agentRegistry';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
+
+// Local imports - shared settings
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   buildAgentModePresetsMessage,
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
+import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
 
-// Type imports
-import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
+// Local imports - controller types
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
-import type { StateStore } from '@platform/interfaces';
 
 export interface DesktopAgentRegistryPort {
   readonly loadAgents: typeof loadAgents;
@@ -66,9 +68,13 @@ export interface DesktopAgentNotificationPort {
   readonly showErrorMessage: (message: string) => Promise<void>;
 }
 
-export interface DesktopAgentSettingsState {
-  readonly workspaceState: StateStore;
-  readonly globalState: StateStore;
+export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
+  readonly registry: DesktopAgentRegistryPort;
+  readonly directory: DesktopAgentDirectoryPort;
+  readonly renderer: DesktopAgentRendererPort;
+  readonly prompts: DesktopAgentPromptPort;
+  readonly remoteCatalog: DesktopRemoteAgentCatalogPort;
+  readonly notifications: DesktopAgentNotificationPort;
 }
 
 export interface DesktopAgentSettingsController {
@@ -84,18 +90,33 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly catalogController;
   private readonly directoryController;
   private readonly visibilityController;
+  private readonly registry: DesktopAgentRegistryPort;
+  private readonly directory: DesktopAgentDirectoryPort;
+  private readonly renderer: DesktopAgentRendererPort;
+  private readonly prompts: DesktopAgentPromptPort;
+  private readonly remoteCatalog: DesktopRemoteAgentCatalogPort;
+  private readonly notifications: DesktopAgentNotificationPort;
 
-  constructor(
-    state: DesktopAgentSettingsState,
-    private readonly registry: DesktopAgentRegistryPort,
-    private readonly directory: DesktopAgentDirectoryPort,
-    private readonly renderer: DesktopAgentRendererPort,
-    private readonly prompts: DesktopAgentPromptPort,
-    private readonly remoteCatalog: DesktopRemoteAgentCatalogPort,
-    private readonly notifications: DesktopAgentNotificationPort,
-  ) {
+  constructor(options: DefaultDesktopAgentSettingsControllerOptions) {
+    const {
+      workspaceState,
+      globalState,
+      registry,
+      directory,
+      renderer,
+      prompts,
+      remoteCatalog,
+      notifications,
+    } = options;
+    this.registry = registry;
+    this.directory = directory;
+    this.renderer = renderer;
+    this.prompts = prompts;
+    this.remoteCatalog = remoteCatalog;
+    this.notifications = notifications;
     const controllers = createSettingsAgentControllers({
-      ...state,
+      workspaceState,
+      globalState,
       getCustomAgentDirectory: directory.getCustomAgentDirectory,
       getSourceDirectory: directory.getSourceDirectory,
       getAgents: registry.getAgents,

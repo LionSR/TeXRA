@@ -58,9 +58,10 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
   const emptyCatalog: AgentCatalog = { workflow: [], toolUse: [] };
   const catalog = options.catalog ?? emptyCatalog;
   const visibleCatalog = options.visibleCatalog ?? catalog;
-  const controller = new DefaultDesktopAgentSettingsController(
-    { workspaceState, globalState },
-    {
+  const controller = new DefaultDesktopAgentSettingsController({
+    workspaceState,
+    globalState,
+    registry: {
       loadAgents: options.loadAgents ?? (async () => undefined),
       refreshAgents: options.refreshAgents ?? (async () => undefined),
       loadAgentOptionsData: async () => ({
@@ -76,7 +77,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       getAgents: (category) => catalog[category],
       getVisibleAgents: (category) => visibleCatalog[category],
     },
-    {
+    directory: {
       getCustomAgentDirectory:
         options.getCustomAgentDirectory ?? (async () => '/agents/custom'),
       getSourceDirectory: async (source) => `/agents/${source}`,
@@ -88,17 +89,17 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
         revealed.push(filePath);
       },
     },
-    { postToRenderer: (message) => posted.push(message) },
-    {
+    renderer: { postToRenderer: (message) => posted.push(message) },
+    prompts: {
       promptText: options.promptText ?? (async () => undefined),
       chooseTeamAvailability:
         options.chooseTeamAvailability ?? (async () => 'cancel'),
     },
-    {
+    remoteCatalog: {
       canAccess: options.canAccessRemoteCatalog ?? (async () => false),
       signIn: options.signInForRemoteCatalog ?? (async () => false),
     },
-    {
+    notifications: {
       showInfoMessage: async (message) => {
         infoMessages.push(message);
       },
@@ -106,7 +107,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
         errorMessages.push(message);
       },
     },
-  );
+  });
   return {
     controller,
     errorMessages,

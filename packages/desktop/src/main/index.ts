@@ -631,19 +631,17 @@ function createWindow(options: {
   // Workspace-explorer sidebar removed in PR 3 (PRD § 7.D + § 8). File staging
   // happens entirely inside <main-app>'s built-in panel; the duplicate tree
   // sidebar and its IPC are gone.
-  const agentSettingsController = new DefaultDesktopAgentSettingsController(
-    {
-      workspaceState: platform().workspaceState,
-      globalState: platform().globalState,
-    },
-    {
+  const agentSettingsController = new DefaultDesktopAgentSettingsController({
+    workspaceState: platform().workspaceState,
+    globalState: platform().globalState,
+    registry: {
       loadAgents,
       refreshAgents: refresh,
       loadAgentOptionsData: computeAgentOptionsData,
       getAgents: getAgentsByCategory,
       getVisibleAgents,
     },
-    {
+    directory: {
       getCustomAgentDirectory: () => platform().agentDirectories.custom(),
       getSourceDirectory: (source: AgentSource) => {
         switch (source) {
@@ -670,8 +668,10 @@ function createWindow(options: {
         shell.showItemInFolder(filePath);
       },
     },
-    { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
-    {
+    renderer: {
+      postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    },
+    prompts: {
       promptText: (input) => promptInRenderer(window, input),
       chooseTeamAvailability: async ({ presetName, unavailableNames }) => {
         const result = await dialog.showMessageBox(window, {
@@ -690,12 +690,12 @@ function createWindow(options: {
         return 'cancel';
       },
     },
-    {
+    remoteCatalog: {
       canAccess: () => SupabaseClient.canAccessRemoteAgentCatalog(),
       signIn: signInForRemoteAgentCatalog,
     },
-    { showInfoMessage, showErrorMessage },
-  );
+    notifications: { showInfoMessage, showErrorMessage },
+  });
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     agentSettingsController,
