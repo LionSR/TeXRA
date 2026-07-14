@@ -1,5 +1,6 @@
 import { defineCommand } from 'citty';
 
+import { InvalidAgentTeamError } from '@agent/roster/AgentRosterController';
 import { readSetting } from '@shared/config/settingsAccess';
 import { agentKeyOf } from '@shared/schemas/agent';
 import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
@@ -42,17 +43,13 @@ function formatConfigValue(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
 
-async function setAgentRosterTeam(
-  roster: ReturnType<typeof cliAgentRosterController>,
-  teamId: string,
+async function runAgentRosterTeamAction(
+  action: () => Promise<void>,
 ): Promise<void> {
   try {
-    await roster.setTeam(teamId);
+    await action();
   } catch (error: unknown) {
-    if (
-      error instanceof Error &&
-      error.message === `Unknown agent team: ${teamId}`
-    ) {
+    if (error instanceof InvalidAgentTeamError) {
       throw new CliUsageError(error.message);
     }
     throw error;
@@ -127,7 +124,10 @@ async function configureAgentRoster(
 
   if (input.inherit) await roster.setInherited();
   if (input.all) await roster.setAll();
-  if (input.team) await setAgentRosterTeam(roster, input.team);
+  const teamId = input.team;
+  if (teamId) {
+    await runAgentRosterTeamAction(() => roster.setTeam(teamId));
+  }
   if (input.workflow !== undefined && input.toolUse !== undefined) {
     await roster.setCustom({
       workflowAgentKeys: parseAgentKeys(input.workflow),
@@ -141,7 +141,10 @@ async function configureAgentRoster(
   } else if (input.toolUse !== undefined) {
     await roster.setEnabledAgentKeys('toolUse', parseAgentKeys(input.toolUse));
   }
-  if (input.defaultTeam) await roster.setDefaultTeam(input.defaultTeam);
+  const defaultTeamId = input.defaultTeam;
+  if (defaultTeamId) {
+    await runAgentRosterTeamAction(() => roster.setDefaultTeam(defaultTeamId));
+  }
   if (input.clearDefault) await roster.clearDefaultTeam();
   if (input.defaultAgent) {
     const available = roster.getVisibleAgents('toolUse');

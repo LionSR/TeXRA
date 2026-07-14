@@ -30,6 +30,8 @@ export interface AgentRosterEntry {
   readonly internal?: boolean;
 }
 
+export class InvalidAgentTeamError extends Error {}
+
 export interface AgentRosterControllerDeps<
   Entry extends AgentRosterEntry = AgentRosterEntry,
 > {
@@ -366,7 +368,8 @@ export class AgentRosterController<
     const preset = allPresets(this.deps.getPresets?.() ?? []).find(
       (candidate) => candidate.id === teamId,
     );
-    if (!preset) throw new Error(`Unknown agent team: ${teamId}`);
+    if (!preset)
+      throw new InvalidAgentTeamError(`Unknown agent team: ${teamId}`);
     await this.setSelection({ kind: 'team', teamId: preset.id });
   }
 
@@ -466,7 +469,7 @@ export class AgentRosterController<
 
   async setDefaultTeam(teamId: string): Promise<void> {
     if (!allPresets().some((preset) => preset.id === teamId)) {
-      throw new Error(
+      throw new InvalidAgentTeamError(
         `Only a built-in team can be the user default: ${teamId}`,
       );
     }

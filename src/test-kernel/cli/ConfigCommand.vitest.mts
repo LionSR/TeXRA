@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { InvalidAgentTeamError } from '@agent/roster/AgentRosterController';
+
 const mocks = vi.hoisted(() => ({
   clearDefaultTeam: vi.fn(),
   getVisibleAgents: vi.fn(),
@@ -134,7 +136,7 @@ describe('CLI config command', () => {
 
   it('reports an unknown team id as a usage error', async () => {
     mocks.setTeam.mockRejectedValueOnce(
-      new Error('Unknown agent team: missing-team'),
+      new InvalidAgentTeamError('Unknown agent team: missing-team'),
     );
 
     const result = await runCli([
@@ -149,6 +151,27 @@ describe('CLI config command', () => {
 
     expect(result.exitCode).toBe(2);
     expect(mocks.setTeam).toHaveBeenCalledWith('missing-team');
+  });
+
+  it('reports an invalid default team id as a usage error', async () => {
+    mocks.setDefaultTeam.mockRejectedValueOnce(
+      new InvalidAgentTeamError(
+        'Only a built-in team can be the user default: custom-team',
+      ),
+    );
+
+    const result = await runCli([
+      'config',
+      'agents',
+      '--default-team',
+      'custom-team',
+      '--output-format',
+      'json',
+      '--no-input',
+    ]);
+
+    expect(result.exitCode).toBe(2);
+    expect(mocks.setDefaultTeam).toHaveBeenCalledWith('custom-team');
   });
 
   it('canonicalizes a default chat agent from the effective roster', async () => {
