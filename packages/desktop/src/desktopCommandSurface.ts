@@ -20,7 +20,7 @@ import type { MenuItemConstructorOptions } from 'electron';
 import type { DesktopRoute } from './desktopShellMessages.js';
 
 export { SETTINGS_TAB };
-export { formatDesktopAccelerator, toElectronAccelerator };
+export { formatDesktopAccelerator };
 
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',

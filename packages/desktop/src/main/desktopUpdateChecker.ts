@@ -139,30 +139,24 @@ async function runDesktopUpdateCheck({
 
   const release = await fetchRelease();
   if (!release) return;
-  if (!isNewerDesktopVersion(release.version, currentVersion)) {
+
+  // Notify at most once per release version; a matching-or-older release just
+  // refreshes the throttle stamp below.
+  if (
+    isNewerDesktopVersion(release.version, currentVersion) &&
+    globalState.get<string>(
+      GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
+    ) !== release.version
+  ) {
+    await notify(release);
     await globalState.update(
-      GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-      nowMs,
+      GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
+      release.version,
     );
-    return;
   }
 
-  const lastNotifiedVersion = globalState.get<string>(
-    GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
-  );
-  if (lastNotifiedVersion === release.version) {
-    await globalState.update(
-      GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-      nowMs,
-    );
-    return;
-  }
-
-  await notify(release);
-  await globalState.update(
-    GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
-    release.version,
-  );
+  // Stamp the daily throttle only after a successful fetch and any required
+  // notification, so a failed check retries on the next launch.
   await globalState.update(
     GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
     nowMs,

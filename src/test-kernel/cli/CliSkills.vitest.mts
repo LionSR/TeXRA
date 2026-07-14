@@ -5,10 +5,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { defaultSkillSources } from '@skills/skillSources';
-import {
-  clearRuntimeSkillSources,
-  setRuntimeSkillSources,
-} from '@skills/runtimeSkills';
+import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import {
   formatCliSkillList,
   readCliRuntimeSkills,
@@ -38,7 +35,7 @@ async function writeSkill(
 }
 
 afterEach(async () => {
-  clearRuntimeSkillSources();
+  setRuntimeSkillSources([]);
   await Promise.all(
     tempRoots.splice(0).map((root) => {
       return fs.rm(root, { recursive: true, force: true });

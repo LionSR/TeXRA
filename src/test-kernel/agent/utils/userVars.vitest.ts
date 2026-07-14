@@ -7,10 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - agent components
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  clearRuntimeSkillSources,
-  setRuntimeSkillSources,
-} from '@skills/runtimeSkills';
+import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { noopTrace } from '@agent/trace';
 import {
   AgentConfigSchema,
@@ -106,7 +103,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
   });
 
   afterEach(async () => {
-    clearRuntimeSkillSources();
+    setRuntimeSkillSources([]);
     await fakeConfig.update('texra.skills.enabled', undefined);
   });
 

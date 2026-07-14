@@ -21,7 +21,7 @@ import {
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { createRunScope } from '@agent/runtime/RunScope';
-import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
@@ -29,7 +29,6 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
-  STREAM_STATUS,
   type ExecutionId,
   type StorageKey,
   type StreamTabId,

@@ -19,7 +19,6 @@ import { flowKey } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_DESCRIPTOR_SCHEMA_VERSION,
   STREAM_PHASE,

@@ -53,9 +53,8 @@ export function createHostEventHandlerContext(): FrontendEventHandlerContext {
   return {
     getState: () => appState.get(),
     setState: (updater) => appState.set(updater(appState.get())),
-    setStreamState: (streamId, updater) =>
-      setStreamStateForId(streamId, updater),
-    setStreamLogs: (streamId, updater) => setStreamLogsForId(streamId, updater),
+    setStreamState: setStreamStateForId,
+    setStreamLogs: setStreamLogsForId,
   };
 }
 

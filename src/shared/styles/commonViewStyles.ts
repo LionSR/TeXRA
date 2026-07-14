@@ -166,15 +166,12 @@ export const commonViewStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
-  .panel-collapsible::part(content) {
-    padding: 0 var(--wa-space-2xs) var(--wa-space-2xs);
-  }
-
   /* wa-details exposes the body via the 'content' part. The grid 1fr/0fr
      trick lets long content scale without a fixed max-height cap. The
      direct child wrapper carries 'overflow: hidden' and 'min-height: 0'
      so the grid row can clamp it without truncation jumps. */
   .panel-collapsible::part(content) {
+    padding: 0 var(--wa-space-2xs) var(--wa-space-2xs);
     display: grid;
     grid-template-rows: 1fr;
   }

@@ -1,24 +1,6 @@
-// Third-party imports
-import micromatch from 'micromatch';
-
 // Local imports - common
 import { ToolError } from '@shared/schemas/toolResult';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-/**
- * Compile a glob pattern into a matcher that operates on POSIX-style paths.
- * Supports `*`, `?`, and `**` tokens.
- */
-export function createGlobMatcher(pattern: string): (value: string) => boolean {
-  // Preserve Minimatch semantics: basename matching is only enabled for
-  // slash-free patterns. micromatch changes slash-containing pattern behavior
-  // when matchBase is true, so gate it before compiling.
-  const isMatch = micromatch.matcher(pattern, {
-    dot: true,
-    matchBase: !pattern.includes('/'),
-  });
-  return (value: string) => isMatch(value.replaceAll('\\', '/'));
-}
 
 /**
  * Count non-overlapping occurrences of `needle` in `haystack`.

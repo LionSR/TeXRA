@@ -2,10 +2,10 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent output
 import {
@@ -21,17 +21,12 @@ import {
 } from '@utils/prompt';
 
 describe('workflow prompt file names', () => {
-  beforeEach(async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform({
-        workspacePath: '/workspace',
-        files: {
-          '/workspace/chapter/main.tex': 'workspace text',
-          '/outside/absolute.tex': 'external text',
-        },
-      }),
-    );
+  setupPlatform({
+    workspacePath: '/workspace',
+    files: {
+      '/workspace/chapter/main.tex': 'workspace text',
+      '/outside/absolute.tex': 'external text',
+    },
   });
 
   it('uses workspace-relative names and external basenames in prompt variables', async () => {

@@ -15,11 +15,7 @@ import {
 } from '@shared/utils/dispatcher';
 
 import { SwitchViewMessageSchema } from '../commonViewMessages';
-import {
-  commandOnly,
-  withFilesArray,
-  withOptionalFilePath,
-} from '../messageFactories';
+import { commandOnly, withFilesArray } from '../messageFactories';
 import {
   ExtendedDocumentFileTypeSchema,
   MultipleDocumentFileTypeSchema,
@@ -126,7 +122,10 @@ const FileSelectionMessages = [
 ] as const;
 
 const FileSelectedMessages = [
-  withOptionalFilePath(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
+    filePath: z.string().optional(),
+  }),
 ] as const;
 
 const RequestFileMessages = [

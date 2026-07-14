@@ -23,7 +23,7 @@ import {
 } from '@utils/git/commitLogFormat';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { extendEnvPath } from '@utils/system/platformPaths';
-import { isGitRepository as probeGitRepository } from '@utils/system/isGitRepository';
+import { isGitRepository } from '@utils/system/isGitRepository';
 
 const CHANNEL = 'gitCommands';
 logger.initialize(CHANNEL);
@@ -53,18 +53,6 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
     { id: gitCommands.getRecentCommits, handler: getRecentCommits },
     { id: gitCommands.findCommitInHistory, handler: findCommitInHistory },
   ]);
-}
-
-/**
- * Check if the workspace (or a given path) is inside a git repository.
- * Delegates to the host-neutral probe shared with the desktop host so both
- * hosts can't drift apart on worktree/submodule handling.
- *
- * @param rootPath - Optional root path override. Defaults to VS Code workspace.
- *   Pass a worktree path to check a specific checkout.
- */
-function isGitRepository(rootPath?: string): Promise<boolean> {
-  return probeGitRepository(rootPath);
 }
 
 async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
