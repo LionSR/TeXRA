@@ -3,6 +3,7 @@ import {
   AgentRosterController,
   getAgentsByCategory,
   loadAgents,
+  resolveAgentKey,
 } from '@agent/index';
 import { agentKeyOf } from '@shared/schemas/agent';
 import { parseAgentModePresets } from '@shared/schemas/agentPresets';
@@ -34,6 +35,8 @@ export function cliAgentRosterController(): AgentRosterController {
       parseAgentModePresets(
         workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
       ),
+    resolveIdentifier: (category, identifier) =>
+      resolveAgentKey(identifier, category),
     fallbackTeamId: null,
   });
 }

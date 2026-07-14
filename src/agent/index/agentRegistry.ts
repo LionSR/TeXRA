@@ -569,10 +569,8 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
       parseAgentModePresets(
         workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
       ),
-    resolveIdentifier: (agentCategory, identifier) => {
-      const entry = getAgent(identifier, agentCategory);
-      return entry ? agentKeyOf(entry) : identifier;
-    },
+    resolveIdentifier: (agentCategory, identifier) =>
+      resolveAgentKey(identifier, agentCategory),
     fallbackTeamId: null,
   }).getVisibleAgents(category) as AgentEntry[];
 }

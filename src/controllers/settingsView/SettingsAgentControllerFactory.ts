@@ -17,6 +17,7 @@ import {
   getAgent,
   getAgentsByCategory,
   getVisibleAgents as getVisibleRegistryAgents,
+  resolveAgentKey,
   type AgentEntry,
 } from '@agent/index';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -60,6 +61,8 @@ export function createSettingsAgentControllers(
       parseAgentModePresets(
         workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
       ),
+    resolveIdentifier: (category, identifier) =>
+      resolveAgentKey(identifier, category),
     fallbackTeamId: null,
   });
 
