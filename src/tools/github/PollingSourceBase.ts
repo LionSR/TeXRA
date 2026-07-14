@@ -14,8 +14,8 @@
 import pMap from 'p-map';
 
 import type { AgentTrace } from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import { appSignals } from '@eventBus/AppSignals';
-import { createChannelTrace } from '@logger';
 
 import {
   createBoundedIdSet,

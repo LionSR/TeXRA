@@ -10,6 +10,7 @@
 
 import { synchronizeAgentResultOutcome, type ResultMeta } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import {
   currentSession,
   type SessionHandle,
@@ -22,7 +23,6 @@ import type {
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { classifyAgentError, isAbortError } from '@common/errors';
-import { createChannelTrace } from '@logger';
 import type {
   ExecutionId,
   StreamTabId,

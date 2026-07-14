@@ -12,7 +12,11 @@ import {
 // Local imports - agent
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
-import { logContextManagementEvent, TraceEmitter } from '@agent/trace';
+import {
+  attachChannelSubscriber,
+  logContextManagementEvent,
+  TraceEmitter,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -61,7 +65,6 @@ import {
 // Local imports - platform
 
 // Local imports - model
-import { attachChannelSubscriber } from '@logger/logUtils';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 import { isGpt5ModelName } from '@model/modelNames';
 

@@ -34,20 +34,6 @@ export function disposeAfterTest<T extends { dispose(): void }>(value: T): T {
   return value;
 }
 
-export function mockLoggerModule(
-  loggerErrorSpy?: ReturnType<typeof vi.fn>,
-): void {
-  vi.doMock('@logger', () => ({
-    createChannelTrace: () => ({
-      emit: vi.fn(),
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: loggerErrorSpy ?? (() => {}),
-    }),
-  }));
-}
-
 /** Minimal AgentTrace stand-in for bridging terminal results into a session. */
 export function makeFakeTrace(): {
   subscribe(fn: (event: unknown) => void): () => void;
