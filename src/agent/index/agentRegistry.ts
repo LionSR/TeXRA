@@ -539,6 +539,15 @@ export function resolveAgentKey(
   return agentKeyOf(entry);
 }
 
+/** Resolve one roster identifier without collapsing an exact source key. */
+export function getRosterAgent(
+  category: AgentCategoryType,
+  identifier: string,
+): AgentEntry | undefined {
+  const entry = getAgent(identifier, category);
+  return entry?.category === category && !entry.internal ? entry : undefined;
+}
+
 // =============================================================================
 // SOURCE HELPERS
 // =============================================================================
@@ -569,8 +578,7 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
       parseAgentModePresets(
         workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
       ),
-    resolveIdentifier: (agentCategory, identifier) =>
-      resolveAgentKey(identifier, agentCategory),
+    resolveAgent: getRosterAgent,
     fallbackTeamId: null,
   }).getVisibleAgents(category) as AgentEntry[];
 }

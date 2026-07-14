@@ -41,6 +41,7 @@ export {
   // Key helpers
   createKey,
   resolveAgentKey,
+  getRosterAgent,
   // Source helpers
   isRemoteAgent,
   // Visible agents (for dropdowns and tools)

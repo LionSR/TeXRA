@@ -27,6 +27,7 @@ export interface AgentRosterEntry {
   readonly name: string;
   readonly source: AgentSource;
   readonly category: AgentCategory;
+  readonly internal?: boolean;
 }
 
 export interface AgentRosterControllerDeps {
@@ -34,11 +35,11 @@ export interface AgentRosterControllerDeps {
   readonly globalState: StateStore;
   readonly getAgents: (category: AgentCategory) => AgentRosterEntry[];
   readonly getPresets?: () => readonly AgentModePreset[];
-  /** Resolve an alias or bare name to a canonical name or source-qualified key. */
-  readonly resolveIdentifier?: (
+  /** Resolve one stored identifier without collapsing exact source identity. */
+  readonly resolveAgent?: (
     category: AgentCategory,
     identifier: string,
-  ) => string;
+  ) => AgentRosterEntry | undefined;
   /** Host policy used only when an inherited roster has no user default. */
   readonly fallbackTeamId?: string | null;
 }
@@ -51,6 +52,8 @@ function serializeWorkspaceWrite(
 ): Promise<void> {
   const previous = workspaceWriteQueues.get(store) ?? Promise.resolve();
   const run = previous.then(write);
+  // Release the queue after either outcome; callers still receive `run` and
+  // therefore observe their own write error.
   workspaceWriteQueues.set(
     store,
     run.then(
@@ -159,19 +162,6 @@ function selectedIdentifiers(
   return category === 'workflow' ? preset.workflowAgents : preset.toolUseAgents;
 }
 
-function filterEntries(
-  entries: readonly AgentRosterEntry[],
-  identifiers: readonly string[] | undefined,
-  resolveIdentifier: (identifier: string) => string = (identifier) =>
-    identifier,
-): AgentRosterEntry[] {
-  if (identifiers === undefined) return [...entries];
-  const resolved = identifiers.map(resolveIdentifier);
-  return entries.filter((entry) =>
-    resolved.some((identifier) => agentMatchesIdentifier(entry, identifier)),
-  );
-}
-
 export class AgentRosterController {
   constructor(private readonly deps: AgentRosterControllerDeps) {}
 
@@ -193,12 +183,19 @@ export class AgentRosterController {
 
   getVisibleAgents(category: AgentCategory): AgentRosterEntry[] {
     const effective = this.getEffectiveSelection();
-    return filterEntries(
-      this.deps.getAgents(category),
-      selectedIdentifiers(effective, category, this.deps.getPresets?.() ?? []),
-      (identifier) =>
-        this.deps.resolveIdentifier?.(category, identifier) ?? identifier,
+    const identifiers = selectedIdentifiers(
+      effective,
+      category,
+      this.deps.getPresets?.() ?? [],
     );
+    if (identifiers === undefined) return this.deps.getAgents(category);
+
+    const resolved = identifiers
+      .map((identifier) => this.resolveEntry(category, identifier))
+      .filter((entry): entry is AgentRosterEntry => entry !== undefined);
+    return [
+      ...new Map(resolved.map((entry) => [agentKeyOf(entry), entry])).values(),
+    ];
   }
 
   /** Return the effective stored identifiers, including unavailable members. */
@@ -218,18 +215,8 @@ export class AgentRosterController {
           presets,
         );
         if (identifiers === undefined) return [];
-        const entries = this.deps.getAgents(category);
         return identifiers
-          .map(
-            (identifier) =>
-              this.deps.resolveIdentifier?.(category, identifier) ?? identifier,
-          )
-          .filter(
-            (identifier) =>
-              !entries.some((entry) =>
-                agentMatchesIdentifier(entry, identifier),
-              ),
-          )
+          .filter((identifier) => !this.resolveEntry(category, identifier))
           .map(agentName);
       },
     );
@@ -257,16 +244,25 @@ export class AgentRosterController {
     return unique(
       identifiers.map((identifier) => {
         if (selection.kind === 'custom') return identifier;
-        const resolvedIdentifier =
-          this.deps.resolveIdentifier?.(category, identifier) ?? identifier;
-        const entry = this.deps
-          .getAgents(category)
-          .find((candidate) =>
-            agentMatchesIdentifier(candidate, resolvedIdentifier),
-          );
-        return entry ? agentKeyOf(entry) : resolvedIdentifier;
+        const entry = this.resolveEntry(category, identifier);
+        return entry ? agentKeyOf(entry) : identifier;
       }),
     );
+  }
+
+  private resolveEntry(
+    category: AgentCategory,
+    identifier: string,
+  ): AgentRosterEntry | undefined {
+    const resolved = this.deps.resolveAgent?.(category, identifier);
+    if (resolved) {
+      return resolved.category === category && !resolved.internal
+        ? resolved
+        : undefined;
+    }
+    return this.deps
+      .getAgents(category)
+      .find((entry) => agentMatchesIdentifier(entry, identifier));
   }
 
   private resolveEffectiveSelection(

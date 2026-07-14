@@ -295,6 +295,35 @@ describe('AgentRosterController', () => {
     ]);
   });
 
+  it('resolves an exact source key hidden by the display projection', () => {
+    const custom = {
+      category: 'toolUse' as const,
+      source: 'custom' as const,
+      name: 'review',
+    };
+    const remote = {
+      category: 'toolUse' as const,
+      source: 'remote' as const,
+      name: 'review',
+    };
+    const roster = new AgentRosterController({
+      workspaceState: memoryStore({
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+          kind: 'custom',
+          workflowAgentKeys: [],
+          toolUseAgentKeys: ['remote:review'],
+        },
+      }),
+      globalState: memoryStore(),
+      getAgents: (category) => (category === 'toolUse' ? [custom] : []),
+      resolveAgent: (_category, identifier) =>
+        identifier === 'remote:review' ? remote : undefined,
+      fallbackTeamId: null,
+    });
+
+    expect(roster.getVisibleAgents('toolUse')).toEqual([remote]);
+  });
+
   it('serializes concurrent category changes through one workspace owner', async () => {
     const workspaceState = memoryStore();
     const first = controller(workspaceState);
