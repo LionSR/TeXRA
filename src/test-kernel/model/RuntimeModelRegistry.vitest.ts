@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installPlatform } from '@test/support/setupPlatform';
+import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
@@ -11,6 +12,7 @@ import {
   getRuntimeModelConfig,
   invalidateRuntimeModelRegistry,
   refreshRuntimeModelRegistry,
+  resolveRuntimeModelConfig,
   runtimeModelAccess,
 } from '@model/runtimeModelRegistry';
 import type {
@@ -105,6 +107,9 @@ describe('runtime model registry', () => {
         supportsNativeCodeExecution: false,
       },
     });
+    expect(
+      inferPersistedModelHandlerCompatibilityKey('copilot:sonnet46', []),
+    ).toBe('ModelHandlerVscodeLm');
   });
 
   it('keeps denied models resolvable without advertising them as available', async () => {
@@ -190,10 +195,27 @@ describe('runtime model registry', () => {
     expect(availableRuntimeModelIds()).toEqual(['copilot:sonnet46']);
 
     invalidateRuntimeModelRegistry();
+    expect(getRuntimeModelConfig('copilot:sonnet46')).toBeDefined();
     await installPlatform({}, { languageModel: languageModelPort([]) });
     await refreshRuntimeModelRegistry();
 
     expect(availableRuntimeModelIds()).toEqual([]);
     expect(getRuntimeModelConfig('copilot:sonnet46')).toBeUndefined();
+  });
+
+  it('does not make static models depend on native discovery', async () => {
+    await installPlatform(
+      {},
+      {
+        languageModel: {
+          ...languageModelPort([]),
+          selectModels: async () => {
+            throw new Error('native discovery failed');
+          },
+        },
+      },
+    );
+
+    await expect(resolveRuntimeModelConfig('gpt55')).resolves.toBeDefined();
   });
 });

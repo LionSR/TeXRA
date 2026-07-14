@@ -133,12 +133,11 @@ export async function refreshRuntimeModelRegistry(): Promise<void> {
   }
 }
 
-/** Drop native discovery state; the next async registry read repopulates it. */
+/** Mark discovery stale while retaining last-known configs for sync readers. */
 export function invalidateRuntimeModelRegistry(): void {
   discoveryEpoch += 1;
   discoveryComplete = false;
   pendingDiscovery = undefined;
-  runtimeModels.clear();
 }
 
 /** Resolve a static or editor-discovered model config by its persisted id. */
@@ -150,8 +149,11 @@ export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
 export async function resolveRuntimeModelConfig(
   model: string,
 ): Promise<ModelConfig | undefined> {
+  const staticConfig = MODEL_CONFIGS[model];
+  if (staticConfig) return staticConfig;
+
   await refreshRuntimeModelRegistry();
-  return getRuntimeModelConfig(model);
+  return runtimeModels.get(model)?.config;
 }
 
 /** Available editor-supplied model ids appended to ordinary visible models. */

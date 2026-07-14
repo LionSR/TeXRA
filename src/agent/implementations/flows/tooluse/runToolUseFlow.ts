@@ -29,7 +29,10 @@ import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import {
+  getRuntimeModelConfig,
+  resolveRuntimeModelConfig,
+} from '@model/runtimeModelRegistry';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -253,7 +256,7 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   const switchModel = async (model: string): Promise<void> => {
-    const nextConfig = getRuntimeModelConfig(model);
+    const nextConfig = await resolveRuntimeModelConfig(model);
     if (!nextConfig) {
       throw new Error(`Model ${model} is not registered`);
     }
