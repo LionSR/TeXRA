@@ -1,6 +1,7 @@
 import { logMissingOutputs, type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
+import { replaceInputCommands } from '@agent/output/fileMapping';
 import {
   type FileLocation,
   type OutputFileInfo,
@@ -8,7 +9,7 @@ import {
 } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/constants/outputProtocol';
 import { normalizeFilePath } from '@utils/core';
-import { FlexibleFS, replaceInputCommands } from '@utils/files';
+import { FlexibleFS } from '@utils/files';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,

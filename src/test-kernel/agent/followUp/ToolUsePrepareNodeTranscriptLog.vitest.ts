@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { buildInitialToolUsePrompts } from '@agent/prompt';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentPromptSchema } from '@agent/core/definition/AgentDataclass';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -10,7 +11,6 @@ import { ToolUsePrepareNode } from '@agent/implementations/flows/tooluse/nodes/T
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { buildInitialToolUsePrompts } from '@utils/prompt';
 
 function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},

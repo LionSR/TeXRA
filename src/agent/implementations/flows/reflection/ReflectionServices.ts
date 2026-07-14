@@ -1,3 +1,4 @@
+import type { PromptBuilder } from '@agent/prompt';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type {
   BaseFlowContextInit,
@@ -8,7 +9,6 @@ import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { LatexMediaManager } from '@latex/LatexMediaManager';
 import type { AgentFileLocation, WorkspaceFileLocation } from '@shared/schemas';
-import type { PromptBuilder } from '@utils/prompt';
 import type { TaskRunFileService } from '@utils/files';
 
 export interface WorkflowOutputPolicy {
