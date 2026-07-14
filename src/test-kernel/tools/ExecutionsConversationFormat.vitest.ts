@@ -30,6 +30,57 @@ describe('formatConversation', () => {
     expect(output).toContain('[tool_result: done]');
   });
 
+  it('formats Google parts at the shared message boundary', () => {
+    const output = formatConversation([
+      {
+        role: 'model',
+        parts: [
+          { text: 'I will inspect the workspace.' },
+          { functionCall: { name: 'ls', args: { path: '.' } } },
+        ],
+      },
+    ]);
+
+    expect(output).toContain('I will inspect the workspace.');
+    expect(output).toContain('[tool_use: ls({"path":"."})]');
+  });
+
+  it('bounds Google part text with the message text limit', () => {
+    const output = formatConversation([
+      {
+        role: 'model',
+        parts: [
+          { text: 'x'.repeat(501) },
+          { functionCall: { name: 'ls', args: { path: '.' } } },
+        ],
+      },
+    ]);
+
+    expect(output).toContain(`${'x'.repeat(497)}...`);
+    expect(output).not.toContain('x'.repeat(498));
+    expect(output).toContain('[tool_use: ls({"path":"."})]');
+  });
+
+  it('formats OpenAI top-level tool calls at the shared message boundary', () => {
+    const output = formatConversation([
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            type: 'function',
+            function: {
+              name: 'read_file',
+              arguments: '{"path":"paper.tex"}',
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(output).toContain('[tool_use: read_file({"path":"paper.tex"})]');
+  });
+
   it('formats VS Code language-model tool parts through the shared policy', () => {
     const toolCall = {
       kind: 'toolCall',
