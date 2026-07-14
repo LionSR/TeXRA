@@ -13,8 +13,8 @@ import { AgentCategory } from './AgentDataclass';
 const DEFAULT_AGENT_NAME = 'correct';
 const DEFAULT_AGENT_INSTRUCTION = '';
 
-/** Pure object schema without refinements for use with .partial(). */
-const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
+/** Fields shared by both category-specific config variants. */
+const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
   agent: z.string().prefault(DEFAULT_AGENT_NAME),
   /**
    * Resolved source of `agent`, captured once when the delegation is validated
@@ -30,7 +30,6 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   rootUserInstruction: z.string().nullish(),
   /** Optional user-facing text for logs when instruction contains hidden context. */
   displayInstruction: z.string().nullish(),
-  agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
   editedFiles: z.array(z.string()).prefault([]),
   toolConfig: ToolConfigSchema,
   /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
@@ -50,33 +49,89 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   delegationAgentScope: AgentDelegationScopeSchema.nullish(),
 });
 
+const WorkflowAgentConfigFieldsSchema = AgentConfigSharedFieldsSchema.extend({
+  agentCategory: z.literal(AgentCategory.Workflow),
+});
+
+const ToolUseAgentConfigFieldsSchema = AgentConfigSharedFieldsSchema.extend({
+  agentCategory: z.literal(AgentCategory.ToolUse),
+});
+
+const AgentConfigFieldsSchema = z.discriminatedUnion('agentCategory', [
+  WorkflowAgentConfigFieldsSchema,
+  ToolUseAgentConfigFieldsSchema,
+]);
+
+/**
+ * Normalize legacy file fields and materialize the historical absent-category
+ * default before the discriminated union selects a variant.
+ */
+function normalizeAgentConfigInput(input: unknown): unknown {
+  const migrated = migrateLegacyContextFileFields(input);
+  if (
+    typeof migrated !== 'object' ||
+    migrated === null ||
+    Array.isArray(migrated) ||
+    ('agentCategory' in migrated && migrated.agentCategory !== undefined)
+  ) {
+    return migrated;
+  }
+  return { ...migrated, agentCategory: AgentCategory.Workflow };
+}
+
+function validateOutputFileCount(
+  config: z.output<typeof AgentConfigSharedFieldsSchema>,
+  ctx: z.RefinementCtx,
+): void {
+  if (config.outputFiles.length > config.inputFiles.length) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['outputFiles'],
+      message:
+        'Number of output files must not be greater than the number of input files.',
+    });
+  }
+}
+
 /**
  * Agent configuration schema with output file count validation.
  * Wrapped in `z.preprocess` so old execution records persisted before
  * the reference/auxiliary → context rename keep parsing on read.
  */
 export const AgentConfigSchema = z.preprocess(
-  migrateLegacyContextFileFields,
-  AgentConfigFieldsSchema.superRefine((config, ctx) => {
-    // Output files must not outnumber input files.
-    if (config.outputFiles.length > config.inputFiles.length) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['outputFiles'],
-        message:
-          'Number of output files must not be greater than the number of input files.',
-      });
-    }
-  }),
+  normalizeAgentConfigInput,
+  AgentConfigFieldsSchema.superRefine(validateOutputFileCount),
 );
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
-export type AgentConfigInput = z.input<typeof AgentConfigFieldsSchema>;
+export type WorkflowAgentConfig = Extract<
+  AgentConfig,
+  { agentCategory: typeof AgentCategory.Workflow }
+>;
+export type ToolUseAgentConfig = Extract<
+  AgentConfig,
+  { agentCategory: typeof AgentCategory.ToolUse }
+>;
+export const WorkflowAgentConfigSchema = z.preprocess(
+  normalizeAgentConfigInput,
+  WorkflowAgentConfigFieldsSchema.superRefine(validateOutputFileCount),
+);
+export const ToolUseAgentConfigSchema = z.preprocess(
+  normalizeAgentConfigInput,
+  ToolUseAgentConfigFieldsSchema.superRefine(validateOutputFileCount),
+);
+export type AgentConfigInput = z.input<typeof AgentConfigSharedFieldsSchema> & {
+  agentCategory?: AgentCategory;
+};
 
 /** Agent configuration payload with required agent and model fields. */
-const AgentConfigPayloadSchema = AgentConfigFieldsSchema.partial().required({
-  agent: true,
-  model: true,
-});
+const AgentConfigPayloadSchema = AgentConfigSharedFieldsSchema.extend({
+  agentCategory: z.enum(AgentCategory).optional(),
+})
+  .partial()
+  .required({
+    agent: true,
+    model: true,
+  });
 
 export type AgentConfigPayload = z.infer<typeof AgentConfigPayloadSchema>;
