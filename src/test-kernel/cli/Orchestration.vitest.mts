@@ -349,6 +349,7 @@ describe('CLI orchestration items', () => {
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
       'Account',
+      'Settings',
       'Help',
     ]);
     expect(buildCliAccountItems(account).map((item) => item.value)).toEqual([
@@ -416,6 +417,7 @@ describe('CLI orchestration items', () => {
       'New chat',
       'Resume',
       'Agent',
+      'Settings',
       'Help',
     ]);
     expect(items[1]?.description).toBe('2 resumable sessions');
@@ -457,6 +459,7 @@ describe('CLI orchestration items', () => {
       'New chat',
       'Resume',
       'Agent',
+      'Settings',
       'Help',
     ]);
   });
@@ -478,6 +481,7 @@ describe('CLI orchestration items', () => {
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
       'Agent',
+      'Settings',
       'Help',
     ]);
   });
@@ -587,6 +591,7 @@ describe('CLI orchestration items', () => {
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
       'Team',
+      'Settings',
       'Help',
     ]);
     expect(buildCliTeamItems(plans, {}).map((item) => item.label)).toEqual([

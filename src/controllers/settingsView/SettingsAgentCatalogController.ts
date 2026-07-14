@@ -1,6 +1,5 @@
 // Local imports - controllers
 import {
-  applyTeamRoster,
   commitTeamRoster,
   resolveTeamRoster,
   type TeamRosterResolution,
@@ -35,6 +34,10 @@ export interface SettingsAgentCatalogState {
   setEnabledAgentKeys(
     category: AgentCategory,
     enabledKeys: string[],
+  ): Promise<void>;
+  setTeamRoster?(
+    preset: AgentModePreset,
+    resolution: TeamRosterResolution,
   ): Promise<void>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getVisibleAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
@@ -117,9 +120,10 @@ export class SettingsAgentCatalogController {
     const preset = this.getPreset(presetId);
     if (!preset) return { ok: false, reason: 'unknownPreset' };
 
-    const { unresolvedNames } = await applyTeamRoster(this.deps.state, preset);
+    const resolution = resolveTeamRoster(this.deps.state, preset);
+    await this.commitPresetResolution(preset, resolution);
 
-    return { ok: true, preset, unresolvedNames };
+    return { ok: true, preset, unresolvedNames: resolution.unresolvedNames };
   }
 
   resolvePreset(presetId: string):
@@ -139,8 +143,13 @@ export class SettingsAgentCatalogController {
   }
 
   async commitPresetResolution(
+    preset: AgentModePreset,
     resolution: TeamRosterResolution,
   ): Promise<void> {
+    if (this.deps.state.setTeamRoster) {
+      await this.deps.state.setTeamRoster(preset, resolution);
+      return;
+    }
     await commitTeamRoster(this.deps.state, resolution);
   }
 

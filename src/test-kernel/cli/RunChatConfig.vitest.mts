@@ -53,6 +53,23 @@ describe('CLI chat run config', () => {
     });
   });
 
+  it('carries a team delegation roster in the run configuration', () => {
+    const delegationAgentScope = {
+      workflowAgentKeys: ['builtInWorkflow:correct'],
+      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    };
+
+    expect(
+      buildInitialChatAgentConfig({
+        agent: 'orchestrator',
+        model: 'deepseekT',
+        instruction: 'check the proof',
+        workingDirectory: '/tmp/project',
+        delegationAgentScope,
+      }),
+    ).toMatchObject({ delegationAgentScope });
+  });
+
   it('does not tag ordinary chats as multi-agent preset runs', () => {
     expect(
       buildInitialChatAgentConfig({

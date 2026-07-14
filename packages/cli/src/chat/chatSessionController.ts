@@ -50,6 +50,7 @@ import {
   type StreamTabId,
   sumUsageStats,
 } from '@shared/schemas';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -124,6 +125,7 @@ export interface BuildInitialChatAgentConfigInput {
   readonly workingDirectory: string;
   readonly mediaFiles?: readonly string[];
   readonly cliMultiAgentPresetId?: string;
+  readonly delegationAgentScope?: AgentDelegationScope;
 }
 
 export function buildInitialChatAgentConfig({
@@ -134,6 +136,7 @@ export function buildInitialChatAgentConfig({
   workingDirectory,
   mediaFiles,
   cliMultiAgentPresetId,
+  delegationAgentScope,
 }: BuildInitialChatAgentConfigInput): AgentConfigPayload {
   return {
     agent,
@@ -144,6 +147,7 @@ export function buildInitialChatAgentConfig({
     workingDirectory,
     ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
     ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
+    ...(delegationAgentScope ? { delegationAgentScope } : {}),
   };
 }
 

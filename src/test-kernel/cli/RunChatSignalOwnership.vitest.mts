@@ -31,7 +31,6 @@ const mocks = vi.hoisted(() => ({
   render: vi.fn(),
   resolveChatDefaults: vi.fn(),
   runCliPlatformShutdownSequence: vi.fn(),
-  seedCliRosterFromDefaultTeam: vi.fn(),
   selectCliRunnableModel: vi.fn(),
   setCliHelperModel: vi.fn(),
   subscribeStreamLog: vi.fn(),
@@ -67,10 +66,6 @@ vi.mock('@cli/runtime/initPlatform', () => ({
 
 vi.mock('@cli/onboarding/runOnboarding', () => ({
   maybeRunCliOnboarding: mocks.maybeRunCliOnboarding,
-}));
-
-vi.mock('@cli/runtime/defaultTeamRoster', () => ({
-  seedCliRosterFromDefaultTeam: mocks.seedCliRosterFromDefaultTeam,
 }));
 
 vi.mock('@cli/runtime/chatDefaults', () => ({
@@ -223,7 +218,6 @@ describe('runChat signal ownership wiring', () => {
       configured: false,
       declined: false,
     });
-    mocks.seedCliRosterFromDefaultTeam.mockResolvedValue(undefined);
     mocks.resolveChatDefaults.mockResolvedValue({
       agent: 'assistant',
       agentSource: 'default',

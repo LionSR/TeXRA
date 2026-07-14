@@ -34,7 +34,6 @@ import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
-import { seedCliRosterFromDefaultTeam } from '@cli/runtime/defaultTeamRoster';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   handOffCliShutdownSignalHandlers,
@@ -65,6 +64,7 @@ import {
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { getFirstRunDone } from '@shared/state/onboardingState';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -164,6 +164,7 @@ export interface RunChatInit {
   readonly teamName?: string;
   /** Multi-agent preset id when chat was launched from a team preset. */
   readonly cliMultiAgentPresetId?: string;
+  readonly delegationAgentScope?: AgentDelegationScope;
   /** Pre-resolved startup resume from `texra resume <id>`. */
   readonly initialResume?: {
     readonly id: ExecutionId;
@@ -310,7 +311,6 @@ export async function runChat(
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
   await loadAgents();
-  await seedCliRosterFromDefaultTeam();
   const visibleToolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
@@ -629,6 +629,7 @@ export async function runChat(
             mediaFiles,
             workingDirectory: context.cwd,
             cliMultiAgentPresetId: init.cliMultiAgentPresetId,
+            delegationAgentScope: init.delegationAgentScope,
           }),
         );
         started = true;

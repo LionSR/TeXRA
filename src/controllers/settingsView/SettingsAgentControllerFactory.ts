@@ -12,14 +12,20 @@ import {
 import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import {
+  AgentRosterController,
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
   getAgent,
   getAgentsByCategory,
   getVisibleAgents as getVisibleRegistryAgents,
   type AgentEntry,
-} from '@agent/index/agentRegistry';
+} from '@agent/index';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
+import {
+  agentKeyOf,
+  type AgentCategory,
+  type AgentSource,
+} from '@shared/schemas/agent';
+import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 
@@ -40,25 +46,29 @@ export interface SettingsAgentControllers {
   readonly state: SettingsAgentCatalogState;
 }
 
-function agentStateKey(category: AgentCategory): WorkspaceStateKey {
-  return category === 'workflow'
-    ? WorkspaceStateKey.ENABLED_AGENTS
-    : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
-}
-
 export function createSettingsAgentControllers(
   options: AgentControllerFactoryOptions,
 ): SettingsAgentControllers {
   const { workspaceState, globalState } = options;
   const getAgents = options.getAgents ?? getAgentsByCategory;
   const getVisibleAgents = options.getVisibleAgents ?? getVisibleRegistryAgents;
+  const roster = new AgentRosterController({
+    workspaceState,
+    globalState,
+    getAgents,
+    getPresets: () =>
+      parseAgentModePresets(
+        workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
+      ),
+    fallbackTeamId: null,
+  });
 
   const state: SettingsAgentCatalogState = {
     getEnabledAgentKeys: (category) =>
-      workspaceState.get<string[]>(agentStateKey(category)),
-    setEnabledAgentKeys: async (category, enabledKeys) => {
-      await workspaceState.update(agentStateKey(category), enabledKeys);
-    },
+      roster.getVisibleAgents(category).map(agentKeyOf),
+    setEnabledAgentKeys: (category, enabledKeys) =>
+      roster.setEnabledAgentKeys(category, enabledKeys),
+    setTeamRoster: (preset) => roster.setTeam(preset.id),
     getAgents,
     getVisibleAgents,
     getCustomPresetsRaw: () =>

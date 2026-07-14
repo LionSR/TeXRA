@@ -3,9 +3,11 @@
 import * as path from 'node:path';
 
 import { platform } from '@platform/platform';
+import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as logger from '@logger/logUtils';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 import type {
   AgentCategory as AgentCategoryType,
   AgentSource,
@@ -52,9 +54,9 @@ function isLegacyBuiltInKey(k: string): boolean {
 }
 
 /**
- * Single source for which visibility state key owns each category's
- * enabled-agents list. `getVisibleAgents` reads it forward (category → key); the
- * key migrations iterate it so the relationship isn't re-encoded per function.
+ * Category-to-key map for the legacy visibility mirrors. Compatibility
+ * migrations iterate it so the relationship is not re-encoded per function;
+ * current roster selection is owned by AgentRosterController.
  */
 const ENABLED_AGENTS_STATE_KEY: Record<AgentCategory, WorkspaceStateKey> = {
   [AgentCategory.Workflow]: WorkspaceStateKey.ENABLED_AGENTS,
@@ -212,10 +214,9 @@ async function doLoad(
  * Rewrite persisted enabled-agent keys whose name part is a legacy alias
  * (e.g. `chat` or `builtInToolUse:chat`) to the canonical agent name. The
  * Agents settings UI matches these keys literally, so leaving stale legacy
- * names in state would show the renamed agent as disabled while
- * {@link filterVisible} still surfaces it — and toggling it off in the UI
- * could never remove the stale key. A registered agent that genuinely uses
- * the legacy name (e.g. a custom `chat`) keeps its key untouched.
+ * names in state would make an older host disagree with the current roster.
+ * A registered agent that genuinely uses the legacy name (e.g. a custom
+ * `chat`) keeps its key untouched.
  */
 function migrateLegacyAgentNameKeys(): void {
   for (const category of [
@@ -558,11 +559,19 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  * No default → undefined means "never configured" (show all).
  */
 export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
-  const entries = getAgentsByCategory(category);
-  const raw = platform().workspaceState.get<string[]>(
-    ENABLED_AGENTS_STATE_KEY[category],
-  );
-  return filterVisible(entries, raw, category);
+  const { workspaceState, globalState } = platform();
+  return new AgentRosterController({
+    workspaceState,
+    globalState,
+    getAgents: getAgentsByCategory,
+    getPresets: () =>
+      parseAgentModePresets(
+        workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
+      ),
+    resolveIdentifier: (agentCategory, identifier) =>
+      getAgent(identifier, agentCategory)?.name ?? agentName(identifier),
+    fallbackTeamId: null,
+  }).getVisibleAgents(category) as AgentEntry[];
 }
 
 /**
@@ -702,26 +711,6 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   }
 
   return [...byKey.values()];
-}
-
-function filterVisible(
-  entries: AgentEntry[],
-  configured: string[] | undefined,
-  category: AgentCategory,
-): AgentEntry[] {
-  // undefined = never configured → show all; [] = explicitly empty → show none
-  if (configured === undefined) return entries;
-  // Match by name so visibility survives when dedup changes the winning source.
-  // A persisted legacy name also enables its canonical replacement, so agent
-  // renames don't silently hide an agent the user opted into.
-  const enabledNames = new Set(
-    configured.flatMap((value) => {
-      const name = agentName(value);
-      if (entries.some((entry) => entry.name === name)) return [name];
-      return [getAgent(value, category)?.name ?? name];
-    }),
-  );
-  return entries.filter((entry) => enabledNames.has(entry.name));
 }
 
 // =============================================================================

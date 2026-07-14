@@ -15,22 +15,23 @@
 import { z } from 'zod';
 
 import { platform } from '@platform/platform';
-import { createRegistryTeamRosterState } from '@agent/teams/registryTeamRosterState';
+import { AgentRosterController } from '@agent/roster/AgentRosterController';
+import { getAgentsByCategory } from '@agent/index/agentRegistry';
 import { refresh } from '@agent/index/agentRegistry';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { preflightTeamAvailability } from '@common/teams/TeamAvailabilityPreflight';
 import {
-  commitTeamRoster,
   resolveTeamRoster,
   teamHostedNamesForPreflight,
 } from '@common/teams/TeamRoster';
 import { resolveBuiltInTeamPreset } from '@common/teams/builtInTeamPresets';
 import { agentName } from '@shared/schemas/agent';
-import { setDefaultTeamId } from '@shared/state/onboardingState';
 import {
   AGENT_MODE_PRESETS,
+  parseAgentModePresets,
   STARTER_AGENT_MODE_PRESET,
 } from '@shared/schemas/agentPresets';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 import { defineTool } from '../core/define';
@@ -90,7 +91,8 @@ ${describeTeams()}`,
       );
     }
 
-    const state = createRegistryTeamRosterState(platform().workspaceState);
+    const { workspaceState, globalState } = platform();
+    const state = { getAgents: getAgentsByCategory };
     const initial = {
       preset,
       resolution: resolveTeamRoster(state, preset),
@@ -156,8 +158,18 @@ ${describeTeams()}`,
 
     const { workflowKeys, toolUseKeys, unresolvedNames } =
       preflight.value.resolution;
-    await commitTeamRoster(state, preflight.value.resolution);
-    await setDefaultTeamId(platform().globalState, preset.id);
+    const roster = new AgentRosterController({
+      workspaceState,
+      globalState,
+      getAgents: getAgentsByCategory,
+      getPresets: () =>
+        parseAgentModePresets(
+          workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
+        ),
+      fallbackTeamId: null,
+    });
+    await roster.setTeam(preset.id);
+    await roster.setDefaultTeam(preset.id);
 
     // Names that didn't resolve in the registry right now stay in the roster
     // (visibility matches by name, so they activate the moment they appear).

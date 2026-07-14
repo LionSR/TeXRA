@@ -423,6 +423,7 @@ async function assembleAgentLaunchContext(
     executionId,
     agentName: config.agent,
     workingDirectory,
+    delegationAgentScope: fullConfig.delegationAgentScope,
     session,
   });
 

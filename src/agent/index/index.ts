@@ -18,6 +18,12 @@ export { GlobalStorageAgentDirectoryStorage } from './AgentDirectorySync';
 export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 
 export {
+  AgentRosterController,
+  type AgentRosterControllerDeps,
+  type AgentRosterSnapshot,
+} from '../roster/AgentRosterController';
+
+export {
   // Types
   type AgentEntry,
   type ResolvedAgent,

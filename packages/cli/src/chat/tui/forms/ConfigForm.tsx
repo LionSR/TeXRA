@@ -158,6 +158,15 @@ export interface ConfigFormProps {
   /** Reset a setting to its default (delete the key). */
   readonly resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
   readonly openForm?: (formName: string) => void;
+  readonly formLinks?: readonly {
+    readonly name: string;
+    readonly label: string;
+    readonly description: string;
+  }[];
+  readonly renderForm?: (
+    formName: string,
+    onBack: () => void,
+  ) => React.JSX.Element | undefined;
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
@@ -165,6 +174,7 @@ export interface ConfigFormProps {
 
 type ConfigFormMode =
   | { readonly kind: 'categories' }
+  | { readonly kind: 'linked-form'; readonly name: string }
   | { readonly kind: 'list'; readonly category: string }
   | {
       readonly kind: 'enum';
@@ -284,6 +294,16 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     runWrite(entry, settingDefault(entry), () => props.resetValue?.(entry));
   };
 
+  if (mode.kind === 'linked-form') {
+    return (
+      props.renderForm?.(mode.name, () => setMode({ kind: 'categories' })) ?? (
+        <FormFrame title="/config">
+          <Text dimColor>Configuration form unavailable.</Text>
+        </FormFrame>
+      )
+    );
+  }
+
   useInput((input, key) => {
     if (mode.kind !== 'enum') return;
     if (isConfigResetInput(input, key)) {
@@ -364,7 +384,14 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   }
 
   if (mode.kind === 'categories') {
-    const categories = buildConfigCategoryItems(props.entries);
+    const categories = [
+      ...(props.formLinks ?? []).map((link) => ({
+        value: `form:${link.name}`,
+        label: link.label,
+        description: link.description,
+      })),
+      ...buildConfigCategoryItems(props.entries),
+    ];
     if (categories.length === 0) {
       return (
         <FormFrame title="/config">
@@ -383,7 +410,15 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
           items={categories}
           maxVisibleItems={window.maxVisibleItems}
           showOverflow={window.showOverflow}
-          onSelect={(category) => setMode({ kind: 'list', category })}
+          onSelect={(category) => {
+            if (category.startsWith('form:')) {
+              const name = category.slice('form:'.length);
+              if (props.renderForm) setMode({ kind: 'linked-form', name });
+              else props.openForm?.(name);
+              return;
+            }
+            setMode({ kind: 'list', category });
+          }}
           onCancel={props.onClose}
         />
         <Box marginTop={1}>

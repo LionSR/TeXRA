@@ -88,9 +88,6 @@ vi.mock('@cli/runtime/multiAgentPresets', () => {
     planCliMultiAgentPresets: mocks.planCliMultiAgentPresets,
     planCliMultiAgentPresetRun: mocks.planCliMultiAgentPresetRun,
     readCliMultiAgentPresets: vi.fn(() => []),
-    withCliMultiAgentPresetVisibility: vi.fn(
-      (_plan: unknown, run: () => Promise<unknown>) => run(),
-    ),
   };
 });
 

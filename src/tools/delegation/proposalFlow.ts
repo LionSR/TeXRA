@@ -9,11 +9,7 @@
 import { nanoid } from 'nanoid';
 
 // Local imports - agent
-import {
-  getVisibleAgent,
-  getVisibleAgents,
-  type AgentEntry,
-} from '@agent/index/agentRegistry';
+import type { AgentEntry } from '@agent/index/agentRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
 
@@ -36,6 +32,10 @@ import {
   availableModelNamesFromOptions,
   selectDelegationModelFromAvailableNames,
 } from '@tools/delegationModelAvailability';
+import {
+  getDelegationAgent,
+  getDelegationAgents,
+} from '@tools/delegationAgentAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - delegation
@@ -70,9 +70,9 @@ export function requireVisibleAgent(
   category: AgentCategory,
   name: string,
 ): AgentEntry {
-  const agent = getVisibleAgent(category, name);
+  const agent = getDelegationAgent(category, name);
   if (agent) return agent;
-  const available = getVisibleAgents(category)
+  const available = getDelegationAgents(category)
     .map((a) => a.name)
     .join(', ');
   throw new Error(
@@ -201,7 +201,7 @@ export async function proposeAndExecute(
   const agentOverride =
     result.agent && result.agent !== proposal.agent ? result.agent : undefined;
   const resolvedAgentOverride = agentOverride
-    ? getVisibleAgent(proposal.agentCategory, agentOverride)
+    ? getDelegationAgent(proposal.agentCategory, agentOverride)
     : undefined;
 
   // Re-validate against the current registry — between proposal display and

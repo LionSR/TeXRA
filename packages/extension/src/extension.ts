@@ -12,7 +12,6 @@ import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UsageLogService } from '@telemetry/UsageLogService';
-import { seedRosterFromDefaultTeam } from '@controllers/onboarding/defaultTeamSeeding';
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
 import { StreamLogStore } from '@transcript';
 import { loadAgents } from '@agent/index';
@@ -379,22 +378,6 @@ export async function activate(context: vscode.ExtensionContext) {
       await registerAgentDirectoryRoots(context);
       try {
         await loadAgents({ includeRemote: false });
-        // Seed a never-configured workspace's roster from the user-level
-        // default team, falling back to the built-in Physicist team. Needs
-        // the local registry, hence sequenced after the bundled-agent scan
-        // and before activation completes so the first launcher render is
-        // already scoped without waiting on remote agent fetches.
-        try {
-          await seedRosterFromDefaultTeam({
-            globalState: context.globalState,
-            workspaceState: workspaceSM,
-          });
-        } catch (err) {
-          logger.warn(
-            'extension',
-            `Default-team roster seeding failed: ${toErrorMessage(err)}`,
-          );
-        }
         void loadAgents().catch((err) => {
           logger.warn(
             'extension',
