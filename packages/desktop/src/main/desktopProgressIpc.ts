@@ -97,12 +97,10 @@ export function createDesktopProgressIpc(
         if (!isProgressWebviewReadyMessage(message)) return false;
         const progress = getProgress();
         if (progress) {
-          void progress
-            .completeWebviewReady(reportAsyncError)
-            .catch(reportAsyncError);
+          void progress.completeWebviewReady().catch(reportAsyncError);
         } else if (ensureProgress) {
           void ensureProgress()
-            .then((loaded) => loaded.completeWebviewReady(reportAsyncError))
+            .then((loaded) => loaded.completeWebviewReady())
             .catch(reportAsyncError);
         }
         return false;

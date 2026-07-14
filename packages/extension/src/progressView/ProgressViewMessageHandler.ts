@@ -160,11 +160,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     return {
       // Common handlers - passthrough to webview
-      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: () => {
+      [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: async () => {
         this.logger.debug(this.channel, 'Webview ready signal received');
         const view = this.getActiveView();
         if (view) {
-          this.provider.markWebviewReady(view);
+          await this.provider.markWebviewReady(view);
         }
       },
       [PROGRESS_VIEW_COMMANDS.THEME_SET]: forwardToActiveView,

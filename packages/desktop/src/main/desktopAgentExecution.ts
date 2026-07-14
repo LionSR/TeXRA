@@ -15,7 +15,6 @@ import {
 } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
-import { restoreProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryRestore';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
@@ -297,6 +296,7 @@ export class DesktopProgressBridge {
         this.approvalHandlers = buildApprovalRequestHandlerSet({
           webviewUpdater,
           canSend,
+          logger: this.logger,
           overrides: {
             retry: {
               show: () => undefined,
@@ -1070,10 +1070,6 @@ export class DesktopProgressBridge {
     this.syncStreamContent(this.updateStreamMetadata());
   }
 
-  replayPendingPrompts(): void {
-    replayApprovalRequestHandlers(this.approvalHandlers);
-  }
-
   /**
    * Owns the Progress webview's readiness sequence. Restored streams are
    * folded into `session.status` by `restartRepair`; transcript persistence is
@@ -1082,17 +1078,10 @@ export class DesktopProgressBridge {
    * Gating the whole sequence here makes the ordering uniform for every
    * `webviewReady` caller.
    */
-  async completeWebviewReady(
-    onInquiryRestoreError: (error: unknown) => void = () => {},
-  ): Promise<void> {
+  async completeWebviewReady(): Promise<void> {
     await this.restartRepair;
     this.syncFullView();
-    void restoreProgressViewInquiries({
-      webviewUpdater: this.backend.webviewUpdater,
-      externalInquiry: this.approvalHandlers.externalInquiry,
-      logger: this.logger,
-    }).catch(onInquiryRestoreError);
-    this.replayPendingPrompts();
+    await replayApprovalRequestHandlers(this.approvalHandlers);
   }
 
   setActiveStream(streamId: StreamTabId): void {

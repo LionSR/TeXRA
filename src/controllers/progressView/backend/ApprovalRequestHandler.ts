@@ -24,19 +24,19 @@ export class ApprovalRequestHandler<
     private readonly canSend: () => boolean,
   ) {}
 
-  /** True when nothing is currently pending — used by callers that
-   *  want to skip an expensive hydration on warm view reactivations. */
-  get pendingSize(): number {
-    return this.pending.size;
-  }
-
   show(item: T): void {
-    const id = String(item[this.idField]);
-    this.pending.set(id, item);
+    const id = this.setPending(item);
     if (this.canSend() && !this.delivered.has(id)) {
       this.delivered.add(id);
       this.sendShow(item);
     }
+  }
+
+  /** Replace pending data without delivering it until the next replay. */
+  protected setPending(item: T): string {
+    const id = String(item[this.idField]);
+    this.pending.set(id, item);
+    return id;
   }
 
   resolve(id: string): void {
