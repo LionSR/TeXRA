@@ -84,6 +84,7 @@ function identifiersEqual(
 export function readAgentRosterSelection(
   workspaceState: StateStore,
   presets: readonly AgentModePreset[] = [],
+  allAgentKeys?: Readonly<Record<AgentCategory, readonly string[]>>,
 ): AgentRosterSelection {
   const raw = workspaceState.get<unknown>(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
@@ -100,8 +101,8 @@ export function readAgentRosterSelection(
     return INHERITED_AGENT_ROSTER;
   }
 
-  const workflowKeys = workflow ?? [];
-  const toolUseKeys = toolUse ?? [];
+  const workflowKeys = workflow ?? allAgentKeys?.workflow ?? [];
+  const toolUseKeys = toolUse ?? allAgentKeys?.toolUse ?? [];
   const matchingPreset = allPresets(presets).find(
     (preset) =>
       identifiersEqual(workflowKeys, preset.workflowAgents) &&
@@ -152,6 +153,10 @@ export class AgentRosterController {
     return readAgentRosterSelection(
       this.deps.workspaceState,
       this.deps.getPresets?.() ?? [],
+      {
+        workflow: this.deps.getAgents('workflow').map(agentKeyOf),
+        toolUse: this.deps.getAgents('toolUse').map(agentKeyOf),
+      },
     );
   }
 
@@ -211,9 +216,40 @@ export class AgentRosterController {
     };
   }
 
+  private selectionKeys(
+    selection: Exclude<AgentRosterSelection, { readonly kind: 'inherit' }>,
+    category: AgentCategory,
+  ): string[] | undefined {
+    const identifiers = selectedIdentifiers(
+      selection,
+      category,
+      this.deps.getPresets?.() ?? [],
+    );
+    if (identifiers === undefined) return undefined;
+
+    return unique(
+      identifiers.map((identifier) => {
+        if (selection.kind === 'custom') return identifier;
+        const name =
+          this.deps.resolveIdentifier?.(category, identifier) ??
+          agentName(identifier);
+        const entry = this.deps
+          .getAgents(category)
+          .find((candidate) => candidate.name === name);
+        return entry ? agentKeyOf(entry) : identifier;
+      }),
+    );
+  }
+
+  private effectiveAgentKeys(category: AgentCategory): string[] {
+    return (
+      this.selectionKeys(this.getEffectiveSelection(), category) ??
+      this.deps.getAgents(category).map(agentKeyOf)
+    );
+  }
+
   async setSelection(selection: AgentRosterSelection): Promise<void> {
     const parsed = AgentRosterSelectionSchema.parse(selection);
-    const presets = this.deps.getPresets?.() ?? [];
     const effective =
       parsed.kind === 'inherit'
         ? (() => {
@@ -232,20 +268,7 @@ export class AgentRosterController {
     // Compatibility mirrors for older hosts. The canonical key above is the
     // only source used by current code to choose the workspace roster.
     for (const category of ['workflow', 'toolUse'] as const) {
-      const identifiers = selectedIdentifiers(effective, category, presets);
-      const compatibilityKeys =
-        identifiers === undefined
-          ? undefined
-          : identifiers.map((identifier) => {
-              if (effective.kind === 'custom') return identifier;
-              const name =
-                this.deps.resolveIdentifier?.(category, identifier) ??
-                agentName(identifier);
-              const entry = this.deps
-                .getAgents(category)
-                .find((candidate) => candidate.name === name);
-              return entry ? agentKeyOf(entry) : identifier;
-            });
+      const compatibilityKeys = this.selectionKeys(effective, category);
       await this.deps.workspaceState.update(
         stateKey(category),
         compatibilityKeys,
@@ -276,16 +299,15 @@ export class AgentRosterController {
     category: AgentCategory,
     enabledKeys: readonly string[],
   ): Promise<void> {
-    const snapshot = this.snapshot();
     await this.setCustom({
       workflowAgentKeys:
         category === 'workflow'
           ? enabledKeys
-          : snapshot.workflowAgents.map(agentKeyOf),
+          : this.effectiveAgentKeys('workflow'),
       toolUseAgentKeys:
         category === 'toolUse'
           ? enabledKeys
-          : snapshot.toolUseAgents.map(agentKeyOf),
+          : this.effectiveAgentKeys('toolUse'),
     });
   }
 
@@ -303,9 +325,8 @@ export class AgentRosterController {
     readonly name: string;
     readonly enabled: boolean;
   }): Promise<void> {
-    const snapshot = this.snapshot();
-    const workflowAgentKeys = snapshot.workflowAgents.map(agentKeyOf);
-    const toolUseAgentKeys = snapshot.toolUseAgents.map(agentKeyOf);
+    const workflowAgentKeys = this.effectiveAgentKeys('workflow');
+    const toolUseAgentKeys = this.effectiveAgentKeys('toolUse');
     const target =
       input.category === 'workflow' ? workflowAgentKeys : toolUseAgentKeys;
     const key = agentKeyOf(input);

@@ -71,6 +71,20 @@ describe('AgentRosterController', () => {
     ).toBeUndefined();
   });
 
+  it('preserves legacy all-agents semantics for an unset category', () => {
+    const workspaceState = memoryStore({
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [],
+    });
+    const roster = controller(workspaceState);
+
+    expect(roster.getSelection()).toEqual({
+      kind: 'custom',
+      workflowAgentKeys: ['builtInWorkflow:write', 'custom:review'],
+      toolUseAgentKeys: [],
+    });
+    expect(roster.getVisibleAgents('workflow')).toEqual(agents.workflow);
+  });
+
   it('uses the user default only for inherited workspaces', () => {
     const workspaceState = memoryStore();
     const globalState = memoryStore({
@@ -124,6 +138,36 @@ describe('AgentRosterController', () => {
       kind: 'custom',
       workflowAgentKeys: ['builtInWorkflow:write', 'custom:review'],
       toolUseAgentKeys: ['builtInToolUse:lead'],
+    });
+  });
+
+  it('preserves unresolved team members when another category changes', async () => {
+    const unavailablePreset: AgentModePreset = {
+      ...preset,
+      id: 'partly-unavailable',
+      workflowAgents: ['write', 'future-reviewer'],
+    };
+    const workspaceState = memoryStore();
+    const roster = new AgentRosterController({
+      workspaceState,
+      globalState: memoryStore(),
+      getAgents: (category) => agents[category],
+      getPresets: () => [unavailablePreset],
+      fallbackTeamId: null,
+    });
+    await roster.setTeam(unavailablePreset.id);
+
+    await roster.setAgentEnabled({
+      category: 'toolUse',
+      source: 'custom',
+      name: 'search',
+      enabled: true,
+    });
+
+    expect(roster.getSelection()).toEqual({
+      kind: 'custom',
+      workflowAgentKeys: ['builtInWorkflow:write', 'future-reviewer'],
+      toolUseAgentKeys: ['builtInToolUse:lead', 'custom:search'],
     });
   });
 });
