@@ -66,14 +66,18 @@ describe('AgentRosterForm', () => {
   });
 
   it('reports open categories without materializing the current catalog', () => {
-    expect(
-      formatCliAgentRoster({
-        selection: { kind: 'all' },
-        effectiveSelection: { kind: 'all' },
-        workflowAgentKeys: 'all',
-        toolUseAgentKeys: ['future-assistant'],
-        unresolvedNames: ['future-assistant'],
-      }),
-    ).toContain('Workflow agents: all');
+    const output = formatCliAgentRoster({
+      selection: { kind: 'team', teamId: 'deleted-team' },
+      effectiveSelection: { kind: 'all' },
+      missingTeamId: 'deleted-team',
+      workflowAgentKeys: 'all',
+      toolUseAgentKeys: ['future-assistant'],
+      unresolvedNames: ['future-assistant'],
+    });
+
+    expect(output).toContain('Workflow agents: all');
+    expect(output).toContain(
+      'Unavailable team: deleted-team; showing all agents instead',
+    );
   });
 });

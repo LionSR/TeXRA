@@ -100,6 +100,14 @@ export function readCliMultiAgentPresets(): CliMultiAgentPreset[] {
   return cliMultiAgentPresets(customRaw);
 }
 
+/** Resolve the current display name for a persisted team identity. */
+export function readCliMultiAgentPresetName(
+  presetId: string | undefined,
+): string | undefined {
+  if (!presetId) return undefined;
+  return findCliMultiAgentPreset(readCliMultiAgentPresets(), presetId)?.name;
+}
+
 export function cliMultiAgentPresets(
   customRaw: unknown,
 ): CliMultiAgentPreset[] {

@@ -96,7 +96,7 @@ export function getDelegationAgents(category: AgentCategory): AgentEntry[] {
     const entry = key.includes(':')
       ? getAgent(key, category)
       : getCategoryAgent(category, key);
-    if (!entry || entry.category !== category) continue;
+    if (!entry || entry.category !== category || entry.internal) continue;
     const canonicalKey = agentKeyOf(entry);
     if (seen.has(canonicalKey)) continue;
     seen.add(canonicalKey);

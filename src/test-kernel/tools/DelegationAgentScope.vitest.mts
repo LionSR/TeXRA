@@ -14,6 +14,13 @@ const customReview = {
   name: 'review',
   path: '/agents/custom-review.yaml',
 } as const;
+const internalReview = {
+  category: 'toolUse',
+  source: 'builtInToolUse',
+  name: 'internalReview',
+  path: '/agents/internal-review.yaml',
+  internal: true,
+} as const;
 
 const mocks = vi.hoisted(() => ({
   context: undefined as unknown,
@@ -30,6 +37,7 @@ vi.mock('@agent/index/agentRegistry', () => ({
   ) => entries.find((entry) => agentMatchesIdentifier(entry, identifier)),
   getAgent: (identifier: string) => {
     if (identifier === 'remote:review') return remoteReview;
+    if (identifier === 'builtInToolUse:internalReview') return internalReview;
     if (identifier === 'custom:review' || identifier === 'review') {
       return customReview;
     }
@@ -61,5 +69,19 @@ describe('execution-scoped delegation agents', () => {
     expect(getDelegationAgents('toolUse')).toEqual([remoteReview]);
     expect(getDelegationAgent('toolUse', 'review')).toBe(remoteReview);
     expect(getDelegationAgent('toolUse', 'custom:review')).toBeUndefined();
+  });
+
+  it('excludes internal agents from an execution-scoped roster', () => {
+    mocks.context = {
+      kind: 'launch',
+      runScope: {
+        delegationAgentScope: {
+          workflowAgentKeys: [],
+          toolUseAgentKeys: ['remote:review', 'builtInToolUse:internalReview'],
+        },
+      },
+    };
+
+    expect(getDelegationAgents('toolUse')).toEqual([remoteReview]);
   });
 });

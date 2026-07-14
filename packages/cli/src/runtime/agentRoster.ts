@@ -20,6 +20,7 @@ export interface CliAgentRosterRecord {
     { readonly kind: 'inherit' }
   >;
   readonly defaultTeamId?: string;
+  readonly missingTeamId?: string;
   readonly defaultChatAgent?: string;
   readonly workflowAgentKeys: AgentRosterCategorySelection;
   readonly toolUseAgentKeys: AgentRosterCategorySelection;
@@ -52,6 +53,7 @@ export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
     selection: snapshot.selection,
     effectiveSelection: snapshot.effectiveSelection,
     defaultTeamId: snapshot.defaultTeamId,
+    missingTeamId: snapshot.missingTeamId,
     defaultChatAgent: resolveConfiguredAgent(config?.values, 'chat'),
     workflowAgentKeys: roster.getEnabledAgentKeys('workflow') ?? 'all',
     toolUseAgentKeys: roster.getEnabledAgentKeys('toolUse') ?? 'all',
@@ -85,6 +87,11 @@ export function formatCliAgentRoster(record: CliAgentRosterRecord): string {
   ];
   if (record.unresolvedNames.length > 0) {
     lines.push(`Unavailable members: ${record.unresolvedNames.join(', ')}`);
+  }
+  if (record.missingTeamId) {
+    lines.push(
+      `Unavailable team: ${record.missingTeamId}; showing all agents instead`,
+    );
   }
   return lines.join('\n');
 }

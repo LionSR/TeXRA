@@ -48,6 +48,7 @@ import {
   type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
+import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { initializeInteractiveTranscriptSession } from '@cli/runtime/transcriptSession';
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
@@ -383,6 +384,9 @@ export async function runChat(
     resetSession: resetSessionForClear,
     resumeExecution: (id: ExecutionId) => chatController.resume(id),
   });
+  const initialPresetId = initialResume
+    ? (initialResume.resolution.config.cliMultiAgentPresetId ?? undefined)
+    : init.cliMultiAgentPresetId;
   sessionMetaSignal.set({
     agent,
     model,
@@ -392,10 +396,10 @@ export async function runChat(
     approvalPolicy: activeApprovalPolicy,
     canDelegate: chatAgentSupportsDelegation(agent),
     transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
-    teamName: init.teamName,
-    cliMultiAgentPresetId: initialResume
-      ? (initialResume.resolution.config.cliMultiAgentPresetId ?? undefined)
-      : init.cliMultiAgentPresetId,
+    teamName: initialResume
+      ? readCliMultiAgentPresetName(initialPresetId)
+      : (init.teamName ?? readCliMultiAgentPresetName(initialPresetId)),
+    cliMultiAgentPresetId: initialPresetId,
     delegationAgentScope: initialResume
       ? (initialResume.resolution.config.delegationAgentScope ?? undefined)
       : init.delegationAgentScope,

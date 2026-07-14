@@ -297,6 +297,7 @@ describe('AgentRosterController', () => {
 
     expect(roster.getEffectiveSelection()).toEqual({ kind: 'all' });
     expect(roster.getVisibleAgents('toolUse')).toEqual(agents.toolUse);
+    expect(roster.snapshot().missingTeamId).toBe('deleted-team');
   });
 
   it('materializes an active custom team before deleting its preset', async () => {

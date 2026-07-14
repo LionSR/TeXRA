@@ -65,6 +65,11 @@ vi.mock('@agent/runtime/terminalResultToast', () => ({
 }));
 
 vi.mock('@platform/platform', () => ({
+  platform: () => ({
+    workspaceState: {
+      get: mocks.workspaceGet,
+    },
+  }),
   tryPlatform: () => ({
     workspaceState: {
       get: mocks.workspaceGet,
@@ -570,6 +575,7 @@ describe('createChatSessionController', () => {
     });
 
     expect(sessionMeta.get()).toMatchObject({
+      teamName: 'Physicist',
       cliMultiAgentPresetId: 'physicist',
       delegationAgentScope: config.delegationAgentScope,
     });

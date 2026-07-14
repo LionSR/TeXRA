@@ -184,6 +184,12 @@ export function AgentRosterForm(
     return (
       <FormFrame title="/config · Agents" showCloseHint={false}>
         {error ? <Text color="red">{error}</Text> : null}
+        {data.record.missingTeamId ? (
+          <Text color="yellow">
+            Team "{data.record.missingTeamId}" is unavailable; showing all
+            agents.
+          </Text>
+        ) : null}
         <Select
           items={[...items]}
           maxVisibleItems={window.maxVisibleItems}

@@ -77,6 +77,8 @@ export interface AgentRosterSnapshot<
     { readonly kind: 'inherit' }
   >;
   readonly defaultTeamId?: string;
+  /** Persisted team identity that could not be resolved; effective roster is all. */
+  readonly missingTeamId?: string;
   readonly workflowAgents: Entry[];
   readonly toolUseAgents: Entry[];
   readonly unresolvedNames: string[];
@@ -213,7 +215,7 @@ export class AgentRosterController<
 
   snapshot(): AgentRosterSnapshot<Entry> {
     const selection = this.getSelection();
-    const effectiveSelection = this.getEffectiveSelection();
+    const effectiveSelection = this.resolveEffectiveSelection(selection);
     const presets = this.deps.getPresets?.() ?? [];
     const unresolvedNames = (['workflow', 'toolUse'] as const).flatMap(
       (category) => {
@@ -232,6 +234,7 @@ export class AgentRosterController<
       selection,
       effectiveSelection,
       defaultTeamId: this.getDefaultTeamId(),
+      missingTeamId: this.missingTeamId(selection),
       workflowAgents: this.getVisibleAgents('workflow'),
       toolUseAgents: this.getVisibleAgents('toolUse'),
       unresolvedNames: unique(unresolvedNames),
@@ -270,7 +273,9 @@ export class AgentRosterController<
     }
     return this.deps
       .getAgents(category)
-      .find((entry) => agentMatchesIdentifier(entry, identifier));
+      .find(
+        (entry) => !entry.internal && agentMatchesIdentifier(entry, identifier),
+      );
   }
 
   private resolveEffectiveSelection(
@@ -290,6 +295,21 @@ export class AgentRosterController<
       return { kind: 'all' };
     }
     return selection;
+  }
+
+  private missingTeamId(selection: AgentRosterSelection): string | undefined {
+    const teamId =
+      selection.kind === 'inherit'
+        ? (this.getDefaultTeamId() ?? this.deps.fallbackTeamId)
+        : selection.kind === 'team'
+          ? selection.teamId
+          : undefined;
+    if (!teamId) return undefined;
+    return allPresets(this.deps.getPresets?.() ?? []).some(
+      (preset) => preset.id === teamId,
+    )
+      ? undefined
+      : teamId;
   }
 
   private effectiveCategorySelection(

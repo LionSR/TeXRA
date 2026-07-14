@@ -31,6 +31,7 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   createCliRuntimeHost,
@@ -263,6 +264,9 @@ export function createChatSessionController(
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
       canDelegate: chatAgentSupportsDelegation(config.agent),
+      teamName: readCliMultiAgentPresetName(
+        config.cliMultiAgentPresetId ?? undefined,
+      ),
       cliMultiAgentPresetId: config.cliMultiAgentPresetId ?? undefined,
       delegationAgentScope: config.delegationAgentScope ?? undefined,
     });

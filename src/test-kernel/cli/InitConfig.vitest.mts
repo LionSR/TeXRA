@@ -122,6 +122,32 @@ describe('setWorkspaceCliChatAgent', () => {
       undefined,
     );
   });
+
+  it('removes a stale legacy chat-agent default when setting the current key', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-default-'));
+    const configPath = workspaceTexraConfigPath(workspace);
+    await mkdir(path.dirname(configPath), { recursive: true });
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        'texra.chat': { agent: 'current', model: 'deepseekT' },
+        chat: { agent: 'legacy', model: 'sonnet46T' },
+      }),
+      'utf8',
+    );
+
+    await setWorkspaceCliChatAgent(workspace, 'builtInToolUse:assistant');
+
+    const raw = JSON.parse(await nodeReadFile(configPath, 'utf8')) as {
+      'texra.chat': { agent?: string; model: string };
+      chat: { agent?: string; model: string };
+    };
+    expect(raw['texra.chat']).toEqual({
+      agent: 'builtInToolUse:assistant',
+      model: 'deepseekT',
+    });
+    expect(raw.chat).toEqual({ model: 'sonnet46T' });
+  });
 });
 
 describe('gitignoreWithTexra', () => {

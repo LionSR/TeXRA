@@ -301,11 +301,10 @@ export async function setWorkspaceCliChatAgent(
   const sectionKey = Object.hasOwn(snapshot, 'texra.chat')
     ? 'texra.chat'
     : 'chat';
-  const sectionKeys = trimmed ? [sectionKey] : configKeyVariants('chat');
-  for (const key of sectionKeys) {
+  for (const key of configKeyVariants('chat')) {
     const existing = isObject(snapshot[key]) ? snapshot[key] : {};
     const next = { ...existing };
-    if (trimmed) next.agent = trimmed;
+    if (trimmed && key === sectionKey) next.agent = trimmed;
     else delete next.agent;
     await store.set(key, Object.keys(next).length > 0 ? next : undefined);
   }
