@@ -89,10 +89,8 @@ export interface StatusBarDisplayInput {
   readonly taskControlsAvailable?: boolean;
   readonly agentSelectionAvailable?: boolean;
   readonly subagentControlsAvailable: boolean;
-  /** True when more than the root stream exists, i.e. a subagent or
-   *  child stream is live. Gates the stream-navigation hints, which are
-   *  no-ops in a plain single-stream chat. */
-  readonly hasMultipleStreams: boolean;
+  /** True when the current stream tree has selectable session rows. */
+  readonly sessionNavigationAvailable: boolean;
   readonly model: string;
   readonly apiMode: string;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
@@ -405,7 +403,7 @@ function statusBarBindingsText(
   taskControlsAvailable = true,
   agentSelectionAvailable = false,
   subagentControlsAvailable: boolean,
-  hasMultipleStreams: boolean,
+  sessionNavigationAvailable: boolean,
   modifierLabel = defaultShortcutModifierLabel(),
   shiftEnterNewline = false,
   transcriptAvailable = false,
@@ -416,7 +414,7 @@ function statusBarBindingsText(
     taskControlsAvailable,
     agentSelectionAvailable,
     subagentControlsAvailable,
-    hasMultipleStreams,
+    sessionNavigationAvailable,
     modifierLabel,
     shiftEnterNewline,
     transcriptAvailable,
@@ -424,10 +422,10 @@ function statusBarBindingsText(
     maxColumns,
   ].join('|');
   if (memoKey === lastBindingsKey) return lastBindingsText;
-  const streamTabs = hasMultipleStreams
+  const streamTabs = sessionNavigationAvailable
     ? keyHintText({ key: 'Tab', action: 'sessions' })
     : undefined;
-  const streamFocus = hasMultipleStreams
+  const streamFocus = sessionNavigationAvailable
     ? keyHintText({
         key: metaChordLabel(modifierLabel, '1..9'),
         action: 'focus',
@@ -460,10 +458,10 @@ function statusBarBindingsText(
     agentSelectionAvailable &&
     !taskControlsAvailable &&
     !subagentControlsAvailable &&
-    !hasMultipleStreams;
+    !sessionNavigationAvailable;
   const candidates = [
-    // Stream cycling / numeric focus only do something when there is more
-    // than one stream — hide the hints in a plain single-stream chat.
+    // Session navigation only applies when the current tree has selectable
+    // rows; unrelated or not-yet-attached streams do not make Tab actionable.
     statusBarBindingRow([
       streamTabs,
       streamFocus,
@@ -501,7 +499,7 @@ function statusBarBindingsText(
       subagentControlsAvailable ||
       agentSelectionAvailable) &&
       statusBarBindingRow([streamTabs, tasks, subagents, agent, ctrlC]),
-    hasMultipleStreams &&
+    sessionNavigationAvailable &&
       taskControlsAvailable &&
       statusBarBindingRow([streamTabs, transcript, tasks, ctrlC]),
     taskControlsAvailable && statusBarBindingRow([transcript, tasks, ctrlC]),
@@ -852,7 +850,7 @@ export function buildStatusBarDisplay(
                 input.taskControlsAvailable ?? true,
                 input.agentSelectionAvailable ?? false,
                 input.subagentControlsAvailable,
-                input.hasMultipleStreams,
+                input.sessionNavigationAvailable,
                 input.shortcutModifierLabel,
                 input.shiftEnterNewline,
                 input.transcriptAvailable,

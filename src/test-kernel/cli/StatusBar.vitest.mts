@@ -36,7 +36,7 @@ function statusInput(
     activeProcesses: 0,
     approvalDepth: 0,
     subagentControlsAvailable: false,
-    hasMultipleStreams: false,
+    sessionNavigationAvailable: false,
     model: 'deepseekT',
     apiMode: PERSONAL_API_MODE_LABEL,
     shortcutModifierLabel: 'Alt',
@@ -205,7 +205,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         transcriptAvailable: true,
       }),
     );
@@ -220,7 +220,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         transcriptAvailable: true,
         width: 80,
       }),
@@ -234,7 +234,7 @@ describe('CLI StatusBar display model', () => {
   it('advertises list-owned keys while the session list has focus', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         sessionListFocused: true,
         width: 80,
       }),
@@ -250,7 +250,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         taskControlsAvailable: false,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         transcriptAvailable: true,
         width: 60,
       }),
@@ -264,7 +264,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         taskControlsAvailable: false,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         transcriptAvailable: true,
         width: 42,
       }),
@@ -324,7 +324,7 @@ describe('CLI StatusBar display model', () => {
         agentSelectionAvailable: true,
         taskControlsAvailable: true,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         transcriptAvailable: true,
         width: 80,
       }),
@@ -378,7 +378,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 1,
         taskControlsAvailable: false,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         apiMode: 'relay',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
@@ -402,7 +402,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 1,
         taskControlsAvailable: false,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         apiMode: 'relay',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop root',
@@ -439,7 +439,7 @@ describe('CLI StatusBar display model', () => {
         activeProcesses: 1,
         approvalDepth: 3,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         apiMode: 'relay',
         ctrlCAction: 'stop',
       }),
@@ -474,7 +474,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop',
         transcriptAvailable: true,
         width: 60,
@@ -495,7 +495,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
         transcriptAvailable: true,
@@ -515,7 +515,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop',
         width: 34,
         shortcutsActive: false,
@@ -634,7 +634,7 @@ describe('CLI StatusBar display model', () => {
     const baseDisplayInput = statusInput({
       status: STREAM_PHASE.CANCELLED,
       subagentControlsAvailable: true,
-      hasMultipleStreams: true,
+      sessionNavigationAvailable: true,
       ctrlCAction: 'stop root',
     });
     const display = buildStatusBarDisplay(baseDisplayInput);
@@ -675,7 +675,7 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.WAITING,
         isChildStream: true,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop root',
       }),
     );
@@ -991,7 +991,7 @@ describe('CLI StatusBar display model', () => {
         activeProcesses: 1,
         approvalDepth: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop',
         shortcutsActive: false,
       }),
@@ -1039,7 +1039,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop',
         shortcutsActive: false,
         width: 40,
@@ -1056,7 +1056,7 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 3,
         activeProcesses: 1,
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         ctrlCAction: 'stop',
         shortcutsActive: false,
         width: 15,
@@ -1274,7 +1274,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         subagentControlsAvailable: true,
-        hasMultipleStreams: true,
+        sessionNavigationAvailable: true,
         shortcutModifierLabel: defaultShortcutModifierLabel('darwin'),
       }),
     );

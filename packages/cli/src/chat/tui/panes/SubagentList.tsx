@@ -1,11 +1,14 @@
 // Interactive session list plus non-selectable active process rows.
 
+// Third-party imports
 import { Box, Text } from 'ink';
 import { useMemo } from 'react';
 
+// Local imports - shared stream state
 import type { ActiveChildInfo } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
+// Local imports - TUI state and controls
 import {
   childElapsed,
   liveChildExecutionElapsedKey,
@@ -148,13 +151,6 @@ function ProcessRow({
 /**
  * Natural row count: one row per session and active process.
  */
-export function subagentPanelRowCount(
-  sessions: readonly StreamView[],
-  activeProcesses: readonly ActiveChildInfo[],
-): number {
-  return sessions.length + activeProcesses.length;
-}
-
 export function subagentListRowAllocation({
   maxRows,
   processCount,

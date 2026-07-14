@@ -1,5 +1,6 @@
 // Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
+// Third-party imports
 import { useApp, useInput, useStdin, useWindowSize } from 'ink';
 import {
   useCallback,
@@ -10,8 +11,11 @@ import {
   useState,
 } from 'react';
 
+// Local imports - shared runtime
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import type { StreamTabId } from '@shared/schemas';
+
+// Local imports - TUI surfaces and state
 import {
   appEscapeInterruptActive,
   appFocusShortcutsActive,
@@ -492,6 +496,7 @@ export function App(props: AppProps): React.JSX.Element {
               foregroundKind,
             })}
             queuedFollowUpPreview={!queuedFollowUpPanelVisible}
+            sessionNavigationAvailable={sessionViews.length > 0}
             shortcutsActive={focusShortcutsActive}
             sessionListFocused={sessionListFocused}
             subagentControlsAvailable={subagentControlsAvailable}
