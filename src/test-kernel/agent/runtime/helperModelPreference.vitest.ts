@@ -6,18 +6,19 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 const getHelperModelName = vi.hoisted(() => vi.fn());
 const getModelUnavailableReason = vi.hoisted(() => vi.fn());
+const resolveRuntimeModelConfig = vi.hoisted(() => vi.fn());
 
 vi.mock('@agent/runtime/helperModelName', () => ({ getHelperModelName }));
 vi.mock('@model/computeModelOptions', () => ({ getModelUnavailableReason }));
-vi.mock('llm-zoo', () => ({
-  MODEL_CONFIGS: {
-    deepseek: { capabilities: { supportsFunctionCalling: true } },
-    chatonly: { capabilities: { supportsFunctionCalling: false } },
-    // Known model whose capabilities omit supportsFunctionCalling — the tool-use
-    // flow treats this as "no function calling".
-    undeclared: { capabilities: {} },
-  },
-}));
+vi.mock('@model/runtimeModelRegistry', () => ({ resolveRuntimeModelConfig }));
+
+const MODEL_CONFIGS = {
+  deepseek: { capabilities: { supportsFunctionCalling: true } },
+  chatonly: { capabilities: { supportsFunctionCalling: false } },
+  // Known model whose capabilities omit supportsFunctionCalling — the tool-use
+  // flow treats this as "no function calling".
+  undeclared: { capabilities: {} },
+};
 
 function configFor(model: string, agentCategory = 'toolUse'): AgentConfig {
   return {
@@ -32,6 +33,11 @@ describe('applyHelperModelPreference', () => {
     vi.resetModules();
     getHelperModelName.mockReset();
     getModelUnavailableReason.mockReset();
+    resolveRuntimeModelConfig.mockImplementation(async (model: string) =>
+      Object.hasOwn(MODEL_CONFIGS, model)
+        ? MODEL_CONFIGS[model as keyof typeof MODEL_CONFIGS]
+        : undefined,
+    );
   });
 
   async function resolve(config: AgentConfig): Promise<AgentConfig> {

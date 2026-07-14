@@ -6,11 +6,10 @@
  * LLM calls that share the same configured "helper model" setting.
  */
 
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
+import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
 import { getHelperModelName } from './helperModelName';
 
@@ -35,7 +34,15 @@ export async function createHelperModelKit(): Promise<HelperModelResult> {
     return { kit: undefined, reason };
   }
 
-  const handler = await createModelHandler(MODEL_CONFIGS[modelName]);
+  const modelConfig = await resolveRuntimeModelConfig(modelName);
+  if (!modelConfig) {
+    return {
+      kit: undefined,
+      reason: `Model "${modelName}" is not recognized.`,
+    };
+  }
+
+  const handler = await createModelHandler(modelConfig);
   handler.setOutputStreaming(false);
   handler.setProgressViewEnabled(false);
 

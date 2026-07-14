@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import { ZodError } from 'zod';
-import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { createRunTrace, type RunTrace } from '@transcript';
 import {
@@ -41,6 +41,7 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
+import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { INSTRUCTION_ACTION } from '@shared/schemas';
 import {
   STREAM_PHASE,
@@ -166,8 +167,9 @@ export async function getAgentPath(
 async function validateModelExists(
   modelName: string,
   runtimeHost: AgentRuntimeHost,
-): Promise<void> {
-  if (modelName in MODEL_CONFIGS) return;
+): Promise<ModelConfig> {
+  const modelConfig = await resolveRuntimeModelConfig(modelName);
+  if (modelConfig) return modelConfig;
 
   runtimeHost.emit('requestShowInstruction', {
     key: 'modelNotRecognized',
@@ -175,7 +177,7 @@ async function validateModelExists(
     actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
     showSuppress: false,
   });
-  throw new AgentError(`Model ${modelName} not found in MODEL_CONFIGS`);
+  throw new AgentError(`Model ${modelName} is not registered`);
 }
 
 async function inferLaunchModelHandlerCompatibilityKey(
@@ -278,14 +280,13 @@ async function assembleAgentLaunchContext(
     );
   }
 
-  await validateModelExists(fullConfig.model, runtimeHost);
+  const modelConfig = await validateModelExists(fullConfig.model, runtimeHost);
 
   const config: AgentConfig = {
     ...fullConfig,
     agentCategory: setting.agentCategory,
   };
 
-  const modelConfig = MODEL_CONFIGS[fullConfig.model];
   const modelHandlerCompatibilityKey =
     input.modelHandlerCompatibilityKey ??
     (await inferLaunchModelHandlerCompatibilityKey(executionId, config.model));
