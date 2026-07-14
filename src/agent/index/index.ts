@@ -19,6 +19,7 @@ export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 
 export {
   AgentRosterController,
+  InvalidAgentTeamError,
   type AgentRosterControllerDeps,
   type AgentRosterSnapshot,
 } from '../roster/AgentRosterController';
