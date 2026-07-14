@@ -24,16 +24,14 @@ import {
   streams,
 } from '@cli/chat/tui/state/cliState';
 import {
+  allocateConversationBottomPanelRows,
   allocateMiddleRows,
   allocateSidePanelRows,
   shouldShowTipRow,
   shouldShowTodosPlanPanel,
   staticTranscriptRowBudget,
 } from '@cli/chat/tui/appLayout';
-import {
-  nextFocusBack,
-  nextFocusForward,
-} from '@cli/chat/tui/state/focusCycle';
+import { orderedDescendantsFromTree } from '@cli/chat/tui/state/focusCycle';
 import { hasChildControlItems } from '@cli/chat/tui/state/childControls';
 import { focusedChildInputDisabledMessage } from '@cli/chat/tui/state/focusedChildFollowUp';
 import {
@@ -109,6 +107,14 @@ const child1 = 'child-1' as StreamTabId;
 const child2 = 'child-2' as StreamTabId;
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
+
+function orderedSessionDescendants(parent: StreamTabId): StreamTabId[] {
+  return orderedDescendantsFromTree({
+    parent,
+    childStreamEntries: childStreamEntries.get(),
+    streams: streams.get(),
+  });
+}
 
 afterEach(() => {
   clearAllStreamStatusesForTest(defaultSession().status);
@@ -197,7 +203,7 @@ describe('cliState Phase 4 fields', () => {
         'subagents',
       ),
     ).toBe(true);
-    expect(nextFocusForward()).toBe(child1);
+    expect(orderedSessionDescendants(root)[0]).toBe(child1);
 
     removeStream(child1);
 
@@ -235,7 +241,7 @@ describe('cliState Phase 4 fields', () => {
         'subagents',
       ),
     ).toBe(false);
-    expect(nextFocusForward()).toBeUndefined();
+    expect(orderedSessionDescendants(root)[0]).toBeUndefined();
   });
 
   it('updates retained child rows when a failed subagent leaves the active list', () => {
@@ -319,7 +325,7 @@ describe('cliState Phase 4 fields', () => {
       });
 
       expect(parentStream.get().get(child1)).toBe(root);
-      expect(nextFocusForward()).toBe(child1);
+      expect(orderedSessionDescendants(root)[0]).toBe(child1);
       expect(
         transcriptViewportKey({
           activeStreamId: child1,
@@ -378,7 +384,7 @@ describe('CLI TUI row allocation', () => {
     });
 
     expect(layout.transcriptRows).toBe(1);
-    expect(layout.foregroundRows).toBe(17);
+    expect(layout.foregroundRows).toBe(18);
   });
 
   it('hides the normal chat tip row while foreground surfaces own input', () => {
@@ -400,7 +406,7 @@ describe('CLI TUI row allocation', () => {
     });
 
     expect(layout.transcriptRows).toBe(1);
-    expect(layout.foregroundRows).toBe(6);
+    expect(layout.foregroundRows).toBe(7);
   });
 
   it('can cap compact foreground surfaces on tall terminals', () => {
@@ -427,7 +433,7 @@ describe('CLI TUI row allocation', () => {
     });
 
     expect(layout.transcriptRows).toBe(0);
-    expect(layout.foregroundRows).toBe(18);
+    expect(layout.foregroundRows).toBe(19);
   });
 
   it('uses the whole middle region for the transcript without foreground UI', () => {
@@ -438,7 +444,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: false,
     });
 
-    expect(layout.transcriptRows).toBe(17);
+    expect(layout.transcriptRows).toBe(18);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -452,7 +458,7 @@ describe('CLI TUI row allocation', () => {
       tipVisible: false,
     });
 
-    expect(layout.transcriptRows).toBe(15);
+    expect(layout.transcriptRows).toBe(16);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -501,7 +507,7 @@ describe('CLI TUI row allocation', () => {
     ).toBeUndefined();
   });
 
-  it('keeps the compact live reserve aligned with stream tab visibility', () => {
+  it('keeps the compact live reserve aligned with pinned chrome', () => {
     const staticRows = staticTranscriptRowBudget({
       footerRows: 5,
       foregroundOpen: false,
@@ -519,7 +525,6 @@ describe('CLI TUI row allocation', () => {
         rows: 14,
         slashPaletteOpen: false,
         staticTranscriptRows: staticRows,
-        streamTabsVisible: false,
         tipVisible: false,
       }).transcriptRows,
     ).toBe(2);
@@ -533,7 +538,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: false,
     });
 
-    expect(layout.transcriptRows).toBe(12);
+    expect(layout.transcriptRows).toBe(13);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -545,7 +550,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: true,
     });
 
-    expect(layout.transcriptRows).toBe(4);
+    expect(layout.transcriptRows).toBe(5);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -595,6 +600,55 @@ describe('CLI TUI row allocation', () => {
         rows: 1,
       }),
     ).toEqual({ subagentRows: 0, todosPlanRows: 1 });
+  });
+
+  it('keeps sessions visible beside todos in a short terminal', () => {
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        processCount: 0,
+        sessionCount: 2,
+        sessionListFocused: false,
+        todosPlanContentRows: 5,
+        transcriptRows: 1,
+      }),
+    ).toEqual({
+      bottomPanelRows: 1,
+      sessionPanelRows: 1,
+      todosPlanRows: 0,
+    });
+  });
+
+  it('allocates session rows when process slice data is absent', () => {
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 2,
+        sessionListFocused: false,
+        todosPlanContentRows: 0,
+        transcriptRows: 6,
+      }),
+    ).toEqual({
+      bottomPanelRows: 2,
+      sessionPanelRows: 2,
+      todosPlanRows: 0,
+    });
+  });
+
+  it('does not allocate session rows without transcript space', () => {
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 2,
+        sessionListFocused: false,
+        todosPlanContentRows: 5,
+        transcriptRows: 0,
+      }),
+    ).toEqual({
+      bottomPanelRows: 0,
+      sessionPanelRows: 0,
+      todosPlanRows: 0,
+    });
   });
 
   it('shows todo and plan chrome only while a stream is active', () => {
@@ -1009,7 +1063,7 @@ describe('CLI TUI row allocation', () => {
         status: STREAM_PHASE.COMPLETED,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Esc s to choose another.',
+      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc s to choose another.',
     );
 
     expect(
@@ -1020,7 +1074,7 @@ describe('CLI TUI row allocation', () => {
         status: STREAM_PHASE.COMPLETED,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Alt-s to choose another.',
+      'Subagent is no longer accepting follow-ups; press Tab to select a session or Alt-s to choose another.',
     );
 
     expect(
@@ -1032,7 +1086,7 @@ describe('CLI TUI row allocation', () => {
         subagentControlsAvailable: false,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to switch streams.',
+      'Subagent is no longer accepting follow-ups; press Tab to select a session.',
     );
 
     expect(
@@ -1045,7 +1099,7 @@ describe('CLI TUI row allocation', () => {
         taskControlsAvailable: true,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Esc p to review tasks.',
+      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc p to review tasks.',
     );
 
     expect(
@@ -1057,7 +1111,7 @@ describe('CLI TUI row allocation', () => {
         taskControlsAvailable: true,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Esc s to choose another, or Esc p to review tasks.',
+      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc s to choose another, or Esc p to review tasks.',
     );
   });
 
@@ -2754,11 +2808,10 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
   });
 });
 
-describe('focusCycle', () => {
-  it('Ctrl-A cycles through siblings then wraps back to the parent', () => {
-    activeStreamId.set(root);
-    // Only subagents own a stream tab, so both live siblings are modeled as
-    // subagents here — a background process is never itself a focus target.
+describe('session tree order', () => {
+  it('orders retained sibling sessions', () => {
+    // Only subagents own a session, so both live siblings are modeled as
+    // subagents here; a background process is never a selection target.
     applySubagentRoster(root, [
       {
         kind: 'subagent',
@@ -2777,31 +2830,15 @@ describe('focusCycle', () => {
     setParentStream(child2, root);
     patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
     patchStream(child2, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
-    // root → first descendant.
-    expect(nextFocusForward()).toBe(child1);
-    // child1 → next sibling resolved through the parent's descendant list.
-    activeStreamId.set(child1);
-    expect(nextFocusForward()).toBe(child2);
-    // child2 (last sibling) → wrap back to parent.
-    activeStreamId.set(child2);
-    expect(nextFocusForward()).toBe(root);
+    expect(orderedSessionDescendants(root)).toEqual([child1, child2]);
   });
 
-  it('Ctrl-A can still focus an inactive child stream with retained history', () => {
-    activeStreamId.set(root);
+  it('retains an inactive child session with history', () => {
     setParentStream(child1, root);
     patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
     patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
 
-    expect(nextFocusForward()).toBe(child1);
-  });
-
-  it('Ctrl-B returns to the parent and bottoms out at root', () => {
-    setParentStream(child1, root);
-    activeStreamId.set(child1);
-    expect(nextFocusBack()).toBe(root);
-    activeStreamId.set(root);
-    expect(nextFocusBack()).toBeUndefined();
+    expect(orderedSessionDescendants(root)).toEqual([child1]);
   });
 });
 
