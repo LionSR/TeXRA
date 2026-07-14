@@ -1,3 +1,4 @@
+import type { AgentTrace } from '@agent/trace';
 import type {
   AgentProposalPermission,
   BashPermission,
@@ -11,6 +12,7 @@ import type {
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import { ApprovalRequestHandler } from './ApprovalRequestHandler';
+import { ExternalInquiryRequestHandler } from './ExternalInquiryRequestHandler';
 import type { ProgressBackendUiConfig } from './ProgressBackend';
 import type { WebviewUpdater } from './WebviewUpdater';
 
@@ -26,10 +28,7 @@ export interface ApprovalRequestHandlerSet {
   retry: ApprovalRequestHandler<RetryPermission, 'streamId'>;
   agentProposal: ApprovalRequestHandler<AgentProposalPermission, 'proposalId'>;
   planApproval: ApprovalRequestHandler<PlanApprovalPermission, 'approvalId'>;
-  externalInquiry: ApprovalRequestHandler<
-    ExternalInquiryPermission,
-    'requestId'
-  >;
+  externalInquiry: ExternalInquiryRequestHandler;
   userQuestion: ApprovalRequestHandler<UserQuestionPermission, 'requestId'>;
 }
 
@@ -80,6 +79,7 @@ export interface BuildApprovalRequestHandlerSetParams {
   webviewUpdater: WebviewUpdater;
   /** Gate passed to every handler; an empty/false gate keeps it pending-only. */
   canSend: () => boolean;
+  logger?: Pick<AgentTrace, 'debug'>;
   overrides: ApprovalRequestHandlerOverrides;
 }
 
@@ -132,12 +132,18 @@ export function buildApprovalRequestHandlerSet(
       PERMISSION_KIND.PLAN_APPROVAL,
       'approvalId',
     ),
-    externalInquiry: webviewPermissionHandler(
-      webviewUpdater,
+    externalInquiry: new ExternalInquiryRequestHandler({
+      show: (data) =>
+        webviewUpdater.showPermission({
+          kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
+          data,
+        }),
+      resolve: (id) =>
+        webviewUpdater.resolvePermission(PERMISSION_KIND.EXTERNAL_INQUIRY, id),
+      syncThreads: (threads) => webviewUpdater.syncInquiryThreads(threads),
       canSend,
-      PERMISSION_KIND.EXTERNAL_INQUIRY,
-      'requestId',
-    ),
+      logger: params.logger,
+    }),
     userQuestion: webviewPermissionHandler(
       webviewUpdater,
       canSend,
@@ -162,12 +168,12 @@ export function buildApprovalRequestHandlerSet(
   };
 }
 
-export function replayApprovalRequestHandlers(
+export async function replayApprovalRequestHandlers(
   handlers: ReplayableApprovalRequestHandlerSet,
-): void {
-  for (const key of APPROVAL_REQUEST_HANDLER_KEYS) {
-    handlers[key].replay();
-  }
+): Promise<void> {
+  await Promise.all(
+    APPROVAL_REQUEST_HANDLER_KEYS.map((key) => handlers[key].replay()),
+  );
 }
 
 export interface ProgressBackendUiConfigParams {

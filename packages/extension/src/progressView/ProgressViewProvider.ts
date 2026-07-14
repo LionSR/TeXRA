@@ -8,7 +8,6 @@ import {
   replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import { restoreProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryRestore';
 import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { computeAgentOptionsData } from '@agent/index';
@@ -114,6 +113,7 @@ export class ProgressViewProvider
         this.approvalHandlers = buildApprovalRequestHandlerSet({
           webviewUpdater: u,
           canSend,
+          logger: this.logger,
           overrides: {
             retry: {
               show: (p) =>
@@ -379,25 +379,14 @@ export class ProgressViewProvider
     this._pendingUpdateOptions = null;
     this._panelJustDisposed = false;
     this.syncFullView({ forceRebuild: true });
-    // Manifest-backed inquiry state is durable, but handler pending state is
-    // in-memory. Fire-and-forget: replay covers warm targets, restoration covers
-    // host restarts.
-    void restoreProgressViewInquiries({
-      webviewUpdater: this.webviewUpdater,
-      externalInquiry: this.approvalHandlers.externalInquiry,
-      logger: this.logger,
-    });
     this.replayPendingPrompts();
   }
 
   private replayPendingPrompts(): void {
-    if (!this.webviewUpdater.isAvailable()) {
-      return;
-    }
+    if (!this.webviewUpdater.isAvailable()) return;
 
-    replayApprovalRequestHandlers(this.approvalHandlers);
-    // YOLO / Super YOLO state is already sent by syncFullView() which is
-    // always called before replayPendingPrompts() in markWebviewReady().
+    void replayApprovalRequestHandlers(this.approvalHandlers);
+    // YOLO / Super YOLO state is already sent by syncFullView() before replay.
   }
 
   public getPendingAgentProposal(

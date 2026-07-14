@@ -20,7 +20,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 import { setupPlatform } from '@test/support/setupPlatform';
-import { restoreProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryRestore';
+import { ExternalInquiryRequestHandler } from '@controllers/progressView/backend/ExternalInquiryRequestHandler';
 import {
   type ExternalInquiryPermission,
   type ExternalInquiryThreadId,
@@ -111,45 +111,50 @@ function openFollowUpLegacyManifest(): Record<string, unknown> {
 }
 
 function createProgressProviderShell(): {
-  restore: () => Promise<void>;
+  replay: () => Promise<void>;
   show: ReturnType<typeof vi.fn>;
+  syncThreads: ReturnType<typeof vi.fn>;
 } {
   const show = vi.fn<(permission: ExternalInquiryPermission) => void>();
-  return {
-    restore: () =>
-      restoreProgressViewInquiries({
-        webviewUpdater: {
-          isAvailable: () => true,
-          syncInquiryThreads: vi.fn(),
-        },
-        externalInquiry: {
-          pendingSize: 0,
-          show,
-        },
-        logger: { debug: vi.fn() },
-      }),
+  const syncThreads = vi.fn();
+  const handler = new ExternalInquiryRequestHandler({
     show,
+    resolve: vi.fn(),
+    syncThreads,
+    canSend: () => true,
+    logger: { debug: vi.fn() },
+  });
+  return {
+    replay: () => handler.replay(),
+    show,
+    syncThreads,
   };
 }
 
-function createRestoreShellWithPendingInquiry(): {
-  restore: () => Promise<void>;
+function createReplayShellWithPendingInquiry(): {
+  replay: () => Promise<void>;
   show: ReturnType<typeof vi.fn>;
 } {
   const show = vi.fn<(permission: ExternalInquiryPermission) => void>();
+  const handler = new ExternalInquiryRequestHandler({
+    show,
+    resolve: vi.fn(),
+    syncThreads: vi.fn(),
+    canSend: () => true,
+    logger: { debug: vi.fn() },
+  });
+  handler.show({
+    requestId: 'pending',
+    threadId: 'pending' as ExternalInquiryThreadId,
+    question: 'Pending',
+    allowBypass: false,
+    streamId: STREAM,
+    sessionLinks: [],
+    transcript: [],
+    mode: 'new',
+  });
   return {
-    restore: () =>
-      restoreProgressViewInquiries({
-        webviewUpdater: {
-          isAvailable: () => true,
-          syncInquiryThreads: vi.fn(),
-        },
-        externalInquiry: {
-          pendingSize: 1,
-          show,
-        },
-        logger: { debug: vi.fn() },
-      }),
+    replay: () => handler.replay(),
     show,
   };
 }
@@ -200,9 +205,9 @@ describe('external inquiry read boundary', () => {
     await seedThread(OPEN_THREAD, openFollowUpLegacyManifest(), {
       't1/answer.txt': 'Legacy A',
     });
-    const { restore, show } = createProgressProviderShell();
+    const { replay, show, syncThreads } = createProgressProviderShell();
 
-    await restore();
+    await replay();
 
     expect(show).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -214,16 +219,23 @@ describe('external inquiry read boundary', () => {
         ]),
       }),
     );
+    expect(syncThreads).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ threadId: OPEN_THREAD }),
+      ]),
+    );
   });
 
-  it('does not restore durable inquiries when pending state is already warm', async () => {
+  it('reconciles durable inquiries when pending state is already warm', async () => {
     await seedThread(OPEN_THREAD, openFollowUpLegacyManifest(), {
       't1/answer.txt': 'Legacy A',
     });
-    const { restore, show } = createRestoreShellWithPendingInquiry();
+    const { replay, show } = createReplayShellWithPendingInquiry();
 
-    await restore();
+    await replay();
 
-    expect(show).not.toHaveBeenCalled();
+    expect(show).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: OPEN_THREAD }),
+    );
   });
 });
