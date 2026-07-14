@@ -33,6 +33,7 @@ Verify the command:
 texra --help
 texra version
 texra agents list
+texra config
 ```
 
 ## Running Agents
@@ -325,6 +326,37 @@ opens the same integration list and toggles integrations that support enabling
 or disabling.
 
 ## Workspace Defaults
+
+Run `texra config` in a terminal to open the same configuration view available
+from the launcher's **Settings** row and from `/config` in a chat. Its **Agents**
+section has three distinct choices:
+
+- **Workspace roster** controls which agents are available in the current
+  folder. It may inherit the user default, show all agents, use a named team,
+  or store an exact custom selection.
+- **Default team** is a user-level choice used only by workspaces whose roster
+  is set to inherit. With no default team, an inherited workspace shows all
+  agents.
+- **Default chat agent** is the root agent selected for new chats in this
+  workspace. It is stored as `chat.agent` in `.texra/config.json` and does not
+  change which agents are visible.
+
+The corresponding non-interactive interface is `texra config agents`:
+
+```bash
+texra config agents                         # inspect the effective roster
+texra config agents --all                   # show every agent in this folder
+texra config agents --team lean-project     # use a named team
+texra config agents --inherit               # follow the user default
+texra config agents --default-team physicist
+texra config agents --workflow correct,polish --tool-use assistant,review
+texra config agents --default-agent builtInToolUse:assistant
+```
+
+`texra agents list` and `texra multi-agent list|show|run` retain narrower
+responsibilities: they inspect or run agents and teams, but do not alter the
+workspace roster. `texra init` writes initial command defaults and likewise
+does not change agent visibility.
 
 The CLI reads optional, non-secret defaults from `.texra/config.json` in the
 current workspace. Scaffold one with `texra init` (add `--yes` to accept

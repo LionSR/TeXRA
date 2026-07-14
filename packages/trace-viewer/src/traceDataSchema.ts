@@ -31,6 +31,7 @@ import {
   StreamSnapshotSchema,
 } from '@shared/schemas/streamSnapshot';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
+import { AgentDelegationScopeSchema } from '@shared/schemas/agentRoster';
 import type { TraceDocument } from '@transcript/traceAssembler';
 
 const TRACE_EXECUTION_META_SCHEMA_VERSION = 1;
@@ -55,6 +56,7 @@ const TraceAgentConfigSchema = NullableFileFieldsSchema.extend({
   workingDirectory: z.string().nullish(),
   cliOutputFile: z.string().nullish(),
   cliMultiAgentPresetId: z.string().nullish(),
+  delegationAgentScope: AgentDelegationScopeSchema.nullish(),
 }).superRefine((config, ctx) => {
   if (config.outputFiles.length > config.inputFiles.length) {
     ctx.addIssue({

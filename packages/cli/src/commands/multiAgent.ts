@@ -21,7 +21,6 @@ import {
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   readCliMultiAgentPresets,
-  withCliMultiAgentPresetVisibility,
   MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION,
   MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION,
   type CliMultiAgentPresetRunPlan,
@@ -221,6 +220,10 @@ export async function runMultiAgentPreset(
         workingDirectory: runContext.cwd,
         agentCategory: AgentCategory.ToolUse,
         cliMultiAgentPresetId: plan.preset.id,
+        delegationAgentScope: {
+          workflowAgentKeys: [...plan.workflowAgentKeys],
+          toolUseAgentKeys: [...plan.toolUseAgentKeys],
+        },
       };
 
       const execution = await executeCliToolUseConfig(config, runContext, {
@@ -228,7 +231,6 @@ export async function runMultiAgentPreset(
         registerExecution: true,
         markErrorOnThrow: true,
         stopAfterCycle: true,
-        wrap: (run) => withCliMultiAgentPresetVisibility(plan, run),
         categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
       });
       if (!execution.ok) return execution.exitCode;

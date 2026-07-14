@@ -1,6 +1,5 @@
 // Local imports - controllers
 import {
-  applyTeamRoster,
   commitTeamRoster,
   resolveTeamRoster,
   type TeamRosterResolution,
@@ -36,10 +35,15 @@ export interface SettingsAgentCatalogState {
     category: AgentCategory,
     enabledKeys: string[],
   ): Promise<void>;
+  setTeamRoster?(preset: AgentModePreset): Promise<void>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getVisibleAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getCustomPresetsRaw(): unknown;
   setCustomPresets(presets: AgentModePreset[]): Promise<void>;
+  removeCustomPreset(
+    presetId: string,
+    remaining: AgentModePreset[],
+  ): Promise<void>;
 }
 
 export interface SettingsAgentCatalogControllerDeps {
@@ -117,9 +121,10 @@ export class SettingsAgentCatalogController {
     const preset = this.getPreset(presetId);
     if (!preset) return { ok: false, reason: 'unknownPreset' };
 
-    const { unresolvedNames } = await applyTeamRoster(this.deps.state, preset);
+    const resolution = resolveTeamRoster(this.deps.state, preset);
+    await this.commitPresetResolution(preset, resolution);
 
-    return { ok: true, preset, unresolvedNames };
+    return { ok: true, preset, unresolvedNames: resolution.unresolvedNames };
   }
 
   resolvePreset(presetId: string):
@@ -139,8 +144,13 @@ export class SettingsAgentCatalogController {
   }
 
   async commitPresetResolution(
+    preset: AgentModePreset,
     resolution: TeamRosterResolution,
   ): Promise<void> {
+    if (this.deps.state.setTeamRoster) {
+      await this.deps.state.setTeamRoster(preset);
+      return;
+    }
     await commitTeamRoster(this.deps.state, resolution);
   }
 
@@ -174,7 +184,8 @@ export class SettingsAgentCatalogController {
     const target = presets.find((preset) => preset.id === presetId);
     if (!target) return null;
 
-    await this.deps.state.setCustomPresets(
+    await this.deps.state.removeCustomPreset(
+      presetId,
       presets.filter((preset) => preset.id !== presetId),
     );
     return target;

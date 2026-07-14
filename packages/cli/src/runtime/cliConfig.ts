@@ -4,11 +4,12 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { z } from 'zod';
 
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import { JsonStore } from '@platform/defaults/jsonStore';
 import { isFileNotFoundError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { configKeyVariants } from '@shared/config/configKeys';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isObject } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   CLI_APPROVAL_POLICIES,
@@ -278,6 +279,35 @@ export async function loadWorkspaceCliConfig(
     values: parseCliConfigValues(parsed),
     warnings: collectValidationWarnings(filePath, parsed),
   };
+}
+
+/**
+ * Update the workspace chat-agent default without replacing unrelated config.
+ * Nested command defaults remain a JSON object because the public config file
+ * uses `chat.agent`, while scalar state settings use flat `texra.*` keys.
+ */
+export async function setWorkspaceCliChatAgent(
+  cwd: string,
+  agent: string | undefined,
+): Promise<void> {
+  const trimmed = agent?.trim();
+  if (agent !== undefined && !trimmed) {
+    throw new Error('The default chat agent must not be empty.');
+  }
+  const store = await JsonStore.open(workspaceTexraConfigPath(cwd), {
+    corruptionPolicy: 'fail',
+  });
+  const snapshot = store.snapshot();
+  const sectionKey = Object.hasOwn(snapshot, 'texra.chat')
+    ? 'texra.chat'
+    : 'chat';
+  for (const key of configKeyVariants('chat')) {
+    const existing = isObject(snapshot[key]) ? snapshot[key] : {};
+    const next = { ...existing };
+    if (trimmed && key === sectionKey) next.agent = trimmed;
+    else delete next.agent;
+    await store.set(key, Object.keys(next).length > 0 ? next : undefined);
+  }
 }
 
 export function resolveConfiguredAgent(

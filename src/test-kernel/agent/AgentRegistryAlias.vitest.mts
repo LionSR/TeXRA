@@ -23,6 +23,7 @@ import {
   invalidateRemoteAgentsAfterSignOut,
   loadAgents,
   refresh,
+  resolveAgentKey,
 } from '@agent/index/agentRegistry';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
@@ -134,6 +135,9 @@ describe('agent registry legacy aliases', () => {
     const entry = getAgent('chat');
     expect(entry?.name).toBe('assistant');
     expect(getAgent('assistant')?.name).toBe('assistant');
+    expect(resolveAgentKey('chat', AgentCategory.ToolUse)).toBe(
+      'builtInToolUse:assistant',
+    );
   });
 
   it('exposes workflow round counts from local agent YAML', () => {

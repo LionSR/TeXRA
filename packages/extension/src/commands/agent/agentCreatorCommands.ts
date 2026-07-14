@@ -197,7 +197,7 @@ function buildVSCodeUI(): AgentCreatorUI {
     },
 
     async promptAddToConfig(agentName, isEdited, category) {
-      await promptToAddAgentToConfig(agentName, isEdited, category);
+      await promptToAddAgentToConfig(agentName, 'custom', isEdited, category);
     },
 
     async openCreatedFile(filePath) {

@@ -1,27 +1,16 @@
 // Registers the slash commands the input palette surfaces.
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
-import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
-import {
-  readSetting,
-  resetSetting,
-  writeSetting,
-  type SettingsStores,
-} from '@shared/config/settingsAccess';
-import {
-  CLI_STATE_SETTINGS,
-  type StateSettingEntry,
-} from '@shared/schemas/stateSettings';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 
 import { ApiModeForm } from '../forms/ApiModeForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { ConfigForm } from '../forms/ConfigForm';
+import { createCliConfigFormProps } from '../forms/CliConfigForm';
 import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
@@ -50,23 +39,6 @@ type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
 type SkillSelectHandler = (value: SkillActivation) => void | Promise<void>;
 type ErrorHandler = (error: unknown) => void | Promise<void>;
 type SelectionCompletion = 'afterAction' | 'beforeAction';
-
-async function applyCliConfigSettingSideEffects(
-  entry: StateSettingEntry,
-  stores: SettingsStores,
-  value?: unknown,
-  onApiModeSelect?: ApiModeSelectHandler,
-): Promise<void> {
-  if (entry.category === 'git') {
-    applyCliGitAuthorConfig(stores.config);
-  }
-  if (entry.key === GlobalStateKey.USE_OPENROUTER) {
-    invalidateModelOptionsCache();
-    if (value === true) {
-      await onApiModeSelect?.('personal');
-    }
-  }
-}
 
 /** Run a form selection handler with consistent completion and error routing. */
 function runFormSelection<T>({
@@ -419,30 +391,15 @@ export function registerBuiltinSlashCommands(options?: {
       const stores = getConfigStores();
       return (
         <ConfigForm
-          availableRows={props.availableRows}
-          entries={CLI_STATE_SETTINGS}
-          readValue={(entry) => readSetting(entry, stores, 'cli')}
-          writeValue={async (entry, value) => {
-            await writeSetting(entry, value, stores, 'cli');
-            await applyCliConfigSettingSideEffects(
-              entry,
-              stores,
-              value,
-              onApiModeSelect,
-            );
-          }}
-          resetValue={async (entry) => {
-            await resetSetting(entry, stores, 'cli');
-            await applyCliConfigSettingSideEffects(
-              entry,
-              stores,
-              undefined,
-              onApiModeSelect,
-            );
-          }}
-          openForm={(formName) => openCliSlashCommandForm(formName, '')}
-          onClose={() => props.onDone(undefined)}
-          onError={options?.onError}
+          {...createCliConfigFormProps({
+            stores,
+            availableRows: props.availableRows,
+            openExternalForm: (formName) =>
+              openCliSlashCommandForm(formName, ''),
+            onClose: () => props.onDone(undefined),
+            onError: options?.onError,
+            onApiModePersonal: () => onApiModeSelect('personal'),
+          })}
         />
       );
     };

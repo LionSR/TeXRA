@@ -8,10 +8,6 @@ import {
   pickDefaultToolUseAgent,
 } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
-import {
-  clearCliSeededRoster,
-  seedCliRosterFromDefaultTeam,
-} from '../runtime/defaultTeamRoster';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
@@ -53,10 +49,8 @@ export function defaultInitAgentOptions(
 async function gatherOptions(apiMode: CliApiMode): Promise<{
   agents: InitAgentOption[];
   models: CliModelAccess[];
-  seededRoster: boolean;
 }> {
   await loadAgents({ includeRemote: false });
-  const seededRoster = await seedCliRosterFromDefaultTeam();
   const agents = defaultInitAgentOptions(
     getVisibleAgents(AgentCategory.ToolUse),
   );
@@ -64,7 +58,7 @@ async function gatherOptions(apiMode: CliApiMode): Promise<{
     apiMode,
     agentCategory: AgentCategory.ToolUse,
   });
-  return { agents, models, seededRoster };
+  return { agents, models };
 }
 
 export function defaultInitAnswers(
@@ -196,7 +190,7 @@ async function runInit(
   }
 
   const apiMode = effectiveCliApiMode(context);
-  const { agents, models, seededRoster } = await gatherOptions(apiMode);
+  const { agents, models } = await gatherOptions(apiMode);
 
   const interactive =
     !opts.yes &&
@@ -215,7 +209,6 @@ async function runInit(
       colorEnabled: resolveCliStdoutColorEnabled(context),
     });
     if (!result) {
-      if (seededRoster) await clearCliSeededRoster();
       writeTextStderr('Cancelled. No config written.');
       return CliExitCode.Success;
     }
@@ -230,7 +223,6 @@ async function runInit(
   try {
     await writeInitConfig(filePath, config);
   } catch (error: unknown) {
-    if (seededRoster) await clearCliSeededRoster();
     throw error;
   }
 

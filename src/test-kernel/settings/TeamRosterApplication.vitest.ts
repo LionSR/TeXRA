@@ -73,7 +73,7 @@ describe('extension team roster application', () => {
       'commit',
     ]);
     expect(commitPresetResolution).toHaveBeenCalledOnce();
-    expect(commitPresetResolution).toHaveBeenCalledWith(resolved);
+    expect(commitPresetResolution).toHaveBeenCalledWith(preset, resolved);
   });
 
   it('cancels before refresh or roster writes', async () => {
