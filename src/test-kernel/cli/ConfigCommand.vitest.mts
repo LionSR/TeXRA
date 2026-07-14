@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { InvalidAgentTeamError } from '@agent/roster/AgentRosterController';
+import { InvalidAgentTeamError } from '@agent/index';
 
 const mocks = vi.hoisted(() => ({
   clearDefaultTeam: vi.fn(),
