@@ -13,6 +13,7 @@ import type {
   AgentSource,
 } from '@shared/schemas/agent';
 import {
+  agentMatchesIdentifier,
   agentKey as createKey,
   agentKeyOf,
   agentName,
@@ -568,8 +569,10 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
       parseAgentModePresets(
         workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
       ),
-    resolveIdentifier: (agentCategory, identifier) =>
-      getAgent(identifier, agentCategory)?.name ?? agentName(identifier),
+    resolveIdentifier: (agentCategory, identifier) => {
+      const entry = getAgent(identifier, agentCategory);
+      return entry ? agentKeyOf(entry) : identifier;
+    },
     fallbackTeamId: null,
   }).getVisibleAgents(category) as AgentEntry[];
 }
@@ -590,12 +593,7 @@ export function findAgentByIdentifier(
   entries: readonly AgentEntry[],
   identifier: string,
 ): AgentEntry | undefined {
-  const name = agentName(identifier);
-  return entries.find((entry) =>
-    identifier === name
-      ? entry.name === name
-      : agentKeyOf(entry) === identifier,
-  );
+  return entries.find((entry) => agentMatchesIdentifier(entry, identifier));
 }
 
 /**

@@ -71,6 +71,11 @@ function renderConfigFormProps(): {
   ) => void | Promise<void>;
   resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
   openForm?: (formName: string) => void;
+  renderForm?: (
+    formName: string,
+    onBack: () => void,
+  ) => React.JSX.Element | undefined;
+  availableRows?: number;
 } {
   const node = activeForm.get()?.render(() => {}, 20) as {
     type?: (props: unknown) => unknown;
@@ -419,5 +424,22 @@ describe('/config slash command wiring', () => {
     props.openForm?.('tools');
 
     expect(activeForm.get()?.commandName).toBe('tools');
+  });
+
+  it('provides native linked forms with the shared terminal row budget', () => {
+    registerBuiltinSlashCommands({
+      getConfigStores: () => makeFakeSettingsStores().stores,
+    });
+    openCliSlashCommandForm('config', '');
+
+    const props = renderConfigFormProps();
+    const tools = props.renderForm?.('tools', () => undefined) as
+      { props?: { availableRows?: number } } | undefined;
+    const agents = props.renderForm?.('agents', () => undefined) as
+      { props?: { availableRows?: number } } | undefined;
+
+    expect(props.availableRows).toBe(20);
+    expect(tools?.props?.availableRows).toBe(20);
+    expect(agents?.props?.availableRows).toBe(20);
   });
 });

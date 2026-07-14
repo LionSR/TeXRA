@@ -79,6 +79,13 @@ export function createSettingsAgentControllers(
         presets,
       );
     },
+    removeCustomPreset: (presetId, remaining) =>
+      roster.removeTeamPreset(presetId, () =>
+        workspaceState.update(
+          WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+          remaining,
+        ),
+      ),
   };
 
   const catalog = new SettingsAgentCatalogController({

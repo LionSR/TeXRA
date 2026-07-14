@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty';
 
 import { readSetting } from '@shared/config/settingsAccess';
+import { agentKeyOf } from '@shared/schemas/agent';
 import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
 
 import {
@@ -110,16 +111,35 @@ async function configureAgentRoster(
   if (input.inherit) await roster.setInherited();
   if (input.all) await roster.setAll();
   if (input.team) await roster.setTeam(input.team);
-  if (customRequested) {
+  if (input.workflow !== undefined && input.toolUse !== undefined) {
     await roster.setCustom({
       workflowAgentKeys: parseAgentKeys(input.workflow),
       toolUseAgentKeys: parseAgentKeys(input.toolUse),
     });
+  } else if (input.workflow !== undefined) {
+    await roster.setEnabledAgentKeys(
+      'workflow',
+      parseAgentKeys(input.workflow),
+    );
+  } else if (input.toolUse !== undefined) {
+    await roster.setEnabledAgentKeys('toolUse', parseAgentKeys(input.toolUse));
   }
   if (input.defaultTeam) await roster.setDefaultTeam(input.defaultTeam);
   if (input.clearDefault) await roster.clearDefaultTeam();
   if (input.defaultAgent) {
-    await setWorkspaceCliChatAgent(context.cwd, input.defaultAgent);
+    const available = roster.getVisibleAgents('toolUse');
+    const selected = available.find(
+      (agent) =>
+        agent.name === input.defaultAgent ||
+        agentKeyOf(agent) === input.defaultAgent,
+    );
+    if (!selected) {
+      const names = available.map((agent) => agent.name).join(', ');
+      throw new CliUsageError(
+        `Default chat agent "${input.defaultAgent}" is not in the effective workspace roster. Available agents: ${names || '(none)'}.`,
+      );
+    }
+    await setWorkspaceCliChatAgent(context.cwd, agentKeyOf(selected));
   }
   if (input.clearDefaultAgent) {
     await setWorkspaceCliChatAgent(context.cwd, undefined);

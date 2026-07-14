@@ -294,6 +294,14 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     runWrite(entry, settingDefault(entry), () => props.resetValue?.(entry));
   };
 
+  useInput((input, key) => {
+    if (mode.kind !== 'enum') return;
+    if (isConfigResetInput(input, key)) {
+      resetEntry(mode.entry);
+      setMode({ kind: 'list', category: mode.category });
+    }
+  });
+
   if (mode.kind === 'linked-form') {
     return (
       props.renderForm?.(mode.name, () => setMode({ kind: 'categories' })) ?? (
@@ -303,14 +311,6 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
       )
     );
   }
-
-  useInput((input, key) => {
-    if (mode.kind !== 'enum') return;
-    if (isConfigResetInput(input, key)) {
-      resetEntry(mode.entry);
-      setMode({ kind: 'list', category: mode.category });
-    }
-  });
 
   if (mode.kind === 'enum') {
     const { entry } = mode;
@@ -457,7 +457,10 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
       commit(entry, !(effective(entry) as boolean));
     } else if (kind === 'form') {
       const formName = entry.openForm;
-      if (formName) props.openForm?.(formName);
+      if (formName) {
+        if (props.renderForm) setMode({ kind: 'linked-form', name: formName });
+        else props.openForm?.(formName);
+      }
     } else if (kind === 'enum') {
       setMode({ kind: 'enum', entry, category: mode.category });
     } else if (kind === 'string') {

@@ -79,6 +79,9 @@ function createController(options?: {
         setCustomPresets: async (presets) => {
           customPresetsRaw = presets;
         },
+        removeCustomPreset: async (_presetId, remaining) => {
+          customPresetsRaw = remaining;
+        },
       },
     }),
     enabled,

@@ -6,7 +6,10 @@ import {
   type AgentRosterEntry,
 } from '@agent/roster/AgentRosterController';
 import type { AgentCategory } from '@shared/schemas/agent';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import {
+  STARTER_AGENT_MODE_PRESET,
+  type AgentModePreset,
+} from '@shared/schemas/agentPresets';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { StateStore } from '@platform/interfaces';
 
@@ -79,7 +82,7 @@ describe('AgentRosterController', () => {
 
     expect(roster.getSelection()).toEqual({
       kind: 'custom',
-      workflowAgentKeys: ['builtInWorkflow:write', 'custom:review'],
+      workflowAgentKeys: 'all',
       toolUseAgentKeys: [],
     });
     expect(roster.getVisibleAgents('workflow')).toEqual(agents.workflow);
@@ -100,6 +103,29 @@ describe('AgentRosterController', () => {
     expect(
       roster.getVisibleAgents('toolUse').map((agent) => agent.name),
     ).toEqual(['lead']);
+  });
+
+  it('refreshes compatibility mirrors when an inherited default changes', async () => {
+    const workspaceState = memoryStore();
+    const roster = controller(workspaceState, memoryStore());
+
+    await roster.setDefaultTeam(STARTER_AGENT_MODE_PRESET.id);
+
+    expect(roster.getSelection()).toEqual({ kind: 'inherit' });
+    expect(workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
+      STARTER_AGENT_MODE_PRESET.workflowAgents,
+    );
+    expect(
+      workspaceState.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
+    ).toEqual(STARTER_AGENT_MODE_PRESET.toolUseAgents);
+
+    await roster.clearDefaultTeam();
+    expect(
+      workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS),
+    ).toBeUndefined();
+    expect(
+      workspaceState.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
+    ).toBeUndefined();
   });
 
   it('persists one canonical team selection and legacy mirrors', async () => {
@@ -136,7 +162,7 @@ describe('AgentRosterController', () => {
 
     expect(roster.getSelection()).toEqual({
       kind: 'custom',
-      workflowAgentKeys: ['builtInWorkflow:write', 'custom:review'],
+      workflowAgentKeys: 'all',
       toolUseAgentKeys: ['builtInToolUse:lead'],
     });
   });
@@ -168,6 +194,127 @@ describe('AgentRosterController', () => {
       kind: 'custom',
       workflowAgentKeys: ['builtInWorkflow:write', 'future-reviewer'],
       toolUseAgentKeys: ['builtInToolUse:lead', 'custom:search'],
+    });
+  });
+
+  it('keeps an unset legacy category open to agents loaded later', async () => {
+    const workspaceState = memoryStore({
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['builtInToolUse:lead'],
+    });
+    const workflowAgents = [...agents.workflow];
+    const roster = new AgentRosterController({
+      workspaceState,
+      globalState: memoryStore(),
+      getAgents: (category) =>
+        category === 'workflow' ? workflowAgents : agents.toolUse,
+      getPresets: () => [preset],
+      fallbackTeamId: null,
+    });
+
+    workflowAgents.push({
+      category: 'workflow',
+      source: 'remote',
+      name: 'future',
+    });
+    await roster.setEnabledAgentKeys('toolUse', ['builtInToolUse:lead']);
+
+    expect(roster.getSelection()).toEqual({
+      kind: 'custom',
+      workflowAgentKeys: 'all',
+      toolUseAgentKeys: ['builtInToolUse:lead'],
+    });
+    expect(roster.getVisibleAgents('workflow')).toContainEqual(
+      expect.objectContaining({ name: 'future' }),
+    );
+  });
+
+  it('falls back to all agents for a missing symbolic team', () => {
+    const workspaceState = memoryStore({
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+        kind: 'team',
+        teamId: 'deleted-team',
+      },
+    });
+    const roster = controller(workspaceState);
+
+    expect(roster.getEffectiveSelection()).toEqual({ kind: 'all' });
+    expect(roster.getVisibleAgents('toolUse')).toEqual(agents.toolUse);
+  });
+
+  it('materializes an active custom team before deleting its preset', async () => {
+    let presets: AgentModePreset[] = [preset];
+    const workspaceState = memoryStore();
+    const roster = new AgentRosterController({
+      workspaceState,
+      globalState: memoryStore(),
+      getAgents: (category) => agents[category],
+      getPresets: () => presets,
+      fallbackTeamId: null,
+    });
+    await roster.setTeam(preset.id);
+
+    await roster.removeTeamPreset(preset.id, async () => {
+      presets = [];
+    });
+
+    expect(roster.getSelection()).toEqual({
+      kind: 'custom',
+      workflowAgentKeys: ['builtInWorkflow:write'],
+      toolUseAgentKeys: ['builtInToolUse:lead'],
+    });
+  });
+
+  it('matches source-qualified custom selections by exact identity', async () => {
+    const duplicateAgents: Record<AgentCategory, AgentRosterEntry[]> = {
+      workflow: [],
+      toolUse: [
+        { category: 'toolUse', source: 'custom', name: 'review' },
+        { category: 'toolUse', source: 'remote', name: 'review' },
+      ],
+    };
+    const roster = new AgentRosterController({
+      workspaceState: memoryStore({
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+          kind: 'custom',
+          workflowAgentKeys: [],
+          toolUseAgentKeys: ['remote:review'],
+        },
+      }),
+      globalState: memoryStore(),
+      getAgents: (category) => duplicateAgents[category],
+      fallbackTeamId: null,
+    });
+
+    expect(roster.getVisibleAgents('toolUse')).toEqual([
+      { category: 'toolUse', source: 'remote', name: 'review' },
+    ]);
+  });
+
+  it('serializes concurrent category changes through one workspace owner', async () => {
+    const workspaceState = memoryStore();
+    const first = controller(workspaceState);
+    const second = controller(workspaceState);
+    await first.setAll();
+
+    await Promise.all([
+      first.setAgentEnabled({
+        category: 'workflow',
+        source: 'custom',
+        name: 'review',
+        enabled: false,
+      }),
+      second.setAgentEnabled({
+        category: 'toolUse',
+        source: 'custom',
+        name: 'search',
+        enabled: false,
+      }),
+    ]);
+
+    expect(first.getSelection()).toEqual({
+      kind: 'custom',
+      workflowAgentKeys: ['builtInWorkflow:write'],
+      toolUseAgentKeys: ['builtInToolUse:lead'],
     });
   });
 });

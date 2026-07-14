@@ -12,6 +12,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { AgentRosterForm } from './AgentRosterForm';
 import { ConfigForm, type ConfigFormProps } from './ConfigForm';
+import { ToolsListForm } from './ToolsListForm';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
@@ -60,10 +61,23 @@ export function createCliConfigFormProps(
         description: 'workspace roster and user default team',
       },
     ],
-    renderForm: (formName, onBack) =>
-      formName === 'agents' ? (
-        <AgentRosterForm onClose={onBack} onError={props.onError} />
-      ) : undefined,
+    renderForm: (formName, onBack) => {
+      if (formName === 'agents') {
+        return (
+          <AgentRosterForm
+            availableRows={props.availableRows}
+            onClose={onBack}
+            onError={props.onError}
+          />
+        );
+      }
+      if (formName === 'tools') {
+        return (
+          <ToolsListForm availableRows={props.availableRows} onClose={onBack} />
+        );
+      }
+      return undefined;
+    },
     openForm: props.openExternalForm,
     onClose: props.onClose,
     onError: props.onError,

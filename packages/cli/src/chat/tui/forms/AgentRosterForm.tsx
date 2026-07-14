@@ -21,6 +21,10 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { KeyHints } from '../ui/KeyHints';
 import { Select, type SelectItem } from '../ui/Select';
 import { FormFrame } from './_shared/FormFrame';
+import {
+  computeSelectWindowSize,
+  type SelectWindowSize,
+} from './_shared/selectWindow';
 
 type AgentRosterFormMode =
   | 'overview'
@@ -38,6 +42,7 @@ interface AgentRosterData {
 }
 
 export interface AgentRosterFormProps {
+  readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
 }
@@ -46,6 +51,34 @@ function selectionLabel(record: CliAgentRosterRecord): string {
   const selection = record.selection;
   if (selection.kind === 'team') return `team: ${selection.teamId}`;
   return selection.kind;
+}
+
+export function buildChatDefaultAgentItems(
+  agents: readonly AgentEntry[],
+  effectiveKeys: readonly string[],
+): SelectItem<string>[] {
+  const effective = new Set(effectiveKeys);
+  return [
+    {
+      value: '',
+      label: 'Automatic',
+      description: 'Choose from the effective workspace roster',
+    },
+    ...agents
+      .filter((agent) => effective.has(agentKeyOf(agent)))
+      .map((agent) => ({
+        value: agentKeyOf(agent),
+        label: agent.name,
+        description: agent.description,
+      })),
+  ];
+}
+
+export function agentRosterSelectWindow(args: {
+  readonly availableRows: number | undefined;
+  readonly itemCount: number;
+}): SelectWindowSize {
+  return computeSelectWindowSize({ ...args, chromeRows: 5 });
 }
 
 async function loadRosterData(): Promise<AgentRosterData> {
@@ -110,22 +143,34 @@ export function AgentRosterForm(
     items: readonly SelectItem<string>[],
     onSelect: (value: string) => void,
     onCancel: () => void,
-  ) => (
-    <FormFrame title="/config · Agents" showCloseHint={false}>
-      {error ? <Text color="red">{error}</Text> : null}
-      <Select items={[...items]} onSelect={onSelect} onCancel={onCancel} />
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'navigate' },
-            { key: 'Enter', action: 'select' },
-            { key: 'Esc', action: 'back' },
-          ]}
-          confirmCancel={false}
+  ) => {
+    const window = agentRosterSelectWindow({
+      availableRows: props.availableRows,
+      itemCount: items.length,
+    });
+    return (
+      <FormFrame title="/config · Agents" showCloseHint={false}>
+        {error ? <Text color="red">{error}</Text> : null}
+        <Select
+          items={[...items]}
+          maxVisibleItems={window.maxVisibleItems}
+          showOverflow={window.showOverflow}
+          onSelect={onSelect}
+          onCancel={onCancel}
         />
-      </Box>
-    </FormFrame>
-  );
+        <Box marginTop={1}>
+          <KeyHints
+            hints={[
+              { key: '↑/↓', action: 'navigate' },
+              { key: 'Enter', action: 'select' },
+              { key: 'Esc', action: 'back' },
+            ]}
+            confirmCancel={false}
+          />
+        </Box>
+      </FormFrame>
+    );
+  };
 
   if (mode === 'overview') {
     return frame(
@@ -215,18 +260,7 @@ export function AgentRosterForm(
 
   if (mode === 'chat-default') {
     return frame(
-      [
-        {
-          value: '',
-          label: 'Automatic',
-          description: 'Choose from the effective workspace roster',
-        },
-        ...data.toolUse.map((agent) => ({
-          value: agentKeyOf(agent),
-          label: agent.name,
-          description: agent.description,
-        })),
-      ],
+      buildChatDefaultAgentItems(data.toolUse, data.record.toolUseAgentKeys),
       (value) => {
         const cwd = platform().workspace.getWorkspacePath();
         if (!cwd) return;

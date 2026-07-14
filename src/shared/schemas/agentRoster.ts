@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
 const AgentKeyListSchema = z.array(z.string().trim().min(1));
+export const AgentRosterCategorySelectionSchema = z.union([
+  z.literal('all'),
+  AgentKeyListSchema,
+]);
+export type AgentRosterCategorySelection = z.infer<
+  typeof AgentRosterCategorySelectionSchema
+>;
 
 /**
  * One durable description of how a workspace obtains its visible agents.
@@ -16,8 +23,8 @@ export const AgentRosterSelectionSchema = z.discriminatedUnion('kind', [
   }),
   z.strictObject({
     kind: z.literal('custom'),
-    workflowAgentKeys: AgentKeyListSchema,
-    toolUseAgentKeys: AgentKeyListSchema,
+    workflowAgentKeys: AgentRosterCategorySelectionSchema,
+    toolUseAgentKeys: AgentRosterCategorySelectionSchema,
   }),
 ]);
 

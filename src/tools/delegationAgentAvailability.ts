@@ -17,8 +17,9 @@
  */
 
 import {
+  findAgentByIdentifier,
   getAgent,
-  getAgentsByCategory,
+  getCategoryAgent,
   getVisibleAgent as getWorkspaceVisibleAgent,
   getVisibleAgents,
   type AgentEntry,
@@ -26,7 +27,8 @@ import {
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@model';
 import type { AgentCategory } from '@shared/schemas/agent';
-import { agentName } from '@shared/schemas/agent';
+import { agentKeyOf } from '@shared/schemas/agent';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
 
 /** Matches the "Available agents:" header plus its contiguous (non-blank) list
@@ -75,34 +77,48 @@ export function visibleDelegationAgentsBlock(category: AgentCategory): string {
   return `Available agents:\n${formatAgentList(agents)}`;
 }
 
+function activeDelegationScope(): AgentDelegationScope | undefined {
+  const context = tryUseRunContext();
+  return context?.kind === 'launch'
+    ? (context.runScope.delegationAgentScope ?? undefined)
+    : undefined;
+}
+
 /** Resolve delegation targets from the active run scope, then durable roster. */
 export function getDelegationAgents(category: AgentCategory): AgentEntry[] {
-  const context = tryUseRunContext();
-  const scope =
-    context?.kind === 'launch'
-      ? context.runScope.delegationAgentScope
-      : undefined;
+  const scope = activeDelegationScope();
   if (!scope) return getVisibleAgents(category);
   const keys =
     category === 'workflow' ? scope.workflowAgentKeys : scope.toolUseAgentKeys;
-  const names = new Set(keys.map((key) => key.split(':').at(-1) ?? key));
-  return getAgentsByCategory(category).filter((entry) => names.has(entry.name));
+  const resolved: AgentEntry[] = [];
+  const seen = new Set<string>();
+  for (const key of keys) {
+    const entry = key.includes(':')
+      ? getAgent(key, category)
+      : getCategoryAgent(category, key);
+    if (!entry || entry.category !== category) continue;
+    const canonicalKey = agentKeyOf(entry);
+    if (seen.has(canonicalKey)) continue;
+    seen.add(canonicalKey);
+    resolved.push(entry);
+  }
+  return resolved;
 }
 
 export function getDelegationAgent(
   category: AgentCategory,
   identifier: string,
 ): AgentEntry | undefined {
-  const context = tryUseRunContext();
-  const scope =
-    context?.kind === 'launch'
-      ? context.runScope.delegationAgentScope
-      : undefined;
+  const scope = activeDelegationScope();
   if (!scope) return getWorkspaceVisibleAgent(category, identifier);
-  const resolvedName =
-    getAgent(identifier, category)?.name ?? agentName(identifier);
-  return getDelegationAgents(category).find(
-    (entry) => entry.name === resolvedName,
+  const agents = getDelegationAgents(category);
+  const exact = findAgentByIdentifier(agents, identifier);
+  if (exact) return exact;
+  const alias = getAgent(identifier, category);
+  if (!alias) return undefined;
+  return findAgentByIdentifier(
+    agents,
+    identifier.includes(':') ? agentKeyOf(alias) : alias.name,
   );
 }
 

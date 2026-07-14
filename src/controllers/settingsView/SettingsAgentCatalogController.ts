@@ -43,6 +43,10 @@ export interface SettingsAgentCatalogState {
   getVisibleAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getCustomPresetsRaw(): unknown;
   setCustomPresets(presets: AgentModePreset[]): Promise<void>;
+  removeCustomPreset(
+    presetId: string,
+    remaining: AgentModePreset[],
+  ): Promise<void>;
 }
 
 export interface SettingsAgentCatalogControllerDeps {
@@ -183,7 +187,8 @@ export class SettingsAgentCatalogController {
     const target = presets.find((preset) => preset.id === presetId);
     if (!target) return null;
 
-    await this.deps.state.setCustomPresets(
+    await this.deps.state.removeCustomPreset(
+      presetId,
       presets.filter((preset) => preset.id !== presetId),
     );
     return target;
