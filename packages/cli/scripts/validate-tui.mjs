@@ -2033,15 +2033,13 @@ const SCENARIOS = [
     // Steps: A, S(running), R_P+, E_P+.
     checkpoints: [
       {
-        expect: ['Tab sessions'],
-        unexpect: ['1 sub', 'orderChecker'],
+        unexpect: ['Tab sessions', '1 sub', 'orderChecker'],
       },
       {
-        expect: ['Tab sessions'],
-        unexpect: ['1 sub', 'orderChecker'],
+        unexpect: ['Tab sessions', '1 sub', 'orderChecker'],
       },
       {
-        expect: ['1 sub', 'orderChecker running'],
+        expect: ['Tab sessions', '1 sub', 'orderChecker running'],
       },
       {
         expect: ['1 sub', 'orderChecker running'],
@@ -2128,17 +2126,25 @@ const SCENARIOS = [
     // Steps: S(running), A, E_P+, R_P+.
     checkpoints: [
       {
-        expect: ['Tab sessions'],
-        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
+        unexpect: [
+          'Tab sessions',
+          '1 sub',
+          'orderChecker',
+          'harness-child-eve',
+        ],
       },
       {
         // Attachment does not supply a parent edge, so the running slice is
         // registered but still absent from the root's session list.
-        expect: ['Tab sessions'],
-        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
+        unexpect: [
+          'Tab sessions',
+          '1 sub',
+          'orderChecker',
+          'harness-child-eve',
+        ],
       },
       {
-        expect: ['harness-child-eve'],
+        expect: ['Tab sessions', 'harness-child-eve'],
         unexpect: ['1 sub', 'orderChecker'],
       },
       {
@@ -2447,6 +2453,20 @@ const SCENARIOS = [
     resizes: [{ cols: 44, rows: 7 }],
     expect: ['leanSolver waiti', '+3 sessions', 'latex build running'],
     maxOccurrences: [{ text: 'leanSolver waiting for you', max: 1 }],
+  },
+  {
+    name: 'subagent-list-remembers-selection',
+    frame: 'viewport',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: 'Tab sessions',
+    keys: ['\t', DOWN, ESC, '\t'],
+    expect: ['›   ● strategy running', 'Tab input', 'Esc input'],
+    unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
     name: 'subagent-list-tiny-resize-releases-focus',
