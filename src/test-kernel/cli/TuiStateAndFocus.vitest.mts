@@ -378,7 +378,7 @@ describe('CLI TUI row allocation', () => {
     });
 
     expect(layout.transcriptRows).toBe(1);
-    expect(layout.foregroundRows).toBe(17);
+    expect(layout.foregroundRows).toBe(18);
   });
 
   it('hides the normal chat tip row while foreground surfaces own input', () => {
@@ -400,7 +400,7 @@ describe('CLI TUI row allocation', () => {
     });
 
     expect(layout.transcriptRows).toBe(1);
-    expect(layout.foregroundRows).toBe(6);
+    expect(layout.foregroundRows).toBe(7);
   });
 
   it('can cap compact foreground surfaces on tall terminals', () => {
@@ -427,7 +427,7 @@ describe('CLI TUI row allocation', () => {
     });
 
     expect(layout.transcriptRows).toBe(0);
-    expect(layout.foregroundRows).toBe(18);
+    expect(layout.foregroundRows).toBe(19);
   });
 
   it('uses the whole middle region for the transcript without foreground UI', () => {
@@ -438,7 +438,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: false,
     });
 
-    expect(layout.transcriptRows).toBe(17);
+    expect(layout.transcriptRows).toBe(18);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -452,7 +452,7 @@ describe('CLI TUI row allocation', () => {
       tipVisible: false,
     });
 
-    expect(layout.transcriptRows).toBe(15);
+    expect(layout.transcriptRows).toBe(16);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -501,7 +501,7 @@ describe('CLI TUI row allocation', () => {
     ).toBeUndefined();
   });
 
-  it('keeps the compact live reserve aligned with stream tab visibility', () => {
+  it('keeps the compact live reserve aligned with pinned chrome', () => {
     const staticRows = staticTranscriptRowBudget({
       footerRows: 5,
       foregroundOpen: false,
@@ -519,7 +519,6 @@ describe('CLI TUI row allocation', () => {
         rows: 14,
         slashPaletteOpen: false,
         staticTranscriptRows: staticRows,
-        streamTabsVisible: false,
         tipVisible: false,
       }).transcriptRows,
     ).toBe(2);
@@ -533,7 +532,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: false,
     });
 
-    expect(layout.transcriptRows).toBe(12);
+    expect(layout.transcriptRows).toBe(13);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -545,7 +544,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: true,
     });
 
-    expect(layout.transcriptRows).toBe(4);
+    expect(layout.transcriptRows).toBe(5);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -1009,7 +1008,7 @@ describe('CLI TUI row allocation', () => {
         status: STREAM_PHASE.COMPLETED,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Esc s to choose another.',
+      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc s to choose another.',
     );
 
     expect(
@@ -1020,7 +1019,7 @@ describe('CLI TUI row allocation', () => {
         status: STREAM_PHASE.COMPLETED,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Alt-s to choose another.',
+      'Subagent is no longer accepting follow-ups; press Tab to select a session or Alt-s to choose another.',
     );
 
     expect(
@@ -1032,7 +1031,7 @@ describe('CLI TUI row allocation', () => {
         subagentControlsAvailable: false,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to switch streams.',
+      'Subagent is no longer accepting follow-ups; press Tab to select a session.',
     );
 
     expect(
@@ -1045,7 +1044,7 @@ describe('CLI TUI row allocation', () => {
         taskControlsAvailable: true,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Esc p to review tasks.',
+      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc p to review tasks.',
     );
 
     expect(
@@ -1057,7 +1056,7 @@ describe('CLI TUI row allocation', () => {
         taskControlsAvailable: true,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to switch streams or Esc s to choose another, or Esc p to review tasks.',
+      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc s to choose another, or Esc p to review tasks.',
     );
   });
 

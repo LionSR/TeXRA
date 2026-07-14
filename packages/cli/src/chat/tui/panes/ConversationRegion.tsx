@@ -6,7 +6,7 @@ import { Box } from 'ink';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
-import { type ActiveChildInfo, type StreamTabId } from '@shared/schemas';
+import { type StreamTabId } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { clamp } from '@utils/core';
 
@@ -20,10 +20,6 @@ import {
   staticScrollbackTarget,
   staticTranscriptRowBudget,
 } from '../appLayout';
-import {
-  visibleSubagentRows,
-  type ChildStreamEntries,
-} from '../state/childExecutions';
 import {
   isScopedTranscriptViewport,
   transcriptViewportChange,
@@ -43,22 +39,22 @@ import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { ChildControlStreamTarget } from '../state/childControls';
 import type { StreamSlice } from '../state/cliState';
+import type { StreamView } from '../state/streamViews';
 
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation or push the input bar off-screen.
 const BOTTOM_PANEL_MAX_ROWS = 10;
-const EMPTY_SUBAGENT_ROWS: readonly ActiveChildInfo[] = [];
-
 interface ConversationRegionSnapshot {
   readonly activeStreamId: StreamTabId | undefined;
-  readonly childStreamEntries: ChildStreamEntries;
   readonly foregroundMaxRows: number | undefined;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly reverseSearchOpen: boolean;
   readonly rootStreamId: StreamTabId | undefined;
   readonly slashPaletteOpen: boolean;
-  readonly streamTabsVisible: boolean;
+  readonly selectedSessionId: StreamTabId | undefined;
+  readonly sessionListFocused: boolean;
+  readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly childExecutionPanelTarget: ChildControlStreamTarget;
   readonly transcriptViewerStreamId: StreamTabId | undefined;
@@ -80,12 +76,18 @@ interface ConversationRegionProps {
   ) => ReactNode;
   readonly rows: number;
   readonly snapshot: ConversationRegionSnapshot;
+  readonly onCancelSessionList: () => void;
+  readonly onFocusSession: (streamId: StreamTabId) => void;
+  readonly onSessionSelectionChange: (streamId: StreamTabId) => void;
 }
 
 export function ConversationRegion({
   agentSelectionAvailable,
   colorEnabled,
   columns,
+  onCancelSessionList,
+  onFocusSession,
+  onSessionSelectionChange,
   onTranscriptViewportChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -128,8 +130,7 @@ export function ConversationRegion({
     !foregroundOpen && queuedFollowUpMessages.length > 0;
   const footerRows =
     PINNED_CHROME_ROWS.status +
-    (inputBarVisible ? PINNED_CHROME_ROWS.input : 0) +
-    (snapshot.streamTabsVisible ? PINNED_CHROME_ROWS.streamTabsWorstCase : 0);
+    (inputBarVisible ? PINNED_CHROME_ROWS.input : 0);
   const requestedQueuedFollowUpPanelRows = queuedFollowUpPanelWanted
     ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
     : 0;
@@ -139,6 +140,7 @@ export function ConversationRegion({
   const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
   const tipRowVisible =
     !scopedTranscript &&
+    !snapshot.sessionListFocused &&
     shouldShowTipRow({
       foregroundOpen,
       hasQueuedFollowUps: queuedFollowUpPanelWanted,
@@ -153,15 +155,10 @@ export function ConversationRegion({
         tipVisible: tipRowVisible,
       });
   const childExecutionPanelTarget = snapshot.childExecutionPanelTarget;
-  const childExecutionPanelRows = childExecutionPanelTarget.streamId
-    ? visibleSubagentRows(
-        childExecutionPanelTarget.streamId,
-        snapshot.childStreamEntries,
-        snapshot.streams,
-      )
-    : EMPTY_SUBAGENT_ROWS;
   const hasChildExecutionPanel =
-    !foregroundOpen && childExecutionPanelTarget.hasItems;
+    !foregroundOpen &&
+    (snapshot.sessionViews.length > 0 ||
+      (childExecutionPanelTarget.slice?.activeProcesses.length ?? 0) > 0);
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
     hasPlan: activeSlice?.plan != null,
@@ -178,7 +175,6 @@ export function ConversationRegion({
     reserveTranscriptRows: snapshot.foregroundKind !== 'transcript',
     rows,
     slashPaletteOpen: snapshot.slashPaletteOpen,
-    streamTabsVisible: snapshot.streamTabsVisible,
     staticTranscriptRows: staticTranscriptRows ?? 0,
     tipVisible: tipRowVisible,
   });
@@ -188,7 +184,7 @@ export function ConversationRegion({
   const subagentContentRows =
     hasChildExecutionPanel && childExecutionPanelTarget.slice
       ? subagentPanelRowCount(
-          childExecutionPanelRows,
+          snapshot.sessionViews,
           childExecutionPanelTarget.slice.activeProcesses,
         )
       : 0;
@@ -196,17 +192,27 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
       : 0;
+  const panelTranscriptLimit = snapshot.sessionListFocused
+    ? transcriptRows
+    : Math.floor(transcriptRows / 2);
   const bottomPanelBudget = Math.min(
     BOTTOM_PANEL_MAX_ROWS,
     subagentContentRows + todosPlanContentRows,
-    Math.floor(transcriptRows / 2),
+    panelTranscriptLimit,
   );
   const conversationRows = transcriptRows - bottomPanelBudget;
-  const { subagentRows, todosPlanRows } = allocateSidePanelRows({
+  const allocatedSidePanelRows = allocateSidePanelRows({
     subagentContentRows,
     todosPlanContentRows,
     rows: bottomPanelBudget,
   });
+  const subagentRows =
+    snapshot.sessionListFocused &&
+    subagentContentRows > 0 &&
+    bottomPanelBudget > 0
+      ? Math.max(1, allocatedSidePanelRows.subagentRows)
+      : allocatedSidePanelRows.subagentRows;
+  const todosPlanRows = bottomPanelBudget - subagentRows;
   const foregroundSurface = renderForegroundSurface(
     foregroundRows,
     transcriptWidth,
@@ -249,8 +255,13 @@ export function ConversationRegion({
         {bottomPanelBudget > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
+              keyboardActive={snapshot.sessionListFocused}
               maxRows={subagentRows}
-              subagents={childExecutionPanelRows}
+              onCancel={onCancelSessionList}
+              onFocusStream={onFocusSession}
+              onSelectionChange={onSessionSelectionChange}
+              selectedStreamId={snapshot.selectedSessionId}
+              sessions={snapshot.sessionViews}
               activeProcesses={childExecutionPanelTarget.slice?.activeProcesses}
               processOutput={childExecutionPanelTarget.slice?.processOutput}
             />

@@ -1,3 +1,5 @@
+import type { StreamTabId } from '@shared/schemas';
+
 import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
 import {
   COLOR_BORDER,
@@ -6,6 +8,21 @@ import {
   COLOR_WARNING,
 } from '../ui/colors';
 import { STATUS_DOT } from '../ui/glyphs';
+import type { StreamView } from '../state/streamViews';
+
+export function resolveSessionSelectionId(
+  sessions: readonly StreamView[],
+  selectedStreamId: StreamTabId | undefined,
+  activeStreamId: StreamTabId | undefined,
+): StreamTabId | undefined {
+  if (sessions.some((session) => session.id === selectedStreamId)) {
+    return selectedStreamId;
+  }
+  if (sessions.some((session) => session.id === activeStreamId)) {
+    return activeStreamId;
+  }
+  return sessions[0]?.id;
+}
 
 export function childStatusColor(status: string | undefined): string {
   if (!status) return COLOR_SUCCESS;

@@ -1,8 +1,4 @@
-// Lists active subagents + processes for the currently-focused stream and
-// tails the live stdout/stderr per process so the user can see what each
-// shell call is doing.
-//
-// The leading numeric index is currently a visual cue only.
+// Interactive session list plus non-selectable active process rows.
 
 import { Box, Text } from 'ink';
 
@@ -16,28 +12,24 @@ import {
 } from '../state/childControls';
 import { childExecutionLabel } from '../state/childExecutions';
 import { useLiveNowMs } from '../state/useLiveNowMs';
+import { COLOR_HINT } from '../ui/colors';
+import { POINTER, TICK } from '../ui/glyphs';
+import { Select } from '../ui/Select';
 import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
 import type { ProcessOutputTail } from '../state/cliState';
+import type { StreamView } from '../state/streamViews';
 
-interface RowProps {
+interface ProcessRowProps {
   readonly child: ActiveChildInfo;
-  readonly index: number;
   readonly nowMs: number;
-  readonly compact?: boolean;
   readonly tail?: ProcessOutputTail;
 }
 
-export interface ChildRow {
-  readonly child: ActiveChildInfo;
-  readonly index: number;
-}
-
-const TAIL_LINES = 4;
-
 function childStatusLabel(status: string | undefined): string | undefined {
-  // Every row in this panel is a child/subagent stream, never the root
-  // session, so WAITING always gets the distinct child-waiting wording.
-  return formatStreamStatusLabel(status, { style: 'cli', isChildStream: true });
+  return formatStreamStatusLabel(status, {
+    style: 'cli',
+    isChildStream: true,
+  });
 }
 
 export function compactChildRowText({
@@ -62,108 +54,82 @@ export function compactChildRowText({
     .join(' · ');
 }
 
-function Row({
-  child,
-  compact = false,
-  index,
+function SessionRow({
+  active,
+  focused,
   nowMs,
-  tail,
-}: RowProps): React.JSX.Element {
-  // The state layer already caps each stream at PROCESS_TAIL_CHARS_MAX, so
-  // pulling the last `TAIL_LINES` non-blank lines is bounded work.
-  const tailLines = compact ? [] : processTailLines(tail).slice(-TAIL_LINES);
-  const elapsed = childElapsed(child, nowMs);
-  const label = childExecutionLabel(child);
-  const statusLabel = childStatusLabel(child.status);
+  session,
+}: {
+  readonly active: boolean;
+  readonly focused: boolean;
+  readonly nowMs: number;
+  readonly session: StreamView;
+}): React.JSX.Element {
+  const status = session.slice?.status;
+  const statusLabel = formatStreamStatusLabel(status, {
+    style: 'cli',
+    isChildStream: session.parentId !== undefined,
+    ...(session.slice?.substate ? { substate: session.slice.substate } : {}),
+  });
+  const elapsed = childElapsed(
+    {
+      status,
+      startedAt: session.slice?.runStartedAt,
+    },
+    nowMs,
+  );
   return (
-    <Box
-      flexDirection="column"
-      height={compact ? 1 : undefined}
-      overflowY={compact ? 'hidden' : undefined}
-    >
-      <Box flexDirection="row" minWidth={0}>
-        <Text dimColor>{index < 9 ? ` ${index + 1} ` : '   '}</Text>
-        <Text color={childStatusColor(child.status)}>
-          {CHILD_STATUS_MARKER}
-        </Text>
-        {compact ? (
-          <Text wrap="truncate-end">
-            {compactChildRowText({ child, nowMs, tail })}
-          </Text>
-        ) : (
-          <>
-            <Text>{label}</Text>
-            {statusLabel ? <Text dimColor>{` ${statusLabel}`}</Text> : null}
-            {elapsed ? <Text dimColor>{` · ${elapsed}`}</Text> : null}
-          </>
-        )}
-      </Box>
-      {tailLines.length > 0 ? (
-        <Box flexDirection="column" marginLeft={4}>
-          {tailLines.map((line, i) => (
-            <Text key={i} dimColor>
-              {line}
-            </Text>
-          ))}
-        </Box>
-      ) : null}
+    <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
+      <Text color={focused ? COLOR_HINT : undefined}>
+        {focused ? POINTER : ' '}
+      </Text>
+      <Text color={active ? COLOR_HINT : undefined}>
+        {active ? ` ${TICK} ` : '   '}
+      </Text>
+      <Text color={childStatusColor(status)}>{CHILD_STATUS_MARKER}</Text>
+      <Text bold={active} wrap="truncate-end">
+        {session.label}
+        {statusLabel ? ` ${statusLabel}` : ''}
+        {elapsed ? ` · ${elapsed}` : ''}
+      </Text>
     </Box>
   );
 }
 
-export function compactRows(params: {
-  readonly activeProcesses: readonly ActiveChildInfo[];
-  readonly maxRows: number;
-  readonly subagents: readonly ActiveChildInfo[];
-}): {
-  readonly hiddenCount: number;
-  readonly rows: readonly ChildRow[];
-} {
-  const rowBudget = Math.max(0, Math.floor(params.maxRows));
-  const allRows: ChildRow[] = [
-    ...params.subagents.map((child, index) => ({ child, index })),
-    ...params.activeProcesses.map((child, processIndex) => ({
-      child,
-      index: params.subagents.length + processIndex,
-    })),
-  ];
-  if (allRows.length <= rowBudget) {
-    return { hiddenCount: 0, rows: allRows };
-  }
-  if (rowBudget <= 0) {
-    return { hiddenCount: allRows.length, rows: [] };
-  }
-  // At one row, show the highest-signal item (the first row — already
-  // priority-ordered by the caller's active overlay) instead of spending the
-  // only row on the hidden-count marker. Mirrors TodosPlanPanel's
-  // `compactTodosPlanRows`, the other bottom panel sharing this row budget.
-  const visibleCount = rowBudget === 1 ? 1 : rowBudget - 1;
-  const visibleRows = allRows.slice(0, visibleCount);
-  return {
-    hiddenCount: allRows.length - visibleRows.length,
-    rows: visibleRows,
-  };
+function ProcessRow({
+  child,
+  nowMs,
+  tail,
+}: ProcessRowProps): React.JSX.Element {
+  return (
+    <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
+      <Text>{'    '}</Text>
+      <Text color={childStatusColor(child.status)}>{CHILD_STATUS_MARKER}</Text>
+      <Text wrap="truncate-end">
+        {compactChildRowText({ child, nowMs, tail })}
+      </Text>
+    </Box>
+  );
 }
 
 /**
- * Natural (uncapped) compact-row count: one row per visible subagent and
- * active process. Drives the bottom-panel reservation in App so the panel
- * takes only the height it needs.
+ * Natural row count: one row per session and active process.
  */
 export function subagentPanelRowCount(
-  subagents: readonly ActiveChildInfo[],
+  sessions: readonly StreamView[],
   activeProcesses: readonly ActiveChildInfo[],
 ): number {
-  return subagents.length + activeProcesses.length;
+  return sessions.length + activeProcesses.length;
 }
 
 export interface SubagentListProps {
+  readonly keyboardActive?: boolean;
   readonly maxRows?: number;
-  /** Already-derived visible subagent rows (retained order, active overlay)
-   *  for the target parent stream — computed once by the caller from
-   *  `childExecutions.ts#visibleSubagentRows` so this stays a stateless
-   *  props-in renderer. */
-  readonly subagents?: readonly ActiveChildInfo[];
+  readonly onCancel?: () => void;
+  readonly onFocusStream?: (streamId: StreamView['id']) => void;
+  readonly onSelectionChange?: (streamId: StreamView['id']) => void;
+  readonly selectedStreamId?: StreamView['id'];
+  readonly sessions?: readonly StreamView[];
   readonly activeProcesses?: readonly ActiveChildInfo[];
   readonly processOutput?: ReadonlyMap<string, ProcessOutputTail>;
 }
@@ -171,86 +137,76 @@ export interface SubagentListProps {
 export function SubagentList(
   props: SubagentListProps = {},
 ): React.JSX.Element | null {
-  const subagents = props.subagents ?? [];
+  const sessions = props.sessions ?? [];
   const activeProcesses = props.activeProcesses ?? [];
   const processOutput = props.processOutput;
-  const liveElapsedKey = liveChildExecutionElapsedKey(
-    subagents,
-    activeProcesses,
-  );
+  const liveSessionStarts = sessions
+    .map((session) => session.slice?.runStartedAt)
+    .filter((startedAt): startedAt is number => startedAt !== undefined);
+  const liveElapsedKey =
+    [liveChildExecutionElapsedKey([], activeProcesses), ...liveSessionStarts]
+      .filter((key) => key !== undefined)
+      .join(':') || undefined;
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
 
-  if (subagents.length === 0 && activeProcesses.length === 0) return null;
+  if (sessions.length === 0 && activeProcesses.length === 0) return null;
   if (props.maxRows !== undefined && props.maxRows <= 0) return null;
 
-  if (props.maxRows !== undefined) {
-    const { hiddenCount, rows } = compactRows({
-      activeProcesses,
-      maxRows: props.maxRows,
-      subagents,
-    });
-    return (
-      <Box
-        flexDirection="column"
-        height={props.maxRows}
-        overflowY="hidden"
-        paddingX={1}
-      >
-        {rows.map(({ child, index }) => (
-          <Row
-            key={child.executionId}
-            child={child}
-            compact
-            index={index}
-            nowMs={nowMs}
-            tail={processOutput?.get(child.executionId)}
-          />
-        ))}
-        {hiddenCount > 0 && rows.length < props.maxRows ? (
-          <Text
-            dimColor
-            wrap="truncate-end"
-          >{`   … +${hiddenCount} more child execution${hiddenCount === 1 ? '' : 's'}`}</Text>
-        ) : null}
-      </Box>
-    );
-  }
+  const sessionRowBudget =
+    props.maxRows === undefined
+      ? sessions.length
+      : Math.min(sessions.length, Math.max(0, Math.floor(props.maxRows)));
+  const processRowBudget =
+    props.maxRows === undefined
+      ? activeProcesses.length
+      : Math.max(0, Math.floor(props.maxRows) - sessionRowBudget);
+  const visibleProcesses = activeProcesses.slice(0, processRowBudget);
+  const sessionsById = new Map(
+    sessions.map((session) => [session.id, session]),
+  );
 
-  // Reached only when maxRows is undefined (the compact branch above owns every
-  // bounded case), so the panel renders uncapped with a trailing margin.
   return (
-    <Box flexDirection="column" paddingX={1} marginBottom={1}>
-      {subagents.length > 0 ? (
-        <Box flexDirection="column">
-          <Text bold dimColor>
-            Subagents
-          </Text>
-          {subagents.map((child, i) => (
-            <Row
-              key={child.executionId}
-              child={child}
-              index={i}
-              nowMs={nowMs}
-            />
-          ))}
-        </Box>
+    <Box
+      flexDirection="column"
+      height={props.maxRows}
+      overflowY={props.maxRows === undefined ? undefined : 'hidden'}
+      paddingX={1}
+    >
+      {sessions.length > 0 ? (
+        <Select
+          activeValue={sessions.find((session) => session.active)?.id}
+          highlightedValue={props.selectedStreamId}
+          hotkeys={false}
+          isActive={props.keyboardActive}
+          items={sessions.map((session) => ({
+            label: session.label,
+            value: session.id,
+          }))}
+          maxVisibleItems={sessionRowBudget}
+          onCancel={props.onCancel ?? (() => undefined)}
+          onHighlightChange={(streamId) => props.onSelectionChange?.(streamId)}
+          onSelect={(streamId) => props.onFocusStream?.(streamId)}
+          renderItem={(item, state) => {
+            const session = sessionsById.get(item.value);
+            return session ? (
+              <SessionRow
+                active={state.active}
+                focused={state.focused}
+                nowMs={nowMs}
+                session={session}
+              />
+            ) : null;
+          }}
+        />
       ) : null}
-      {activeProcesses.length > 0 ? (
-        <Box flexDirection="column" marginTop={subagents.length > 0 ? 1 : 0}>
-          <Text bold dimColor>
-            Processes
-          </Text>
-          {activeProcesses.map((child, i) => (
-            <Row
-              key={child.executionId}
-              child={child}
-              index={subagents.length + i}
-              nowMs={nowMs}
-              tail={processOutput?.get(child.executionId)}
-            />
-          ))}
-        </Box>
-      ) : null}
+      {visibleProcesses.map((child) => (
+        <ProcessRow
+          key={child.executionId}
+          child={child}
+          nowMs={nowMs}
+          tail={processOutput?.get(child.executionId)}
+        />
+      ))}
     </Box>
   );
 }

@@ -1,9 +1,10 @@
 // Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
 import { useApp, useInput, useStdin, useWindowSize } from 'ink';
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
+import type { StreamTabId } from '@shared/schemas';
 import {
   appEscapeInterruptActive,
   appFocusShortcutsActive,
@@ -23,10 +24,7 @@ import { TranscriptViewer } from './modals/TranscriptViewer';
 import { InputBar } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import {
-  StreamTabsStrip,
-  streamTabsDisplayItems,
-} from './panes/StreamTabsStrip';
+import { resolveSessionSelectionId } from './panes/SubagentListDisplay';
 import { currentApproval } from './state/approvalQueue';
 import {
   isEscapeInput,
@@ -54,8 +52,7 @@ import {
   parentStream as parentStreamSignal,
 } from './state/childExecutions';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
-import { nextFocusBack, nextFocusForward } from './state/focusCycle';
-import { streamDisplayLabel } from './state/streamViews';
+import { activeStreamTreeViews, streamDisplayLabel } from './state/streamViews';
 import { useSignal } from './state/useSignal';
 import type { TranscriptViewportChange } from './state/transcriptViewportMode';
 import type { InputHistory } from './history/inputHistory';
@@ -102,6 +99,8 @@ export function App(props: AppProps): React.JSX.Element {
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
   const childControlMode = useSignal(childControlModeSignal);
   const childControlEscapeAction = useSignal(childControlEscapeActionSignal);
+  const [sessionListFocused, setSessionListFocused] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<StreamTabId>();
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
@@ -183,14 +182,22 @@ export function App(props: AppProps): React.JSX.Element {
   }, [inputDisabled, stdin]);
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const streamTabItems = streamTabsDisplayItems({
+  const sessionViews = activeStreamTreeViews({
     activeStreamId,
     childStreamEntries,
     parentStream,
     streams,
-    width: columns,
   });
-  const streamTabsVisible = streamTabItems.length > 0;
+  const resolvedSelectedSessionId = resolveSessionSelectionId(
+    sessionViews,
+    selectedSessionId,
+    activeStreamId,
+  );
+  useEffect(() => {
+    if (sessionViews.length === 0 && sessionListFocused) {
+      setSessionListFocused(false);
+    }
+  }, [sessionListFocused, sessionViews.length]);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
     childControlMode,
@@ -278,11 +285,13 @@ export function App(props: AppProps): React.JSX.Element {
     }
   }
 
-  const focusShortcutsActive = appFocusShortcutsActive({
-    foregroundOpen,
-    reverseSearchOpen,
-    slashPaletteOpen,
-  });
+  const focusShortcutsActive =
+    !sessionListFocused &&
+    appFocusShortcutsActive({
+      foregroundOpen,
+      reverseSearchOpen,
+      slashPaletteOpen,
+    });
   const pendingEscapeInterruptTimer = useRef<
     ReturnType<typeof setTimeout> | undefined
   >(undefined);
@@ -378,6 +387,11 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
+    if (sessionListFocused) {
+      if (key.tab) setSessionListFocused(false);
+      return;
+    }
+
     // Everything below stands down while a modal/form/input overlay owns the
     // keyboard.
     if (!focusShortcutsActive) return;
@@ -387,10 +401,18 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
-    // Tab / Shift-Tab cycles stream focus.
+    // Tab transfers keyboard ownership from the input to the session list.
     if (key.tab) {
-      const next = key.shift ? nextFocusBack() : nextFocusForward();
-      if (next) activeStreamIdSignal.set(next);
+      if (sessionViews.length > 0) {
+        setSelectedSessionId(
+          resolveSessionSelectionId(
+            sessionViews,
+            activeStreamId,
+            activeStreamId,
+          ),
+        );
+        setSessionListFocused(true);
+      }
       return;
     }
 
@@ -439,8 +461,8 @@ export function App(props: AppProps): React.JSX.Element {
             disabledMessage={childInputDisabledMessage}
             disabled={inputDisabled}
             history={props.history}
+            keyboardActive={!sessionListFocused}
           />
-          <StreamTabsStrip items={streamTabItems} width={columns} />
           <StatusBar
             agentSelectionAvailable={agentSelectionAvailable}
             commandName={props.commandName}
@@ -452,6 +474,7 @@ export function App(props: AppProps): React.JSX.Element {
             })}
             queuedFollowUpPreview={!queuedFollowUpPanelVisible}
             shortcutsActive={focusShortcutsActive}
+            sessionListFocused={sessionListFocused}
             subagentControlsAvailable={subagentControlsAvailable}
             taskControlsAvailable={taskControlsAvailable}
             transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
@@ -462,18 +485,26 @@ export function App(props: AppProps): React.JSX.Element {
       rows={rows}
       snapshot={{
         activeStreamId,
-        childStreamEntries,
         foregroundMaxRows,
         foregroundKind,
         parentStream,
         reverseSearchOpen,
         rootStreamId,
         slashPaletteOpen,
-        streamTabsVisible,
+        sessionListFocused,
+        sessionViews,
+        selectedSessionId: resolvedSelectedSessionId,
         streams,
         childExecutionPanelTarget: childControlTargets.tasks,
         transcriptViewerStreamId,
       }}
+      onCancelSessionList={() => setSessionListFocused(false)}
+      onFocusSession={(streamId) => {
+        setSelectedSessionId(streamId);
+        activeStreamIdSignal.set(streamId);
+        setSessionListFocused(false);
+      }}
+      onSessionSelectionChange={setSelectedSessionId}
     />
   );
 }

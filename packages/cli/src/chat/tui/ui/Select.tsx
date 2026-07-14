@@ -9,7 +9,7 @@
 // `1`-`9` for the first nine rows, then `a`-`z` for rows 10-35.
 
 import { Box, Text, useInput } from 'ink';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { clamp, clampIndex } from '@utils/core';
 import { COLOR_HINT } from './colors';
@@ -38,6 +38,21 @@ export interface SelectProps<T> {
   readonly labelMaxCols?: number;
   readonly maxVisibleItems?: number;
   readonly showOverflow?: boolean;
+  /** Whether this list currently owns terminal input. */
+  readonly isActive?: boolean;
+  /** Controlled highlighted value. Useful when item identities outlive rows. */
+  readonly highlightedValue?: T;
+  readonly onHighlightChange?: (value: T) => void;
+  /** Disable direct 1-9/a-z activation for arrow-only lists. */
+  readonly hotkeys?: boolean;
+  readonly renderItem?: (
+    item: SelectItem<T>,
+    state: {
+      readonly active: boolean;
+      readonly focused: boolean;
+      readonly index: number;
+    },
+  ) => ReactNode;
 }
 
 function firstEnabledSelectIndex<T>(
@@ -212,6 +227,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
     items: props.items,
   });
   const [highlight, setHighlight] = useState(initial);
+  const highlightRef = useRef(initial);
   // Drop input after cancel until React commits the resulting transition. A
   // parent may reuse this Select instance for the destination screen, so the
   // guard must not remain latched across renders.
@@ -223,8 +239,16 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   }
 
   useEffect(() => {
-    setHighlight((h) => clampIndex(h, props.items.length));
-  }, [props.items.length]);
+    const controlledIndex = props.items.findIndex(
+      (item) => item.value === props.highlightedValue,
+    );
+    const next =
+      controlledIndex >= 0
+        ? controlledIndex
+        : clampIndex(highlightRef.current, props.items.length);
+    highlightRef.current = next;
+    setHighlight(next);
+  }, [props.highlightedValue, props.items]);
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -245,64 +269,69 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
     visibleItemCount: visibleItems.length,
   });
 
-  useInput((input, key) => {
-    if (cancelledRef.current) return;
-    const rawNavigationInput = isRawSelectNavigationInput(input);
-    const rawArrowDirection = rawSelectArrowDirection(input);
-    if (key.upArrow || rawArrowDirection === -1) {
-      setHighlight((h) =>
-        nextSelectHighlightIndex({
-          direction: -1,
-          highlight: h,
-          items: props.items,
-        }),
-      );
-      return;
-    }
-    if (key.downArrow || rawArrowDirection === 1) {
-      setHighlight((h) =>
-        nextSelectHighlightIndex({
-          direction: 1,
-          highlight: h,
-          items: props.items,
-        }),
-      );
-      return;
-    }
-    // A fast Esc followed by another key can arrive as an Alt/meta chord or
-    // as raw ESC + one printable key. Select forms have no meta shortcuts, so
-    // treat that as cancel-and-drop without swallowing raw terminal navigation.
-    if (
-      isEscapeInput(input, key) ||
-      (key.meta && !rawNavigationInput) ||
-      isRawSelectEscChordInput(input)
-    ) {
-      cancelAndDrop();
-      return;
-    }
-    if (isPlainReturnInput(input, key)) {
-      const choice = props.items[highlight];
-      if (choice && !choice.disabled) props.onSelect(choice.value);
-      return;
-    }
-    if (!key.ctrl && input.length > 2) {
-      if (rawNavigationInput) return;
-      cancelAndDrop();
-      return;
-    }
-    // Single-key jumps (1-9, then a-z) for direct selection. Ignore Ctrl
-    // chords: Ctrl+C exits the app through App's unified handler, and other
-    // Ctrl+<letter> chords were never meant as row hotkeys.
-    if (!key.ctrl) {
-      const idx = selectIndexForHotkeyInput(input);
-      if (idx != null && idx < props.items.length) {
-        const choice = props.items[idx];
-        if (choice && !choice.disabled) {
-          props.onSelect(choice.value);
+  const moveHighlight = (direction: -1 | 1): void => {
+    const next = nextSelectHighlightIndex({
+      direction,
+      highlight: highlightRef.current,
+      items: props.items,
+    });
+    highlightRef.current = next;
+    setHighlight(next);
+    const item = props.items[next];
+    if (item) props.onHighlightChange?.(item.value);
+  };
+
+  useInput(
+    (input, key) => {
+      if (cancelledRef.current) return;
+      const rawNavigationInput = isRawSelectNavigationInput(input);
+      const rawArrowDirection = rawSelectArrowDirection(input);
+      if (key.upArrow || rawArrowDirection === -1) {
+        moveHighlight(-1);
+        return;
+      }
+      if (key.downArrow || rawArrowDirection === 1) {
+        moveHighlight(1);
+        return;
+      }
+      // A fast Esc followed by another key can arrive as an Alt/meta chord or
+      // as raw ESC + one printable key. Select forms have no meta shortcuts, so
+      // treat that as cancel-and-drop without swallowing raw terminal navigation.
+      if (
+        isEscapeInput(input, key) ||
+        (key.meta && !rawNavigationInput) ||
+        isRawSelectEscChordInput(input)
+      ) {
+        cancelAndDrop();
+        return;
+      }
+      if (isPlainReturnInput(input, key)) {
+        const choice = props.items[highlightRef.current];
+        if (choice && !choice.disabled) props.onSelect(choice.value);
+        return;
+      }
+      if (!key.ctrl && input.length > 2) {
+        if (rawNavigationInput) return;
+        cancelAndDrop();
+        return;
+      }
+      // Single-key jumps (1-9, then a-z) for direct selection. Ignore Ctrl
+      // chords: Ctrl+C exits the app through App's unified handler, and other
+      // Ctrl+<letter> chords were never meant as row hotkeys.
+      if (!key.ctrl && props.hotkeys !== false) {
+        const idx = selectIndexForHotkeyInput(input);
+        if (idx != null && idx < props.items.length) {
+          const choice = props.items[idx];
+          if (choice && !choice.disabled) {
+            highlightRef.current = idx;
+            props.onHighlightChange?.(choice.value);
+            props.onSelect(choice.value);
+          }
         }
       }
-    }
-  });
+    },
+    { isActive: props.isActive ?? true },
+  );
 
   return (
     <Box flexDirection="column" aria-role="listbox">
@@ -318,6 +347,22 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         const hotkey = selectHotkeyForIndex(i);
         const shortcut = hotkey ? `${hotkey}.` : '  ';
         const showInlineOverflow = focused && inlineOverflowText;
+        if (props.renderItem) {
+          return (
+            <Box
+              key={selectItemRenderKey(item, i)}
+              minWidth={0}
+              aria-role="option"
+              aria-state={{
+                selected: focused,
+                checked: active,
+                disabled: item.disabled,
+              }}
+            >
+              {props.renderItem(item, { active, focused, index: i })}
+            </Box>
+          );
+        }
         return (
           <Box
             key={selectItemRenderKey(item, i)}

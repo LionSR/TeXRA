@@ -3,164 +3,114 @@ import { describe, expect, it } from 'vitest';
 import {
   CHILD_STATUS_MARKER,
   childStatusColor,
+  resolveSessionSelectionId,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
+import { compactChildRowText } from '@cli/chat/tui/panes/SubagentList';
 import {
-  compactChildRowText,
-  compactRows,
-} from '@cli/chat/tui/panes/SubagentList';
-import { STREAM_PHASE } from '@shared/schemas';
-import type { ActiveChildInfo } from '@shared/schemas';
+  nextSelectHighlightIndex,
+  visibleSelectRange,
+  type SelectItem,
+} from '@cli/chat/tui/ui/Select';
+import type { StreamView } from '@cli/chat/tui/state/streamViews';
+import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 
-describe('CLI SubagentList display model', () => {
-  it('renders a steady (non-animated) marker for every status', () => {
-    // The marker is intentionally static: a blinking dot forced the whole live
-    // region to repaint twice a second, which surfaced Ink repaint residue.
+function session(id: string, active = false): StreamView {
+  return {
+    id: id as StreamTabId,
+    label: id,
+    slice: undefined,
+    active,
+  };
+}
+
+describe('CLI session list display model', () => {
+  it('keeps status markers steady and status colors independent of focus', () => {
     expect(CHILD_STATUS_MARKER).toBe('● ');
-  });
-
-  it('maps status colors consistently', () => {
     expect(childStatusColor(undefined)).toBe('green');
     expect(childStatusColor('running')).toBe('green');
     expect(childStatusColor('waiting')).toBe('yellow');
     expect(childStatusColor('error')).toBe('red');
     expect(childStatusColor('failed')).toBe('red');
     expect(childStatusColor('exit 2')).toBe('red');
-    // A user stop is not an error: neutral (gray), not red, matching the
-    // progress view / webview and the canonical RUN_OUTCOME (cancelled ≠ failed).
     expect(childStatusColor('stopped')).toBe('gray');
-    // The canonical `cancelled` phase (what stream slices actually carry —
-    // roster summaries alone use the legacy `stopped` spelling) must get the
-    // same neutral color, distinct from completed (green) and failed (red).
     expect(childStatusColor(STREAM_PHASE.CANCELLED)).toBe('gray');
     expect(childStatusColor(STREAM_PHASE.COMPLETED)).toBe('green');
   });
 
-  it('uses a compact child row budget instead of clipping nested sections', () => {
-    const subagents: ActiveChildInfo[] = [
-      {
-        kind: 'subagent',
-        executionId: 'strategy',
-        agentName: 'strategy',
-        childStreamId: 'strategy-stream',
-      },
-      {
-        kind: 'subagent',
-        executionId: 'lean',
-        agentName: 'leanSolver',
-        childStreamId: 'lean-stream',
-      },
-      {
-        kind: 'subagent',
-        executionId: 'review',
-        agentName: 'reviewer',
-        childStreamId: 'review-stream',
-      },
+  it('moves selection through every session and wraps at the ends', () => {
+    const sessions = [
+      session('main', true),
+      session('lean'),
+      session('review'),
     ];
-    const activeProcesses: ActiveChildInfo[] = [
-      {
-        kind: 'process',
-        executionId: 'latexmk',
-        agentName: 'latex build',
-        toolName: 'bash',
-      },
-    ];
+    const items: SelectItem<StreamTabId>[] = sessions.map(({ id, label }) => ({
+      label,
+      value: id,
+    }));
 
-    const display = compactRows({
-      activeProcesses,
-      maxRows: 3,
-      subagents,
-    });
-
-    expect(display.rows.map((row) => row.child.executionId)).toEqual([
-      'strategy',
-      'lean',
-    ]);
-    expect(display.hiddenCount).toBe(2);
+    expect(
+      nextSelectHighlightIndex({
+        direction: 1,
+        highlight: 0,
+        items,
+      }),
+    ).toBe(1);
+    expect(
+      nextSelectHighlightIndex({
+        direction: -1,
+        highlight: 0,
+        items,
+      }),
+    ).toBe(2);
   });
 
-  it('uses the single available row for the highest-signal item', () => {
-    // Mirrors TodosPlanPanel's `compactTodosPlanRows` tie-break: at one row,
-    // show the top-priority row instead of spending it on the overflow
-    // marker.
-    const display = compactRows({
-      activeProcesses: [
-        { kind: 'process', executionId: 'latexmk', agentName: 'latex build' },
-      ],
-      maxRows: 1,
-      subagents: [
-        {
-          kind: 'subagent',
-          executionId: 'strategy',
-          agentName: 'strategy',
-          childStreamId: 'strategy-stream',
-        },
-        {
-          kind: 'subagent',
-          executionId: 'lean',
-          agentName: 'leanSolver',
-          childStreamId: 'lean-stream',
-        },
-      ],
-    });
-
-    expect(display.rows.map((row) => row.child.executionId)).toEqual([
-      'strategy',
-    ]);
-    expect(display.hiddenCount).toBe(2);
-  });
-
-  it('spends zero rows on real content at a zero row budget', () => {
-    const display = compactRows({
-      activeProcesses: [],
-      maxRows: 0,
-      subagents: [
-        {
-          kind: 'subagent',
-          executionId: 'strategy',
-          agentName: 'strategy',
-          childStreamId: 'strategy-stream',
-        },
-      ],
-    });
-
-    expect(display.rows).toEqual([]);
-    expect(display.hiddenCount).toBe(1);
-  });
-
-  it('keeps exact-fit compact rows without adding an overflow summary', () => {
-    const subagents: ActiveChildInfo[] = [
-      {
-        kind: 'subagent',
-        executionId: 'strategy',
-        agentName: 'strategy',
-        childStreamId: 'strategy-stream',
-      },
-      {
-        kind: 'subagent',
-        executionId: 'lean',
-        agentName: 'leanSolver',
-        childStreamId: 'lean-stream',
-      },
-    ];
-    const activeProcesses: ActiveChildInfo[] = [
-      { kind: 'process', executionId: 'latexmk', agentName: 'latex build' },
+  it('preserves selection by stream id as rows change', () => {
+    const selected = 'lean' as StreamTabId;
+    const reordered = [
+      session('review'),
+      session('main', true),
+      session('lean'),
     ];
 
-    const display = compactRows({
-      activeProcesses,
-      maxRows: 3,
-      subagents,
-    });
-
-    expect(display.rows.map((row) => row.child.executionId)).toEqual([
-      'strategy',
-      'lean',
-      'latexmk',
-    ]);
-    expect(display.hiddenCount).toBe(0);
+    expect(
+      resolveSessionSelectionId(reordered, selected, 'main' as StreamTabId),
+    ).toBe(selected);
+    expect(
+      resolveSessionSelectionId(
+        reordered.slice(0, 2),
+        selected,
+        'main' as StreamTabId,
+      ),
+    ).toBe('main');
   });
 
-  it('summarizes the latest process output in compact rows', () => {
+  it('keeps a non-first selected row visible after the row budget shrinks', () => {
+    const sessions = [
+      session('main', true),
+      session('strategy'),
+      session('lean'),
+      session('review'),
+    ];
+    const selected = sessions[2]?.id;
+    const selectedIndex = sessions.findIndex(({ id }) => id === selected);
+
+    expect(
+      visibleSelectRange({
+        highlight: selectedIndex,
+        itemCount: sessions.length,
+        maxVisibleItems: 2,
+      }),
+    ).toEqual({ start: 1, end: 3 });
+    expect(
+      visibleSelectRange({
+        highlight: selectedIndex,
+        itemCount: sessions.length,
+        maxVisibleItems: 1,
+      }),
+    ).toEqual({ start: 2, end: 3 });
+  });
+
+  it('summarizes the latest output on visibly non-selectable process rows', () => {
     expect(
       compactChildRowText({
         child: {
@@ -180,19 +130,5 @@ describe('CLI SubagentList display model', () => {
     ).toBe(
       'latex build running · 19sec · main.tex: Proof sketch needs one missing reference',
     );
-  });
-
-  it('uses CLI-facing labels for child stream statuses', () => {
-    expect(
-      compactChildRowText({
-        child: {
-          kind: 'process',
-          executionId: 'review',
-          agentName: 'review',
-          status: STREAM_PHASE.WAITING,
-        },
-        nowMs: Date.now(),
-      }),
-    ).toBe('review waiting for you');
   });
 });

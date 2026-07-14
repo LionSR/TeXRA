@@ -121,6 +121,8 @@ export interface StatusBarDisplayInput {
   /** Label for the foreground surface's Escape action while shortcutsActive is
    *  false. */
   readonly foregroundEscapeAction?: string;
+  /** True while the persistent session list, rather than the input, owns keys. */
+  readonly sessionListFocused?: boolean;
 }
 
 interface StatusBarDisplay {
@@ -423,7 +425,7 @@ function statusBarBindingsText(
   ].join('|');
   if (memoKey === lastBindingsKey) return lastBindingsText;
   const streamTabs = hasMultipleStreams
-    ? keyHintText({ key: 'Tab', action: 'streams' })
+    ? keyHintText({ key: 'Tab', action: 'sessions' })
     : undefined;
   const streamFocus = hasMultipleStreams
     ? keyHintText({
@@ -546,6 +548,31 @@ function foregroundBindingsText(
   if (fitsStatusBindings(compact, maxColumns)) return compact;
 
   return ctrlCBinding;
+}
+
+function sessionListBindingsText(
+  ctrlCAction: CtrlCAction,
+  maxColumns?: number,
+): string {
+  const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
+  const candidates = [
+    [
+      keyHintText({ key: 'Up/Down', action: 'select' }),
+      keyHintText({ key: 'Enter', action: 'focus' }),
+      keyHintText({ key: 'Esc', action: 'input' }),
+      ctrlCBinding,
+    ].join(KEY_HINT_SEPARATOR),
+    [
+      keyHintText({ key: 'Up/Down', action: 'select' }),
+      keyHintText({ key: 'Enter', action: 'focus' }),
+      ctrlCBinding,
+    ].join(KEY_HINT_SEPARATOR),
+    ctrlCBinding,
+  ];
+  return (
+    candidates.find((candidate) => fitsStatusBindings(candidate, maxColumns)) ??
+    ctrlCBinding
+  );
 }
 
 export function ctrlCActionForFocus({
@@ -806,26 +833,33 @@ export function buildStatusBarDisplay(
             input.pendingExitResumeId,
             { approvalPolicy: input.approvalPolicy },
           )}`
-        : input.shortcutsActive === false
-          ? foregroundBindingsText(
+        : input.sessionListFocused
+          ? sessionListBindingsText(
               input.ctrlCAction ?? 'exit',
               input.width === undefined
                 ? undefined
                 : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
-              input.foregroundEscapeAction,
             )
-          : statusBarBindingsText(
-              input.taskControlsAvailable ?? true,
-              input.agentSelectionAvailable ?? false,
-              input.subagentControlsAvailable,
-              input.hasMultipleStreams,
-              input.shortcutModifierLabel,
-              input.shiftEnterNewline,
-              input.transcriptAvailable,
-              input.ctrlCAction,
-              input.width === undefined
-                ? undefined
-                : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
-            ),
+          : input.shortcutsActive === false
+            ? foregroundBindingsText(
+                input.ctrlCAction ?? 'exit',
+                input.width === undefined
+                  ? undefined
+                  : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
+                input.foregroundEscapeAction,
+              )
+            : statusBarBindingsText(
+                input.taskControlsAvailable ?? true,
+                input.agentSelectionAvailable ?? false,
+                input.subagentControlsAvailable,
+                input.hasMultipleStreams,
+                input.shortcutModifierLabel,
+                input.shiftEnterNewline,
+                input.transcriptAvailable,
+                input.ctrlCAction,
+                input.width === undefined
+                  ? undefined
+                  : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
+              ),
   };
 }

@@ -19,7 +19,6 @@ const COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS = 2;
 export const PINNED_CHROME_ROWS = {
   tip: 1,
   input: 3,
-  streamTabsWorstCase: 1,
   status: 2,
 } as const;
 
@@ -28,7 +27,6 @@ function pinnedChromeRows({
   queuedFollowUpPanelRows = 0,
   reverseSearchOpen,
   slashPaletteOpen,
-  streamTabsVisible = true,
   staticTranscriptRows = 0,
   tipVisible = true,
 }: {
@@ -36,14 +34,12 @@ function pinnedChromeRows({
   readonly queuedFollowUpPanelRows?: number;
   readonly reverseSearchOpen: boolean;
   readonly slashPaletteOpen: boolean;
-  readonly streamTabsVisible?: boolean;
   readonly staticTranscriptRows?: number;
   readonly tipVisible?: boolean;
 }): number {
   const baseRows =
     PINNED_CHROME_ROWS.status +
     (inputVisible ? PINNED_CHROME_ROWS.input : 0) +
-    (streamTabsVisible ? PINNED_CHROME_ROWS.streamTabsWorstCase : 0) +
     queuedFollowUpPanelRows +
     staticTranscriptRows +
     (tipVisible ? PINNED_CHROME_ROWS.tip : 0);
@@ -63,7 +59,6 @@ export function allocateMiddleRows({
   reserveTranscriptRows = true,
   rows,
   slashPaletteOpen,
-  streamTabsVisible = true,
   staticTranscriptRows = 0,
   tipVisible = true,
 }: {
@@ -75,7 +70,6 @@ export function allocateMiddleRows({
   readonly reserveTranscriptRows?: boolean;
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
-  readonly streamTabsVisible?: boolean;
   readonly staticTranscriptRows?: number;
   readonly tipVisible?: boolean;
 }): {
@@ -90,7 +84,6 @@ export function allocateMiddleRows({
         queuedFollowUpPanelRows,
         reverseSearchOpen,
         slashPaletteOpen,
-        streamTabsVisible,
         staticTranscriptRows,
         tipVisible,
       }),
