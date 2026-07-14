@@ -190,7 +190,6 @@ describe('codex tool - atomic resume fallback', () => {
     const firstImportStarted = pDefer<void>();
     const firstImport = pDefer<any>();
     const thread = { id: 'stale-thread', runStreamed: vi.fn() };
-    const executions = { getAgentHandleByStream: () => undefined } as any;
     let strategy: ChildRunStrategy<unknown> | undefined;
     mocks.importCodexClass
       .mockImplementationOnce(() => {

@@ -48,7 +48,7 @@ const MAX_VISIBLE_ROWS = 20;
  * un-animated native-toggle timing) and the post-animation case (accurate
  * final layout for the fit-addon column/row calculation).
  */
-export const TERMINAL_REFIT_EVENTS = [
+const TERMINAL_REFIT_EVENTS = [
   'toggle',
   'wa-show',
   'wa-after-show',

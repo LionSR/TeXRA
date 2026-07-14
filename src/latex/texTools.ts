@@ -159,19 +159,14 @@ export async function compileLatex2Pdf(
     // revised sibling wins over the original source fallback.
     const documentDir = path.dirname(latexFile);
 
-    // Get TikZ input directory from configuration
     const tikzInputDirectory = getConfig<string>(
       'texra.latex.tikzInputDirectory',
       '',
     );
-
-    // Check if workspace path should be included
     const includeWorkspace = getConfig<boolean>(
       'texra.latex.includeWorkspaceInTexinputs',
       true,
     );
-
-    // Build TEXINPUTS from configured paths
     const workspacePath = includeWorkspace ? WorkspaceFS.getPath() : null;
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
       documentDir,

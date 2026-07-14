@@ -177,9 +177,11 @@ export class ZoteroSearchTool extends defineTool({
     }
 
     const collectionMap = include_collections
-      ? await this.fetchCollections(
-          result.map((r) => r.citekey),
+      ? await callBetterBibTeX(
+          'item.collections',
+          [result.map((r) => r.citekey), true],
           port,
+          z.record(z.string(), z.array(BbtCollectionChainSchema)),
         )
       : null;
 
@@ -200,18 +202,5 @@ export class ZoteroSearchTool extends defineTool({
       summary: `Found ${formatResultCount(result.length, 'item')} matching ${label}`,
       output: items.join('\n'),
     };
-  }
-
-  private async fetchCollections(
-    citekeys: string[],
-    port: number,
-  ): Promise<Record<string, BbtCollectionChain[]>> {
-    if (citekeys.length === 0) return {};
-    return callBetterBibTeX(
-      'item.collections',
-      [citekeys, true],
-      port,
-      z.record(z.string(), z.array(BbtCollectionChainSchema)),
-    );
   }
 }

@@ -15,7 +15,7 @@ function isCsiFinalCode(code: number): boolean {
   return code >= 0x40 && code <= 0x7e;
 }
 
-function stripAnsiSgrChunk(text: string, state: SgrStripState): string {
+export function stripAnsiSgrChunk(text: string, state: SgrStripState): string {
   const input = `${state.pending}${text}`;
   state.pending = '';
 
@@ -53,12 +53,6 @@ function stripAnsiSgrChunk(text: string, state: SgrStripState): string {
   }
 
   return output;
-}
-
-export function stripAnsiSgrSequences(text: string): string {
-  const state: SgrStripState = { pending: '' };
-  const output = stripAnsiSgrChunk(text, state);
-  return `${output}${state.pending}`;
 }
 
 function chunkText(chunk: unknown): string | undefined {

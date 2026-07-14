@@ -60,15 +60,16 @@ export async function assembleTrace(
   ]);
   if (!config) return { status: 'config_missing' };
 
+  const fallbackStreamId = getStreamTabId(config.agent, config.model, {
+    executionId,
+  });
   const streamId =
     (
       await resolvePersistedStreamIdForExecution(executionId, {
         streamLogStore,
-        fallbackStreamId: getStreamTabId(config.agent, config.model, {
-          executionId,
-        }),
+        fallbackStreamId,
       })
-    )?.streamId ?? getStreamTabId(config.agent, config.model, { executionId });
+    )?.streamId ?? fallbackStreamId;
 
   const [, snapshot] = await Promise.all([
     streamLogStore.ensureLoaded(streamId),

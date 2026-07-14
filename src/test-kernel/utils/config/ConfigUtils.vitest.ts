@@ -66,16 +66,9 @@ describe('getValidatedConfig', () => {
 // PlatformSettings
 // ---------------------------------------------------------------------------
 
-function initWith(options: {
-  workspaceState?: Record<string, unknown>;
-  globalState?: Record<string, unknown>;
-}): Promise<void> {
-  return installPlatform(options);
-}
-
 describe('readPlatformSetting', () => {
   it('resolves the default from the catalog schema when the key is unset', async () => {
-    await initWith({});
+    await installPlatform({});
     expect(readPlatformSetting(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
       LATEX_CONFIG_DEFAULTS.latexFormatter,
     );
@@ -84,7 +77,7 @@ describe('readPlatformSetting', () => {
   });
 
   it('returns the stored value when present and valid', async () => {
-    await initWith({
+    await installPlatform({
       workspaceState: { [WorkspaceStateKey.LATEX_FORMATTER]: 'tex-fmt' },
     });
     expect(readPlatformSetting(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
@@ -93,7 +86,7 @@ describe('readPlatformSetting', () => {
   });
 
   it('snaps a stored value that fails the schema back to the catalog default', async () => {
-    await initWith({
+    await installPlatform({
       workspaceState: {
         [WorkspaceStateKey.LATEX_FORMATTER]: 'not-a-formatter',
       },
@@ -104,7 +97,7 @@ describe('readPlatformSetting', () => {
   });
 
   it('throws for a key with no catalog entry', async () => {
-    await initWith({});
+    await installPlatform({});
     expect(() => readPlatformSetting('texra.not.a.catalog.key')).toThrow(
       /no state-setting catalog entry/i,
     );

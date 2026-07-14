@@ -153,7 +153,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
       kind: 'success',
       toolCalls: endTurn ? undefined : toolCalls,
       stopReason,
-      text: text ?? undefined,
+      text,
       endTurn,
       serverToolContentBlocks: serverToolData.contentBlocks,
       lastAssistantContent,

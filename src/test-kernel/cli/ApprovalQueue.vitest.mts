@@ -14,7 +14,7 @@ import {
   approvalPayloadStreamId,
   approvalQueueStatus,
   clearApprovals,
-  clearApprovalsForStream,
+  clearApprovalsWhere,
   currentApproval,
   enqueueApproval,
   type ApprovalPayload,
@@ -247,8 +247,10 @@ describe('CLI approval queue', () => {
 
   // Regression coverage for #7306: the per-stream cancel previously only cancelled
   // retry routes, leaving bash/tool-edit/plan/proposal/user-question requests
-  // permanently pending on a stream-scoped interrupt.
-  it('clears every pending kind for a stream via clearApprovalsForStream, leaving other streams alone', async () => {
+  // permanently pending on a stream-scoped interrupt. HostInteractions.cancel
+  // now settles a stream via clearApprovalsWhere with a streamId predicate
+  // (see subscribeApprovals.ts), so this exercises that same multi-kind clear.
+  it('clears every pending kind for a stream via clearApprovalsWhere, leaving other streams alone', async () => {
     const planPayload = {
       kind: 'plan',
       payload: { approvalId: 'approval-1', streamId: 'stream-a' },
@@ -271,7 +273,9 @@ describe('CLI approval queue', () => {
       expect(currentApproval.get()?.payload).toBe(planPayload);
     });
 
-    clearApprovalsForStream('stream-a');
+    clearApprovalsWhere(
+      (payload) => approvalPayloadStreamId(payload) === 'stream-a',
+    );
 
     const interrupted = {
       accepted: false,

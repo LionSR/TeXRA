@@ -362,21 +362,17 @@ export class StreamSnapshotStore {
         if (sessionEvent.scope !== 'run') return;
         const { event } = sessionEvent;
 
-        if (event.type === 'run.config') {
-          this.setTaskState(
-            event.streamId,
-            agentConfigToTaskState(event.config),
-            event.executionId,
-          );
-          return;
-        }
-
-        if (event.type === 'usage') {
-          this.handleSessionUsageEvent(event.data);
-          return;
-        }
-
         switch (event.type) {
+          case 'run.config':
+            this.setTaskState(
+              event.streamId,
+              agentConfigToTaskState(event.config),
+              event.executionId,
+            );
+            return;
+          case 'usage':
+            this.handleSessionUsageEvent(event.data);
+            return;
           case 'updateTodos':
             this.setTodos(event.streamId, event.todos);
             return;

@@ -5,7 +5,6 @@ import { computeUtilizationPercent } from '../support/contextUtilization';
 // Type imports - Anthropic SDK
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
-  BetaContentBlock,
   BetaContentBlockParam,
   BetaCompactionBlock,
   BetaCompactionIterationUsage,
