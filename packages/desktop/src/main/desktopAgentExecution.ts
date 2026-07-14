@@ -15,7 +15,7 @@ import {
 } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
-import { hydrateProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryHydration';
+import { restoreProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryRestore';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
@@ -1070,14 +1070,6 @@ export class DesktopProgressBridge {
     this.syncStreamContent(this.updateStreamMetadata());
   }
 
-  async hydrateProgressViewInquiries(): Promise<void> {
-    await hydrateProgressViewInquiries({
-      webviewUpdater: this.backend.webviewUpdater,
-      externalInquiry: this.approvalHandlers.externalInquiry,
-      logger: this.logger,
-    });
-  }
-
   replayPendingPrompts(): void {
     replayApprovalRequestHandlers(this.approvalHandlers);
   }
@@ -1091,11 +1083,15 @@ export class DesktopProgressBridge {
    * `webviewReady` caller.
    */
   async completeWebviewReady(
-    onInquiryHydrationError: (error: unknown) => void = () => {},
+    onInquiryRestoreError: (error: unknown) => void = () => {},
   ): Promise<void> {
     await this.restartRepair;
     this.syncFullView();
-    void this.hydrateProgressViewInquiries().catch(onInquiryHydrationError);
+    void restoreProgressViewInquiries({
+      webviewUpdater: this.backend.webviewUpdater,
+      externalInquiry: this.approvalHandlers.externalInquiry,
+      logger: this.logger,
+    }).catch(onInquiryRestoreError);
     this.replayPendingPrompts();
   }
 

@@ -20,7 +20,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 import { setupPlatform } from '@test/support/setupPlatform';
-import { hydrateOpenInquiryPermissions } from '@controllers/progressView/backend/externalInquiryHydration';
+import { restoreProgressViewInquiries } from '@controllers/progressView/backend/externalInquiryRestore';
 import {
   type ExternalInquiryPermission,
   type ExternalInquiryThreadId,
@@ -111,13 +111,13 @@ function openFollowUpLegacyManifest(): Record<string, unknown> {
 }
 
 function createProgressProviderShell(): {
-  hydrate: () => Promise<void>;
+  restore: () => Promise<void>;
   show: ReturnType<typeof vi.fn>;
 } {
   const show = vi.fn<(permission: ExternalInquiryPermission) => void>();
   return {
-    hydrate: () =>
-      hydrateOpenInquiryPermissions({
+    restore: () =>
+      restoreProgressViewInquiries({
         webviewUpdater: {
           isAvailable: () => true,
           syncInquiryThreads: vi.fn(),
@@ -132,14 +132,14 @@ function createProgressProviderShell(): {
   };
 }
 
-function createHydrationShellWithPendingInquiry(): {
-  hydrate: () => Promise<void>;
+function createRestoreShellWithPendingInquiry(): {
+  restore: () => Promise<void>;
   show: ReturnType<typeof vi.fn>;
 } {
   const show = vi.fn<(permission: ExternalInquiryPermission) => void>();
   return {
-    hydrate: () =>
-      hydrateOpenInquiryPermissions({
+    restore: () =>
+      restoreProgressViewInquiries({
         webviewUpdater: {
           isAvailable: () => true,
           syncInquiryThreads: vi.fn(),
@@ -196,13 +196,13 @@ describe('external inquiry read boundary', () => {
     );
   });
 
-  it('hydrates legacy answers through progress-view inquiry hydration', async () => {
+  it('restores legacy answers with progress-view inquiries', async () => {
     await seedThread(OPEN_THREAD, openFollowUpLegacyManifest(), {
       't1/answer.txt': 'Legacy A',
     });
-    const { hydrate, show } = createProgressProviderShell();
+    const { restore, show } = createProgressProviderShell();
 
-    await hydrate();
+    await restore();
 
     expect(show).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -216,13 +216,13 @@ describe('external inquiry read boundary', () => {
     );
   });
 
-  it('does not rehydrate durable inquiries when pending state is already warm', async () => {
+  it('does not restore durable inquiries when pending state is already warm', async () => {
     await seedThread(OPEN_THREAD, openFollowUpLegacyManifest(), {
       't1/answer.txt': 'Legacy A',
     });
-    const { hydrate, show } = createHydrationShellWithPendingInquiry();
+    const { restore, show } = createRestoreShellWithPendingInquiry();
 
-    await hydrate();
+    await restore();
 
     expect(show).not.toHaveBeenCalled();
   });

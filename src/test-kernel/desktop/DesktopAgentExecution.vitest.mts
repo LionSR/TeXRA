@@ -89,7 +89,7 @@ type TestableBridge = Bridge & {
   handleInteractionEvent(event: string, payload: unknown): void;
   syncFullView(): void;
   completeWebviewReady(
-    onInquiryHydrationError?: (error: unknown) => void,
+    onInquiryRestoreError?: (error: unknown) => void,
   ): Promise<void>;
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
   setActiveStream(streamId: StreamTabId): void;
