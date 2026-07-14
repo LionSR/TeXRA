@@ -35,10 +35,7 @@ export interface SettingsAgentCatalogState {
     category: AgentCategory,
     enabledKeys: string[],
   ): Promise<void>;
-  setTeamRoster?(
-    preset: AgentModePreset,
-    resolution: TeamRosterResolution,
-  ): Promise<void>;
+  setTeamRoster?(preset: AgentModePreset): Promise<void>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getVisibleAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getCustomPresetsRaw(): unknown;
@@ -151,7 +148,7 @@ export class SettingsAgentCatalogController {
     resolution: TeamRosterResolution,
   ): Promise<void> {
     if (this.deps.state.setTeamRoster) {
-      await this.deps.state.setTeamRoster(preset, resolution);
+      await this.deps.state.setTeamRoster(preset);
       return;
     }
     await commitTeamRoster(this.deps.state, resolution);
