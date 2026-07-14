@@ -517,10 +517,8 @@ export class DesktopProgressBridge {
           deleteAllStreams: () => this.deleteAllStreams(),
           stopStream: (stream) => this.stopStream(stream),
         },
-        run: {
-          resumeStream: async (stream) => {
-            await this.tryResumeStream(stream);
-          },
+        resumeStream: async (stream) => {
+          await this.tryResumeStream(stream);
         },
         followUp: {
           sendFollowUp: ({ stream, text, mediaFiles }) =>
