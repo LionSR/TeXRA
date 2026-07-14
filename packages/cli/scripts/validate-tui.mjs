@@ -1006,6 +1006,26 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'config-category-back-responsive',
+    env: { HARNESS_ENTRIES: '4' },
+    // Reuses the shared Select instance across category -> list -> category.
+    keys: ['/config', '\r', '\r', ESC, DOWN, '\r'],
+    frame: 'viewport',
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: [
+      '/config · AI agents',
+      '↑/↓ navigate',
+      'Enter toggle / edit / open',
+      'Esc back',
+    ],
+    unexpect: [
+      '/config · Git and worktrees',
+      'No configurable settings are available here yet.',
+      'Platform not initialized',
+      '/config - error',
+    ],
+  },
+  {
     name: 'approval-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/approval', '\r'],
