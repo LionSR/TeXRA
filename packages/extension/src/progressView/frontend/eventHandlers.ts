@@ -19,7 +19,7 @@ import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './components/ExternalInquiryPanel';
 import {
   APPROVE_SESSION_ACTION,
-  APPROVE_SUPER_YOLO_ACTION,
+  APPROVE_ALL_DELEGATED_WORK_ACTION,
   type FilterEventDetail,
   type FollowUpClearDetail,
   type FollowupCommandDetail,
@@ -372,27 +372,28 @@ export function handlePermissionAction(
       removePrompt(ctx, PERMISSION_KIND.RETRY, permission.data.streamId);
       break;
     case PERMISSION_KIND.PROPOSAL: {
-      // "Super Yolo (this session)" approves this proposal like a normal approve
-      // and enables per-stream delegated-task auto-approval for the rest of the
-      // stream — mirroring the edit/bash "Yolo (this session)" decomposition. It
-      // never reaches the backend proposal protocol (action enum stays
-      // approve|reject|setup). Enable bypass BEFORE settling the approval:
+      // Approve-all accepts this proposal and enables delegated-task approval
+      // for the rest of the stream. It never reaches the backend proposal
+      // protocol (action stays approve|reject|setup). Enable the bypass BEFORE
+      // settling the approval:
       // webview messages are FIFO and ENABLE_SUPER_YOLO_BYPASS sets the
       // per-stream bypass synchronously, so it lands before approve unblocks the
       // agent and the next proposal can't race ahead and re-prompt. Use the
-      // idempotent ENABLE (force-on), not the TOGGLE: super-yolo can be turned on
-      // from the stream header while this prompt is still visible (that doesn't
+      // idempotent ENABLE (force-on), not the TOGGLE: approval can be turned on
+      // from the stream header while this prompt is still visible (which does not
       // auto-resolve the open proposal), and a toggle would then flip bypass back
       // OFF here — the opposite of "enable". Mirrors edit/bash ENABLE_APPROVAL_BYPASS.
-      const isSuperYolo = action === APPROVE_SUPER_YOLO_ACTION;
-      if (isSuperYolo) {
+      const approveAllDelegatedWork =
+        action === APPROVE_ALL_DELEGATED_WORK_ACTION;
+      if (approveAllDelegatedWork) {
         postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS, {
           stream: permission.data.streamId,
+          initiatingProposalId: permission.data.proposalId,
         });
       }
       postMessage(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
         proposalId: permission.data.proposalId,
-        action: isSuperYolo ? 'approve' : action,
+        action: approveAllDelegatedWork ? 'approve' : action,
         feedback,
         model: modelOverride,
         agent: agentOverride,

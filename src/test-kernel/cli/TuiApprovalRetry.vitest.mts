@@ -53,6 +53,12 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { AgentCategory } from '@shared/schemas';
+import {
+  cleanupAllApprovals,
+  isApprovalBypassedForStream,
+  isBashApprovalBypassedForStream,
+  proposalApprovals,
+} from '@tools/approval';
 import { setGoalSessionBashAutoApproval } from '@tools/goal';
 
 function context(): CliContext {
@@ -132,6 +138,7 @@ function chatGptSubscriptionRetry(
 
 afterEach(() => {
   clearApprovals();
+  cleanupAllApprovals();
   resetCliState();
   mocks.lookupApiKey.mockReset();
   mocks.notify.mockReset();
@@ -243,7 +250,7 @@ describe('TUI retry approvals', () => {
     );
   });
 
-  it('updates TUI super-yolo bypass state at the proposal decision site', async () => {
+  it('enables the complete delegated-task approval mode at the proposal decision site', async () => {
     const { runtimeHost, interactions } = tui();
     const result = interactions.requestAgentProposal?.({
       proposalId: 'proposal-bypass',
@@ -269,13 +276,99 @@ describe('TUI retry approvals', () => {
     expect(streams.get().get('proposal-bypass-stream')?.bypass.superYolo).toBe(
       true,
     );
+    expect(streams.get().get('proposal-bypass-stream')?.bypass).toEqual({
+      superYolo: true,
+      toolEdit: true,
+      bash: true,
+    });
+    expect(proposalApprovals().isBypassed('proposal-bypass-stream')).toBe(true);
+    expect(isApprovalBypassedForStream('proposal-bypass-stream')).toBe(true);
+    expect(isBashApprovalBypassedForStream('proposal-bypass-stream')).toBe(
+      true,
+    );
     expect(runtimeHost.emit).toHaveBeenCalledWith(
       'updateSuperYoloBypassState',
-      {
-        streamId: 'proposal-bypass-stream',
-        bypassActive: true,
-      },
+      { streamId: 'proposal-bypass-stream', bypassActive: true },
     );
+    expect(runtimeHost.emit).toHaveBeenCalledWith(
+      'updateToolEditApprovalBypassState',
+      { streamId: 'proposal-bypass-stream', bypassActive: true },
+    );
+  });
+
+  it('approves delegated work already queued in the same stream', async () => {
+    const { interactions } = tui();
+    const streamId = 'parallel-approval-stream';
+    const proposal = interactions.requestAgentProposal?.({
+      proposalId: 'proposal-current',
+      streamId,
+      agent: 'critic',
+      agentSource: null,
+      model: 'kimi26T',
+      instruction: 'Check the local compactness claim.',
+      memories: [],
+      workingDirectory: null,
+      agentCategory: AgentCategory.ToolUse,
+    });
+    const edit = interactions.requestToolEditApproval?.({
+      path: '/work/main.tex',
+      originalContent: 'old',
+      proposedContent: 'new',
+      sourceTool: 'edit',
+      streamId,
+    });
+    const bash = interactions.requestBashApproval?.({
+      command: 'lake build',
+      streamId,
+    });
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'proposal',
+        payload: { proposalId: 'proposal-current' },
+      });
+    });
+    currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
+
+    await expect(proposal).resolves.toEqual({ action: 'approve' });
+    await expect(edit).resolves.toEqual({
+      accepted: true,
+      appliedContent: 'new',
+    });
+    await expect(bash).resolves.toEqual({
+      accepted: true,
+      userMessage: undefined,
+    });
+    expect(currentApproval.get()).toBeUndefined();
+  });
+
+  it('keeps an ordinary proposal approval limited to the current request', async () => {
+    const { interactions } = tui();
+    const streamId = 'proposal-one-off-stream';
+    const result = interactions.requestAgentProposal?.({
+      proposalId: 'proposal-one-off',
+      streamId,
+      agent: 'critic',
+      agentSource: null,
+      model: 'kimi26T',
+      instruction: 'Check one calculation.',
+      memories: [],
+      workingDirectory: null,
+      agentCategory: AgentCategory.ToolUse,
+    });
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload.kind).toBe('proposal');
+    });
+    currentApproval.get()?.decide({ accepted: true });
+
+    await expect(result).resolves.toEqual({ action: 'approve' });
+    expect(streams.get().get(streamId)?.bypass.superYolo ?? false).toBe(false);
+    expect(streams.get().get(streamId)?.bypass.toolEdit ?? false).toBe(false);
+    expect(streams.get().get(streamId)?.bypass.bash ?? false).toBe(false);
+    expect(proposalApprovals().isBypassed(streamId)).toBe(false);
+    expect(isApprovalBypassedForStream(streamId)).toBe(false);
+    expect(isBashApprovalBypassedForStream(streamId)).toBe(false);
   });
 
   it('auto-switches provider-less relay retries when any personal key exists', async () => {

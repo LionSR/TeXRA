@@ -12,6 +12,7 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { DiffViewHost } from '@hosts/uiHosts';
+import type { StreamTabId } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
@@ -45,6 +46,7 @@ export interface DesktopToolEditApprovalOptions {
 }
 
 export interface DesktopToolEditApprovalController {
+  approvePendingForStream(streamId: StreamTabId): void;
   cancel(selector?: HostInteractionCancelSelector): void;
   handleAction(payload: {
     requestId: string;
@@ -73,7 +75,7 @@ interface DesktopPendingToolEditApproval extends LatexPreviewEntry {
 interface InitializingToolEditApproval {
   readonly request: ToolEditApprovalRequest;
   readonly cancellationScope?: object;
-  cancellation?: ToolEditApprovalResult;
+  earlyResolution?: ToolEditApprovalResult;
 }
 
 class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalController {
@@ -112,11 +114,11 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       throw error;
     }
     this.initializing.delete(requestId);
-    if (initialization.cancellation) {
+    if (initialization.earlyResolution) {
       this.cleanupEntry(entry);
       return {
-        ...initialization.cancellation,
-        lineChanges: initialization.cancellation.lineChanges ?? lineChanges,
+        ...initialization.earlyResolution,
+        lineChanges: initialization.earlyResolution.lineChanges ?? lineChanges,
       };
     }
     entry.cancellationScope = initialization.cancellationScope;
@@ -193,10 +195,30 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     }
   }
 
+  approvePendingForStream(streamId: StreamTabId): void {
+    for (const initialization of this.initializing.values()) {
+      if (
+        initialization.earlyResolution ||
+        initialization.request.streamId !== streamId
+      ) {
+        continue;
+      }
+      initialization.earlyResolution = {
+        accepted: true,
+        appliedContent: initialization.request.proposedContent,
+      };
+    }
+    for (const [requestId, entry] of this.pending) {
+      if (entry.request.streamId === streamId && !entry.isSettled()) {
+        this.handleAction({ requestId, action: 'approve' });
+      }
+    }
+  }
+
   cancel(selector: HostInteractionCancelSelector = {}): void {
     for (const initialization of this.initializing.values()) {
       if (
-        initialization.cancellation ||
+        initialization.earlyResolution ||
         !matchesCancelSelector(
           {
             kind: 'toolEdit',
@@ -208,7 +230,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       ) {
         continue;
       }
-      initialization.cancellation = {
+      initialization.earlyResolution = {
         accepted: false,
         userMessage: selector.cause,
       };
