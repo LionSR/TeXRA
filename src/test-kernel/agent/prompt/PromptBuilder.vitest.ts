@@ -3,8 +3,8 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Type imports
+import { buildInitialToolUsePrompts, PromptBuilder } from '@agent/prompt';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
-import { buildInitialToolUsePrompts, PromptBuilder } from '@utils/prompt';
 
 describe('PromptBuilder', () => {
   it('uses array-based userRequest entries for reflections', async () => {

@@ -11,7 +11,7 @@ import {
   loadRuntimeSkillCatalog,
   setRuntimeSkillSources,
 } from '@skills/runtimeSkills';
-import { buildInitialToolUsePrompts } from '@utils/prompt';
+import { buildInitialToolUsePrompts } from '@agent/prompt';
 
 const tempRoots: string[] = [];
 

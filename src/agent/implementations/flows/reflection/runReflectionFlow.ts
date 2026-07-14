@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import { getExecutionStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
+import { PromptBuilder } from '@agent/prompt';
 import {
   createOutputState,
   setActiveRun,
@@ -23,10 +24,6 @@ import {
   readPersistedFlowRecord,
 } from '@agent/node/persistedFlow';
 import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
-import {
-  WORKFLOW_DOCUMENT_OUTPUT_EXT,
-  WORKFLOW_RAW_OUTPUT_EXT,
-} from '@shared/constants/workflowOutput';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
@@ -38,6 +35,10 @@ import {
   type StorageKey,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
+import {
+  WORKFLOW_DOCUMENT_OUTPUT_EXT,
+  WORKFLOW_RAW_OUTPUT_EXT,
+} from '@shared/constants/workflowOutput';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   AbsoluteFS,
@@ -45,7 +46,6 @@ import {
   WorkspaceFS,
   createWorkspaceLocation,
 } from '@utils/files';
-import { PromptBuilder } from '@utils/prompt';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 import { TeXCountNode } from './nodes/TeXCountNode';

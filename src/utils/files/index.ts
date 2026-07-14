@@ -4,7 +4,6 @@ export { AbsoluteFS } from './absoluteFS';
 export { StorageFS, GlobalStorageFS } from './storageFS';
 
 // Heavily-used utilities (re-exported for convenience)
-export * from './fileMappingUtils';
 export * from './mimeUtils';
 export * from './taskRunStorage';
 export * from './flexibleFS';
