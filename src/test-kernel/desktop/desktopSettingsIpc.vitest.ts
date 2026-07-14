@@ -94,6 +94,9 @@ async function createSettingsIpc(options: {
   return createDesktopSettingsIpc({
     postToRenderer: () => {},
     agentSettingsController: createStubDesktopAgentSettingsController(),
+    resourcesPath: '/resources',
+    runExecution: async () => undefined,
+    restoreTaskState: async () => true,
     globalState: new MemoryStateStore(),
     workspaceState: new MemoryStateStore(),
     secrets: options.secrets,

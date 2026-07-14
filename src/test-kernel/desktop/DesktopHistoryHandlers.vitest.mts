@@ -74,6 +74,8 @@ function createHistoryActions(
   return new DesktopHistoryHandlers({
     postToRenderer: vi.fn(),
     resourcesPath: RESOURCES_PATH,
+    runExecution: vi.fn(async () => undefined),
+    restoreTaskState: vi.fn(async () => true),
     onError: vi.fn(),
     ...overrides,
   }).actions;
@@ -142,13 +144,13 @@ describe('DesktopHistoryHandlers', () => {
     );
   });
 
-  it('errors instead of a false success when rerun has no runExecution dependency wired (Copilot #7827)', async () => {
+  it('reruns a valid history item through the required execution capability', async () => {
     await writeHistoryConfig();
     const showInfoMessage = vi.fn();
-    const showErrorMessage = vi.fn();
+    const runExecution = vi.fn(async () => undefined);
     const actions = createHistoryActions({
       showInfoMessage,
-      showErrorMessage,
+      runExecution,
     });
 
     await assertSupported(actions.rerunAgent)({
@@ -156,10 +158,10 @@ describe('DesktopHistoryHandlers', () => {
       historyId: HISTORY_ID,
     });
 
-    expect(showInfoMessage).not.toHaveBeenCalled();
-    expect(showErrorMessage).toHaveBeenCalledWith(
-      'Rerunning agents from history is not available in this build',
+    expect(showInfoMessage).toHaveBeenCalledWith(
+      'Rerunning agent from history',
     );
+    expect(runExecution).toHaveBeenCalledOnce();
   });
 
   it('exports a history chat to Markdown via the shared ChatExportController', async () => {

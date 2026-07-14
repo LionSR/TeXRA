@@ -41,13 +41,7 @@ type RendererMessage = Parameters<
   DesktopSettingsIpcOptions['postToRenderer']
 >[0];
 
-type SettingsFixtureOverrides = Omit<
-  DesktopSettingsIpcOptions,
-  'agentSettingsController' | 'postToRenderer'
-> & {
-  agentSettingsController?: DesktopSettingsIpcOptions['agentSettingsController'];
-  postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
-};
+type SettingsFixtureOverrides = Partial<DesktopSettingsIpcOptions>;
 
 type CapturedSettingsFixtureOverrides = Omit<
   SettingsFixtureOverrides,
@@ -158,6 +152,9 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       createStubDesktopAgentSettingsController(),
     globalState,
     postToRenderer: overrides.postToRenderer ?? (() => undefined),
+    resourcesPath: overrides.resourcesPath ?? '/resources',
+    runExecution: overrides.runExecution ?? (async () => undefined),
+    restoreTaskState: overrides.restoreTaskState ?? (async () => true),
     workspaceState,
   });
   return { globalState, settings, workspaceState };
