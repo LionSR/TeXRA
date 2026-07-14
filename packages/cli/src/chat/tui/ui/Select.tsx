@@ -90,6 +90,23 @@ export function selectInitialHighlightIndex<T>({
   return firstEnabledSelectIndex(items);
 }
 
+export function selectControlledHighlightIndex<T>({
+  highlightedValue,
+  items,
+  previousIndex,
+}: {
+  readonly highlightedValue?: T;
+  readonly items: ReadonlyArray<SelectItem<T>>;
+  readonly previousIndex: number;
+}): number {
+  const controlledIndex = items.findIndex(
+    (item) => item.value === highlightedValue,
+  );
+  return controlledIndex >= 0
+    ? controlledIndex
+    : clampIndex(previousIndex, items.length);
+}
+
 export function nextSelectHighlightIndex<T>({
   direction,
   highlight,
@@ -241,15 +258,15 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   }
 
   useEffect(() => {
-    const controlledIndex = props.items.findIndex(
-      (item) => item.value === props.highlightedValue,
-    );
-    const next =
-      controlledIndex >= 0
-        ? controlledIndex
-        : clampIndex(highlightRef.current, props.items.length);
+    const next = selectControlledHighlightIndex({
+      highlightedValue: props.highlightedValue,
+      items: props.items,
+      previousIndex: highlightRef.current,
+    });
     highlightRef.current = next;
     setHighlight(next);
+    // Item identity is intentional: a same-length reorder must relocate a
+    // controlled highlighted value. Callers stabilize unchanged item arrays.
   }, [props.highlightedValue, props.items]);
 
   useEffect(() => {

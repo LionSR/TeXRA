@@ -1,7 +1,7 @@
 // Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
 import { useApp, useInput, useStdin, useWindowSize } from 'ink';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import type { StreamTabId } from '@shared/schemas';
@@ -182,12 +182,16 @@ export function App(props: AppProps): React.JSX.Element {
   }, [inputDisabled, stdin]);
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const sessionViews = activeStreamTreeViews({
-    activeStreamId,
-    childStreamEntries,
-    parentStream,
-    streams,
-  });
+  const sessionViews = useMemo(
+    () =>
+      activeStreamTreeViews({
+        activeStreamId,
+        childStreamEntries,
+        parentStream,
+        streams,
+      }),
+    [activeStreamId, childStreamEntries, parentStream, streams],
+  );
   const resolvedSelectedSessionId = resolveSessionSelectionId(
     sessionViews,
     selectedSessionId,

@@ -1,6 +1,7 @@
 // Interactive session list plus non-selectable active process rows.
 
 import { Box, Text } from 'ink';
+import { useMemo } from 'react';
 
 import type { ActiveChildInfo } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
@@ -206,13 +207,28 @@ export function SubagentList(
   const sessions = props.sessions ?? [];
   const activeProcesses = props.activeProcesses ?? [];
   const processOutput = props.processOutput;
-  const liveSessionStarts = sessions
-    .map((session) => session.slice?.runStartedAt)
-    .filter((startedAt): startedAt is number => startedAt !== undefined);
-  const liveElapsedKey =
-    [liveChildExecutionElapsedKey([], activeProcesses), ...liveSessionStarts]
-      .filter((key) => key !== undefined)
-      .join(':') || undefined;
+  const liveElapsedKey = useMemo(() => {
+    const liveSessionStarts = sessions
+      .map((session) => session.slice?.runStartedAt)
+      .filter((startedAt): startedAt is number => startedAt !== undefined);
+    return (
+      [liveChildExecutionElapsedKey([], activeProcesses), ...liveSessionStarts]
+        .filter((key) => key !== undefined)
+        .join(':') || undefined
+    );
+  }, [activeProcesses, sessions]);
+  const sessionItems = useMemo(
+    () =>
+      sessions.map((session) => ({
+        label: session.label,
+        value: session.id,
+      })),
+    [sessions],
+  );
+  const sessionsById = useMemo(
+    () => new Map(sessions.map((session) => [session.id, session])),
+    [sessions],
+  );
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
 
   if (sessions.length === 0 && activeProcesses.length === 0) return null;
@@ -229,10 +245,6 @@ export function SubagentList(
     hiddenProcessCount > 0 && visibleProcesses.length === 0
       ? `+${hiddenProcessCount} process${hiddenProcessCount === 1 ? '' : 'es'}`
       : undefined;
-  const sessionsById = new Map(
-    sessions.map((session) => [session.id, session]),
-  );
-
   return (
     <Box
       flexDirection="column"
@@ -246,10 +258,7 @@ export function SubagentList(
           highlightedValue={props.selectedStreamId}
           hotkeys={false}
           isActive={props.keyboardActive}
-          items={sessions.map((session) => ({
-            label: session.label,
-            value: session.id,
-          }))}
+          items={sessionItems}
           maxVisibleItems={sessionRows}
           onCancel={props.onCancel ?? (() => undefined)}
           onHighlightChange={(streamId) => props.onSelectionChange?.(streamId)}

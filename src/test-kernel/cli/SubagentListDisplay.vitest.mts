@@ -11,6 +11,7 @@ import {
 } from '@cli/chat/tui/panes/SubagentList';
 import {
   nextSelectHighlightIndex,
+  selectControlledHighlightIndex,
   visibleSelectRange,
   type SelectItem,
 } from '@cli/chat/tui/ui/Select';
@@ -87,6 +88,22 @@ describe('CLI session list display model', () => {
     ).toBe('main');
   });
 
+  it('relocates a controlled highlight after a same-length reorder', () => {
+    const selected = 'lean' as StreamTabId;
+    const items = [session('main'), session('lean'), session('review')].map(
+      ({ id, label }) => ({ label, value: id }),
+    );
+    const reordered = [items[2]!, items[0]!, items[1]!];
+
+    expect(
+      selectControlledHighlightIndex({
+        highlightedValue: selected,
+        items: reordered,
+        previousIndex: 1,
+      }),
+    ).toBe(2);
+  });
+
   it('keeps a non-first selected row visible after the row budget shrinks', () => {
     const sessions = [
       session('main', true),
@@ -113,7 +130,7 @@ describe('CLI session list display model', () => {
     ).toEqual({ start: 2, end: 3 });
   });
 
-  it('summarizes the latest output on visibly non-selectable process rows', () => {
+  it('keeps bounded process rows to the latest one-line output summary', () => {
     expect(
       compactChildRowText({
         child: {

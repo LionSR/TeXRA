@@ -2041,10 +2041,10 @@ const SCENARIOS = [
         unexpect: ['1 sub', 'orderChecker'],
       },
       {
-        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+        expect: ['1 sub', 'orderChecker running'],
       },
       {
-        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+        expect: ['1 sub', 'orderChecker running'],
       },
     ],
     expect: ['orderChecker', '1 sub', 'Tab sessions'],
@@ -2063,18 +2063,18 @@ const SCENARIOS = [
       {
         // Active via the roster's retained-parent fallback, before the
         // child's own StreamSlice exists — not yet focusable.
-        expect: ['1 sub', 'orderChecker · 1m 4s'],
-        unexpect: ['Tab sessions', 'orderChecker running'],
+        expect: ['1 sub'],
+        unexpect: ['Tab sessions', 'orderChecker'],
       },
       {
-        expect: ['Tab sessions', '1:orderChecker'],
-        unexpect: ['1:orderChecker*', 'orderChecker running'],
+        expect: ['Tab sessions', 'orderChecker'],
+        unexpect: ['orderChecker running'],
       },
       {
-        expect: ['orderChecker running', '1:orderChecker*'],
+        expect: ['orderChecker running'],
       },
       {
-        expect: ['orderChecker running', '1:orderChecker*'],
+        expect: ['orderChecker running'],
       },
     ],
     expect: ['orderChecker', '1 sub', 'Tab sessions'],
@@ -2103,15 +2103,15 @@ const SCENARIOS = [
       {
         // Attachment creates the slice and makes the existing edge focusable;
         // the running marker still waits for the next status fact.
-        expect: ['Tab sessions', 'harness-child-eve…'],
-        unexpect: ['1 sub', 'orderChecker', 'harness-child-eve…*'],
-      },
-      {
-        expect: ['harness-child-eve…*'],
+        expect: ['Tab sessions', 'harness-child-eve'],
         unexpect: ['1 sub', 'orderChecker'],
       },
       {
-        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+        expect: ['harness-child-eve'],
+        unexpect: ['1 sub', 'orderChecker'],
+      },
+      {
+        expect: ['1 sub', 'orderChecker running'],
       },
     ],
     expect: ['orderChecker', '1 sub', 'Tab sessions'],
@@ -2133,16 +2133,16 @@ const SCENARIOS = [
       },
       {
         // Attachment does not supply a parent edge, so the running slice is
-        // registered but still absent from the root's focus strip.
+        // registered but still absent from the root's session list.
         expect: ['Tab sessions'],
         unexpect: ['1 sub', 'orderChecker', 'harness-child-eve'],
       },
       {
-        expect: ['harness-child-eve…*'],
+        expect: ['harness-child-eve'],
         unexpect: ['1 sub', 'orderChecker'],
       },
       {
-        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+        expect: ['1 sub', 'orderChecker running'],
       },
     ],
     expect: ['orderChecker', '1 sub', 'Tab sessions'],
@@ -2163,26 +2163,23 @@ const SCENARIOS = [
     checkpoints: [
       { expect: ['Tab sessions'], unexpect: ['1 sub', 'orderChecker'] },
       { expect: ['Tab sessions'], unexpect: ['1 sub', 'orderChecker'] },
-      { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
-      { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
+      { expect: ['1 sub', 'orderChecker running'] },
+      { expect: ['1 sub', 'orderChecker running'] },
       {
         // Promoted to top-level: no longer active under root, but the
-        // retained/historical row survives.
-        expect: ['1:main*', 'orderChecker running'],
-        unexpect: ['1 sub', '1:orderChecker*'],
+        // unified root session list no longer includes the unrelated row.
+        expect: ['main running'],
+        unexpect: ['1 sub', 'orderChecker'],
       },
       {
         // A stale roster resend from the former parent must not resurrect
         // the edge or active membership.
-        expect: ['1:main*', 'orderChecker running'],
-        unexpect: ['1 sub', '1:orderChecker*'],
+        expect: ['main running'],
+        unexpect: ['1 sub', 'orderChecker'],
       },
     ],
-    // Prove the TUI is still interactive after the late fact: Tab finds the
-    // promoted (now top-level) stream reachable and switches to it — its
-    // status bar shows a real, wall-clock elapsed time once focused, so this
-    // only asserts the exit path still works cleanly rather than exact text.
-    keys: ['\t'],
+    // Prove the root session list remains interactive after the late fact.
+    keys: ['\t', DOWN, '\r'],
     expectExit: true,
   },
   {
@@ -2205,23 +2202,20 @@ const SCENARIOS = [
       { expect: ['Tab sessions'], unexpect: ['1 sub', 'orderChecker'] },
       { expect: ['Tab sessions'], unexpect: ['1 sub', 'orderChecker'] },
       {
-        expect: ['harness-child-eve…*'],
+        expect: ['harness-child-eve'],
         unexpect: ['1 sub', 'orderChecker'],
       },
       {
-        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+        expect: ['1 sub', 'orderChecker running'],
       },
       {
         // A late, stale roster from the child's former parent must not erase
         // active membership under the new (root) parent.
-        expect: ['1 sub', 'orderChecker running', '1:orderChecker*'],
+        expect: ['1 sub', 'orderChecker running'],
       },
     ],
-    // Prove the TUI is still interactive: Tab finds the reattached child
-    // reachable and switches focus to it (a real, wall-clock elapsed time
-    // appears once focused), so this only asserts the exit path still works
-    // cleanly rather than exact post-focus text.
-    keys: ['\t'],
+    // Prove the TUI is still interactive by focusing the reattached child.
+    keys: ['\t', DOWN, '\r'],
     expectExit: true,
   },
   {
@@ -2245,10 +2239,9 @@ const SCENARIOS = [
       { unexpect: ['1 sub', 'orderChecker'] },
     ],
     // Prove the TUI is still interactive after the removal + late facts:
-    // nothing under the removed parent was ever reachable from root, so Tab
-    // is a no-op here (unlike promotion/reattachment above) and the frame —
-    // and the exit path — must stay exactly as before.
-    keys: ['\t'],
+    // nothing under the removed parent is reachable from root. Opening and
+    // confirming the root row must leave the frame and exit path intact.
+    keys: ['\t', DOWN, '\r'],
     expect: ['◆ — personal'],
     unexpect: ['1 sub', 'orderChecker'],
     expectExit: true,
@@ -2265,8 +2258,8 @@ const SCENARIOS = [
     checkpoints: [
       { expect: ['Tab sessions'], unexpect: ['1 sub', 'orderChecker'] },
       { expect: ['Tab sessions'], unexpect: ['1 sub', 'orderChecker'] },
-      { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
-      { expect: ['1 sub', 'orderChecker running', '1:orderChecker*'] },
+      { expect: ['1 sub', 'orderChecker running'] },
+      { expect: ['1 sub', 'orderChecker running'] },
       {
         // Untrack (roster omission) arrives before the terminal status: the
         // retained/historical row survives, but active membership does not.
@@ -2274,22 +2267,22 @@ const SCENARIOS = [
         unexpect: ['1 sub'],
       },
       {
-        expect: ['orderChecker completed', '1:orderChecker(completed)'],
+        expect: ['orderChecker completed'],
         unexpect: ['1 sub', 'orderChecker running'],
       },
       {
         // Removal scrubs every trace, including the retained/historical row.
-        unexpect: ['orderChecker', '1 sub', '1:orderChecker', 'Tab sessions'],
+        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
       },
       {
-        unexpect: ['orderChecker', '1 sub', '1:orderChecker', 'Tab sessions'],
+        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
       },
       {
-        unexpect: ['orderChecker', '1 sub', '1:orderChecker', 'Tab sessions'],
+        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
       },
       {
         // A late re-attachment attempt for the removed id must stay ignored.
-        unexpect: ['orderChecker', '1 sub', '1:orderChecker', 'Tab sessions'],
+        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
       },
       {
         // A late resume-transition attempt is the one status fact that would
@@ -2297,13 +2290,13 @@ const SCENARIOS = [
         // transition is a same-value no-op the status machine drops before
         // it gets there) — it must still stay suppressed by the removal
         // tombstone.
-        unexpect: ['orderChecker', '1 sub', '1:orderChecker', 'Tab sessions'],
+        unexpect: ['orderChecker', '1 sub', 'Tab sessions'],
       },
     ],
     // Prove the TUI is still interactive after the removal + late facts:
-    // the removed child is unreachable, so Tab is a no-op and the frame —
-    // and the exit path — must stay exactly as before.
-    keys: ['\t'],
+    // the removed child is unreachable, so confirming the root row must leave
+    // the frame and exit path intact.
+    keys: ['\t', DOWN, '\r'],
     expect: ['◆ — personal'],
     unexpect: ['orderChecker', '1 sub'],
     expectExit: true,
@@ -2436,8 +2429,6 @@ const SCENARIOS = [
       'agent: chat · model: harness-model',
       'entry-1 chat history line',
       'entry-4 chat history line',
-      '[main]',
-      '1:strategy',
       'signal read during notification phase',
       'ERROR',
     ],
@@ -2455,7 +2446,6 @@ const SCENARIOS = [
     keys: ['\t', DOWN, DOWN],
     resizes: [{ cols: 44, rows: 7 }],
     expect: ['leanSolver waiti', '+3 sessions', 'latex build running'],
-    unexpect: ['[main]', '1:strategy', '2:leanSolver'],
     maxOccurrences: [{ text: 'leanSolver waiting for you', max: 1 }],
   },
   {
@@ -2496,7 +2486,6 @@ const SCENARIOS = [
     ],
     unexpect: [
       'subagent: strategy · parent: main · model: harness-model',
-      '[1:strategy]*',
       'signal read during notification phase',
       'ERROR',
     ],
@@ -2513,18 +2502,17 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t'],
+    keys: ['\t', DOWN, '\r'],
     expect: [
       'strategy detail line 15',
       'strategy detail line 18',
-      '[1:strategy]*',
+      '✓ ● strategy running',
     ],
     unexpect: [
       'strategy detail line 01',
       'entry-1 chat history line',
       'entry-4 chat history line',
       'PgUp',
-      '[main]*',
       'signal read during notification phase',
       'ERROR',
     ],
@@ -2541,7 +2529,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DC4, 'g'],
+    keys: ['\t', DOWN, '\r', DC4, 'g'],
     expect: [
       'strategy\n› Please handle the harness-child-strategy sub-workflow.',
       'strategy detail line 01',
@@ -2551,7 +2539,6 @@ const SCENARIOS = [
     unexpect: [
       'entry-1 chat history line',
       'entry-4 chat history line',
-      '[main]*',
       'signal read during notification phase',
       'ERROR',
     ],
@@ -2674,7 +2661,6 @@ const SCENARIOS = [
       'Enter view',
       'f focus',
       'Esc close',
-      '[1:strategy]*',
     ],
     unexpect: ['Stream: main', '│   2. leanSolver', '│   3. reviewer'],
   },
@@ -2697,7 +2683,6 @@ const SCENARIOS = [
       'proof audit',
       'Enter view',
       'Esc close',
-      '[1:strategy]*',
     ],
     unexpect: [
       'Stream: main',
@@ -2999,13 +2984,7 @@ const SCENARIOS = [
     bootExpect: 'TeXRA',
     keys: [ESC + 's'], // Esc/Alt-s
     frame: 'viewport',
-    expect: [
-      'strategy',
-      '+2 more',
-      'Enter view',
-      'Esc close',
-      '[main]* 1:strategy*',
-    ],
+    expect: ['strategy', 'Enter view', 'Esc close'],
     unexpect: ['*    y*', 'dle)          r*'],
   },
   {
@@ -3041,7 +3020,6 @@ const SCENARIOS = [
       'preparing a concise result.',
       'f focus',
       'Esc back',
-      '[main]* 1:strategy*',
       'Ctrl-C stop',
     ],
     unexpect: ['│ ›', 'Task details', 'Output:', '*    y*', 'Ctrl…'],
@@ -3064,7 +3042,6 @@ const SCENARIOS = [
       'preparing a concise result.',
       'f focus',
       'Esc back',
-      '[main]* 1:strategy*',
     ],
     unexpect: ['│ ›', 'Task details', 'Output:', '*    y*'],
   },
@@ -3194,7 +3171,7 @@ const SCENARIOS = [
     keys: [ESC + 'p', 'k', ESC + 's', 'f'],
     frame: 'viewport',
     expect: [
-      '[1:strategy](stopped)',
+      '› ✓ ● strategy stopped',
       '◆ stopped',
       'root active',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
@@ -3245,7 +3222,7 @@ const SCENARIOS = [
     unexpect: [
       'Harness interrupt requested.',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
-      '[1:strategy](stopped)',
+      '› ✓ ● strategy stopped',
     ],
   },
   {
@@ -3260,7 +3237,7 @@ const SCENARIOS = [
     keys: [ESC + 'p', 'k', ESC + 's', 'f', 'can you still receive this?', '\r'],
     frame: 'viewport',
     expect: [
-      '[1:strategy](stopped)',
+      '› ✓ ● strategy stopped',
       '◆ stopped',
       'root active',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
@@ -3365,7 +3342,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Harness interrupt requested.',
-      '[main](stopped)',
+      '› ✓ ● main stopped',
       '◆ stopped personal',
       'Ctrl-C exit',
     ],
