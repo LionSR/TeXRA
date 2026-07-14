@@ -122,7 +122,12 @@ import {
   cliMultiAgentPresets,
   planCliMultiAgentPresets,
 } from '../src/runtime/multiAgentPresets';
-import { buildCliOrchestrationItems } from '../src/runtime/orchestration';
+import {
+  buildCliAgentItems,
+  buildCliOrchestrationItems,
+  buildCliResumeItems,
+  buildCliTeamItems,
+} from '../src/runtime/orchestration';
 import {
   CLI_HISTORY_RESUMABLE_STATUS,
   type CliHistoryEntry,
@@ -361,15 +366,6 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
 }
 await loadAgents({ includeRemote: false });
 
-const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
-  presetPlans: planCliMultiAgentPresets(cliMultiAgentPresets(undefined), {
-    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
-  }),
-  history: harnessOrchestrationHistory(),
-  toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
-});
-
 function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
   if (!SHOW_DELEGATED_ORCHESTRATION_HISTORY) return [];
   return [
@@ -405,6 +401,34 @@ function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
     },
   ];
 }
+
+const HARNESS_ORCHESTRATION_HISTORY = harnessOrchestrationHistory();
+const HARNESS_TOOL_USE_AGENTS = getAgentsByCategory(AgentCategory.ToolUse);
+const HARNESS_PRESET_PLANS = planCliMultiAgentPresets(
+  cliMultiAgentPresets(undefined),
+  {
+    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
+    toolUseAgents: HARNESS_TOOL_USE_AGENTS,
+  },
+);
+const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
+  presetPlans: HARNESS_PRESET_PLANS,
+  history: HARNESS_ORCHESTRATION_HISTORY,
+  toolUseAgents: HARNESS_TOOL_USE_AGENTS,
+});
+const HARNESS_ORCHESTRATION_RESUME_ITEMS = buildCliResumeItems(
+  HARNESS_ORCHESTRATION_HISTORY,
+);
+const HARNESS_ORCHESTRATION_AGENT_ITEMS = buildCliAgentItems(
+  HARNESS_TOOL_USE_AGENTS,
+);
+const HARNESS_ORCHESTRATION_TEAM_ITEMS = buildCliTeamItems(
+  HARNESS_PRESET_PLANS,
+  {
+    includeLoginHint: true,
+    remoteAgentCatalogAvailable: false,
+  },
+);
 
 type HarnessModelFixture = Readonly<{
   value: string;
@@ -493,6 +517,9 @@ if (SHOW_ORCHESTRATION) {
   const instance = render(
     <OrchestrationApp
       items={HARNESS_ORCHESTRATION_ITEMS}
+      resumeItems={HARNESS_ORCHESTRATION_RESUME_ITEMS}
+      agentItems={HARNESS_ORCHESTRATION_AGENT_ITEMS}
+      teamItems={HARNESS_ORCHESTRATION_TEAM_ITEMS}
       models={
         HARNESS_API_MODE_FROM_ENV
           ? harnessOrchestrationModels(HARNESS_API_MODE)
