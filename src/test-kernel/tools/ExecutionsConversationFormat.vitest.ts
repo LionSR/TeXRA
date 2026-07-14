@@ -30,6 +30,41 @@ describe('formatConversation', () => {
     expect(output).toContain('[tool_result: done]');
   });
 
+  it('formats Google parts at the shared message boundary', () => {
+    const output = formatConversation([
+      {
+        role: 'model',
+        parts: [
+          { text: 'I will inspect the workspace.' },
+          { functionCall: { name: 'ls', args: { path: '.' } } },
+        ],
+      },
+    ]);
+
+    expect(output).toContain('I will inspect the workspace.');
+    expect(output).toContain('[tool_use: ls({"path":"."})]');
+  });
+
+  it('formats OpenAI top-level tool calls at the shared message boundary', () => {
+    const output = formatConversation([
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            type: 'function',
+            function: {
+              name: 'read_file',
+              arguments: '{"path":"paper.tex"}',
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(output).toContain('[tool_use: read_file({"path":"paper.tex"})]');
+  });
+
   it('formats VS Code language-model tool parts through the shared policy', () => {
     const toolCall = {
       kind: 'toolCall',

@@ -7,8 +7,7 @@
  * tool class stays focused on path routing and storage access.
  */
 import {
-  asText,
-  formatConversationContent,
+  formatConversationMessage,
   type ConversationFormatOptions,
 } from '@agent/storage/conversationFormat';
 
@@ -17,20 +16,11 @@ const CONVERSATION_FORMAT_OPTIONS: ConversationFormatOptions = {
   toolBlockLimit: 100,
 };
 
-interface ConversationMessage {
-  role?: unknown;
-  content?: unknown;
-}
-
 /** Render a stored conversation as numbered <message> blocks. */
 export function formatConversation(conversation: readonly unknown[]): string {
   const messages = conversation.map((msg, i) => {
-    const m = (msg ?? {}) as ConversationMessage;
-    // Coerce a missing, non-string, or empty role to "unknown": stored roles
-    // are untrusted, and an empty label would render a meaningless role="".
-    const role = asText(m.role) || 'unknown';
-    const content = formatConversationContent(
-      m.content,
+    const { role, content } = formatConversationMessage(
+      msg,
       CONVERSATION_FORMAT_OPTIONS,
     );
     return `<message index="${i + 1}" role="${role}">\n${content}\n</message>`;

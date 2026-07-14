@@ -17,17 +17,17 @@
  *  - the CLI's `texra history` / resume previews
  *    (`packages/cli/src/runtime/history/conversationFormat.ts`)
  *
- * Callers keep their own message-level composition (XML-ish `<message>`
- * blocks for the tools endpoint; a structured preview/transcript shape plus
- * whole-message truncation for the CLI) — only the per-content-block
- * recognition and truncation below is shared.
+ * Callers keep their own output composition (XML-ish `<message>` blocks for
+ * the tools endpoint; a structured preview/transcript shape plus whole-message
+ * truncation for the CLI). Provider-native message and content recognition is
+ * shared here.
  */
 import { extractWebFetchResultFields } from '@agent/types/ServerToolTypes';
 import { isObject } from '@utils/core';
 
 const DEFAULT_TRUNCATION_MARKER = '...';
 
-export const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
+const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
 
 export interface ConversationFormatOptions {
   /** Truncate string/JSON-ish top-level message content at this many chars. Omit for no limit. */
@@ -44,7 +44,7 @@ export interface ConversationFormatOptions {
   readonly hideProviderReasoning?: boolean;
 }
 
-export function asText(value: unknown): string {
+function asText(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
@@ -74,7 +74,7 @@ function truncate(
   return `${str.slice(0, Math.max(maxLen - marker.length, 0))}${marker}`;
 }
 
-export function hasProviderReasoningBlock(content: unknown): boolean {
+function hasProviderReasoningBlock(content: unknown): boolean {
   if (Array.isArray(content)) return content.some(isProviderReasoningBlock);
   return isProviderReasoningBlock(content);
 }
@@ -106,7 +106,7 @@ function formatToolUseMarker(
   if (options.includeToolUseInput === false) return `[tool_use: ${name}]`;
   const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
   const inputJson = truncate(
-    stringifyConversationValue(input ?? {}),
+    typeof input === 'string' ? input : stringifyConversationValue(input ?? {}),
     options.toolBlockLimit,
     marker,
   );
@@ -335,4 +335,69 @@ export function formatConversationContent(
     options.textLimit,
     marker,
   );
+}
+
+/**
+ * Normalize one provider-native stored message to the role and text consumed
+ * by conversation views.
+ */
+export function formatConversationMessage(
+  message: unknown,
+  options: ConversationFormatOptions = {},
+) {
+  const raw = isObject(message) ? message : {};
+  const role = asText(raw.role) || 'unknown';
+  const content = [
+    formatConversationContent(raw.content, options),
+    formatConversationContent(raw.parts, options),
+    formatTopLevelToolCalls(raw.tool_calls, options),
+  ]
+    .filter((part) => part.trim().length > 0)
+    .join('\n')
+    .trim();
+
+  if (content) return { role, content };
+  const onlyHiddenReasoning =
+    options.hideProviderReasoning === true &&
+    (role === 'assistant' || role === 'model') &&
+    (hasProviderReasoningBlock(raw.content) ||
+      hasProviderReasoningBlock(raw.parts));
+  return {
+    role,
+    content: onlyHiddenReasoning ? HIDDEN_PROVIDER_REASONING_MARKER : '',
+  };
+}
+
+function formatTopLevelToolCalls(
+  toolCalls: unknown,
+  options: ConversationFormatOptions,
+): string {
+  if (!Array.isArray(toolCalls) || options.includeToolUseMarkers === false) {
+    return '';
+  }
+  return toolCalls
+    .map((toolCall) => formatTopLevelToolCall(toolCall, options))
+    .join('\n');
+}
+
+function formatTopLevelToolCall(
+  toolCall: unknown,
+  options: ConversationFormatOptions,
+): string {
+  if (!isObject(toolCall)) {
+    const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
+    return `[tool_use: ${truncate(
+      stringifyConversationValue(toolCall),
+      options.toolBlockLimit,
+      marker,
+    )}]`;
+  }
+  const nestedFunction = isObject(toolCall.function)
+    ? toolCall.function
+    : undefined;
+  const name =
+    asText(nestedFunction?.name) || asText(toolCall.name) || 'unknown';
+  const input =
+    nestedFunction?.arguments ?? toolCall.arguments ?? toolCall.input ?? {};
+  return formatToolUseMarker(name, input, options);
 }
