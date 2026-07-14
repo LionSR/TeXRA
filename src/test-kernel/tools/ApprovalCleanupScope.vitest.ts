@@ -14,6 +14,8 @@ import {
   cleanupApprovalsForStream,
   cleanupUnscopedApprovals,
   isBashApprovalBypassedForStream,
+  proposalApprovals,
+  setDelegatedWorkApprovalBypasses,
   setBashApprovalSessionBypass,
 } from '@tools/approval';
 import {
@@ -112,6 +114,39 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
 });
 
 describe('session-owned approval state (#8144)', () => {
+  it('keeps complete delegated-task approval grants within their owning session', () => {
+    const sessionA = createTestSession();
+    const sessionB = createTestSession();
+    const streamId = sid('s:delegated-approval-same-id');
+
+    try {
+      setDelegatedWorkApprovalBypasses(
+        streamId,
+        true,
+        noopAgentRuntimeHost,
+        sessionA,
+      );
+
+      expect(proposalApprovals(sessionA).isBypassed(streamId)).toBe(true);
+      expect(sessionA.approvals.toolEdit.bypass.isBypassed(streamId)).toBe(
+        true,
+      );
+      expect(sessionA.approvals.bash.bypass.isBypassed(streamId)).toBe(true);
+      expect(proposalApprovals(sessionB).isBypassed(streamId)).toBe(false);
+      expect(sessionB.approvals.toolEdit.bypass.isBypassed(streamId)).toBe(
+        false,
+      );
+      expect(sessionB.approvals.bash.bypass.isBypassed(streamId)).toBe(false);
+
+      cleanupApprovalsForStream(streamId, sessionA);
+      expect(proposalApprovals(sessionA).isBypassed(streamId)).toBe(false);
+      expect(proposalApprovals(sessionB).isBypassed(streamId)).toBe(false);
+    } finally {
+      sessionA.dispose();
+      sessionB.dispose();
+    }
+  });
+
   it('keeps bypass state for equal stream ids isolated between sessions', () => {
     const sessionA = createTestSession();
     const sessionB = createTestSession();

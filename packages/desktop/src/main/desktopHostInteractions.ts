@@ -64,13 +64,20 @@ export interface DesktopHostInteractionsOptions {
   getToolEditApprovals(): DesktopToolEditApprovalController;
 }
 
-export function createDesktopHostInteractions(
-  options: DesktopHostInteractionsOptions,
-): HostInteractions {
-  return new DesktopHostInteractions(options);
+export interface DesktopHostInteractions extends HostInteractions {
+  approvePendingDelegatedWork(
+    streamId: StreamTabId,
+    initiatingProposalId: string,
+  ): Promise<void>;
 }
 
-class DesktopHostInteractions implements HostInteractions {
+export function createDesktopHostInteractions(
+  options: DesktopHostInteractionsOptions,
+): DesktopHostInteractions {
+  return new DesktopHostInteractionsImpl(options);
+}
+
+class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   private readonly pendingRequests = new Map<
     string,
     PendingDesktopInteraction
@@ -214,6 +221,27 @@ class DesktopHostInteractions implements HostInteractions {
         this.options.getApprovalHandlers().userQuestion.resolve(requestId);
         return true;
     }
+  }
+
+  async approvePendingDelegatedWork(
+    streamId: StreamTabId,
+    initiatingProposalId: string,
+  ): Promise<void> {
+    for (const [requestId, request] of [...this.pendingRequests]) {
+      if (
+        request.streamId !== streamId ||
+        (request.kind === 'proposal' && requestId === initiatingProposalId)
+      ) {
+        continue;
+      }
+      if (request.kind === 'bash' || request.kind === 'proposal') {
+        this.resolve(requestId, {
+          kind: request.kind,
+          action: 'approve',
+        });
+      }
+    }
+    this.options.getToolEditApprovals().approvePendingForStream(streamId);
   }
 
   /**

@@ -4,11 +4,12 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createTestSession } from '@test/support/sessionTestUtils';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createTestSession } from '@test/support/sessionTestUtils';
 import {
+  approveNativeToolEditApprovals,
   cancelNativeToolEditApprovals,
   handleProgressViewToolEditApprovalAction,
   initializeNativeToolEditApproval,
@@ -209,6 +210,107 @@ afterEach(async () => {
 });
 
 describe('native tool edit approval', () => {
+  it('approves a matching edit while its preview is still initializing', async () => {
+    const runtimeHost = createRecordingRuntimeHost();
+    const session = createTestSession();
+    sessions.push(session);
+    initializeNativeToolEditApproval(
+      {
+        storageUri: { fsPath: storageRoot },
+        globalStorageUri: { fsPath: storageRoot },
+      } as unknown as VSCode.ExtensionContext,
+      runtimeHost,
+    );
+    const approval = nativeRequestApproval(
+      {
+        path: '/workspace/approve-initializing.txt',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-initializing',
+      },
+      { session },
+    );
+    activeApprovals.push(approval);
+
+    await expect(
+      approveNativeToolEditApprovals(session, 'stream-initializing'),
+    ).resolves.toBeUndefined();
+    await expect(approval).resolves.toMatchObject({
+      accepted: true,
+      appliedContent: 'new\n',
+    });
+    expect(runtimeHost.shown).toEqual([]);
+  });
+
+  it('approves a matching edit whose preview is already pending', async () => {
+    const { approval, session } = await startApproval();
+
+    await expect(
+      approveNativeToolEditApprovals(session, 'stream-approval'),
+    ).resolves.toBeUndefined();
+    await expect(approval).resolves.toMatchObject({
+      accepted: true,
+      appliedContent: 'beta\n',
+    });
+  });
+
+  it('keeps pending edit approval scoped to both session and stream', async () => {
+    const runtimeHost = createRecordingRuntimeHost();
+    const targetSession = createTestSession();
+    const otherSession = createTestSession();
+    sessions.push(targetSession, otherSession);
+    initializeNativeToolEditApproval(
+      {
+        storageUri: { fsPath: storageRoot },
+        globalStorageUri: { fsPath: storageRoot },
+      } as unknown as VSCode.ExtensionContext,
+      runtimeHost,
+    );
+    const request = (path: string, streamId: string, session: SessionHandle) =>
+      nativeRequestApproval(
+        {
+          path,
+          originalContent: 'old\n',
+          proposedContent: 'new\n',
+          sourceTool: 'write_file',
+          streamId,
+        },
+        { session },
+      );
+    const target = request(
+      '/workspace/target.txt',
+      'stream-target',
+      targetSession,
+    );
+    const otherStream = request(
+      '/workspace/other-stream.txt',
+      'stream-other',
+      targetSession,
+    );
+    const otherSessionRequest = request(
+      '/workspace/other-session.txt',
+      'stream-target',
+      otherSession,
+    );
+    activeApprovals.push(target, otherStream, otherSessionRequest);
+    await vi.waitFor(() => expect(runtimeHost.shown).toHaveLength(3));
+
+    await approveNativeToolEditApprovals(targetSession, 'stream-target');
+    await expect(target).resolves.toMatchObject({ accepted: true });
+
+    cancelNativeToolEditApprovals(targetSession, {
+      streamId: 'stream-other',
+    });
+    cancelNativeToolEditApprovals(otherSession, {
+      streamId: 'stream-target',
+    });
+    await expect(otherStream).resolves.toMatchObject({ accepted: false });
+    await expect(otherSessionRequest).resolves.toMatchObject({
+      accepted: false,
+    });
+  });
+
   it('does not present an approval cancelled during initialization', async () => {
     const runtimeHost = createRecordingRuntimeHost();
     const session = createTestSession();

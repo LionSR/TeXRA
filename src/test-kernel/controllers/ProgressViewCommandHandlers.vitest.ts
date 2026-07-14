@@ -89,6 +89,7 @@ function createActions(
       runtimeHost: { emit: vi.fn() } satisfies AgentRuntimeHost,
     },
     approval: {
+      approvePendingDelegatedWork: vi.fn(async () => undefined),
       handleToolEditApprovalAction: vi.fn().mockReturnValue(true),
       onUnsupportedToolEditApproval: vi.fn(),
       handleBashApprovalAction: vi.fn(),
@@ -513,9 +514,10 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     const stream = 'stream:proposal-bypass';
     const { events, host } = createRecordingRuntimeHost();
     const showInfo = vi.fn();
-    const handlers = createProgressViewCommandHandlers(
-      createActions({ bypass: { runtimeHost: host, showInfo } }),
-    );
+    const actions = createActions({
+      bypass: { runtimeHost: host, showInfo },
+    });
+    const handlers = createProgressViewCommandHandlers(actions);
 
     expect(
       dispatchProgressViewInbound(
@@ -542,7 +544,26 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       },
     ]);
     expect(showInfo).toHaveBeenCalledWith(
-      'Delegated task auto-approval enabled for this stream.',
+      'Task, file-edit, and command auto-approval enabled for this stream.',
+    );
+
+    expect(
+      dispatchProgressViewInbound(
+        {
+          command: PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS,
+          stream,
+          initiatingProposalId: 'proposal-current',
+        },
+        handlers,
+      ),
+    ).toBe(true);
+    await Promise.resolve();
+    expect(proposalApprovals().isBypassed(stream)).toBe(true);
+    expect(isApprovalBypassedForStream(stream)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream)).toBe(true);
+    expect(actions.approval.approvePendingDelegatedWork).toHaveBeenCalledWith(
+      stream,
+      'proposal-current',
     );
 
     expect(

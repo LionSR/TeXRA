@@ -111,6 +111,7 @@ export {
 export {
   // Proposal approval
   proposalApprovals,
+  setDelegatedWorkApprovalBypasses,
 } from './proposalApproval';
 
 export {

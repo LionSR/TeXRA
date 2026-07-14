@@ -6,6 +6,7 @@ import {
   getProposalFileGroups,
   type AgentProposalPermission,
 } from '@shared/schemas';
+import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
 import { ConfirmCard } from './ConfirmCard';
 import { COLOR_ACCENT } from '../ui/colors';
@@ -225,6 +226,10 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       borderStyle="double"
       color={COLOR_ACCENT}
       title={title}
+      alwaysAllow={{
+        kind: 'superYolo',
+        label: DELEGATION_APPROVAL_COPY.cliAction,
+      }}
       onDecide={props.onDecide}
     >
       <Box marginTop={1} flexDirection="column">

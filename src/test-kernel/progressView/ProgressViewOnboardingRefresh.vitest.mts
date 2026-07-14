@@ -10,6 +10,7 @@ import type { HostInteractions } from '@agent/runtime/HostInteractions';
 // Local imports - progress view
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import type { ExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -46,8 +47,9 @@ type ProgressViewProviderFake = ProgressViewProvider & {
 
 function createHostInteractions(
   overrides: Partial<HostInteractions> = {},
-): HostInteractions {
+): ExtensionHostInteractions {
   return {
+    approvePendingDelegatedWork: vi.fn(async () => undefined),
     resolve: vi.fn(() => false),
     cancel: vi.fn(),
     ...overrides,

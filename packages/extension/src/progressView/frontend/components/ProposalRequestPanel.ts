@@ -48,7 +48,7 @@ import { getBasename } from '@utils/core';
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
-import { APPROVE_SUPER_YOLO_ACTION } from '../events';
+import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '../events';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
@@ -104,26 +104,25 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
     return false;
   }
 
-  // Proposals carry their own bypass affordance ("Super Yolo"), not the
-  // edit/bash session bypass. Override the base Approve button to surface the
-  // super-yolo caret (canBypass stays false) and override the shared `a`
-  // accelerator to trigger it. A proposal always has a streamId, so the menu
-  // always applies.
+  // Proposals carry a stronger approval action than the edit/bash bypass.
+  // Override the base Approve button to surface it and map the shared `a`
+  // accelerator to the same action. A proposal always has a streamId.
   protected override renderApproveButton(approveTitle: string): TemplateResult {
     return html`
       <approve-split-button
         .approveTitle=${approveTitle}
         .canBypass=${false}
-        .canSuperYolo=${true}
+        .canApproveAllDelegatedWork=${true}
         @approve=${() => this.emitAction('approve')}
-        @approve-super-yolo=${() => this.emitAction(APPROVE_SUPER_YOLO_ACTION)}
+        @approve-all-delegated-work=${() =>
+          this.emitAction(APPROVE_ALL_DELEGATED_WORK_ACTION)}
       ></approve-split-button>
     `;
   }
 
   protected override handleApproveSessionKey(): boolean {
     if (this.showFeedback) return false;
-    this.emitAction(APPROVE_SUPER_YOLO_ACTION);
+    this.emitAction(APPROVE_ALL_DELEGATED_WORK_ACTION);
     return true;
   }
 
@@ -341,9 +340,9 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
   // ===========================================================================
 
   protected override emitAction(action: string, feedback?: string): void {
-    // Super Yolo approves this proposal too, so it carries the same model/agent
-    // dropdown overrides as a plain approve.
-    if (action !== 'approve' && action !== APPROVE_SUPER_YOLO_ACTION) {
+    // Approve-all also accepts this proposal, so it carries the same model and
+    // agent overrides as a plain approval.
+    if (action !== 'approve' && action !== APPROVE_ALL_DELEGATED_WORK_ACTION) {
       super.emitAction(action, feedback);
       return;
     }
