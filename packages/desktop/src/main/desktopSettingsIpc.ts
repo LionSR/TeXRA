@@ -6,23 +6,12 @@ import {
   isAllowedLatexInstallCommand,
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
-import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
 import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
-import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
-import {
-  computeAgentOptionsData,
-  getAgentsByCategory,
-  getVisibleAgents as getVisibleRegistryAgents,
-  loadAgents,
-  refresh,
-  type AgentEntry,
-} from '@agent/index/agentRegistry';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   codexCoordinator,
   getChatGptAuthStatus,
@@ -30,7 +19,6 @@ import {
   setCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
 } from '@auth/codex';
-import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import {
   API_PROVIDERS,
   apiKeySecretName,
@@ -53,7 +41,7 @@ import {
   normalizePlatform,
 } from '@shared/constants/latex';
 import type { LatexConfigField } from '@shared/constants/latex';
-import { AgentCategory, type AgentSource } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas/agent';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
@@ -69,11 +57,6 @@ import {
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
-import {
-  buildAgentSelectionMessage,
-  buildCustomAgentDirMessage,
-  buildAgentModePresetsMessage,
-} from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import { GoalStore } from '@tools/goal';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
@@ -125,6 +108,7 @@ import {
 } from './desktopHistoryHandlers.js';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 
 type ToolDashboardBuilder = (
   cachedResults?: ExternalToolCheckResult[],
@@ -132,21 +116,14 @@ type ToolDashboardBuilder = (
 
 export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   postToRenderer(message: unknown): void;
+  agentSettingsController: DesktopAgentSettingsController;
   sendStartupCatalogData?: boolean;
-  loadAgents?: typeof loadAgents;
-  refreshAgents?: typeof refresh;
-  loadAgentOptionsData?: typeof computeAgentOptionsData;
-  getAgents?: (category: AgentCategory) => AgentEntry[];
-  getVisibleAgents?: (category: AgentCategory) => AgentEntry[];
   globalState?: StateStore;
   workspaceState?: StateStore;
   config?: ConfigProvider;
   buildToolDashboardItems?: ToolDashboardBuilder;
   refreshToolAvailability?: () => Promise<void>;
-  getCustomAgentDirectory?: () => Promise<string>;
-  selectCustomAgentDirectory?: () => Promise<string | undefined>;
   openPath?: (filePath: string) => Promise<void>;
-  revealPath?: (filePath: string) => Promise<void>;
   /** Route this window to the progress view and select the given stream. */
   revealStream?: (streamId: string) => Promise<void>;
   openExternalUrl?: (url: string) => Promise<void>;
@@ -162,19 +139,9 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
     title: string;
     prompt: string;
   }) => Promise<string | undefined>;
-  promptText?: (input: {
-    title: string;
-    prompt: string;
-  }) => Promise<string | undefined>;
   showInfoMessage?: (message: string) => Promise<void>;
   showErrorMessage?: (message: string) => Promise<void>;
   confirmAction?: (message: string, confirmLabel?: string) => Promise<boolean>;
-  chooseTeamAvailability?: (input: {
-    presetName: string;
-    unavailableNames: readonly string[];
-  }) => Promise<TeamAvailabilityChoice>;
-  canAccessRemoteAgentCatalog?: () => Promise<boolean>;
-  signInForRemoteAgentCatalog?: () => Promise<boolean>;
   signIn?: () => Promise<void>;
   signOut?: () => Promise<void>;
   setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
@@ -223,22 +190,12 @@ export function createDesktopSettingsIpc(
     showErrorMessage: options.showErrorMessage,
     onError,
   });
-  const loadAgentRegistry = options.loadAgents ?? loadAgents;
-  const refreshAgentRegistry = options.refreshAgents ?? refresh;
-  const loadAgentOptionsData =
-    options.loadAgentOptionsData ?? computeAgentOptionsData;
-  const getAgentEntries = options.getAgents ?? getAgentsByCategory;
-  const getVisibleAgentEntries =
-    options.getVisibleAgents ?? getVisibleRegistryAgents;
   const usesDefaultToolDashboardBuilder =
     options.buildToolDashboardItems == null;
   const buildToolDashboardItems =
     options.buildToolDashboardItems ?? buildDefaultToolDashboardItems;
   const refreshToolAvailability = options.refreshToolAvailability;
   const secrets = options.secrets ?? tryPlatform()?.secrets ?? emptySecrets;
-  const getCustomAgentDirectory =
-    options.getCustomAgentDirectory ??
-    (() => platform().agentDirectories.custom());
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
   const goalController = new SettingsGoalController({
@@ -255,18 +212,6 @@ export function createDesktopSettingsIpc(
       autoRevealExclude: true,
     }),
     onDetectionError: onError,
-  });
-  const {
-    catalog: agentCatalogController,
-    directory: agentDirectoryController,
-    visibility: agentVisibilityController,
-  } = createSettingsAgentControllers({
-    workspaceState,
-    globalState,
-    getCustomAgentDirectory,
-    getSourceDirectory: getAgentDirectory,
-    getAgents: getAgentEntries,
-    getVisibleAgents: getVisibleAgentEntries,
   });
   const modelListRefresh =
     options.modelListRefresh ??
@@ -382,28 +327,6 @@ export function createDesktopSettingsIpc(
     );
   }
 
-  function getAgentDirectory(source: AgentSource): Promise<string | undefined> {
-    switch (source) {
-      case 'custom':
-        return getCustomAgentDirectory();
-      case 'builtInWorkflow':
-        return platform().agentDirectories.builtIn();
-      case 'builtInToolUse':
-        return platform().agentDirectories.builtInToolUse();
-      case 'remote':
-        return Promise.resolve(undefined);
-    }
-  }
-
-  async function postAgentSelectionData(): Promise<void> {
-    options.postToRenderer(
-      await buildAgentSelectionMessage({
-        loadAgents: loadAgentRegistry,
-        buildSelectionItems: () => agentCatalogController.buildSelectionItems(),
-      }),
-    );
-  }
-
   async function postModelSelectionData(): Promise<void> {
     await settingsHost.sendModelSelectionData();
   }
@@ -426,24 +349,6 @@ export function createDesktopSettingsIpc(
         toolUse: toolUseModelOptions,
       },
     });
-  }
-
-  async function postMainAgentOptionsData(
-    selectedToolUseAgent?: string,
-  ): Promise<void> {
-    options.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      optionsData: await loadAgentOptionsData(),
-      ...(selectedToolUseAgent ? { selectedToolUseAgent } : {}),
-    });
-  }
-
-  async function postCustomAgentDir(): Promise<void> {
-    options.postToRenderer(
-      await buildCustomAgentDirMessage({
-        getCustomDirStatus: () => agentDirectoryController.getCustomDirStatus(),
-      }),
-    );
   }
 
   async function postProfileData(): Promise<void> {
@@ -552,16 +457,6 @@ export function createDesktopSettingsIpc(
     );
   }
 
-  function postAgentModePresets(): void {
-    options.postToRenderer(
-      buildAgentModePresetsMessage({
-        getCustomPresets: () => agentCatalogController.getCustomPresets(),
-        getOrchestratorAgentNames: () =>
-          agentCatalogController.getOrchestratorAgentNames(),
-      }),
-    );
-  }
-
   function postApprovalSettings(): void {
     options.postToRenderer(
       buildApprovalSettingsMessage({
@@ -591,7 +486,6 @@ export function createDesktopSettingsIpc(
     const memoryEnabledPosted = postMemoryEnabled();
     const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
-    postAgentModePresets();
     postApprovalSettings();
     await Promise.all([
       memoryEnabledPosted,
@@ -602,8 +496,7 @@ export function createDesktopSettingsIpc(
       postChatGptAuthStatus(),
       postLatexSettingsStatus(),
       postDesktopCrashReportingStatus(),
-      postAgentSelectionData(),
-      postCustomAgentDir(),
+      options.agentSettingsController.postStartupData(),
       postToolDashboardData(),
     ]);
   }
@@ -870,7 +763,7 @@ export function createDesktopSettingsIpc(
     await postMainModelOptionsData();
     await postProfileData();
     if (refreshOptions.deferAgentCatalogRefresh) return;
-    await Promise.all([postAgentSelectionData(), postMainAgentOptionsData()]);
+    await options.agentSettingsController.refreshCatalogData();
   }
 
   async function updateAgentSetting(
@@ -934,148 +827,6 @@ export function createDesktopSettingsIpc(
     const command = await findToolCommand(input.toolId, input.kind);
     if (!command) return;
     await options.runToolCommand?.({ ...input, command });
-  }
-
-  async function updateAgentEnabled(input: {
-    category: AgentCategory;
-    source: AgentSource;
-    name: string;
-    enabled: boolean;
-  }): Promise<void> {
-    await agentVisibilityController.setAgentEnabled(input);
-    await Promise.all([postAgentSelectionData(), postMainAgentOptionsData()]);
-  }
-
-  async function updateAllAgentsEnabled(input: {
-    category: AgentCategory;
-    source: AgentSource;
-    enabled: boolean;
-  }): Promise<void> {
-    await agentVisibilityController.setAllAgentsEnabled(input);
-    await Promise.all([postAgentSelectionData(), postMainAgentOptionsData()]);
-  }
-
-  async function setCustomAgentDir(): Promise<void> {
-    const selectedPath = await options.selectCustomAgentDirectory?.();
-    if (!selectedPath) return;
-
-    await agentDirectoryController.setCustomDir(selectedPath);
-    await Promise.all([
-      postCustomAgentDir(),
-      postAgentSelectionData(),
-      postMainAgentOptionsData(),
-    ]);
-  }
-
-  async function resetCustomAgentDir(): Promise<void> {
-    await agentDirectoryController.resetCustomDir();
-    await Promise.all([
-      postCustomAgentDir(),
-      postAgentSelectionData(),
-      postMainAgentOptionsData(),
-    ]);
-  }
-
-  async function openAgentYaml(input: {
-    source: AgentSource;
-    name: string;
-  }): Promise<void> {
-    const result = agentDirectoryController.planOpenAgentYaml(input);
-    if (!result.ok) {
-      await options.showErrorMessage?.(
-        result.reason === 'missingAgent'
-          ? `Agent not found: ${input.name}`
-          : `No configuration file found for agent: ${input.name}`,
-      );
-      return;
-    }
-    await options.openPath?.(result.path);
-  }
-
-  async function openAgentFolder(): Promise<void> {
-    const result = await agentDirectoryController.planOpenAgentFolder('custom');
-    if (!result.ok) {
-      await options.showErrorMessage?.(
-        'No custom agent directory is available',
-      );
-      return;
-    }
-    await options.openPath?.(result.path);
-  }
-
-  async function revealAgentFile(input: {
-    source: AgentSource;
-    name: string;
-  }): Promise<void> {
-    const result = agentDirectoryController.planRevealAgentFile(input);
-    if (!result.ok) {
-      await options.showErrorMessage?.(
-        `Agent not found or has no file: ${input.name}`,
-      );
-      return;
-    }
-    await (options.revealPath ?? options.openPath)?.(result.path);
-  }
-
-  async function applyAgentModePreset(presetId: string): Promise<void> {
-    const result = await applyTeamRosterWithPreflight(presetId, {
-      catalog: agentCatalogController,
-      loadLocalCatalog: () => loadAgentRegistry({ includeRemote: false }),
-      canAccessRemoteCatalog:
-        options.canAccessRemoteAgentCatalog ??
-        (() => SupabaseClient.canAccessRemoteAgentCatalog()),
-      choose: (preset, unavailableNames) =>
-        options.chooseTeamAvailability?.({
-          presetName: preset.name,
-          unavailableNames,
-        }) ?? Promise.resolve('cancel'),
-      signIn:
-        options.signInForRemoteAgentCatalog ?? (() => Promise.resolve(false)),
-      forceRefreshRemoteCatalog: () =>
-        refreshAgentRegistry({ includeRemote: true }),
-    });
-    if (result.status === 'unknown') {
-      await options.showErrorMessage?.(`Unknown team: ${presetId}`);
-      return;
-    }
-    if (result.status === 'cancelled') return;
-    if (result.status === 'choice-required') return;
-    if (result.status === 'unavailable') {
-      await options.showErrorMessage?.(
-        `Team "${result.preset.name}" is still unavailable: ${result.unavailableNames.join(', ')}`,
-      );
-      return;
-    }
-    await Promise.all([
-      postAgentSelectionData(),
-      postMainAgentOptionsData(
-        agentCatalogController.getPresetToolUseRoot(
-          result.preset.toolUseAgents,
-        ),
-      ),
-    ]);
-    await options.showInfoMessage?.(`Applied "${result.preset.name}" team`);
-  }
-
-  async function saveAgentModePreset(): Promise<void> {
-    const name = await options.promptText?.({
-      title: 'Save agent team',
-      prompt: 'Name for the new team',
-    });
-    if (!name?.trim()) return;
-    await loadAgentRegistry();
-    const preset = await agentCatalogController.saveCurrentPreset(name);
-    postAgentModePresets();
-    await options.showInfoMessage?.(`Saved team "${preset.name}"`);
-  }
-
-  async function deleteAgentModePreset(presetId: string): Promise<void> {
-    const deleted = await agentCatalogController.deleteCustomPreset(presetId);
-    if (!deleted) {
-      await options.showErrorMessage?.(`Unknown custom team: ${presetId}`);
-      return;
-    }
-    postAgentModePresets();
   }
 
   function runAsync(work: Promise<void>): void {
@@ -1151,32 +902,7 @@ export function createDesktopSettingsIpc(
           enabled,
         ),
     },
-    agentSelection: {
-      setEnabled: ({ category, source, name, enabled }) =>
-        updateAgentEnabled({ category, source, name, enabled }),
-      setAllEnabled: ({ category, source, enabled }) =>
-        updateAllAgentsEnabled({ category, source, enabled }),
-      openYaml: ({ source, name }) => openAgentYaml({ source, name }),
-      openFolder: () => openAgentFolder(),
-      create: unsupported(
-        'Creating custom agents is not available in the desktop app yet.',
-      ),
-      customize: unsupported(
-        'Customizing agents is not available in the desktop app yet.',
-      ),
-      deleteCustom: unsupported(
-        'Deleting custom agents is not available in the desktop app yet.',
-      ),
-      revealFile: ({ source, name }) => revealAgentFile({ source, name }),
-      viewRemotePrompt: unsupported(
-        'Viewing a remote agent prompt is not available in the desktop app yet.',
-      ),
-      setCustomDir: () => setCustomAgentDir(),
-      resetCustomDir: () => resetCustomAgentDir(),
-      applyModePreset: (presetId) => applyAgentModePreset(presetId),
-      saveModePreset: () => saveAgentModePreset(),
-      deleteModePreset: (presetId) => deleteAgentModePreset(presetId),
-    },
+    agentSelection: options.agentSettingsController.actions,
     gitAuthor: {
       setMarkCommits: (enabled) =>
         setGitAuthor(StateKeys.GIT_MARK_COMMITS, enabled),

@@ -18,6 +18,9 @@ import { apiKeySecretName } from '@model/apiProviders';
 // Local imports - shared
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
+// Local imports - desktop test support
+import { createStubDesktopAgentSettingsController } from './desktopSettingsTestSupport';
+
 // Local imports - platform
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -90,6 +93,7 @@ async function createSettingsIpc(options: {
 
   return createDesktopSettingsIpc({
     postToRenderer: () => {},
+    agentSettingsController: createStubDesktopAgentSettingsController(),
     globalState: new MemoryStateStore(),
     workspaceState: new MemoryStateStore(),
     secrets: options.secrets,
