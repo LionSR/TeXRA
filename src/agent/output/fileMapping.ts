@@ -1,19 +1,17 @@
 // Standard library imports
 import * as path from 'node:path';
 
-// Local imports - common
+// Local imports - agent
 import type { AgentTrace } from '@agent/trace/AgentTrace';
+
+// Local imports - shared
 import type { FileLocation } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - logger
-
-// Local imports - core utilities
+// Local imports - utilities
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
-
-// Local file imports
-import { FlexibleFS } from './flexibleFS';
-import { getComparablePath } from './taskRunStorage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { FlexibleFS } from '@utils/files/flexibleFS';
+import { getComparablePath } from '@utils/files/taskRunStorage';
 
 /**
  * Create a mapping between two file lists based on name similarity.

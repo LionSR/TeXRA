@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { z } from 'zod';
 
 import { BaseNode, Flow } from '@agent/node';
+import { getSystemPromptWithRules } from '@agent/prompt';
 import { recordRound } from '@agent/core/state/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
@@ -25,7 +26,6 @@ import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import { AbsoluteFS, FlexibleFS } from '@utils/files';
-import { getSystemPromptWithRules } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 
