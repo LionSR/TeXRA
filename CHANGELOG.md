@@ -12,6 +12,12 @@ All notable changes to this project will be documented in this file.
   approve the current delegated task and stop repeated task, edit, and command
   approval prompts for that stream.
 
+#### Bug Fixes
+
+- **Retry prompts no longer ask for discarded feedback** — choosing “give up”
+  now cancels immediately instead of opening a rejection note that the retry
+  flow cannot use.
+
 ### Extension (VS Code)
 
 #### Bug Fixes

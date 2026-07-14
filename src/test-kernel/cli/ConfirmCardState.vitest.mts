@@ -10,22 +10,50 @@ import {
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
 describe('CLI confirm-card key handling', () => {
+  const feedbackRejection = {
+    allowAlways: false,
+    rejectionMode: 'feedback',
+  } as const;
+  const immediateRejection = {
+    allowAlways: false,
+    rejectionMode: 'immediate',
+  } as const;
+
   it('approves with y, collects rejection feedback with n, and cancels with escape', () => {
-    expect(confirmCardKeyAction('y', {}, false)).toBe('approve');
-    expect(confirmCardKeyAction('Y', {}, false)).toBe('approve');
-    expect(confirmCardKeyAction('n', {}, false)).toBe('feedback');
-    expect(confirmCardKeyAction('', { escape: true }, false)).toBe('reject');
-    expect(confirmCardKeyAction('\u001B', {}, false)).toBe('reject');
-    expect(confirmCardKeyAction('\u001Bn', {}, false)).toBe('ignore');
+    expect(confirmCardKeyAction('y', {}, feedbackRejection)).toBe('approve');
+    expect(confirmCardKeyAction('Y', {}, feedbackRejection)).toBe('approve');
+    expect(confirmCardKeyAction('n', {}, feedbackRejection)).toBe('feedback');
+    expect(confirmCardKeyAction('', { escape: true }, feedbackRejection)).toBe(
+      'reject',
+    );
+    expect(confirmCardKeyAction('\u001B', {}, feedbackRejection)).toBe(
+      'reject',
+    );
+    expect(confirmCardKeyAction('\u001Bn', {}, feedbackRejection)).toBe(
+      'ignore',
+    );
+  });
+
+  it('rejects immediately when feedback has no consumer', () => {
+    expect(confirmCardKeyAction('n', {}, immediateRejection)).toBe('reject');
   });
 
   it('does not reserve a second key for rejection feedback', () => {
-    expect(confirmCardKeyAction('e', {}, false)).toBe('ignore');
+    expect(confirmCardKeyAction('e', {}, feedbackRejection)).toBe('ignore');
   });
 
   it('only enables approve-always where the modal allows it', () => {
-    expect(confirmCardKeyAction('a', {}, true)).toBe('approveAlways');
-    expect(confirmCardKeyAction('a', {}, false)).toBe('ignore');
+    expect(
+      confirmCardKeyAction(
+        'a',
+        {},
+        {
+          allowAlways: true,
+          rejectionMode: 'feedback',
+        },
+      ),
+    ).toBe('approveAlways');
+    expect(confirmCardKeyAction('a', {}, feedbackRejection)).toBe('ignore');
   });
 
   it('shows scoped session-wide approval hints for approval modals', () => {
