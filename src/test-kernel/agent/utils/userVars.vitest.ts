@@ -1,12 +1,17 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Standard library imports
 
 // Local imports - agent components
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  clearRuntimeSkillSources,
+  setRuntimeSkillSources,
+} from '@skills/runtimeSkills';
+import { noopTrace } from '@agent/trace';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -82,5 +87,44 @@ describe('getToolFlags', () => {
 
     const flags = getToolFlags(baseConfig, setting, prompt);
     assert.equal(flags.ROUNDS, 3);
+  });
+});
+
+describe('buildUserVars runtime skill diagnostics', () => {
+  const missingSource = '/missing/runtime-skill-source';
+
+  beforeEach(() => {
+    fakeConfig.set('texra.skills.enabled', true);
+    setRuntimeSkillSources([
+      {
+        scope: 'bundled',
+        path: missingSource,
+        label: 'bundled',
+        required: true,
+      },
+    ]);
+  });
+
+  afterEach(async () => {
+    clearRuntimeSkillSources();
+    await fakeConfig.update('texra.skills.enabled', undefined);
+  });
+
+  it('emits catalog load issues through the agent trace', async () => {
+    const warn = vi.fn();
+    const vars = await buildUserVars(
+      baseConfig,
+      { ...baseSetting, agentCategory: AgentCategory.ToolUse },
+      basePrompt,
+      '/agents/generic',
+      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      { ...noopTrace, warn },
+      '/workspace',
+    );
+
+    expect(vars.AVAILABLE_SKILLS).toBe('');
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      `Skill import error: Skill source does not exist (${missingSource})`,
+    );
   });
 });

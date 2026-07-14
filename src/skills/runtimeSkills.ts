@@ -1,4 +1,3 @@
-import type { AgentTrace } from '@agent/trace';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
 import {
@@ -9,6 +8,13 @@ import {
 } from './loadSkills';
 
 const runtimeSkillSources: SkillSource[] = [];
+
+export interface RuntimeSkillCatalogResult {
+  catalog: string;
+  issues: SkillLoadIssue[];
+}
+
+export type { SkillLoadIssue } from './loadSkills';
 
 export function setRuntimeSkillSources(sources: readonly SkillSource[]): void {
   runtimeSkillSources.length = 0;
@@ -21,11 +27,6 @@ export function listRuntimeSkillSources(): SkillSource[] {
 
 export function clearRuntimeSkillSources(): void {
   runtimeSkillSources.length = 0;
-}
-
-function formatSkillIssue(issue: SkillLoadIssue): string {
-  const location = issue.path ? ` (${issue.path})` : '';
-  return `${issue.severity}: ${issue.message}${location}`;
 }
 
 function formatRuntimeSkillCatalog(skills: readonly SourcedSkill[]): string {
@@ -57,17 +58,13 @@ export function formatRuntimeSkillActivation({
   ].join('\n');
 }
 
-export async function loadRuntimeSkillCatalog(
-  logger?: AgentTrace,
-): Promise<string> {
+export async function loadRuntimeSkillCatalog(): Promise<RuntimeSkillCatalogResult> {
   const sources = listRuntimeSkillSources();
-  if (sources.length === 0) return '';
+  if (sources.length === 0) return { catalog: '', issues: [] };
 
   const result = await discoverSkillSources(sources);
-  for (const issue of result.errors) {
-    logger?.warn(`Skill import ${formatSkillIssue(issue)}`);
-  }
-  if (result.skills.length === 0) return '';
-
-  return formatRuntimeSkillCatalog(result.skills);
+  return {
+    catalog: formatRuntimeSkillCatalog(result.skills),
+    issues: result.errors,
+  };
 }
