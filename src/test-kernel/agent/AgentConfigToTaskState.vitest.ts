@@ -5,10 +5,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - agent
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   isToolUseTaskState,
@@ -86,23 +83,22 @@ describe('agentConfigToTaskState', () => {
     assert.deepEqual(taskState, { agentConfig: config });
   });
 
-  it('tolerates minimal workflow configs from tests and legacy callers', () => {
-    const config = {
-      agentCategory: AgentCategory.Workflow,
-      agent: 'correct',
-      model: 'sonnet46T',
-      inputFiles: [],
-      outputFiles: [],
-    } as unknown as AgentConfig;
-
-    const taskState = agentConfigToTaskState(config);
-
+  it('normalizes a legacy workflow config nested inside task state', () => {
+    const taskState = TaskStateSchema.parse({
+      agentConfig: {
+        inputFile: 'main.tex',
+      },
+      activeFiles: {
+        input: true,
+      },
+    });
     if (!isWorkflowTaskState(taskState)) {
       assert.fail('Expected a workflow task state');
     }
-    assert.equal(taskState.agentConfig, config);
+    assert.equal(taskState.agentConfig.agentCategory, AgentCategory.Workflow);
+    assert.deepEqual(taskState.agentConfig.inputFiles, ['main.tex']);
     assert.deepEqual(taskState.activeFiles, {
-      input: false,
+      input: true,
       context: false,
       media: false,
       output: false,
