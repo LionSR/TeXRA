@@ -35,15 +35,28 @@ const roster = vi.hoisted(() => ({
   ],
 }));
 
+// `resolveDelegationScopeAgents` is the single source of truth for scope
+// resolution (agentRegistry.ts, tested there); this test only exercises how
+// buildUserVars formats its result into WORKFLOW_AGENTS/TOOL_USE_AGENTS, so
+// the mock reproduces the fixture's key-to-entry mapping rather than
+// re-implementing the real resolver's priority/dedup logic.
 vi.mock('@agent/index/agentRegistry', () => ({
-  getRosterAgent: (category: string, identifier: string) =>
-    roster.entries.find(
-      (entry) =>
-        entry.category === category &&
-        `${entry.source}:${entry.name}` === identifier,
-    ),
-  getVisibleAgents: (category: string) =>
-    roster.entries.filter((entry) => entry.category === category),
+  resolveDelegationScopeAgents: (
+    scope:
+      | { workflowAgentKeys: string[]; toolUseAgentKeys: string[] }
+      | undefined,
+    category: string,
+  ) => {
+    if (!scope) return roster.entries.filter((e) => e.category === category);
+    const keys =
+      category === 'workflow' ? scope.workflowAgentKeys : scope.toolUseAgentKeys;
+    return keys.flatMap((key) => {
+      const entry = roster.entries.find(
+        (e) => e.category === category && `${e.source}:${e.name}` === key,
+      );
+      return entry ? [entry] : [];
+    });
+  },
 }));
 
 // Local imports - test support

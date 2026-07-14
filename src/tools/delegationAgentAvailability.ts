@@ -19,9 +19,8 @@
 import {
   findAgentByIdentifier,
   getAgent,
-  getCategoryAgent,
   getVisibleAgent as getWorkspaceVisibleAgent,
-  getVisibleAgents,
+  resolveDelegationScopeAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
@@ -86,23 +85,7 @@ function activeDelegationScope(): AgentDelegationScope | undefined {
 
 /** Resolve delegation targets from the active run scope, then durable roster. */
 export function getDelegationAgents(category: AgentCategory): AgentEntry[] {
-  const scope = activeDelegationScope();
-  if (!scope) return getVisibleAgents(category);
-  const keys =
-    category === 'workflow' ? scope.workflowAgentKeys : scope.toolUseAgentKeys;
-  const resolved: AgentEntry[] = [];
-  const seen = new Set<string>();
-  for (const key of keys) {
-    const entry = key.includes(':')
-      ? getAgent(key, category)
-      : getCategoryAgent(category, key);
-    if (!entry || entry.category !== category || entry.internal) continue;
-    const canonicalKey = agentKeyOf(entry);
-    if (seen.has(canonicalKey)) continue;
-    seen.add(canonicalKey);
-    resolved.push(entry);
-  }
-  return resolved;
+  return resolveDelegationScopeAgents(activeDelegationScope(), category);
 }
 
 export function getDelegationAgent(

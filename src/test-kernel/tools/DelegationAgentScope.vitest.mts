@@ -30,6 +30,11 @@ vi.mock('@agent/runtime/RunContext', () => ({
   tryUseRunContext: () => mocks.context,
 }));
 
+// `resolveDelegationScopeAgents` is the single source of truth for scope
+// resolution (agentRegistry.ts) — this test only exercises how
+// delegationAgentAvailability.ts consumes its result, so the mock reproduces
+// just this scope's expected resolution rather than re-implementing
+// priority/dedup logic that belongs to agentRegistry's own tests.
 vi.mock('@agent/index/agentRegistry', () => ({
   findAgentByIdentifier: (
     entries: Array<{ source: string; name: string }>,
@@ -43,10 +48,14 @@ vi.mock('@agent/index/agentRegistry', () => ({
     }
     return undefined;
   },
-  getCategoryAgent: (_category: string, identifier: string) =>
-    identifier === 'review' ? customReview : undefined,
   getVisibleAgent: () => customReview,
-  getVisibleAgents: () => [customReview],
+  resolveDelegationScopeAgents: (
+    scope: { toolUseAgentKeys: readonly string[] } | undefined,
+    category: string,
+  ) =>
+    scope && category === 'toolUse' && scope.toolUseAgentKeys.includes('remote:review')
+      ? [remoteReview]
+      : [],
 }));
 
 const { getDelegationAgent, getDelegationAgents } =
