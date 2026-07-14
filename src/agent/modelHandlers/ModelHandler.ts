@@ -1323,9 +1323,12 @@ export abstract class ModelHandler<
    *
    * @param rawUsage - Raw usage data from the provider's API response
    * @param responseTimeMs - Response time in milliseconds
-   * @returns Normalized usage with all metrics in a consistent format
+   * @returns Normalized usage, or undefined when the provider reports no usage
    */
-  abstract normalizeUsage(rawUsage: U, responseTimeMs: number): NormalizedUsage;
+  abstract normalizeUsage(
+    rawUsage: U,
+    responseTimeMs: number,
+  ): NormalizedUsage | undefined;
 
   /**
    * Updates model message content with the latest response. Handles cache

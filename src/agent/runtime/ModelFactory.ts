@@ -1,5 +1,9 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { platform } from '@platform/platform';
+import {
+  LANGUAGE_MODEL_PORT_ERROR_CODE,
+  LanguageModelPortError,
+} from '@platform/languageModel';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
@@ -121,8 +125,10 @@ const PROVIDER_HANDLER_ROUTES: Record<ModelProvider, ProviderHandlerRoute> = {
     compatibilityKey: 'ModelHandlerOpenRouterNative',
   },
   [ModelProvider.COPILOT]: {
-    load: null,
-    compatibilityKey: null,
+    load: async () =>
+      (await import('@agent/modelHandlers/vscodelm/modelHandlerVscodeLm'))
+        .ModelHandlerVscodeLm,
+    compatibilityKey: 'ModelHandlerVscodeLm',
   },
 };
 
@@ -281,6 +287,12 @@ export function modelHandlerCompatibilityKey(
 ): ModelHandlerCompatibilityKey | undefined {
   if (shouldUseInternalValidationModelHandler()) {
     return 'ModelHandlerValidation';
+  }
+
+  // Editor-supplied models cannot be proxied through OpenRouter. This route
+  // must win before the global OpenRouter preference below.
+  if (originalConfig.provider === ModelProvider.COPILOT) {
+    return 'ModelHandlerVscodeLm';
   }
 
   const config = applyShortModelNamePreference(
@@ -478,6 +490,16 @@ async function createModelHandlerForResolvedCompatibilityKey(
     );
   }
 
+  if (
+    compatibilityKey === 'ModelHandlerVscodeLm' &&
+    !platform().languageModel.isAvailable()
+  ) {
+    throw new LanguageModelPortError(
+      LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
+      'The VS Code Language Model API is unavailable in this host. Copilot models require a compatible VS Code extension host.',
+    );
+  }
+
   switch (compatibilityKey) {
     case 'ModelHandlerValidation': {
       // Package validation still enters the real CLI and executeAgent path.
@@ -530,8 +552,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
     }
 
     default: {
-      // Direct provider handler. The key is the provider's route key (or
-      // undefined for providers with no direct handler, e.g. Copilot).
+      // Direct provider handler. The key is the provider's registered route key.
       assertGoogleInteractionsRoutable(config, useOpenRouter);
       const route = PROVIDER_HANDLER_ROUTES[config.provider];
       if (!route.load || !route.compatibilityKey) {

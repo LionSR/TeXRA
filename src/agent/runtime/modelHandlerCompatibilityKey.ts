@@ -4,6 +4,7 @@ export const MODEL_HANDLER_COMPATIBILITY_KEYS = [
   'ModelHandlerValidation',
   'ModelHandlerOpenAIResponse',
   'ModelHandlerOpenRouterNative',
+  'ModelHandlerVscodeLm',
   'ModelHandlerAnthropic',
   'ModelHandlerOpenAI',
   'ModelHandlerGoogleGenAI',

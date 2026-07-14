@@ -1,6 +1,8 @@
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LANGUAGE_MODEL_PORT_ERROR_CODE } from '@platform/languageModel';
+
 class LanguageModelTextPart {
   constructor(public readonly value: string) {}
 }
@@ -47,6 +49,8 @@ class CancellationTokenSource {
   }
 }
 
+class CancellationError extends Error {}
+
 function fakeModel(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'copilot-gpt-4o',
@@ -79,6 +83,7 @@ vi.mock('vscode', () => ({
   LanguageModelChatMessage,
   LanguageModelChatToolMode: { Auto: 1, Required: 2 },
   CancellationTokenSource,
+  CancellationError,
 }));
 
 const { createLanguageModelPort } =
@@ -124,7 +129,7 @@ describe('createLanguageModelPort', () => {
     });
   });
 
-  it('resolves operations directly by model id', async () => {
+  it('resolves operations by vendor and model id', async () => {
     const model = fakeModel();
     mocks.selectChatModels.mockImplementation(async ({ id }) =>
       id === 'missing' ? [] : [model],
@@ -132,21 +137,41 @@ describe('createLanguageModelPort', () => {
     mocks.canSendRequest.mockReturnValue(true);
     const port = createPort();
 
-    await expect(port.countTokens('copilot-gpt-4o', 'hello')).resolves.toBe(42);
-    await expect(port.canSendRequest('copilot-gpt-4o')).resolves.toBe(true);
-    await expect(port.countTokens('missing', 'hello')).rejects.toThrow(
-      'Language model "missing" is unavailable.',
-    );
+    const reference = { vendor: 'copilot', id: 'copilot-gpt-4o' };
+    await expect(port.countTokens(reference, 'hello')).resolves.toBe(42);
+    await expect(port.canSendRequest(reference)).resolves.toBe(true);
     await expect(
-      createPort({}).canSendRequest('copilot-gpt-4o'),
+      port.countTokens({ vendor: 'copilot', id: 'missing' }, 'hello'),
+    ).rejects.toThrow('Language model "missing" is unavailable.');
+    await expect(
+      createPort({}).canSendRequest(reference),
     ).resolves.toBeUndefined();
     expect(() =>
       createPort({})
         .onDidChangeAccess(() => {})
         .dispose(),
     ).not.toThrow();
-    expect(model.countTokens).toHaveBeenCalledWith('hello');
+    expect(model.countTokens).toHaveBeenCalledWith('hello', expect.anything());
     expect(mocks.canSendRequest).toHaveBeenCalledWith(model);
+    expect(mocks.selectChatModels).toHaveBeenCalledWith(reference);
+  });
+
+  it('does not select a model with the same id from another vendor', async () => {
+    const otherVendor = fakeModel({
+      vendor: 'other-provider',
+      countTokens: vi.fn(async () => 99),
+    });
+    const copilot = fakeModel();
+    mocks.selectChatModels.mockResolvedValue([otherVendor, copilot]);
+
+    await expect(
+      createPort().countTokens(
+        { vendor: 'copilot', id: 'copilot-gpt-4o' },
+        'hello',
+      ),
+    ).resolves.toBe(42);
+    expect(otherVendor.countTokens).not.toHaveBeenCalled();
+    expect(copilot.countTokens).toHaveBeenCalledOnce();
   });
 
   it('translates messages, tools, and streamed parts', async () => {
@@ -163,7 +188,7 @@ describe('createLanguageModelPort', () => {
     const parts = [];
 
     for await (const part of createPort().sendRequest(
-      'copilot-gpt-4o',
+      { vendor: 'copilot', id: 'copilot-gpt-4o' },
       [
         {
           role: 'assistant',
@@ -251,12 +276,21 @@ describe('createLanguageModelPort', () => {
     const controller = new AbortController();
     if (mode === 'pre-abort') controller.abort();
     const stream = createPort().sendRequest(
-      'copilot-gpt-4o',
+      { vendor: 'copilot', id: 'copilot-gpt-4o' },
       [],
       {},
       controller.signal,
     );
     const iterator = stream[Symbol.asyncIterator]();
+
+    if (mode === 'pre-abort') {
+      await expect(iterator.next()).rejects.toMatchObject({
+        code: LANGUAGE_MODEL_PORT_ERROR_CODE.CANCELLED,
+        message: 'Language model "copilot-gpt-4o" request was cancelled.',
+      });
+      expect(cancellationSources[0]?.cancel).toHaveBeenCalledOnce();
+      return;
+    }
 
     await iterator.next();
     if (mode === 'abort') controller.abort();
@@ -264,5 +298,66 @@ describe('createLanguageModelPort', () => {
 
     expect(cancellationSources[0]?.cancel).toHaveBeenCalledOnce();
     if (mode !== 'return') await iterator.return?.();
+  });
+
+  it.each([
+    ['NoPermissions', LANGUAGE_MODEL_PORT_ERROR_CODE.NO_PERMISSIONS],
+    ['Blocked', LANGUAGE_MODEL_PORT_ERROR_CODE.QUOTA_EXCEEDED],
+    ['NotFound', LANGUAGE_MODEL_PORT_ERROR_CODE.MODEL_UNAVAILABLE],
+    ['Unknown', LANGUAGE_MODEL_PORT_ERROR_CODE.UNKNOWN],
+  ])('translates VS Code %s errors', async (nativeCode, expectedCode) => {
+    const nativeError = Object.assign(new Error('native failure'), {
+      code: nativeCode,
+    });
+    mocks.selectChatModels.mockResolvedValue([
+      fakeModel({
+        sendRequest: vi.fn(async () => Promise.reject(nativeError)),
+      }),
+    ]);
+
+    const consume = async () => {
+      for await (const _part of createPort().sendRequest(
+        { vendor: 'copilot', id: 'copilot-gpt-4o' },
+        [],
+        {},
+        new AbortController().signal,
+      )) {
+        // The request rejects before producing a part.
+      }
+    };
+
+    await expect(consume()).rejects.toMatchObject({
+      name: 'LanguageModelPortError',
+      code: expectedCode,
+      cause: nativeError,
+    });
+  });
+
+  it('reports cancellation when VS Code closes the stream normally', async () => {
+    const controller = new AbortController();
+    mocks.selectChatModels.mockResolvedValue([
+      fakeModel({
+        sendRequest: vi.fn(async () => ({
+          stream: (async function* () {
+            yield new LanguageModelTextPart('partial');
+            controller.abort();
+          })(),
+        })),
+      }),
+    ]);
+    const stream = createPort().sendRequest(
+      { vendor: 'copilot', id: 'copilot-gpt-4o' },
+      [],
+      {},
+      controller.signal,
+    );
+    const iterator = stream[Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { kind: 'text', text: 'partial' },
+    });
+    await expect(iterator.next()).rejects.toMatchObject({
+      code: LANGUAGE_MODEL_PORT_ERROR_CODE.CANCELLED,
+    });
   });
 });

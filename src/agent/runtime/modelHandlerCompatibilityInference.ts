@@ -52,6 +52,13 @@ export function inferPersistedModelHandlerCompatibilityKey(
   messages: readonly ProviderMessage[],
 ): ModelHandlerCompatibilityKey | undefined {
   const modelConfig = MODEL_CONFIGS[model];
+  // Copilot had no direct handler before ModelHandlerVscodeLm. Its only
+  // runnable legacy route was OpenRouter, so a keyless persisted transcript
+  // necessarily uses the OpenRouter message format. New Copilot sessions
+  // persist their explicit compatibility key and do not enter this inference.
+  if (modelConfig?.provider === ModelProvider.COPILOT) {
+    return 'ModelHandlerOpenRouterNative';
+  }
   if (modelConfig?.provider !== ModelProvider.GOOGLE) return undefined;
   if (messages.some(isGoogleGenAIContentMessage)) {
     return 'ModelHandlerGoogleGenAI';
