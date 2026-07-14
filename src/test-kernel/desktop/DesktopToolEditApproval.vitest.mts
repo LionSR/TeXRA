@@ -42,7 +42,7 @@ interface DesktopToolEditApprovalModule {
     showErrorMessage?: (message: string) => Promise<void> | void;
     tempRoot?: string;
   }): {
-    approvePendingForStream(streamId: string): void;
+    approvePendingForStream(streamId: string): Promise<void>;
     cancel(selector?: {
       streamId?: string | null;
       kind?: string;
@@ -284,7 +284,12 @@ describe('desktop tool edit approval', () => {
           expect(runtimeHost.shownToolEditPermissions).toHaveLength(2),
         );
 
-        controller.approvePendingForStream('stream-target');
+        let targetSettled = false;
+        void target.then(() => {
+          targetSettled = true;
+        });
+        await controller.approvePendingForStream('stream-target');
+        expect(targetSettled).toBe(true);
         await expect(target).resolves.toMatchObject({
           accepted: true,
           appliedContent: 'new target\n',

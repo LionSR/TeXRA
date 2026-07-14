@@ -46,7 +46,7 @@ export interface DesktopToolEditApprovalOptions {
 }
 
 export interface DesktopToolEditApprovalController {
-  approvePendingForStream(streamId: StreamTabId): void;
+  approvePendingForStream(streamId: StreamTabId): Promise<void>;
   cancel(selector?: HostInteractionCancelSelector): void;
   handleAction(payload: {
     requestId: string;
@@ -166,7 +166,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
 
     switch (payload.action) {
       case 'approve':
-        this.runAction(payload.requestId, () =>
+        void this.runAction(payload.requestId, () =>
           this.approveProposedEdit(payload.requestId, entry),
         );
         return true;
@@ -177,13 +177,15 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
         });
         return true;
       case 'openDiff':
-        this.runAction(payload.requestId, () => this.openDiffPatch(entry));
+        void this.runAction(payload.requestId, () => this.openDiffPatch(entry));
         return true;
       case 'previewProposed':
-        this.runAction(payload.requestId, () => this.previewProposed(entry));
+        void this.runAction(payload.requestId, () =>
+          this.previewProposed(entry),
+        );
         return true;
       case 'showLatexdiff':
-        this.runAction(payload.requestId, () =>
+        void this.runAction(payload.requestId, () =>
           runLatexdiff(entry, {
             subtype: 'ONLYCHANGEDPAGE',
             openBuildDisplay: this.options.openBuildDisplay,
@@ -195,7 +197,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     }
   }
 
-  approvePendingForStream(streamId: StreamTabId): void {
+  async approvePendingForStream(streamId: StreamTabId): Promise<void> {
     for (const initialization of this.initializing.values()) {
       if (
         initialization.earlyResolution ||
@@ -208,11 +210,16 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
         appliedContent: initialization.request.proposedContent,
       };
     }
-    for (const [requestId, entry] of this.pending) {
-      if (entry.request.streamId === streamId && !entry.isSettled()) {
-        this.handleAction({ requestId, action: 'approve' });
-      }
-    }
+    const pending = [...this.pending].filter(
+      ([, entry]) => entry.request.streamId === streamId && !entry.isSettled(),
+    );
+    await Promise.all(
+      pending.map(([requestId, entry]) =>
+        this.runAction(requestId, () =>
+          this.approveProposedEdit(requestId, entry),
+        ),
+      ),
+    );
   }
 
   cancel(selector: HostInteractionCancelSelector = {}): void {
@@ -328,12 +335,17 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     this.cleanupEntry(entry);
   }
 
-  private runAction(requestId: string, action: () => Promise<void>): void {
-    void action().catch((error) => {
+  private async runAction(
+    requestId: string,
+    action: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await action();
+    } catch (error) {
       if (this.pending.has(requestId)) {
-        this.report(toErrorMessage(error));
+        await this.report(toErrorMessage(error));
       }
-    });
+    }
   }
 
   private async previewProposed(

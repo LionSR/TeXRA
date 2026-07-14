@@ -97,7 +97,7 @@ async function createInteractions(handlers = createHandlers()) {
   const runtimeHost = { emit: vi.fn() };
   const session = createTestSession();
   const toolEditApprovals = {
-    approvePendingForStream: vi.fn(),
+    approvePendingForStream: vi.fn(async (): Promise<void> => {}),
     cancel: vi.fn(),
     requestApproval: vi.fn(async () => ({ accepted: true })),
   };
@@ -141,20 +141,36 @@ describe('createDesktopHostInteractions', () => {
       command: 'npm test',
       streamId: 'stream-b',
     });
+    let releaseToolEdits: (() => void) | undefined;
+    toolEditApprovals.approvePendingForStream.mockReturnValue(
+      new Promise<void>((resolve) => {
+        releaseToolEdits = resolve;
+      }),
+    );
 
-    await interactions.approvePendingDelegatedWork(
+    let approvalCompleted = false;
+    const approval = interactions.approvePendingDelegatedWork(
       'stream-a',
       'proposal-current',
     );
+    void approval.then(() => {
+      approvalCompleted = true;
+    });
+
+    await vi.waitFor(() =>
+      expect(toolEditApprovals.approvePendingForStream).toHaveBeenCalledWith(
+        'stream-a',
+      ),
+    );
+    expect(approvalCompleted).toBe(false);
+    releaseToolEdits?.();
+    await approval;
 
     await expect(parallel).resolves.toEqual({ action: 'approve' });
     await expect(bash).resolves.toEqual({
       accepted: true,
       userMessage: undefined,
     });
-    expect(toolEditApprovals.approvePendingForStream).toHaveBeenCalledWith(
-      'stream-a',
-    );
     expect(handlers.agentProposal.resolve).toHaveBeenCalledWith(
       'proposal-parallel',
     );
