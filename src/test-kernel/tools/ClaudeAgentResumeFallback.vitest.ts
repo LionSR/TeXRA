@@ -218,7 +218,6 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     setupCommonMocks();
     const firstEnvStarted = pDefer<void>();
     const firstEnv = pDefer<NodeJS.ProcessEnv>();
-    const executions = { getAgentHandleByStream: () => undefined } as any;
     let strategy: ChildRunStrategy<unknown> | undefined;
     mocks.buildClaudeAgentEnv
       .mockImplementationOnce(() => {

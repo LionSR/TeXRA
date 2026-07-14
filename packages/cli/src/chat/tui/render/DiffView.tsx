@@ -167,14 +167,6 @@ export function diffVisualRowCount(
   return wrappedDiffDisplayLines(hunks, width, maxHunkLines).length;
 }
 
-export function boundedDiffDisplayLines(
-  hunks: readonly Hunk[],
-  maxHunkLines = 0,
-  maxDisplayLines = 0,
-): DiffDisplayLine[] {
-  return scrollBoundedDiffDisplayLines(hunks, maxHunkLines, maxDisplayLines, 0);
-}
-
 export function maxDiffScrollOffset(
   totalLines: number,
   maxDisplayLines: number,

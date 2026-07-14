@@ -71,23 +71,6 @@ const RAW_USAGE = {
   output_tokens: 1_000_000,
 } as ResponseUsage;
 
-function createResponse(inputTokens: number) {
-  return {
-    id: 'response-id',
-    status: 'completed',
-    output: [],
-    output_text: 'ok',
-    usage: { input_tokens: inputTokens, output_tokens: 1 },
-  };
-}
-
-function createResponseStream(response: ReturnType<typeof createResponse>) {
-  return {
-    async *[Symbol.asyncIterator]() {},
-    finalResponse: async () => response,
-  };
-}
-
 /** Seed the handler's running input-token tally (owned by the chain-state
  *  collaborator; reached here via its narrow setter, not a raw field write). */
 function setCumulativeInputTokens(

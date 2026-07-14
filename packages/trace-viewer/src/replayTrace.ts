@@ -167,11 +167,7 @@ export function replayTrace(
     : { ...streamTabBase, kind: 'agent', model: trace.config.model };
   const updateStreams: UpdateStreamsMessage = {
     command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-    streams: [
-      {
-        ...streamTabInfo,
-      },
-    ],
+    streams: [streamTabInfo],
     activeStream: trace.streamId,
     agentFilter: 'all',
     streamStates: {

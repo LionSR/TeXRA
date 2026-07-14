@@ -23,12 +23,7 @@ import type { MediaEntry } from '@agent/utils/mediaTypes';
 // Local imports - common
 import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import {
-  extractAnthropicWebFetchResults,
-  extractAnthropicWebSearchResults,
   isAnthropicServerToolContent,
-  isAnthropicServerToolUse,
-  isAnthropicWebFetchResult,
-  isAnthropicWebSearchResult,
   type ServerToolExtractionResult,
 } from '@agent/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
@@ -138,9 +133,6 @@ import type {
   DocumentBlockParam,
   ThinkingBlockParam,
   RedactedThinkingBlockParam,
-  ServerToolUseBlock,
-  WebSearchToolResultBlock,
-  WebFetchToolResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 type ErrorWithRequestId = Error & { request_id?: string };

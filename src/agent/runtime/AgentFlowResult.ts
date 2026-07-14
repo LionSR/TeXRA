@@ -44,8 +44,6 @@ export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   touchedFiles: z.array(z.string()).optional(),
 });
 
-export type ToolUseFlowResult = z.infer<typeof ToolUseFlowResultSchema>;
-
 const AgentFlowResultSchema = z.discriminatedUnion('category', [
   WorkflowFlowResultSchema,
   ToolUseFlowResultSchema,

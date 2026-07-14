@@ -9,7 +9,6 @@ import {
   generateSessionDescription,
   getSessionDescriptionInstruction,
 } from '@agent/runtime/sessionDescription';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 

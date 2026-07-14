@@ -50,7 +50,6 @@ import {
 } from './subscriptionBindings';
 import { SharedIssuePollingSource } from './IssuePollingSource';
 import { SharedPRPollingSource } from './PRPollingSource';
-import { SharedRepoPollingSource } from './RepoPollingSource';
 import type { GhIssue, GhPullRequest } from './prTypes';
 
 const GitHubSubscriptionInputSchema = z.strictObject({
@@ -312,17 +311,13 @@ function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
 
 function execList(): ToolResult {
   const { streamId } = requireRunStream('github_subscription');
-  const prKeys = listPRSubscriptionBindings(SharedPRPollingSource.activeKeys())
+  const prKeys = listPRSubscriptionBindings()
     .filter((b) => b.streamIds.includes(streamId))
     .map((b) => b.key);
-  const repoKeys = listRepoSubscriptionBindings(
-    SharedRepoPollingSource.activeKeys(),
-  )
+  const repoKeys = listRepoSubscriptionBindings()
     .filter((b) => b.streamIds.includes(streamId))
     .map((b) => b.key);
-  const issueKeys = listIssueSubscriptionBindings(
-    SharedIssuePollingSource.activeKeys(),
-  )
+  const issueKeys = listIssueSubscriptionBindings()
     .filter((b) => b.streamIds.includes(streamId))
     .map((b) => b.key);
   const all = [...repoKeys, ...prKeys, ...issueKeys];

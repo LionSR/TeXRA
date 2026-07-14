@@ -16,7 +16,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - event bus
 import { appSignals, type AppSignalPayloads } from '@eventBus/AppSignals';

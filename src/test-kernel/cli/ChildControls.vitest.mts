@@ -29,7 +29,6 @@ import {
   taskDetailFollowTailScrollOffsetForColumns,
   taskDetailInitialScrollOffset,
   taskDetailScrollableOutputRowCountForColumns,
-  taskDetailVisibleLineCountFromOffsetForColumns,
   taskDetailVisibleOutputRowsFromOffsetForColumns,
   taskDetailVisibleScrollOffset,
   taskDetailWrappedRowCount,
@@ -1295,24 +1294,25 @@ describe('CLI child execution controls', () => {
   it('budgets compact task detail output by wrapped terminal rows', () => {
     expect(taskDetailWrappedRowCount('abcd', 4)).toBe(1);
     expect(taskDetailWrappedRowCount('abcde', 4)).toBe(2);
+    const mixedLines = ['x'.repeat(180), 'short 1', 'short 2', 'short 3'];
     expect(
-      taskDetailVisibleLineCountFromOffsetForColumns({
+      taskDetailVisibleOutputRowsFromOffsetForColumns({
         availableColumns: 80,
         compact: true,
-        tailLines: ['x'.repeat(180), 'short 1', 'short 2', 'short 3'],
+        tailLines: mixedLines,
         visibleRowBudget: 3,
         offset: 0,
       }),
-    ).toBe(1);
+    ).toEqual(['x'.repeat(76), 'x'.repeat(76), 'x'.repeat(28)]);
     expect(
-      taskDetailVisibleLineCountFromOffsetForColumns({
+      taskDetailVisibleOutputRowsFromOffsetForColumns({
         availableColumns: 80,
         compact: true,
-        tailLines: ['x'.repeat(180), 'short 1', 'short 2', 'short 3'],
+        tailLines: mixedLines,
         visibleRowBudget: 3,
-        offset: 1,
+        offset: 3,
       }),
-    ).toBe(3);
+    ).toEqual(['short 1', 'short 2', 'short 3']);
     const wrappedRows = taskDetailVisibleOutputRowsFromOffsetForColumns({
       availableColumns: 48,
       compact: true,

@@ -22,7 +22,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   AgentExecutionHandle,
   type LiveToolUseFlowContext,

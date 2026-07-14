@@ -21,17 +21,7 @@ export function generateExportFilename(
   input: ExportFilenameInput,
   extension: 'md' | 'tex' | 'html',
 ): string {
-  return `${generateExportFolderName(input)}.${extension}`;
-}
-
-/**
- * Shared filename stem (no extension) used by single-file exports (md/tex/html).
- */
-function generateExportFolderName(input: ExportFilenameInput): string {
-  const date = new Date(input.timestamp);
-  const datePart = isoDateOnly(date);
-
-  const parts = ['texra-chat', datePart];
+  const parts = ['texra-chat', isoDateOnly(new Date(input.timestamp))];
 
   if (input.config.agent) {
     parts.push(sanitizeFilename(input.config.agent));
@@ -43,7 +33,7 @@ function generateExportFolderName(input: ExportFilenameInput): string {
     parts.push(sanitizeFilename(shortModel));
   }
 
-  return parts.join('-');
+  return `${parts.join('-')}.${extension}`;
 }
 
 function sanitizeFilename(name: string): string {

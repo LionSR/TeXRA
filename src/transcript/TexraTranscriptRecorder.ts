@@ -18,7 +18,6 @@ import type {
   AgentEvent,
   AgentTrace,
   AgentTraceSubscriber,
-  LogEvent,
 } from '@agent/trace';
 import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import { isDebugModeEnabled } from '@logger/logUtils';
@@ -200,24 +199,21 @@ export function attachTranscriptRecorder(
     });
   };
 
-  const handleLog = (event: LogEvent): void => {
-    const messageType = asMessageType(event.messageType);
-    if (!shouldEmit(event.level, messageType)) return;
-    appendLog({
-      level: event.level,
-      groupId: event.stageId,
-      messageType,
-      text: event.message,
-      data: event.data,
-      verbose: event.verbose,
-    });
-  };
-
   const subscriber: AgentTraceSubscriber = (event: AgentEvent) => {
     switch (event.type) {
-      case 'log':
-        handleLog(event);
+      case 'log': {
+        const messageType = asMessageType(event.messageType);
+        if (!shouldEmit(event.level, messageType)) return;
+        appendLog({
+          level: event.level,
+          groupId: event.stageId,
+          messageType,
+          text: event.message,
+          data: event.data,
+          verbose: event.verbose,
+        });
         return;
+      }
 
       case 'stage.start':
         if (event.kind) stageKinds.set(event.id, event.kind);

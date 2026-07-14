@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - command catalog and shared schemas
+import { toElectronAccelerator } from '@shared/commands/accelerators';
 import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
@@ -89,9 +90,7 @@ describe('desktop command surface', () => {
     ).toEqual(['Help', 'Help']);
   });
 
-  it('normalizes catalog keybindings to Electron accelerators', async () => {
-    const { toElectronAccelerator } = await loadDesktopCommandSurface();
-
+  it('normalizes catalog keybindings to Electron accelerators', () => {
     expect(
       toElectronAccelerator(
         { key: 'ctrl+alt+shift+c', mac: 'cmd+option+shift+c' },

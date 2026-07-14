@@ -21,7 +21,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 
 // Local imports - runtime
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 import {
   AgentExecutionHandle,

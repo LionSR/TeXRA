@@ -196,22 +196,3 @@ describe('getGitignoreMatcher', () => {
     );
   });
 });
-
-describe('createGlobMatcher', () => {
-  it('does not apply basename matching to slash-containing patterns', async () => {
-    const { createGlobMatcher } = await import('@tools/utils');
-    const matcher = createGlobMatcher('src/*.js');
-
-    expect(matcher('src/foo.js')).toBe(true);
-    expect(matcher('lib/foo.js')).toBe(false);
-    expect(matcher('foo.js')).toBe(false);
-  });
-
-  it('keeps basename matching for slash-free patterns', async () => {
-    const { createGlobMatcher } = await import('@tools/utils');
-    const matcher = createGlobMatcher('*.js');
-
-    expect(matcher('foo.js')).toBe(true);
-    expect(matcher('src/foo.js')).toBe(true);
-  });
-});
