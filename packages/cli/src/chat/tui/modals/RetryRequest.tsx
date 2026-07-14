@@ -34,7 +34,8 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
       color={COLOR_WARNING}
       title="Retry the failed call?"
       approveLabel="retry"
-      rejectLabel="give up & note"
+      rejectLabel="give up"
+      rejectionMode="immediate"
       extraActions={
         canSwitchToPersonalKey
           ? [
