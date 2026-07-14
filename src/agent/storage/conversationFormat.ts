@@ -3,10 +3,11 @@
  * (`ExecutionKVStore.readConversation()`) as text.
  *
  * A stored conversation is `unknown[]` — whichever model handler produced it
- * (Anthropic, OpenAI, Google, OpenRouter) writes its own provider-native
- * message shape, so `content` blocks show up as Anthropic-style
+ * (Anthropic, OpenAI, Google, OpenRouter, VS Code LM) writes its own
+ * provider-native message shape, so `content` blocks show up as Anthropic-style
  * `{type: 'text'|'tool_use'|'tool_result'}`, Google's discriminator-less
- * `{text}`/`{functionCall}`/`{functionResponse}` parts, or OpenAI's top-level
+ * `{text}`/`{functionCall}`/`{functionResponse}` parts, VS Code LM's
+ * `{kind: 'text'|'toolCall'|'toolResult'}` parts, or OpenAI's top-level
  * `tool_calls`. This module recognizes those shapes once, instead of every
  * caller re-parsing them with its own drifted truncation rules.
  *
@@ -186,7 +187,8 @@ function formatWebFetchResultMarker(
  * Render a single content-block (an element of a message's `content`/`parts`
  * array) to text. Handles Anthropic's `{type: ...}` discriminated blocks,
  * Google's discriminator-less `{text}`/`{functionCall}`/`{functionResponse}`
- * parts, and falls back to a JSON dump for unrecognized shapes.
+ * parts, VS Code LM's `kind`-discriminated parts, and falls back to a JSON dump
+ * for unrecognized shapes.
  */
 function formatConversationBlock(
   block: unknown,
@@ -200,6 +202,18 @@ function formatConversationBlock(
       options.toolBlockLimit,
       marker,
     );
+  }
+  switch (block.kind) {
+    case 'text':
+      return asText(block.text);
+    case 'toolCall':
+      return formatToolUseMarker(
+        asText(block.name) || 'unknown',
+        block.input,
+        options,
+      );
+    case 'toolResult':
+      return formatToolResultMarker(block.text, options);
   }
   // Google's `parts` entries have no `type` discriminator at all — a plain
   // `text` field is the only signal, so check it before the `type` switch.

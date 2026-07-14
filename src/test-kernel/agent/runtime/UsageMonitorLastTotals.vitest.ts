@@ -8,7 +8,10 @@ import {
   UsageLogService,
 } from '@telemetry/UsageLogService';
 import { TraceEmitter } from '@agent/trace';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
+import {
+  AgentRunStateSnapshotSchema,
+  recordCycleMetrics,
+} from '@agent/core/state/AgentState';
 import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -109,6 +112,38 @@ describe('UsageMonitor', () => {
       });
       expect(usageData?.usage).not.toHaveProperty('viaChatGptSubscription');
     } finally {
+      dispose();
+    }
+  });
+
+  it('does not replay prior usage during a usage-less tool-use continuation', async () => {
+    const { dispose, events, monitor } = createMonitorWithEvents();
+    const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
+    try {
+      const state = AgentRunStateSnapshotSchema.parse({});
+      const usage = {
+        inputTokens: 10,
+        outputTokens: 2,
+        cost: 0.01,
+        responseTimeMs: 50,
+        provider: 'openai' as const,
+      };
+      recordCycleMetrics(state, 50, usage);
+      await monitor.recordUsage(state);
+
+      recordCycleMetrics(state, 25, null);
+      expect(state.usageAccumulator.latestUsage).toBeNull();
+      await monitor.recordUsage(state);
+
+      expect(runEventsOfType(events, 'usage')).toHaveLength(1);
+      expect(log).toHaveBeenCalledTimes(1);
+      expect(monitor.lastTotals()).toBe(state.usageAccumulator.totals);
+      expect(state.usageAccumulator.totals).toMatchObject({
+        totalInputTokens: 10,
+        totalOutputTokens: 2,
+      });
+    } finally {
+      log.mockRestore();
       dispose();
     }
   });

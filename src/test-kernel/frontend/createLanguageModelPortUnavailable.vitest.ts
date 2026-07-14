@@ -14,8 +14,8 @@ describe('createLanguageModelPort without vscode.lm', () => {
 
     expect(port.isAvailable()).toBe(false);
     await expect(port.selectModels()).resolves.toEqual([]);
-    await expect(port.countTokens('missing', 'text')).rejects.toThrow(
-      'unavailable in this host',
-    );
+    await expect(
+      port.countTokens({ vendor: 'copilot', id: 'missing' }, 'text'),
+    ).rejects.toThrow('unavailable in this host');
   });
 });

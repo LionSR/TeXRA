@@ -132,18 +132,19 @@ export class UsageMonitor {
       const totals = stateGlobal.usageAccumulator.totals;
       this.lastSeenTotals = totals;
       const latestUsage = stateGlobal.usageAccumulator.latestUsage;
+      if (!latestUsage) return;
 
       // Per-round usage - sent to both UI (for accumulation) and backend analytics
-      const roundInputTokens = latestUsage?.inputTokens ?? 0;
-      const roundOutputTokens = latestUsage?.outputTokens ?? 0;
-      const roundCacheReadTokens = latestUsage?.cachedInputTokens ?? 0;
-      const roundCacheCreationTokens = latestUsage?.cacheCreationTokens ?? 0;
-      const roundReasoningTokens = latestUsage?.reasoningTokens ?? 0;
-      const roundCost = latestUsage?.cost ?? 0;
-      const toolUseTokens = latestUsage?.toolUsePromptTokens ?? 0;
-      const usageRoute = latestUsage?.usageRoute ?? this.currentUsageRoute();
+      const roundInputTokens = latestUsage.inputTokens;
+      const roundOutputTokens = latestUsage.outputTokens;
+      const roundCacheReadTokens = latestUsage.cachedInputTokens ?? 0;
+      const roundCacheCreationTokens = latestUsage.cacheCreationTokens ?? 0;
+      const roundReasoningTokens = latestUsage.reasoningTokens ?? 0;
+      const roundCost = latestUsage.cost;
+      const toolUseTokens = latestUsage.toolUsePromptTokens ?? 0;
+      const usageRoute = latestUsage.usageRoute ?? this.currentUsageRoute();
       const roundCacheMissTokens = resolveRoundCacheMissTokens(
-        latestUsage?.cacheMissInputTokens,
+        latestUsage.cacheMissInputTokens,
         roundInputTokens,
         roundCacheReadTokens,
       );

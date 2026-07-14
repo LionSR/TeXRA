@@ -17,6 +17,12 @@ export interface LanguageModelSelector {
   readonly id?: string;
 }
 
+/** Stable identity for a model whose id is scoped to its provider. */
+export interface LanguageModelReference {
+  readonly vendor: string;
+  readonly id: string;
+}
+
 export interface LanguageModelTextPart {
   readonly kind: 'text';
   readonly text: string;
@@ -65,6 +71,35 @@ export interface LanguageModelRequestOptions {
 export type LanguageModelResponsePart =
   LanguageModelTextPart | LanguageModelToolCallPart;
 
+export type LanguageModelTokenCountInput = string | LanguageModelMessage;
+
+export const LANGUAGE_MODEL_PORT_ERROR_CODE = {
+  HOST_UNAVAILABLE: 'host_unavailable',
+  MODEL_UNAVAILABLE: 'model_unavailable',
+  NO_PERMISSIONS: 'no_permissions',
+  QUOTA_EXCEEDED: 'quota_exceeded',
+  CANCELLED: 'cancelled',
+  UNKNOWN: 'unknown',
+} as const;
+
+export type LanguageModelPortErrorCode =
+  (typeof LANGUAGE_MODEL_PORT_ERROR_CODE)[keyof typeof LANGUAGE_MODEL_PORT_ERROR_CODE];
+
+/** Host-neutral failure from an editor-supplied language model API. */
+export class LanguageModelPortError extends Error {
+  readonly code: LanguageModelPortErrorCode;
+
+  constructor(
+    code: LanguageModelPortErrorCode,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'LanguageModelPortError';
+    this.code = code;
+  }
+}
+
 /**
  * Host bridge for subscription-backed language models exposed by the editor.
  * Hosts without such an API use {@link UNAVAILABLE_LANGUAGE_MODEL_PORT}.
@@ -76,13 +111,17 @@ export interface LanguageModelPort {
   ): Promise<readonly LanguageModelInfo[]>;
   onDidChangeModels(listener: () => void): Disposable;
   sendRequest(
-    modelId: string,
+    model: LanguageModelReference,
     messages: readonly LanguageModelMessage[],
     options: LanguageModelRequestOptions,
     signal: AbortSignal,
   ): AsyncIterable<LanguageModelResponsePart>;
-  countTokens(modelId: string, text: string): Promise<number>;
-  canSendRequest(modelId: string): Promise<boolean | undefined>;
+  countTokens(
+    model: LanguageModelReference,
+    input: LanguageModelTokenCountInput,
+    signal?: AbortSignal,
+  ): Promise<number>;
+  canSendRequest(model: LanguageModelReference): Promise<boolean | undefined>;
   onDidChangeAccess(listener: () => void): Disposable;
 }
 
@@ -94,7 +133,10 @@ function unavailableRequest(): AsyncIterable<LanguageModelResponsePart> {
     [Symbol.asyncIterator]() {
       return {
         next: async () => {
-          throw new Error(UNAVAILABLE_MESSAGE);
+          throw new LanguageModelPortError(
+            LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
+            UNAVAILABLE_MESSAGE,
+          );
         },
       };
     },
@@ -109,7 +151,10 @@ export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
     onDidChangeModels: () => ({ dispose() {} }),
     sendRequest: unavailableRequest,
     countTokens: async () => {
-      throw new Error(UNAVAILABLE_MESSAGE);
+      throw new LanguageModelPortError(
+        LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
+        UNAVAILABLE_MESSAGE,
+      );
     },
     canSendRequest: async () => undefined,
     onDidChangeAccess: () => ({ dispose() {} }),

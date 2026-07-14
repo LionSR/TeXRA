@@ -40,6 +40,8 @@ export function recordCycleMetrics(
 ): void {
   if (normalizedUsage) {
     recordNormalizedUsage(run.usageAccumulator, normalizedUsage);
+  } else {
+    run.usageAccumulator.latestUsage = null;
   }
   run.totalResponseTimeMs += responseTimeMs;
 }
