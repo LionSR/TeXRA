@@ -122,6 +122,7 @@ import type {
   DesktopAgentExecution,
   DesktopAgentExecutionOptions,
 } from './desktopAgentExecution.js';
+import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 import type { StreamSnapshotStore } from '@transcript';
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
@@ -540,10 +541,10 @@ function createWindow(options: {
     ).unref();
   };
   attachRendererConsoleLog(window.webContents);
-  const agentExecutionOptions: DesktopAgentExecutionOptions = {
-    postToRenderer: postToRendererIfAlive,
-    opener: previewHost,
-    diff: createDesktopDiffHost({
+  const agentExecutionHost: DesktopAgentExecutionHost = {
+    openPath: previewHost.openPath,
+    openBuildDisplay: previewHost.openBuildDisplay,
+    openDiff: createDesktopDiffHost({
       openPath: previewHost.openPath,
       // Audit item C / trajectory #18: prefer the in-app overlay
       // (<texra-diff-view> inside a wa-dialog). The external-editor
@@ -562,7 +563,7 @@ function createWindow(options: {
         ipc.postToRenderer(message);
         return true;
       },
-    }),
+    }).openDiff,
     confirmAcceptFile: async (message) => {
       const result = await dialog.showMessageBox(window, {
         type: 'warning',
@@ -575,8 +576,6 @@ function createWindow(options: {
     },
     showInfoMessage,
     showErrorMessage,
-    streamSnapshotStore: options.streamSnapshotStore,
-    progressSnapshotStore: options.progressSnapshotStore,
     // Recompute the onboarding funnel after a run completes so a user's first
     // successful run leaves the setup card without waiting for a restart
     // (the run lifecycle has already persisted firstRunDone). Mirrors the
@@ -584,6 +583,12 @@ function createWindow(options: {
     onRunCompleted: () => {
       void onboardingIpcRef.current?.refreshOnboardingFunnel();
     },
+  };
+  const agentExecutionOptions: DesktopAgentExecutionOptions = {
+    postToRenderer: postToRendererIfAlive,
+    host: agentExecutionHost,
+    streamSnapshotStore: options.streamSnapshotStore,
+    progressSnapshotStore: options.progressSnapshotStore,
   };
   let agentExecution: DesktopAgentExecution | undefined;
   let agentExecutionLoad: Promise<DesktopAgentExecution> | undefined;

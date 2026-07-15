@@ -3,7 +3,6 @@ import path from 'node:path';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import { appSignals } from '@eventBus/AppSignals';
-import type { DiffViewHost } from '@hosts/uiHosts';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -19,21 +18,22 @@ import type {
   OutputFileInfo,
   RoundIndexed,
 } from '@shared/schemas';
-import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
   AbsoluteFS,
   createExternalLocation,
   pathToLocation,
 } from '@utils/files';
+import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
-export interface DesktopProgressFileActionOptions {
-  openPath?: (filePath: string, line?: number) => Promise<void>;
-  openBuildDisplay?: BuildDisplayFn;
-  openDiff?: DiffViewHost['openDiff'];
-  confirmAcceptFile?: (message: string) => Promise<boolean>;
-  showInfoMessage?: (message: string) => Promise<void> | void;
-  showErrorMessage?: (message: string) => Promise<void> | void;
-}
+type DesktopProgressFileActionUi = Pick<
+  DesktopAgentExecutionHost,
+  | 'openPath'
+  | 'openBuildDisplay'
+  | 'openDiff'
+  | 'confirmAcceptFile'
+  | 'showInfoMessage'
+  | 'showErrorMessage'
+>;
 
 /**
  * Bridge-owned capabilities the file actions reach back into: starting a fresh
@@ -68,29 +68,16 @@ function toFileLocation(filePath: string): FileLocation {
 
 export class DesktopProgressFileActions {
   constructor(
-    private readonly options: DesktopProgressFileActionOptions,
+    private readonly ui: DesktopProgressFileActionUi,
     private readonly host: DesktopProgressFileActionHost,
   ) {}
 
   async openFileCompile(filePath: string): Promise<void> {
-    if (this.options.openBuildDisplay) {
-      await this.options.openBuildDisplay(toFileLocation(filePath));
-      return;
-    }
-    await this.options.showErrorMessage?.(
-      'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
-    );
+    await this.ui.openBuildDisplay(toFileLocation(filePath));
   }
 
   async compareFiles(baseFile: string, editedFile: string): Promise<void> {
-    if (!this.options.openDiff) {
-      await this.options.showErrorMessage?.(
-        'Desktop file comparison is not available in this host yet.',
-      );
-      return;
-    }
-
-    await this.options.openDiff(
+    await this.ui.openDiff(
       { filePath: baseFile },
       { filePath: editedFile },
       `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
@@ -112,7 +99,7 @@ export class DesktopProgressFileActions {
       },
     });
     if (!validation.valid) {
-      await this.options.showErrorMessage?.(`Merge: ${validation.message}`);
+      await this.ui.showErrorMessage(`Merge: ${validation.message}`);
       return;
     }
     await this.host.runExecution(validation.request);
@@ -130,15 +117,12 @@ export class DesktopProgressFileActions {
         readFile: (location) => readFile(location.absolutePath, 'utf8'),
         writeFile: (location, content) =>
           writeFile(location.absolutePath, content, 'utf8'),
-        confirm: (message) =>
-          this.options.confirmAcceptFile
-            ? this.options.confirmAcceptFile(message)
-            : Promise.resolve(true),
+        confirm: (message) => this.ui.confirmAcceptFile(message),
         emitWritten: (absolutePath) =>
           appSignals.emit('workspaceFilesWritten', {
             absolutePaths: [absolutePath],
           }),
-        showInfo: (message) => this.options.showInfoMessage?.(message),
+        showInfo: (message) => this.ui.showInfoMessage(message),
       },
     );
   }
@@ -171,7 +155,7 @@ export class DesktopProgressFileActions {
     );
 
     if (!result.success || !result.diffFileName) {
-      await this.options.showErrorMessage?.(
+      await this.ui.showErrorMessage(
         result.message ?? 'Failed to generate diff file.',
       );
       return;
@@ -188,7 +172,7 @@ export class DesktopProgressFileActions {
       candidates,
       (file) => readFile(file, 'utf8'),
       async (file) => {
-        await this.options.openPath?.(file);
+        await this.ui.openPath(file);
       },
     );
   }
@@ -252,12 +236,8 @@ export class DesktopProgressFileActions {
     return successes.length > 0;
   }
 
-  /** Open a generated diff file via the LaTeX build display, falling back to the plain opener. */
+  /** Open a generated diff file via the desktop LaTeX build display. */
   private async openDiffOutput(diffFilePath: string): Promise<void> {
-    if (this.options.openBuildDisplay) {
-      await this.options.openBuildDisplay(createExternalLocation(diffFilePath));
-      return;
-    }
-    await this.options.openPath?.(diffFilePath);
+    await this.ui.openBuildDisplay(createExternalLocation(diffFilePath));
   }
 }
