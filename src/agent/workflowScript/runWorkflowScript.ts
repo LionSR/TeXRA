@@ -161,8 +161,8 @@ const ORCHESTRATION_PRELUDE = `
  * name/message.
  */
 export class WorkflowRunAbortError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'WorkflowRunAbortError';
   }
 }
@@ -191,7 +191,7 @@ function isWorkflowAbort(error: unknown): boolean {
 export async function runWorkflowScript(
   options: WorkflowScriptRunOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const { runAgent, onEvent } = options;
+  const { runAgent, onEvent, onJournalEntry } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxAgentCalls = options.maxAgentCalls ?? DEFAULT_MAX_AGENT_CALLS;
@@ -212,17 +212,53 @@ export async function runWorkflowScript(
   // no runner keeps consuming quota or emitting events after the run ends.
   const pendingAgentCalls = new Set<Promise<unknown>>();
   let callCounter = 0;
+  const issuedCallKeys = new Set<string>();
   let currentPhase: string | undefined;
+  let fatalRunError: WorkflowRunAbortError | undefined;
 
   const emit = (event: WorkflowScriptEvent) => onEvent?.(event);
+
+  const rememberFatalRunError = (error: unknown): WorkflowRunAbortError => {
+    const fatal =
+      error instanceof WorkflowRunAbortError
+        ? error
+        : new WorkflowRunAbortError(toErrorMessage(error));
+    fatalRunError ??= fatal;
+    runAbort.abort();
+    return fatalRunError;
+  };
+
+  const recordJournalEntry = async (
+    entry: WorkflowJournalEntry,
+    label: string,
+  ): Promise<void> => {
+    journal.set(entry.index, entry);
+    try {
+      await onJournalEntry?.(entry);
+    } catch (error) {
+      const message = `Failed to persist workflow journal entry ${entry.index}: ${toErrorMessage(error)}`;
+      const fatal = rememberFatalRunError(new WorkflowRunAbortError(message));
+      emit({
+        type: 'agent:end',
+        index: entry.index,
+        label,
+        cached: false,
+        error: message,
+      });
+      throw fatal;
+    }
+  };
 
   async function agentPrimitive(
     prompt: unknown,
     rawOptions?: unknown,
   ): Promise<string | undefined> {
     if (runAbort.signal.aborted) {
-      throw new WorkflowRunAbortError(
-        'Workflow run aborted (timeout or call cap); no new agent() calls may start.',
+      throw rememberFatalRunError(
+        fatalRunError ??
+          new WorkflowRunAbortError(
+            'Workflow run aborted (timeout or call cap); no new agent() calls may start.',
+          ),
       );
     }
     if (!isNonEmptyString(prompt)) {
@@ -238,6 +274,14 @@ export async function runWorkflowScript(
       callOptions.label ??
       prompt.slice(0, LABEL_EXCERPT_LENGTH).replaceAll(/\s+/g, ' ').trim();
     const key = journalKey(prompt, callOptions);
+    if (issuedCallKeys.has(key)) {
+      throw rememberFatalRunError(
+        new WorkflowRunAbortError(
+          'Repeated agent() calls with the same prompt and options require distinct non-empty "id" options for restart-safe identity.',
+        ),
+      );
+    }
+    issuedCallKeys.add(key);
 
     const prior = priorEntries.get(index);
     if (prior && prior.key === key) {
@@ -265,9 +309,10 @@ export async function runWorkflowScript(
     if (liveCallCounter > maxAgentCalls) {
       // Abort first so in-flight sibling agents stop consuming quota — the
       // backstop must cancel the fan-out, not just fail this one call.
-      runAbort.abort();
-      throw new WorkflowRunAbortError(
-        `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
+      throw rememberFatalRunError(
+        new WorkflowRunAbortError(
+          `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
+        ),
       );
     }
 
@@ -278,12 +323,16 @@ export async function runWorkflowScript(
         // Re-check after waiting for a slot: a timeout/cap abort while this
         // call was queued must not launch fresh model work.
         if (runAbort.signal.aborted) {
-          throw new WorkflowRunAbortError(
-            'Workflow run aborted while this agent() call was queued.',
+          throw rememberFatalRunError(
+            fatalRunError ??
+              new WorkflowRunAbortError(
+                'Workflow run aborted while this agent() call was queued.',
+              ),
           );
         }
         return runAgent({
           index,
+          key,
           prompt,
           options: callOptions,
           signal: runAbort.signal,
@@ -292,7 +341,7 @@ export async function runWorkflowScript(
     } catch (error) {
       // A runner may surface the run abort (it holds runAbort.signal);
       // that must stop the workflow, not degrade into a null agent result.
-      if (isWorkflowAbort(error)) throw error;
+      if (isWorkflowAbort(error)) throw rememberFatalRunError(error);
       // A failed agent resolves to null (callers filter with .filter(Boolean))
       // and is deliberately NOT journaled, so a resume retries it.
       emit({
@@ -322,7 +371,7 @@ export async function runWorkflowScript(
       });
       throw error;
     }
-    journal.set(index, { index, key, result: normalizedResult });
+    await recordJournalEntry({ index, key, result: normalizedResult }, label);
     emit({ type: 'agent:end', index, label, cached: false });
     return payload;
   }
@@ -330,6 +379,7 @@ export async function runWorkflowScript(
   const argsJson = serializeBridgeValue(options.args, 'Workflow args');
 
   let result: unknown;
+  let scriptFailure: { readonly error: unknown } | undefined;
   try {
     result = await runScriptInSandbox(
       body,
@@ -365,6 +415,8 @@ export async function runWorkflowScript(
         onTimeout: () => runAbort.abort(),
       },
     );
+  } catch (error) {
+    scriptFailure = { error };
   } finally {
     // Abort unconditionally once the sandbox returns. This stops in-flight
     // work the script abandoned and makes agentPrimitive reject any late call.
@@ -390,6 +442,12 @@ export async function runWorkflowScript(
       }
     }
   }
+
+  // Guest code may catch an agent() rejection, and an abandoned call can
+  // reject while the final drain is running. Checkpoint failure is a run-level
+  // invariant, so inspect it only after every bounded cleanup opportunity.
+  if (fatalRunError) throw fatalRunError;
+  if (scriptFailure) throw scriptFailure.error;
 
   return {
     meta,
@@ -440,13 +498,14 @@ function normalizeAgentOptions(
   // called with a value that did not come through the bridge.
   const source = structuredClone(raw ?? {}) as Record<string, unknown>;
   const options: WorkflowAgentCallOptions = {};
-  for (const field of ['label', 'phase', 'agentName'] as const) {
+  for (const field of ['id', 'label', 'phase', 'agentName'] as const) {
     const value = source[field];
     if (value === undefined) continue;
-    if (typeof value !== 'string') {
-      throw new Error(`agent() option "${field}" must be a string.`);
+    if (typeof value !== 'string' || (field === 'id' && !value.trim())) {
+      const requirement = field === 'id' ? 'a non-empty string' : 'a string';
+      throw new Error(`agent() option "${field}" must be ${requirement}.`);
     }
-    options[field] = value;
+    options[field] = field === 'id' ? value.trim() : value;
   }
   for (const field of ['schema', 'outputSchema'] as const) {
     if (!Object.hasOwn(source, field)) continue;

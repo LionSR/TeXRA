@@ -540,10 +540,14 @@ export function buildSubagentResultMeta(
   agentName: string,
   result: AgentFinalResult,
   wallTimeMs: number,
+  options: { readonly parentExecutionId?: ExecutionId } = {},
 ): SubagentResultMeta {
   return {
     producer: 'subagent',
     agentName,
+    ...(options.parentExecutionId !== undefined && {
+      parentExecutionId: options.parentExecutionId,
+    }),
     wallTimeMs,
     result,
   };
@@ -560,6 +564,7 @@ export function buildSubagentFailureResultMeta(
   fallbackCategory: AgentFlowCategory,
   result: AgentFlowResult | undefined,
   wallTimeMs: number,
+  options: { readonly parentExecutionId?: ExecutionId } = {},
 ): SubagentResultMeta {
   const finalResult = result
     ? buildAgentFinalResult({
@@ -572,5 +577,5 @@ export function buildSubagentFailureResultMeta(
         category: fallbackCategory,
         outcome: 'failed',
       });
-  return buildSubagentResultMeta(agentName, finalResult, wallTimeMs);
+  return buildSubagentResultMeta(agentName, finalResult, wallTimeMs, options);
 }

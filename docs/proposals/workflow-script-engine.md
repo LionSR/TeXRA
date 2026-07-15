@@ -62,7 +62,9 @@ return await agent('Merge these drafts, unify notation.', {
 ### Primitives
 
 - `agent(prompt, opts?)` → one subagent run; returns the typed result
-  (`null` on failure). Options: `label`, `phase`, `agentName`, `inputFiles`.
+  (`null` on failure). Options: `id`, `label`, `phase`, `agentName`,
+  `inputFiles`. Otherwise-identical calls require distinct `id` values so
+  restart recovery does not depend on scheduling order.
 - `parallel(thunks)` → concurrent barrier; failed thunks resolve to `null`.
 - `pipeline(items, ...stages)` → per-item stage chains with **no barrier**
   between stages (wall-clock = slowest single-item chain, not
@@ -196,8 +198,8 @@ copy, no LLM involvement. Rounds that emitted nothing leave symlinks
 
 Every completed `agent()` call is journaled by (call index, hash of
 prompt+options). Re-running with a prior journal replays matching calls from
-cache and re-runs only edited or new calls; failed calls are not journaled,
-so resume retries them. This extends the existing `persistedFlow` checkpoint
+cache and re-runs only edited or new calls; failed and cancelled calls are not
+journaled, so resume retries them. This extends the existing `persistedFlow` checkpoint
 pattern and is why scripts must be deterministic — `Date.now()` and
 `Math.random()` throw inside the sandbox (pass timestamps via `args`).
 Journals persist in the execution KV store alongside the script text.

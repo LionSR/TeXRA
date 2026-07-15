@@ -21,6 +21,8 @@ export type WorkflowScriptMeta = z.infer<typeof WorkflowScriptMetaSchema>;
 
 /** Options accepted by the script-facing `agent()` primitive. */
 export interface WorkflowAgentCallOptions {
+  /** Stable identity when otherwise-identical calls occur more than once. */
+  id?: string;
   /** Display label for progress UIs; defaults to a prompt excerpt. */
   label?: string;
   /** Progress group; defaults to the `phase()` active at call time. */
@@ -34,6 +36,8 @@ export interface WorkflowAgentCallOptions {
 export interface WorkflowAgentInvocation {
   /** 0-based call sequence number; also the journal key position. */
   index: number;
+  /** Stable hash of the prompt and normalized call options. */
+  key: string;
   prompt: string;
   options: WorkflowAgentCallOptions;
   /**
@@ -84,6 +88,12 @@ export interface WorkflowScriptRunOptions {
   concurrency?: number;
   /** Journal from a prior run; per-index key matches return cached results. */
   journal?: WorkflowJournalEntry[];
+  /**
+   * Durable checkpoint hook for a successfully validated live call. The
+   * engine awaits it before the result becomes visible to the script, so a
+   * host restart cannot expose work whose journal entry was never persisted.
+   */
+  onJournalEntry?: (entry: WorkflowJournalEntry) => void | Promise<void>;
   onEvent?: (event: WorkflowScriptEvent) => void;
   /** Wall-clock cap for the whole script. Default 10 minutes. */
   timeoutMs?: number;
