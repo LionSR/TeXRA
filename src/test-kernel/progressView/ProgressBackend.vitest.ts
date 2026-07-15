@@ -1727,6 +1727,39 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('promotes the transcript first timestamp into canonical metadata', () => {
+    const { backend } = createRecordingBackend();
+    const stream = 'timestamp-stream' as StreamTabId;
+
+    try {
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.updateStreamMetadata(stream, { creationTimestamp: 500 });
+      expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(
+        500,
+      );
+
+      backend.state.streamLogs.append(stream, {
+        id: 'first-entry',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 100,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'first transcript entry',
+      });
+
+      expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(
+        100,
+      );
+      expect(
+        buildStreamInfos(backend.state, 'all').find(
+          (streamInfo) => streamInfo.name === stream,
+        ),
+      ).toMatchObject({ name: stream, creationTimestamp: 100 });
+    } finally {
+      backend.dispose();
+    }
+  });
+
   it('deletes the execution directory named by stream metadata when a stream is cleared', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966a' as StreamTabId;

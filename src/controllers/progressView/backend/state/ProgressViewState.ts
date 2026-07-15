@@ -270,7 +270,7 @@ export class ProgressViewState {
   ): void {
     const state = this.getOrCreateSession(stream, patch.creationTimestamp);
     const creationTimestamp = state.metadata.creationTimestamp;
-    Object.assign(state.metadata, patch, { creationTimestamp });
+    state.metadata = { ...state.metadata, ...patch, creationTimestamp };
     this.applySnapshotMetadata(stream, state.metadata);
   }
 
@@ -292,8 +292,18 @@ export class ProgressViewState {
     this.applySnapshotMetadata(stream, state.metadata);
   }
 
+  /**
+   * Read effective metadata, creating the ephemeral record when needed. Once
+   * the transcript has entries, its actual first timestamp replaces any
+   * provisional or restored timestamp used before the log became available.
+   */
   getStreamMetadata(stream: StreamTabId): Readonly<ProgressStreamMetadata> {
-    return this.getOrCreateSession(stream).metadata;
+    const metadata = this.getOrCreateSession(stream).metadata;
+    const firstTimestamp = this.streamLogs.getFirstTimestamp(stream);
+    if (firstTimestamp !== undefined) {
+      metadata.creationTimestamp = firstTimestamp;
+    }
+    return metadata;
   }
 
   setStreamTaskState(
