@@ -9,8 +9,8 @@ import {
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
+  finalizeExecution: vi.fn(),
   registerExecution: vi.fn(),
-  writeTerminalStatus: vi.fn(),
 }));
 
 vi.mock('@agent/storage', async () => {
@@ -18,16 +18,20 @@ vi.mock('@agent/storage', async () => {
     await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
   return {
     ...actual,
+    finalizeExecution: mocks.finalizeExecution,
     registerExecution: mocks.registerExecution,
-    writeTerminalStatus: mocks.writeTerminalStatus,
   };
 });
 
 describe('CLI chat execution registration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.finalizeExecution.mockResolvedValue({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    });
     mocks.registerExecution.mockResolvedValue(undefined);
-    mocks.writeTerminalStatus.mockResolvedValue(undefined);
   });
 
   it('registers fresh chat executions so resume/history can resolve them', async () => {
@@ -63,10 +67,11 @@ describe('CLI chat execution registration', () => {
       agentSettled: false,
     });
 
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
       executionId,
-      EXECUTION_STATUS.ERROR,
-    );
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
   });
 
   it('does not mark launch errors before registration succeeds', async () => {
@@ -77,7 +82,7 @@ describe('CLI chat execution registration', () => {
       agentSettled: false,
     });
 
-    expect(mocks.writeTerminalStatus).not.toHaveBeenCalled();
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 
   it('does not overwrite terminal status after the agent has settled', async () => {
@@ -88,6 +93,6 @@ describe('CLI chat execution registration', () => {
       agentSettled: true,
     });
 
-    expect(mocks.writeTerminalStatus).not.toHaveBeenCalled();
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 });

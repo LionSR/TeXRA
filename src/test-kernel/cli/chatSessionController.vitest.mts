@@ -9,6 +9,7 @@ import pDefer from 'p-defer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  finalizeExecution: vi.fn(),
   stopAgentStream: vi.fn(),
   workspaceGet: vi.fn(),
   getExecutionStore: vi.fn(),
@@ -37,9 +38,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
+  finalizeExecution: mocks.finalizeExecution,
   getExecutionStore: mocks.getExecutionStore,
   registerExecution: vi.fn(),
-  writeTerminalStatus: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
@@ -378,6 +379,12 @@ describe('chatTuiCanStartRootRun', () => {
 
 describe('createChatSessionController', () => {
   beforeEach(() => {
+    mocks.finalizeExecution.mockReset();
+    mocks.finalizeExecution.mockResolvedValue({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    });
     mocks.stopAgentStream.mockReset();
     mocks.workspaceGet.mockReset();
     mocks.workspaceGet.mockReturnValue(false);

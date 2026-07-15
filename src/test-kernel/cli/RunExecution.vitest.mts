@@ -35,7 +35,7 @@ const mocks = vi.hoisted(() => ({
   readCliRunOutcome: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
-  writeTerminalStatus: vi.fn(),
+  finalizeExecution: vi.fn(),
 }));
 
 const tempDirs: string[] = [];
@@ -80,7 +80,7 @@ vi.mock('@agent/runtime/runAgent', () => ({
 
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
-  writeTerminalStatus: mocks.writeTerminalStatus,
+  finalizeExecution: mocks.finalizeExecution,
 }));
 
 vi.mock('@cli/runtime/runtimeHost', () => ({
@@ -147,6 +147,11 @@ function stubRunExecutionDeps(): void {
     close: mocks.close,
   });
   mocks.readCliRunOutcome.mockResolvedValue('completed');
+  mocks.finalizeExecution.mockResolvedValue({
+    status: 'durable',
+    terminalStatusPersisted: true,
+    flowRecord: 'deleted',
+  });
   mocks.runAgent.mockResolvedValue({
     category: 'toolUse',
     executionId: 'exec-1',
@@ -503,10 +508,35 @@ describe('executeCliRequest', () => {
       executeCliRequest(request, cliContext(), { markErrorOnThrow: true }),
     ).rejects.toBe(error);
 
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.ERROR,
-    );
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a terminal-state durability failure instead of reporting a handled run error', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = baseRequest();
+    const persistenceError = new Error('terminal metadata write failed');
+    mocks.runAgent.mockRejectedValueOnce(new AgentError('provider boom'));
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: persistenceError,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    await expect(
+      executeCliRequest(request, cliContext(), { markErrorOnThrow: true }),
+    ).rejects.toBe(persistenceError);
+
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
@@ -529,10 +559,11 @@ describe('executeCliRequest', () => {
       }),
     ).rejects.toBe(cleanupError);
 
-    expect(mocks.writeTerminalStatus).not.toHaveBeenCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.ERROR,
-    );
+    expect(mocks.finalizeExecution).not.toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
@@ -547,10 +578,11 @@ describe('executeCliRequest', () => {
 
     expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
     // markErrorOnThrow still records the terminal status, same as before.
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.ERROR,
-    );
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
@@ -628,10 +660,11 @@ describe('executeCliRequest', () => {
     await Promise.resolve();
     await platform.lifecycle.runShutdown();
 
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.INTERRUPTED,
-    );
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      flowRecord: 'preserve',
+    });
 
     resolveRun?.({
       category: 'toolUse',
@@ -649,11 +682,12 @@ describe('executeCliRequest', () => {
         streamId: 'stream-1',
       },
     });
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledTimes(2);
-    expect(mocks.writeTerminalStatus).toHaveBeenLastCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.INTERRUPTED,
-    );
+    expect(mocks.finalizeExecution).toHaveBeenCalledTimes(2);
+    expect(mocks.finalizeExecution).toHaveBeenLastCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      flowRecord: 'preserve',
+    });
   });
 
   it('removes the shutdown status hook after owned executions finish', async () => {
@@ -666,10 +700,10 @@ describe('executeCliRequest', () => {
     await executeCliRequest(request, cliContext(), {
       registerExecution: true,
     });
-    mocks.writeTerminalStatus.mockClear();
+    mocks.finalizeExecution.mockClear();
     await platform.lifecycle.runShutdown();
 
-    expect(mocks.writeTerminalStatus).not.toHaveBeenCalled();
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 });
 
@@ -790,10 +824,11 @@ describe('executeCliConfig', () => {
     });
 
     expect(result).toMatchObject({ ok: false });
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      expect.any(String),
-      EXECUTION_STATUS.ERROR,
-    );
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: expect.any(String),
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
     expect(mocks.writeTextStderr).toHaveBeenCalledWith('wrong category');
     expect(mocks.close).toHaveBeenCalledOnce();
   });

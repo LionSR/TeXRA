@@ -14,13 +14,13 @@ const mocks = vi.hoisted(() => {
   return {
     executeCliConfig: vi.fn(),
     emitCliResult: vi.fn(),
+    finalizeExecution: vi.fn(),
     withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     isAuthenticated: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
     selectCliRunModel: vi.fn(),
     writeResultMeta: vi.fn(),
-    writeTerminalStatus: vi.fn(),
   };
 });
 
@@ -29,7 +29,7 @@ vi.mock('@agent/storage', async (importOriginal) => ({
   getExecutionStore: vi.fn(() => ({
     writeResultMeta: mocks.writeResultMeta,
   })),
-  writeTerminalStatus: mocks.writeTerminalStatus,
+  finalizeExecution: mocks.finalizeExecution,
 }));
 
 vi.mock('@agent/index', () => ({
@@ -97,6 +97,11 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 describe('CLI workflow run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.finalizeExecution.mockResolvedValue({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    });
     mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'polish',
       category: AgentCategory.Workflow,
@@ -574,10 +579,11 @@ describe('CLI workflow run command', () => {
         cost: 0,
       },
     });
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      'exec-copy-fail',
-      EXECUTION_STATUS.ERROR,
-    );
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-copy-fail',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
   });
 
   it('uses the resolved terminal outcome in the persisted envelope', async () => {
