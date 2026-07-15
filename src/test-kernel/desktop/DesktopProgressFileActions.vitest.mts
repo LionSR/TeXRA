@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 
+import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.mjs';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 type DiffOutcome = {
@@ -64,8 +65,7 @@ async function loadFileActions(mocks: {
   };
 }): Promise<{
   actions: FileActionsInstance;
-  openPath: ReturnType<typeof vi.fn>;
-  showErrorMessage: ReturnType<typeof vi.fn>;
+  openBuildDisplay: ReturnType<typeof vi.fn>;
   runLatexdiffForExecution: ReturnType<typeof vi.fn>;
   runDiff: ReturnType<typeof vi.fn>;
 }> {
@@ -118,13 +118,9 @@ async function loadFileActions(mocks: {
     moduleFileUrl(desktopSourcePath('main', 'desktopProgressFileActions.ts'))
   )) as FileActionsModule;
 
-  const openPath = vi.fn();
-  const showErrorMessage = vi.fn();
+  const openBuildDisplay = vi.fn();
   const actions = new module.DesktopProgressFileActions(
-    {
-      openPath,
-      showErrorMessage,
-    },
+    createStubDesktopAgentExecutionHost({ openBuildDisplay }),
     {
       runExecution: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(async () => []),
@@ -133,8 +129,7 @@ async function loadFileActions(mocks: {
 
   return {
     actions,
-    openPath,
-    showErrorMessage,
+    openBuildDisplay,
     runLatexdiffForExecution,
     runDiff,
   };
@@ -159,7 +154,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       ],
       totalOperations: 1,
     };
-    const { actions, openPath, runLatexdiffForExecution, runDiff } =
+    const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
       await loadFileActions({ outcome });
     const outputsByRound = { 1: [outputInfo('/run/r1/main.tex')] };
 
@@ -181,7 +176,10 @@ describe('DesktopProgressFileActions latexdiff', () => {
       }),
     );
     expect(runDiff).not.toHaveBeenCalled();
-    expect(openPath).toHaveBeenCalledWith('/run/r1/main_diff.tex');
+    expect(openBuildDisplay).toHaveBeenCalledWith({
+      kind: 'external',
+      absolutePath: '/run/r1/main_diff.tex',
+    });
   });
 
   it('passes the scan identity (and no rounds) when only a workspace scan is available', async () => {
@@ -195,7 +193,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       ],
       totalOperations: 1,
     };
-    const { actions, openPath, runLatexdiffForExecution, runDiff } =
+    const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
       await loadFileActions({ outcome });
 
     await actions.runLatexdiffForRun(
@@ -222,11 +220,14 @@ describe('DesktopProgressFileActions latexdiff', () => {
       }),
     );
     expect(runDiff).not.toHaveBeenCalled();
-    expect(openPath).toHaveBeenCalledWith('/workspace/main_diff.tex');
+    expect(openBuildDisplay).toHaveBeenCalledWith({
+      kind: 'external',
+      absolutePath: '/workspace/main_diff.tex',
+    });
   });
 
   it('falls back to single-file latexdiff when the shared core finds no operations', async () => {
-    const { actions, openPath, runLatexdiffForExecution, runDiff } =
+    const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
       await loadFileActions({
         outcome: { results: [], totalOperations: 0 },
         fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
@@ -242,7 +243,10 @@ describe('DesktopProgressFileActions latexdiff', () => {
 
     expect(runLatexdiffForExecution).toHaveBeenCalledOnce();
     expect(runDiff).toHaveBeenCalledOnce();
-    expect(openPath).toHaveBeenCalledWith('/workspace/fallback_diff.tex');
+    expect(openBuildDisplay).toHaveBeenCalledWith({
+      kind: 'external',
+      absolutePath: '/workspace/fallback_diff.tex',
+    });
   });
 
   it('opens every successful diff, not just the first', async () => {
@@ -262,7 +266,9 @@ describe('DesktopProgressFileActions latexdiff', () => {
       ],
       totalOperations: 3,
     };
-    const { actions, openPath, runDiff } = await loadFileActions({ outcome });
+    const { actions, openBuildDisplay, runDiff } = await loadFileActions({
+      outcome,
+    });
 
     await actions.runLatexdiffForRun(
       '/workspace/main.tex',
@@ -272,14 +278,20 @@ describe('DesktopProgressFileActions latexdiff', () => {
       },
     );
 
-    expect(openPath).toHaveBeenCalledWith('/run/r1/main_diff.tex');
-    expect(openPath).toHaveBeenCalledWith('/run/r2/main_diff.tex');
-    expect(openPath).toHaveBeenCalledTimes(2);
+    expect(openBuildDisplay).toHaveBeenCalledWith({
+      kind: 'external',
+      absolutePath: '/run/r1/main_diff.tex',
+    });
+    expect(openBuildDisplay).toHaveBeenCalledWith({
+      kind: 'external',
+      absolutePath: '/run/r2/main_diff.tex',
+    });
+    expect(openBuildDisplay).toHaveBeenCalledTimes(2);
     expect(runDiff).not.toHaveBeenCalled();
   });
 
   it('falls back to single-file latexdiff when the shared core throws', async () => {
-    const { actions, openPath, runDiff } = await loadFileActions({
+    const { actions, openBuildDisplay, runDiff } = await loadFileActions({
       throws: true,
       fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
     });
@@ -294,11 +306,14 @@ describe('DesktopProgressFileActions latexdiff', () => {
     );
 
     expect(runDiff).toHaveBeenCalledOnce();
-    expect(openPath).toHaveBeenCalledWith('/workspace/fallback_diff.tex');
+    expect(openBuildDisplay).toHaveBeenCalledWith({
+      kind: 'external',
+      absolutePath: '/workspace/fallback_diff.tex',
+    });
   });
 
   it('falls back to single-file latexdiff when every shared operation failed', async () => {
-    const { actions, openPath, runDiff } = await loadFileActions({
+    const { actions, openBuildDisplay, runDiff } = await loadFileActions({
       outcome: {
         results: [{ success: false, message: 'missing base' }],
         totalOperations: 1,
@@ -315,7 +330,10 @@ describe('DesktopProgressFileActions latexdiff', () => {
     );
 
     expect(runDiff).toHaveBeenCalledOnce();
-    expect(openPath).toHaveBeenCalledWith('/workspace/fallback_diff.tex');
+    expect(openBuildDisplay).toHaveBeenCalledWith({
+      kind: 'external',
+      absolutePath: '/workspace/fallback_diff.tex',
+    });
   });
 
   it('threads the run output files into the shared core for scan resolution', async () => {
