@@ -159,30 +159,26 @@ JSON output file and lists that artifact in `files` or `outputs`. This keeps
 the cross-stage contract fixed while allowing arbitrary application data
 without provider-specific behavior or per-agent result schemas.
 
-### 3. Deep layers: scripted orchestration costs zero delegation depth
+### 3. Deep layers: one parent-child relation
 
-The delegation depth budget is a hard 1–5
-(`src/shared/constants/delegationPolicy.ts`), and every hop burns a level.
-Script-internal `agent()` calls are deterministic code, not LLM delegation:
-the engine spawns children at the **workflow's own depth**, not `+1` per
-call, so only LLM-visible hops (orchestrator → workflow tool; an agent
-inside the workflow that itself delegates) consume budget. Otherwise a
-three-stage pipeline exhausts the budget on glue.
+Execution lineage has one representation: each child records its direct
+`parentExecutionId`. There is no numeric delegation depth or separate depth
+budget. Script-internal `agent()` calls are ordinary direct children of the
+execution that invoked the workflow-script tool, and their streams attach to
+that execution's stream through the existing child registry.
 
-Nested `workflow()` is allowed **one level only** (child shares the parent's
-semaphore, abort signal, and cost roll-up). This keeps trees comprehensible
-and limits exposure to the fail-closed depth-recovery path
-(`computeDelegationDepthFromStorage` → `UNKNOWN_DELEGATION_DEPTH`), whose
-risk grows with tree height.
+The engine does not expose a nested `workflow()` primitive. A workflow script
+may launch agents, but those agents cannot recursively launch another workflow
+script through the default tool roster. This keeps the production tree flat
+without introducing a second lineage policy.
 
 ### 4. Concurrency budget (missing today, needed regardless)
 
-There is no semaphore, queue, or cap anywhere: N delegations in one round =
-N unbounded concurrent LLM streams, each able to fan out again — the only
-limiter in the system is depth. The engine runs every `agent()` call through
-one counting semaphore (prototype default 4; production default should be
-provider-rate-limit aware). Excess calls queue. A lifetime call cap
-(default 200) backstops runaway loops, and per-call fan-out is bounded.
+Script fan-out needs a bounded resource policy independent of execution
+lineage. The engine runs every `agent()` call through one counting semaphore
+(prototype default 4; production default should be provider-rate-limit aware).
+Excess calls queue. A lifetime call cap (default 200) backstops runaway loops,
+and per-call fan-out is bounded.
 The same semaphore should eventually gate LLM-driven delegation too.
 
 ### 5. Stage chaining generalizes existing lineage machinery
@@ -222,13 +218,11 @@ design, in `ToolUseDispatchNode`).
 
 ### 8. Sandbox
 
-Prototype: `node:vm` with code generation disabled, no `require`/`process`,
-determinism prelude. This is an isolation convenience, not a hardened
-security boundary — acceptable while scripts are generated exclusively by
-TeXRA's own orchestrator and the only reachable capabilities are the
-injected primitives. If scripts ever come from untrusted sources (shared
-workflow libraries), swap `sandbox.ts` for quickjs-emscripten (WASM; works
-in all three hosts) behind the same `runScriptInSandbox` signature.
+The engine runs each script in a fresh QuickJS runtime and context with a CPU
+interrupt deadline, bounded heap and stack, disabled dynamic code generation,
+no `require`/`process`, and the determinism prelude. Host capabilities and
+results cross the boundary only as JSON text. The shared WASM module is embedded
+in all three hosts, so packaged execution does not depend on a filesystem path.
 
 ## Validation
 
@@ -258,7 +252,7 @@ consolidated result.
    it requires no model-constrained JSON mechanism.
 3. **The engine as a `delegate_workflow_script` tool**: prototype engine
    (`src/agent/workflowScript/`) wired to the in-band execution path,
-   zero-depth child spawning, run-storage file binding, journal persistence,
+   ordinary `parentExecutionId` lineage, run-storage file binding, journal persistence,
    progress-event bridging onto the existing stream tree (extension board
    already renders arbitrary depth; CLI shows direct children per stream).
 
@@ -266,7 +260,7 @@ consolidated result.
 
 `src/agent/workflowScript/` (host-agnostic, VS Code-free; `runAgent`
 injected). Implements: meta parsing/validation (Zod), import ban,
-`node:vm` sandbox with determinism guards, `agent()` / `parallel()` /
+preemptible QuickJS sandbox with determinism guards, `agent()` / `parallel()` /
 `pipeline()` / `concat()` / `log()` / `phase()` / `args`, concurrency
 semaphore, call cap, fan-out caps, wall-clock timeout, and journal-based
 resume. The Vitest suite in

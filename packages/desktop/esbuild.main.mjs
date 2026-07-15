@@ -22,6 +22,7 @@ const result = await esbuild.build({
   outdir,
   chunkNames: 'chunks/[name]-[hash]',
   external: ['electron', 'fsevents'],
+  loader: { '.wasm': 'binary' },
   tsconfig: 'tsconfig.main.json',
   target: 'node22',
   banner: { js: esmCjsGlobalsBanner },

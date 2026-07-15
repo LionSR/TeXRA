@@ -118,7 +118,7 @@ const extensionConfig = {
     'bufferutil', // Optional native module
     'utf-8-validate', // Optional native module
   ],
-  loader: { '.tex': 'text' },
+  loader: { '.tex': 'text', '.wasm': 'binary' },
   plugins: [aliasPlugin, progressPlugin],
   logLevel: 'warning',
   // Polyfill import.meta.url for ESM-only dependencies (e.g. @openai/codex-sdk)
