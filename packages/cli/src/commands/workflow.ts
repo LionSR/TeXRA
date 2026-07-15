@@ -1,8 +1,4 @@
-import {
-  buildCliWorkflowResultMeta,
-  getExecutionStore,
-  writeTerminalStatus,
-} from '@agent/storage';
+import { buildCliWorkflowResultMeta, getExecutionStore } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
@@ -14,6 +10,7 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
+import { finalizeCliExecution } from '../runtime/executionFinalization';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
@@ -160,7 +157,13 @@ export async function runWorkflowAgent(
           return CliExitCode.Interrupted;
         }
 
-        await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+        await finalizeCliExecution(
+          executionId,
+          EXECUTION_STATUS.ERROR,
+          'delete',
+          (finalizationError) =>
+            writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
+        );
         writeErrorStderr(error);
         return CliExitCode.AgentError;
       }

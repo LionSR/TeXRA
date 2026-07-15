@@ -27,13 +27,13 @@ const mocks = vi.hoisted(() => ({
   enqueueChildRunFollowUp: vi.fn(),
   wakeChildRunFollowUp: vi.fn(),
   executeAgent: vi.fn(),
+  finalizeExecution: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   readConfig: vi.fn(),
   resumeToolUseFromSnapshot: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   synchronizeAgentResultOutcome: vi.fn(),
-  writeTerminalStatus: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
@@ -42,9 +42,9 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
+  finalizeExecution: mocks.finalizeExecution,
   getExecutionStore: vi.fn(() => ({ readConfig: mocks.readConfig })),
   synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
-  writeTerminalStatus: mocks.writeTerminalStatus,
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
@@ -95,8 +95,12 @@ describe('NativeToolUseStrategy', () => {
     mocks.wakeChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
+    mocks.finalizeExecution.mockResolvedValue({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    });
     mocks.synchronizeAgentResultOutcome.mockResolvedValue(undefined);
-    mocks.writeTerminalStatus.mockResolvedValue(undefined);
   });
 
   afterEach(() => {

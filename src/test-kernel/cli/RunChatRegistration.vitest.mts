@@ -9,8 +9,9 @@ import {
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
+  finalizeExecution: vi.fn(),
+  reportFinalizationFailure: vi.fn(),
   registerExecution: vi.fn(),
-  writeTerminalStatus: vi.fn(),
 }));
 
 vi.mock('@agent/storage', async () => {
@@ -18,16 +19,20 @@ vi.mock('@agent/storage', async () => {
     await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
   return {
     ...actual,
+    finalizeExecution: mocks.finalizeExecution,
     registerExecution: mocks.registerExecution,
-    writeTerminalStatus: mocks.writeTerminalStatus,
   };
 });
 
 describe('CLI chat execution registration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.finalizeExecution.mockResolvedValue({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    });
     mocks.registerExecution.mockResolvedValue(undefined);
-    mocks.writeTerminalStatus.mockResolvedValue(undefined);
   });
 
   it('registers fresh chat executions so resume/history can resolve them', async () => {
@@ -60,13 +65,15 @@ describe('CLI chat execution registration', () => {
 
     await markRegisteredChatExecutionError(executionId, {
       executionRegistered: true,
-      agentSettled: false,
+      lifecycleStarted: false,
+      reportFinalizationFailure: mocks.reportFinalizationFailure,
     });
 
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
       executionId,
-      EXECUTION_STATUS.ERROR,
-    );
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
   });
 
   it('does not mark launch errors before registration succeeds', async () => {
@@ -74,20 +81,94 @@ describe('CLI chat execution registration', () => {
 
     await markRegisteredChatExecutionError(executionId, {
       executionRegistered: false,
-      agentSettled: false,
+      lifecycleStarted: false,
+      reportFinalizationFailure: mocks.reportFinalizationFailure,
     });
 
-    expect(mocks.writeTerminalStatus).not.toHaveBeenCalled();
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 
-  it('does not overwrite terminal status after the agent has settled', async () => {
+  it('does not overwrite terminal status after the lifecycle starts', async () => {
     const executionId = 'completed' as ExecutionId;
 
     await markRegisteredChatExecutionError(executionId, {
       executionRegistered: true,
-      agentSettled: true,
+      lifecycleStarted: true,
+      reportFinalizationFailure: mocks.reportFinalizationFailure,
     });
 
-    expect(mocks.writeTerminalStatus).not.toHaveBeenCalled();
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+  });
+
+  it('reports finalization failures without rejecting the chat error path', async () => {
+    const executionId = 'registered' as ExecutionId;
+    const persistenceError = new Error('terminal metadata disk full');
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: persistenceError,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    await expect(
+      markRegisteredChatExecutionError(executionId, {
+        executionRegistered: true,
+        lifecycleStarted: false,
+        reportFinalizationFailure: mocks.reportFinalizationFailure,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(mocks.reportFinalizationFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message:
+          'Failed to persist error status for execution registered: terminal metadata disk full',
+        cause: persistenceError,
+      }),
+    );
+  });
+
+  it('reports unexpected finalizer rejections without rejecting the caller', async () => {
+    const persistenceError = new Error('finalizer contract failure');
+    mocks.finalizeExecution.mockRejectedValueOnce(persistenceError);
+
+    await expect(
+      markRegisteredChatExecutionError('registered' as ExecutionId, {
+        executionRegistered: true,
+        lifecycleStarted: false,
+        reportFinalizationFailure: mocks.reportFinalizationFailure,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(mocks.reportFinalizationFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message:
+          'Execution finalization failed unexpectedly for registered: finalizer contract failure',
+        cause: persistenceError,
+      }),
+    );
+  });
+
+  it('distinguishes flow-record cleanup failures from terminal writes', async () => {
+    const cleanupError = new Error('flow record is locked');
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: cleanupError,
+      stage: 'flow-record-delete',
+      terminalStatusPersisted: true,
+    });
+
+    await markRegisteredChatExecutionError('registered' as ExecutionId, {
+      executionRegistered: true,
+      lifecycleStarted: false,
+      reportFinalizationFailure: mocks.reportFinalizationFailure,
+    });
+
+    expect(mocks.reportFinalizationFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message:
+          'Persisted error status for execution registered, but failed to delete its flow record: flow record is locked',
+        cause: cleanupError,
+      }),
+    );
   });
 });

@@ -34,6 +34,39 @@ import {
   sessionFactPayloads,
 } from '../progressTestUtils';
 
+const storageMocks = vi.hoisted(() => ({
+  finalizeExecution: vi.fn(),
+  synchronizeAgentResultOutcome: vi.fn(),
+}));
+
+const channelTraceMocks = vi.hoisted(() => ({
+  warn: vi.fn(),
+}));
+
+vi.mock('@agent/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/storage')>();
+  storageMocks.finalizeExecution.mockImplementation(actual.finalizeExecution);
+  storageMocks.synchronizeAgentResultOutcome.mockImplementation(
+    actual.synchronizeAgentResultOutcome,
+  );
+  return {
+    ...actual,
+    finalizeExecution: storageMocks.finalizeExecution,
+    synchronizeAgentResultOutcome: storageMocks.synchronizeAgentResultOutcome,
+  };
+});
+
+vi.mock('@agent/trace', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/trace')>();
+  return {
+    ...actual,
+    createChannelTrace: vi.fn(() => ({
+      ...actual.noopTrace,
+      warn: channelTraceMocks.warn,
+    })),
+  };
+});
+
 setupPlatform({ workspacePath: '/workspace' });
 
 describe('executionRegistry', () => {
@@ -333,6 +366,127 @@ describe('executionRegistry', () => {
         outcome: RUN_OUTCOME.CANCELLED,
         executionId,
       });
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('settles and untracks a waiting handle when terminal metadata persistence fails', async () => {
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const executionId = 'exec-waiting-kill-metadata-failure' as ExecutionId;
+    const parentStreamId =
+      'parent-waiting-kill-metadata-failure' as StreamTabId;
+    const childStreamId = 'child-waiting-kill-metadata-failure' as StreamTabId;
+    const durabilityError = new Error('metadata disk write failed');
+    storageMocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+      error: durabilityError,
+    });
+    storageMocks.synchronizeAgentResultOutcome.mockClear();
+    channelTraceMocks.warn.mockClear();
+
+    try {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        createRecordingHost().host,
+      );
+      registry.track(handle);
+      handle.registerWaitingCleanup(() => {});
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.WAITING,
+      );
+
+      expect(registry.kill(executionId)).toBe(true);
+
+      await expect(handle.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.CANCELLED,
+        executionId,
+      });
+      expect(registry.getHandle(executionId)).toBeUndefined();
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
+      await vi.waitFor(() => {
+        expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
+          'Failed to finalize stopped waiting execution',
+          {
+            data: {
+              executionId,
+              stage: 'terminal-status',
+              terminalStatusPersisted: false,
+              error: durabilityError,
+            },
+          },
+        );
+      });
+      expect(storageMocks.synchronizeAgentResultOutcome).not.toHaveBeenCalled();
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('synchronizes a waiting stop when only flow-record deletion fails', async () => {
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const executionId = 'exec-waiting-kill-flow-delete-failure' as ExecutionId;
+    const parentStreamId =
+      'parent-waiting-kill-flow-delete-failure' as StreamTabId;
+    const childStreamId =
+      'child-waiting-kill-flow-delete-failure' as StreamTabId;
+    const cleanupError = new Error('flow delete failed');
+    storageMocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      stage: 'flow-record-delete',
+      terminalStatusPersisted: true,
+      error: cleanupError,
+    });
+    storageMocks.synchronizeAgentResultOutcome.mockResolvedValueOnce(undefined);
+    storageMocks.synchronizeAgentResultOutcome.mockClear();
+    channelTraceMocks.warn.mockClear();
+
+    try {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        createRecordingHost().host,
+      );
+      registry.track(handle);
+      handle.registerWaitingCleanup(() => {});
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.WAITING,
+      );
+
+      expect(registry.kill(executionId)).toBe(true);
+
+      await vi.waitFor(() => {
+        expect(
+          storageMocks.synchronizeAgentResultOutcome,
+        ).toHaveBeenCalledExactlyOnceWith(executionId, RUN_OUTCOME.CANCELLED);
+      });
+      expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
+        'Failed to finalize stopped waiting execution',
+        {
+          data: {
+            executionId,
+            stage: 'flow-record-delete',
+            terminalStatusPersisted: true,
+            error: cleanupError,
+          },
+        },
+      );
     } finally {
       registry.dispose();
     }

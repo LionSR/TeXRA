@@ -89,6 +89,8 @@ export interface RunToolUseFlowInput<
   ) => void;
   /** Runtime feature registry for auto-injected tools. */
   toolInjections?: ToolInjectionRegistry;
+  /** Reports whether terminal finalization should retain the resume record. */
+  onFlowRecordDisposition?: (disposition: 'preserve' | 'delete') => void;
 }
 
 export interface RunToolUseFlowResult {
@@ -586,15 +588,10 @@ export async function runToolUseFlow<C = unknown>(
     const preserveFollowUpQueue =
       preserveFlowRecord && !persistenceRecoveryPending;
 
-    if (preservationReason) {
-      logger.debug(preservationReason);
-    } else {
-      try {
-        await kv.delete(flowKey(executionId));
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
+    if (preservationReason) logger.debug(preservationReason);
+    input.onFlowRecordDisposition?.(preserveFlowRecord ? 'preserve' : 'delete');
+    // AgentRunLifecycle applies this policy with terminal metadata through one
+    // storage finalization after the flow reports its outcome.
 
     // Recovery failures preserve the unread record but release the rebuilt
     // live queue. The resume wrapper owns the drained batch and restores it

@@ -20,6 +20,7 @@ import {
 } from 'llm-zoo';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import type { AgentEvent } from '@agent/trace';
+import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type {
   AgentPrompt,
@@ -53,7 +54,11 @@ import type { SdkToolCall } from '@agent/types/IModelHandler';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { BashTool } from '@tools/bash';
 import { TaskRunFileService } from '@utils/files';
@@ -631,6 +636,60 @@ describe('BashTool', () => {
       clearStreamStatusForTest(defaultSession().status, parentStreamId);
       defaultSession().followUps.release(parentStreamId);
     }
+  });
+
+  it('finalizes background execution when supplementary result metadata fails', async () => {
+    let resolveCommand: ((result: ExecResult) => void) | undefined;
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCommand = resolve;
+        }),
+    );
+    await installPlatform({
+      workspacePath: '/workspace',
+      config: { 'texra.toolUse.requireBashApproval': false },
+    });
+    const parentStreamId = 'bash-result-meta-failure' as StreamTabId;
+    const { host } = createRecordingHost();
+    const recorded = recordSessionEvents(defaultSession().events);
+
+    const launchResult = await withToolEnvironment(
+      {
+        run: { runtimeHost: host, streamId: parentStreamId },
+        call: { tracker: new FileInteractionState() },
+      },
+      () =>
+        new BashTool().call({
+          command: 'make build',
+          run_in_background: true,
+        }),
+    );
+    const executionId = /Execution ID: (\S+)/.exec(
+      String(launchResult.output ?? ''),
+    )?.[1];
+    assert.ok(executionId, JSON.stringify(launchResult));
+    const store = getExecutionStore(executionId);
+    vi.spyOn(store, 'writeResultMeta').mockRejectedValueOnce(
+      new Error('result metadata disk full'),
+    );
+
+    resolveCommand?.({
+      success: true,
+      stdout: 'done\n',
+      stderr: '',
+      timedOut: false,
+      exitCode: 0,
+    });
+
+    await vi.waitFor(async () => {
+      assert.equal(
+        (await store.readMeta())?.terminalStatus,
+        EXECUTION_STATUS.COMPLETED,
+      );
+    });
+    recorded.detach();
+    defaultSession().followUps.release(parentStreamId);
   });
 
   it('accepts optional command descriptions without passing them to the shell', async () => {

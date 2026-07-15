@@ -1,5 +1,5 @@
 import { platform } from '@platform/platform';
-import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
+import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import {
   logSdkError,
   type AgentTrace,
@@ -7,7 +7,6 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import { flowKey } from '@agent/node/persistedFlow';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AGENT_ERROR_OUTCOME,
@@ -61,6 +60,20 @@ export interface RunFlowLifecycleOptions {
   onRun?: (handle: AgentRunHandle) => void | Promise<void>;
 }
 
+export type FlowRecordDisposition = FinalizeExecutionInput['flowRecord'];
+
+/** Private control channel through which a flow reports its retention policy. */
+export interface FlowLifecycleControl {
+  setFlowRecordDisposition(disposition: FlowRecordDisposition): void;
+}
+
+export type RunTerminalPersistence =
+  | { readonly kind: 'skip' }
+  | {
+      readonly kind: 'finalize';
+      readonly flowRecord: FinalizeExecutionInput['flowRecord'];
+    };
+
 export interface FinalizeRunTerminalParams {
   /** Live handle for this terminal attempt; its settled flag is the exactly-once guard. */
   readonly handle: AgentExecutionHandle;
@@ -84,18 +97,19 @@ export interface FinalizeRunTerminalParams {
    * bash) omit it so their per-turn results stay out of the host result plane.
    */
   readonly trace?: AgentTrace;
-  /**
-   * Persist the outcome projection to execution history (best-effort). Callers
-   * that own a richer persistence block (background bash writes result meta,
-   * report, and status together) pass false.
-   */
-  readonly persistTerminalStatus: boolean;
+  /** Durable execution-state action owned by the storage finalizer. */
+  readonly persistence: RunTerminalPersistence;
   /**
    * Delivery hook (subagent onError) run after the result settles and before
    * untrack, so the parent still sees this child as active while the
    * delivery routes. Guarded: a throwing hook cannot abort finalization.
    */
   readonly deliver?: () => void | Promise<void>;
+}
+
+export interface FinalizeRunTerminalResult {
+  readonly event: ResultEvent;
+  readonly terminalStatusPersisted: boolean;
 }
 
 /**
@@ -112,7 +126,7 @@ export interface FinalizeRunTerminalParams {
  */
 export async function finalizeRunTerminal(
   params: FinalizeRunTerminalParams,
-): Promise<ResultEvent | undefined> {
+): Promise<FinalizeRunTerminalResult | undefined> {
   const { handle, outcome } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
   // This run is terminating, not suspending: drop any waiting-cleanup
@@ -124,11 +138,35 @@ export async function finalizeRunTerminal(
   // live registration to clear in the common case — this guards a future
   // caller that registers one outside that branch.
   handle.clearWaitingCleanup();
-  if (params.persistTerminalStatus) {
-    await writeTerminalStatus(
-      handle.executionId,
-      projectRunOutcome(outcome).executionStatus,
-    ).catch(() => {});
+  let terminalStatusPersisted = false;
+  if (params.persistence.kind === 'finalize') {
+    try {
+      const finalization = await finalizeExecution({
+        executionId: handle.executionId,
+        terminalStatus: projectRunOutcome(outcome).executionStatus,
+        flowRecord: params.persistence.flowRecord,
+      });
+      if (finalization.status === 'failed') {
+        logger.warn('Failed to finalize durable execution state', {
+          data: {
+            agentIdentifier: handle.agentName,
+            executionId: handle.executionId,
+            stage: finalization.stage,
+            terminalStatusPersisted: finalization.terminalStatusPersisted,
+            error: finalization.error,
+          },
+        });
+      }
+      terminalStatusPersisted = finalization.terminalStatusPersisted;
+    } catch (error) {
+      logger.warn('Execution finalizer rejected unexpectedly', {
+        data: {
+          agentIdentifier: handle.agentName,
+          executionId: handle.executionId,
+          error,
+        },
+      });
+    }
   }
   if (params.stage) {
     try {
@@ -189,7 +227,7 @@ export async function finalizeRunTerminal(
       data: { agentIdentifier: handle.agentName, error: cleanupErr },
     });
   }
-  return event;
+  return { event, terminalStatusPersisted };
 }
 
 function transitionRunStart(ctx: AgentLaunchContext): void {
@@ -258,7 +296,10 @@ function emitRunStart(ctx: AgentLaunchContext): void {
  */
 export async function runFlowWithLifecycle(
   ctx: AgentLaunchContext,
-  runner: (handle: AgentExecutionHandle) => Promise<AgentRuntimeFlowResult>,
+  runner: (
+    handle: AgentExecutionHandle,
+    lifecycle: FlowLifecycleControl,
+  ) => Promise<AgentRuntimeFlowResult>,
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentRuntimeFlowResult> {
   const { streamId, executionId, runtimeHost, session } = ctx.runScope;
@@ -282,6 +323,12 @@ export async function runFlowWithLifecycle(
   // missed the emitRunStart() `run.config` below and replays it from here (#8258).
   handle.initialRunFacts = { config: ctx.config };
   session.executions.track(handle);
+  let flowRecordDisposition: FlowRecordDisposition | undefined;
+  const lifecycleControl: FlowLifecycleControl = {
+    setFlowRecordDisposition(disposition): void {
+      flowRecordDisposition = disposition;
+    },
+  };
   // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
   // throw nor an async rejection from a consumer callback may abort the run.
   if (options?.onRun) {
@@ -304,7 +351,7 @@ export async function runFlowWithLifecycle(
     outcome: RunOutcome;
     error?: ResultEvent['error'];
     deliver?: () => void | Promise<void>;
-  }): Promise<ResultEvent | undefined> =>
+  }): Promise<FinalizeRunTerminalResult | undefined> =>
     finalizeRunTerminal({
       handle,
       executions: session.executions,
@@ -313,7 +360,14 @@ export async function runFlowWithLifecycle(
       isSubagent: options?.isSubagent ?? false,
       stage: ctx.parentStage,
       trace: ctx.logger,
-      persistTerminalStatus: true,
+      persistence: {
+        kind: 'finalize',
+        // Tool-use flows report the exact recovery decision through the
+        // private lifecycle control. Other flows retain the historical policy.
+        flowRecord:
+          flowRecordDisposition ??
+          (arm.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve'),
+      },
       ...arm,
     });
   try {
@@ -327,7 +381,7 @@ export async function runFlowWithLifecycle(
     if (!handle.hasPendingInterrupt) transitionRunStart(ctx);
     let result: AgentRuntimeFlowResult;
     try {
-      result = await runner(handle);
+      result = await runner(handle, lifecycleControl);
     } finally {
       handle.closePendingInterruptWindow();
     }
@@ -342,15 +396,6 @@ export async function runFlowWithLifecycle(
       const parentStageId = ctx.parentStage.id;
       handle.registerWaitingCleanup(() => {
         session.followUps.release(streamId);
-        // Best-effort: this deletes the persisted flow-record for a run that
-        // is already being torn down and has no caller left awaiting this
-        // closure (it only fires from a later kill, well after the original
-        // request context is gone) — a failed delete just leaves a stale
-        // record on disk, not a correctness gap, so there is nothing useful
-        // to propagate an error to.
-        void getExecutionStore(executionId)
-          .delete(flowKey(executionId))
-          .catch(() => {});
         // Close this turn's "Run: ..." transcript group so a killed suspended
         // subagent doesn't leave it stuck at `running` forever (every other
         // terminal path reaches this via `finalizeRunTerminal`'s stage end,
@@ -381,6 +426,11 @@ export async function runFlowWithLifecycle(
       });
       return result;
     }
+    // Persist the terminal fact before any supplementary UX state. In
+    // particular, a completed tool-use flow must not remain resumable while an
+    // onboarding write is pending.
+    await finalizeTerminal({ outcome: result.outcome });
+
     // Onboarding funnel (PRD: agent-native onboarding): State 1 ends when any
     // real run completes. The setup conversation itself doesn't count, but the
     // demo it delegates does (subagent runs land here too). Best-effort: a
@@ -399,13 +449,6 @@ export async function runFlowWithLifecycle(
       }
     }
 
-    // The flow's outcome is the canonical terminal fact; the finalizer owns
-    // every projection of it. No other layer may re-derive these. Success
-    // has no delivery hook: a native subagent's own turn value IS the
-    // strategy's returned result (see childRunLoop.ts), so there is nothing
-    // left to deliver here — only a subagent failure needs the caller to
-    // format and route an error (see the catch arm's `onError` below).
-    await finalizeTerminal({ outcome: result.outcome });
     logger.debug(`Task completed with outcome: ${result.outcome}`);
     return result;
   } catch (err) {

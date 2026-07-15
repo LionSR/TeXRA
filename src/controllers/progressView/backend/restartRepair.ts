@@ -1,6 +1,8 @@
 import {
+  finalizeExecution as defaultFinalizeExecution,
   synchronizeAgentResultOutcome as defaultSynchronizeResultOutcome,
-  writeTerminalStatus as defaultWriteTerminalStatus,
+  type FinalizeExecutionInput,
+  type FinalizeExecutionResult,
 } from '@agent/storage/executionLifecycle';
 import type {
   StreamStatusEmitOptions,
@@ -37,10 +39,9 @@ export interface RestartRepairOptions {
   /** Retry terminal metadata after an earlier repair already moved a stream to FAILED. */
   retryFailedStreams?: boolean;
   statusEmitOptions?: StreamStatusEmitOptions;
-  writeTerminalStatus?: (
-    executionId: ExecutionId,
-    status: string,
-  ) => Promise<void>;
+  finalizeExecution?: (
+    input: FinalizeExecutionInput,
+  ) => Promise<FinalizeExecutionResult>;
   /** Align the latest persisted envelope after terminal metadata is durable. */
   synchronizeResultOutcome?: (
     executionId: ExecutionId,
@@ -109,10 +110,9 @@ function transitionToFailedForRestart(
 async function writeFailedTerminalStatuses(
   streamIds: readonly StreamTabId[],
   executionIds: ReadonlyMap<StreamTabId, ExecutionId>,
-  writeTerminalStatus: (
-    executionId: ExecutionId,
-    status: string,
-  ) => Promise<void>,
+  finalizeExecution: (
+    input: FinalizeExecutionInput,
+  ) => Promise<FinalizeExecutionResult>,
   synchronizeResultOutcome: (
     executionId: ExecutionId,
     outcome: RunOutcome,
@@ -125,7 +125,13 @@ async function writeFailedTerminalStatuses(
     return executionId ? [{ streamId, executionId }] : [];
   });
   const results = await Promise.allSettled(
-    writes.map(({ executionId }) => writeTerminalStatus(executionId, status)),
+    writes.map(({ executionId }) =>
+      finalizeExecution({
+        executionId,
+        terminalStatus: status,
+        flowRecord: 'delete',
+      }),
+    ),
   );
 
   const updated: ExecutionId[] = [];
@@ -136,11 +142,25 @@ async function writeFailedTerminalStatuses(
   for (const [index, result] of results.entries()) {
     const { streamId, executionId } = writes[index];
     if (result.status === 'fulfilled') {
-      updated.push(executionId);
-      synchronizationWrites.push({ streamId, executionId });
+      const finalization = result.value;
+      if (finalization.status === 'failed') {
+        logger?.warn('Failed to finalize restart-repair execution', {
+          data: {
+            streamId,
+            executionId,
+            stage: finalization.stage,
+            terminalStatusPersisted: finalization.terminalStatusPersisted,
+            error: finalization.error,
+          },
+        });
+      }
+      if (finalization.terminalStatusPersisted) {
+        updated.push(executionId);
+        synchronizationWrites.push({ streamId, executionId });
+      }
       continue;
     }
-    logger?.warn('Failed to persist restart-repair terminal status', {
+    logger?.warn('Restart-repair finalization rejected unexpectedly', {
       data: { streamId, executionId, error: result.reason },
     });
   }
@@ -289,7 +309,7 @@ export async function repairRestartedStreams(
   const terminalStatusUpdated = await writeFailedTerminalStatuses(
     failedStreams,
     options.executionIds,
-    options.writeTerminalStatus ?? defaultWriteTerminalStatus,
+    options.finalizeExecution ?? defaultFinalizeExecution,
     options.synchronizeResultOutcome ?? defaultSynchronizeResultOutcome,
     options.logger,
   );
