@@ -887,10 +887,13 @@ describe('finalizeRunTerminal', () => {
       const event = await first;
 
       expect(event).toMatchObject({
-        type: 'result',
-        outcome: RUN_OUTCOME.COMPLETED,
-        executionId,
-        streamId,
+        terminalStatusPersisted: true,
+        event: {
+          type: 'result',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId,
+          streamId,
+        },
       });
       expect(storageMocks.finalizeExecution).toHaveBeenCalledTimes(1);
       // The stream-status transition also emits on the trace; the terminal
@@ -901,7 +904,7 @@ describe('finalizeRunTerminal', () => {
         ),
       ).toHaveLength(1);
       expect(untrack).toHaveBeenCalledTimes(1);
-      await expect(handle.result).resolves.toBe(event);
+      await expect(handle.result).resolves.toBe(event?.event);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
       traceEmit.mockRestore();
@@ -946,11 +949,14 @@ describe('finalizeRunTerminal', () => {
       });
 
       expect(event).toMatchObject({
-        type: 'result',
-        outcome: RUN_OUTCOME.FAILED,
-        executionId,
+        terminalStatusPersisted: false,
+        event: {
+          type: 'result',
+          outcome: RUN_OUTCOME.FAILED,
+          executionId,
+        },
       });
-      await expect(handle.result).resolves.toBe(event);
+      await expect(handle.result).resolves.toBe(event?.event);
       expect(untrack).toHaveBeenCalledExactlyOnceWith(executionId);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
       expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(

@@ -711,7 +711,7 @@ export function startChildRunLoop<TTurn>(
           // No turn result follows an interruption between turns. Only this
           // path may relabel the latest interim envelope; ordinary terminal
           // turns persist their own result after runFlowWithLifecycle returns.
-          if (finalized && loop.isInterrupted()) {
+          if (finalized?.terminalStatusPersisted && loop.isInterrupted()) {
             await synchronizeAgentResultOutcome(executionId, outcome);
           }
         }

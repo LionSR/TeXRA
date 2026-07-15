@@ -254,7 +254,7 @@ describe('execution lifecycle', () => {
     expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
   });
 
-  it('does not delete the flow record when terminal metadata fails', async () => {
+  it('deletes the flow record when failed terminal metadata cannot persist', async () => {
     const executionId = 'metadata-failed-flow' as ExecutionId;
     const error = new Error('metadata disk full');
     mocks.readMeta.mockRejectedValueOnce(error);
@@ -271,7 +271,27 @@ describe('execution lifecycle', () => {
       stage: 'terminal-status',
       terminalStatusPersisted: false,
     });
-    expect(mocks.delete).not.toHaveBeenCalled();
+    expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
+  });
+
+  it('reports when terminal metadata and fail-closed flow deletion both fail', async () => {
+    const executionId = 'metadata-and-flow-failed' as ExecutionId;
+    mocks.readMeta.mockRejectedValueOnce(new Error('metadata disk full'));
+    mocks.delete.mockRejectedValueOnce(new Error('flow delete failed'));
+
+    const result = await finalizeExecution({
+      executionId,
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'preserve',
+    });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      stage: 'terminal-status-and-flow-record-delete',
+      terminalStatusPersisted: false,
+      error: expect.any(AggregateError),
+    });
+    expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
   });
 
   it('reports durable terminal metadata when flow deletion fails', async () => {

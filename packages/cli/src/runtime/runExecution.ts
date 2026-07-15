@@ -207,14 +207,20 @@ export async function executeCliRequest(
     ? request.executionId
     : undefined;
   let shutdownInterrupted = false;
+  let shutdownFinalizationError: unknown;
   const disposeShutdownStatus = ownedExecutionId
     ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
         shutdownInterrupted = true;
-        await finalizeCliExecutionOrThrow(
-          ownedExecutionId,
-          EXECUTION_STATUS.INTERRUPTED,
-          'preserve',
-        );
+        try {
+          await finalizeCliExecutionOrThrow(
+            ownedExecutionId,
+            EXECUTION_STATUS.INTERRUPTED,
+            'preserve',
+          );
+          shutdownFinalizationError = undefined;
+        } catch (error) {
+          shutdownFinalizationError = error;
+        }
       })
     : undefined;
   const invoke = (): Promise<ExecuteAgentResult> =>
@@ -252,7 +258,12 @@ export async function executeCliRequest(
       : trackedInvoke());
     runResult = { ok: true, result };
   } catch (err) {
-    if (options.markErrorOnThrow && request.executionId && !invokeSettledOk) {
+    if (
+      options.markErrorOnThrow &&
+      request.executionId &&
+      !invokeSettledOk &&
+      !(err instanceof AgentError)
+    ) {
       await finalizeCliExecutionOrThrow(
         request.executionId,
         EXECUTION_STATUS.ERROR,
@@ -271,11 +282,16 @@ export async function executeCliRequest(
     // If the run settles while shutdown is in progress, keep the
     // signal-owned interrupted status as the final write.
     if (shutdownInterrupted && ownedExecutionId) {
-      await finalizeCliExecutionOrThrow(
-        ownedExecutionId,
-        EXECUTION_STATUS.INTERRUPTED,
-        'preserve',
-      );
+      try {
+        await finalizeCliExecutionOrThrow(
+          ownedExecutionId,
+          EXECUTION_STATUS.INTERRUPTED,
+          'preserve',
+        );
+        shutdownFinalizationError = undefined;
+      } catch (error) {
+        shutdownFinalizationError = error;
+      }
     }
     detachResultToast();
     detachRunProgressRenderer();
@@ -291,6 +307,10 @@ export async function executeCliRequest(
     } finally {
       await interactionHost.close();
     }
+  }
+
+  if (shutdownFinalizationError !== undefined) {
+    throw shutdownFinalizationError;
   }
 
   if (!runResult.ok) {

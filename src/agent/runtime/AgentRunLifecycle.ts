@@ -105,6 +105,11 @@ export interface FinalizeRunTerminalParams {
   readonly deliver?: () => void | Promise<void>;
 }
 
+export interface FinalizeRunTerminalResult {
+  readonly event: ResultEvent;
+  readonly terminalStatusPersisted: boolean;
+}
+
 /**
  * The single owner of terminal run choreography, shared by the run lifecycle
  * arms below, the agent-CLI session loop, and child stream tabs
@@ -119,7 +124,7 @@ export interface FinalizeRunTerminalParams {
  */
 export async function finalizeRunTerminal(
   params: FinalizeRunTerminalParams,
-): Promise<ResultEvent | undefined> {
+): Promise<FinalizeRunTerminalResult | undefined> {
   const { handle, outcome } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
   // This run is terminating, not suspending: drop any waiting-cleanup
@@ -131,6 +136,7 @@ export async function finalizeRunTerminal(
   // live registration to clear in the common case — this guards a future
   // caller that registers one outside that branch.
   handle.clearWaitingCleanup();
+  let terminalStatusPersisted = false;
   if (params.persistence.kind === 'finalize') {
     try {
       const finalization = await finalizeExecution({
@@ -149,6 +155,7 @@ export async function finalizeRunTerminal(
           },
         });
       }
+      terminalStatusPersisted = finalization.terminalStatusPersisted;
     } catch (error) {
       logger.warn('Execution finalizer rejected unexpectedly', {
         data: {
@@ -218,7 +225,7 @@ export async function finalizeRunTerminal(
       data: { agentIdentifier: handle.agentName, error: cleanupErr },
     });
   }
-  return event;
+  return { event, terminalStatusPersisted };
 }
 
 function transitionRunStart(ctx: AgentLaunchContext): void {
@@ -342,7 +349,7 @@ export async function runFlowWithLifecycle(
     outcome: RunOutcome;
     error?: ResultEvent['error'];
     deliver?: () => void | Promise<void>;
-  }): Promise<ResultEvent | undefined> =>
+  }): Promise<FinalizeRunTerminalResult | undefined> =>
     finalizeRunTerminal({
       handle,
       executions: session.executions,

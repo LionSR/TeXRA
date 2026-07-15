@@ -120,6 +120,33 @@ describe('deriveResumability', () => {
     });
   });
 
+  it('fails closed when terminal metadata fails for a failed execution', async () => {
+    const executionId = 'failed-terminal-metadata-with-flow' as ExecutionId;
+    await writeMeta(executionId, {});
+    await writeFlow(executionId);
+    const store = getExecutionStore(executionId);
+    vi.spyOn(store, 'writeMeta').mockRejectedValueOnce(
+      new Error('metadata disk full'),
+    );
+
+    await expect(
+      finalizeExecution({
+        executionId,
+        terminalStatus: EXECUTION_STATUS.ERROR,
+        flowRecord: 'preserve',
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    await expect(deriveResumability(executionId)).resolves.toMatchObject({
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
+    });
+  });
+
   it('marks interrupted executions with a valid flow record as resumable', async () => {
     const executionId = 'interrupted-with-flow' as ExecutionId;
     await writeTerminalStatus(executionId, EXECUTION_STATUS.INTERRUPTED);

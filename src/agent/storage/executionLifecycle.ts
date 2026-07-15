@@ -14,6 +14,7 @@ import { flowKey } from '@agent/node/persistedFlow';
 
 import * as logger from '@logger/logUtils';
 import {
+  RUN_OUTCOME,
   executionStatusToRunOutcome,
   type ExecutionId,
   type RunOutcome,
@@ -234,7 +235,7 @@ export type FinalizeExecutionResult =
   | {
       status: 'failed';
       error: unknown;
-      stage: 'terminal-status';
+      stage: 'terminal-status' | 'terminal-status-and-flow-record-delete';
       terminalStatusPersisted: false;
     }
   | {
@@ -253,6 +254,26 @@ export async function finalizeExecution({
   try {
     await writeTerminalStatus(executionId, terminalStatus);
   } catch (error) {
+    const outcome = executionStatusToRunOutcome(terminalStatus);
+    const deleteToFailClosed =
+      flowRecord === 'delete' ||
+      outcome === RUN_OUTCOME.COMPLETED ||
+      outcome === RUN_OUTCOME.FAILED;
+    if (deleteToFailClosed) {
+      try {
+        await getExecutionStore(executionId).delete(flowKey(executionId));
+      } catch (deleteError) {
+        return {
+          status: 'failed',
+          error: new AggregateError(
+            [error, deleteError],
+            `Terminal metadata and flow deletion failed for ${executionId}`,
+          ),
+          stage: 'terminal-status-and-flow-record-delete',
+          terminalStatusPersisted: false,
+        };
+      }
+    }
     return {
       status: 'failed',
       error,

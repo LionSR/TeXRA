@@ -516,27 +516,16 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces a terminal-state durability failure instead of reporting a handled run error', async () => {
+  it('does not finalize a classified run failure a second time', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
-    const persistenceError = new Error('terminal metadata write failed');
     mocks.runAgent.mockRejectedValueOnce(new AgentError('provider boom'));
-    mocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      error: persistenceError,
-      stage: 'terminal-status',
-      terminalStatusPersisted: false,
-    });
 
     await expect(
       executeCliRequest(request, cliContext(), { markErrorOnThrow: true }),
-    ).rejects.toBe(persistenceError);
+    ).resolves.toEqual({ ok: false, exitCode: CliExitCode.AgentError });
 
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
-      executionId: 'exec-1',
-      terminalStatus: EXECUTION_STATUS.ERROR,
-      flowRecord: 'delete',
-    });
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
@@ -577,12 +566,7 @@ describe('executeCliRequest', () => {
     });
 
     expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
-    // markErrorOnThrow still records the terminal status, same as before.
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
-      executionId: 'exec-1',
-      terminalStatus: EXECUTION_STATUS.ERROR,
-      flowRecord: 'delete',
-    });
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
@@ -688,6 +672,44 @@ describe('executeCliRequest', () => {
       terminalStatus: EXECUTION_STATUS.INTERRUPTED,
       flowRecord: 'preserve',
     });
+  });
+
+  it('closes the runtime host when shutdown finalization fails', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    const platform = createFakePlatform();
+    initPlatform(platform);
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const persistenceError = new Error('terminal metadata disk full');
+    mocks.finalizeExecution.mockResolvedValue({
+      status: 'failed',
+      error: persistenceError,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+    let resolveRun:
+      | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
+      | undefined;
+    mocks.runAgent.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRun = resolve;
+      }),
+    );
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+    });
+    await Promise.resolve();
+    await platform.lifecycle.runShutdown();
+    resolveRun?.({
+      category: 'toolUse',
+      executionId: 'exec-1',
+      outcome: 'completed',
+      streamId: 'stream-1',
+    });
+
+    await expect(run).rejects.toBe(persistenceError);
+    expect(mocks.finalizeExecution).toHaveBeenCalledTimes(2);
+    expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
   it('removes the shutdown status hook after owned executions finish', async () => {
