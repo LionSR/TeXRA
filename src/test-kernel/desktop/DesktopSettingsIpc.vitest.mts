@@ -13,6 +13,7 @@ import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 import {
   createStubDesktopAgentSettingsController,
+  createStubDesktopCrashReportingSettingsController,
   createStubDesktopCredentialSettingsController,
   createStubDesktopHistoryOptions,
   createStubDesktopToolingSettingsController,
@@ -46,12 +47,14 @@ type RendererMessage = Parameters<
 type SettingsFixtureOverrides = Omit<
   Partial<DesktopSettingsIpcOptions>,
   | 'agentSettingsController'
+  | 'crashReportingSettingsController'
   | 'credentialSettingsController'
   | 'toolingSettingsController'
   | 'postToRenderer'
   | keyof DesktopHistoryOptions
 > & {
   agentSettingsController?: DesktopSettingsIpcOptions['agentSettingsController'];
+  crashReportingSettingsController?: DesktopSettingsIpcOptions['crashReportingSettingsController'];
   credentialSettingsController?: DesktopSettingsIpcOptions['credentialSettingsController'];
   toolingSettingsController?: DesktopSettingsIpcOptions['toolingSettingsController'];
   history?: Partial<DesktopHistoryOptions>;
@@ -121,34 +124,6 @@ class MemoryConfigStore {
   }
 }
 
-class MemorySecrets {
-  readonly values = new Map<string, string>();
-
-  async get(key: string): Promise<string | undefined> {
-    return this.values.get(key);
-  }
-
-  async getStored(key: string): Promise<string | undefined> {
-    return this.values.get(key);
-  }
-
-  async set(key: string, value: string): Promise<void> {
-    this.values.set(key, value);
-  }
-
-  async delete(key: string): Promise<void> {
-    this.values.delete(key);
-  }
-
-  async listStoredKeys(): Promise<readonly string[]> {
-    return [...this.values.keys()];
-  }
-
-  getEnv(): string | undefined {
-    return undefined;
-  }
-}
-
 async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
   return import(
     moduleFileUrl(desktopSourcePath('main', 'desktopSettingsIpc.ts'))
@@ -168,6 +143,9 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     agentSettingsController:
       overrides.agentSettingsController ??
       createStubDesktopAgentSettingsController(),
+    crashReportingSettingsController:
+      overrides.crashReportingSettingsController ??
+      createStubDesktopCrashReportingSettingsController(),
     credentialSettingsController:
       overrides.credentialSettingsController ??
       createStubDesktopCredentialSettingsController({
@@ -369,39 +347,29 @@ describe('desktop settings IPC', () => {
     expect(isWorktreeSupportEnabled()).toBe(true);
   });
 
-  it('round-trips desktop crash reporting settings through global state and secrets', async () => {
-    const globalState = new MemoryStateStore();
-    const secrets = new MemorySecrets();
-
-    let initializeCalls = 0;
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      globalState,
-      secrets,
-      promptSecret: async () => ' https://example.invalid/123 ',
-      initializeCrashReporting: async () => {
-        initializeCalls += 1;
-      },
+  it('delegates crash-reporting commands to the required controller', async () => {
+    const get = vi.fn(async () => undefined);
+    const setEnabled = vi.fn(async () => undefined);
+    const setDsn = vi.fn(async () => undefined);
+    const crashReportingSettingsController =
+      createStubDesktopCrashReportingSettingsController({
+        actions: { get, setEnabled, setDsn },
+      });
+    const { settings } = createSettingsFixture({
+      crashReportingSettingsController,
     });
 
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING,
+      }),
+    ).toBe(true);
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
         enabled: true,
       }),
     ).toBe(true);
-    await flushAsyncWork();
-
-    expect(
-      globalState.values.get(GlobalStateKey.DESKTOP_CRASH_REPORTING_ENABLED),
-    ).toBe(true);
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
-      enabled: true,
-      configured: false,
-    });
-    expect(initializeCalls).toBe(0);
-
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN,
@@ -409,40 +377,9 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
-      enabled: true,
-      configured: true,
-    });
-    expect(initializeCalls).toBe(1);
-  });
-
-  it('initializes desktop crash reporting when users enable an existing DSN', async () => {
-    const globalState = new MemoryStateStore();
-    const secrets = new MemorySecrets();
-    await secrets.set(
-      'texra.desktop.crashReporting.dsn',
-      'https://example.invalid/123',
-    );
-    let initializeCalls = 0;
-
-    const { settings } = createSettingsFixture({
-      globalState,
-      secrets,
-      initializeCrashReporting: async () => {
-        initializeCalls += 1;
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
-        enabled: true,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(initializeCalls).toBe(1);
+    expect(get).toHaveBeenCalledOnce();
+    expect(setEnabled).toHaveBeenCalledWith(true);
+    expect(setDsn).toHaveBeenCalledOnce();
   });
 
   it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
@@ -667,7 +604,7 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it('delegates tooling startup and posts approval settings on readiness', async () => {
+  it('delegates domain startup and posts approval settings on readiness', async () => {
     const workspaceState = new MemoryStateStore();
     workspaceState.values.set(
       WorkspaceStateKey.CODEX_SANDBOX_MODE,
@@ -678,6 +615,11 @@ describe('desktop settings IPC', () => {
     const agentSettingsController = createStubDesktopAgentSettingsController();
     const postAgentStartupData = vi.fn(async () => undefined);
     agentSettingsController.postStartupData = postAgentStartupData;
+    const postCrashReportingStartupData = vi.fn(async () => undefined);
+    const crashReportingSettingsController =
+      createStubDesktopCrashReportingSettingsController({
+        postStartupData: postCrashReportingStartupData,
+      });
     const postToolingStartupData = vi.fn(async () => undefined);
     const postLatexConfigValues = vi.fn();
     const toolingSettingsController =
@@ -688,6 +630,7 @@ describe('desktop settings IPC', () => {
 
     const { settings, posted } = createCapturedSettingsFixture({
       agentSettingsController,
+      crashReportingSettingsController,
       toolingSettingsController,
       workspaceState,
       config,
@@ -705,6 +648,7 @@ describe('desktop settings IPC', () => {
 
     expect(postLatexConfigValues).toHaveBeenCalledOnce();
     expect(postToolingStartupData).toHaveBeenCalledOnce();
+    expect(postCrashReportingStartupData).toHaveBeenCalledOnce();
     expect(postAgentStartupData).toHaveBeenCalledOnce();
 
     expect(

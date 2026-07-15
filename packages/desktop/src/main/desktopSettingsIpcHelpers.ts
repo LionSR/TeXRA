@@ -1,6 +1,5 @@
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
-import type { PlatformSecrets } from '@platform/secrets';
 
 /**
  * Module-level helpers for the desktop settings IPC. These have no closure
@@ -9,15 +8,6 @@ import type { PlatformSecrets } from '@platform/secrets';
  * helper defers its `@tools` import so the heavy module only loads when a tool
  * dashboard request actually arrives.
  */
-
-export const emptySecrets: PlatformSecrets = {
-  get: () => Promise.resolve(undefined),
-  getStored: () => Promise.resolve(undefined),
-  set: () => Promise.resolve(),
-  delete: () => Promise.resolve(),
-  listStoredKeys: () => Promise.resolve([]),
-  getEnv: () => undefined,
-};
 
 export function defaultOnError(error: unknown): void {
   console.error(error);

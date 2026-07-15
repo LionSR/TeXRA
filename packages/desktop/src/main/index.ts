@@ -68,6 +68,7 @@ import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.
 import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
+import { DefaultDesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
 import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import {
@@ -830,9 +831,23 @@ function createWindow(options: {
       latexConfigPersistenceController: new LatexConfigPersistenceController(),
     },
   );
+  const crashReportingSettingsController =
+    new DefaultDesktopCrashReportingSettingsController({
+      state: platform().globalState,
+      secrets: platform().secrets,
+      renderer: {
+        postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+      },
+      prompt: {
+        input: (input) =>
+          promptInRenderer(window, { ...input, password: true }),
+      },
+      initialization: { initialize: options.initializeCrashReporting },
+    });
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     agentSettingsController,
+    crashReportingSettingsController,
     credentialSettingsController,
     toolingSettingsController,
     sendStartupCatalogData: true,
@@ -845,8 +860,6 @@ function createWindow(options: {
     },
     restoreTaskState: async (taskState) =>
       (await getAgentExecution()).progress.restoreTaskState(taskState),
-    promptSecret: (input) =>
-      promptInRenderer(window, { ...input, password: true }),
     showInfoMessage,
     showErrorMessage,
     confirmAction: async (message, confirmLabel = 'OK') => {
@@ -859,7 +872,6 @@ function createWindow(options: {
       });
       return result.response === 0;
     },
-    initializeCrashReporting: options.initializeCrashReporting,
     openPath: previewHost.openPath,
     revealStream: async (streamId) => {
       try {
