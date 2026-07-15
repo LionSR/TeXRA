@@ -15,6 +15,8 @@ export function resolveExecutionDisplayCategory(
   agent: string | undefined,
   category: string | undefined,
 ): string | undefined {
+  // Raw detail reads have not crossed the listing normalization boundary;
+  // normalized listing rows use their discriminated `kind` below instead.
   return isProcessAgent(agent) ? 'process' : category;
 }
 
