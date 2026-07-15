@@ -14,6 +14,7 @@ import {
 } from '@telemetry/UsageLogService';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import * as logger from '@logger/logUtils';
 
 function usageEntry(model: string) {
   return {
@@ -102,6 +103,96 @@ describe('UsageLogService', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['first'], ['second']]);
+  });
+
+  it('waits for successive active batches during disposal', async () => {
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
+
+    let releaseFirstFetch: (() => void) | undefined;
+    let releaseSecondFetch: (() => void) | undefined;
+    const firstFetchReleased = new Promise<void>((resolve) => {
+      releaseFirstFetch = resolve;
+    });
+    const secondFetchReleased = new Promise<void>((resolve) => {
+      releaseSecondFetch = resolve;
+    });
+    const batches: unknown[] = [];
+    const fetchMock = stubFetch(batches, async (callCount) => {
+      if (callCount === 1) await firstFetchReleased;
+      if (callCount === 2) await secondFetchReleased;
+    });
+
+    UsageLogService.log(usageEntry('first'));
+    const firstFlush = UsageLogService.flush();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    UsageLogService.log(usageEntry('second'));
+    const secondFlush = UsageLogService.flush();
+    const disposal = UsageLogService.dispose();
+
+    releaseFirstFetch?.();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    let disposed = false;
+    void disposal.then(() => {
+      disposed = true;
+    });
+    await Promise.resolve();
+    expect(disposed).toBe(false);
+
+    releaseSecondFetch?.();
+    await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
+      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+    ]);
+    await expect(disposal).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(batches.map(batchModels)).toEqual([['first'], ['second']]);
+  });
+
+  it('warns after five seconds without bounding disposal', async () => {
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
+    const warn = vi.spyOn(logger, 'warn');
+
+    let releaseFetch: (() => void) | undefined;
+    const fetchReleased = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    const batches: unknown[] = [];
+    const fetchMock = stubFetch(batches, async () => {
+      await fetchReleased;
+    });
+
+    UsageLogService.log(usageEntry('slow'));
+    const flush = UsageLogService.flush();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const disposal = UsageLogService.dispose();
+    let disposed = false;
+    void disposal.then(() => {
+      disposed = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(warn).not.toHaveBeenCalledWith(
+      'UsageLogService',
+      'Dispose timeout waiting for in-flight flush',
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(warn).toHaveBeenCalledWith(
+      'UsageLogService',
+      'Dispose timeout waiting for in-flight flush',
+    );
+    expect(disposed).toBe(false);
+
+    releaseFetch?.();
+    await expect(flush).resolves.toBe(USAGE_LOG_FLUSH_OUTCOME.ACCEPTED);
+    await expect(disposal).resolves.toBeUndefined();
+    expect(batches.map(batchModels)).toEqual([['slow']]);
+    vi.useRealTimers();
   });
 
   it('keeps queued entries when setup fails before dequeue', async () => {
