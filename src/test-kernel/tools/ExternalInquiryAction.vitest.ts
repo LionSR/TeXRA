@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type {
-  HostInteractionResolution,
+  HostInteractionSettlement,
   HostInteractions,
 } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -37,7 +37,7 @@ describe('handleExternalInquiryAction', () => {
   let detach: (() => void) | undefined;
   let resolve: ReturnType<
     typeof vi.fn<
-      (requestId: string, result: HostInteractionResolution) => boolean
+      (requestId: string, settlement: HostInteractionSettlement) => boolean
     >
   >;
 
@@ -46,7 +46,7 @@ describe('handleExternalInquiryAction', () => {
     storageMocks.recordAnswerForOpenTurn.mockResolvedValue(null);
     storageMocks.markDropped.mockResolvedValue(null);
     resolve = vi.fn<
-      (requestId: string, result: HostInteractionResolution) => boolean
+      (requestId: string, settlement: HostInteractionSettlement) => boolean
     >(() => true);
     const interactions: HostInteractions = {
       resolve,
@@ -69,7 +69,6 @@ describe('handleExternalInquiryAction', () => {
 
     expect(resolve).toHaveBeenCalledWith('thread-submit', {
       kind: 'externalInquiry',
-      action: 'submit',
     });
   });
 
@@ -82,8 +81,6 @@ describe('handleExternalInquiryAction', () => {
 
     expect(resolve).toHaveBeenCalledWith('thread-drop', {
       kind: 'externalInquiry',
-      action: 'drop',
-      feedback: 'The question is no longer needed.',
     });
   });
 });

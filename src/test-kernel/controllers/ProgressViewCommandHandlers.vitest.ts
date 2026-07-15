@@ -789,3 +789,71 @@ describe('external inquiry action schema', () => {
     expect(results).toEqual([true, true, true, false, false]);
   });
 });
+
+describe('user question action schema', () => {
+  const command = PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION;
+  const requestId = 'question-1';
+
+  it.each([
+    {
+      name: 'submit with answers',
+      message: {
+        command,
+        requestId,
+        action: 'submit',
+        answers: { choice: 'A' },
+      },
+      valid: true,
+    },
+    {
+      name: 'reject with feedback',
+      message: { command, requestId, action: 'reject', feedback: 'Not now' },
+      valid: true,
+    },
+    {
+      name: 'skip without feedback',
+      message: { command, requestId, action: 'skip' },
+      valid: true,
+    },
+    {
+      name: 'submit without answers',
+      message: { command, requestId, action: 'submit' },
+      valid: false,
+    },
+    {
+      name: 'submit with rejection feedback',
+      message: {
+        command,
+        requestId,
+        action: 'submit',
+        answers: { choice: 'A' },
+        feedback: 'contradictory',
+      },
+      valid: false,
+    },
+    {
+      name: 'reject with answers',
+      message: {
+        command,
+        requestId,
+        action: 'reject',
+        answers: { choice: 'A' },
+      },
+      valid: false,
+    },
+    {
+      name: 'skip with answers',
+      message: {
+        command,
+        requestId,
+        action: 'skip',
+        answers: { choice: 'A' },
+      },
+      valid: false,
+    },
+  ])('$name is $valid', ({ message, valid }) => {
+    expect(ProgressViewInboundMessageSchema.safeParse(message).success).toBe(
+      valid,
+    );
+  });
+});

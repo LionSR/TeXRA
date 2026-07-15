@@ -24,6 +24,7 @@ import {
   type HostInteractionOptions,
   type HostInteractions,
   type HostRetryRequest,
+  type HostUserQuestionResult,
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
@@ -559,11 +560,7 @@ async function requestRetryInteraction(
 async function requestUserQuestionInteraction(
   payload: RuntimeInteractionEventPayloads['showUserQuestion'],
   context: CliContext,
-): Promise<{
-  submitted: boolean;
-  answers?: ApprovalDecision['userQuestionAnswers'];
-  feedback?: string;
-}> {
+): Promise<HostUserQuestionResult> {
   if (!approvalPromptAllowed(context)) {
     return {
       submitted: false,

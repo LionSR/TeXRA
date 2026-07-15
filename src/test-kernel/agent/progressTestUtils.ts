@@ -185,8 +185,8 @@ export function createRecordingHost(): {
         });
       });
     },
-    resolve: (requestId, result) => {
-      if (result.kind === 'bash') {
+    resolve: (requestId, settlement) => {
+      if (settlement.kind === 'bash') {
         const pending = pendingBashes.get(requestId);
         if (!pending) return false;
         pendingBashes.delete(requestId);
@@ -195,13 +195,15 @@ export function createRecordingHost(): {
           payload: { requestId },
         });
         pending.settle({
-          accepted: result.action === 'approve',
+          accepted: settlement.decision.action === 'approve',
           userMessage:
-            result.action === 'reject' ? result.feedback?.trim() : undefined,
+            settlement.decision.action === 'reject'
+              ? settlement.decision.feedback?.trim()
+              : undefined,
         });
         return true;
       }
-      if (result.kind === 'plan') {
+      if (settlement.kind === 'plan') {
         const pending = pendingPlans.get(requestId);
         if (!pending) return false;
         pendingPlans.delete(requestId);
@@ -209,13 +211,10 @@ export function createRecordingHost(): {
           event: 'resolvePlanApproval',
           payload: { approvalId: requestId },
         });
-        pending.settle({
-          action: result.action as PlanApprovalResult['action'],
-          ...(result.feedback ? { feedback: result.feedback } : {}),
-        } as PlanApprovalResult);
+        pending.settle(settlement.decision);
         return true;
       }
-      if (result.kind === 'proposal') {
+      if (settlement.kind === 'proposal') {
         const pending = pendingProposals.get(requestId);
         if (!pending) return false;
         pendingProposals.delete(requestId);
@@ -223,15 +222,10 @@ export function createRecordingHost(): {
           event: 'resolveAgentProposal',
           payload: { proposalId: requestId },
         });
-        pending.settle(
-          (result.value ?? {
-            action: result.action,
-            ...(result.feedback ? { feedback: result.feedback } : {}),
-          }) as ProposalResult,
-        );
+        pending.settle(settlement.decision);
         return true;
       }
-      if (result.kind === 'retry') {
+      if (settlement.kind === 'retry') {
         const pending = pendingRetries.get(requestId);
         if (!pending) return false;
         pendingRetries.delete(requestId);
@@ -239,13 +233,10 @@ export function createRecordingHost(): {
           event: 'resolveRetryRequest',
           payload: { streamId: requestId },
         });
-        pending.settle({
-          action: result.action as RetryResult['action'],
-          ...(result.feedback ? { feedback: result.feedback } : {}),
-        } as RetryResult);
+        pending.settle(settlement.decision);
         return true;
       }
-      if (result.kind === 'userQuestion') {
+      if (settlement.kind === 'userQuestion') {
         const pending = pendingUserQuestions.get(requestId);
         if (!pending) return false;
         pendingUserQuestions.delete(requestId);
@@ -253,14 +244,17 @@ export function createRecordingHost(): {
           event: 'resolveUserQuestion',
           payload: { requestId },
         });
-        pending.settle({
-          submitted: result.action === 'submit',
-          answers:
-            result.action === 'submit'
-              ? (result.value as HostUserQuestionResult['answers'])
-              : undefined,
-          feedback: result.action === 'submit' ? undefined : result.feedback,
-        });
+        pending.settle(
+          settlement.decision.action === 'submit'
+            ? {
+                submitted: true,
+                answers: settlement.decision.answers,
+              }
+            : {
+                submitted: false,
+                feedback: settlement.decision.feedback,
+              },
+        );
         return true;
       }
       return false;

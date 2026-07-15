@@ -161,7 +161,7 @@ describe('createExtensionHostInteractions', () => {
     expect(
       interactions.resolve('proposal-current', {
         kind: 'proposal',
-        action: 'approve',
+        decision: { action: 'approve' },
       }),
     ).toBe(true);
     const bashShow = handlers.bash.show as unknown as ReturnType<typeof vi.fn>;
@@ -176,7 +176,7 @@ describe('createExtensionHostInteractions', () => {
     expect(
       interactions.resolve(streamBRequestId!, {
         kind: 'bash',
-        action: 'reject',
+        decision: { action: 'reject' },
       }),
     ).toBe(true);
     await expect(initiatingProposal).resolves.toEqual({ action: 'approve' });
@@ -233,7 +233,7 @@ describe('createExtensionHostInteractions', () => {
     expect(
       interactions.resolve('plan-a', {
         kind: 'plan',
-        action: 'approve_and_goal',
+        decision: { action: 'approve_and_goal' },
       }),
     ).toBe(true);
 
@@ -243,7 +243,10 @@ describe('createExtensionHostInteractions', () => {
     expect(handlers.planApproval.resolve).toHaveBeenCalledWith('plan-a');
     // The request was settled first-wins: a second resolution finds nothing.
     expect(
-      interactions.resolve('plan-a', { kind: 'plan', action: 'approve' }),
+      interactions.resolve('plan-a', {
+        kind: 'plan',
+        decision: { action: 'approve' },
+      }),
     ).toBe(false);
   });
 
@@ -303,7 +306,6 @@ describe('createExtensionHostInteractions', () => {
     await expect(first).resolves.toEqual({ action: 'cancel' });
     expect(
       interactions.resolveRetry('stream-a' as StreamTabId, 'retry:first', {
-        kind: 'retry',
         action: 'retry',
       }),
     ).toBe(false);
@@ -317,7 +319,7 @@ describe('createExtensionHostInteractions', () => {
       interactions.resolveRetry(
         'stream-a' as StreamTabId,
         'retry:replacement',
-        { kind: 'retry', action: 'retry' },
+        { action: 'retry' },
       ),
     ).toBe(true);
     await expect(replacement).resolves.toEqual({ action: 'retry' });
@@ -404,12 +406,18 @@ describe('createExtensionHostInteractions', () => {
     // bash approval as a plan action would (defends against a caller bug
     // resolving the wrong pending kind under a reused/misrouted requestId).
     expect(
-      interactions.resolve(requestId, { kind: 'plan', action: 'approve' }),
+      interactions.resolve(requestId, {
+        kind: 'plan',
+        decision: { action: 'approve' },
+      }),
     ).toBe(false);
 
     // The correctly-kinded resolution still settles it.
     expect(
-      interactions.resolve(requestId, { kind: 'bash', action: 'approve' }),
+      interactions.resolve(requestId, {
+        kind: 'bash',
+        decision: { action: 'approve' },
+      }),
     ).toBe(true);
     await expect(resultPromise).resolves.toEqual({ accepted: true });
   });
@@ -448,7 +456,10 @@ describe('createExtensionHostInteractions', () => {
     // resolvable first-wins.
     expect(handlers.planApproval.resolve).not.toHaveBeenCalled();
     expect(
-      interactions.resolve('plan-a', { kind: 'plan', action: 'approve' }),
+      interactions.resolve('plan-a', {
+        kind: 'plan',
+        decision: { action: 'approve' },
+      }),
     ).toBe(true);
     await expect(planPromise).resolves.toEqual({ action: 'approve' });
   });
@@ -481,6 +492,10 @@ describe('createExtensionHostInteractions', () => {
       streamId: 'stream-a',
       mode: 'new',
     });
+    expect(interactions.resolve('thread-a', { kind: 'externalInquiry' })).toBe(
+      true,
+    );
+    expect(handlers.externalInquiry.resolve).toHaveBeenCalledWith('thread-a');
   });
 
   it('cancels streamless user questions during unscoped cleanup', async () => {
@@ -518,9 +533,45 @@ describe('createExtensionHostInteractions', () => {
     expect(
       interactions.resolve('question-a', {
         kind: 'userQuestion',
-        action: 'submit',
+        decision: { action: 'submit', answers: { choice: 'unit volume' } },
       }),
     ).toBe(false);
+  });
+
+  it('settles submitted user questions with their answers', async () => {
+    const handlers = createHandlers();
+    const interactions = createInteractions({
+      handlers,
+      session: createTestSession(),
+    });
+
+    const resultPromise = interactions.askUserQuestion?.({
+      requestId: 'question-submit',
+      questions: [
+        {
+          question: 'Which normalization should be used?',
+          options: [{ label: 'Unit volume' }, { label: 'Unit mass' }],
+        },
+      ],
+      allowBypass: false,
+      streamId: 'stream-a' as StreamTabId,
+    });
+    const answers = { normalization: 'unit volume' };
+
+    expect(
+      interactions.resolve('question-submit', {
+        kind: 'userQuestion',
+        decision: { action: 'submit', answers },
+      }),
+    ).toBe(true);
+
+    await expect(resultPromise).resolves.toEqual({
+      submitted: true,
+      answers,
+    });
+    expect(handlers.userQuestion.resolve).toHaveBeenCalledWith(
+      'question-submit',
+    );
   });
 
   it('delegates tool edit approval to the native VS Code port', async () => {
