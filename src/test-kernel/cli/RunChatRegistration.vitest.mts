@@ -126,4 +126,49 @@ describe('CLI chat execution registration', () => {
       }),
     );
   });
+
+  it('reports unexpected finalizer rejections without rejecting the caller', async () => {
+    const persistenceError = new Error('finalizer contract failure');
+    mocks.finalizeExecution.mockRejectedValueOnce(persistenceError);
+
+    await expect(
+      markRegisteredChatExecutionError('registered' as ExecutionId, {
+        executionRegistered: true,
+        agentSettled: false,
+        reportFinalizationFailure: mocks.reportFinalizationFailure,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(mocks.reportFinalizationFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message:
+          'Execution finalization failed unexpectedly for registered: finalizer contract failure',
+        cause: persistenceError,
+      }),
+    );
+  });
+
+  it('distinguishes flow-record cleanup failures from terminal writes', async () => {
+    const cleanupError = new Error('flow record is locked');
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: cleanupError,
+      stage: 'flow-record-delete',
+      terminalStatusPersisted: true,
+    });
+
+    await markRegisteredChatExecutionError('registered' as ExecutionId, {
+      executionRegistered: true,
+      agentSettled: false,
+      reportFinalizationFailure: mocks.reportFinalizationFailure,
+    });
+
+    expect(mocks.reportFinalizationFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message:
+          'Persisted error status for execution registered, but failed to delete its flow record: flow record is locked',
+        cause: cleanupError,
+      }),
+    );
+  });
 });

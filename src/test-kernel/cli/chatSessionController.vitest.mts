@@ -9,7 +9,9 @@ import pDefer from 'p-defer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  executeAgent: vi.fn(),
   finalizeExecution: vi.fn(),
+  registerExecution: vi.fn(),
   stopAgentStream: vi.fn(),
   workspaceGet: vi.fn(),
   getExecutionStore: vi.fn(),
@@ -40,7 +42,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', () => ({
   finalizeExecution: mocks.finalizeExecution,
   getExecutionStore: mocks.getExecutionStore,
-  registerExecution: vi.fn(),
+  registerExecution: mocks.registerExecution,
 }));
 
 vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
@@ -52,7 +54,7 @@ vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
-  executeAgent: vi.fn(),
+  executeAgent: mocks.executeAgent,
   resumeToolUseFromSnapshot: mocks.resumeToolUseFromSnapshot,
 }));
 
@@ -379,12 +381,21 @@ describe('chatTuiCanStartRootRun', () => {
 
 describe('createChatSessionController', () => {
   beforeEach(() => {
+    mocks.executeAgent.mockReset();
+    mocks.executeAgent.mockResolvedValue({
+      category: 'toolUse',
+      executionId: 'exec-start',
+      outcome: RUN_OUTCOME.COMPLETED,
+      streamId: 'stream-start',
+    });
     mocks.finalizeExecution.mockReset();
     mocks.finalizeExecution.mockResolvedValue({
       status: 'durable',
       terminalStatusPersisted: true,
       flowRecord: 'deleted',
     });
+    mocks.registerExecution.mockReset();
+    mocks.registerExecution.mockResolvedValue(undefined);
     mocks.stopAgentStream.mockReset();
     mocks.workspaceGet.mockReset();
     mocks.workspaceGet.mockReturnValue(false);
@@ -456,6 +467,38 @@ describe('createChatSessionController', () => {
     expect(typeof ctrl.resume).toBe('function');
     expect(typeof ctrl.stop).toBe('function');
     expect(typeof ctrl.canStartRootRun).toBe('function');
+  });
+
+  it('shows durability failures without turning an intentional stop into an error', async () => {
+    const run = pDefer<never>();
+    const session = makeSession();
+    mocks.executeAgent.mockReturnValueOnce(run.promise);
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: new Error('terminal metadata disk full'),
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    ctrl.startRootRun({
+      agent: 'chat',
+      model: 'gpt54',
+      instruction: 'Check the draft.',
+      workingDirectory: '/tmp/test',
+      agentCategory: 'toolUse',
+    });
+    await vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalledOnce());
+    ctrl.stop();
+    run.reject(new Error('run stopped'));
+    await session.runPromise;
+
+    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(
+        /^Failed to persist error status for execution .+: terminal metadata disk full$/,
+      ),
+    );
+    expect(session.runExitCode).toBe(CliExitCode.Success);
   });
 
   it('canStartRootRun() delegates to chatTuiCanStartRootRun(session)', () => {

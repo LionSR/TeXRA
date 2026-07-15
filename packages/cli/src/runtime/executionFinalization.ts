@@ -13,17 +13,29 @@ export async function finalizeCliExecution(
   flowRecord: FinalizeExecutionInput['flowRecord'],
   reportFailure: CliFinalizationFailureReporter,
 ): Promise<void> {
-  const result = await finalizeExecution({
-    executionId,
-    terminalStatus,
-    flowRecord,
-  });
+  let result: Awaited<ReturnType<typeof finalizeExecution>>;
+  try {
+    result = await finalizeExecution({
+      executionId,
+      terminalStatus,
+      flowRecord,
+    });
+  } catch (error) {
+    reportFailure(
+      new Error(
+        `Execution finalization failed unexpectedly for ${executionId}: ${toErrorMessage(error)}`,
+        { cause: error },
+      ),
+    );
+    return;
+  }
   if (result.status === 'durable') return;
 
-  reportFailure(
-    new Error(
-      `Failed to persist ${terminalStatus.toLowerCase()} status for execution ${executionId}: ${toErrorMessage(result.error)}`,
-      { cause: result.error },
-    ),
-  );
+  const message =
+    result.stage === 'flow-record-delete'
+      ? `Persisted ${terminalStatus.toLowerCase()} status for execution ${executionId}, but failed to delete its flow record: ${toErrorMessage(result.error)}`
+      : result.stage === 'terminal-status-and-flow-record-delete'
+        ? `Failed to persist ${terminalStatus.toLowerCase()} status and delete the flow record for execution ${executionId}: ${toErrorMessage(result.error)}`
+        : `Failed to persist ${terminalStatus.toLowerCase()} status for execution ${executionId}: ${toErrorMessage(result.error)}`;
+  reportFailure(new Error(message, { cause: result.error }));
 }
