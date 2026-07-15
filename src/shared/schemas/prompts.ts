@@ -145,8 +145,6 @@ export type ExternalInquiryPermission = z.infer<
 // User Question
 // ============================================================================
 
-export const USER_QUESTION_ACTIONS = ['submit', 'reject'] as const;
-
 const UserQuestionOptionSchema = z.strictObject({
   label: z.string().min(1),
   description: z.string().nullish(),
