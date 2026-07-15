@@ -423,6 +423,41 @@ describe('relay free-tier request limits', () => {
     assert.equal(releases, 1);
   });
 
+  it('preserves upstream errors and slot release when the observer throws', async () => {
+    const upstreamError = new Error('response body failed');
+    const observerError = new Error('sensitive observer details');
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let releases = 0;
+    const failingBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(upstreamError);
+      },
+    });
+
+    try {
+      const wrapped = await releaseWhenStreamCloses(
+        failingBody,
+        async () => {
+          releases += 1;
+        },
+        undefined,
+        0,
+        () => {
+          throw observerError;
+        },
+      );
+      if (wrapped === null) assert.fail('expected wrapped stream');
+
+      await assert.rejects(wrapped.getReader().read(), upstreamError);
+      assert.equal(releases, 1);
+      assert.deepEqual(errorLog.mock.calls, [
+        ['[RELAY] Upstream body failure observer failed'],
+      ]);
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
   it('uses the same slot id for gate refresh and release RPCs', async () => {
     const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
     const client = {

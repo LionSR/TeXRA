@@ -244,7 +244,11 @@ export async function releaseWhenStreamCloses(
       try {
         readResult = await reader.read();
       } catch (error) {
-        onUpstreamBodyError?.(error);
+        try {
+          onUpstreamBodyError?.(error);
+        } catch {
+          console.error('[RELAY] Upstream body failure observer failed');
+        }
         await releaseOnce();
         throw error;
       }
