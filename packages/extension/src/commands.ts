@@ -25,7 +25,6 @@ import {
   registerSettingsViewCommands,
   initializeSettingsViewProvider,
 } from '@commands/settings';
-import { registerAuthCommands } from '@commands/auth';
 import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
@@ -49,7 +48,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerPackCommands(context);
   registerCleanCommands(context);
   registerMergeCommands(context);
-  registerAuthCommands(context);
   registerStateRestoreCommand(context);
   registerSettingsViewCommands(context);
   registerCompareCommands(context);
