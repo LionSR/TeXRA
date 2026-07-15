@@ -1,6 +1,3 @@
-// Local imports - agent
-import type { ExecutionRequest } from '@agent/core/state/executionRequests';
-
 import {
   isWorkflowTaskState,
   type TaskState,
@@ -46,7 +43,6 @@ interface ProgressWorkflowActionsState {
 
 export interface ProgressWorkflowActionsControllerDeps {
   state: ProgressWorkflowActionsState;
-  executeAgent(request: ExecutionRequest): Promise<void>;
   runDiff(request: WorkflowDiffRequest): Promise<void>;
   runFileOperation(
     operation: WorkflowFileOperation,
@@ -56,27 +52,6 @@ export interface ProgressWorkflowActionsControllerDeps {
 
 export class ProgressWorkflowActionsController {
   constructor(private readonly deps: ProgressWorkflowActionsControllerDeps) {}
-
-  async resume(stream: StreamTabId): Promise<void> {
-    const taskState = this.deps.state.getTaskState(stream);
-    if (!taskState) return;
-
-    const executionId = isWorkflowTaskState(taskState)
-      ? this.deps.state.getExecutionId(stream)
-      : undefined;
-
-    await this.deps.executeAgent({
-      config: taskState.agentConfig,
-      ...(executionId && { executionId }),
-    });
-  }
-
-  async runNew(stream: StreamTabId): Promise<void> {
-    const taskState = this.deps.state.getTaskState(stream);
-    if (!taskState) return;
-
-    await this.deps.executeAgent({ config: taskState.agentConfig });
-  }
 
   async diffStream(stream: StreamTabId): Promise<void> {
     await this.withWorkflowTaskState(stream, async (taskState) => {

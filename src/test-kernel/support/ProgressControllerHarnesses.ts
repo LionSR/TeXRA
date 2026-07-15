@@ -17,7 +17,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import type { TaskState, WorkflowTaskState } from '@agent/core/state/TaskState';
 
 // Local imports - shared
@@ -237,7 +236,6 @@ export interface ProgressWorkflowActionsHarnessOptions {
 
 export interface ProgressWorkflowActionsHarness {
   controller: ProgressWorkflowActionsController;
-  executed: ExecutionRequest[];
   diffs: WorkflowDiffRequest[];
   fileOperations: Array<{
     operation: WorkflowFileOperation;
@@ -248,7 +246,6 @@ export interface ProgressWorkflowActionsHarness {
 export function createProgressWorkflowActionsHarness(
   options: ProgressWorkflowActionsHarnessOptions = {},
 ): ProgressWorkflowActionsHarness {
-  const executed: ExecutionRequest[] = [];
   const diffs: WorkflowDiffRequest[] = [];
   const fileOperations: Array<{
     operation: WorkflowFileOperation;
@@ -264,9 +261,6 @@ export function createProgressWorkflowActionsHarness(
         getKnownWorkspaceOutputPaths: (stream) =>
           new Set(options.knownWorkspaceOutputs?.get(stream) ?? []),
       },
-      executeAgent: async (request) => {
-        executed.push(request);
-      },
       runDiff: async (request) => {
         diffs.push(request);
       },
@@ -274,7 +268,6 @@ export function createProgressWorkflowActionsHarness(
         fileOperations.push({ operation, request });
       },
     }),
-    executed,
     diffs,
     fileOperations,
   };

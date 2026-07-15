@@ -371,17 +371,10 @@ export class DesktopProgressBridge {
 
   private createProgressViewHost(): ProgressViewHost {
     return new ProgressViewHost({
-      // Shared run-new path (mirrors the extension wiring). Only
-      // `getTaskState` and `executeAgent` matter here: diff/file-operation
-      // actions are routed through `workflowFileActions`/`fileActions`, so
-      // those deps stay unwired.
-      workflowActions: {
+      run: {
         state: {
           getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
           getExecutionId: (stream) => this.getStreamExecutionId(stream),
-          getOutputFiles: (stream) =>
-            this.state.snapshots.getOutputFiles(stream),
-          getKnownWorkspaceOutputPaths: () => new Set(),
         },
         executeAgent: async (request) => {
           const validated = validateExecutionRequest(request);
@@ -393,14 +386,6 @@ export class DesktopProgressBridge {
             return;
           }
           await this.runExecution(validated.request);
-        },
-        runDiff: () => {
-          throw new Error('Desktop diff is routed through workflowFileActions');
-        },
-        runFileOperation: () => {
-          throw new Error(
-            'Desktop file operations are routed through workflowFileActions',
-          );
         },
       },
       workflowFileActions: {

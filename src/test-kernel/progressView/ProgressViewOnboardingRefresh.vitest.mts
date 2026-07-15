@@ -15,6 +15,10 @@ import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - test support
 import { FakePromptHost } from '../support/FakeHosts';
+import {
+  createOutputFile,
+  createWorkflowTaskState,
+} from '../support/ProgressControllerHarnesses';
 
 import type * as vscode from 'vscode';
 
@@ -417,6 +421,84 @@ describe('progress-view onboarding refresh wiring', () => {
       action: 'reject',
       feedback: 'state the invariant first',
     });
+  });
+
+  it('routes workflow toolbar actions through extension capabilities', async () => {
+    const provider = createProgressViewProvider();
+    const taskState = createWorkflowTaskState(
+      { outputFiles: ['declared.tex'] },
+      { output: false },
+    );
+    const output = createOutputFile();
+    vi.mocked(provider.state.snapshots.getTaskState).mockReturnValue(taskState);
+    vi.mocked(provider.state.snapshots.getExecutionId).mockReturnValue(
+      'exec-123',
+    );
+    vi.mocked(provider.state.snapshots.getOutputFiles).mockReturnValue({
+      1: [output],
+    });
+    vi.mocked(provider.state.snapshots.getKnownFilePaths).mockReturnValue(
+      new Set(['/workspace/generated.tex', 'extra.tex']),
+    );
+    const handler = createMessageHandler(provider, createExtensionContext());
+    const view = createWebviewView();
+
+    await handler.handleMessage(
+      { command: PROGRESS_VIEW_COMMANDS.DIFF_STREAM, stream: 'stream-a' },
+      view,
+    );
+    await handler.handleMessage(
+      { command: PROGRESS_VIEW_COMMANDS.PACK_STREAM, stream: 'stream-a' },
+      view,
+    );
+    await handler.handleMessage(
+      { command: PROGRESS_VIEW_COMMANDS.CLEAN_STREAM, stream: 'stream-a' },
+      view,
+    );
+
+    expect(mocks.safeExecuteCommand).toHaveBeenNthCalledWith(
+      1,
+      'texra.runLatexdiff',
+      [
+        {
+          agent: 'correct',
+          model: 'gemini31p',
+          inputFile: 'input.tex',
+          outputFiles: ['declared.tex'],
+          outputFilesActive: false,
+          streamId: 'stream-a',
+          runId: 'exec-123',
+          outputsByRound: { 1: [output] },
+        },
+      ],
+      'ProgressView',
+    );
+    const fileOperationRequest = {
+      streamId: 'stream-a',
+      agent: 'correct',
+      model: 'gemini31p',
+      inputFile: 'input.tex',
+      outputFiles: ['declared.tex', '/workspace/generated.tex', 'extra.tex'],
+      executionId: 'exec-123',
+      skipProgressViewClear: true,
+    };
+    expect(mocks.safeExecuteCommand).toHaveBeenNthCalledWith(
+      2,
+      'texra.pack',
+      [fileOperationRequest],
+      'ProgressView',
+    );
+    expect(mocks.safeExecuteCommand).toHaveBeenNthCalledWith(
+      3,
+      'texra.clean',
+      [fileOperationRequest],
+      'ProgressView',
+    );
+    expect(provider.state.snapshots.getKnownFilePaths).toHaveBeenCalledTimes(2);
+    expect(provider.state.snapshots.getKnownFilePaths).toHaveBeenCalledWith(
+      'stream-a',
+      { workspaceOnly: true },
+    );
   });
 
   it('delegates onboarding refresh through the main view provider', async () => {

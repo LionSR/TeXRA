@@ -1,3 +1,13 @@
+// Local imports - agent
+import type { ExecutionRequest } from '@agent/core/state/executionRequests';
+import {
+  isWorkflowTaskState,
+  type TaskState,
+} from '@agent/core/state/TaskState';
+
+// Local imports - shared
+import type { StreamTabId } from '@shared/schemas';
+
 // Local imports - controllers
 import {
   createProgressViewCommandHandlers,
@@ -13,10 +23,6 @@ import {
   ProgressAgentProposalController,
   type ProgressAgentProposalControllerDeps,
 } from './ProgressAgentProposalController';
-import {
-  ProgressWorkflowActionsController,
-  type ProgressWorkflowActionsControllerDeps,
-} from './ProgressWorkflowActionsController';
 import {
   ProgressWorkflowFileActionsController,
   type ProgressWorkflowFileActionsControllerDeps,
@@ -42,15 +48,51 @@ export interface ProgressViewHostCommandOptions {
   readonly externalInquiry: ProgressViewExternalInquiryCommandActions;
 }
 
+interface ProgressViewRunState {
+  getTaskState(stream: StreamTabId): TaskState | undefined;
+  getExecutionId(stream: StreamTabId): string | undefined;
+}
+
+interface ProgressViewRunDependencies {
+  readonly state: ProgressViewRunState;
+  executeAgent(request: ExecutionRequest): Promise<void>;
+}
+
+async function resumeStream(
+  dependencies: ProgressViewRunDependencies,
+  stream: StreamTabId,
+): Promise<void> {
+  const taskState = dependencies.state.getTaskState(stream);
+  if (!taskState) return;
+
+  const executionId = isWorkflowTaskState(taskState)
+    ? dependencies.state.getExecutionId(stream)
+    : undefined;
+
+  await dependencies.executeAgent({
+    config: taskState.agentConfig,
+    ...(executionId && { executionId }),
+  });
+}
+
+async function runNewStream(
+  dependencies: ProgressViewRunDependencies,
+  stream: StreamTabId,
+): Promise<void> {
+  const taskState = dependencies.state.getTaskState(stream);
+  if (!taskState) return;
+
+  await dependencies.executeAgent({ config: taskState.agentConfig });
+}
+
 export interface ProgressViewHostOptions {
-  readonly workflowActions: ProgressWorkflowActionsControllerDeps;
+  readonly run: ProgressViewRunDependencies;
   readonly workflowFileActions: ProgressWorkflowFileActionsControllerDeps;
   readonly agentProposal: ProgressAgentProposalControllerDeps;
   readonly commands: ProgressViewHostCommandOptions;
 }
 
 export class ProgressViewHost {
-  readonly workflowActionsController: ProgressWorkflowActionsController;
   readonly workflowFileActionsController: ProgressWorkflowFileActionsController;
   readonly agentProposalController: ProgressAgentProposalController;
   readonly commandHandlers: ReturnType<
@@ -58,9 +100,6 @@ export class ProgressViewHost {
   >;
 
   constructor(options: ProgressViewHostOptions) {
-    this.workflowActionsController = new ProgressWorkflowActionsController(
-      options.workflowActions,
-    );
     this.workflowFileActionsController =
       new ProgressWorkflowFileActionsController(options.workflowFileActions);
     this.agentProposalController = new ProgressAgentProposalController(
@@ -71,8 +110,8 @@ export class ProgressViewHost {
       run: {
         resumeStream:
           options.commands.resumeStream ??
-          ((stream) => this.workflowActionsController.resume(stream)),
-        runNewStream: (stream) => this.workflowActionsController.runNew(stream),
+          ((stream) => resumeStream(options.run, stream)),
+        runNewStream: (stream) => runNewStream(options.run, stream),
       },
       followUp: options.commands.followUp,
       bypass: options.commands.bypass,

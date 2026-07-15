@@ -25,18 +25,14 @@ describe('ProgressViewHost', () => {
     const settledProposals: unknown[] = [];
 
     const host = new ProgressViewHost({
-      workflowActions: {
+      run: {
         state: {
           getTaskState: () => taskState,
           getExecutionId: () => 'exec-1',
-          getOutputFiles: () => ({}),
-          getKnownWorkspaceOutputPaths: () => new Set(),
         },
         executeAgent: async (request) => {
           executed.push(request);
         },
-        runDiff: vi.fn(),
-        runFileOperation: vi.fn(),
       },
       workflowFileActions: {
         state: {
@@ -104,6 +100,10 @@ describe('ProgressViewHost', () => {
       command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
       stream: 'stream-a',
     });
+    await host.commandHandlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
+      command: PROGRESS_VIEW_COMMANDS.RESUME,
+      stream: 'stream-a',
+    });
     await host.commandHandlers[PROGRESS_VIEW_COMMANDS.OPEN_LABEL]?.({
       command: PROGRESS_VIEW_COMMANDS.OPEN_LABEL,
       label: 'main-thm',
@@ -114,7 +114,10 @@ describe('ProgressViewHost', () => {
       action: 'approve',
     });
 
-    assert.deepEqual(executed, [{ config: taskState.agentConfig }]);
+    assert.deepEqual(executed, [
+      { config: taskState.agentConfig },
+      { config: taskState.agentConfig, executionId: 'exec-1' },
+    ]);
     assert.deepEqual(openedLabels, ['main-thm']);
     assert.deepEqual(infoMessages, ['Label "main-thm" not found.']);
     assert.deepEqual(settledProposals, [
