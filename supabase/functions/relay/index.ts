@@ -74,6 +74,7 @@ import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import {
   TIER_CONFIG,
   TIER_SPENDING_LIMITS,
+  getCanonicalRelayModelName,
   getSpendingLimit,
   getRequestLimits,
   isRetiredModelRequest,
@@ -104,10 +105,13 @@ import {
   classifyPreHeaderFailure,
   getRelayRequestBytes,
   getUpstreamRequestId,
+  RELAY_REQUEST_ID_HEADER,
   type RelayFailurePhase,
+  withRelayErrorRequestId,
 } from './diagnostics.ts';
 import {
   acquireRelayRequestSlot,
+  releaseAfterUpstreamFailure,
   releaseWhenStreamCloses,
 } from './requestGate.ts';
 
@@ -124,7 +128,6 @@ const RELAY_VERSION = '1.10.0';
 
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
 const UPSTREAM_TIMEOUT_MS = 390000;
-const RELAY_REQUEST_ID_HEADER = 'x-relay-request-id';
 
 // Env and the service-role client are fixed at cold start; no per-request state.
 // Public metadata remains available without the service role, but proxy routes
@@ -275,11 +278,6 @@ function logRelayFailure(diagnostic: RelayFailureDiagnostic): void {
       ...diagnostic,
     })}`,
   );
-}
-
-function withRelayRequestId(response: Response, relayRequestId: string) {
-  response.headers.set(RELAY_REQUEST_ID_HEADER, relayRequestId);
-  return response;
 }
 
 /**
@@ -874,6 +872,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   const bodyToSend =
     c.req.method === 'GET' ? undefined : (requestBody ?? c.req.raw.body);
   const relayRequestId = crypto.randomUUID();
+  const diagnosticModel = getCanonicalRelayModelName(modelName);
   const requestBytes = getRelayRequestBytes(
     bodyToSend,
     c.req.raw.headers.get('content-length'),
@@ -893,20 +892,20 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     logRelayFailure({
       relayRequestId,
       provider,
-      model: modelName,
+      model: diagnosticModel,
       requestBytes,
       elapsedMs: Math.round(performance.now() - upstreamStartedAt),
       failurePhase,
       upstreamRequestId: null,
     });
-    await releaseRelaySlot?.();
+    await releaseAfterUpstreamFailure(releaseRelaySlot);
     if (failurePhase === 'pre_headers_timeout') {
-      return withRelayRequestId(
+      return withRelayErrorRequestId(
         jsonError('Upstream request timed out', 504),
         relayRequestId,
       );
     }
-    return withRelayRequestId(
+    return withRelayErrorRequestId(
       jsonError('Internal server error', 500),
       relayRequestId,
     );
@@ -962,7 +961,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
           logRelayFailure({
             relayRequestId,
             provider,
-            model: modelName,
+            model: diagnosticModel,
             requestBytes,
             elapsedMs: Math.round(performance.now() - upstreamStartedAt),
             failurePhase: 'response_body_failure',

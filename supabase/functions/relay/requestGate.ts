@@ -69,6 +69,20 @@ function once(release: () => Promise<void>): () => Promise<void> {
   };
 }
 
+/** Release a slot without allowing a release failure to replace the upstream
+ * failure that the caller is already handling. */
+export async function releaseAfterUpstreamFailure(
+  release: (() => Promise<void>) | null | undefined,
+): Promise<void> {
+  try {
+    await release?.();
+  } catch {
+    console.error(
+      '[RELAY] Failed to release request slot after upstream failure',
+    );
+  }
+}
+
 function startStreamLeaseRefresh(
   refresh: (() => Promise<void>) | undefined,
   intervalMs: number,
@@ -205,7 +219,7 @@ export async function releaseWhenStreamCloses(
         } catch {
           console.error('[RELAY] Upstream body failure observer failed');
         }
-        await releaseOnce();
+        await releaseAfterUpstreamFailure(releaseOnce);
         throw error;
       }
 
