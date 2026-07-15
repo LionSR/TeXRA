@@ -64,8 +64,7 @@ export interface InputBarProps {
 }
 
 export interface InputBarHandle {
-  readonly hasDraft: () => boolean;
-  readonly clearDraft: () => void;
+  readonly discardDraft: () => boolean;
 }
 
 function slashSubmitText(
@@ -160,14 +159,14 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     clearDraft();
     return { value: '', cursor: 0 };
   }, [clearDraft]);
-  useImperativeHandle(
-    props.controlRef,
-    () => ({
-      clearDraft,
-      hasDraft: () => draftValueRef.current.length > 0,
-    }),
-    [clearDraft],
-  );
+  const discardDraft = useCallback((): boolean => {
+    if (draftValueRef.current.length === 0) return false;
+    clearDraft();
+    return true;
+  }, [clearDraft]);
+  useImperativeHandle(props.controlRef, () => ({ discardDraft }), [
+    discardDraft,
+  ]);
   const replaceSlashTriggerInput = useCallback(
     (input: string, value: string, cursor: number) => {
       if (value === '/' && cursor === 1 && input.startsWith('/')) {

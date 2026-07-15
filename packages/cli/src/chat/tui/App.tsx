@@ -17,6 +17,7 @@ import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - TUI surfaces and state
 import {
+  appDraftDiscardActive,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
   approvalVisibleForActiveStream,
@@ -401,8 +402,13 @@ export function App(props: AppProps): React.JSX.Element {
     // interrupt-then-exit behavior without duplicating that process lifecycle.
     if (key.ctrl && input === 'c') {
       triggerAppCtrlC({
-        hasDraft: () => inputBarRef.current?.hasDraft() ?? false,
-        clearDraft: () => inputBarRef.current?.clearDraft(),
+        discardDraft: () =>
+          appDraftDiscardActive({
+            inputDisabled,
+            reverseSearchOpen,
+            sessionListFocused,
+          }) &&
+          (inputBarRef.current?.discardDraft() ?? false),
         canStopActiveRun,
         onInterruptActive: props.onInterruptActive,
         onExit: exit,

@@ -107,18 +107,28 @@ export function triggerEscapeInterrupt(state: EscapeInterruptState): boolean {
 export type AppCtrlCAction = 'clear-draft' | 'delegate' | 'interrupt' | 'exit';
 
 export interface AppCtrlCState {
-  readonly hasDraft: () => boolean;
-  readonly clearDraft: () => void;
+  readonly discardDraft: () => boolean;
   readonly canStopActiveRun: () => boolean;
   readonly onInterruptActive: () => void;
   readonly onExit: () => void;
   readonly onCtrlC?: () => void;
 }
 
+export function appDraftDiscardActive({
+  inputDisabled,
+  reverseSearchOpen,
+  sessionListFocused,
+}: {
+  readonly inputDisabled: boolean;
+  readonly reverseSearchOpen: boolean;
+  readonly sessionListFocused: boolean;
+}): boolean {
+  return !inputDisabled && !reverseSearchOpen && !sessionListFocused;
+}
+
 /** Apply the root TUI's complete Ctrl+C policy from the latest composer state. */
 export function triggerAppCtrlC(state: AppCtrlCState): AppCtrlCAction {
-  if (state.hasDraft()) {
-    state.clearDraft();
+  if (state.discardDraft()) {
     return 'clear-draft';
   }
 

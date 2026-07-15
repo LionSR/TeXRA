@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - TUI interaction policy
 import {
+  appDraftDiscardActive,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
   approvalVisibleForActiveStream,
@@ -66,10 +67,11 @@ function ctrlCFixture({
     events,
     readDraft: () => currentDraft,
     state: {
-      hasDraft: () => currentDraft.length > 0,
-      clearDraft: () => {
+      discardDraft: () => {
+        if (currentDraft.length === 0) return false;
         currentDraft = '';
         events.push('clear');
+        return true;
       },
       canStopActiveRun: () => active,
       onInterruptActive: () => events.push('interrupt'),
@@ -146,6 +148,37 @@ describe('app interaction policy', () => {
     expect(triggerAppCtrlC(fixture.state)).toBe('clear-draft');
     expect(triggerAppCtrlC(fixture.state)).toBe('delegate');
     expect(fixture.events).toEqual(['clear', 'delegate']);
+  });
+
+  it('does not let a background draft consume Ctrl+C', () => {
+    const cases = [
+      {
+        inputDisabled: true,
+        reverseSearchOpen: false,
+        sessionListFocused: false,
+      },
+      {
+        inputDisabled: false,
+        reverseSearchOpen: true,
+        sessionListFocused: false,
+      },
+      {
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        sessionListFocused: true,
+      },
+    ];
+
+    for (const state of cases) {
+      expect(appDraftDiscardActive(state)).toBe(false);
+    }
+    expect(
+      appDraftDiscardActive({
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        sessionListFocused: false,
+      }),
+    ).toBe(true);
   });
 
   it('resolves exhaustive foreground row caps', () => {
