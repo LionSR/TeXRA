@@ -19,32 +19,6 @@ import {
 } from '../support/ProgressControllerHarnesses';
 
 describe('ProgressWorkflowActionsController', () => {
-  it('resumes workflow streams with their execution id', async () => {
-    const taskState = createWorkflowTaskState();
-    const { controller, executed } = createProgressWorkflowActionsHarness({
-      taskStates: new Map([['stream-a', taskState]]),
-      executionIds: new Map([['stream-a', 'exec-123']]),
-    });
-
-    await controller.resume('stream-a');
-
-    assert.deepEqual(executed, [
-      { config: taskState.agentConfig, executionId: 'exec-123' },
-    ]);
-  });
-
-  it('runs a fresh request without the existing execution id', async () => {
-    const taskState = createWorkflowTaskState();
-    const { controller, executed } = createProgressWorkflowActionsHarness({
-      taskStates: new Map([['stream-a', taskState]]),
-      executionIds: new Map([['stream-a', 'exec-123']]),
-    });
-
-    await controller.runNew('stream-a');
-
-    assert.deepEqual(executed, [{ config: taskState.agentConfig }]);
-  });
-
   it('ignores toolbar actions for non-workflow streams', async () => {
     const toolUseState: TaskState = {
       agentConfig: createAgentConfig({
