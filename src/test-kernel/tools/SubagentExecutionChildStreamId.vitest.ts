@@ -64,7 +64,6 @@ describe('executeSubagent childStreamId derivation', () => {
     mocks.tryUseRunContext.mockReturnValue({
       runtimeHost: { emit: vi.fn() },
       executionId: 'parent-exec',
-      delegationDepth: 0,
       approvalPromptsUnavailable: false,
       runtimeUnavailableTools: [],
       stopAfterCycle: false,
@@ -92,8 +91,19 @@ describe('executeSubagent childStreamId derivation', () => {
 
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
     const [loopParams] = mocks.startChildRunLoop.mock.calls[0] as [
-      { childStreamId: StreamTabId; executionId: string },
+      {
+        childStreamId: StreamTabId;
+        executionId: string;
+        parentStreamId: StreamTabId;
+      },
     ];
+    expect(loopParams.parentStreamId).toBe(orchestratorStreamId);
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      loopParams.executionId,
+      expect.any(Object),
+      agentName,
+      'parent-exec',
+    );
     const expectedChildStreamId = getStreamTabId(
       configPayload.agent,
       configPayload.model,

@@ -56,7 +56,6 @@ export interface NativeToolUseStrategyParams {
   readonly parentSession: SessionHandle;
   readonly runtimeHost: AgentRuntimeHost;
   readonly startedAt: number;
-  readonly delegationDepth: number;
   readonly workingDirectory?: string;
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
@@ -146,7 +145,6 @@ export function createNativeToolUseStrategy(
           isSubagent: true,
           enforceCategory: true,
           parentStreamId: params.orchestratorStreamId,
-          delegationDepth: params.delegationDepth,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
           allowWaitingResult: true,

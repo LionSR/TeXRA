@@ -66,6 +66,14 @@ function pinExecutionWorkingDirectory(config: AgentConfig): AgentConfig {
   return workingDirectory ? { ...config, workingDirectory } : config;
 }
 
+/** Return whether readable persisted metadata directly links to a parent. */
+export async function hasPersistedParent(
+  executionId: ExecutionId,
+): Promise<boolean> {
+  const meta = await getExecutionStore(executionId).readMeta();
+  return meta?.parentExecutionId !== undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Per-execution write queue — serializes read-modify-write cycles on meta
 // so that concurrent writeTerminalStatus / writeSessionDescription calls
@@ -115,14 +123,12 @@ export async function registerExecution(
   agentName: string,
   parentExecutionId?: ExecutionId,
   category?: string,
-  delegationDepth?: number,
 ): Promise<void> {
   const timestamp = new Date().toISOString();
   const store = getExecutionStore(executionId);
 
   const meta: ExecutionMetaInput = { timestamp, parentExecutionId };
   if (category) meta.category = category;
-  if (delegationDepth !== undefined) meta.delegationDepth = delegationDepth;
   const persistedConfig = normalizeWriterCategory(
     pinExecutionWorkingDirectory(config),
     agentName,
