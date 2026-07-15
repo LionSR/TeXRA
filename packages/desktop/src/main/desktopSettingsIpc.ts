@@ -36,21 +36,19 @@ import {
   type DesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
-import {
-  DesktopHistoryHandlers,
-  type DesktopHistoryOptions,
-} from './desktopHistoryHandlers.js';
+import type { DesktopHistorySettingsController } from './desktopHistoryHandlers.js';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import type { DesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 
-export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
+export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
   agentSettingsController: DesktopAgentSettingsController;
   crashReportingSettingsController: DesktopCrashReportingSettingsController;
   credentialSettingsController: DesktopCredentialSettingsController;
+  historySettingsController: DesktopHistorySettingsController;
   toolingSettingsController: DesktopToolingSettingsController;
   state: SettingsStatePorts;
   config: ConfigProvider;
@@ -59,7 +57,6 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   /** Route this window to the progress view and select the given stream. */
   revealStream?: (streamId: string) => Promise<void>;
   showInfoMessage?: (message: string) => Promise<void>;
-  showErrorMessage?: (message: string) => Promise<void>;
   confirmAction?: (message: string, confirmLabel?: string) => Promise<boolean>;
   onError?: (error: unknown) => void;
 }
@@ -83,16 +80,6 @@ export function createDesktopSettingsIpc(
       void options.showInfoMessage?.(error.reason);
     },
   );
-  const historyHandlers = new DesktopHistoryHandlers({
-    postToRenderer: options.postToRenderer,
-    resourcesPath: options.resourcesPath,
-    runExecution: options.runExecution,
-    restoreTaskState: options.restoreTaskState,
-    openPath: options.openPath,
-    showInfoMessage: options.showInfoMessage,
-    showErrorMessage: options.showErrorMessage,
-    onError,
-  });
   const goalController = new SettingsGoalController({
     listGoals: () => GoalStore.list(),
   });
@@ -216,7 +203,7 @@ export function createDesktopSettingsIpc(
     await Promise.all([
       memoryEnabledPosted,
       postMemoryData(),
-      historyHandlers.postHistoryData(),
+      options.historySettingsController.postHistoryData(),
       modelSelectionDataPosted,
       options.credentialSettingsController.postStartupData(),
       options.toolingSettingsController.postStartupData(),
@@ -325,7 +312,7 @@ export function createDesktopSettingsIpc(
       pin: (storagePath) => setMemoryPinned(storagePath, true),
       unpin: (storagePath) => setMemoryPinned(storagePath, false),
     },
-    history: historyHandlers.actions,
+    history: options.historySettingsController.actions,
     profile: options.credentialSettingsController.profileActions,
     modelSelection: {
       setEnabled: (modelName, enabled) =>
