@@ -379,7 +379,7 @@ function isFutureTimestamp(
 // Hono App
 // =============================================================================
 
-const app = new Hono().basePath('/relay');
+export const app = new Hono().basePath('/relay');
 
 // CORS middleware
 app.use(
@@ -970,4 +970,6 @@ app.notFound((_c) => {
   return jsonError('Invalid path. Expected: /relay/{provider}/{apiPath}', 400);
 });
 
-Deno.serve(app.fetch);
+if (import.meta.main) {
+  Deno.serve(app.fetch);
+}

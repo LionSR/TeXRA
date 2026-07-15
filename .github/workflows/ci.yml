@@ -85,6 +85,12 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2.0.5
+        with:
+          deno-version: '2.8.3'
+          cache: true
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -93,6 +99,13 @@ jobs:
 
       - name: Lint
         run: pnpm run lint
+
+      - name: Validate relay edge function
+        working-directory: supabase/functions/relay
+        run: |
+          deno check index.ts *_test.ts
+          deno lint
+          deno test --allow-env
 
       - name: Check dead-code ratchet
         run: pnpm run check:dead-code-ratchet
