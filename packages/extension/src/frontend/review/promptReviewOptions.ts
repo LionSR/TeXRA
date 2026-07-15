@@ -14,6 +14,7 @@ import { z } from 'zod';
 // Local imports
 import { listBaseBranchCandidates } from '@agent/review/reviewDiff';
 import type { ReviewApproach } from '@agent/review/reviewIssues';
+import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
 import { getValidatedConfig } from '@utils/config/configUtils';
 
@@ -42,8 +43,7 @@ const BRANCH_PROMPT_HINT =
 
 /**
  * Show a single-select QuickPick that honors Escape (resolves `undefined`).
- * The first item is pre-selected so Enter accepts the default. `prompt` and
- * `defaultButton` are feature-detected for older VS Code builds.
+ * The first item is pre-selected so Enter accepts the default.
  */
 function pickFromQuickPick<T extends vscode.QuickPickItem>(config: {
   title: string;
@@ -53,32 +53,21 @@ function pickFromQuickPick<T extends vscode.QuickPickItem>(config: {
   defaultButton?: vscode.QuickInputButton;
 }): Promise<T | undefined> {
   const { title, placeholder, items, prompt, defaultButton } = config;
-  return new Promise<T | undefined>((resolve) => {
-    const qp = vscode.window.createQuickPick<T>();
-    let settled = false;
-    const finish = (value: T | undefined): void => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-      qp.dispose();
-    };
-    qp.title = title;
-    qp.placeholder = placeholder;
-    qp.ignoreFocusOut = true;
-    qp.items = items;
-    qp.activeItems = [items[0]];
-    if ('prompt' in qp) {
-      (qp as vscode.QuickPick<T> & { prompt: string }).prompt = prompt;
-    }
+  const qp = vscode.window.createQuickPick<T>();
+  qp.title = title;
+  qp.placeholder = placeholder;
+  qp.ignoreFocusOut = true;
+  qp.items = items;
+  qp.activeItems = [items[0]];
+  qp.prompt = prompt;
+  if (defaultButton) qp.buttons = [defaultButton];
+  return settleQuickInput(qp, (accept) => {
     if (defaultButton) {
-      if ('buttons' in qp) qp.buttons = [defaultButton];
       qp.onDidTriggerButton((button) => {
-        if (button === defaultButton) finish(items[0]);
+        if (button === defaultButton) accept(items[0]);
       });
     }
-    qp.onDidAccept(() => finish(qp.activeItems[0] ?? qp.selectedItems[0]));
-    qp.onDidHide(() => finish(undefined));
-    qp.show();
+    qp.onDidAccept(() => accept(qp.activeItems[0] ?? qp.selectedItems[0]));
   });
 }
 
@@ -121,8 +110,8 @@ export async function promptReviewOptions(
       ? [thoroughItem, quickItem]
       : [quickItem, thoroughItem];
   const trimmedInstructions = userInstructions.trim();
-  // VS Code 1.108+: echo the step-1 focus text when present; otherwise keep the
-  // original approach explanation visible.
+  // Echo the step-1 focus text when present; otherwise keep the original
+  // approach explanation visible.
   const approachPick = await pickFromQuickPick({
     title: 'Agent Review — Approach',
     placeholder: 'Choose review depth',
@@ -146,8 +135,7 @@ export async function promptReviewOptions(
       ref: candidate.ref,
     })),
   ];
-  // VS Code 1.109+ can place a button in the QuickPick title area; offer a
-  // one-click "use auto-detect" since most runs take the default.
+  // Offer a one-click "use auto-detect" since most runs take the default.
   const useDefaultButton: vscode.QuickInputButton = {
     iconPath: new vscode.ThemeIcon('check'),
     tooltip: 'Use auto-detect (skip)',

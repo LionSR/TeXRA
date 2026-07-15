@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { appSignals } from '@eventBus/AppSignals';
 import {
@@ -192,14 +191,11 @@ async function pickReplaceOrCopyTarget(
     },
   ];
 
-  const pick = await showQuickPick<AcceptItem>({
+  const pick = await vscode.window.showQuickPick<AcceptItem>(acceptItems, {
     title: 'Accept edits',
-    placeholder: `Accept '${path.basename(editedPath)}' into the workspace`,
+    placeHolder: `Accept '${path.basename(editedPath)}' into the workspace`,
     ignoreFocusOut: true,
-    // VS Code 1.108+: keep the edited filename visible after the placeholder
-    // is cleared by typing — this is a destructive replace-vs-copy choice.
     prompt: `Edited file: ${path.basename(editedPath)}`,
-    items: acceptItems,
   });
   return pick?.target;
 }

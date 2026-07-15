@@ -14,7 +14,6 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
-import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -116,15 +115,12 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
   ];
 
   type CredentialPick = (typeof picks)[number];
-  const picked = await showQuickPick<CredentialPick>({
+  const picked = await vscode.window.showQuickPick<CredentialPick>(picks, {
     title: 'TeXRA Setup',
-    placeholder:
+    placeHolder:
       'TeXRA needs a credential before the setup assistant can run models.',
-    // VS Code 1.108+: the four choices are not self-explanatory in isolation,
-    // and the placeholder vanishes on first keystroke. The prompt persists.
     prompt:
       'ChatGPT uses your Plus/Pro subscription; Researcher Access uses your TeXRA account; API Key requires a provider key.',
-    items: picks,
   });
 
   if (!picked) return false;

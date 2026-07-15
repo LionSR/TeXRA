@@ -3,10 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import {
-  settleQuickInput,
-  showQuickPick,
-} from '@commands/_shared/quickInputUtils';
+import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
@@ -75,11 +72,8 @@ function createProfileKeyController(): SettingsProfileKeyController {
   });
 }
 
-async function setApiKeyForProvider(
-  provider: ApiProvider,
-  showNavigationFallback = false,
-): Promise<void> {
-  const apiKey = await promptForApiKey(provider, showNavigationFallback);
+async function setApiKeyForProvider(provider: ApiProvider): Promise<void> {
+  const apiKey = await promptForApiKey(provider);
 
   if (!apiKey) {
     return;
@@ -97,56 +91,29 @@ async function setApiKeyForProvider(
 }
 
 /**
- * Prompt for an API key. When the host exposes InputBox title buttons, add a
- * "Get API Key" action that opens the provider's key portal without closing the
- * input box, so the user can paste straight away. Older hosts use the previous
- * message-button fallback when the provider-picker path asks for it.
+ * Prompt for an API key with a native button that opens the provider's key
+ * portal without closing the input box, so the user can paste straight away.
  */
 async function promptForApiKey(
   provider: ApiProvider,
-  showNavigationFallback: boolean,
 ): Promise<string | undefined> {
   const ib = vscode.window.createInputBox();
-  const supportsTitleButtons = Reflect.has(ib, 'buttons');
-
-  if (!supportsTitleButtons && showNavigationFallback) {
-    const actions: Array<vscode.MessageItem & { id: 'enter' | 'getApiKey' }> = [
-      { title: 'Enter Key', id: 'enter' },
-      { title: 'Get API Key', id: 'getApiKey' },
-    ];
-    const action = await vscode.window.showInformationMessage(
-      `Set your ${provider} API key`,
-      ...actions,
-    );
-
-    if (action == null) {
-      ib.dispose();
-      return undefined;
-    }
-
-    if (action.id === 'getApiKey') {
-      ib.dispose();
-      await vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
-      return undefined;
-    }
-  }
-
   ib.title = `Set ${provider} API key`;
   ib.prompt = `Enter ${provider} API key`;
   ib.password = true;
   ib.placeholder = '************************************';
+  ib.ignoreFocusOut = true;
   const getKeyButton: vscode.QuickInputButton = {
     iconPath: new vscode.ThemeIcon('link-external'),
     tooltip: `Get ${provider} API key`,
+    location: vscode.QuickInputButtonLocation?.Input,
   };
-  if (supportsTitleButtons) {
-    ib.buttons = [getKeyButton];
-    ib.onDidTriggerButton((button) => {
-      if (button === getKeyButton) {
-        void vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
-      }
-    });
-  }
+  ib.buttons = [getKeyButton];
+  ib.onDidTriggerButton((button) => {
+    if (button === getKeyButton) {
+      void vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
+    }
+  });
   return settleQuickInput(ib, (accept) => {
     ib.onDidAccept(() => {
       accept(ib.value);
@@ -166,15 +133,17 @@ export async function setApiKey(provider?: ApiProvider): Promise<void> {
   }
 
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await showQuickPick<ProviderQuickPickItem>({
-    placeholder: 'Select API provider',
-    prompt:
-      "Keys are stored in VS Code's encrypted secret store, never on disk.",
-    items: providerItems,
-  });
+  const providerPick = await vscode.window.showQuickPick<ProviderQuickPickItem>(
+    providerItems,
+    {
+      placeHolder: 'Select API provider',
+      prompt:
+        "Keys are stored in VS Code's encrypted secret store, never on disk.",
+    },
+  );
 
   if (providerPick?.provider) {
-    await setApiKeyForProvider(providerPick.provider, true);
+    await setApiKeyForProvider(providerPick.provider);
   }
 }
 
@@ -188,12 +157,14 @@ type ProviderQuickPickItem = Awaited<
  */
 export async function removeApiKey(): Promise<void> {
   const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await showQuickPick<ProviderQuickPickItem>({
-    placeholder: 'Select API provider to remove key',
-    prompt:
-      'Only removes the key from TeXRA — does not delete it from the provider.',
-    items: providerItems,
-  });
+  const providerPick = await vscode.window.showQuickPick<ProviderQuickPickItem>(
+    providerItems,
+    {
+      placeHolder: 'Select API provider to remove key',
+      prompt:
+        'Only removes the key from TeXRA — does not delete it from the provider.',
+    },
+  );
 
   const provider = providerPick?.provider;
   if (!provider) {
