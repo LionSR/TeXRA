@@ -297,14 +297,24 @@ export async function runWorkflowScript(
       return 'null';
     }
 
-    // Validate before journaling. Resume storage must never contain a value
-    // that the sandbox boundary cannot reproduce.
-    const payload = serializeBridgeValue(result, 'agent() result');
-    journal.set(index, {
-      index,
-      key,
-      result: deserializeBridgeValue(payload),
-    });
+    let payload: string | undefined;
+    let normalizedResult: unknown;
+    try {
+      // Validate before journaling. Resume storage must never contain a value
+      // that the sandbox boundary cannot reproduce.
+      payload = serializeBridgeValue(result, 'agent() result');
+      normalizedResult = deserializeBridgeValue(payload);
+    } catch (error) {
+      emit({
+        type: 'agent:end',
+        index,
+        label,
+        cached: false,
+        error: toErrorMessage(error),
+      });
+      throw error;
+    }
+    journal.set(index, { index, key, result: normalizedResult });
     emit({ type: 'agent:end', index, label, cached: false });
     return payload;
   }

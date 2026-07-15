@@ -236,6 +236,11 @@ interface GuestOutcome {
   error?: Error;
 }
 
+type SandboxSettlement =
+  | { readonly kind: 'outcome'; readonly outcome: GuestOutcome }
+  | { readonly kind: 'host-failure'; readonly error: Error }
+  | { readonly kind: 'timeout' };
+
 /**
  * Evaluates a workflow body in a fresh preemptible QuickJS runtime. The WASM
  * module is shared, but every script receives a new runtime and context with
@@ -249,10 +254,9 @@ export async function runScriptInSandbox(
   const quickJs = await getQuickJsModule();
   const deadline = performance.now() + options.timeoutMs;
   let active = true;
-  let timedOut = false;
+  let interruptRequested = false;
   let timeoutNotified = false;
-  let outcome: GuestOutcome | undefined;
-  let hostFailure: Error | undefined;
+  let settlement: SandboxSettlement | undefined;
   let wakeResolve: (() => void) | undefined;
 
   const wake = () => {
@@ -263,18 +267,17 @@ export async function runScriptInSandbox(
   const waitForWake = () =>
     new Promise<void>((resolve) => {
       wakeResolve = resolve;
-      if (
-        timedOut ||
-        outcome !== undefined ||
-        hostFailure ||
-        runtime.hasPendingJob()
-      ) {
+      if (settlement !== undefined || runtime.hasPendingJob()) {
         wake();
       }
     });
   const markTimedOut = () => {
-    if (timedOut) return;
-    timedOut = true;
+    interruptRequested = true;
+    if (settlement !== undefined) {
+      wake();
+      return;
+    }
+    settlement = { kind: 'timeout' };
     if (!timeoutNotified) {
       timeoutNotified = true;
       try {
@@ -290,7 +293,7 @@ export async function runScriptInSandbox(
     memoryLimitBytes: QUICKJS_MEMORY_LIMIT_BYTES,
     maxStackSizeBytes: QUICKJS_STACK_LIMIT_BYTES,
     interruptHandler: () => {
-      if (timedOut || performance.now() >= deadline) {
+      if (interruptRequested || performance.now() >= deadline) {
         markTimedOut();
         return true;
       }
@@ -314,12 +317,13 @@ export async function runScriptInSandbox(
       pendingHostPromises,
       () => active,
       (error) => {
-        hostFailure = error;
+        if (settlement !== undefined) return;
+        settlement = { kind: 'host-failure', error };
         wake();
       },
       (delivered) => {
-        if (outcome !== undefined) return;
-        outcome = delivered;
+        if (settlement !== undefined) return;
+        settlement = { kind: 'outcome', outcome: delivered };
         wake();
       },
       wake,
@@ -366,26 +370,24 @@ export async function runScriptInSandbox(
         bodyThunk.dispose();
       }
 
-      await pumpJobs(
-        runtime,
-        () => {
-          if (timedOut) throw timeoutError(options);
-          if (hostFailure) throw hostFailure;
-          if (outcome?.error) throw outcome.error;
-          return outcome !== undefined;
-        },
-        waitForWake,
-      );
+      await pumpJobs(runtime, () => settlement !== undefined, waitForWake);
 
-      if (timedOut) throw timeoutError(options);
-      if (hostFailure) throw hostFailure;
-      if (outcome?.error) throw outcome.error;
-      return outcome?.value;
+      switch (settlement?.kind) {
+        case 'outcome':
+          if (settlement.outcome.error) throw settlement.outcome.error;
+          return settlement.outcome.value;
+        case 'host-failure':
+          throw settlement.error;
+        case 'timeout':
+          throw timeoutError(options);
+        case undefined:
+          throw new Error('Workflow sandbox stopped without a result.');
+      }
     } finally {
       deliver.dispose();
     }
   } catch (error) {
-    if (timedOut) throw timeoutError(options);
+    if (settlement?.kind === 'timeout') throw timeoutError(options);
     throw error;
   } finally {
     active = false;
@@ -560,6 +562,12 @@ async function pumpJobs(
 ): Promise<void> {
   while (!shouldStop()) {
     const result = runtime.executePendingJobs(MAX_JOBS_PER_TURN);
+    // Result delivery is the run's linearization point. A later guest job in
+    // the same QuickJS batch must not replace that result with its own error.
+    if (shouldStop()) {
+      result.dispose();
+      return;
+    }
     const executed = result.unwrap();
     if (shouldStop()) return;
 

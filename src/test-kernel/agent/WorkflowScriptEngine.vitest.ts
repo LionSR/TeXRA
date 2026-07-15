@@ -480,6 +480,39 @@ return [typeof globalThis.__wfDeliver, typeof globalThis.__wfBody]`,
     expect(run.result).toEqual(['undefined', 'undefined']);
   });
 
+  it('keeps a delivered result when a later guest microtask throws', async () => {
+    const run = await runWorkflowScript({
+      script: `${META}
+Promise.resolve().then(() => {
+  Promise.resolve().then(() => { throw new Error('late rejection') })
+})
+return 'delivered'`,
+      runAgent: echoRunner,
+    });
+
+    expect(run.result).toBe('delivered');
+  });
+
+  it('does not time out a delivered result while preempting leftover work', async () => {
+    const onTimeout = vi.fn();
+    const result = await runScriptInSandbox(
+      `
+Promise.resolve().then(() => {
+  Promise.resolve().then(() => { while (true) {} })
+})
+return 'delivered'`,
+      { asyncFns: {}, syncFns: {}, argsJson: undefined },
+      {
+        filename: 'delivered-before-deadline.workflow.js',
+        timeoutMs: 40,
+        onTimeout,
+      },
+    );
+
+    expect(result).toBe('delivered');
+    expect(onTimeout).not.toHaveBeenCalled();
+  });
+
   it('aborts un-awaited agent() calls left pending when the script returns', async () => {
     // A script that fires an agent() call without awaiting it, then returns,
     // must not leave model work running past the reported-complete point:
@@ -702,12 +735,29 @@ while (true) {}`,
   });
 
   it('rejects non-serializable agent results instead of journaling null', async () => {
+    const events: WorkflowScriptEvent[] = [];
     await expect(
       runWorkflowScript({
         script: `${META}return await agent('function-result')`,
         runAgent: async () => () => undefined,
+        onEvent: (event) => events.push(event),
       }),
     ).rejects.toThrow(/agent\(\) result must be JSON-serializable/i);
+    expect(events).toEqual([
+      {
+        type: 'agent:start',
+        index: 0,
+        label: 'function-result',
+        phase: undefined,
+      },
+      {
+        type: 'agent:end',
+        index: 0,
+        label: 'function-result',
+        cached: false,
+        error: expect.stringMatching(/must be JSON-serializable/i),
+      },
+    ]);
   });
 
   it('rejects explicitly supplied non-serializable workflow args', async () => {
