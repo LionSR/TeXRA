@@ -58,11 +58,21 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     private readonly onboarding?: MainViewOnboardingHooks,
   ) {
     super('MainView', { trackActiveView: true });
-    this.recordingManager = new RecordingManager(context, {
-      recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
-      recordingStoppedCommand: MAIN_VIEW_COMMANDS.RECORDING_STOPPED,
-      recordingErrorCommand: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
-      transcriptionCommand: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED,
+    this.recordingManager = new RecordingManager({
+      buildRecordingMessage: (message) => {
+        const command = {
+          started: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
+          stopped: MAIN_VIEW_COMMANDS.RECORDING_STOPPED,
+          error: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
+        }[message.status];
+        return message.status === 'error'
+          ? { command, error: message.error }
+          : { command };
+      },
+      buildTranscriptionMessage: (text) => ({
+        command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED,
+        text,
+      }),
       progressTitle: 'Transcribing instruction',
     });
     this.fileManager = new FileManager();
