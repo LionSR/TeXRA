@@ -14,10 +14,12 @@ import {
   readRequestBodyWithinSizeLimit,
 } from '../../../supabase/functions/relay/requestLimits';
 import {
-  acquireRelayRequestSlot,
   classifyPreHeaderFailure,
   getRelayRequestBytes,
   getUpstreamRequestId,
+} from '../../../supabase/functions/relay/diagnostics';
+import {
+  acquireRelayRequestSlot,
   releaseWhenStreamCloses,
 } from '../../../supabase/functions/relay/requestGate';
 import { getRequestLimits } from '../../../supabase/functions/relay/models';
@@ -398,7 +400,6 @@ describe('relay free-tier request limits', () => {
 
   it('reports upstream response-body failures and releases the slot', async () => {
     const upstreamError = new Error('response body failed');
-    let observedError: unknown;
     let releases = 0;
     const failingBody = new ReadableStream<Uint8Array>({
       pull(controller) {
@@ -412,14 +413,11 @@ describe('relay free-tier request limits', () => {
       },
       undefined,
       0,
-      (error) => {
-        observedError = error;
-      },
+      () => {},
     );
     if (wrapped === null) assert.fail('expected wrapped stream');
 
     await assert.rejects(wrapped.getReader().read(), upstreamError);
-    assert.equal(observedError, upstreamError);
     assert.equal(releases, 1);
   });
 

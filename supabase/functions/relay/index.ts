@@ -101,12 +101,14 @@ import {
   readRequestBodyWithinSizeLimit,
 } from './requestLimits.ts';
 import {
-  acquireRelayRequestSlot,
   classifyPreHeaderFailure,
   getRelayRequestBytes,
   getUpstreamRequestId,
-  releaseWhenStreamCloses,
   type RelayFailurePhase,
+} from './diagnostics.ts';
+import {
+  acquireRelayRequestSlot,
+  releaseWhenStreamCloses,
 } from './requestGate.ts';
 
 // =============================================================================
