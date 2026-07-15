@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
-import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { SettingsProfileHost } from '@controllers/settingsView/SettingsProfileHost';
+import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
@@ -122,7 +123,7 @@ function createProfileHost(options: {
   const config = new Map<string, unknown>();
   const globalState = options.globalState ?? createStateStore();
   const secretValues = options.secretValues ?? new Map<string, string>();
-  return createSettingsViewHost({
+  return new SettingsProfileHost({
     state: {
       workspaceState: createStateStore(),
       globalState,
@@ -180,10 +181,11 @@ function createProfileHost(options: {
         options.refreshAfterKeyChange ?? (async () => undefined),
     },
     providerConfig: {
-      isApiProvider: (provider) => provider === 'openai',
-      setProviderStreaming: options.setProviderStreaming,
-      setProviderEndpoint: options.setProviderEndpoint,
-      setGlobalStreaming: options.setGlobalStreaming,
+      setProviderStreaming:
+        options.setProviderStreaming ?? (async () => undefined),
+      setProviderEndpoint:
+        options.setProviderEndpoint ?? (async () => undefined),
+      setGlobalStreaming: options.setGlobalStreaming ?? (async () => undefined),
     },
   });
 }
@@ -194,7 +196,7 @@ describe('SettingsViewHost', () => {
     const modelSelection = createModelSelectionController();
     const messages: unknown[] = [];
     let modelRefreshes = 0;
-    const host = createSettingsViewHost({
+    const host = new SettingsViewHost({
       state: {
         workspaceState: createStateStore(),
         globalState: createStateStore(),
@@ -220,6 +222,7 @@ describe('SettingsViewHost', () => {
     await host.sendModelSelectionData();
     await host.setModelEnabled({ modelName: 'gpt55', enabled: false });
 
+    expect(host).not.toHaveProperty('sendProfileData');
     expect(messages.at(0)).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
       enabled: true,
