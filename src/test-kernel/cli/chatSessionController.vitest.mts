@@ -210,19 +210,30 @@ describe('CLI terminal outcome resolution', () => {
     ).resolves.toBe(RUN_OUTCOME.CANCELLED);
   });
 
-  it('surfaces storage failures instead of masking them', async () => {
+  it('reports an outcome read failure and retains the completed run', async () => {
+    const reportReadFailure = vi.fn();
     mocks.getExecutionStore.mockReturnValue({
       readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
     });
 
     await expect(
-      readCliRunOutcome({
-        category: 'toolUse',
-        executionId: 'broken-storage',
-        outcome: RUN_OUTCOME.COMPLETED,
-        streamId: 'broken-storage',
-      } as Parameters<typeof readCliRunOutcome>[0]),
-    ).rejects.toThrow('metadata read failed');
+      readCliRunOutcome(
+        {
+          category: 'toolUse',
+          executionId: 'broken-storage',
+          outcome: RUN_OUTCOME.COMPLETED,
+          streamId: 'broken-storage',
+        } as Parameters<typeof readCliRunOutcome>[0],
+        reportReadFailure,
+      ),
+    ).resolves.toBe(RUN_OUTCOME.COMPLETED);
+    expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message:
+          'Could not verify the persisted outcome for execution broken-storage; using the current run outcome: metadata read failed',
+        cause: expect.any(Error),
+      }),
+    );
   });
 });
 

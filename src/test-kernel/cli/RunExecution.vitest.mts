@@ -332,6 +332,30 @@ describe('executeCliRequest', () => {
     );
   });
 
+  it('reports outcome read failures without rejecting a successful run', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const readError = new Error('metadata read failed');
+    mocks.readCliRunOutcome.mockImplementationOnce(
+      async (
+        result: { readonly outcome: string },
+        reportReadFailure: (error: Error) => void,
+      ) => {
+        reportReadFailure(readError);
+        return result.outcome;
+      },
+    );
+
+    await expect(
+      executeCliRequest(baseRequest(), cliContext()),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { outcome: 'completed' },
+    });
+    expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
+      message: 'metadata read failed',
+    });
+  });
+
   it('persists headless stream sidecars from session events', async () => {
     await installStoragePlatform();
     const { executeCliRequest } = await import('@cli/runtime/runExecution');

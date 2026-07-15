@@ -330,6 +330,9 @@ export async function executeCliRequest(
     };
   }
 
-  const outcome = await readCliRunOutcome(runResult.result);
+  const outcome = await readCliRunOutcome(
+    runResult.result,
+    reportFinalizationFailure,
+  );
   return { ok: true, result: { ...runResult.result, outcome } };
 }
