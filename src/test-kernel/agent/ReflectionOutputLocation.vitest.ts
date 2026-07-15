@@ -45,6 +45,7 @@ describe('reflection output location resolution', () => {
       relativePath: 'output.xml',
     };
     let resolvedRound: number | undefined;
+    const shared = reflectionShared();
     const node = new ResponseCycleNode().setServices({
       getOutputFileLocation: async (round: number) => {
         resolvedRound = round;
@@ -53,9 +54,11 @@ describe('reflection output location resolution', () => {
       },
     } as unknown as ReflectionServices);
 
-    const prep = await node.prep(reflectionShared());
+    const prep = await node.prep(shared);
 
     expect(resolvedRound).toBe(1);
+    expect(prep.context).toBe(shared.context);
+    expect(prep).not.toHaveProperty('shared');
     expect(prep.outputLocation).toBe(outputLocation);
   });
 });

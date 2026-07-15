@@ -58,8 +58,8 @@ import type { ResponseCycleServices } from './CycleServices';
 const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
   /** Whether output file exists */
   outputExists: z.boolean(),
-  /** Agent output location (nullable for native nesting compatibility) */
-  outputLocation: AgentFileLocationSchema.nullable(),
+  /** Agent output location selected before this cycle starts. */
+  outputLocation: AgentFileLocationSchema,
   /** Processed response text */
   processedResponse: z.string().optional(),
 });
@@ -111,7 +111,7 @@ class ResponsePrepNode<C> extends BaseNode<
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
     const { prompt, userVarChannels, checkInterruption } = this.services;
     const interrupted = checkInterruption();
-    const exists = await FlexibleFS.exists(shared.outputLocation!);
+    const exists = await FlexibleFS.exists(shared.outputLocation);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(prompt.systemPrompt, {
@@ -140,7 +140,7 @@ class ResponsePrepNode<C> extends BaseNode<
     await saveCycleDebug(shared.messages, 'messages', this.services, {
       continuationCount: round.continuationCount,
       baseName: 'response',
-      outputFile: shared.outputLocation!.relativePath,
+      outputFile: shared.outputLocation.relativePath,
     });
 
     return FlowTransition.DEFAULT;
@@ -191,17 +191,19 @@ type ProcessNodeResult = SkippableNodeResult<ProcessResult>;
 /**
  * Data extracted by prep() for continuation decision.
  */
-interface ContinuationPrepResult {
-  shouldSkip: boolean;
+interface ContinuationPrepData {
   interrupted: boolean;
-  stopReason?: ProviderStopReason;
-  processedResponse?: string;
+  stopReason: ProviderStopReason;
+  processedResponse: string;
 }
+
+type ContinuationPrepResult = SkippableNodeResult<ContinuationPrepData>;
 
 type ContinuationNodeResult = SkippableNodeResult<{
   shouldEndTurn: boolean;
   shouldStop: boolean;
   shouldContinue: boolean;
+  reachedTokenLimit: boolean;
 }>;
 
 export function responseCycleToolsForModel<C>(
@@ -369,7 +371,7 @@ class ResponseProcessNode<C> extends BaseNode<
     workspace.assembly.accumulatedOutput = result.updatedAccumulatedOutput;
     shared.processedResponse = result.processedResponse;
 
-    const outputLocation = shared.outputLocation!;
+    const { outputLocation } = shared;
     const connector = result.bestConnector;
 
     await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
@@ -469,39 +471,39 @@ class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
-    const shouldSkip =
-      shared.shouldStop || !shared.stopReason || !shared.processedResponse;
-
-    const interrupted = !shouldSkip && this.services.checkInterruption();
+    if (shared.shouldStop || !shared.stopReason || !shared.processedResponse) {
+      return { kind: 'skipped' };
+    }
 
     return {
-      shouldSkip,
-      interrupted,
-      stopReason: shared.stopReason ?? undefined,
-      processedResponse: shared.processedResponse,
+      kind: 'success',
+      value: {
+        interrupted: this.services.checkInterruption(),
+        stopReason: shared.stopReason,
+        processedResponse: shared.processedResponse,
+      },
     };
   }
 
   async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
     const { round, run, modelHandler, setting } = this.services;
 
-    if (prepRes.shouldSkip) {
+    if (prepRes.kind === 'skipped') {
       return { kind: 'skipped' };
     }
 
-    if (prepRes.interrupted) {
+    const { interrupted, stopReason, processedResponse } = prepRes.value;
+    if (interrupted) {
       return {
         kind: 'success',
         value: {
           shouldEndTurn: false,
           shouldStop: true,
           shouldContinue: false,
+          reachedTokenLimit: false,
         },
       };
     }
-
-    const stopReason = prepRes.stopReason!;
-    const processedResponse = prepRes.processedResponse!;
 
     const { endTurn: shouldEndTurn, shouldStop } =
       modelHandler.checkStopConditions(
@@ -517,16 +519,22 @@ class ResponseContinuationNode<C> extends BaseNode<
       processedResponse,
       setting,
     );
+    const reachedTokenLimit = isTokenLimitStopReason(stopReason);
 
     return {
       kind: 'success',
-      value: { shouldEndTurn, shouldStop, shouldContinue },
+      value: {
+        shouldEndTurn,
+        shouldStop,
+        shouldContinue,
+        reachedTokenLimit,
+      },
     };
   }
 
   async post(
     shared: ResponseCycleShared,
-    prepRes: ContinuationPrepResult,
+    _prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
     const { round, workspace, logger, modelHandler, setting, config } =
@@ -538,11 +546,11 @@ class ResponseContinuationNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const { shouldEndTurn, shouldStop, shouldContinue } = execRes.value;
+    const { shouldEndTurn, shouldStop, shouldContinue, reachedTokenLimit } =
+      execRes.value;
     shared.endTurn = shouldEndTurn;
     shared.shouldStop = shouldStop;
 
-    const reachedTokenLimit = isTokenLimitStopReason(prepRes.stopReason);
     if (shouldStop || !(shouldContinue || reachedTokenLimit)) {
       return FlowTransition.COMPLETE;
     }
@@ -600,7 +608,7 @@ export function createResponseCycleFlow<C>(): Flow<
     getDebugFileOptions: (shared, services) => ({
       continuationCount: services.round.continuationCount,
       baseName: 'response',
-      outputFile: shared.outputLocation!.relativePath,
+      outputFile: shared.outputLocation.relativePath,
     }),
   });
   const processNode = new ResponseProcessNode<C>();
