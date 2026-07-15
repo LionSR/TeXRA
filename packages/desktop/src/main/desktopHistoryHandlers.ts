@@ -15,7 +15,6 @@ import {
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import type { TaskState } from '@agent/core/state/TaskState';
-import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - IPC contracts
@@ -31,22 +30,21 @@ import type { SettingsViewCommandActions } from '@controllers/settingsView/Setti
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
 
-/** History-specific capabilities supplied by the desktop host. */
+/** Dependencies required by the desktop history controller. */
 export interface DesktopHistoryOptions {
   /** Resolved extension resources used by chat export templates. */
-  resourcesPath: string;
+  readonly resourcesPath: string;
   /** Run a validated request created from a persisted history entry. */
-  runExecution: (request: ValidatedExecutionRequest) => Promise<void>;
+  readonly runExecution: (request: ValidatedExecutionRequest) => Promise<void>;
   /** Restore a persisted agent configuration into the main view. */
-  restoreTaskState: (taskState: TaskState) => Promise<boolean>;
-}
-
-interface DesktopHistoryHandlerDependencies extends DesktopHistoryOptions {
-  postToRenderer(message: unknown): void;
-  openPath?: (filePath: string) => Promise<void>;
-  showInfoMessage?: (message: string) => Promise<void>;
-  showErrorMessage?: (message: string) => Promise<void>;
-  onError(error: unknown): void;
+  readonly restoreTaskState: (taskState: TaskState) => Promise<boolean>;
+  /** Return execution ids that must be protected from history deletion. */
+  readonly getActiveExecutionIds: () => readonly string[];
+  readonly postToRenderer: (message: unknown) => void;
+  readonly openPath: (filePath: string) => Promise<void>;
+  readonly showInfoMessage: (message: string) => Promise<void>;
+  readonly showErrorMessage: (message: string) => Promise<void>;
+  readonly onError: (error: unknown) => void;
 }
 
 const HISTORY_CONFIG_UNREADABLE_MESSAGE =
@@ -55,15 +53,18 @@ const HISTORY_CONFIG_UNREADABLE_MESSAGE =
 type HistoryConfigResult =
   { status: 'ok'; config: AgentConfig } | { status: 'unreadable' };
 
+export interface DesktopHistorySettingsController {
+  readonly actions: SettingsViewCommandActions['history'];
+  postHistoryData(): Promise<void>;
+}
+
 /** Own desktop history settings actions behind the dispatcher contract. */
-export class DesktopHistoryHandlers {
+export class DesktopHistoryHandlers implements DesktopHistorySettingsController {
   readonly actions: SettingsViewCommandActions['history'];
 
   private chatExportControllerLoad: Promise<ChatExportController> | undefined;
 
-  constructor(
-    private readonly dependencies: DesktopHistoryHandlerDependencies,
-  ) {
+  constructor(private readonly dependencies: DesktopHistoryOptions) {
     this.actions = {
       deleteAgent: (historyId) => this.deleteItem(historyId),
       clear: () => this.clear(),
@@ -80,8 +81,8 @@ export class DesktopHistoryHandlers {
   }
 
   private async deleteItem(historyId: string): Promise<void> {
-    if (getAllActiveExecutionIds().includes(historyId)) {
-      await this.dependencies.showInfoMessage?.(
+    if (this.dependencies.getActiveExecutionIds().includes(historyId)) {
+      await this.dependencies.showInfoMessage(
         'Cannot delete a running execution',
       );
       return;
@@ -89,7 +90,7 @@ export class DesktopHistoryHandlers {
 
     const deleted = await deleteExecution(historyId as ExecutionId);
     if (!deleted) {
-      await this.dependencies.showInfoMessage?.(
+      await this.dependencies.showInfoMessage(
         `History item not found: ${historyId}`,
       );
       return;
@@ -98,7 +99,9 @@ export class DesktopHistoryHandlers {
   }
 
   private async clear(): Promise<void> {
-    await deleteAllExecutions(new Set(getAllActiveExecutionIds()));
+    await deleteAllExecutions(
+      new Set(this.dependencies.getActiveExecutionIds()),
+    );
     this.dependencies.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
     });
@@ -119,24 +122,24 @@ export class DesktopHistoryHandlers {
   private async rerun(historyId: string): Promise<void> {
     const result = await this.readHistoryConfig(historyId);
     if (result.status === 'unreadable') {
-      await this.dependencies.showErrorMessage?.(
+      await this.dependencies.showErrorMessage(
         HISTORY_CONFIG_UNREADABLE_MESSAGE,
       );
       return;
     }
     const validated = validateExecutionRequest({ config: result.config });
     if (!validated.valid) {
-      await this.dependencies.showErrorMessage?.(validated.message);
+      await this.dependencies.showErrorMessage(validated.message);
       return;
     }
-    await this.dependencies.showInfoMessage?.('Rerunning agent from history');
+    await this.dependencies.showInfoMessage('Rerunning agent from history');
     await this.dependencies.runExecution(validated.request);
   }
 
   private async restore(historyId: string): Promise<void> {
     const result = await this.readHistoryConfig(historyId);
     if (result.status === 'unreadable') {
-      await this.dependencies.showErrorMessage?.(
+      await this.dependencies.showErrorMessage(
         HISTORY_CONFIG_UNREADABLE_MESSAGE,
       );
       return;
@@ -145,7 +148,7 @@ export class DesktopHistoryHandlers {
       agentConfigToTaskState(result.config),
     );
     if (!restored) {
-      await this.dependencies.showErrorMessage?.(
+      await this.dependencies.showErrorMessage(
         'Failed to restore configuration',
       );
     }
@@ -177,10 +180,10 @@ export class DesktopHistoryHandlers {
   ): Promise<void> {
     switch (status) {
       case 'config_missing':
-        await this.dependencies.showInfoMessage?.('History item not found');
+        await this.dependencies.showInfoMessage('History item not found');
         return;
       case 'conversation_missing':
-        await this.dependencies.showInfoMessage?.(
+        await this.dependencies.showInfoMessage(
           'No conversation data available for this execution',
         );
         return;
@@ -192,10 +195,10 @@ export class DesktopHistoryHandlers {
   ): Promise<void> {
     switch (status) {
       case 'config_missing':
-        await this.dependencies.showInfoMessage?.('History item not found');
+        await this.dependencies.showInfoMessage('History item not found');
         return;
       case 'streamLogs_missing':
-        await this.dependencies.showInfoMessage?.(
+        await this.dependencies.showInfoMessage(
           'No stored transcript available for this execution — it may predate transcript persistence.',
         );
         return;
@@ -217,8 +220,8 @@ export class DesktopHistoryHandlers {
       return;
     }
     const { absolutePath, storagePath } = outcome.result;
-    await this.dependencies.openPath?.(absolutePath);
-    await this.dependencies.showInfoMessage?.(
+    await this.dependencies.openPath(absolutePath);
+    await this.dependencies.showInfoMessage(
       `Chat exported: ${path.basename(storagePath)}`,
     );
   }
@@ -245,8 +248,8 @@ export class DesktopHistoryHandlers {
         historyId,
         exportInput,
       );
-      await this.dependencies.openPath?.(absolutePath);
-      await this.dependencies.showInfoMessage?.(
+      await this.dependencies.openPath(absolutePath);
+      await this.dependencies.showInfoMessage(
         `Chat exported: ${path.basename(storagePath)}`,
       );
       return;
@@ -255,8 +258,8 @@ export class DesktopHistoryHandlers {
     const { absolutePath, storagePath, pdfPath, logTail } =
       await controller.exportAsLatex(historyId, exportInput);
     if (pdfPath) {
-      await this.dependencies.openPath?.(pdfPath);
-      await this.dependencies.showInfoMessage?.(
+      await this.dependencies.openPath(pdfPath);
+      await this.dependencies.showInfoMessage(
         `Chat exported and compiled: ${path.basename(storagePath).replace('.tex', '.pdf')}`,
       );
       return;
@@ -268,8 +271,8 @@ export class DesktopHistoryHandlers {
         ),
       );
     }
-    await this.dependencies.openPath?.(absolutePath);
-    await this.dependencies.showInfoMessage?.(
+    await this.dependencies.openPath(absolutePath);
+    await this.dependencies.showInfoMessage(
       'LaTeX compilation failed. The .tex source file has been opened instead.',
     );
   }
