@@ -7,6 +7,7 @@ import type {
   DesktopHistoryOptions,
   DesktopHistorySettingsController,
 } from '@desktop/main/desktopHistoryHandlers';
+import type { DesktopSettingsUiHost } from '@desktop/main/desktopSettingsIpc';
 import type { DesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 
 // Shared imports - settings controllers
@@ -51,6 +52,20 @@ export function createStubDesktopHistorySettingsController(
       exportChatHtml: noOp,
     },
     postHistoryData: noOp,
+    ...overrides,
+  };
+}
+
+export function createStubDesktopSettingsUiHost(
+  overrides: Partial<DesktopSettingsUiHost> = {},
+): DesktopSettingsUiHost {
+  return {
+    openPath: noOp,
+    revealStream: noOp,
+    showInfoMessage: noOp,
+    showErrorMessage: noOp,
+    confirmAction: async () => true,
+    onError: () => undefined,
     ...overrides,
   };
 }

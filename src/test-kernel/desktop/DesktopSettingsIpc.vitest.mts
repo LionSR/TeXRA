@@ -16,6 +16,7 @@ import {
   createStubDesktopCrashReportingSettingsController,
   createStubDesktopCredentialSettingsController,
   createStubDesktopHistorySettingsController,
+  createStubDesktopSettingsUiHost,
   createStubDesktopToolingSettingsController,
 } from './desktopSettingsTestSupport';
 import type { StateStore } from '@platform/interfaces';
@@ -50,6 +51,7 @@ type SettingsFixtureOverrides = Omit<
   | 'state'
   | 'config'
   | 'historySettingsController'
+  | 'ui'
   | 'toolingSettingsController'
   | 'postToRenderer'
 > & {
@@ -60,6 +62,7 @@ type SettingsFixtureOverrides = Omit<
   workspaceState?: StateStore;
   config?: DesktopSettingsIpcOptions['config'];
   historySettingsController?: DesktopSettingsIpcOptions['historySettingsController'];
+  ui?: Partial<DesktopSettingsIpcOptions['ui']>;
   toolingSettingsController?: DesktopSettingsIpcOptions['toolingSettingsController'];
   postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
 };
@@ -140,6 +143,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     globalState = new MemoryStateStore(),
     workspaceState = new MemoryStateStore(),
     config = new MemoryConfigStore(),
+    ui,
     ...settingsOverrides
   } = overrides;
   const postToRenderer = overrides.postToRenderer ?? (() => undefined);
@@ -171,6 +175,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       }),
     state: { globalState, workspaceState },
     config,
+    ui: createStubDesktopSettingsUiHost(ui),
     postToRenderer,
   });
   return { globalState, settings, workspaceState };
@@ -446,8 +451,10 @@ describe('desktop settings IPC', () => {
     const revealed: string[] = [];
 
     const { settings } = createSettingsFixture({
-      revealStream: async (streamId) => {
-        revealed.push(streamId);
+      ui: {
+        revealStream: async (streamId) => {
+          revealed.push(streamId);
+        },
       },
     });
 
@@ -590,7 +597,7 @@ describe('desktop settings IPC', () => {
       workspaceState,
       globalState,
       credentialSettingsController,
-      onError: (error) => errors.push(error),
+      ui: { onError: (error) => errors.push(error) },
     });
 
     expect(
@@ -672,7 +679,7 @@ describe('desktop settings IPC', () => {
       workspaceState,
       config,
       sendStartupCatalogData: true,
-      onError: () => undefined,
+      ui: { onError: () => undefined },
     });
 
     expect(
@@ -707,7 +714,7 @@ describe('desktop settings IPC', () => {
 
     const { settings, posted } = createCapturedSettingsFixture({
       config,
-      onError: () => undefined,
+      ui: { onError: () => undefined },
     });
 
     expect(
@@ -752,7 +759,7 @@ describe('desktop settings IPC', () => {
       config: new MemoryConfigStore(),
       sendStartupCatalogData: true,
       credentialSettingsController,
-      onError: () => undefined,
+      ui: { onError: () => undefined },
     });
 
     expect(
@@ -850,6 +857,28 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
       enabled: false,
     });
+  });
+
+  it('requires UI confirmation before deleting memory', async () => {
+    const confirmAction = vi.fn(async () => false);
+    const { settings, posted } = createCapturedSettingsFixture({
+      ui: { confirmAction },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.DELETE_MEMORY,
+        storagePath: 'memory/example.md',
+        displayPath: 'example.md',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(confirmAction).toHaveBeenCalledWith(
+      'Delete "example.md"?',
+      'Delete',
+    );
+    expect(posted).toEqual([]);
   });
 
   it('ignores unsupported or malformed settings messages', async () => {
