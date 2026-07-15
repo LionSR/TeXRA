@@ -60,6 +60,7 @@ import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.
 import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
+import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopGitHost } from './desktopGitHost.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
@@ -696,11 +697,71 @@ function createWindow(options: {
     },
     notifications: { showInfoMessage, showErrorMessage },
   });
+  const credentialSettingsController =
+    new DefaultDesktopCredentialSettingsController({
+      workspaceState: platform().workspaceState,
+      globalState: platform().globalState,
+      config: platform().config,
+      secrets: platform().secrets,
+      renderer: {
+        postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+      },
+      prompt: {
+        input: (input) =>
+          promptInRenderer(window, {
+            title: input.title ?? input.prompt ?? 'Set API key',
+            prompt: input.prompt ?? 'Enter API key',
+            password: input.password,
+          }),
+        confirm: async (message, promptOptions) => {
+          const result = await dialog.showMessageBox(window, {
+            type: 'warning',
+            message,
+            detail: promptOptions?.detail,
+            buttons: [promptOptions?.confirmLabel ?? 'OK', 'Cancel'],
+            defaultId: 0,
+            cancelId: 1,
+          });
+          return result.response === 0;
+        },
+      },
+      externalOpener: {
+        openExternal: previewHost.openExternal,
+        presentChatGptSignInUrl: async (url) => {
+          const result = await dialog.showMessageBox(window, {
+            type: 'info',
+            message: 'Signing in with ChatGPT',
+            detail:
+              'Opened your default browser. Using a different browser for ChatGPT? ' +
+              'Open this link there instead:\n\n' +
+              `${url}`,
+            buttons: ['Copy Sign-in Link', 'Close'],
+            defaultId: 0,
+            cancelId: 1,
+          });
+          if (result.response === 0) {
+            clipboard.writeText(url);
+          }
+        },
+      },
+      notifications: { showInfoMessage, showErrorMessage },
+      auth: {
+        signIn: () => desktopAuth.signIn(),
+        signOut: () => desktopAuth.signOut(),
+      },
+      setUseIncludedModelAccess: (enabled) =>
+        getServerSideKeyService().setUseIncludedModelAccess(enabled),
+      modelListRefresh,
+      onCredentialChanged: async () => {
+        await onboardingIpcRef.current?.refreshOnboardingFunnel();
+      },
+      onError: reportAsyncError,
+    });
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     agentSettingsController,
+    credentialSettingsController,
     sendStartupCatalogData: true,
-    modelListRefresh,
     resourcesPath: options.resourcesPath,
     // Rerun/Restore from history: same host-neutral owners the extension's
     // history handlers call (runAgent / buildMainViewState), reached through
@@ -724,13 +785,6 @@ function createWindow(options: {
       });
       return result.response === 0;
     },
-    signIn: () => desktopAuth.signIn(),
-    signOut: () => desktopAuth.signOut(),
-    setApiAccessMode: async (mode) => {
-      await getServerSideKeyService().setUseIncludedModelAccess(
-        mode === 'included',
-      );
-    },
     initializeCrashReporting: options.initializeCrashReporting,
     openPath: previewHost.openPath,
     revealStream: async (streamId) => {
@@ -742,25 +796,6 @@ function createWindow(options: {
       }
     },
     openExternalUrl: (url) => previewHost.openExternal(url),
-    presentChatGptSignInUrl: async (url) => {
-      // `openExternal` opens the system default browser. Offer the raw link so
-      // a user whose ChatGPT subscription is signed in elsewhere can open it in
-      // that browser — the loopback callback accepts the redirect from any one.
-      const result = await dialog.showMessageBox(window, {
-        type: 'info',
-        message: 'Signing in with ChatGPT',
-        detail:
-          'Opened your default browser. Using a different browser for ChatGPT? ' +
-          'Open this link there instead:\n\n' +
-          `${url}`,
-        buttons: ['Copy Sign-in Link', 'Close'],
-        defaultId: 0,
-        cancelId: 1,
-      });
-      if (result.response === 0) {
-        clipboard.writeText(url);
-      }
-    },
     installToolExtension: async (extensionId) => {
       // The desktop shell can't host VS Code extensions, so opening the
       // marketplace URL was misleading. Surface an info dialog that names
@@ -796,9 +831,6 @@ function createWindow(options: {
     },
     runInstallCommand: async (command) => {
       await runSetupCommand(command);
-    },
-    onApiKeyChanged: async () => {
-      await onboardingIpcRef.current?.refreshOnboardingFunnel();
     },
     onError: reportAsyncError,
   });
