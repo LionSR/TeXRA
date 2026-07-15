@@ -9,7 +9,6 @@ import type { SessionHandle } from './SessionHandle';
 interface RunContextCommon {
   /** Current model short name for this run (e.g. "opus46T"). */
   readonly model?: string;
-  readonly delegationDepth?: number;
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
   readonly stopAfterCycle?: boolean;
@@ -48,7 +47,6 @@ export type RunContext = LaunchRunContext | BareRunContext;
 // ---------------------------------------------------------------------------
 
 interface CreateRunContextCommon {
-  delegationDepth?: number;
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
   stopAfterCycle?: boolean;
@@ -85,10 +83,7 @@ const runContextScope = new AsyncLocalStorage<RunContext>();
 // ---------------------------------------------------------------------------
 
 type CommonRunContextFieldNames =
-  | 'delegationDepth'
-  | 'approvalPromptsUnavailable'
-  | 'runtimeUnavailableTools'
-  | 'stopAfterCycle';
+  'approvalPromptsUnavailable' | 'runtimeUnavailableTools' | 'stopAfterCycle';
 
 /**
  * Fields shared by both `RunContext` kinds, forwarded as-is from the input
@@ -98,7 +93,6 @@ function commonRunContextFields<T extends CreateRunContextCommon>(
   options: T,
 ): Pick<T, CommonRunContextFieldNames> {
   return {
-    delegationDepth: options.delegationDepth,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,

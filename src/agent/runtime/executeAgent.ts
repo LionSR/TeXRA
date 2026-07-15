@@ -25,7 +25,7 @@ import {
   type AgentToolUseSetting,
   type AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
-import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
+import { hasPersistedParent } from '@agent/storage/executionLifecycle';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import {
   type RequestEnsureProgressViewPayload,
@@ -350,12 +350,6 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * prefaulted defaults (e.g. runExecuteCommand) should leave this off.
    */
   enforceCategory?: boolean;
-  /**
-   * Depth of this execution in the delegation chain. Root (user-initiated) is 0;
-   * each delegate_agent / delegate_workflow call increments it. Used to gate
-   * nested delegation based on the Multi-Agent settings. Defaults to 0.
-   */
-  delegationDepth?: number;
   /** Fires with the real streamId before the stream is activated (before UI sync). */
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
@@ -404,7 +398,6 @@ export async function executeAgent(
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
   });
   const runContextOptions = {
-    delegationDepth: options.delegationDepth ?? 0,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
@@ -518,6 +511,10 @@ export async function resumeToolUseFromSnapshot(
       snapshot.agentConfig.model,
       snapshot.messages,
     );
+  // Resolve persisted lineage before launch assembly activates the stream and
+  // transfers its resources. Storage failures must propagate without leaving
+  // an activated resume stream outside lifecycle cleanup.
+  const isSubagent = await hasPersistedParent(snapshot.executionId);
   const ctx = await buildAgentLaunchContext({
     configPayload: snapshot.agentConfig,
     executionId: snapshot.executionId,
@@ -529,14 +526,7 @@ export async function resumeToolUseFromSnapshot(
     suppressErrorNotification: true,
     session: options.session,
   });
-  // Recover delegation depth from the persisted parent-execution chain
-  // so resumed subagents remain gated by the nested-delegation policy
-  // instead of silently promoting to root.
-  const delegationDepth = await computeDelegationDepthFromStorage(
-    snapshot.executionId,
-  );
   const runContextOptions = {
-    delegationDepth,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
   };
@@ -554,7 +544,6 @@ export async function resumeToolUseFromSnapshot(
       );
     }
 
-    const isSubagent = delegationDepth > 0;
     const result = await runFlowWithLifecycle(
       ctx,
       async (handle, lifecycle) => {
@@ -567,10 +556,10 @@ export async function resumeToolUseFromSnapshot(
             setting,
             resumeSnapshot: snapshot,
             drainedFollowUps: options.drainedFollowUps,
-            // Derive from the recovered parent chain: any execution with a
-            // parent is a subagent. Without this, the rebuilt system prompt
-            // would drop subagent-specific instructions (e.g. the shared
-            // /memories protocol) that the fresh run had included.
+            // A persisted parent marks this execution as a subagent. Without
+            // this, the rebuilt system prompt would drop subagent-specific
+            // instructions (e.g. the shared /memories protocol) that the fresh
+            // run had included.
             isSubagent,
             onProgress: options.onProgress,
             onFollowUpConsumed: wrapOnFollowUpConsumed(

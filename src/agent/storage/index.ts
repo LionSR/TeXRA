@@ -26,6 +26,7 @@ export {
 } from './executionWorkspaceFiles';
 export {
   finalizeExecution,
+  hasPersistedParent,
   registerExecution,
   synchronizeAgentResultOutcome,
   type FinalizeExecutionInput,

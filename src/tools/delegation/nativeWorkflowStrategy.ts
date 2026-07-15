@@ -29,7 +29,6 @@ export interface NativeWorkflowStrategyParams {
   readonly parentSession: SessionHandle;
   readonly runtimeHost: AgentRuntimeHost;
   readonly startedAt: number;
-  readonly delegationDepth: number;
   readonly workingDirectory?: string;
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
@@ -74,7 +73,6 @@ export function createNativeWorkflowStrategy(
           isSubagent: true,
           enforceCategory: true,
           parentStreamId: params.orchestratorStreamId,
-          delegationDepth: params.delegationDepth,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
           onStreamResolved: params.onStreamResolved,

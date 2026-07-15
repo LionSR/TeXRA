@@ -95,13 +95,6 @@ const ExecutionMetaBaseSchema = z.object({
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
   /**
-   * Delegation depth at launch time: 0 for user-initiated, N for an agent
-   * N levels deep. Optional so pre-feature snapshots don't fail validation.
-   * Read on resume (for observability and `isSubagent` detection) without
-   * having to walk a potentially broken parent chain.
-   */
-  delegationDepth: z.int().nonnegative().optional(),
-  /**
    * The transcript stream this execution's data lives under, once resolved.
    * Decide-once-carry-as-data cache for `resolvePersistedStreamIdForExecution`
    * (`executionStreamResolver.ts`): absent on executions whose stream wasn't
