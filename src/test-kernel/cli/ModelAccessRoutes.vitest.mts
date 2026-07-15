@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   contextForCliModelAccess,
   readCliModelAccessStatus,
   selectCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoutes';
-import type { CliContext } from '@cli/runtime/cliContext';
 
 const mocks = vi.hoisted(() => ({
   getCodexStatus: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock('@cli/runtime/chatgptLogin', () => ({
   signInCliChatGpt: mocks.signInCliChatGpt,
 }));
 
-const context = { apiMode: 'personal' } as CliContext;
+const context = createTestCliContext({ apiMode: 'personal' });
 
 beforeEach(() => {
   vi.clearAllMocks();

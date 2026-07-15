@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import * as codexAuth from '@auth/codex';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
 import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
@@ -55,18 +56,14 @@ function createSession(): TuiSession {
 }
 
 function createCliContext(overrides: Partial<CliContext> = {}): CliContext {
-  return {
+  return createTestCliContext({
     cwd: '/tmp/workspace',
     mode: 'interactive',
-    outputFormat: 'text',
     approvalPolicy: 'ask',
     stdoutIsTty: true,
-    termIsDumb: false,
-    colorEnabled: false,
     version: '0.0.0-test',
-    resourcesPath: '/tmp/resources',
     ...overrides,
-  };
+  });
 }
 
 function createContext(

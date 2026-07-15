@@ -15,8 +15,8 @@ export async function contextFromArgs(
   const context = await buildCliContext({
     globalArgs: pickGlobalArgs(args, { skillSourcePaths }),
   });
-  if (context.quietLogs !== true) {
-    for (const warning of context.configWarnings ?? []) {
+  if (!context.quietLogs) {
+    for (const warning of context.configWarnings) {
       writeTextStderr(`WARN ${warning}`);
     }
   }

@@ -32,18 +32,15 @@ vi.mock('@cli/runtime/initPlatform', () => ({
   initInteractiveCliPlatform: mocks.initInteractiveCliPlatform,
 }));
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { runSetup } from '@cli/commands/setup';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { CliContext } from '@cli/runtime/cliContext';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 
-const INTERACTIVE_CONTEXT = {
+const INTERACTIVE_CONTEXT = createTestCliContext({
   mode: 'interactive',
   stdoutIsTty: true,
-  termIsDumb: false,
-  stdoutColorEnabled: false,
-  colorEnabled: false,
-} as unknown as CliContext;
+});
 
 describe('texra setup combined flow', () => {
   beforeEach(() => {
@@ -63,7 +60,7 @@ describe('texra setup combined flow', () => {
       const exit = await runSetup({
         ...INTERACTIVE_CONTEXT,
         mode: 'headless',
-      } as CliContext);
+      });
       expect(exit).toBe(CliExitCode.Usage);
       expect(mocks.initInteractiveCliPlatform).not.toHaveBeenCalled();
       expect(mocks.runCliOnboarding).not.toHaveBeenCalled();

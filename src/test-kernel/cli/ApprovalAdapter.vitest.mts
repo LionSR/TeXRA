@@ -10,6 +10,7 @@ vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
 }));
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
@@ -36,18 +37,13 @@ import {
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
-  return {
+  return createTestCliContext({
     cwd: '/tmp',
     mode: 'interactive',
-    outputFormat: 'text',
     approvalPolicy: 'ask',
-    stdoutColorEnabled: false,
-    stderrColorEnabled: false,
-    colorEnabled: false,
     version: 'test',
-    resourcesPath: '/tmp/resources',
     ...overrides,
-  };
+  });
 }
 
 function useCliHostInteractions(

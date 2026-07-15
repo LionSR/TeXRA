@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ExecutionId } from '@shared/schemas';
 
@@ -35,20 +36,16 @@ vi.mock('@cli/chat/tui/runChatTui', () => ({
 const EXECUTION_ID = 'exec-1' as ExecutionId;
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
-  return {
-    cwd: '/tmp/project',
+  return createTestCliContext({
     mode: 'interactive',
-    outputFormat: 'text',
     approvalPolicy: 'ask',
     stdoutIsTty: true,
     stderrIsTty: true,
     stdoutColorEnabled: true,
     stderrColorEnabled: true,
     colorEnabled: true,
-    version: '0.0.0',
-    resourcesPath: '/tmp/resources',
     ...overrides,
-  };
+  });
 }
 
 function resumableResolution() {

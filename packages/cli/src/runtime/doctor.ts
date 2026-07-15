@@ -308,12 +308,12 @@ async function checkConfig(context: CliContext): Promise<DoctorCheck> {
       'Optional defaults may be placed in .texra/config.json.',
     );
   }
-  if ((context.configWarnings ?? []).length > 0) {
+  if (context.configWarnings.length > 0) {
     return warn(
       'config',
       'Config',
       `Workspace config has warnings: ${context.configFilePath}`,
-      context.configWarnings?.join(' '),
+      context.configWarnings.join(' '),
     );
   }
   const workspaceConfig = workspaceTexraConfigPath(context.cwd);
@@ -417,12 +417,8 @@ export function writeDoctorReport(
   // report goes to stdout, a failing one to stderr (clig.dev). Using a single
   // stderr-keyed gate leaked ANSI into `doctor | cat` and stripped color from
   // `doctor 2>/dev/null` on a TTY.
-  const stdoutColorEnabled =
-    context.stdoutColorEnabled ??
-    (context.colorEnabled && context.stdoutIsTty === true);
-  const stderrColorEnabled =
-    context.stderrColorEnabled ??
-    (context.colorEnabled && context.stderrIsTty === true);
+  const stdoutColorEnabled = context.stdoutColorEnabled;
+  const stderrColorEnabled = context.stderrColorEnabled;
   const colorEnabled = report.ok ? stdoutColorEnabled : stderrColorEnabled;
   const text = formatDoctorText(report, createCliStyle(colorEnabled));
   if (report.ok) {

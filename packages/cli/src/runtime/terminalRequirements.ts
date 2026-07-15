@@ -1,14 +1,18 @@
-import type { CliContext } from './cliContext';
-
 export type InteractiveTerminalFailureReason = 'headless' | 'dumb-terminal';
 
+interface InteractiveTerminalContext {
+  readonly mode: 'headless' | 'interactive';
+  readonly stdoutIsTty?: boolean;
+  readonly termIsDumb?: boolean;
+}
+
 export function interactiveTerminalFailure(
-  context: Pick<CliContext, 'mode' | 'stdoutIsTty' | 'termIsDumb'>,
+  context: InteractiveTerminalContext,
 ): InteractiveTerminalFailureReason | undefined {
-  if (context.mode === 'headless' || context.stdoutIsTty !== true) {
+  if (context.mode === 'headless' || !context.stdoutIsTty) {
     return 'headless';
   }
-  if (context.termIsDumb === true) return 'dumb-terminal';
+  if (context.termIsDumb) return 'dumb-terminal';
   return undefined;
 }
 

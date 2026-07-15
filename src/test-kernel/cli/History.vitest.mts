@@ -81,6 +81,7 @@ vi.mock('@cli/runtime/initPlatform', () => ({
 import { parseHistoryListLimit, runHistoryExport } from '@cli/commands/history';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import type { TraceDocument } from '@transcript';
 import {
   cliHistoryNdjsonRecords,
@@ -1352,15 +1353,10 @@ describe('CLI history runtime', () => {
       const trace = makeTrace('a1');
 
       function makeContext(resourcesPath: string): CliContext {
-        return {
+        return createTestCliContext({
           cwd: '/workspace',
-          mode: 'headless',
-          outputFormat: 'text',
-          approvalPolicy: 'never',
-          colorEnabled: false,
-          version: '0.0.0',
           resourcesPath,
-        };
+        });
       }
 
       beforeEach(() => {
