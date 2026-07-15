@@ -87,7 +87,6 @@ import {
 import type { RegisteredToolName } from '@tools/registry';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
-import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
