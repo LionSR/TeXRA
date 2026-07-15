@@ -15,7 +15,6 @@ import {
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import type { TaskState } from '@agent/core/state/TaskState';
-import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - IPC contracts
@@ -39,6 +38,8 @@ export interface DesktopHistoryOptions {
   readonly runExecution: (request: ValidatedExecutionRequest) => Promise<void>;
   /** Restore a persisted agent configuration into the main view. */
   readonly restoreTaskState: (taskState: TaskState) => Promise<boolean>;
+  /** Return execution ids that must be protected from history deletion. */
+  readonly getActiveExecutionIds: () => readonly string[];
   readonly postToRenderer: (message: unknown) => void;
   readonly openPath: (filePath: string) => Promise<void>;
   readonly showInfoMessage: (message: string) => Promise<void>;
@@ -80,7 +81,7 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   }
 
   private async deleteItem(historyId: string): Promise<void> {
-    if (getAllActiveExecutionIds().includes(historyId)) {
+    if (this.dependencies.getActiveExecutionIds().includes(historyId)) {
       await this.dependencies.showInfoMessage(
         'Cannot delete a running execution',
       );
@@ -98,7 +99,9 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   }
 
   private async clear(): Promise<void> {
-    await deleteAllExecutions(new Set(getAllActiveExecutionIds()));
+    await deleteAllExecutions(
+      new Set(this.dependencies.getActiveExecutionIds()),
+    );
     this.dependencies.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
     });

@@ -25,6 +25,7 @@ import {
   refresh,
 } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
+import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/uiHosts';
@@ -855,6 +856,7 @@ function createWindow(options: {
     },
     restoreTaskState: async (taskState) =>
       (await getAgentExecution()).progress.restoreTaskState(taskState),
+    getActiveExecutionIds: getAllActiveExecutionIds,
     openPath: previewHost.openPath,
     showInfoMessage,
     showErrorMessage,

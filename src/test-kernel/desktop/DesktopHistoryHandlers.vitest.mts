@@ -30,7 +30,6 @@ const chatExportMocks = vi.hoisted(() => ({
   constructorError: undefined as Error | undefined,
 }));
 const historyMocks = vi.hoisted(() => ({
-  activeExecutionIds: [] as string[],
   buildHistoryMessage: vi.fn(),
 }));
 
@@ -54,11 +53,6 @@ vi.mock('@controllers/settingsView/HistoryMessageBuilder', () => ({
   buildHistoryMessage: historyMocks.buildHistoryMessage,
 }));
 
-vi.mock('@agent/runtime/SessionHandle', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/runtime/SessionHandle')>()),
-  getAllActiveExecutionIds: () => historyMocks.activeExecutionIds,
-}));
-
 type DesktopHistoryHandlersModule =
   typeof import('@desktop/main/desktopHistoryHandlers');
 type DesktopHistoryDependencies = ConstructorParameters<
@@ -66,7 +60,10 @@ type DesktopHistoryDependencies = ConstructorParameters<
 >[0];
 type DesktopHistoryCapabilities = Pick<
   DesktopHistoryOptions,
-  'resourcesPath' | 'runExecution' | 'restoreTaskState'
+  | 'resourcesPath'
+  | 'runExecution'
+  | 'restoreTaskState'
+  | 'getActiveExecutionIds'
 >;
 type DesktopHistoryActionOverrides = Partial<
   Omit<DesktopHistoryDependencies, keyof DesktopHistoryCapabilities>
@@ -132,7 +129,6 @@ describe('DesktopHistoryHandlers', () => {
     chatExportMocks.constructorDeps.length = 0;
     chatExportMocks.constructorError = undefined;
     vi.resetAllMocks();
-    historyMocks.activeExecutionIds = [];
     historyMocks.buildHistoryMessage.mockResolvedValue({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
       historyItems: [],
@@ -177,10 +173,10 @@ describe('DesktopHistoryHandlers', () => {
 
   it('protects an active execution from deletion', async () => {
     await writeHistoryConfig();
-    historyMocks.activeExecutionIds = [HISTORY_ID];
     const postToRenderer = vi.fn();
     const showInfoMessage = vi.fn(async () => undefined);
     const actions = createHistoryActions({
+      history: { getActiveExecutionIds: () => [HISTORY_ID] },
       postToRenderer,
       showInfoMessage,
     });
@@ -217,9 +213,11 @@ describe('DesktopHistoryHandlers', () => {
       getExecutionStore(activeHistoryId).writeConfig(HISTORY_CONFIG),
       getExecutionStore(inactiveHistoryId).writeConfig(HISTORY_CONFIG),
     ]);
-    historyMocks.activeExecutionIds = [activeHistoryId];
     const postToRenderer = vi.fn();
-    const actions = createHistoryActions({ postToRenderer });
+    const actions = createHistoryActions({
+      history: { getActiveExecutionIds: () => [activeHistoryId] },
+      postToRenderer,
+    });
 
     await assertSupported(actions.clear)();
 
