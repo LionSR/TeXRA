@@ -7,18 +7,18 @@ import { LatexToolingController } from '@controllers/settingsView/LatexToolingCo
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 
 // Local imports - shared settings
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   HOMEBREW_INSTALL_COMMAND,
   LATEX_WORKSHOP_EXT_ID,
 } from '@shared/constants/latex';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported } from '@shared/utils/dispatcher';
 
-// Local imports - platform and tool types
-import type { StateStore } from '@platform/interfaces';
+// Local imports - supporting types
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
+import type { StateStore } from '@platform/interfaces';
 
 class MemoryStateStore implements StateStore {
   readonly values = new Map<string, unknown>();

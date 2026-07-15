@@ -1,20 +1,20 @@
 // Local imports - shared settings controllers
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 
 // Local imports - shared settings types
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   LATEX_WORKSHOP_EXT_ID,
   type LatexConfigField,
 } from '@shared/constants/latex';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 
-// Local imports - tool dashboard types
+// Local imports - controller and tool dashboard types
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
+import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 
 interface DesktopToolDashboardPort {
   buildItems(
