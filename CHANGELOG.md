@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Session navigation remembers its place** — after returning from the
+  vertical session list to the input, pressing `Tab` again restores the same
+  highlighted session instead of jumping back to the main conversation.
 - **Retry prompts no longer ask for discarded feedback** — choosing “give up”
   now cancels immediately instead of opening a rejection note that the retry
   flow cannot use.

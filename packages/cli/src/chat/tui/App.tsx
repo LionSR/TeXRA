@@ -7,8 +7,8 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
-  useState,
 } from 'react';
 
 // Local imports - shared runtime
@@ -35,7 +35,6 @@ import { TranscriptViewer } from './modals/TranscriptViewer';
 import { InputBar } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import { resolveSessionSelectionId } from './panes/SubagentListDisplay';
 import { currentApproval } from './state/approvalQueue';
 import {
   isEscapeInput,
@@ -63,6 +62,10 @@ import {
   parentStream as parentStreamSignal,
 } from './state/childExecutions';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
+import {
+  INITIAL_SESSION_LIST_SELECTION,
+  reduceSessionListSelection,
+} from './state/sessionListSelection';
 import { activeStreamTreeViews, streamDisplayLabel } from './state/streamViews';
 import { useSignal } from './state/useSignal';
 import type { TranscriptViewportChange } from './state/transcriptViewportMode';
@@ -110,8 +113,12 @@ export function App(props: AppProps): React.JSX.Element {
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
   const childControlMode = useSignal(childControlModeSignal);
   const childControlEscapeAction = useSignal(childControlEscapeActionSignal);
-  const [sessionListFocused, setSessionListFocused] = useState(false);
-  const [selectedSessionId, setSelectedSessionId] = useState<StreamTabId>();
+  const [sessionListSelection, dispatchSessionListSelection] = useReducer(
+    reduceSessionListSelection,
+    INITIAL_SESSION_LIST_SELECTION,
+  );
+  const sessionListFocused = sessionListSelection.focused;
+  const selectedSessionId = sessionListSelection.selectedStreamId;
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
@@ -203,23 +210,24 @@ export function App(props: AppProps): React.JSX.Element {
       }),
     [activeStreamId, childStreamEntries, parentStream, streams],
   );
-  const resolvedSelectedSessionId = resolveSessionSelectionId(
-    sessionViews,
-    selectedSessionId,
-    activeStreamId,
-  );
+  useEffect(() => {
+    dispatchSessionListSelection({
+      kind: 'reconcile',
+      activeStreamId,
+      sessions: sessionViews,
+    });
+  }, [activeStreamId, sessionViews]);
   useEffect(() => {
     if (sessionViews.length === 0 && sessionListFocused) {
-      setSessionListFocused(false);
+      dispatchSessionListSelection({ kind: 'blur' });
     }
   }, [sessionListFocused, sessionViews.length]);
   const cancelSessionList = useCallback(() => {
-    setSessionListFocused(false);
+    dispatchSessionListSelection({ kind: 'blur' });
   }, []);
   const focusSession = useCallback((streamId: StreamTabId) => {
-    setSelectedSessionId(streamId);
+    dispatchSessionListSelection({ kind: 'focusStream', streamId });
     activeStreamIdSignal.set(streamId);
-    setSessionListFocused(false);
   }, []);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
@@ -411,7 +419,7 @@ export function App(props: AppProps): React.JSX.Element {
     }
 
     if (sessionListFocused) {
-      if (key.tab) setSessionListFocused(false);
+      if (key.tab) dispatchSessionListSelection({ kind: 'blur' });
       return;
     }
 
@@ -427,8 +435,7 @@ export function App(props: AppProps): React.JSX.Element {
     // Tab transfers keyboard ownership from the input to the session list.
     if (key.tab) {
       if (sessionViews.length > 0) {
-        setSelectedSessionId(resolvedSelectedSessionId);
-        setSessionListFocused(true);
+        dispatchSessionListSelection({ kind: 'focus' });
       }
       return;
     }
@@ -511,14 +518,16 @@ export function App(props: AppProps): React.JSX.Element {
         slashPaletteOpen,
         sessionListFocused,
         sessionViews,
-        selectedSessionId: resolvedSelectedSessionId,
+        selectedSessionId,
         streams,
         childExecutionPanelTarget: childControlTargets.tasks,
         transcriptViewerStreamId,
       }}
       onCancelSessionList={cancelSessionList}
       onFocusSession={focusSession}
-      onSessionSelectionChange={setSelectedSessionId}
+      onSessionSelectionChange={(streamId) =>
+        dispatchSessionListSelection({ kind: 'highlight', streamId })
+      }
     />
   );
 }
