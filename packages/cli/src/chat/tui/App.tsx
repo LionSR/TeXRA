@@ -17,6 +17,7 @@ import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - TUI surfaces and state
 import {
+  appDraftDiscardActive,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
   approvalVisibleForActiveStream,
@@ -26,13 +27,14 @@ import {
   foregroundMaxRowsForKind,
   foregroundSurfaceKind,
   shouldDeferEscapeInterruptForMetaChord,
+  triggerAppCtrlC,
   triggerEscapeInterrupt,
   type EscapeInterruptState,
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
 import { TranscriptViewer } from './modals/TranscriptViewer';
-import { InputBar } from './panes/InputBar';
+import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
 import { currentApproval } from './state/approvalQueue';
@@ -326,6 +328,7 @@ export function App(props: AppProps): React.JSX.Element {
   const pendingEscapeInterruptTimer = useRef<
     ReturnType<typeof setTimeout> | undefined
   >(undefined);
+  const inputBarRef = useRef<InputBarHandle>(null);
 
   const clearPendingEscapeInterrupt = () => {
     if (pendingEscapeInterruptTimer.current === undefined) return;
@@ -398,15 +401,19 @@ export function App(props: AppProps): React.JSX.Element {
     // path used by terminals that deliver a signal; harnesses can fall back to
     // interrupt-then-exit behavior without duplicating that process lifecycle.
     if (key.ctrl && input === 'c') {
-      if (props.onCtrlC) {
-        props.onCtrlC();
-        return;
-      }
-      if (canStopActiveRun()) {
-        props.onInterruptActive();
-        return;
-      }
-      exit();
+      triggerAppCtrlC({
+        discardDraft: () =>
+          appDraftDiscardActive({
+            inputDisabled,
+            reverseSearchOpen,
+            sessionListFocused,
+          }) &&
+          (inputBarRef.current?.discardDraft() ?? false),
+        canStopActiveRun,
+        onInterruptActive: props.onInterruptActive,
+        onExit: exit,
+        onCtrlC: props.onCtrlC,
+      });
       return;
     }
 
@@ -480,6 +487,7 @@ export function App(props: AppProps): React.JSX.Element {
       renderFooterChrome={(queuedFollowUpPanelVisible) => (
         <>
           <InputBar
+            controlRef={inputBarRef}
             onSubmit={props.onSubmit}
             collapseWhenDisabled={!inputBarVisible}
             disabledMessage={childInputDisabledMessage}
