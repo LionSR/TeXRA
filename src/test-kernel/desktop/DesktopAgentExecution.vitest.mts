@@ -3202,7 +3202,7 @@ describe('DesktopProgressBridge', () => {
       expect(
         windowB.session.interactions.resolve(approvalId, {
           kind: 'plan',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(false);
       // ...neither can B's inbound plan-approval handler...
@@ -3547,7 +3547,7 @@ describe('DesktopProgressBridge', () => {
         expect(
           bridgeB.session.interactions.resolve('plan-rebound', {
             kind: 'plan',
-            action: 'approve',
+            decision: { action: 'approve' },
           }),
         ).toBe(true);
         await expect(planPromise).resolves.toEqual({ action: 'approve' });
@@ -3674,7 +3674,7 @@ describe('DesktopProgressBridge', () => {
         expect(
           bridgeC.session.interactions.resolve('plan-second-window-close', {
             kind: 'plan',
-            action: 'approve',
+            decision: { action: 'approve' },
           }),
         ).toBe(true);
         await expect(approval).resolves.toEqual({ action: 'approve' });
@@ -3771,7 +3771,7 @@ describe('DesktopProgressBridge', () => {
           expect(
             bridgeB.session.interactions.resolve(approvalId, {
               kind: 'plan',
-              action: 'approve',
+              decision: { action: 'approve' },
             }),
           ).toBe(true);
         }

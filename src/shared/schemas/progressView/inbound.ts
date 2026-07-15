@@ -24,7 +24,6 @@ import {
   BASH_APPROVAL_ACTIONS,
   PLAN_APPROVAL_ACTIONS,
   TOOL_EDIT_APPROVAL_ACTIONS,
-  USER_QUESTION_ACTIONS,
   UserQuestionAnswersSchema,
 } from '../prompts';
 import { AgentCategoryFilterSchema, StreamScopedBaseSchema } from './data';
@@ -173,13 +172,28 @@ const ExternalInquiryActionMessageSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
-const UserQuestionActionMessageSchema = z.object({
+const UserQuestionActionMessageBase = {
   command: z.literal(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION),
   requestId: z.string().min(1),
-  action: z.enum([...USER_QUESTION_ACTIONS, 'skip'] as const),
-  answers: UserQuestionAnswersSchema.optional(),
-  feedback: z.string().optional(),
-});
+};
+
+const UserQuestionActionMessageSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    ...UserQuestionActionMessageBase,
+    action: z.literal('submit'),
+    answers: UserQuestionAnswersSchema,
+  }),
+  z.strictObject({
+    ...UserQuestionActionMessageBase,
+    action: z.literal('reject'),
+    feedback: z.string().optional(),
+  }),
+  z.strictObject({
+    ...UserQuestionActionMessageBase,
+    action: z.literal('skip'),
+    feedback: z.string().optional(),
+  }),
+]);
 
 const RestoreProposalConfigMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG),

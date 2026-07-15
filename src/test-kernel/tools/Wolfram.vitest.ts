@@ -68,7 +68,7 @@ describe('WolframTool approval', () => {
     expect(
       explicit.host.interactions?.resolve(show.payload.requestId, {
         kind: 'bash',
-        action: 'approve',
+        decision: { action: 'approve' },
       }),
     ).toBe(true);
 
@@ -87,8 +87,10 @@ describe('WolframTool approval', () => {
     expect(
       explicit.host.interactions?.resolve(show.payload.requestId, {
         kind: 'bash',
-        action: 'reject',
-        feedback: 'Use the requested node check instead.',
+        decision: {
+          action: 'reject',
+          feedback: 'Use the requested node check instead.',
+        },
       }),
     ).toBe(true);
 
@@ -110,7 +112,7 @@ describe('WolframTool approval', () => {
     expect(
       explicit.host.interactions?.resolve(show.payload.requestId, {
         kind: 'bash',
-        action: 'reject',
+        decision: { action: 'reject' },
       }),
     ).toBe(true);
 
