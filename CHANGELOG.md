@@ -21,10 +21,10 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
-- **Use GitHub Copilot models in VS Code** — compatible models from the user's
-  existing Copilot subscription can now be selected in the Models tab without
-  adding a provider API key. If Copilot usage is exhausted, TeXRA can retry
-  with a saved key for the same provider.
+- **Use GitHub Copilot models in VS Code (Experimental)** — compatible models
+  from the user's existing Copilot subscription can now be selected in the
+  Models tab without adding a provider API key. If Copilot usage is
+  exhausted, TeXRA can retry with a saved key for the same provider.
 
 #### Bug Fixes
 
