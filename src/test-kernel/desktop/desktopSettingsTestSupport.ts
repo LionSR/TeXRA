@@ -1,10 +1,25 @@
 // Desktop imports
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
+import type { DesktopHistoryOptions } from '@desktop/main/desktopHistoryHandlers';
 
 // Shared imports
 import { unsupported } from '@shared/utils/dispatcher';
 
+// Local imports - desktop test paths
+import { repoPath } from './desktopTestPaths.mjs';
+
 const noOp = async (): Promise<void> => undefined;
+
+export function createStubDesktopHistoryOptions(
+  overrides: Partial<DesktopHistoryOptions> = {},
+): DesktopHistoryOptions {
+  return {
+    resourcesPath: repoPath('packages', 'extension', 'resources'),
+    runExecution: noOp,
+    restoreTaskState: async () => true,
+    ...overrides,
+  };
+}
 
 export function createStubDesktopAgentSettingsController(): DesktopAgentSettingsController {
   return {
