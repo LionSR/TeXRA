@@ -39,9 +39,12 @@ return concat(sections, { separator: '\n\n' });
 ## Boundaries (deliberate for the prototype)
 
 - **Host-agnostic**: the engine never spawns agents itself; hosts inject a
-  `runAgent` callback. Production wiring should use the in-band subagent
-  execution path so the engine consumes the post-flow `AgentFinalResult`
-  envelope — never the XML follow-up delivery string.
+  `runAgent` callback. The production adapter in
+  `src/tools/delegation/workflowScriptAgentRunner.ts` uses the in-band
+  subagent execution path, so the engine consumes the post-flow
+  `AgentFinalResult` envelope — never the XML follow-up delivery string. It
+  also verifies task-run inputs against persisted child lineage and result
+  manifests before passing them to a later stage.
 - **Sandbox**: a fresh QuickJS runtime and context per script, with a CPU
   interrupt deadline, 64 MB heap limit, 1 MB stack limit, dynamic code
   generation disabled, and no `require`/`process`. The WASM module is loaded
@@ -90,11 +93,8 @@ return concat(sections, { separator: '\n\n' });
 
 ## Not yet built (production integration)
 
-- Production `runAgent` wiring that returns the fixed `AgentFinalResult`
-  envelope after workflow diffs have been generated.
-- File hand-off: binding a stage's `outputs` (`OutputFileSummary[]`) as the
-  next stage's `inputFiles` directly from run storage, without an
-  `accept_run_files` round-trip. Domain-specific structures travel as JSON
+- A `delegate_workflow_script` tool, which will invoke the existing production
+  runner and task-run file hand-off. Domain-specific structures travel as JSON
   output files rather than per-call result schemas.
-- A `delegate_workflow_script` tool + journal persistence in the execution
-  KV store, and progress-event bridging onto the existing stream tree.
+- Journal persistence in the execution KV store and progress-event bridging
+  onto the existing stream tree.
