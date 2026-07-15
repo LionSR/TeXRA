@@ -23,10 +23,11 @@ import type {
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { classifyAgentError, isAbortError } from '@common/errors';
-import type {
-  ExecutionId,
-  StreamTabId,
-  SubagentProgressUpdate,
+import {
+  RUN_OUTCOME,
+  type ExecutionId,
+  type StreamTabId,
+  type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
@@ -662,7 +663,7 @@ export function startChildRunLoop<TTurn>(
           failed: sawTurnFailure,
           cancelled: loop.isInterrupted(),
           stage: sessionStage,
-          persistTerminalStatus: true,
+          persistence: { kind: 'finalize', flowRecord: 'delete' },
         });
       } else {
         // Native: every GENUINE terminal turn already finalized its own
@@ -701,12 +702,16 @@ export function startChildRunLoop<TTurn>(
                   }
                 : undefined,
             isSubagent: true,
-            persistTerminalStatus: true,
+            persistence: {
+              kind: 'finalize',
+              flowRecord:
+                outcome === RUN_OUTCOME.CANCELLED ? 'preserve' : 'delete',
+            },
           });
           // No turn result follows an interruption between turns. Only this
           // path may relabel the latest interim envelope; ordinary terminal
           // turns persist their own result after runFlowWithLifecycle returns.
-          if (finalized && loop.isInterrupted()) {
+          if (finalized?.terminalStatusPersisted && loop.isInterrupted()) {
             await synchronizeAgentResultOutcome(executionId, outcome);
           }
         }

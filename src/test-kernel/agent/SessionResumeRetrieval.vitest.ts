@@ -119,6 +119,9 @@ async function runPersistedFlow(
   options: {
     readonly isSubagent?: boolean;
     readonly onIdle?: () => void;
+    readonly onFlowRecordDisposition?: (
+      disposition: 'preserve' | 'delete',
+    ) => void;
   } = {},
 ): Promise<RunToolUseFlowResult> {
   const config = snapshot?.agentConfig ?? CONFIG;
@@ -158,6 +161,7 @@ async function runPersistedFlow(
           ...(snapshot !== undefined && { resumeSnapshot: snapshot }),
           isSubagent: options.isSubagent ?? true,
           onIdle: options.onIdle,
+          onFlowRecordDisposition: options.onFlowRecordDisposition,
           toolInjections: new ToolInjectionRegistry(),
         },
         new MapToolRegistry({}),
@@ -716,6 +720,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const readSpy = vi.spyOn(store, 'read');
     const deleteSpy = vi.spyOn(store, 'delete');
     const releaseSpy = vi.spyOn(session.followUps, 'release');
+    const dispositions: Array<'preserve' | 'delete'> = [];
 
     try {
       const result = await runPersistedFlow(
@@ -724,11 +729,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         undefined,
         (flowContext) => flowContext.interrupt(),
         session,
+        { onFlowRecordDisposition: (value) => dispositions.push(value) },
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(readSpy).not.toHaveBeenCalled();
-      expect(deleteSpy).toHaveBeenCalledWith(flowKey(executionId));
+      expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
+      expect(dispositions).toEqual(['delete']);
       expect(releaseSpy).toHaveBeenCalledWith(streamId);
     } finally {
       readSpy.mockRestore();
@@ -841,14 +848,23 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         throw abortError;
       });
     const deleteSpy = vi.spyOn(store, 'delete');
+    const dispositions: Array<'preserve' | 'delete'> = [];
 
     try {
       await expect(
-        runPersistedFlow(executionId, streamId, snapshot, (context) => {
-          flowContext = context;
-        }),
+        runPersistedFlow(
+          executionId,
+          streamId,
+          snapshot,
+          (context) => {
+            flowContext = context;
+          },
+          undefined,
+          { onFlowRecordDisposition: (value) => dispositions.push(value) },
+        ),
       ).rejects.toBe(abortError);
       expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
+      expect(dispositions).toEqual(['preserve']);
       expect(await store.read<FlowRecord>(flowKey(executionId))).toMatchObject({
         cursor: { nextNodeId: 'start' },
         shared: { shouldSkipCycle: true },

@@ -10,11 +10,14 @@
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
+import { flowKey } from '@agent/node/persistedFlow';
 
 import * as logger from '@logger/logUtils';
 import {
+  RUN_OUTCOME,
   executionStatusToRunOutcome,
   type ExecutionId,
+  type ExecutionStatus,
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
@@ -84,7 +87,9 @@ function enqueueMetaUpdate(
   const next = prev.then(async () => {
     const store = getExecutionStore(executionId);
     const existing = await store.readMeta();
-    if (!existing) return;
+    if (!existing) {
+      throw new Error(`Execution metadata not found for ${executionId}`);
+    }
     await store.writeMeta({ ...existing, ...updater(existing) });
     invalidateListingCache();
   });
@@ -142,16 +147,14 @@ export async function registerExecution(
 }
 
 /**
- * Persist supplementary metadata fields on an existing execution.
+ * Persist supplementary metadata fields on an existing execution as a
+ * best-effort operation.
  * Serialized with other meta updates for the same execution to prevent
  * read-modify-write races (e.g. between terminal status and description).
- * Never throws: storage failures are swallowed and logged so callers'
- * lifecycle logic (registry untrack, follow-up delivery) always runs — even
- * for fields like terminal status that are the resumability/status source of
- * truth, not incidental bookkeeping. Callers must not add their own
- * `.catch()` around this; it can never reject.
+ * Never throws because these fields are caches or presentation metadata, not
+ * lifecycle state. Authoritative metadata must use enqueueMetaUpdate directly.
  */
-async function persistMetaField(
+async function persistSupplementaryMetaFieldsBestEffort(
   executionId: ExecutionId,
   fields: Partial<ExecutionMeta>,
   what: string,
@@ -206,17 +209,110 @@ export async function synchronizeAgentResultOutcome(
   }
 }
 
-/** Persist a terminal status and its canonical outcome projection. */
+/**
+ * Persist a terminal status and its canonical outcome projection.
+ * @deprecated Use {@link finalizeExecution} so flow-record disposition and
+ * durability failures are handled together.
+ */
 export async function writeTerminalStatus(
   executionId: ExecutionId,
-  status: string,
+  status: ExecutionStatus,
 ): Promise<void> {
   const outcome = executionStatusToRunOutcome(status);
-  await persistMetaField(
-    executionId,
-    { terminalStatus: status, ...(outcome && { outcome }) },
-    'terminal status',
-  );
+  await enqueueMetaUpdate(executionId, () => ({
+    terminalStatus: status,
+    ...(outcome && { outcome }),
+  }));
+}
+
+export interface FinalizeExecutionInput {
+  readonly executionId: ExecutionId;
+  readonly terminalStatus: ExecutionStatus;
+  readonly flowRecord: 'preserve' | 'delete';
+}
+
+export type FinalizeExecutionResult =
+  | {
+      readonly status: 'durable';
+      readonly terminalStatusPersisted: true;
+      readonly flowRecord: 'preserved' | 'deleted';
+    }
+  | {
+      readonly status: 'failed';
+      readonly error: unknown;
+      readonly stage:
+        'terminal-status' | 'terminal-status-and-flow-record-delete';
+      readonly terminalStatusPersisted: false;
+    }
+  | {
+      readonly status: 'failed';
+      readonly error: unknown;
+      readonly stage: 'flow-record-delete';
+      readonly terminalStatusPersisted: true;
+    };
+
+/** Persist terminal metadata, then apply the requested flow-record policy. */
+export async function finalizeExecution({
+  executionId,
+  terminalStatus,
+  flowRecord,
+}: FinalizeExecutionInput): Promise<FinalizeExecutionResult> {
+  try {
+    await writeTerminalStatus(executionId, terminalStatus);
+  } catch (error) {
+    const outcome = executionStatusToRunOutcome(terminalStatus);
+    // A terminal COMPLETED/FAILED result must never retain a resumable flow,
+    // even when the caller requested preservation before the status write failed.
+    const deleteToFailClosed =
+      flowRecord === 'delete' ||
+      outcome === RUN_OUTCOME.COMPLETED ||
+      outcome === RUN_OUTCOME.FAILED;
+    if (deleteToFailClosed) {
+      try {
+        await getExecutionStore(executionId).delete(flowKey(executionId));
+      } catch (deleteError) {
+        return {
+          status: 'failed',
+          error: new AggregateError(
+            [error, deleteError],
+            `Terminal metadata and flow deletion failed for ${executionId}`,
+          ),
+          stage: 'terminal-status-and-flow-record-delete',
+          terminalStatusPersisted: false,
+        };
+      }
+    }
+    return {
+      status: 'failed',
+      error,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    };
+  }
+
+  if (flowRecord === 'preserve') {
+    return {
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'preserved',
+    };
+  }
+
+  try {
+    await getExecutionStore(executionId).delete(flowKey(executionId));
+    return {
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    };
+  } catch (error) {
+    return {
+      status: 'failed',
+      error,
+      stage: 'flow-record-delete',
+      terminalStatusPersisted: true,
+    };
+  }
 }
 
 /** Persist an AI-generated session description on an existing execution's metadata. */
@@ -224,7 +320,11 @@ export async function writeSessionDescription(
   executionId: ExecutionId,
   description: string,
 ): Promise<void> {
-  await persistMetaField(executionId, { description }, 'session description');
+  await persistSupplementaryMetaFieldsBestEffort(
+    executionId,
+    { description },
+    'session description',
+  );
 }
 
 /**
@@ -237,5 +337,9 @@ export async function writeExecutionStreamId(
   executionId: ExecutionId,
   streamId: StreamTabId,
 ): Promise<void> {
-  await persistMetaField(executionId, { streamId }, 'execution stream id');
+  await persistSupplementaryMetaFieldsBestEffort(
+    executionId,
+    { streamId },
+    'execution stream id',
+  );
 }

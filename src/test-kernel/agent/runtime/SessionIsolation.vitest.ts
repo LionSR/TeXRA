@@ -40,11 +40,15 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createRecordingHost } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
-  writeTerminalStatus: vi.fn().mockResolvedValue(undefined),
+  finalizeExecution: vi.fn().mockResolvedValue({
+    status: 'durable',
+    terminalStatusPersisted: true,
+    flowRecord: 'deleted',
+  }),
 }));
 
 vi.mock('@agent/storage', () => ({
-  writeTerminalStatus: storageMocks.writeTerminalStatus,
+  finalizeExecution: storageMocks.finalizeExecution,
 }));
 
 function initTestPlatform(): Promise<void> {

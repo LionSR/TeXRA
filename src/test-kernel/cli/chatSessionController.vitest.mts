@@ -9,6 +9,9 @@ import pDefer from 'p-defer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  executeAgent: vi.fn(),
+  finalizeExecution: vi.fn(),
+  registerExecution: vi.fn(),
   stopAgentStream: vi.fn(),
   workspaceGet: vi.fn(),
   getExecutionStore: vi.fn(),
@@ -37,9 +40,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
+  finalizeExecution: mocks.finalizeExecution,
   getExecutionStore: mocks.getExecutionStore,
-  registerExecution: vi.fn(),
-  writeTerminalStatus: vi.fn(),
+  registerExecution: mocks.registerExecution,
 }));
 
 vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
@@ -51,7 +54,7 @@ vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
-  executeAgent: vi.fn(),
+  executeAgent: mocks.executeAgent,
   resumeToolUseFromSnapshot: mocks.resumeToolUseFromSnapshot,
 }));
 
@@ -207,19 +210,30 @@ describe('CLI terminal outcome resolution', () => {
     ).resolves.toBe(RUN_OUTCOME.CANCELLED);
   });
 
-  it('surfaces storage failures instead of masking them', async () => {
+  it('reports an outcome read failure and retains the completed run', async () => {
+    const reportReadFailure = vi.fn();
     mocks.getExecutionStore.mockReturnValue({
       readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
     });
 
     await expect(
-      readCliRunOutcome({
-        category: 'toolUse',
-        executionId: 'broken-storage',
-        outcome: RUN_OUTCOME.COMPLETED,
-        streamId: 'broken-storage',
-      } as Parameters<typeof readCliRunOutcome>[0]),
-    ).rejects.toThrow('metadata read failed');
+      readCliRunOutcome(
+        {
+          category: 'toolUse',
+          executionId: 'broken-storage',
+          outcome: RUN_OUTCOME.COMPLETED,
+          streamId: 'broken-storage',
+        } as Parameters<typeof readCliRunOutcome>[0],
+        reportReadFailure,
+      ),
+    ).resolves.toBe(RUN_OUTCOME.COMPLETED);
+    expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message:
+          'Could not verify the persisted outcome for execution broken-storage; using the current run outcome: metadata read failed',
+        cause: expect.any(Error),
+      }),
+    );
   });
 });
 
@@ -378,6 +392,21 @@ describe('chatTuiCanStartRootRun', () => {
 
 describe('createChatSessionController', () => {
   beforeEach(() => {
+    mocks.executeAgent.mockReset();
+    mocks.executeAgent.mockResolvedValue({
+      category: 'toolUse',
+      executionId: 'exec-start',
+      outcome: RUN_OUTCOME.COMPLETED,
+      streamId: 'stream-start',
+    });
+    mocks.finalizeExecution.mockReset();
+    mocks.finalizeExecution.mockResolvedValue({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    });
+    mocks.registerExecution.mockReset();
+    mocks.registerExecution.mockResolvedValue(undefined);
     mocks.stopAgentStream.mockReset();
     mocks.workspaceGet.mockReset();
     mocks.workspaceGet.mockReturnValue(false);
@@ -449,6 +478,67 @@ describe('createChatSessionController', () => {
     expect(typeof ctrl.resume).toBe('function');
     expect(typeof ctrl.stop).toBe('function');
     expect(typeof ctrl.canStartRootRun).toBe('function');
+  });
+
+  it('shows durability failures without turning an intentional stop into an error', async () => {
+    const run = pDefer<never>();
+    const session = makeSession();
+    mocks.executeAgent.mockReturnValueOnce(run.promise);
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: new Error('terminal metadata disk full'),
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    ctrl.startRootRun({
+      agent: 'chat',
+      model: 'gpt54',
+      instruction: 'Check the draft.',
+      workingDirectory: '/tmp/test',
+      agentCategory: 'toolUse',
+    });
+    await vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalledOnce());
+    ctrl.stop();
+    run.reject(new Error('run stopped'));
+    await session.runPromise;
+
+    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(
+        /^Failed to persist error status for execution .+: terminal metadata disk full$/,
+      ),
+    );
+    expect(session.runExitCode).toBe(CliExitCode.Success);
+  });
+
+  it('does not delete a flow after the run lifecycle has taken ownership', async () => {
+    const session = makeSession();
+    mocks.executeAgent.mockImplementationOnce(
+      async (
+        _config: unknown,
+        _executionId: unknown,
+        options: { readonly onRun?: () => void },
+      ) => {
+        options.onRun?.();
+        throw new Error('recovery remains resumable');
+      },
+    );
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    ctrl.startRootRun({
+      agent: 'chat',
+      model: 'gpt54',
+      instruction: 'Continue the recoverable proof.',
+      workingDirectory: '/tmp/test',
+      agentCategory: 'toolUse',
+    });
+    await session.runPromise;
+
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
+      'recovery remains resumable',
+    );
   });
 
   it('canStartRootRun() delegates to chatTuiCanStartRootRun(session)', () => {

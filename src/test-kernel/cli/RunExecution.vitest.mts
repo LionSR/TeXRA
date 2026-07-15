@@ -26,6 +26,7 @@ import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
+  emit: vi.fn(),
   detachRunProgressRenderer: vi.fn(),
   detachSessionProgressProjection: vi.fn(),
   createHeadlessCliHostInteractions: vi.fn(),
@@ -35,7 +36,7 @@ const mocks = vi.hoisted(() => ({
   readCliRunOutcome: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
-  writeTerminalStatus: vi.fn(),
+  finalizeExecution: vi.fn(),
 }));
 
 const tempDirs: string[] = [];
@@ -80,7 +81,7 @@ vi.mock('@agent/runtime/runAgent', () => ({
 
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
-  writeTerminalStatus: mocks.writeTerminalStatus,
+  finalizeExecution: mocks.finalizeExecution,
 }));
 
 vi.mock('@cli/runtime/runtimeHost', () => ({
@@ -141,12 +142,17 @@ function stubRunExecutionDeps(): void {
     dispose: mocks.disposeHostInteractions,
   });
   mocks.createCliRuntimeHost.mockReturnValue({
-    emit: vi.fn(),
+    emit: mocks.emit,
     attachRunProgressRenderer: vi.fn(() => mocks.detachRunProgressRenderer),
     prepareInteractivePrompt: mocks.prepareInteractivePrompt,
     close: mocks.close,
   });
   mocks.readCliRunOutcome.mockResolvedValue('completed');
+  mocks.finalizeExecution.mockResolvedValue({
+    status: 'durable',
+    terminalStatusPersisted: true,
+    flowRecord: 'deleted',
+  });
   mocks.runAgent.mockResolvedValue({
     category: 'toolUse',
     executionId: 'exec-1',
@@ -326,6 +332,30 @@ describe('executeCliRequest', () => {
     );
   });
 
+  it('reports outcome read failures without rejecting a successful run', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const readError = new Error('metadata read failed');
+    mocks.readCliRunOutcome.mockImplementationOnce(
+      async (
+        result: { readonly outcome: string },
+        reportReadFailure: (error: Error) => void,
+      ) => {
+        reportReadFailure(readError);
+        return result.outcome;
+      },
+    );
+
+    await expect(
+      executeCliRequest(baseRequest(), cliContext()),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { outcome: 'completed' },
+    });
+    expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
+      message: 'metadata read failed',
+    });
+  });
+
   it('persists headless stream sidecars from session events', async () => {
     await installStoragePlatform();
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
@@ -503,11 +533,71 @@ describe('executeCliRequest', () => {
       executeCliRequest(request, cliContext(), { markErrorOnThrow: true }),
     ).rejects.toBe(error);
 
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.ERROR,
-    );
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
     expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves an unexpected run error when terminal persistence also fails', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const error = new Error('workspace state unavailable');
+    const persistenceError = new Error('terminal metadata disk full');
+    mocks.runAgent.mockRejectedValueOnce(error);
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: persistenceError,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    await expect(
+      executeCliRequest(baseRequest(), cliContext(), {
+        markErrorOnThrow: true,
+      }),
+    ).rejects.toBe(error);
+
+    expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
+      message:
+        'Failed to persist error status for execution exec-1: terminal metadata disk full',
+    });
+  });
+
+  it('does not finalize a classified run failure a second time', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = baseRequest();
+    mocks.runAgent.mockImplementationOnce(
+      async (_request: unknown, options: { readonly onRun?: () => void }) => {
+        options.onRun?.();
+        throw new AgentError('provider boom');
+      },
+    );
+
+    await expect(
+      executeCliRequest(request, cliContext(), { markErrorOnThrow: true }),
+    ).resolves.toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('finalizes a classified launch failure before the lifecycle starts', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    mocks.runAgent.mockRejectedValueOnce(new AgentError('model not found'));
+
+    await expect(
+      executeCliRequest(baseRequest(), cliContext(), {
+        markErrorOnThrow: true,
+      }),
+    ).resolves.toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
   });
 
   it('keeps a completed run terminal status when wrap cleanup fails after invoke succeeded (#7863)', async () => {
@@ -529,28 +619,30 @@ describe('executeCliRequest', () => {
       }),
     ).rejects.toBe(cleanupError);
 
-    expect(mocks.writeTerminalStatus).not.toHaveBeenCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.ERROR,
-    );
+    expect(mocks.finalizeExecution).not.toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
   it('resolves a classified run failure to a non-zero exit code without rethrowing', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
-    mocks.runAgent.mockRejectedValueOnce(new AgentError('provider boom'));
+    mocks.runAgent.mockImplementationOnce(
+      async (_request: unknown, options: { readonly onRun?: () => void }) => {
+        options.onRun?.();
+        throw new AgentError('provider boom');
+      },
+    );
 
     const result = await executeCliRequest(request, cliContext(), {
       markErrorOnThrow: true,
     });
 
     expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
-    // markErrorOnThrow still records the terminal status, same as before.
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.ERROR,
-    );
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
@@ -628,10 +720,11 @@ describe('executeCliRequest', () => {
     await Promise.resolve();
     await platform.lifecycle.runShutdown();
 
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.INTERRUPTED,
-    );
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      flowRecord: 'preserve',
+    });
 
     resolveRun?.({
       category: 'toolUse',
@@ -649,11 +742,64 @@ describe('executeCliRequest', () => {
         streamId: 'stream-1',
       },
     });
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledTimes(2);
-    expect(mocks.writeTerminalStatus).toHaveBeenLastCalledWith(
-      'exec-1',
-      EXECUTION_STATUS.INTERRUPTED,
+    expect(mocks.finalizeExecution).toHaveBeenCalledTimes(2);
+    expect(mocks.finalizeExecution).toHaveBeenLastCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      flowRecord: 'preserve',
+    });
+  });
+
+  it('closes the runtime host when shutdown finalization fails', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    const platform = createFakePlatform();
+    initPlatform(platform);
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const persistenceError = new Error('terminal metadata disk full');
+    mocks.finalizeExecution.mockResolvedValue({
+      status: 'failed',
+      error: persistenceError,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+    let resolveRun:
+      | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
+      | undefined;
+    mocks.runAgent.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRun = resolve;
+      }),
     );
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+    });
+    await Promise.resolve();
+    await platform.lifecycle.runShutdown();
+    expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
+      message:
+        'Failed to persist interrupted status for execution exec-1: terminal metadata disk full',
+    });
+    resolveRun?.({
+      category: 'toolUse',
+      executionId: 'exec-1',
+      outcome: 'completed',
+      streamId: 'stream-1',
+    });
+    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
+
+    await expect(run).resolves.toEqual({
+      ok: true,
+      result: {
+        category: 'toolUse',
+        executionId: 'exec-1',
+        outcome: 'cancelled',
+        streamId: 'stream-1',
+      },
+    });
+    expect(mocks.finalizeExecution).toHaveBeenCalledTimes(2);
+    expect(mocks.emit).toHaveBeenCalledTimes(1);
+    expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
   it('removes the shutdown status hook after owned executions finish', async () => {
@@ -666,10 +812,10 @@ describe('executeCliRequest', () => {
     await executeCliRequest(request, cliContext(), {
       registerExecution: true,
     });
-    mocks.writeTerminalStatus.mockClear();
+    mocks.finalizeExecution.mockClear();
     await platform.lifecycle.runShutdown();
 
-    expect(mocks.writeTerminalStatus).not.toHaveBeenCalled();
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 });
 
@@ -790,11 +936,46 @@ describe('executeCliConfig', () => {
     });
 
     expect(result).toMatchObject({ ok: false });
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      expect.any(String),
-      EXECUTION_STATUS.ERROR,
-    );
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: expect.any(String),
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
     expect(mocks.writeTextStderr).toHaveBeenCalledWith('wrong category');
     expect(mocks.close).toHaveBeenCalledOnce();
+  });
+
+  it('reports category finalization failures and still returns the mismatch', async () => {
+    const { AgentCategory } =
+      await import('@agent/core/definition/AgentDataclass');
+    const { executeCliConfig } = await import('@cli/runtime/runExecution');
+    mocks.runAgent.mockResolvedValueOnce({
+      category: AgentCategory.Workflow,
+      executionId: 'exec-1',
+      outcome: 'completed',
+      outputs: [],
+      compileFailures: [],
+    });
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: new Error('terminal metadata disk full'),
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    await expect(
+      executeCliConfig(toolUseConfig(), cliContext(), {
+        expectedCategory: AgentCategory.ToolUse,
+        categoryMismatchMessage: 'wrong category',
+      }),
+    ).resolves.toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+
+    expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(
+        /^Warning: Failed to persist error status for execution .+: terminal metadata disk full$/,
+      ),
+    );
+    expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(2, 'wrong category');
   });
 });
