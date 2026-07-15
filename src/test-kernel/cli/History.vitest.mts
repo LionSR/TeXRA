@@ -175,10 +175,9 @@ describe('CLI history runtime', () => {
   it('formats history list rows with the stable tab-separated text shape', async () => {
     mocks.listExecutions.mockResolvedValue([
       {
+        kind: 'agent',
         id: 'a1' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
-        agent: 'correct',
-        model: 'deepseekT',
         agentConfig: config,
         terminalStatus: 'completed',
       },
@@ -211,28 +210,23 @@ describe('CLI history runtime', () => {
     } as AgentConfig;
     mocks.listExecutions.mockResolvedValue([
       {
+        kind: 'agent',
         id: 'visible' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
-        agent: 'correct',
-        model: 'deepseekT',
         agentConfig: config,
         terminalStatus: 'completed',
       },
       {
+        kind: 'process',
         id: 'bash-process' as ExecutionId,
         timestamp: '2026-05-18T08:01:00.000Z',
-        agent: 'bash',
-        model: 'deepseekT',
         agentConfig: processConfig,
-        category: 'process',
         terminalStatus: 'completed',
       },
       {
+        kind: 'incomplete',
         id: 'configless' as ExecutionId,
         timestamp: '2026-05-18T08:02:00.000Z',
-        agent: 'unknown',
-        model: 'unknown',
-        agentConfig: null,
         terminalStatus: 'completed',
       },
     ]);
@@ -253,10 +247,9 @@ describe('CLI history runtime', () => {
     } as AgentConfig;
     mocks.listExecutions.mockResolvedValue([
       {
+        kind: 'agent',
         id: 'team1' as ExecutionId,
         timestamp: '2026-05-18T10:00:00.000Z',
-        agent: 'engineer',
-        model: 'sonnet46T',
         agentConfig: teamConfig,
         terminalStatus: 'resumable',
       },
@@ -280,10 +273,9 @@ describe('CLI history runtime', () => {
     } as AgentConfig;
     mocks.listExecutions.mockResolvedValue([
       {
+        kind: 'agent',
         id: 'chat1' as ExecutionId,
         timestamp: '2026-05-18T11:00:00.000Z',
-        agent: 'assistant',
-        model: 'deepseekT',
         agentConfig: chatConfig,
         terminalStatus: 'resumable',
         description: 'Sketch a proof outline',

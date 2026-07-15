@@ -473,27 +473,27 @@ export function formatCliHistoryDetailsText(
 }
 
 async function toCliHistoryEntry(
-  entry: ExecutionListingEntry,
+  entry: Extract<ExecutionListingEntry, { kind: 'agent' }>,
 ): Promise<CliHistoryEntry> {
-  const inputBasename = firstInputBasename(entry.agentConfig);
+  const config = entry.agentConfig;
+  const inputBasename = firstInputBasename(config);
   const resumability = await deriveResumability(entry.id);
-  const resumeData =
-    resumability.resumable && entry.agentConfig
-      ? await readCliToolUseResumeDataForListing(entry.id, entry.agentConfig)
-      : null;
+  const resumeData = resumability.resumable
+    ? await readCliToolUseResumeDataForListing(entry.id, config)
+    : null;
   return {
     id: entry.id,
     timestamp: entry.timestamp,
-    agent: entry.agent,
-    model: resumeData?.snapshot.agentConfig.model ?? entry.model,
+    agent: config.agent,
+    model: resumeData?.snapshot.agentConfig.model ?? config.model,
     status: resolveCliHistoryStatus({
       terminalStatus: entry.terminalStatus,
       resumable: resumeData !== null,
     }),
     inputBasename,
-    category: entry.category,
+    category: entry.runtimeCategory ?? config.agentCategory,
     description: entry.description,
-    teamPresetId: teamPresetId(entry.agentConfig),
+    teamPresetId: teamPresetId(config),
     parentExecutionId: entry.parentExecutionId,
     delegationDepth: entry.delegationDepth,
   };
@@ -503,7 +503,7 @@ function teamPresetId(config: AgentConfig | null): string | undefined {
   return config?.cliMultiAgentPresetId?.trim() || undefined;
 }
 
-function firstInputBasename(config: AgentConfig | null): string {
-  const first = config?.inputFiles.at(0) ?? '';
+function firstInputBasename(config: AgentConfig): string {
+  const first = config.inputFiles.at(0) ?? '';
   return first ? path.basename(first) : '-';
 }

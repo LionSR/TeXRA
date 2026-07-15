@@ -37,19 +37,32 @@ const EXECUTION_STORAGE_CONCURRENCY = 32;
 // Public types
 // ============================================================================
 
-export interface ExecutionListingEntry {
+interface ExecutionListingBase {
   id: ExecutionId;
   timestamp: string;
   parentExecutionId?: ExecutionId;
   delegationDepth?: number;
-  agent: string;
-  model: string;
-  agentConfig: AgentConfig | null;
-  category?: string;
   terminalStatus?: string;
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
 }
+
+export type ExecutionListingEntry =
+  | (ExecutionListingBase & {
+      kind: 'agent';
+      agentConfig: AgentConfig;
+      /** Metadata override when it differs from `agentConfig.agentCategory`. */
+      runtimeCategory?: string;
+    })
+  | (ExecutionListingBase & {
+      kind: 'process';
+      agentConfig: AgentConfig;
+    })
+  | (ExecutionListingBase & {
+      kind: 'incomplete';
+      /** Preserved metadata for legacy rows whose config is absent. */
+      runtimeCategory?: string;
+    });
 
 /**
  * True for executions a user should see in a history list — excludes
@@ -62,9 +75,9 @@ export interface ExecutionListingEntry {
  * like `ExecutionsTool` need the raw listing to manage background processes.
  */
 export function isUserVisibleExecution(
-  entry: Pick<ExecutionListingEntry, 'agentConfig' | 'category'>,
-): boolean {
-  return entry.agentConfig !== null && entry.category !== 'process';
+  entry: ExecutionListingEntry,
+): entry is Extract<ExecutionListingEntry, { kind: 'agent' }> {
+  return entry.kind === 'agent';
 }
 
 // ============================================================================
@@ -151,17 +164,31 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
 
         if (!meta) return null;
 
-        return {
+        const base: ExecutionListingBase = {
           id,
           timestamp: meta.timestamp,
           parentExecutionId: meta.parentExecutionId,
           delegationDepth: meta.delegationDepth,
-          agent: cfg?.agent ?? 'unknown',
-          model: cfg?.model ?? 'unknown',
-          agentConfig: cfg ?? null,
-          category: meta.category ?? cfg?.agentCategory,
           terminalStatus: meta.terminalStatus,
           description: meta.description,
+        };
+        if (!cfg) {
+          return {
+            ...base,
+            kind: 'incomplete',
+            runtimeCategory: meta.category,
+          };
+        }
+        if (meta.category === 'process') {
+          return { ...base, kind: 'process', agentConfig: cfg };
+        }
+        return {
+          ...base,
+          kind: 'agent',
+          agentConfig: cfg,
+          ...(meta.category && meta.category !== cfg.agentCategory
+            ? { runtimeCategory: meta.category }
+            : {}),
         };
       } catch (error) {
         logger.warn(
