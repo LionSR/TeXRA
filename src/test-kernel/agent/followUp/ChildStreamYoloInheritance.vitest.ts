@@ -14,6 +14,7 @@ import {
   isBashApprovalBypassedForStream,
   setBashApprovalSessionBypass,
 } from '@tools/approval';
+import { currentSession } from '@agent/runtime/SessionHandle';
 
 import { createRecordingHost } from '../progressTestUtils';
 
@@ -67,5 +68,42 @@ describe('child subagent stream approval inheritance', () => {
 
     expect(isApprovalBypassedForStream(child)).toBe(true);
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
+  });
+
+  it('picks up a parent bash bypass toggled after the child stream already started', () => {
+    // Regression for the "YOLO forgotten after one round" bug: inheritance
+    // used to be a one-shot copy taken at child-creation time, so a bypass
+    // enabled on the parent afterwards never reached an already-running
+    // child. It must now resolve live off the ancestry link.
+    const { host } = createRecordingHost();
+    const parent = 'stream:parent-late-toggle' as StreamTabId;
+    const child = 'stream:child-late-toggle' as StreamTabId;
+
+    inheritBashBypassOnChildStream(child, parent);
+    expect(isBashApprovalBypassedForStream(child)).toBe(false);
+
+    setBashApprovalSessionBypass(parent, true, host, { silent: true });
+
+    expect(isBashApprovalBypassedForStream(child)).toBe(true);
+  });
+
+  it('lets a conversation round inherit bypass from the previous round via the session-level ancestry link', () => {
+    // Mirrors the CLI: every chat round mints a brand-new root StreamTabId,
+    // so bypass must be carried forward explicitly (see
+    // chatSessionController.ts's onStreamResolved) rather than assumed to
+    // survive on the same stream id.
+    const { host } = createRecordingHost();
+    const roundOne = 'stream:round-1' as StreamTabId;
+    const roundTwo = 'stream:round-2' as StreamTabId;
+
+    setBashApprovalSessionBypass(roundOne, true, host, { silent: true });
+    currentSession().approvals.registerStreamParent(roundTwo, roundOne);
+
+    expect(isBashApprovalBypassedForStream(roundTwo)).toBe(true);
+
+    // An explicit toggle on the later round still wins over the inherited one.
+    setBashApprovalSessionBypass(roundTwo, false, host, { silent: true });
+    expect(isBashApprovalBypassedForStream(roundTwo)).toBe(false);
+    expect(isBashApprovalBypassedForStream(roundOne)).toBe(true);
   });
 });

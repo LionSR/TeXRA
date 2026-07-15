@@ -35,6 +35,12 @@ export type ApprovalBypassEvent =
  * Single implementation behind the tool-edit, bash, and proposal (super-YOLO)
  * bypass toggles, so set/toggle/clear semantics and UI notification stay
  * uniform across approval kinds.
+ *
+ * A stream with no explicit bypass value of its own defers to its ancestor
+ * chain (see `resolveParent`) rather than defaulting straight to `false` —
+ * this is what lets a delegated subagent stream, or the next round of a CLI
+ * conversation, inherit a bypass its predecessor turned on, without a
+ * one-shot copy that misses toggles made after the child/round was created.
  */
 export interface StreamApprovalBypass {
   isBypassed(streamId: StreamTabId): boolean;
@@ -57,6 +63,7 @@ export interface StreamApprovalBypass {
 
 export function createStreamApprovalBypass(
   event: ApprovalBypassEvent,
+  resolveParent: (streamId: StreamTabId) => StreamTabId | undefined,
 ): StreamApprovalBypass {
   const byStream = new Map<StreamTabId, boolean>();
 
@@ -74,7 +81,15 @@ export function createStreamApprovalBypass(
 
   return {
     isBypassed(streamId) {
-      return byStream.get(streamId) ?? false;
+      const seen = new Set<StreamTabId>();
+      let current: StreamTabId | undefined = streamId;
+      while (current && !seen.has(current)) {
+        const explicit = byStream.get(current);
+        if (explicit !== undefined) return explicit;
+        seen.add(current);
+        current = resolveParent(current);
+      }
+      return false;
     },
     setBypass,
     toggleBypass(streamId, runtimeHost) {
@@ -120,6 +135,7 @@ export interface StreamApprovalControllerOptions<
 > {
   rejectionResult: () => R;
   bypassEvent: ApprovalBypassEvent;
+  resolveParent: (streamId: StreamTabId) => StreamTabId | undefined;
 }
 
 export function createStreamApprovalController<R extends { accepted: boolean }>(
@@ -145,7 +161,10 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
     unregisterPending(id) {
       pending.delete(id);
     },
-    bypass: createStreamApprovalBypass(options.bypassEvent),
+    bypass: createStreamApprovalBypass(
+      options.bypassEvent,
+      options.resolveParent,
+    ),
     enqueue<T>(
       streamId: StreamTabId | undefined,
       run: () => Promise<T>,
@@ -197,6 +216,19 @@ export interface SessionApprovals {
    */
   readonly proposal: StreamApprovalBypass;
   /**
+   * Record that `childStreamId` descends from `parentStreamId` for bypass
+   * resolution purposes: `toolEdit`/`bash`/`proposal.isBypassed(childStreamId)`
+   * will defer to the parent's bypass state whenever the child has no
+   * explicit value of its own. Used for delegated subagent streams (parent =
+   * the orchestrator stream) and, in the CLI, successive conversation rounds
+   * (parent = the previous round's root stream) — both mint a fresh
+   * `StreamTabId` that would otherwise start every bypass kind ungated.
+   */
+  registerStreamParent(
+    childStreamId: StreamTabId,
+    parentStreamId: StreamTabId,
+  ): void;
+  /**
    * Reject every pending approval and clear all bypass + proposal state for
    * this session. Used by session teardown and the session-wide
    * `cleanupAllApprovals` sweep.
@@ -205,25 +237,38 @@ export interface SessionApprovals {
 }
 
 export function createSessionApprovals(): SessionApprovals {
+  const parentOf = new Map<StreamTabId, StreamTabId>();
+  const resolveParent = (streamId: StreamTabId): StreamTabId | undefined =>
+    parentOf.get(streamId);
+
   const toolEdit = createStreamApprovalController<ToolEditApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
     bypassEvent: 'updateToolEditApprovalBypassState',
+    resolveParent,
   });
   const bash = createStreamApprovalController<HostBashApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
     bypassEvent: 'updateBashApprovalBypassState',
+    resolveParent,
   });
-  const proposal = createStreamApprovalBypass('updateSuperYoloBypassState');
+  const proposal = createStreamApprovalBypass(
+    'updateSuperYoloBypassState',
+    resolveParent,
+  );
   return {
     toolEdit,
     bash,
     proposal,
+    registerStreamParent(childStreamId, parentStreamId) {
+      parentOf.set(childStreamId, parentStreamId);
+    },
     rejectAndClearAll() {
       toolEdit.rejectAllPending();
       bash.rejectAllPending();
       toolEdit.bypass.clearAll();
       bash.bypass.clearAll();
       proposal.clearAll();
+      parentOf.clear();
     },
   };
 }
