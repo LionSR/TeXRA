@@ -38,11 +38,10 @@ export interface DesktopShellActionFactoryOptions {
   signIn(): Promise<void>;
   /**
    * Async git log host — closes audit item A from
-   * `docs/dev/standalone-trajectory-audit.md` (trajectory #16). When
-   * provided, the shell forwards the workspace's most recent commits to
-   * the renderer instead of replying with an empty list. Errors are
-   * swallowed by the host itself; failures surface as `commits: []` plus
-   * the best-effort `isGitRepo` boolean.
+   * `docs/dev/standalone-trajectory-audit.md` (trajectory #16). The shell
+   * forwards its recent-commit result to the renderer. The host converts
+   * expected git failures into an empty result with its best-effort
+   * `isGitRepo` value.
    */
   getRecentCommits(): Promise<{
     commits: string[];
