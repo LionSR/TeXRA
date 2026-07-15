@@ -10,6 +10,7 @@ import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn(),
+  reportFinalizationFailure: vi.fn(),
   registerExecution: vi.fn(),
 }));
 
@@ -65,6 +66,7 @@ describe('CLI chat execution registration', () => {
     await markRegisteredChatExecutionError(executionId, {
       executionRegistered: true,
       agentSettled: false,
+      reportFinalizationFailure: mocks.reportFinalizationFailure,
     });
 
     expect(mocks.finalizeExecution).toHaveBeenCalledWith({
@@ -80,6 +82,7 @@ describe('CLI chat execution registration', () => {
     await markRegisteredChatExecutionError(executionId, {
       executionRegistered: false,
       agentSettled: false,
+      reportFinalizationFailure: mocks.reportFinalizationFailure,
     });
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
@@ -91,8 +94,36 @@ describe('CLI chat execution registration', () => {
     await markRegisteredChatExecutionError(executionId, {
       executionRegistered: true,
       agentSettled: true,
+      reportFinalizationFailure: mocks.reportFinalizationFailure,
     });
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+  });
+
+  it('reports finalization failures without rejecting the chat error path', async () => {
+    const executionId = 'registered' as ExecutionId;
+    const persistenceError = new Error('terminal metadata disk full');
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: persistenceError,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    await expect(
+      markRegisteredChatExecutionError(executionId, {
+        executionRegistered: true,
+        agentSettled: false,
+        reportFinalizationFailure: mocks.reportFinalizationFailure,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(mocks.reportFinalizationFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message:
+          'Failed to persist error status for execution registered: terminal metadata disk full',
+        cause: persistenceError,
+      }),
+    );
   });
 });

@@ -27,7 +27,10 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { finalizeCliExecutionOrThrow } from '@cli/runtime/executionFinalization';
+import {
+  finalizeCliExecution,
+  type CliFinalizationFailureReporter,
+} from '@cli/runtime/executionFinalization';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -163,13 +166,15 @@ export async function markRegisteredChatExecutionError(
   options: {
     readonly executionRegistered: boolean;
     readonly agentSettled: boolean;
+    readonly reportFinalizationFailure: CliFinalizationFailureReporter;
   },
 ): Promise<void> {
   if (!options.executionRegistered || options.agentSettled) return;
-  await finalizeCliExecutionOrThrow(
+  await finalizeCliExecution(
     executionId,
     EXECUTION_STATUS.ERROR,
     'delete',
+    options.reportFinalizationFailure,
   );
 }
 
@@ -345,6 +350,12 @@ export function createChatSessionController(
       : CliExitCode.AgentError;
   };
 
+  // Durability failures remain visible even when the user intentionally
+  // stopped the run and the primary run error is therefore suppressed.
+  const reportFinalizationFailure = (error: Error): void => {
+    appendLocalErrorTranscript(toErrorMessage(error));
+  };
+
   // Build the runtime host shared by start and resume: attach the
   // terminal-result toast and the TUI approval pipeline, and return a
   // `finalize` teardown that both run promises invoke from their `.finally`.
@@ -440,6 +451,7 @@ export function createChatSessionController(
         await markRegisteredChatExecutionError(executionId, {
           executionRegistered,
           agentSettled,
+          reportFinalizationFailure,
         });
         reportRunFailure(error);
       })

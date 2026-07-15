@@ -20,7 +20,9 @@ const mocks = vi.hoisted(() => {
     isAuthenticated: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
     selectCliRunModel: vi.fn(),
+    writeErrorStderr: vi.fn(),
     writeResultMeta: vi.fn(),
+    writeTextStderr: vi.fn(),
   };
 });
 
@@ -73,6 +75,11 @@ vi.mock('@cli/runtime/agents', async (importOriginal) => ({
 
 vi.mock('@cli/runtime/runExecution', () => ({
   executeCliConfig: mocks.executeCliConfig,
+}));
+
+vi.mock('@cli/runtime/logSinks', () => ({
+  writeErrorStderr: mocks.writeErrorStderr,
+  writeTextStderr: mocks.writeTextStderr,
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
@@ -584,6 +591,55 @@ describe('CLI workflow run command', () => {
       terminalStatus: EXECUTION_STATUS.ERROR,
       flowRecord: 'delete',
     });
+  });
+
+  it('keeps a copy error primary when execution finalization also fails', async () => {
+    mocks.executeCliConfig.mockResolvedValueOnce({
+      ok: true,
+      executionId: 'exec-copy-fail',
+      result: {
+        category: AgentCategory.Workflow,
+        executionId: 'exec-copy-fail',
+        streamId: 'stream-copy-fail',
+        outcome: RUN_OUTCOME.COMPLETED,
+        outputs: [
+          {
+            round: 1,
+            relativePath: 'r1/paper.tex',
+            absolutePath: '/missing/run/r1/paper.tex',
+            location: 'runStorage',
+            originalPath: '/workspace/paper.tex',
+            added: null,
+            removed: null,
+          },
+        ],
+        compileFailures: [],
+      },
+    });
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: new Error('terminal metadata disk full'),
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    const { runWorkflowAgent } = await import('@cli/commands/workflow');
+    await expect(
+      runWorkflowAgent(cliContext(), {
+        agent: 'polish',
+        inputFiles: ['paper.tex'],
+        contextFiles: [],
+        output: 'polished.tex',
+        instruction: '',
+      }),
+    ).resolves.toBe(CliExitCode.AgentError);
+
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'Warning: Failed to persist error status for execution exec-copy-fail: terminal metadata disk full',
+    );
+    expect(mocks.writeErrorStderr).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: 'ENOENT' }),
+    );
   });
 
   it('uses the resolved terminal outcome in the persisted envelope', async () => {

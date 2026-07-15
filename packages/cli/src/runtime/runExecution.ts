@@ -16,7 +16,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
-import { finalizeCliExecutionOrThrow } from './executionFinalization';
+import { finalizeCliExecution } from './executionFinalization';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { initializeHeadlessTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
@@ -108,10 +108,12 @@ export async function executeCliConfig<
   const { result } = execution;
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
-    await finalizeCliExecutionOrThrow(
+    await finalizeCliExecution(
       executionId,
       EXECUTION_STATUS.ERROR,
       'delete',
+      (finalizationError) =>
+        writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
     );
     writeTextStderr(
       categoryMismatchMessage ??
@@ -209,25 +211,25 @@ export async function executeCliRequest(
     : undefined;
   let shutdownInterrupted = false;
   let shutdownFinalizationFailureReported = false;
-  const reportShutdownFinalizationFailure = (error: unknown): void => {
+  const reportFinalizationFailure = (error: unknown): void => {
+    interactionHost.emit('requestShowError', {
+      message: toErrorMessage(error),
+    });
+  };
+  const reportShutdownFinalizationFailure = (error: Error): void => {
     if (shutdownFinalizationFailureReported) return;
     shutdownFinalizationFailureReported = true;
-    interactionHost.emit('requestShowError', {
-      message: `Failed to persist interrupted status for execution ${ownedExecutionId}: ${toErrorMessage(error)}`,
-    });
+    reportFinalizationFailure(error);
   };
   const disposeShutdownStatus = ownedExecutionId
     ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
         shutdownInterrupted = true;
-        try {
-          await finalizeCliExecutionOrThrow(
-            ownedExecutionId,
-            EXECUTION_STATUS.INTERRUPTED,
-            'preserve',
-          );
-        } catch (error) {
-          reportShutdownFinalizationFailure(error);
-        }
+        await finalizeCliExecution(
+          ownedExecutionId,
+          EXECUTION_STATUS.INTERRUPTED,
+          'preserve',
+          reportShutdownFinalizationFailure,
+        );
       })
     : undefined;
   const invoke = (): Promise<ExecuteAgentResult> =>
@@ -271,10 +273,11 @@ export async function executeCliRequest(
       !invokeSettledOk &&
       !(err instanceof AgentError)
     ) {
-      await finalizeCliExecutionOrThrow(
+      await finalizeCliExecution(
         request.executionId,
         EXECUTION_STATUS.ERROR,
         'delete',
+        reportFinalizationFailure,
       );
     }
     // Only a classified, already-handled AgentError resolves to a non-zero
@@ -289,15 +292,12 @@ export async function executeCliRequest(
     // If the run settles while shutdown is in progress, keep the
     // signal-owned interrupted status as the final write.
     if (shutdownInterrupted && ownedExecutionId) {
-      try {
-        await finalizeCliExecutionOrThrow(
-          ownedExecutionId,
-          EXECUTION_STATUS.INTERRUPTED,
-          'preserve',
-        );
-      } catch (error) {
-        reportShutdownFinalizationFailure(error);
-      }
+      await finalizeCliExecution(
+        ownedExecutionId,
+        EXECUTION_STATUS.INTERRUPTED,
+        'preserve',
+        reportShutdownFinalizationFailure,
+      );
     }
     detachResultToast();
     detachRunProgressRenderer();

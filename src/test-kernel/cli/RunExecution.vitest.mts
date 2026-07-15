@@ -517,6 +517,30 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves an unexpected run error when terminal persistence also fails', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const error = new Error('workspace state unavailable');
+    const persistenceError = new Error('terminal metadata disk full');
+    mocks.runAgent.mockRejectedValueOnce(error);
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: persistenceError,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    await expect(
+      executeCliRequest(baseRequest(), cliContext(), {
+        markErrorOnThrow: true,
+      }),
+    ).rejects.toBe(error);
+
+    expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
+      message:
+        'Failed to persist error status for execution exec-1: terminal metadata disk full',
+    });
+  });
+
   it('does not finalize a classified run failure a second time', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
@@ -868,5 +892,39 @@ describe('executeCliConfig', () => {
     });
     expect(mocks.writeTextStderr).toHaveBeenCalledWith('wrong category');
     expect(mocks.close).toHaveBeenCalledOnce();
+  });
+
+  it('reports category finalization failures and still returns the mismatch', async () => {
+    const { AgentCategory } =
+      await import('@agent/core/definition/AgentDataclass');
+    const { executeCliConfig } = await import('@cli/runtime/runExecution');
+    mocks.runAgent.mockResolvedValueOnce({
+      category: AgentCategory.Workflow,
+      executionId: 'exec-1',
+      outcome: 'completed',
+      outputs: [],
+      compileFailures: [],
+    });
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: new Error('terminal metadata disk full'),
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    await expect(
+      executeCliConfig(toolUseConfig(), cliContext(), {
+        expectedCategory: AgentCategory.ToolUse,
+        categoryMismatchMessage: 'wrong category',
+      }),
+    ).resolves.toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+
+    expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(
+        /^Warning: Failed to persist error status for execution .+: terminal metadata disk full$/,
+      ),
+    );
+    expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(2, 'wrong category');
   });
 });

@@ -10,7 +10,7 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { finalizeCliExecutionOrThrow } from '../runtime/executionFinalization';
+import { finalizeCliExecution } from '../runtime/executionFinalization';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
@@ -157,10 +157,12 @@ export async function runWorkflowAgent(
           return CliExitCode.Interrupted;
         }
 
-        await finalizeCliExecutionOrThrow(
+        await finalizeCliExecution(
           executionId,
           EXECUTION_STATUS.ERROR,
           'delete',
+          (finalizationError) =>
+            writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
         );
         writeErrorStderr(error);
         return CliExitCode.AgentError;
