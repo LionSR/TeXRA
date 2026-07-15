@@ -10,30 +10,20 @@ import {
 } from '../desktopLogMessages.js';
 
 export interface DesktopLogIpcOptions {
-  readLog?: () => DesktopLogSnapshot;
-  copyLog?: (text: string) => Promise<void>;
-  exportLog?: (text: string) => Promise<void>;
+  readLog(): DesktopLogSnapshot;
+  copyLog(text: string): Promise<void>;
+  exportLog(text: string): Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
 export function createDesktopLogIpc(
   renderer: DesktopRenderer,
-  options: DesktopLogIpcOptions = {},
+  options: DesktopLogIpcOptions,
 ): DesktopMessageHandler {
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
 
-  function readSnapshot(): DesktopLogSnapshot {
-    return (
-      options.readLog?.() ?? {
-        path: undefined,
-        text: 'Desktop log is not available.',
-        truncated: false,
-      }
-    );
-  }
-
   function postSnapshot(): DesktopLogSnapshot {
-    const log = readSnapshot();
+    const log = options.readLog();
     renderer.postToRenderer({
       command: DESKTOP_LOG_COMMANDS.SET_LOG,
       log,
@@ -47,10 +37,10 @@ export function createDesktopLogIpc(
         postSnapshot();
       },
       [DESKTOP_LOG_COMMANDS.COPY_LOG]: () => {
-        void options.copyLog?.(postSnapshot().text).catch(reportAsyncError);
+        void options.copyLog(postSnapshot().text).catch(reportAsyncError);
       },
       [DESKTOP_LOG_COMMANDS.EXPORT_LOG]: () => {
-        void options.exportLog?.(postSnapshot().text).catch(reportAsyncError);
+        void options.exportLog(postSnapshot().text).catch(reportAsyncError);
       },
     },
     { onAsyncError: options.onAsyncError },
