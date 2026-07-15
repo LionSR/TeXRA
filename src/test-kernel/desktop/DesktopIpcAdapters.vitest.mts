@@ -32,9 +32,24 @@ type DesktopViewStateIpcModule =
 type DesktopOnboardingOptions = NonNullable<
   Parameters<DesktopOnboardingIpcModule['createDesktopOnboardingIpc']>[1]
 >;
-type OnboardingHarnessOptions = Omit<DesktopOnboardingOptions, 'state'> & {
+type OnboardingHarnessOptions = Partial<
+  Omit<DesktopOnboardingOptions, 'state'>
+> & {
   seed?: Readonly<Record<string, unknown>>;
 };
+
+function createOnboardingCapabilities(): Omit<
+  DesktopOnboardingOptions,
+  'state' | 'readyGate' | 'onAsyncError'
+> {
+  return {
+    hasCredential: () => false,
+    selectSetupAgent: async () => {},
+    kickoffSetup: async () => {},
+    signInWithChatGpt: async () => {},
+    openGettingStarted: async () => {},
+  };
+}
 
 // The WEBVIEW_READY / run-setup handlers trigger refreshOnboardingFunnel as a
 // fire-and-forget task whose chain (readyGate → credential probe →
@@ -123,7 +138,11 @@ async function createOnboardingHarness({
   const postToRenderer = vi.fn();
   const onboarding = createDesktopOnboardingIpc(
     { postToRenderer },
-    { ...options, state: memory.state },
+    {
+      ...createOnboardingCapabilities(),
+      ...options,
+      state: memory.state,
+    },
   );
   return {
     ...memory,
