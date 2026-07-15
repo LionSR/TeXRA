@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import stripAnsi from 'strip-ansi';
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   detectUnknownCliCommand,
@@ -54,21 +55,10 @@ import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
-  return {
-    cwd: '/tmp/project',
-    mode: 'headless',
-    outputFormat: 'text',
-    approvalPolicy: 'never',
-    quietLogs: false,
+  return createTestCliContext({
     renderRunProgress: true,
-    stderrIsTty: false,
-    stdoutColorEnabled: false,
-    stderrColorEnabled: false,
-    colorEnabled: false,
-    version: '0.0.0',
-    resourcesPath: '/tmp/resources',
     ...overrides,
-  };
+  });
 }
 
 function storedConfig(

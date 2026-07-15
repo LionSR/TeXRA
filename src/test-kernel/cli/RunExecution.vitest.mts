@@ -9,6 +9,7 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
@@ -107,19 +108,7 @@ vi.mock('@cli/runtime/logSinks', () => ({
 }));
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
-  return {
-    cwd: '/tmp/project',
-    mode: 'headless',
-    outputFormat: 'text',
-    approvalPolicy: 'never',
-    stderrIsTty: false,
-    stdoutColorEnabled: false,
-    stderrColorEnabled: false,
-    colorEnabled: false,
-    version: '0.0.0',
-    resourcesPath: '/tmp/resources',
-    ...overrides,
-  };
+  return createTestCliContext(overrides);
 }
 
 function baseRequest(): Parameters<typeof executeCliRequest>[0] {

@@ -198,6 +198,7 @@ function cliContext(
     resourcesPath: '/tmp/resources',
     version: '0.0.0-test',
     quietLogs: true,
+    skillSourceOptions: {},
     ...overrides,
   };
 }

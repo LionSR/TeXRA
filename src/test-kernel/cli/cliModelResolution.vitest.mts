@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -48,15 +49,10 @@ const KNOWN_MODEL = 'gpt5';
 const OTHER_MODEL = 'claudeSonnet';
 
 function makeContext(partial: Partial<CliContext> = {}): CliContext {
-  return {
+  return createTestCliContext({
     cwd: '/tmp',
-    colorEnabled: false,
-    mode: 'headless',
-    outputFormat: 'text',
-    stderrIsTty: false,
-    quietLogs: false,
     ...partial,
-  } as CliContext;
+  });
 }
 
 const runConfig = (model: string): CliConfigValues => ({ run: { model } });

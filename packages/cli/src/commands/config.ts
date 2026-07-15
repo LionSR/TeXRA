@@ -242,11 +242,7 @@ const configEditCommand = defineCliCommand({
   args: { ...GLOBAL_ARGS },
   run: async (context) => {
     const ambient = readCliAmbientState();
-    if (
-      !ambient.stdinIsTty ||
-      !(context.stdoutIsTty ?? ambient.stdoutIsTty) ||
-      context.termIsDumb
-    ) {
+    if (!ambient.stdinIsTty || !context.stdoutIsTty || context.termIsDumb) {
       throw new CliUsageError(
         'Interactive configuration requires a terminal. Use `texra config show` or `texra config agents` in scripts.',
       );
