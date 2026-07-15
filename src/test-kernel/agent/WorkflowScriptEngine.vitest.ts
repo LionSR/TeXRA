@@ -57,6 +57,25 @@ describe('parseWorkflowScript', () => {
     expect(() =>
       parseWorkflowScript(`import fs from 'node:fs'\n${META}`),
     ).toThrow(/cannot import/);
+    expect(() =>
+      parseWorkflowScript(`${META}return import('node:fs')`),
+    ).toThrow(/cannot import/);
+    expect(() =>
+      parseWorkflowScript(`${META}return require\`node:fs\``),
+    ).toThrow(/cannot import/);
+  });
+
+  it('does not confuse regex literals with module loading or structure', () => {
+    const { body } = parseWorkflowScript(
+      `${META}const pattern = /require\\s*\\(.*[{}]/\nreturn pattern.test('x')`,
+    );
+    expect(body).toContain('/require\\s*\\(.*[{}]/');
+  });
+
+  it('keeps top-level return and await valid after AST parsing', () => {
+    expect(() =>
+      parseWorkflowScript(`${META}return await agent('x')`),
+    ).not.toThrow();
   });
 
   it('rejects meta whose accessors would hang host-side validation', () => {
