@@ -15,6 +15,9 @@ import {
 } from '../../../supabase/functions/relay/requestLimits';
 import {
   acquireRelayRequestSlot,
+  classifyPreHeaderFailure,
+  getRelayRequestBytes,
+  getUpstreamRequestId,
   releaseWhenStreamCloses,
 } from '../../../supabase/functions/relay/requestGate';
 import { getRequestLimits } from '../../../supabase/functions/relay/models';
@@ -354,6 +357,72 @@ describe('relay free-tier request limits', () => {
     assert.equal(releases, 1);
   });
 
+  it('classifies failures before upstream headers arrive', () => {
+    const timeout = new Error('timed out');
+    timeout.name = 'TimeoutError';
+    const abort = new Error('aborted');
+    abort.name = 'AbortError';
+
+    assert.equal(classifyPreHeaderFailure(timeout), 'pre_headers_timeout');
+    assert.equal(classifyPreHeaderFailure(abort), 'pre_headers_timeout');
+    assert.equal(
+      classifyPreHeaderFailure(new TypeError('fetch failed')),
+      'pre_headers_failure',
+    );
+  });
+
+  it('measures buffered relay request bytes without reading content', () => {
+    assert.equal(getRelayRequestBytes('a€', null), 4);
+    assert.equal(getRelayRequestBytes(new Uint8Array([0, 1, 2]), '999'), 3);
+    assert.equal(getRelayRequestBytes(byteStream([]), '60000'), 60_000);
+    assert.equal(getRelayRequestBytes(byteStream([]), null), null);
+    assert.equal(getRelayRequestBytes(undefined, null), 0);
+  });
+
+  it('extracts provider request ids without replacing them', () => {
+    assert.equal(
+      getUpstreamRequestId(
+        new Headers({
+          'request-id': 'req-anthropic',
+          'x-request-id': 'req-compatible',
+        }),
+      ),
+      'req-anthropic',
+    );
+    assert.equal(
+      getUpstreamRequestId(new Headers({ 'x-goog-request-id': 'req-google' })),
+      'req-google',
+    );
+    assert.equal(getUpstreamRequestId(new Headers()), null);
+  });
+
+  it('reports upstream response-body failures and releases the slot', async () => {
+    const upstreamError = new Error('response body failed');
+    let observedError: unknown;
+    let releases = 0;
+    const failingBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(upstreamError);
+      },
+    });
+    const wrapped = await releaseWhenStreamCloses(
+      failingBody,
+      async () => {
+        releases += 1;
+      },
+      undefined,
+      0,
+      (error) => {
+        observedError = error;
+      },
+    );
+    if (wrapped === null) assert.fail('expected wrapped stream');
+
+    await assert.rejects(wrapped.getReader().read(), upstreamError);
+    assert.equal(observedError, upstreamError);
+    assert.equal(releases, 1);
+  });
+
   it('uses the same slot id for gate refresh and release RPCs', async () => {
     const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
     const client = {
@@ -538,11 +607,16 @@ describe('relay free-tier request limits', () => {
       });
       if (!slot.allowed) assert.fail('expected slot to be allowed');
 
+      let upstreamBodyFailures = 0;
+
       const wrapped = await releaseWhenStreamCloses(
         byteStream([new Uint8Array([1])]),
         slot.release,
         slot.refresh,
         10,
+        () => {
+          upstreamBodyFailures += 1;
+        },
       );
       if (wrapped === null) assert.fail('expected wrapped stream');
 
@@ -558,6 +632,7 @@ describe('relay free-tier request limits', () => {
         reader.read(),
         /relay_request_refresh did not find request slot/,
       );
+      assert.equal(upstreamBodyFailures, 0);
     } finally {
       vi.useRealTimers();
     }

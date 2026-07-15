@@ -32,6 +32,18 @@ export type RelayRequestSlot =
 
 export const RELAY_SLOT_REFRESH_INTERVAL_MS = 60_000;
 
+export type RelayFailurePhase =
+  'pre_headers_timeout' | 'pre_headers_failure' | 'response_body_failure';
+
+const UPSTREAM_REQUEST_ID_HEADERS = [
+  'request-id',
+  'x-request-id',
+  'x-goog-request-id',
+] as const;
+
+type RelayRequestBody =
+  string | Uint8Array | ReadableStream<Uint8Array> | null | undefined;
+
 class RelayRequestSlotLostError extends Error {
   constructor() {
     super('relay_request_refresh did not find request slot');
@@ -58,6 +70,38 @@ function parseGateDecision(data: unknown): GateDecision {
 
 function didRefreshSlot(data: unknown): boolean {
   return isJsonRecord(data) && data.refreshed === true;
+}
+
+export function classifyPreHeaderFailure(error: unknown): RelayFailurePhase {
+  return error instanceof Error &&
+    (error.name === 'TimeoutError' || error.name === 'AbortError')
+    ? 'pre_headers_timeout'
+    : 'pre_headers_failure';
+}
+
+export function getUpstreamRequestId(headers: Headers): string | null {
+  for (const header of UPSTREAM_REQUEST_ID_HEADERS) {
+    const requestId = headers.get(header)?.trim();
+    if (requestId) return requestId;
+  }
+  return null;
+}
+
+export function getRelayRequestBytes(
+  body: RelayRequestBody,
+  contentLength: string | null,
+): number | null {
+  if (body == null) return 0;
+  if (typeof body === 'string') {
+    return new TextEncoder().encode(body).byteLength;
+  }
+  if (body instanceof Uint8Array) return body.byteLength;
+
+  if (contentLength == null || contentLength.trim() === '') return null;
+  const parsedLength = Number(contentLength);
+  return Number.isSafeInteger(parsedLength) && parsedLength >= 0
+    ? parsedLength
+    : null;
 }
 
 function once(release: () => Promise<void>): () => Promise<void> {
@@ -156,6 +200,7 @@ export async function releaseWhenStreamCloses(
   release: () => Promise<void>,
   refresh?: () => Promise<void>,
   refreshIntervalMs = RELAY_SLOT_REFRESH_INTERVAL_MS,
+  onUpstreamBodyError?: (error: unknown) => void,
 ): Promise<ReadableStream<Uint8Array> | null> {
   if (body === null) {
     await release();
@@ -195,21 +240,25 @@ export async function releaseWhenStreamCloses(
       );
     },
     async pull(controller) {
+      let readResult: ReadableStreamReadResult<Uint8Array>;
       try {
-        const { done, value } = await reader.read();
-        if (leaseError) {
-          throw leaseError;
-        }
-        if (done) {
-          controller.close();
-          await releaseOnce();
-          return;
-        }
-        controller.enqueue(value);
+        readResult = await reader.read();
       } catch (error) {
+        onUpstreamBodyError?.(error);
         await releaseOnce();
         throw error;
       }
+
+      if (leaseError) {
+        await releaseOnce();
+        throw leaseError;
+      }
+      if (readResult.done) {
+        controller.close();
+        await releaseOnce();
+        return;
+      }
+      controller.enqueue(readResult.value);
     },
     async cancel(reason) {
       try {

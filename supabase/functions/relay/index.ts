@@ -102,7 +102,11 @@ import {
 } from './requestLimits.ts';
 import {
   acquireRelayRequestSlot,
+  classifyPreHeaderFailure,
+  getRelayRequestBytes,
+  getUpstreamRequestId,
   releaseWhenStreamCloses,
+  type RelayFailurePhase,
 } from './requestGate.ts';
 
 // =============================================================================
@@ -118,6 +122,7 @@ const RELAY_VERSION = '1.10.0';
 
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
 const UPSTREAM_TIMEOUT_MS = 390000;
+const RELAY_REQUEST_ID_HEADER = 'x-relay-request-id';
 
 // Env and the service-role client are fixed at cold start; no per-request state.
 // Public metadata remains available without the service role, but proxy routes
@@ -176,6 +181,16 @@ interface ProviderConfig {
   baseUrl: string;
   envKey: string;
   authType: AuthType;
+}
+
+interface RelayFailureDiagnostic {
+  relayRequestId: string;
+  provider: string;
+  model: string | null;
+  requestBytes: number | null;
+  elapsedMs: number;
+  failurePhase: RelayFailurePhase;
+  upstreamRequestId: string | null;
 }
 
 type ProviderKey =
@@ -249,6 +264,20 @@ function getEnabledProviders(): string[] {
   return Object.entries(PROVIDER_CONFIGS)
     .filter(([, config]) => Deno.env.get(config.envKey))
     .map(([name]) => name);
+}
+
+function logRelayFailure(diagnostic: RelayFailureDiagnostic): void {
+  console.error(
+    `[RELAY] ${JSON.stringify({
+      event: 'upstream_failure',
+      ...diagnostic,
+    })}`,
+  );
+}
+
+function withRelayRequestId(response: Response, relayRequestId: string) {
+  response.headers.set(RELAY_REQUEST_ID_HEADER, relayRequestId);
+  return response;
 }
 
 /**
@@ -394,7 +423,12 @@ app.use(
       'x-stainless-runtime',
       'x-stainless-runtime-version',
     ],
-    exposeHeaders: ['content-length', 'content-type', 'x-request-id'],
+    exposeHeaders: [
+      'content-length',
+      'content-type',
+      'x-request-id',
+      RELAY_REQUEST_ID_HEADER,
+    ],
     maxAge: 86400,
   }),
 );
@@ -835,26 +869,48 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   // 11. Forward request with timeout
   let upstreamResponse: Response;
+  const bodyToSend =
+    c.req.method === 'GET' ? undefined : (requestBody ?? c.req.raw.body);
+  const relayRequestId = crypto.randomUUID();
+  const requestBytes = getRelayRequestBytes(
+    bodyToSend,
+    c.req.raw.headers.get('content-length'),
+  );
+  const upstreamStartedAt = performance.now();
   try {
-    const bodyToSend =
-      c.req.method === 'GET' ? undefined : (requestBody ?? c.req.raw.body);
-
     upstreamResponse = await fetch(targetUrl, {
       method: c.req.method,
       headers: upstreamHeaders,
-      body: bodyToSend,
+      // The buffered body owns its ArrayBuffer, although its existing public
+      // type predates typed-array buffer generics in newer TypeScript versions.
+      body: bodyToSend as BodyInit | null | undefined,
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch (error) {
+    const failurePhase = classifyPreHeaderFailure(error);
+    logRelayFailure({
+      relayRequestId,
+      provider,
+      model: modelName,
+      requestBytes,
+      elapsedMs: Math.round(performance.now() - upstreamStartedAt),
+      failurePhase,
+      upstreamRequestId: null,
+    });
     await releaseRelaySlot?.();
-    if (
-      error instanceof Error &&
-      (error.name === 'TimeoutError' || error.name === 'AbortError')
-    ) {
-      return jsonError('Upstream request timed out', 504);
+    if (failurePhase === 'pre_headers_timeout') {
+      return withRelayRequestId(
+        jsonError('Upstream request timed out', 504),
+        relayRequestId,
+      );
     }
-    throw error;
+    return withRelayRequestId(
+      jsonError('Internal server error', 500),
+      relayRequestId,
+    );
   }
+
+  const upstreamRequestId = getUpstreamRequestId(upstreamResponse.headers);
 
   if (upstreamResponse.status >= 400) {
     console.error(
@@ -871,6 +927,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   });
 
   responseHeaders.set('X-Accel-Buffering', 'no');
+  responseHeaders.set(RELAY_REQUEST_ID_HEADER, relayRequestId);
 
   // FUTURE: SSE keepalive injection to prevent proxy idle timeouts.
   //
@@ -898,6 +955,18 @@ app.all('/:provider{[^/]+}/*', async (c) => {
         upstreamResponse.body,
         releaseRelaySlot,
         refreshRelaySlot ?? undefined,
+        undefined,
+        () => {
+          logRelayFailure({
+            relayRequestId,
+            provider,
+            model: modelName,
+            requestBytes,
+            elapsedMs: Math.round(performance.now() - upstreamStartedAt),
+            failurePhase: 'response_body_failure',
+            upstreamRequestId,
+          });
+        },
       )
     : upstreamResponse.body;
 
