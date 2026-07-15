@@ -848,6 +848,8 @@ function createWindow(options: {
   const historySettingsController = new DesktopHistoryHandlers({
     resourcesPath: options.resourcesPath,
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    // Rerun and restore use the same host-neutral owners as the extension,
+    // reached through the desktop execution bridge instead of VS Code commands.
     runExecution: async (request) => {
       await (await getAgentExecution()).progress.runExecution(request);
     },
