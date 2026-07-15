@@ -30,7 +30,6 @@ import {
   buildGitAuthorSettingsMessage,
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
-import { defaultOnError } from './desktopSettingsIpcHelpers.js';
 import {
   createDesktopErrorReporter,
   type DesktopCommandMessage,
@@ -43,6 +42,15 @@ import type { DesktopCrashReportingSettingsController } from './desktopCrashRepo
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 
+export interface DesktopSettingsUiHost {
+  openPath(filePath: string): Promise<void>;
+  revealStream(streamId: string): Promise<void>;
+  showInfoMessage(message: string): Promise<void>;
+  showErrorMessage(message: string): Promise<void>;
+  confirmAction(message: string, confirmLabel?: string): Promise<boolean>;
+  onError(error: unknown): void;
+}
+
 export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
   agentSettingsController: DesktopAgentSettingsController;
@@ -52,13 +60,8 @@ export interface DesktopSettingsIpcOptions {
   toolingSettingsController: DesktopToolingSettingsController;
   state: SettingsStatePorts;
   config: ConfigProvider;
+  ui: DesktopSettingsUiHost;
   sendStartupCatalogData?: boolean;
-  openPath?: (filePath: string) => Promise<void>;
-  /** Route this window to the progress view and select the given stream. */
-  revealStream?: (streamId: string) => Promise<void>;
-  showInfoMessage?: (message: string) => Promise<void>;
-  confirmAction?: (message: string, confirmLabel?: string) => Promise<boolean>;
-  onError?: (error: unknown) => void;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
@@ -74,12 +77,9 @@ export function createDesktopSettingsIpc(
   const { globalState, workspaceState } = options.state;
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
-  const onError = createDesktopErrorReporter(
-    options.onError ?? defaultOnError,
-    (error) => {
-      void options.showInfoMessage?.(error.reason);
-    },
-  );
+  const onError = createDesktopErrorReporter(options.ui.onError, (error) => {
+    void options.ui.showInfoMessage(error.reason);
+  });
   const goalController = new SettingsGoalController({
     listGoals: () => GoalStore.list(),
   });
@@ -94,10 +94,9 @@ export function createDesktopSettingsIpc(
     },
     memoryPrompt: {
       confirm: (message, promptOptions) =>
-        options.confirmAction?.(message, promptOptions?.confirmLabel) ??
-        Promise.resolve(true),
+        options.ui.confirmAction(message, promptOptions?.confirmLabel),
       warning: async (message) => {
-        await options.showInfoMessage?.(message);
+        await options.ui.showInfoMessage(message);
       },
     },
   });
@@ -152,12 +151,12 @@ export function createDesktopSettingsIpc(
 
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
     const resolvedPath = resolveMemoryStoragePath(input.storagePath);
-    await options.openPath?.(StorageFS.fullPath(resolvedPath));
+    await options.ui.openPath(StorageFS.fullPath(resolvedPath));
   }
 
   async function openMemoryFolder(): Promise<void> {
     await StorageFS.ensureDir(resolveMemoryStoragePath());
-    await options.openPath?.(StorageFS.fullPath(resolveMemoryStoragePath()));
+    await options.ui.openPath(StorageFS.fullPath(resolveMemoryStoragePath()));
   }
 
   function postSuperYoloEnabled(): void {
@@ -395,8 +394,7 @@ export function createDesktopSettingsIpc(
     },
     goals: {
       getList: postGoalList,
-      revealStream: (streamId) =>
-        options.revealStream?.(streamId) ?? Promise.resolve(),
+      revealStream: (streamId) => options.ui.revealStream(streamId),
     },
     desktopCrashReporting: options.crashReportingSettingsController.actions,
   };

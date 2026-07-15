@@ -9,10 +9,6 @@ import type { ExternalToolCheckResult } from '@tools/toolAvailability';
  * dashboard request actually arrives.
  */
 
-export function defaultOnError(error: unknown): void {
-  console.error(error);
-}
-
 export async function buildDefaultToolDashboardItems(
   cachedResults?: ExternalToolCheckResult[],
 ): Promise<ToolDashboardItem[]> {
