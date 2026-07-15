@@ -5,7 +5,7 @@ import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
-import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -82,7 +82,7 @@ export function createDesktopSettingsIpc(
   const goalController = new SettingsGoalController({
     listGoals: () => GoalStore.list(),
   });
-  const settingsHost = createSettingsViewHost({
+  const settingsHost = new SettingsViewHost({
     state: { workspaceState, globalState },
     respond: options.postToRenderer,
     beforeModelSelectionMessage: () =>

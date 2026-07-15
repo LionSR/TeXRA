@@ -17,7 +17,7 @@ import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
-import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { SettingsProfileHost } from '@controllers/settingsView/SettingsProfileHost';
 import { platform } from '@platform/platform';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -108,7 +108,6 @@ import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { HistoryHandlers } from './handlers/historyHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import { ChatGptSubscriptionHandlers } from './handlers/chatgptSubscriptionHandlers';
-import type { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Re-use the shared type helper for extracting specific message types.
@@ -162,7 +161,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly historyHandlers: HistoryHandlers;
   private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly chatgptHandlers: ChatGptSubscriptionHandlers;
-  private readonly settingsHost: SettingsViewHost;
+  private readonly settingsHost: SettingsProfileHost;
   private readonly goalController: SettingsGoalController;
 
   constructor(context: vscode.ExtensionContext) {
@@ -179,7 +178,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // by extension.ts → initializeStateManagers and are still undefined at
     // module load, so destructuring them at top level captures `undefined`
     // and every later globalState.get(...) throws.
-    this.settingsHost = createSettingsViewHost({
+    this.settingsHost = new SettingsProfileHost({
       state: { workspaceState: workspaceSM, globalState: globalSM },
       memoryPrompt: new VscodePromptHost(),
       setMemoryEnabled: setToolUseMemoryEnabled,
