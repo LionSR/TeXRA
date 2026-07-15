@@ -20,7 +20,6 @@ import {
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
-import { isProcessAgent } from '@shared/streams/agentKind';
 import { StorageFS, WorkspaceFS } from '@utils/files';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -180,7 +179,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
             runtimeCategory: meta.category,
           };
         }
-        if (meta.category === 'process' || isProcessAgent(cfg.agent)) {
+        if (meta.category === 'process') {
           return { ...base, kind: 'process', agentConfig: cfg };
         }
         return {

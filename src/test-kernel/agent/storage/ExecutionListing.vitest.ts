@@ -80,7 +80,7 @@ describe('execution listing normalization', () => {
 
   it('classifies process and incomplete storage rows explicitly', async () => {
     const metadataProcessId = 'bbb222' as ExecutionId;
-    const processAgentId = 'ccc333' as ExecutionId;
+    const customBashAgentId = 'ccc333' as ExecutionId;
     const incompleteId = 'ddd444' as ExecutionId;
     await writeExecution(
       metadataProcessId,
@@ -89,7 +89,7 @@ describe('execution listing normalization', () => {
       'process',
     );
     await writeExecution(
-      processAgentId,
+      customBashAgentId,
       '2026-07-15T08:00:00.000Z',
       config('bash'),
     );
@@ -104,7 +104,7 @@ describe('execution listing normalization', () => {
 
     expect(entries.map(({ kind }) => kind)).toEqual([
       'process',
-      'process',
+      'agent',
       'incomplete',
     ]);
     expect(entries[0]).toMatchObject({
@@ -112,7 +112,7 @@ describe('execution listing normalization', () => {
       agentConfig: { agent: 'assistant' },
     });
     expect(entries[1]).toMatchObject({
-      kind: 'process',
+      kind: 'agent',
       agentConfig: { agent: 'bash' },
     });
     expect(entries[2]).toEqual({
@@ -121,6 +121,6 @@ describe('execution listing normalization', () => {
       timestamp: '2026-07-15T07:00:00.000Z',
       runtimeCategory: 'legacy',
     });
-    expect(entries.filter(isUserVisibleExecution)).toEqual([]);
+    expect(entries.filter(isUserVisibleExecution)).toEqual([entries[1]]);
   });
 });
