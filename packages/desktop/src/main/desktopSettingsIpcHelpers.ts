@@ -43,6 +43,11 @@ export async function refreshDefaultDisabledToolCache(): Promise<void> {
   refreshDisabledToolCache();
 }
 
+export async function refreshDefaultToolAvailability(): Promise<void> {
+  const { refreshToolAvailability } = await import('@tools/toolAvailability');
+  await refreshToolAvailability();
+}
+
 export async function findToolCommand(
   toolId: string,
   kind: 'install' | 'auth',
