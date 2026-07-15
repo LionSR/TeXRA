@@ -104,6 +104,38 @@ export function triggerEscapeInterrupt(state: EscapeInterruptState): boolean {
   return true;
 }
 
+export type AppCtrlCAction = 'clear-draft' | 'delegate' | 'interrupt' | 'exit';
+
+export interface AppCtrlCState {
+  readonly hasDraft: () => boolean;
+  readonly clearDraft: () => void;
+  readonly canStopActiveRun: () => boolean;
+  readonly onInterruptActive: () => void;
+  readonly onExit: () => void;
+  readonly onCtrlC?: () => void;
+}
+
+/** Apply the root TUI's complete Ctrl+C policy from the latest composer state. */
+export function triggerAppCtrlC(state: AppCtrlCState): AppCtrlCAction {
+  if (state.hasDraft()) {
+    state.clearDraft();
+    return 'clear-draft';
+  }
+
+  if (state.onCtrlC) {
+    state.onCtrlC();
+    return 'delegate';
+  }
+
+  if (state.canStopActiveRun()) {
+    state.onInterruptActive();
+    return 'interrupt';
+  }
+
+  state.onExit();
+  return 'exit';
+}
+
 export function digitFromMetaShortcut(value: string): number | undefined {
   return /^[1-9]$/.test(value) ? Number.parseInt(value, 10) : undefined;
 }

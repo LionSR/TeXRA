@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import { Box, Text, useInput } from 'ink';
 
 import { writeTextStderr } from '@cli/runtime/logSinks';
@@ -50,6 +56,13 @@ export interface InputBarProps {
   readonly history?: InputHistory;
   /** Whether the input currently owns terminal keys. */
   readonly keyboardActive?: boolean;
+  /** Root-owned handle for draft-aware keyboard policy. */
+  readonly controlRef?: React.Ref<InputBarHandle>;
+}
+
+export interface InputBarHandle {
+  readonly hasDraft: () => boolean;
+  readonly clearDraft: () => void;
 }
 
 function slashSubmitText(
@@ -143,6 +156,14 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     clearDraft();
     return { value: '', cursor: 0 };
   }, [clearDraft]);
+  useImperativeHandle(
+    props.controlRef,
+    () => ({
+      clearDraft,
+      hasDraft: () => draftValueRef.current.length > 0,
+    }),
+    [clearDraft],
+  );
   const replaceSlashTriggerInput = useCallback(
     (input: string, value: string, cursor: number) => {
       if (value === '/' && cursor === 1 && input.startsWith('/')) {
