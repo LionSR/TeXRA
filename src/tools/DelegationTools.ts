@@ -50,9 +50,7 @@ import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 
 // Local imports - delegation
 import {
@@ -68,6 +66,7 @@ import {
   WorkflowAgentInputSchema,
   type WorkflowAgentInput,
 } from './delegation/inputFields';
+import { assertWorkflowFilesExist } from './delegation/workflowFileValidation';
 
 export { rejectOversizedBibAttachments } from './delegation/inputFields';
 export type { WorkflowAgentInput };
@@ -144,31 +143,11 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
       agentCategory: AgentCategory.Workflow,
     });
 
-    // Validate all file paths exist (parallel for performance)
-    const toValidate = (
-      arr: string[],
-      label: string,
-    ): { path: string; label: string }[] =>
-      arr.filter(isNonEmptyString).map((path) => ({ path, label }));
-
-    const filesToValidate = [
-      ...toValidate(input.inputFiles, 'Input file'),
-      ...toValidate(input.contextFiles, 'Context file'),
-      ...toValidate(input.mediaFiles, 'Media file'),
-    ];
-
-    const validationResults = await Promise.all(
-      filesToValidate.map(async ({ path, label }) => ({
-        path,
-        label,
-        exists: await WorkspaceFS.exists(path),
-      })),
-    );
-
-    const missing = validationResults.find((r) => !r.exists);
-    if (missing) {
-      throw new Error(`${missing.label} not found: ${missing.path}`);
-    }
+    await assertWorkflowFilesExist([
+      { label: 'Input file', files: input.inputFiles },
+      { label: 'Context file', files: input.contextFiles },
+      { label: 'Media file', files: input.mediaFiles },
+    ]);
 
     const oversizedBibRejection = await rejectOversizedBibAttachments(input);
     if (oversizedBibRejection) return oversizedBibRejection;

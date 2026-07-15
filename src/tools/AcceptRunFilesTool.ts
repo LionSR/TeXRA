@@ -45,10 +45,8 @@ import { defineTool } from '@tools/core/define';
 // Local imports - utils
 import {
   AbsoluteFS,
-  StorageFS,
   WorkspaceFS,
   FlexibleFS,
-  createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
 import { filterNotNull } from '@utils/core';
@@ -56,6 +54,7 @@ import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import {
   findExistingRunStoragePath,
   getOriginalSnapshotPath,
+  inspectRunStorageEntry,
 } from '@utils/files/taskRunStorage';
 
 // ============================================================================
@@ -161,7 +160,6 @@ Optional:
         const { sourceAbsolute, sourceLocation } = await this.resolveSourceFile(
           executionId,
           mapping.path,
-          runDirExists,
         );
 
         const destPath = mapping.original ?? mapping.path;
@@ -339,29 +337,28 @@ Optional:
    * files are written directly to the workspace.
    */
   private async resolveSourceFile(
-    executionId: string,
+    executionId: ExecutionId,
     runPath: string,
-    runDirExists: boolean,
   ): Promise<{ sourceAbsolute: string; sourceLocation: FileLocation }> {
-    // Try run storage first (primary then legacy)
-    if (runDirExists) {
-      const rel = await findExistingRunStoragePath(executionId, runPath);
-      if (rel) {
-        const abs = StorageFS.fullPath(rel);
-        // Symlinks in run storage mean the round didn't emit the file —
-        // it's a stand-in for the `original/` snapshot (or, on pre-fix
-        // runs, the live workspace). Promoting that to the workspace would
-        // propagate non-agent content as if it were agent output.
-        if (await AbsoluteFS.isSymbolicLink(abs)) {
-          throw new ToolError(
-            `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
-          );
-        }
-        return {
-          sourceAbsolute: abs,
-          sourceLocation: createRunStorageLocation(abs, runPath, executionId),
-        };
-      }
+    const entry = await inspectRunStorageEntry(executionId, runPath);
+    if (entry.kind === 'file') {
+      return {
+        sourceAbsolute: entry.location.absolutePath,
+        sourceLocation: entry.location,
+      };
+    }
+    if (entry.kind === 'symlink') {
+      throw new ToolError(
+        `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
+      );
+    }
+    if (entry.kind === 'directory' || entry.kind === 'unsupported') {
+      throw new ToolError(
+        `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is not a regular file.`,
+      );
+    }
+    if (entry.kind === 'invalid') {
+      throw new ToolError(`Cannot accept ${runPath}: ${entry.reason}`);
     }
 
     // Fall back to workspace

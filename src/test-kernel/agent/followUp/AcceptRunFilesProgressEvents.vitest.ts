@@ -1,8 +1,14 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
+// Standard library imports
+import * as path from 'node:path';
+
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+// Local imports - platform
+import { FileType, type FileStat } from '@platform/interfaces';
 
 // Local imports
 import { installPlatform } from '@test/support/setupPlatform';
@@ -52,6 +58,32 @@ const streamId = 'stream:accept-run-files' as StreamTabId;
 const workspacePath = '/workspace';
 const storagePath = '/storage';
 
+function runStorageStat(type: number): FileStat {
+  return { type, ctime: 0, mtime: 0, size: 1 };
+}
+
+function setRunStorageEntries(
+  entries: Readonly<Record<string, number>> = {},
+): void {
+  const types = new Map<string, number>([
+    [`executions/${executionId}`, FileType.Directory],
+    ...Object.entries(entries),
+  ]);
+  for (const entry of Object.keys(entries)) {
+    let parent = path.posix.dirname(entry);
+    while (parent !== '.' && parent !== `executions/${executionId}`) {
+      types.set(parent, FileType.Directory);
+      parent = path.posix.dirname(parent);
+    }
+  }
+  StorageFS.exists = async (target) => types.has(target);
+  StorageFS.stat = async (target) => {
+    const type = types.get(target);
+    if (type !== undefined) return runStorageStat(type);
+    throw Object.assign(new Error(`Missing: ${target}`), { code: 'ENOENT' });
+  };
+}
+
 function runAccept(
   tool: AcceptRunFilesTool,
   host: AgentRuntimeHost,
@@ -68,6 +100,7 @@ function runAccept(
 
 describe('accept_run_files progress events', () => {
   let originalStorageExists: typeof StorageFS.exists;
+  let originalStorageStat: typeof StorageFS.stat;
   let originalStorageFullPath: typeof StorageFS.fullPath;
   let originalWorkspaceLocatePath: typeof WorkspaceFS.locatePath;
   let originalWorkspaceExists: typeof WorkspaceFS.exists;
@@ -75,12 +108,12 @@ describe('accept_run_files progress events', () => {
   let originalWorkspaceWrite: typeof WorkspaceFS.write;
   let originalWorkspaceDelete: typeof WorkspaceFS.delete;
   let originalAbsoluteIsFile: typeof AbsoluteFS.isFile;
-  let originalAbsoluteIsSymbolicLink: typeof AbsoluteFS.isSymbolicLink;
   let originalAbsoluteRead: typeof AbsoluteFS.read;
   let originalFlexibleRead: typeof FlexibleFS.read;
 
   beforeEach(async () => {
     originalStorageExists = StorageFS.exists;
+    originalStorageStat = StorageFS.stat;
     originalStorageFullPath = StorageFS.fullPath;
     originalWorkspaceLocatePath = WorkspaceFS.locatePath;
     originalWorkspaceExists = WorkspaceFS.exists;
@@ -88,10 +121,8 @@ describe('accept_run_files progress events', () => {
     originalWorkspaceWrite = WorkspaceFS.write;
     originalWorkspaceDelete = WorkspaceFS.delete;
     originalAbsoluteIsFile = AbsoluteFS.isFile;
-    originalAbsoluteIsSymbolicLink = AbsoluteFS.isSymbolicLink;
     originalAbsoluteRead = AbsoluteFS.read;
     originalFlexibleRead = FlexibleFS.read;
-    AbsoluteFS.isSymbolicLink = async () => false;
     testApprovalHandler = undefined;
     await installTestPlatform();
     cleanupAllApprovals();
@@ -108,6 +139,7 @@ describe('accept_run_files progress events', () => {
 
   afterEach(() => {
     StorageFS.exists = originalStorageExists;
+    StorageFS.stat = originalStorageStat;
     StorageFS.fullPath = originalStorageFullPath;
     WorkspaceFS.locatePath = originalWorkspaceLocatePath;
     WorkspaceFS.exists = originalWorkspaceExists;
@@ -115,7 +147,6 @@ describe('accept_run_files progress events', () => {
     WorkspaceFS.write = originalWorkspaceWrite;
     WorkspaceFS.delete = originalWorkspaceDelete;
     AbsoluteFS.isFile = originalAbsoluteIsFile;
-    AbsoluteFS.isSymbolicLink = originalAbsoluteIsSymbolicLink;
     AbsoluteFS.read = originalAbsoluteRead;
     FlexibleFS.read = originalFlexibleRead;
     testApprovalHandler = undefined;
@@ -135,9 +166,9 @@ describe('accept_run_files progress events', () => {
       },
     );
 
-    StorageFS.exists = async (target) =>
-      target === `executions/${executionId}` ||
-      target === `executions/${executionId}/output.tex`;
+    setRunStorageEntries({
+      [`executions/${executionId}/output.tex`]: FileType.File,
+    });
     WorkspaceFS.exists = async () => false;
     WorkspaceFS.read = async () => '';
     WorkspaceFS.write = async () => undefined;
@@ -167,9 +198,9 @@ describe('accept_run_files progress events', () => {
       },
     );
 
-    StorageFS.exists = async (target) =>
-      target === `executions/${executionId}` ||
-      target === `executions/${executionId}/output.tex`;
+    setRunStorageEntries({
+      [`executions/${executionId}/output.tex`]: FileType.File,
+    });
     WorkspaceFS.exists = async () => false;
     WorkspaceFS.read = async () => '';
     WorkspaceFS.write = async () => {
@@ -197,7 +228,7 @@ describe('accept_run_files progress events', () => {
     let approvalProposed = '';
     let writes = 0;
 
-    StorageFS.exists = async (target) => target === `executions/${executionId}`;
+    setRunStorageEntries();
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => 'new content';
     WorkspaceFS.write = async () => {
@@ -234,7 +265,7 @@ describe('accept_run_files progress events', () => {
     let approvals = 0;
     let writes = 0;
 
-    StorageFS.exists = async (target) => target === `executions/${executionId}`;
+    setRunStorageEntries();
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => 'same content';
     WorkspaceFS.write = async () => {
@@ -266,18 +297,16 @@ describe('accept_run_files progress events', () => {
     let approvals = 0;
     let writes = 0;
 
-    StorageFS.exists = async (target) =>
-      target === `executions/${executionId}` ||
-      target === `executions/${executionId}/r1/Draft/appendices.tex`;
+    setRunStorageEntries({
+      [`executions/${executionId}/r1/Draft/appendices.tex`]:
+        FileType.SymbolicLink | FileType.File,
+    });
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => '';
     WorkspaceFS.write = async () => {
       writes++;
     };
     WorkspaceFS.delete = async () => undefined;
-    AbsoluteFS.isSymbolicLink = async (target) =>
-      target ===
-      `${storagePath}/executions/${executionId}/r1/Draft/appendices.tex`;
     testApprovalHandler = async () => {
       approvals++;
       return { accepted: true };
