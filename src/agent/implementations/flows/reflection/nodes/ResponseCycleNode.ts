@@ -16,11 +16,14 @@ import { buildFailedRetryInfo } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import type { ReflectionFlowShared } from '../ReflectionFlowState';
+import type {
+  ReflectionFlowShared,
+  RoundContext,
+} from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';
 
 interface CyclePrepInput {
-  shared: ReflectionFlowShared;
+  context: RoundContext;
   outputLocation: AgentFileLocation;
   run: AgentRunStateSnapshot;
   workspace: AgentWorkspaceState;
@@ -61,7 +64,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     const round = context.stateRoundSnapshot;
 
     return {
-      shared,
+      context,
       outputLocation: await this.services.getOutputFileLocation(
         shared.currentRound,
       ),
@@ -72,8 +75,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: CyclePrepInput): Promise<CycleOutcome> {
-    const { shared } = prepRes;
-    const context = shared.context!; // Validated in prep()
+    const { context } = prepRes;
 
     const [outputAlreadyComplete, initializedMessages] =
       await this.services.modelHandler.initializeOutputAndPrefill(
@@ -190,8 +192,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
     shared.workspaceSnapshot = prepRes.workspace.toSnapshot({
       excludeAssemblyStrings: true,
     });
-    shared.conversation = shared.context!.messages;
-    shared.roundStateSnapshots.push(shared.context!.stateRoundSnapshot);
+    shared.conversation = prepRes.context.messages;
+    shared.roundStateSnapshots.push(prepRes.context.stateRoundSnapshot);
 
     return FlowTransition.DEFAULT;
   }
