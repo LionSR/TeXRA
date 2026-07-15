@@ -681,7 +681,7 @@ export class DesktopProgressBridge {
   private getStreamExecutionId(streamId: StreamTabId): ExecutionId | undefined {
     return (
       this.state.snapshots.getExecutionId(streamId) ??
-      this.state.getStreamHints(streamId).executionId
+      this.state.getStreamMetadata(streamId).executionId
     );
   }
 
@@ -1055,7 +1055,7 @@ export class DesktopProgressBridge {
    * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
    * run works the same way on both hosts.
    *
-   * Resolves category via `buildStreamInfo` (persisted config/hints), not
+   * Resolves category via `buildStreamInfo` (canonical stream metadata), not
    * `getStreamState()`'s ephemeral session-only kind, so a goal-owned stream
    * restored from `workspaceState` that hasn't emitted a live fact yet this
    * session still matches the current filter instead of unconditionally
@@ -1354,9 +1354,7 @@ export class DesktopProgressBridge {
     if (!runState) return undefined;
 
     this.state.streamLogs.ensureStream(streamId);
-    this.state.updateStreamHints(streamId, {
-      agentCategory: runState.agentCategory,
-    });
+    this.state.refreshStreamMetadataFromSnapshot(streamId);
 
     const parentStreamId = this.state.snapshots.getParentStreamId(streamId);
     return {

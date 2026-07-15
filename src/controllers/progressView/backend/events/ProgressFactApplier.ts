@@ -3,7 +3,6 @@ import {
   type LogContentExtras,
 } from '@controllers/progressView/backend/WebviewUpdater';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
-import { pickAgentCategory } from '@controllers/progressView/backend/streamTabInfo';
 import {
   ProgressViewState,
   type ActiveStreamId,
@@ -269,7 +268,7 @@ export class ProgressFactApplier {
   ): AgentCategory | undefined {
     const knownCategory = this.getStreamCategory(streamId);
     const category = knownCategory ?? AgentCategory.Workflow;
-    this.state.clearStreamHints(streamId);
+    this.state.resetStreamMetadataForRun(streamId);
     this.state.getOrCreateStreamState(streamId, category);
     this.state.resetFinishedChildCounters(streamId);
     this.pendingProgressUpdates.delete(streamId);
@@ -375,7 +374,7 @@ export class ProgressFactApplier {
     streamId,
     description,
   }: UpdateStreamDescriptionPayload): void {
-    this.state.snapshots.setDescription(streamId, description);
+    this.state.setStreamDescription(streamId, description);
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateStreamDescription(streamId, description);
     }
@@ -385,7 +384,7 @@ export class ProgressFactApplier {
     childStreamId,
     parentStreamId,
   }: SetParentStreamPayload): void {
-    this.state.snapshots.setParentStream(childStreamId, parentStreamId);
+    this.state.setStreamParent(childStreamId, parentStreamId);
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateParentStream(
         childStreamId,
@@ -525,16 +524,16 @@ export class ProgressFactApplier {
     const wasKnownStream = this.state.streamLogs.has(streamId);
     const previousFilter = this.state.agentCategoryFilter;
     this.state.streamLogs.ensureStream(streamId);
-    // Only pass defined hint fields — spreading {key: undefined} over existing
-    // hints would clear previously-set values (isRemote).
-    const hints = {
+    // Only pass fields the event actually knows; omitted fields retain the
+    // canonical metadata already owned by ProgressViewState.
+    const metadata = {
       ...(payload.agentCategory !== undefined && {
         agentCategory: payload.agentCategory,
       }),
       ...(isRemote !== undefined && { isRemote }),
     };
-    if (Object.keys(hints).length > 0) {
-      this.state.updateStreamHints(streamId, hints);
+    if (Object.keys(metadata).length > 0) {
+      this.state.updateStreamMetadata(streamId, metadata);
     }
     // Resolve category: use payload hint, fall back to existing stream state.
     // Approval flows (proposal, tool-edit, bash) emit without agentCategory;
@@ -627,7 +626,7 @@ export class ProgressFactApplier {
 
     // Legacy compatibility payload. The snapshot store derives the current
     // config and run descriptor from this but no longer writes meta.taskState.
-    this.state.snapshots.setTaskState(streamId, taskState, executionId);
+    this.state.setStreamTaskState(streamId, taskState, executionId);
 
     if (isActiveStream) {
       this.maybeUpdateFilterForCategory(category);
@@ -960,8 +959,7 @@ export class ProgressFactApplier {
   }
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
-    const config = this.state.snapshots.getRunConfig(streamId);
-    return pickAgentCategory(config, this.state.getStreamHints(streamId));
+    return this.state.getStreamMetadata(streamId).agentCategory;
   }
 
   getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {

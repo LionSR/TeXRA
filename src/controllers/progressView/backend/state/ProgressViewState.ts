@@ -5,6 +5,7 @@ import { StreamSnapshotStore, type StreamLogStore } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { TaskState } from '@agent/core/state/TaskState';
 import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
@@ -13,16 +14,15 @@ import {
 } from '@agent/runtime/SessionHandle';
 import {
   AgentCategoryFilterSchema,
-  ContextStateDataSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type RunOutcome,
-  StreamTabInfoBaseSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
   type ConversationProgress,
   type ContextStateData,
+  type ExecutionId,
   type RoundStage,
   type StreamTabId,
 } from '@shared/schemas';
@@ -42,27 +42,26 @@ import type { MementoStorage } from '@controllers/progressView/backend/persisten
  *  mirroring `StreamSnapshotStore`'s own per-stream disk-read concurrency. */
 const LEGACY_INSTRUCTION_BACKFILL_CONCURRENCY = 8;
 
-/** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
-const StreamHintsSchema = StreamTabInfoBaseSchema.pick({
-  agent: true,
-  agentCategory: true,
-  inputFile: true,
-  isRemote: true,
-  creationTimestamp: true,
-  executionId: true,
-  parentStreamId: true,
-  description: true,
-}).partial();
-
-export type StreamHints = z.infer<typeof StreamHintsSchema>;
+/** Canonical current metadata used by every progress-view stream consumer. */
+export interface ProgressStreamMetadata {
+  agent?: string;
+  agentCategory?: AgentCategory;
+  inputFile?: string;
+  isRemote?: boolean;
+  creationTimestamp: number;
+  executionId?: ExecutionId;
+  parentStreamId?: StreamTabId;
+  description?: string;
+  model?: string;
+  instruction?: string;
+  workingDirectory?: string;
+}
 
 /** Ephemeral session state per stream (not persisted). */
-const StreamSessionStateSchema = z.object({
-  hints: StreamHintsSchema.prefault({}),
-  contextState: ContextStateDataSchema.nullable().prefault(null),
-});
-
-type StreamSessionState = z.output<typeof StreamSessionStateSchema>;
+interface StreamSessionState {
+  metadata: ProgressStreamMetadata;
+  contextState: ContextStateData | null;
+}
 
 /** Active stream identifier, or empty string when no stream is selected. */
 export type ActiveStreamId = StreamTabId | '';
@@ -218,38 +217,106 @@ export class ProgressViewState {
 
   // -- Ephemeral session state ------------------------------------------------
 
-  private getOrCreateSession(stream: StreamTabId): StreamSessionState {
+  private getOrCreateSession(
+    stream: StreamTabId,
+    creationTimestamp?: number,
+  ): StreamSessionState {
     let state = this._sessionState.get(stream);
     if (!state) {
-      state = StreamSessionStateSchema.parse({});
+      state = {
+        metadata: {
+          creationTimestamp:
+            this.streamLogs.getFirstTimestamp(stream) ??
+            creationTimestamp ??
+            Date.now(),
+        },
+        contextState: null,
+      };
       this._sessionState.set(stream, state);
     }
     return state;
   }
 
-  updateStreamHints(streamTabId: StreamTabId, hints: StreamHints): void {
-    const state = this.getOrCreateSession(streamTabId);
-    const creationTimestamp =
-      state.hints.creationTimestamp ?? hints.creationTimestamp ?? Date.now();
-    state.hints = StreamHintsSchema.parse({
-      ...state.hints,
-      ...hints,
-      creationTimestamp,
-    });
-  }
-
-  getStreamHints(streamTabId: StreamTabId): StreamHints {
-    return this._sessionState.get(streamTabId)?.hints ?? {};
-  }
-
-  clearStreamHints(streamTabId: StreamTabId): void {
-    const state = this._sessionState.get(streamTabId);
-    if (state) {
-      state.hints =
-        state.hints.creationTimestamp === undefined
-          ? {}
-          : { creationTimestamp: state.hints.creationTimestamp };
+  private applySnapshotMetadata(
+    stream: StreamTabId,
+    metadata: ProgressStreamMetadata,
+  ): void {
+    const config = this.snapshots.getRunConfig(stream);
+    if (config) {
+      metadata.agent = config.agent;
+      metadata.agentCategory = config.agentCategory;
+      metadata.inputFile = config.inputFiles?.at(0) ?? metadata.inputFile;
+      metadata.model = config.model;
+      metadata.instruction = config.instruction;
+      metadata.workingDirectory = config.workingDirectory ?? undefined;
     }
+
+    metadata.executionId =
+      this.snapshots.getExecutionId(stream) ?? metadata.executionId;
+    metadata.parentStreamId =
+      this.snapshots.getParentStreamId(stream) ?? metadata.parentStreamId;
+    metadata.description =
+      this.snapshots.getDescription(stream) ?? metadata.description;
+  }
+
+  /**
+   * Apply metadata known before durable task state catches up. Snapshot-owned
+   * fields are re-applied here so late events cannot override authoritative
+   * config, execution, hierarchy, or description data.
+   */
+  updateStreamMetadata(
+    stream: StreamTabId,
+    patch: Partial<ProgressStreamMetadata>,
+  ): void {
+    const state = this.getOrCreateSession(stream, patch.creationTimestamp);
+    const creationTimestamp = state.metadata.creationTimestamp;
+    Object.assign(state.metadata, patch, { creationTimestamp });
+    this.applySnapshotMetadata(stream, state.metadata);
+  }
+
+  /** Re-apply newly loaded snapshot authority without changing live-only data. */
+  refreshStreamMetadataFromSnapshot(stream: StreamTabId): void {
+    const metadata = this.getOrCreateSession(stream).metadata;
+    this.applySnapshotMetadata(stream, metadata);
+  }
+
+  /**
+   * Start a run from durable metadata, retaining only the tab's original
+   * creation time from its previous provisional/live record.
+   */
+  resetStreamMetadataForRun(stream: StreamTabId): void {
+    const state = this.getOrCreateSession(stream);
+    state.metadata = {
+      creationTimestamp: state.metadata.creationTimestamp,
+    };
+    this.applySnapshotMetadata(stream, state.metadata);
+  }
+
+  getStreamMetadata(stream: StreamTabId): Readonly<ProgressStreamMetadata> {
+    return this.getOrCreateSession(stream).metadata;
+  }
+
+  setStreamTaskState(
+    stream: StreamTabId,
+    taskState: TaskState,
+    executionId?: ExecutionId,
+  ): void {
+    this.snapshots.setTaskState(stream, taskState, executionId);
+    this.refreshStreamMetadataFromSnapshot(stream);
+  }
+
+  setStreamParent(
+    stream: StreamTabId,
+    parent: StreamTabId | null | undefined,
+  ): void {
+    this.snapshots.setParentStream(stream, parent);
+    const metadata = this.getOrCreateSession(stream).metadata;
+    metadata.parentStreamId = parent ?? undefined;
+  }
+
+  setStreamDescription(stream: StreamTabId, description: string): void {
+    this.snapshots.setDescription(stream, description);
+    this.getOrCreateSession(stream).metadata.description = description;
   }
 
   // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).
@@ -376,6 +443,9 @@ export class ProgressViewState {
     }
 
     await this.snapshots.load(streamIds);
+    for (const stream of streamIds) {
+      this.resetStreamMetadataForRun(stream);
+    }
 
     const restoredLegacyInstructionCount =
       await this.backfillLegacyWorkflowInstructions(streamIds);
