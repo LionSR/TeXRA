@@ -14,6 +14,17 @@ function deferred(): {
   return { promise, resolve };
 }
 
+function deferredValue<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 async function flushPromiseQueue(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -76,5 +87,44 @@ describe('InputBar slash submit', () => {
     await flushPromiseQueue();
 
     expect(submitted).toEqual(['/help [Image #1]']);
+  });
+});
+
+describe('InputBar draft discard', () => {
+  it('invalidates an image paste that resolves after the draft is cleared', async () => {
+    const imagePasteQueue = new ImagePasteQueue();
+    const attempt = imagePasteQueue.beginAttempt();
+    const paste = deferredValue<string>();
+    const inserted: string[] = [];
+
+    imagePasteQueue.track(
+      paste.promise.then((chip) => {
+        if (attempt.isCurrent()) inserted.push(chip);
+      }),
+    );
+    imagePasteQueue.discardPending();
+    paste.resolve('[Image #1]');
+    await paste.promise;
+    await flushPromiseQueue();
+
+    expect(attempt.isCurrent()).toBe(false);
+    expect(inserted).toEqual([]);
+  });
+
+  it('cancels a deferred submit when its pending paste is discarded', async () => {
+    const imagePasteQueue = new ImagePasteQueue();
+    const paste = deferred();
+    const submitted: string[] = [];
+
+    imagePasteQueue.track(paste.promise);
+    imagePasteQueue.deferUntilIdle(() => submitted.push('stale draft'));
+    imagePasteQueue.discardPending();
+    paste.resolve();
+    await paste.promise;
+    await flushPromiseQueue();
+
+    expect(submitted).toEqual([]);
+    expect(imagePasteQueue.hasPending).toBe(false);
+    expect(imagePasteQueue.hasDeferredAction).toBe(false);
   });
 });

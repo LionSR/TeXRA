@@ -15,7 +15,10 @@ import {
   DraftAttachmentStore,
   shouldCollapsePaste,
 } from '../input/draftAttachments';
-import { ImagePasteQueue } from '../input/imagePasteQueue';
+import {
+  ImagePasteQueue,
+  type ImagePasteAttempt,
+} from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
 import { isCtrlInput } from '../input/inputKeys';
 import { openRegisteredCliSlashForm } from '../commands/slashForms';
@@ -149,9 +152,10 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   // Ref-held so the store survives re-renders and never triggers one itself.
   const attachmentsRef = useRef(new DraftAttachmentStore());
   const clearDraft = useCallback(() => {
+    imagePasteQueue.discardPending();
     setValue('');
     attachmentsRef.current.clear();
-  }, [setValue]);
+  }, [imagePasteQueue, setValue]);
   const clearDraftEdit = useCallback<CursorEdit>(() => {
     clearDraft();
     return { value: '', cursor: 0 };
@@ -189,23 +193,29 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     if (!shouldCollapsePaste(text)) return text;
     return attachmentsRef.current.addPastedText(text);
   }, []);
-  const onImagePaste = useCallback(async (): Promise<string | null> => {
-    try {
-      const result = await attachClipboardImage();
-      if (!result.ok) {
-        setAttachNotice(result.reason);
+  const onImagePaste = useCallback(
+    async (attempt: ImagePasteAttempt): Promise<string | null> => {
+      try {
+        const result = await attachClipboardImage();
+        if (!attempt.isCurrent()) return null;
+        if (!result.ok) {
+          setAttachNotice(result.reason);
+          return null;
+        }
+        return attachmentsRef.current.addPastedImage({
+          path: result.path,
+          mediaType: result.mediaType,
+          displayName: result.displayName,
+        });
+      } catch (error) {
+        if (attempt.isCurrent()) {
+          setAttachNotice(`Image paste failed: ${toErrorMessage(error)}`);
+        }
         return null;
       }
-      return attachmentsRef.current.addPastedImage({
-        path: result.path,
-        mediaType: result.mediaType,
-        displayName: result.displayName,
-      });
-    } catch (error) {
-      setAttachNotice(`Image paste failed: ${toErrorMessage(error)}`);
-      return null;
-    }
-  }, []);
+    },
+    [],
+  );
 
   // Clear the transient paste notice a few seconds after it appears.
   useEffect(() => {
