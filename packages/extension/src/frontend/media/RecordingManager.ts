@@ -13,59 +13,28 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 const CHANNEL = 'RecordingManager';
 logger.initialize(CHANNEL);
 
-export interface RecordingManagerConfig {
-  recordingStartedCommand?: string;
-  recordingStoppedCommand?: string;
-  recordingErrorCommand?: string;
-  transcriptionCommand?: string;
-  buildRecordingMessage?: (input: {
-    status: 'started' | 'stopped' | 'error';
-    error?: string;
-  }) => Record<string, unknown>;
-  buildTranscriptionMessage?: (text: string) => Record<string, unknown> | null;
-  progressTitle?: string;
+type RecordingMessageInput =
+  { status: 'started' | 'stopped' } | { status: 'error'; error: string };
+
+interface RecordingManagerConfig {
+  buildRecordingMessage: (
+    input: RecordingMessageInput,
+  ) => Record<string, unknown>;
+  buildTranscriptionMessage: (text: string) => Record<string, unknown>;
+  progressTitle: string;
 }
 
 export class RecordingManager {
-  constructor(
-    private readonly context: vscode.ExtensionContext,
-    private readonly commandConfig: RecordingManagerConfig,
-  ) {}
-
-  private buildRecordingMessage(
-    status: 'started' | 'stopped' | 'error',
-    error?: string,
-  ): Record<string, unknown> | null {
-    if (this.commandConfig.buildRecordingMessage) {
-      return this.commandConfig.buildRecordingMessage({ status, error });
-    }
-
-    const commandMap = {
-      started: this.commandConfig.recordingStartedCommand,
-      stopped: this.commandConfig.recordingStoppedCommand,
-      error: this.commandConfig.recordingErrorCommand,
-    };
-    const command = commandMap[status];
-    if (!command) return null;
-
-    return error ? { command, error } : { command };
-  }
-
-  private buildTranscriptionMessage(
-    text: string,
-  ): Record<string, unknown> | null {
-    if (this.commandConfig.buildTranscriptionMessage) {
-      return this.commandConfig.buildTranscriptionMessage(text);
-    }
-
-    const command = this.commandConfig.transcriptionCommand;
-    return command ? { command, text } : null;
-  }
+  constructor(private readonly commandConfig: RecordingManagerConfig) {}
 
   private notifyError(webview: vscode.Webview, message: string): void {
     void showLoggedMessage(CHANNEL, message);
-    const payload = this.buildRecordingMessage('error', message);
-    if (payload) webview.postMessage(payload);
+    webview.postMessage(
+      this.commandConfig.buildRecordingMessage({
+        status: 'error',
+        error: message,
+      }),
+    );
   }
 
   async start(
@@ -74,8 +43,9 @@ export class RecordingManager {
     try {
       const result = await startRecording();
       if (result.success) {
-        const payload = this.buildRecordingMessage('started');
-        if (payload) webviewView.webview.postMessage(payload);
+        webviewView.webview.postMessage(
+          this.commandConfig.buildRecordingMessage({ status: 'started' }),
+        );
       } else if (result.error) {
         this.notifyError(webviewView.webview, result.error);
       }
@@ -93,15 +63,16 @@ export class RecordingManager {
     const acknowledgeStop = (): void => {
       if (stopAcknowledged) return;
       stopAcknowledged = true;
-      const payload = this.buildRecordingMessage('stopped');
-      if (payload) webviewView.webview.postMessage(payload);
+      webviewView.webview.postMessage(
+        this.commandConfig.buildRecordingMessage({ status: 'stopped' }),
+      );
     };
 
     try {
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: this.commandConfig.progressTitle ?? 'Transcribing recording',
+          title: this.commandConfig.progressTitle,
           cancellable: false,
         },
         async () => {
@@ -109,8 +80,9 @@ export class RecordingManager {
           acknowledgeStop();
           const result = await transcriptionPromise;
           if (result.success) {
-            const payload = this.buildTranscriptionMessage(result.text);
-            if (payload) webviewView.webview.postMessage(payload);
+            webviewView.webview.postMessage(
+              this.commandConfig.buildTranscriptionMessage(result.text),
+            );
           } else if (result.error) {
             this.notifyError(webviewView.webview, result.error);
           }
