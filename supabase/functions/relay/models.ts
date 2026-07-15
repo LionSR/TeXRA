@@ -282,6 +282,15 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
   return exactMatches.length > 0 ? exactMatches : boundaryMatches;
 }
 
+/** Return a registry-owned model identifier suitable for diagnostics.
+ * Unknown and caller-defined model text must not enter logs. */
+export function getCanonicalRelayModelName(
+  modelName: string | null,
+): string | null {
+  if (!modelName) return null;
+  return resolveAllModelsByApiName(modelName).at(0)?.apiPattern ?? null;
+}
+
 export function isRetiredModelRequest(modelName: string): boolean {
   const name = normalizeModelName(modelName);
   const modelPart = stripProviderPrefix(name);

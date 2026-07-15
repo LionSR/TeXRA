@@ -186,6 +186,18 @@ describe('formatProviderHttpError', () => {
     expect(formatted.requestId).toBe('req-anthropic');
   });
 
+  it('prefers relay correlation ids over provider request ids', () => {
+    const err = withHeaders(new UnknownSdkApiError('relay timed out'), {
+      'request-id': 'req-anthropic',
+      'x-relay-request-id': 'relay-123',
+    });
+    Object.assign(err, { request_id: 'req-anthropic' });
+
+    const formatted = formatProviderHttpError(err);
+
+    expect(formatted.requestId).toBe('relay-123');
+  });
+
   it('does not infer OpenAI from generic x-request-id headers', () => {
     const err = withHeaders(
       new UnknownSdkApiError('openai-compatible gateway failed'),

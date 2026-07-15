@@ -14,10 +14,22 @@ import {
   readRequestBodyWithinSizeLimit,
 } from '../../../supabase/functions/relay/requestLimits';
 import {
+  classifyPreHeaderFailure,
+  getRelayRequestBytes,
+  getUpstreamRequestId,
+  logRelayFailure,
+  RELAY_REQUEST_ID_HEADER,
+  withRelayErrorRequestId,
+} from '../../../supabase/functions/relay/diagnostics';
+import {
   acquireRelayRequestSlot,
+  releaseRelaySlotSafely,
   releaseWhenStreamCloses,
 } from '../../../supabase/functions/relay/requestGate';
-import { getRequestLimits } from '../../../supabase/functions/relay/models';
+import {
+  getCanonicalRelayModelName,
+  getRequestLimits,
+} from '../../../supabase/functions/relay/models';
 import { isModelFreeRelayPath } from '../../../supabase/functions/relay/paths';
 
 function byteStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
@@ -354,6 +366,219 @@ describe('relay free-tier request limits', () => {
     assert.equal(releases, 1);
   });
 
+  it('classifies failures before upstream headers arrive', () => {
+    const timeout = new Error('timed out');
+    timeout.name = 'TimeoutError';
+    const abort = new Error('aborted');
+    abort.name = 'AbortError';
+
+    assert.equal(classifyPreHeaderFailure(timeout), 'pre_headers_timeout');
+    assert.equal(classifyPreHeaderFailure(abort), 'pre_headers_timeout');
+    assert.equal(
+      classifyPreHeaderFailure(new TypeError('fetch failed')),
+      'pre_headers_failure',
+    );
+  });
+
+  it('uses only registry-owned model identifiers in diagnostics', () => {
+    assert.equal(
+      getCanonicalRelayModelName('anthropic/claude-sonnet-4-6'),
+      'claude-sonnet-4-6',
+    );
+    assert.equal(
+      getCanonicalRelayModelName('prompt-or-secret@example.com'),
+      null,
+    );
+  });
+
+  it('sanitizes the complete structured failure log', () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      logRelayFailure({
+        relayRequestId: 'relay-123',
+        provider: 'anthropic',
+        model: 'prompt-or-secret@example.com',
+        requestBytes: 60_000,
+        elapsedMs: 390_000,
+        failurePhase: 'response_body_failure',
+        upstreamRequestId: 'https://secret.example/prompt',
+      });
+
+      const serialized = String(errorLog.mock.calls[0]?.[0]);
+      assert.equal(serialized.includes('prompt-or-secret@example.com'), false);
+      assert.equal(serialized.includes('secret.example'), false);
+      assert.deepEqual(JSON.parse(serialized.slice('[RELAY] '.length)), {
+        event: 'upstream_failure',
+        relayRequestId: 'relay-123',
+        provider: 'anthropic',
+        model: null,
+        requestBytes: 60_000,
+        elapsedMs: 390_000,
+        failurePhase: 'response_body_failure',
+        upstreamRequestId: null,
+      });
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
+  it('exposes relay-generated error ids through the SDK request-id contract', () => {
+    const response = withRelayErrorRequestId(
+      new Response(null, { status: 504 }),
+      'relay-123',
+    );
+
+    assert.equal(response.headers.get(RELAY_REQUEST_ID_HEADER), 'relay-123');
+    assert.equal(response.headers.get('x-request-id'), 'relay-123');
+  });
+
+  it('measures buffered relay request bytes without reading content', () => {
+    assert.equal(getRelayRequestBytes('a€😀', null), 8);
+    assert.equal(getRelayRequestBytes('\ud800', null), 3);
+    assert.equal(getRelayRequestBytes(new Uint8Array([0, 1, 2]), '999'), 3);
+    assert.equal(getRelayRequestBytes(byteStream([]), '60000'), 60_000);
+    assert.equal(getRelayRequestBytes(byteStream([]), null), null);
+    assert.equal(getRelayRequestBytes(undefined, null), 0);
+  });
+
+  it('extracts provider request ids without replacing them', () => {
+    assert.equal(
+      getUpstreamRequestId(
+        new Headers({
+          'request-id': 'req-anthropic',
+          'x-request-id': 'req-compatible',
+        }),
+      ),
+      'req-anthropic',
+    );
+    assert.equal(
+      getUpstreamRequestId(new Headers({ 'x-goog-request-id': 'req-google' })),
+      'req-google',
+    );
+    assert.equal(getUpstreamRequestId(new Headers()), null);
+    assert.equal(
+      getUpstreamRequestId(
+        new Headers({ 'x-request-id': 'https://secret.example/prompt' }),
+      ),
+      null,
+    );
+  });
+
+  it('does not let slot release failures replace upstream failures', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      await releaseRelaySlotSafely(async () => {
+        throw new Error('release failed with sensitive details');
+      });
+      assert.deepEqual(errorLog.mock.calls, [
+        ['[RELAY] Failed to release request slot'],
+      ]);
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
+  it('reports upstream response-body failures and releases the slot', async () => {
+    const upstreamError = new Error('response body failed');
+    let releases = 0;
+    const failingBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(upstreamError);
+      },
+    });
+    const wrapped = await releaseWhenStreamCloses(
+      failingBody,
+      async () => {
+        releases += 1;
+      },
+      undefined,
+      0,
+      () => {},
+    );
+    if (wrapped === null) assert.fail('expected wrapped stream');
+
+    await assert.rejects(wrapped.getReader().read(), upstreamError);
+    assert.equal(releases, 1);
+  });
+
+  it('preserves bodyless upstream responses when slot release fails', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const wrapped = await releaseWhenStreamCloses(null, async () => {
+        throw new Error('release failed');
+      });
+
+      assert.equal(wrapped, null);
+      assert.deepEqual(errorLog.mock.calls, [
+        ['[RELAY] Failed to release request slot'],
+      ]);
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
+  it('preserves upstream errors and slot release when the observer throws', async () => {
+    const upstreamError = new Error('response body failed');
+    const observerError = new Error('sensitive observer details');
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let releases = 0;
+    const failingBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(upstreamError);
+      },
+    });
+
+    try {
+      const wrapped = await releaseWhenStreamCloses(
+        failingBody,
+        async () => {
+          releases += 1;
+        },
+        undefined,
+        0,
+        () => {
+          throw observerError;
+        },
+      );
+      if (wrapped === null) assert.fail('expected wrapped stream');
+
+      await assert.rejects(wrapped.getReader().read(), upstreamError);
+      assert.equal(releases, 1);
+      assert.deepEqual(errorLog.mock.calls, [
+        ['[RELAY] Upstream body failure observer failed'],
+      ]);
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
+  it('preserves upstream errors when slot release also fails', async () => {
+    const upstreamError = new Error('response body failed');
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failingBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(upstreamError);
+      },
+    });
+
+    try {
+      const wrapped = await releaseWhenStreamCloses(failingBody, async () => {
+        throw new Error('release failed');
+      });
+      if (wrapped === null) assert.fail('expected wrapped stream');
+
+      await assert.rejects(wrapped.getReader().read(), upstreamError);
+      assert.deepEqual(errorLog.mock.calls, [
+        ['[RELAY] Failed to release request slot'],
+      ]);
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
   it('uses the same slot id for gate refresh and release RPCs', async () => {
     const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
     const client = {
@@ -538,14 +763,30 @@ describe('relay free-tier request limits', () => {
       });
       if (!slot.allowed) assert.fail('expected slot to be allowed');
 
+      let upstreamBodyFailures = 0;
+      const pendingBody = new ReadableStream<Uint8Array>({
+        pull() {
+          return new Promise<void>(() => {});
+        },
+      });
+
       const wrapped = await releaseWhenStreamCloses(
-        byteStream([new Uint8Array([1])]),
+        pendingBody,
         slot.release,
         slot.refresh,
         10,
+        () => {
+          upstreamBodyFailures += 1;
+        },
       );
       if (wrapped === null) assert.fail('expected wrapped stream');
 
+      const reader = wrapped.getReader();
+      const pendingRead = reader.read();
+      const rejectedRead = assert.rejects(
+        pendingRead,
+        /relay_request_refresh did not find request slot/,
+      );
       await vi.advanceTimersByTimeAsync(10);
       assert.deepEqual(calls, [
         'relay_request_gate',
@@ -553,11 +794,8 @@ describe('relay free-tier request limits', () => {
         'relay_request_release',
       ]);
 
-      const reader = wrapped.getReader();
-      await assert.rejects(
-        reader.read(),
-        /relay_request_refresh did not find request slot/,
-      );
+      await rejectedRead;
+      assert.equal(upstreamBodyFailures, 0);
     } finally {
       vi.useRealTimers();
     }
