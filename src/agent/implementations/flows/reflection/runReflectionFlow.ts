@@ -1,5 +1,3 @@
-import * as path from 'node:path';
-
 import { getExecutionStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import { PromptBuilder } from '@agent/prompt';
@@ -32,19 +30,14 @@ import {
   type RoundOutput,
   type RunOutcome,
   type StorageKey,
-  type WorkspaceFileLocation,
+  type FileLocation,
 } from '@shared/schemas';
 import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
 } from '@shared/constants/workflowOutput';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  AbsoluteFS,
-  TaskRunFileService,
-  WorkspaceFS,
-  createWorkspaceLocation,
-} from '@utils/files';
+import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 import { TeXCountNode } from './nodes/TeXCountNode';
@@ -120,13 +113,9 @@ export async function runReflectionFlow<C = unknown>(
   const fileService = new TaskRunFileService(executionId);
   const compatibilityKey = activeModelHandlerCompatibilityKey(modelHandler);
 
-  const baseFiles: WorkspaceFileLocation[] = (
+  const baseFiles: FileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
-  ).map((f) => {
-    const absolutePath = path.isAbsolute(f) ? f : WorkspaceFS.fullPath(f);
-    const relativePath = path.isAbsolute(f) ? WorkspaceFS.relativePath(f) : f;
-    return createWorkspaceLocation(absolutePath, relativePath);
-  });
+  ).map((file) => fileService.createLocation(file));
 
   const outputState = createOutputState();
   const xmlManager = new XmlOutputManager(config, logger, fileService);
