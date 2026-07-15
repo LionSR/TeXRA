@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   CHILD_STATUS_MARKER,
   childStatusColor,
-  resolveSessionSelectionId,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 import {
   compactChildRowText,
@@ -66,26 +65,6 @@ describe('CLI session list display model', () => {
         items,
       }),
     ).toBe(2);
-  });
-
-  it('preserves selection by stream id as rows change', () => {
-    const selected = 'lean' as StreamTabId;
-    const reordered = [
-      session('review'),
-      session('main', true),
-      session('lean'),
-    ];
-
-    expect(
-      resolveSessionSelectionId(reordered, selected, 'main' as StreamTabId),
-    ).toBe(selected);
-    expect(
-      resolveSessionSelectionId(
-        reordered.slice(0, 2),
-        selected,
-        'main' as StreamTabId,
-      ),
-    ).toBe('main');
   });
 
   it('relocates a controlled highlight after a same-length reorder', () => {
