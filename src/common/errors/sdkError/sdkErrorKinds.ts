@@ -1,4 +1,5 @@
 import { StatusCodes } from 'http-status-codes';
+import { ExhaustionReasonSchema, type ExhaustionReason } from '@shared/schemas';
 import { isFiniteNumber, isObject, isString } from '@utils/core';
 
 export type SdkErrorKind =
@@ -19,6 +20,7 @@ export interface SdkErrorMetadata {
   provider: string;
   kind: SdkErrorKind;
   statusCode?: number;
+  exhaustionReason?: ExhaustionReason;
 }
 
 const SDK_ERROR_KINDS: ReadonlySet<SdkErrorKind> = new Set([
@@ -42,12 +44,15 @@ export function isSdkErrorMetadata(value: unknown): value is SdkErrorMetadata {
     provider?: unknown;
     kind?: unknown;
     statusCode?: unknown;
+    exhaustionReason?: unknown;
   };
   return (
     isString(candidate.provider) &&
     SDK_ERROR_KINDS.has(candidate.kind as SdkErrorKind) &&
     (candidate.statusCode === undefined ||
-      pickStatus(candidate.statusCode) !== undefined)
+      pickStatus(candidate.statusCode) !== undefined) &&
+    (candidate.exhaustionReason === undefined ||
+      ExhaustionReasonSchema.safeParse(candidate.exhaustionReason).success)
   );
 }
 

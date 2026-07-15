@@ -9,11 +9,15 @@ import {
 } from '@model/computeModelOptions';
 import {
   availableRuntimeModelIds,
+  discoveredRuntimeModelConfigEntries,
+  getRuntimeModelDirectFallback,
   getRuntimeModelConfig,
   invalidateRuntimeModelRegistry,
   refreshRuntimeModelRegistry,
+  requestRuntimeModelAccess,
   resolveRuntimeModelConfig,
   runtimeModelAccess,
+  runtimeModelIds,
 } from '@model/runtimeModelRegistry';
 import type {
   LanguageModelInfo,
@@ -27,22 +31,32 @@ const SONNET: LanguageModelInfo = {
   vendor: 'copilot',
   version: '2026-07',
   maxInputTokens: 160_000,
+  access: 'allowed',
+};
+
+const GPT_56: LanguageModelInfo = {
+  id: 'gpt-5.6',
+  name: 'GPT-5.6',
+  family: 'gpt-5.6',
+  vendor: 'copilot',
+  version: '2026-07',
+  maxInputTokens: 128_000,
+  access: 'allowed',
 };
 
 function languageModelPort(
   models: readonly LanguageModelInfo[],
-  access: boolean | undefined = true,
 ): LanguageModelPort {
   return {
     isAvailable: () => true,
     selectModels: vi.fn(async () => models),
     onDidChangeModels: () => ({ dispose() {} }),
-    sendRequest: () =>
+    sendRequest: vi.fn(() =>
       (async function* () {
-        // Registry tests do not make model requests.
+        yield { kind: 'text' as const, text: 'OK' };
       })(),
+    ),
     countTokens: async () => 0,
-    canSendRequest: vi.fn(async () => access),
     onDidChangeAccess: () => ({ dispose() {} }),
   };
 }
@@ -88,7 +102,17 @@ describe('runtime model registry', () => {
 
     expect(port.selectModels).toHaveBeenCalledWith({ vendor: 'copilot' });
     expect(availableRuntimeModelIds()).toEqual(['copilot:sonnet46']);
-    expect(runtimeModelAccess('copilot:sonnet46')).toBe(true);
+    expect(runtimeModelAccess('copilot:sonnet46')).toBe('allowed');
+    expect(getRuntimeModelDirectFallback('copilot:sonnet46', false)).toEqual({
+      model: 'sonnet46',
+      provider: 'anthropic',
+      chatGptSubscriptionEligible: false,
+    });
+    expect(getRuntimeModelDirectFallback('copilot:sonnet46', true)).toEqual({
+      model: 'sonnet46',
+      provider: 'openRouter',
+      chatGptSubscriptionEligible: false,
+    });
     expect(getRuntimeModelConfig('copilot:sonnet46')).toMatchObject({
       name: 'copilot:sonnet46',
       label: 'Copilot · Claude Sonnet 4.6',
@@ -112,24 +136,38 @@ describe('runtime model registry', () => {
     ).toBe('ModelHandlerVscodeLm');
   });
 
-  it('keeps denied models resolvable without advertising them as available', async () => {
+  it('marks direct fallbacks that could route through ChatGPT subscription', async () => {
+    await installPlatform({}, { languageModel: languageModelPort([GPT_56]) });
+
+    await refreshRuntimeModelRegistry();
+
+    expect(getRuntimeModelDirectFallback('copilot:gpt56', false)).toEqual({
+      model: 'gpt56',
+      provider: 'openai',
+      chatGptSubscriptionEligible: true,
+    });
+  });
+
+  it('keeps unavailable models resolvable without advertising them as available', async () => {
     await installPlatform(
       {},
-      { languageModel: languageModelPort([SONNET], false) },
+      {
+        languageModel: languageModelPort([
+          { ...SONNET, access: 'unavailable' },
+        ]),
+      },
     );
 
     await refreshRuntimeModelRegistry();
 
     expect(availableRuntimeModelIds()).toEqual([]);
-    expect(runtimeModelAccess('copilot:sonnet46')).toBe(false);
+    expect(runtimeModelIds()).toEqual(['copilot:sonnet46']);
+    expect(runtimeModelAccess('copilot:sonnet46')).toBe('unavailable');
     expect(getRuntimeModelConfig('copilot:sonnet46')).toBeDefined();
   });
 
   it('adds accessible native models to the ordinary model options', async () => {
-    await installPlatform(
-      {},
-      { languageModel: languageModelPort([SONNET], true) },
-    );
+    await installPlatform({}, { languageModel: languageModelPort([SONNET]) });
 
     const options = await computeModelOptionsData(
       undefined,
@@ -149,10 +187,14 @@ describe('runtime model registry', () => {
     ]);
   });
 
-  it('shows a denied persisted selection as requiring Copilot permission', async () => {
+  it('shows an unavailable persisted Copilot selection', async () => {
     await installPlatform(
       {},
-      { languageModel: languageModelPort([SONNET], false) },
+      {
+        languageModel: languageModelPort([
+          { ...SONNET, access: 'unavailable' },
+        ]),
+      },
     );
 
     const [option] = await computeModelOptionsData(
@@ -161,11 +203,69 @@ describe('runtime model registry', () => {
     );
 
     expect(option).toMatchObject({
-      availability: 'copilot-permission-required',
-      availabilityLabel: 'Copilot access required',
+      availability: 'copilot-unavailable',
+      availabilityLabel: 'Copilot unavailable',
       disabled: true,
       requiresKey: false,
     });
+  });
+
+  it('distinguishes models awaiting consent from unavailable models', async () => {
+    await installPlatform(
+      {},
+      {
+        languageModel: languageModelPort([
+          { ...SONNET, access: 'consent-required' },
+        ]),
+      },
+    );
+
+    const [option] = await computeModelOptionsData(
+      ['copilot:sonnet46'],
+      modelOptionsAccess(),
+    );
+
+    expect(option).toMatchObject({
+      availability: 'copilot-consent-required',
+      availabilityLabel: 'Copilot consent required',
+      disabled: true,
+      requiresKey: false,
+    });
+  });
+
+  it('requests consent only for a model awaiting the native prompt', async () => {
+    const port = languageModelPort([{ ...SONNET, access: 'consent-required' }]);
+    await installPlatform({}, { languageModel: port });
+
+    await expect(requestRuntimeModelAccess('copilot:sonnet46')).resolves.toBe(
+      'requested',
+    );
+    expect(port.sendRequest).toHaveBeenCalledWith(
+      { vendor: 'copilot', id: SONNET.id },
+      [
+        {
+          role: 'user',
+          content: [
+            {
+              kind: 'text',
+              text: 'Reply with OK to confirm language-model access for TeXRA.',
+            },
+          ],
+        },
+      ],
+      { justification: 'Use Copilot models in TeXRA.' },
+      expect.any(AbortSignal),
+    );
+
+    invalidateRuntimeModelRegistry();
+    const unavailablePort = languageModelPort([
+      { ...SONNET, access: 'unavailable' },
+    ]);
+    await installPlatform({}, { languageModel: unavailablePort });
+    await expect(requestRuntimeModelAccess('copilot:sonnet46')).resolves.toBe(
+      'unavailable',
+    );
+    expect(unavailablePort.sendRequest).not.toHaveBeenCalled();
   });
 
   it('omits native models whose capabilities TeXRA cannot establish', async () => {
@@ -217,5 +317,59 @@ describe('runtime model registry', () => {
     );
 
     await expect(resolveRuntimeModelConfig('gpt55')).resolves.toBeDefined();
+  });
+
+  it('keeps static model options available when native discovery fails', async () => {
+    await installPlatform({}, { languageModel: languageModelPort([SONNET]) });
+    await refreshRuntimeModelRegistry();
+    expect(availableRuntimeModelIds()).toEqual(['copilot:sonnet46']);
+
+    invalidateRuntimeModelRegistry();
+    await installPlatform(
+      {},
+      {
+        languageModel: {
+          ...languageModelPort([]),
+          selectModels: async () => {
+            throw new Error('native discovery failed');
+          },
+        },
+      },
+    );
+
+    const options = await computeModelOptionsData(
+      ['gpt55'],
+      modelOptionsAccess(),
+    );
+
+    expect(options).toEqual([
+      expect.objectContaining({
+        value: 'gpt55',
+        disabled: true,
+      }),
+    ]);
+    expect(availableRuntimeModelIds()).toEqual([]);
+    expect(getRuntimeModelConfig('copilot:sonnet46')).toBeUndefined();
+  });
+
+  it('returns an empty discovered catalogue when native discovery fails', async () => {
+    await installPlatform({}, { languageModel: languageModelPort([SONNET]) });
+    await refreshRuntimeModelRegistry();
+
+    invalidateRuntimeModelRegistry();
+    await installPlatform(
+      {},
+      {
+        languageModel: {
+          ...languageModelPort([]),
+          selectModels: async () => {
+            throw new Error('native discovery failed');
+          },
+        },
+      },
+    );
+
+    await expect(discoveredRuntimeModelConfigEntries()).resolves.toEqual([]);
+    expect(runtimeModelIds()).toEqual([]);
   });
 });

@@ -73,6 +73,7 @@ export type HostAgentProposalRequest = AgentProposal & {
 };
 
 export interface HostRetryRequest {
+  readonly requestId: string;
   readonly streamId: StreamTabId;
   readonly operation: string;
   readonly model?: string;

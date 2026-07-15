@@ -5,8 +5,8 @@ import * as vscode from 'vscode';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelInfo,
+  type LanguageModelAccessState,
   type LanguageModelMessage,
   type LanguageModelPort,
   type LanguageModelRequestOptions,
@@ -15,7 +15,8 @@ import {
   type LanguageModelTokenCountInput,
 } from '@platform/languageModel';
 
-const NOOP_DISPOSABLE = Object.freeze({ dispose() {} });
+// Local imports - logger
+import { warn } from '@logger/logUtils';
 
 function translateLanguageModelError(
   error: unknown,
@@ -67,7 +68,16 @@ function translateLanguageModelError(
   }
 }
 
-function toModelInfo(model: vscode.LanguageModelChat): LanguageModelInfo {
+function toAccessState(access: boolean | undefined): LanguageModelAccessState {
+  if (access === true) return 'allowed';
+  if (access === false) return 'unavailable';
+  return 'consent-required';
+}
+
+function toModelInfo(
+  model: vscode.LanguageModelChat,
+  accessInformation: vscode.LanguageModelAccessInformation,
+): LanguageModelInfo {
   return {
     id: model.id,
     name: model.name,
@@ -75,6 +85,7 @@ function toModelInfo(model: vscode.LanguageModelChat): LanguageModelInfo {
     vendor: model.vendor,
     version: model.version,
     maxInputTokens: model.maxInputTokens,
+    access: toAccessState(accessInformation.canSendRequest(model)),
   };
 }
 
@@ -227,36 +238,35 @@ function toVscodeTokenCountInput(
   return typeof input === 'string' ? input : toVscodeMessage(input);
 }
 
-/** Create the VS Code implementation, or the shared unavailable port. */
+/** Create the VS Code language-model implementation. */
 export function createLanguageModelPort(
   context: vscode.ExtensionContext,
 ): LanguageModelPort {
-  const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
-  if (typeof lm?.selectChatModels !== 'function') {
-    return UNAVAILABLE_LANGUAGE_MODEL_PORT;
-  }
+  const { lm } = vscode;
   const selectChatModels = lm.selectChatModels;
-  const accessInformation = (
-    context as {
-      languageModelAccessInformation?: Partial<vscode.LanguageModelAccessInformation>;
-    }
-  ).languageModelAccessInformation;
+  const accessInformation = context.languageModelAccessInformation;
 
   return {
     isAvailable: () => true,
 
     async selectModels(selector) {
       try {
-        return (await selectChatModels(selector)).map(toModelInfo);
+        return (await selectChatModels(selector)).map((model) =>
+          toModelInfo(model, accessInformation),
+        );
       } catch (error) {
-        throw translateLanguageModelError(error);
+        const translated = translateLanguageModelError(error);
+        warn(
+          'LanguageModelPort',
+          'Could not discover editor-supplied language models.',
+          { data: translated },
+        );
+        throw translated;
       }
     },
 
     onDidChangeModels(listener) {
-      return typeof lm.onDidChangeChatModels === 'function'
-        ? lm.onDidChangeChatModels(listener)
-        : NOOP_DISPOSABLE;
+      return lm.onDidChangeChatModels(listener);
     },
 
     sendRequest(model, messages, options, signal) {
@@ -281,24 +291,8 @@ export function createLanguageModelPort(
       }
     },
 
-    async canSendRequest(reference) {
-      try {
-        if (typeof accessInformation?.canSendRequest !== 'function') {
-          return undefined;
-        }
-        const model = await findModel(selectChatModels, reference);
-        return model === undefined
-          ? undefined
-          : accessInformation.canSendRequest(model);
-      } catch (error) {
-        throw translateLanguageModelError(error, reference.id);
-      }
-    },
-
     onDidChangeAccess(listener) {
-      return typeof accessInformation?.onDidChange === 'function'
-        ? accessInformation.onDidChange(listener)
-        : NOOP_DISPOSABLE;
+      return accessInformation.onDidChange(listener);
     },
   };
 }

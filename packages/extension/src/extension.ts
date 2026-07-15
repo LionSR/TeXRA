@@ -267,6 +267,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
     invalidateModelOptionsCache();
+    appSignals.emit('languageModelsChanged', undefined);
   };
   context.subscriptions.push(
     languageModel.onDidChangeModels(invalidateLanguageModels),

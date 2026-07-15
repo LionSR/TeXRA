@@ -2,25 +2,30 @@
 import type { ApiProvider } from '@model/apiProviders';
 
 // Local imports - shared
-import type { StreamTabId } from '@shared/schemas';
+import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
 
 export interface ProgressApiKeyRetryRequest {
   stream: StreamTabId;
+  requestId: string;
   provider?: ApiProvider;
-  upstreamCreditDepleted?: boolean;
+  exhaustionReason?: ExhaustionReason;
+  chatGptSubscriptionEligible?: boolean;
   viaRelay?: boolean;
-  /** True when the failing request ran through the ChatGPT subscription
-   *  (Codex backend) and hit its usage limit. Accepting the switch turns off
-   *  the "prefer ChatGPT subscription" preference so the retry routes through
-   *  the user's OpenAI API key instead. Orthogonal to `viaRelay`. */
-  chatgptSubscription?: boolean;
 }
 
-export interface ProgressApiKeyRetryResult {
+export interface ProgressApiKeyPreparationResult {
   proceeded: boolean;
-  retried: boolean;
   disabledIncludedModelAccess: boolean;
   disabledChatGptSubscription: boolean;
+}
+
+export interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResult {
+  retried: boolean;
+}
+
+interface ProgressApiRoutingSnapshot {
+  readonly useIncludedModelAccess: boolean;
+  readonly preferChatGptSubscription: boolean;
 }
 
 export interface ProgressApiKeyRetryControllerDeps {
@@ -28,12 +33,13 @@ export interface ProgressApiKeyRetryControllerDeps {
   readKey(provider: ApiProvider): Promise<string | undefined>;
   hasUsableKey(provider: ApiProvider): Promise<boolean>;
   promptForApiKey(provider?: ApiProvider): Promise<void>;
+  getUseIncludedModelAccess(): boolean;
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
-  /** Turn off the "prefer ChatGPT subscription" (Codex) preference so
-   *  Codex-eligible models fall back to the OpenAI API-key path. */
-  disablePreferCodexSubscription(): Promise<void>;
+  getPreferChatGptSubscription(): boolean;
+  setPreferChatGptSubscription(enabled: boolean): Promise<void>;
   invalidateModelOptionsCache(): void;
-  triggerRetry(stream: StreamTabId): boolean;
+  isRetryPending(stream: StreamTabId, requestId: string): boolean;
+  triggerRetry(stream: StreamTabId, requestId: string): boolean;
 }
 
 /**
@@ -48,10 +54,44 @@ export class ProgressApiKeyRetryController {
   async useOwnApiKey(
     request: ProgressApiKeyRetryRequest,
   ): Promise<ProgressApiKeyRetryResult> {
+    const proceeded = await this.ensureOwnApiKey(request);
+    if (
+      !proceeded ||
+      !this.deps.isRetryPending(request.stream, request.requestId)
+    ) {
+      return {
+        proceeded: false,
+        retried: false,
+        disabledIncludedModelAccess: false,
+        disabledChatGptSubscription: false,
+      };
+    }
+
+    const before = this.routingSnapshot();
+    const prepared = await this.applyOwnApiKeyRouting(request);
+    const retried = this.deps.triggerRetry(request.stream, request.requestId);
+    if (!retried) {
+      await this.restoreOwnApiKeyRouting(before, prepared);
+      return {
+        proceeded: false,
+        retried: false,
+        disabledIncludedModelAccess: false,
+        disabledChatGptSubscription: false,
+      };
+    }
+    return {
+      ...prepared,
+      retried: true,
+    };
+  }
+
+  async ensureOwnApiKey(
+    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+  ): Promise<boolean> {
     const providersToCheck = request.provider
       ? [request.provider]
       : this.deps.providers;
-    const requireChange = request.upstreamCreditDepleted === true;
+    const requireChange = request.exhaustionReason === 'upstream-credit';
 
     // The gate depends on which credential failed:
     // - Upstream credit depletion means the stored direct key is the broken
@@ -79,23 +119,26 @@ export class ProgressApiKeyRetryController {
     }
 
     if (!shouldProceed) {
-      return {
-        proceeded: false,
-        retried: false,
-        disabledIncludedModelAccess: false,
-        disabledChatGptSubscription: false,
-      };
+      return false;
     }
 
+    return true;
+  }
+
+  async applyOwnApiKeyRouting(
+    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+  ): Promise<ProgressApiKeyPreparationResult> {
     // Disable relay (included access) so the retry uses the user's own key,
     // not the relay JWT, whenever the switch promises "your own API key".
-    // Both relay exhaustion (viaRelay) and subscription exhaustion
-    // (chatgptSubscription) fall through to `super.getApiKey()`, which otherwise
-    // still prefers relay when included access is on, so the retry would never
-    // reach the stored OpenAI key the UI describes. A direct-key failure
-    // (neither flag) leaves relay untouched for other providers.
+    // Both relay and subscription exhaustion fall through to a direct handler,
+    // which otherwise may still prefer included access over the stored key.
+    // A direct-key failure leaves relay untouched for other providers.
     let disabledIncludedModelAccess = false;
-    if (request.viaRelay === true || request.chatgptSubscription === true) {
+    if (
+      request.viaRelay === true ||
+      request.exhaustionReason === 'chatgpt-subscription' ||
+      request.exhaustionReason === 'copilot-subscription'
+    ) {
       await this.deps.setUseIncludedModelAccess(false);
       this.deps.invalidateModelOptionsCache();
       disabledIncludedModelAccess = true;
@@ -104,18 +147,66 @@ export class ProgressApiKeyRetryController {
     // The subscription quota is exhausted, so turn off the preference and let
     // Codex-eligible models route through the now-usable OpenAI key on retry.
     let disabledChatGptSubscription = false;
-    if (request.chatgptSubscription === true) {
-      await this.deps.disablePreferCodexSubscription();
+    if (
+      this.deps.getPreferChatGptSubscription() &&
+      (request.exhaustionReason === 'chatgpt-subscription' ||
+        (request.exhaustionReason === 'copilot-subscription' &&
+          request.chatGptSubscriptionEligible === true))
+    ) {
+      await this.deps.setPreferChatGptSubscription(false);
       this.deps.invalidateModelOptionsCache();
       disabledChatGptSubscription = true;
     }
 
     return {
       proceeded: true,
-      retried: this.deps.triggerRetry(request.stream),
       disabledIncludedModelAccess,
       disabledChatGptSubscription,
     };
+  }
+
+  /** Apply Copilot fallback routing only for the duration of a launch attempt. */
+  async runCopilotFallbackWithRouting(
+    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+    start: () => Promise<boolean>,
+  ): Promise<boolean> {
+    const before = this.routingSnapshot();
+    const prepared = await this.applyOwnApiKeyRouting(request);
+    let started = false;
+    try {
+      started = await start();
+      return started;
+    } finally {
+      if (!started) await this.restoreOwnApiKeyRouting(before, prepared);
+    }
+  }
+
+  private routingSnapshot(): ProgressApiRoutingSnapshot {
+    return {
+      useIncludedModelAccess: this.deps.getUseIncludedModelAccess(),
+      preferChatGptSubscription: this.deps.getPreferChatGptSubscription(),
+    };
+  }
+
+  private async restoreOwnApiKeyRouting(
+    before: ProgressApiRoutingSnapshot,
+    prepared: ProgressApiKeyPreparationResult,
+  ): Promise<void> {
+    const restores: Promise<void>[] = [];
+    if (prepared.disabledIncludedModelAccess) {
+      restores.push(
+        this.deps.setUseIncludedModelAccess(before.useIncludedModelAccess),
+      );
+    }
+    if (prepared.disabledChatGptSubscription) {
+      restores.push(
+        this.deps.setPreferChatGptSubscription(
+          before.preferChatGptSubscription,
+        ),
+      );
+    }
+    await Promise.all(restores);
+    if (restores.length > 0) this.deps.invalidateModelOptionsCache();
   }
 
   private async hasAnyUsableKey(

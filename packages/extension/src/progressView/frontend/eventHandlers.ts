@@ -4,8 +4,6 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
-  isChatGptSubscriptionLimitError,
-  isUpstreamCreditDepletedError,
   type GettingStartedActionDetail,
   type StreamTabId,
 } from '@shared/schemas';
@@ -335,37 +333,35 @@ export function handlePermissionAction(
         // Non-terminal: panel stays open. The extension handler will
         // trigger retry on success, or leave the panel for the user
         // to choose Retry/Dismiss if the user cancels the key picker.
-        const chatgptSubscription = isChatGptSubscriptionLimitError(
-          permission.data.errorDetails,
-        );
+        const exhaustionReason = permission.data.errorDetails?.exhaustionReason;
         postMessage(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY, {
           stream: permission.data.streamId,
+          requestId: permission.data.requestId,
+          model: permission.data.model,
+          exhaustionReason,
           // Subscription quota exhaustion always means the OpenAI key is the
           // fallback credential, regardless of how the error tagged provider.
-          provider: chatgptSubscription
-            ? 'openai'
-            : permission.data.errorDetails?.provider,
-          upstreamCreditDepleted: isUpstreamCreditDepletedError(
-            permission.data.errorDetails,
-          )
-            ? true
-            : undefined,
+          provider:
+            exhaustionReason === 'chatgpt-subscription'
+              ? 'openai'
+              : permission.data.errorDetails?.provider,
           viaRelay:
             permission.data.errorDetails?.isRelayError === true
               ? true
               : undefined,
-          chatgptSubscription: chatgptSubscription ? true : undefined,
         });
         break;
       }
       if (action === 'retry') {
         postMessage(PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST, {
           stream: permission.data.streamId,
+          requestId: permission.data.requestId,
           feedback,
         });
       } else {
         postMessage(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST, {
           stream: permission.data.streamId,
+          requestId: permission.data.requestId,
         });
       }
       // Optimistic removal
