@@ -45,11 +45,6 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
 
   protected readonly approvalDecision = { action: 'approve' } as const;
 
-  protected get canBypass(): boolean {
-    const { allowBypass, streamId } = this.permission.data;
-    return Boolean(allowBypass && streamId);
-  }
-
   @state() private inlineDiffOpen = false;
 
   protected override handleExtraKey(key: string): boolean {

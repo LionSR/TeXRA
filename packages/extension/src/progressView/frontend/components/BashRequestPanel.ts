@@ -38,11 +38,6 @@ export class BashRequestPanel extends BaseBypassApprovalPanel<'bash'> {
 
   protected readonly approvalDecision = { action: 'approve' } as const;
 
-  protected get canBypass(): boolean {
-    const { allowBypass, streamId } = this.permission.data;
-    return Boolean(allowBypass && streamId);
-  }
-
   override render(): TemplateResult {
     const data = this.permission.data;
 
