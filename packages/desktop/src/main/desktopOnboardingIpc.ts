@@ -28,7 +28,7 @@ export interface DesktopOnboardingIpcOptions {
    * keys, or any provider API key). Async because both the relay auth check
    * and the secrets read can involve disk/network I/O.
    */
-  hasCredential?: () => boolean | Promise<boolean>;
+  hasCredential: () => boolean | Promise<boolean>;
   /**
    * Resolves once the host's one-shot first-run backfill has settled. The first
    * funnel derivation waits for it so a returning veteran isn't transiently
@@ -37,17 +37,17 @@ export interface DesktopOnboardingIpcOptions {
    */
   readyGate?: Promise<void>;
   /** Post SET_SELECTED_AGENT to the renderer when entering State 1. */
-  selectSetupAgent?: () => Promise<void>;
+  selectSetupAgent: () => Promise<void>;
   /** Launch the setup conversation when the user clicks "Run Setup". */
-  kickoffSetup?: () => Promise<void>;
+  kickoffSetup: () => Promise<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */
-  signInWithChatGpt?: () => Promise<void>;
+  signInWithChatGpt: () => Promise<void>;
   /**
    * Open the getting-started walkthrough from the State 0 welcome card. The
    * desktop shell can't host the VS Code walkthrough, so the host wires this to
    * the closest analog: opening the desktop getting-started docs externally.
    */
-  openGettingStarted?: () => Promise<void>;
+  openGettingStarted: () => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -58,7 +58,7 @@ export interface DesktopOnboardingIpc extends DesktopMessageHandler {
 
 export function createDesktopOnboardingIpc(
   renderer: DesktopRenderer,
-  options: DesktopOnboardingIpcOptions = {},
+  options: DesktopOnboardingIpcOptions,
 ): DesktopOnboardingIpc {
   const state = options.state ?? platform().globalState;
   let previousFunnelState: OnboardingFunnelState | undefined;
@@ -88,9 +88,9 @@ export function createDesktopOnboardingIpc(
     if (options.readyGate) {
       await options.readyGate.catch(() => undefined);
     }
-    const hasCredential = options.hasCredential
-      ? await Promise.resolve(options.hasCredential()).catch(() => false)
-      : false;
+    const hasCredential = await Promise.resolve(options.hasCredential()).catch(
+      () => false,
+    );
     const flags = readOnboardingFlags(state);
     const transition = planOnboardingFunnelTransition(previousFunnelState, {
       hasCredential,
@@ -107,7 +107,7 @@ export function createDesktopOnboardingIpc(
       await setOnboardingDeclined(state, false);
     }
     if (transition.selectSetupAgent) {
-      await options.selectSetupAgent?.();
+      await options.selectSetupAgent();
     }
     // Entering State 1 only selects the setup agent and paints the setup card;
     // it never auto-starts the setup conversation. The user launches setup
@@ -125,7 +125,7 @@ export function createDesktopOnboardingIpc(
     // completion, which must NOT block the serialized funnel-refresh chain —
     // otherwise a later "skip setup" / sign-out / credential-removal refresh
     // would queue behind the entire setup run, leaving the card stuck on 'setup'.
-    void Promise.resolve(options.kickoffSetup?.())
+    void Promise.resolve(options.kickoffSetup())
       .catch(() => {
         // Swallow — the kickoff handler already surfaced the error to the user.
       })
@@ -173,7 +173,7 @@ export function createDesktopOnboardingIpc(
   }
 
   async function runSetup(): Promise<void> {
-    await options.selectSetupAgent?.();
+    await options.selectSetupAgent();
     // Route through the shared guard so a double-click of "Run Setup" can't
     // launch a second concurrent run.
     startSetupKickoff();
@@ -181,12 +181,12 @@ export function createDesktopOnboardingIpc(
   }
 
   async function signInWithChatGpt(): Promise<void> {
-    await options.signInWithChatGpt?.();
+    await options.signInWithChatGpt();
     await refreshOnboardingFunnel();
   }
 
   async function openGettingStarted(): Promise<void> {
-    await options.openGettingStarted?.();
+    await options.openGettingStarted();
   }
 
   return {
