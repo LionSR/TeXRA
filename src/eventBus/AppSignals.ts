@@ -1,5 +1,12 @@
 import { EventEmitter } from 'node:events';
 
+/**
+ * Cross-cutting, process-scoped app-lifecycle signals (auth, subscriptions,
+ * tool availability, workspace-file writes). Not for run/session progress
+ * events — those extend `AgentEvent` (`agent/trace/`) or `SessionFact`
+ * (`SessionEventHub` in `agent/runtime/`), per the VS Code-free-zone rule in
+ * CLAUDE.md.
+ */
 export interface AppSignalPayloads {
   /** The VS Code extension is shutting down. */
   extensionDeactivating: undefined;

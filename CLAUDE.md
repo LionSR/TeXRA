@@ -118,7 +118,7 @@ Key directories in `src/`:
 - `housekeeping/` - Cleanup and packing operations
 - `hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers
 - `logger/` - Logging infrastructure
-- `eventBus/` - Progress event system
+- `eventBus/` - Cross-cutting app-lifecycle signals (`AppSignals`: auth, subscriptions, tool availability, workspace-file writes) — not run/session progress events; see `agent/trace` and `SessionEventHub` (`agent/runtime/`) for those
 - `replacement/` - Text cleanup rules
 - `skills/` - Skill schemas, loading, and runtime skill sources
 - `telemetry/` - Usage logging
@@ -409,7 +409,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - `src/controllers/` (host-neutral orchestration behind injected ports)
 - `src/shared/` (wire contracts, IPC schemas, message types; no new `@agent/*` imports)
 - `src/replacement/` (text cleanup rules)
-- `src/eventBus/` (progress event system)
+- `src/eventBus/` (cross-cutting app-lifecycle signals — `AppSignals`, not progress events; see the run/session-fact rule below)
 - `src/hosts/` (host capability ports)
 - Webview frontends (`packages/extension/src/webview/frontend/`, `packages/extension/src/progressView/frontend/`, `packages/extension/src/settingsView/frontend/`)
 
