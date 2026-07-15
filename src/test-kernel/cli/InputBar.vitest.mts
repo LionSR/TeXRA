@@ -4,6 +4,12 @@ import { createRequire } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
+import { BaseTextInput } from '@cli/chat/tui/input/BaseTextInput';
+import {
+  ActiveDraftScope,
+  createActiveDraftRegistry,
+} from '@cli/chat/tui/input/activeDraft';
+import { triggerAppCtrlC } from '@cli/chat/tui/appInteractionPolicy';
 import {
   InputBar,
   submitSlashCommandWhenReady,
@@ -159,6 +165,60 @@ describe('InputBar slash submit', () => {
 });
 
 describe('InputBar draft discard', () => {
+  it('clears a mounted foreground text input before exiting', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const registry = createActiveDraftRegistry();
+    const onExit = vi.fn();
+    let currentValue = 'dialog answer';
+
+    function Harness() {
+      const [value, setValue] = React.useState(currentValue);
+      ink.useInput((input: string, key: { readonly ctrl?: boolean }) => {
+        if (key.ctrl && input === 'c') {
+          triggerAppCtrlC({
+            discardDraft: registry.discard,
+            canStopActiveRun: () => false,
+            onInterruptActive: vi.fn(),
+            onExit,
+          });
+        }
+      });
+      return React.createElement(
+        ActiveDraftScope,
+        { active: true, registry },
+        React.createElement(BaseTextInput, {
+          value,
+          onChange: (next: string) => {
+            currentValue = next;
+            setValue(next);
+          },
+          onSubmit: () => undefined,
+        }),
+      );
+    }
+
+    const stdin = new FakeStdin();
+    const stdout = new FakeStdout();
+    const instance = ink.render(React.createElement(Harness), {
+      stdin,
+      stdout,
+      interactive: true,
+      exitOnCtrlC: false,
+      patchConsole: false,
+    });
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('\u0003');
+      await waitFor(() => currentValue === '');
+
+      expect(onExit).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('invalidates an image paste that resolves after the draft is cleared', async () => {
     const imagePasteQueue = new ImagePasteQueue();
     const attempt = imagePasteQueue.beginAttempt();

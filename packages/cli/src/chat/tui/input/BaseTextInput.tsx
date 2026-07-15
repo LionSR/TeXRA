@@ -31,6 +31,7 @@ import {
   withImagePasteTimeout,
   type ImagePasteAttempt,
 } from './imagePasteQueue';
+import { useActiveDraft } from './activeDraft';
 import { textDisplayWidth } from '../render/terminalText';
 
 const ESC_SLASH_PREFIX = '\u001B/';
@@ -442,6 +443,21 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     },
     [applyEdit],
   );
+
+  const discardDraft = useCallback((): boolean => {
+    const latest = syncLatestExternalValue();
+    if (
+      latest.value.length === 0 &&
+      !imagePasteQueue.hasPending &&
+      !imagePasteQueue.hasDeferredAction
+    ) {
+      return false;
+    }
+    imagePasteQueue.discardPending();
+    applyEdit({ value: '', cursor: 0 });
+    return true;
+  }, [applyEdit, imagePasteQueue, syncLatestExternalValue]);
+  useActiveDraft(discardDraft, focus);
 
   const submitAfterImagePastes = useCallback(
     (handler: (value: string) => void, submitted: string): void => {

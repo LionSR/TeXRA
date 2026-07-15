@@ -482,7 +482,8 @@ function FreeTextQuestion(props: FreeTextQuestionProps): React.JSX.Element {
     visibleItemCount: visibleOptions.length,
   });
   useInput((input, key) => {
-    // Esc cancels; Ctrl+C is owned by the App's unified handler (exits the app).
+    // Esc cancels; App clears a non-empty answer before applying its usual
+    // Ctrl+C stop or exit behavior.
     if (isEscapeInput(input, key)) {
       props.onCancel();
     }
