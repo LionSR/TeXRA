@@ -6,9 +6,14 @@
  * BOTH its input AND output prices are cheap, so a cheap-input / expensive-output
  * flagship (gemini-3.x-pro at $2/$12, gpt-5 at $1.25/$10) can no longer leak into
  * free on input price alone. See MAX_FREE_INPUT_PRICE / MAX_FREE_OUTPUT_PRICE.
- * - free: input <= $1.5/M AND output <= $9/M
- * - Max: every model (not bounded by the free-tier price ceiling)
+ * - free: input <= $1.5/M AND output <= $9/M, excluding ULTRA_ONLY_PROVIDERS
+ * - Max: every model except ULTRA_ONLY_PROVIDERS (not bounded by the
+ *   free-tier price ceiling)
  * - Ultra: every model
+ *
+ * openai/anthropic/google were made Ultra-only via relay on 2026-07-14 (relay
+ * still proxies them for Ultra; free/Max users can still reach them with
+ * their own API keys, just not through relay's server-side keys).
  */
 
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
@@ -63,7 +68,16 @@ interface RelayModel {
   shortName: string;
   apiPattern: string;
   minTier: MinTier;
+  provider: string;
 }
+
+/**
+ * Providers only reachable via relay on the Ultra tier. free/Max users can
+ * still use these providers with their own API keys; they're just not
+ * proxied through relay's server-side keys below Ultra.
+ */
+export const ULTRA_ONLY_PROVIDERS = ['openai', 'anthropic', 'google'] as const;
+const ULTRA_ONLY_PROVIDER_SET = new Set<string>(ULTRA_ONLY_PROVIDERS);
 
 // =============================================================================
 // Tier Assignment Logic
@@ -96,7 +110,7 @@ function getTierFromPrice(inputPrice: number, outputPrice: number): MinTier {
  * an upsell. Kept next to the price ceiling it must satisfy (input <= 1.5,
  * output <= 9).
  */
-export const FREE_TIER_SUGGESTED_MODEL = 'gemini35f';
+export const FREE_TIER_SUGGESTED_MODEL = 'deepseek';
 
 /** Convert llm-zoo model to relay model */
 function toRelayModel(config: ModelConfig): RelayModel {
@@ -104,6 +118,7 @@ function toRelayModel(config: ModelConfig): RelayModel {
     shortName: config.name,
     apiPattern: config.fullName.toLowerCase(),
     minTier: getTierFromPrice(config.inputPrice, config.outputPrice),
+    provider: config.provider,
   };
 }
 
@@ -148,7 +163,11 @@ const RETIRED_MODEL_PATTERNS = Object.values(MODEL_CONFIGS)
 // =============================================================================
 
 const FREE_TIER_SHORT_NAMES = RELAY_MODELS.filter(
-  (m) => m.minTier === FREE_TIER,
+  (m) => m.minTier === FREE_TIER && !ULTRA_ONLY_PROVIDER_SET.has(m.provider),
+).map((m) => m.shortName);
+
+const MAX_TIER_SHORT_NAMES = RELAY_MODELS.filter(
+  (m) => !ULTRA_ONLY_PROVIDER_SET.has(m.provider),
 ).map((m) => m.shortName);
 
 // =============================================================================
@@ -159,7 +178,7 @@ export const TIER_CONFIG: TierModelConfig = {
   providers: [...ALL_PROVIDERS],
   tiers: {
     free: { models: FREE_TIER_SHORT_NAMES },
-    Max: { models: '*' },
+    Max: { models: MAX_TIER_SHORT_NAMES },
     Ultra: { models: '*' },
   },
 };
