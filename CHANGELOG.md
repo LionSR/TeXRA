@@ -49,9 +49,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Ctrl+C clears unfinished chat input before stopping or exiting** — pressing
-  Ctrl+C with a non-empty draft now clears the draft; pressing it again keeps
-  the existing response-stop or exit behavior.
+- **Ctrl+C clears unfinished input before stopping or exiting** — pressing
+  Ctrl+C with text in the chat input or a dialog now clears that text; pressing
+  it again keeps the existing response-stop or exit behavior.
 - **Session navigation uses one persistent list** — `Tab` opens the vertical
   list for the main and delegated sessions; arrow keys select a session,
   `Enter` focuses it, and reopening the list restores the previous selection.

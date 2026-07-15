@@ -44,6 +44,10 @@ import {
   rewriteKittyEnterInput,
 } from './input/inputKeys';
 import {
+  ActiveDraftScope,
+  createActiveDraftRegistry,
+} from './input/activeDraft';
+import {
   numericFocusTargetForActiveStream,
   resolveChildControlDisplayTargets,
 } from './state/childControls';
@@ -124,6 +128,7 @@ export function App(props: AppProps): React.JSX.Element {
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
+  const activeDraftRegistry = useMemo(createActiveDraftRegistry, []);
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
   const agentSelectionAvailable = rootRunStartAvailable;
@@ -403,12 +408,13 @@ export function App(props: AppProps): React.JSX.Element {
     if (key.ctrl && input === 'c') {
       triggerAppCtrlC({
         discardDraft: () =>
-          appDraftDiscardActive({
+          activeDraftRegistry.discard() ||
+          (appDraftDiscardActive({
             inputDisabled,
             reverseSearchOpen,
             sessionListFocused,
           }) &&
-          (inputBarRef.current?.discardDraft() ?? false),
+            (inputBarRef.current?.discardDraft() ?? false)),
         canStopActiveRun,
         onInterruptActive: props.onInterruptActive,
         onExit: exit,
@@ -479,63 +485,68 @@ export function App(props: AppProps): React.JSX.Element {
   });
 
   return (
-    <ConversationRegion
-      agentSelectionAvailable={agentSelectionAvailable}
-      colorEnabled={props.colorEnabled}
-      columns={columns}
-      onTranscriptViewportChange={props.onTranscriptViewportChange}
-      renderFooterChrome={(queuedFollowUpPanelVisible) => (
-        <>
-          <InputBar
-            controlRef={inputBarRef}
-            onSubmit={props.onSubmit}
-            collapseWhenDisabled={!inputBarVisible}
-            disabledMessage={childInputDisabledMessage}
-            disabled={inputDisabled}
-            history={props.history}
-            keyboardActive={!sessionListFocused}
-          />
-          <StatusBar
-            agentSelectionAvailable={agentSelectionAvailable}
-            commandName={props.commandName}
-            foregroundEscapeAction={foregroundEscapeAction({
-              activeFormEscapeAction: activeForm?.escapeAction,
-              approvalKind,
-              childControlEscapeAction,
-              foregroundKind,
-            })}
-            queuedFollowUpPreview={!queuedFollowUpPanelVisible}
-            sessionNavigationAvailable={sessionViews.length > 0}
-            shortcutsActive={focusShortcutsActive}
-            sessionListFocused={sessionListFocused}
-            subagentControlsAvailable={subagentControlsAvailable}
-            taskControlsAvailable={taskControlsAvailable}
-            transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
-          />
-        </>
-      )}
-      renderForegroundSurface={renderForegroundSurface}
-      rows={rows}
-      snapshot={{
-        activeStreamId,
-        foregroundMaxRows,
-        foregroundKind,
-        parentStream,
-        reverseSearchOpen,
-        rootStreamId,
-        slashPaletteOpen,
-        sessionListFocused,
-        sessionViews,
-        selectedSessionId,
-        streams,
-        childExecutionPanelTarget: childControlTargets.tasks,
-        transcriptViewerStreamId,
-      }}
-      onCancelSessionList={cancelSessionList}
-      onFocusSession={focusSession}
-      onSessionSelectionChange={(streamId) =>
-        dispatchSessionListSelection({ kind: 'highlight', streamId })
-      }
-    />
+    <ActiveDraftScope
+      active={foregroundOpen || reverseSearchOpen}
+      registry={activeDraftRegistry}
+    >
+      <ConversationRegion
+        agentSelectionAvailable={agentSelectionAvailable}
+        colorEnabled={props.colorEnabled}
+        columns={columns}
+        onTranscriptViewportChange={props.onTranscriptViewportChange}
+        renderFooterChrome={(queuedFollowUpPanelVisible) => (
+          <>
+            <InputBar
+              controlRef={inputBarRef}
+              onSubmit={props.onSubmit}
+              collapseWhenDisabled={!inputBarVisible}
+              disabledMessage={childInputDisabledMessage}
+              disabled={inputDisabled}
+              history={props.history}
+              keyboardActive={!sessionListFocused}
+            />
+            <StatusBar
+              agentSelectionAvailable={agentSelectionAvailable}
+              commandName={props.commandName}
+              foregroundEscapeAction={foregroundEscapeAction({
+                activeFormEscapeAction: activeForm?.escapeAction,
+                approvalKind,
+                childControlEscapeAction,
+                foregroundKind,
+              })}
+              queuedFollowUpPreview={!queuedFollowUpPanelVisible}
+              sessionNavigationAvailable={sessionViews.length > 0}
+              shortcutsActive={focusShortcutsActive}
+              sessionListFocused={sessionListFocused}
+              subagentControlsAvailable={subagentControlsAvailable}
+              taskControlsAvailable={taskControlsAvailable}
+              transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
+            />
+          </>
+        )}
+        renderForegroundSurface={renderForegroundSurface}
+        rows={rows}
+        snapshot={{
+          activeStreamId,
+          foregroundMaxRows,
+          foregroundKind,
+          parentStream,
+          reverseSearchOpen,
+          rootStreamId,
+          slashPaletteOpen,
+          sessionListFocused,
+          sessionViews,
+          selectedSessionId,
+          streams,
+          childExecutionPanelTarget: childControlTargets.tasks,
+          transcriptViewerStreamId,
+        }}
+        onCancelSessionList={cancelSessionList}
+        onFocusSession={focusSession}
+        onSessionSelectionChange={(streamId) =>
+          dispatchSessionListSelection({ kind: 'highlight', streamId })
+        }
+      />
+    </ActiveDraftScope>
   );
 }
