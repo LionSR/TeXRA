@@ -36,6 +36,7 @@ try {
     // those file-relative lookups against the real `node_modules/clipboardy`
     // install that ships alongside `dist` as a declared dependency.
     external: ['fsevents', 'clipboardy'],
+    loader: { '.wasm': 'binary' },
     define: {
       'process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL': JSON.stringify(
         includeInternalValidationModel ? '1' : '',

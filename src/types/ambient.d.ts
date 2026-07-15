@@ -55,6 +55,12 @@ declare module '*.woff2' {
   export default url;
 }
 
+/** Embedded by every Node host through esbuild's binary loader. */
+declare module '@jitl/quickjs-wasmfile-release-sync/wasm' {
+  const bytes: Uint8Array;
+  export default bytes;
+}
+
 declare module 'highlightjs-lean' {
   import { LanguageFn } from 'highlight.js';
   const lean: LanguageFn;
