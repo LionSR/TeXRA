@@ -37,9 +37,9 @@
  * ============================================================================
  *
  * TIER HIERARCHY (model access):
- * - free: input <= $1.5/M AND output <= $9/M
- * - Max: every model
- * - Ultra: every model
+ * - free: input <= $1.5/M AND output <= $9/M, excluding openai/anthropic/google
+ * - Max: every model except openai/anthropic/google
+ * - Ultra: every model, including openai/anthropic/google (Ultra-only via relay)
  *
  * Authentication: JWT tokens are extracted from SDK auth headers:
  * - OpenAI: Authorization: Bearer {jwt}
@@ -79,6 +79,7 @@ import {
   isRetiredModelRequest,
   isModelAllowedForTier,
   FREE_TIER_SUGGESTED_MODEL,
+  ULTRA_ONLY_PROVIDER_SET,
   ULTRA_TIER,
   FREE_TIER,
   MAX_TIER,
@@ -595,6 +596,19 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   }
 
   const userTier = profile.tier || FREE_TIER;
+
+  // 6.1. openai/anthropic/google are Ultra-only via relay: free/Max users can
+  // still reach them with their own API keys, just not through relay's
+  // server-side keys. Gated on the URL provider segment, not model name, so
+  // it can't be bypassed by an unrecognized/future model string.
+  if (userTier !== ULTRA_TIER && ULTRA_ONLY_PROVIDER_SET.has(provider)) {
+    return jsonError(
+      `Provider '${provider}' is only available on relay for the Ultra tier. ` +
+        `Switch to your own API key for '${provider}', or upgrade to Ultra.`,
+      403,
+      { providerRestricted: true, provider, requiredTier: ULTRA_TIER },
+    );
+  }
 
   // 6.5. Check monthly spending limit
   const spending = await checkSpendingLimit(relayAdminClient, userId, userTier);
