@@ -1,5 +1,4 @@
 import type { MainViewExecuteMessage } from '@shared/mainView';
-import { filterNotNullish } from '@utils/core';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
 import {
@@ -29,10 +28,10 @@ import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStart
 export interface DesktopMainViewIpcOptions {
   debugMode?: boolean;
   getTheme?: () => DesktopTheme;
-  fileSelection?: DesktopFileSelection;
-  settings?: DesktopSettingsIpc;
-  progress?: DesktopProgressIpc;
-  onboarding?: DesktopMessageHandler;
+  fileSelection: DesktopFileSelection;
+  settings: DesktopSettingsIpc;
+  progress: DesktopProgressIpc;
+  onboarding: DesktopMessageHandler;
   logs: DesktopLogIpcOptions;
   shellActions: DesktopShellActions;
   modelListRefresh?: PromiseLike<void>;
@@ -94,7 +93,7 @@ export function installDesktopMainViewIpc(
     logs,
     shell,
     execution,
-  ].filter(filterNotNullish);
+  ];
 
   function dispose(): void {
     if (disposed) return;
