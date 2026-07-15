@@ -77,7 +77,7 @@ export function createDesktopSettingsIpc(
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
   const onError = createDesktopErrorReporter(options.ui.onError, (error) => {
-    void options.ui.showInfoMessage(error.reason);
+    void options.ui.showInfoMessage(error.reason).catch(options.ui.onError);
   });
   const goalController = new SettingsGoalController({
     listGoals: () => GoalStore.list(),
