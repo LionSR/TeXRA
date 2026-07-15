@@ -34,7 +34,10 @@ export function sanitizePathSegment(
   if (options.replacement) {
     const escaped = escapeRegExp(options.replacement);
     if (options.collapseRepeats) {
-      result = result.replaceAll(new RegExp(`${escaped}+`, 'g'), options.replacement);
+      result = result.replaceAll(
+        new RegExp(`${escaped}+`, 'g'),
+        options.replacement,
+      );
     }
     if (options.trimReplacement) {
       result = result.replaceAll(
