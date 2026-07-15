@@ -70,6 +70,7 @@ import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import { DefaultDesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
 import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
+import { DesktopHistoryHandlers } from './desktopHistoryHandlers.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import {
   buildDefaultToolDashboardItems,
@@ -844,11 +845,25 @@ function createWindow(options: {
       },
       initialization: { initialize: options.initializeCrashReporting },
     });
+  const historySettingsController = new DesktopHistoryHandlers({
+    resourcesPath: options.resourcesPath,
+    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    runExecution: async (request) => {
+      await (await getAgentExecution()).progress.runExecution(request);
+    },
+    restoreTaskState: async (taskState) =>
+      (await getAgentExecution()).progress.restoreTaskState(taskState),
+    openPath: previewHost.openPath,
+    showInfoMessage,
+    showErrorMessage,
+    onError: reportAsyncError,
+  });
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     agentSettingsController,
     crashReportingSettingsController,
     credentialSettingsController,
+    historySettingsController,
     toolingSettingsController,
     state: {
       globalState: platform().globalState,
@@ -856,17 +871,7 @@ function createWindow(options: {
     },
     config: platform().config,
     sendStartupCatalogData: true,
-    resourcesPath: options.resourcesPath,
-    // Rerun/Restore from history: same host-neutral owners the extension's
-    // history handlers call (runAgent / buildMainViewState), reached through
-    // the desktop agent-execution bridge instead of a vscode command.
-    runExecution: async (request) => {
-      await (await getAgentExecution()).progress.runExecution(request);
-    },
-    restoreTaskState: async (taskState) =>
-      (await getAgentExecution()).progress.restoreTaskState(taskState),
     showInfoMessage,
-    showErrorMessage,
     confirmAction: async (message, confirmLabel = 'OK') => {
       const result = await dialog.showMessageBox(window, {
         type: 'warning',

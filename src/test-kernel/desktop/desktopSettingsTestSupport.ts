@@ -3,7 +3,10 @@ import { createModelSelectionController } from '@controllers/settingsView/Settin
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import type { DesktopCrashReportingSettingsController } from '@desktop/main/desktopCrashReportingSettingsController';
 import type { DesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
-import type { DesktopHistoryOptions } from '@desktop/main/desktopHistoryHandlers';
+import type {
+  DesktopHistoryOptions,
+  DesktopHistorySettingsController,
+} from '@desktop/main/desktopHistoryHandlers';
 import type { DesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 
 // Shared imports - settings controllers
@@ -24,6 +27,29 @@ export function createStubDesktopHistoryOptions(
     resourcesPath: repoPath('packages', 'extension', 'resources'),
     runExecution: noOp,
     restoreTaskState: async () => true,
+    postToRenderer: () => undefined,
+    openPath: noOp,
+    showInfoMessage: noOp,
+    showErrorMessage: noOp,
+    onError: () => undefined,
+    ...overrides,
+  };
+}
+
+export function createStubDesktopHistorySettingsController(
+  overrides: Partial<DesktopHistorySettingsController> = {},
+): DesktopHistorySettingsController {
+  return {
+    actions: {
+      deleteAgent: noOp,
+      clear: noOp,
+      rerunAgent: noOp,
+      restoreAgent: noOp,
+      exportChatMd: noOp,
+      exportChatTex: noOp,
+      exportChatHtml: noOp,
+    },
+    postHistoryData: noOp,
     ...overrides,
   };
 }

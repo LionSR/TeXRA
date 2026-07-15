@@ -29,6 +29,10 @@ const chatExportMocks = vi.hoisted(() => ({
   constructorDeps: [] as unknown[],
   constructorError: undefined as Error | undefined,
 }));
+const historyMocks = vi.hoisted(() => ({
+  activeExecutionIds: [] as string[],
+  buildHistoryMessage: vi.fn(),
+}));
 
 vi.mock('@controllers/settingsView/ChatExportController', () => ({
   ChatExportController: class {
@@ -46,15 +50,28 @@ vi.mock('@controllers/settingsView/ChatExportController', () => ({
   },
 }));
 
+vi.mock('@controllers/settingsView/HistoryMessageBuilder', () => ({
+  buildHistoryMessage: historyMocks.buildHistoryMessage,
+}));
+
+vi.mock('@agent/runtime/SessionHandle', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/runtime/SessionHandle')>()),
+  getAllActiveExecutionIds: () => historyMocks.activeExecutionIds,
+}));
+
 type DesktopHistoryHandlersModule =
   typeof import('@desktop/main/desktopHistoryHandlers');
 type DesktopHistoryDependencies = ConstructorParameters<
   DesktopHistoryHandlersModule['DesktopHistoryHandlers']
 >[0];
+type DesktopHistoryCapabilities = Pick<
+  DesktopHistoryOptions,
+  'resourcesPath' | 'runExecution' | 'restoreTaskState'
+>;
 type DesktopHistoryActionOverrides = Partial<
-  Omit<DesktopHistoryDependencies, keyof DesktopHistoryOptions>
+  Omit<DesktopHistoryDependencies, keyof DesktopHistoryCapabilities>
 > & {
-  history?: Partial<DesktopHistoryOptions>;
+  history?: Partial<DesktopHistoryCapabilities>;
 };
 
 const RESOURCES_PATH = repoPath('packages', 'extension', 'resources');
@@ -75,7 +92,9 @@ let DesktopHistoryHandlers!: DesktopHistoryHandlersModule['DesktopHistoryHandler
 
 setupPlatform();
 
-function createHistoryActions(overrides: DesktopHistoryActionOverrides = {}) {
+function createHistoryController(
+  overrides: DesktopHistoryActionOverrides = {},
+) {
   const {
     history,
     postToRenderer = vi.fn(),
@@ -90,7 +109,11 @@ function createHistoryActions(overrides: DesktopHistoryActionOverrides = {}) {
     postToRenderer,
     onError,
     ...optionalDependencies,
-  }).actions;
+  });
+}
+
+function createHistoryActions(overrides: DesktopHistoryActionOverrides = {}) {
+  return createHistoryController(overrides).actions;
 }
 
 async function writeHistoryConfig(): Promise<void> {
@@ -109,6 +132,104 @@ describe('DesktopHistoryHandlers', () => {
     chatExportMocks.constructorDeps.length = 0;
     chatExportMocks.constructorError = undefined;
     vi.resetAllMocks();
+    historyMocks.activeExecutionIds = [];
+    historyMocks.buildHistoryMessage.mockResolvedValue({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
+      historyItems: [],
+    });
+  });
+
+  it('posts the current history message to the renderer', async () => {
+    const postToRenderer = vi.fn();
+    const controller = createHistoryController({ postToRenderer });
+
+    await controller.postHistoryData();
+
+    expect(historyMocks.buildHistoryMessage).toHaveBeenCalledOnce();
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
+      historyItems: [],
+    });
+  });
+
+  it('reruns a persisted history configuration through the execution port', async () => {
+    await writeHistoryConfig();
+    const runExecution = vi.fn(async () => undefined);
+    const showInfoMessage = vi.fn(async () => undefined);
+    const actions = createHistoryActions({
+      history: { runExecution },
+      showInfoMessage,
+    });
+
+    await assertSupported(actions.rerunAgent)({
+      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+      historyId: HISTORY_ID,
+    });
+
+    expect(showInfoMessage).toHaveBeenCalledWith(
+      'Rerunning agent from history',
+    );
+    expect(runExecution).toHaveBeenCalledWith({
+      config: HISTORY_CONFIG,
+      executionId: undefined,
+    });
+  });
+
+  it('protects an active execution from deletion', async () => {
+    await writeHistoryConfig();
+    historyMocks.activeExecutionIds = [HISTORY_ID];
+    const postToRenderer = vi.fn();
+    const showInfoMessage = vi.fn(async () => undefined);
+    const actions = createHistoryActions({
+      postToRenderer,
+      showInfoMessage,
+    });
+
+    await assertSupported(actions.deleteAgent)(HISTORY_ID);
+
+    expect(await getExecutionStore(HISTORY_ID).readConfig()).toEqual(
+      HISTORY_CONFIG,
+    );
+    expect(showInfoMessage).toHaveBeenCalledWith(
+      'Cannot delete a running execution',
+    );
+    expect(postToRenderer).not.toHaveBeenCalled();
+  });
+
+  it('deletes an inactive execution and refreshes history', async () => {
+    await writeHistoryConfig();
+    const postToRenderer = vi.fn();
+    const actions = createHistoryActions({ postToRenderer });
+
+    await assertSupported(actions.deleteAgent)(HISTORY_ID);
+
+    expect(await getExecutionStore(HISTORY_ID).readConfig()).toBeNull();
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
+      historyItems: [],
+    });
+  });
+
+  it('clears inactive history while preserving active executions', async () => {
+    const activeHistoryId = 'cccc3333';
+    const inactiveHistoryId = 'dddd4444';
+    await Promise.all([
+      getExecutionStore(activeHistoryId).writeConfig(HISTORY_CONFIG),
+      getExecutionStore(inactiveHistoryId).writeConfig(HISTORY_CONFIG),
+    ]);
+    historyMocks.activeExecutionIds = [activeHistoryId];
+    const postToRenderer = vi.fn();
+    const actions = createHistoryActions({ postToRenderer });
+
+    await assertSupported(actions.clear)();
+
+    expect(await getExecutionStore(activeHistoryId).readConfig()).toEqual(
+      HISTORY_CONFIG,
+    );
+    expect(await getExecutionStore(inactiveHistoryId).readConfig()).toBeNull();
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
+    });
   });
 
   it("restores a history item's setup into the main view", async () => {
