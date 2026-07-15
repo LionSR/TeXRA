@@ -110,7 +110,7 @@ import {
 } from './diagnostics.ts';
 import {
   acquireRelayRequestSlot,
-  releaseAfterUpstreamFailure,
+  releaseRelaySlotSafely,
   releaseWhenStreamCloses,
 } from './requestGate.ts';
 
@@ -877,7 +877,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
       failurePhase,
       upstreamRequestId: null,
     });
-    await releaseAfterUpstreamFailure(releaseRelaySlot);
+    await releaseRelaySlotSafely(releaseRelaySlot);
     if (failurePhase === 'pre_headers_timeout') {
       return withRelayErrorRequestId(
         jsonError('Upstream request timed out', 504),

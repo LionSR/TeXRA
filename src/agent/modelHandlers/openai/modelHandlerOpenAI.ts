@@ -4,6 +4,10 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports - core utilities
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
+import {
+  ChatCompletionStream,
+  type ContentDeltaEvent,
+} from 'openai/lib/ChatCompletionStream';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 
 // Local imports - agent components
@@ -23,6 +27,7 @@ import type {
 } from '@agent/types/IModelHandler';
 import {
   buildErrorLogData,
+  detectRequestId,
   isMissingFinishReasonError,
   handleStreamingFailure,
   trackStreamConnect,
@@ -90,10 +95,7 @@ import type {
   ChatCompletionMessageParam,
   ChatCompletionMessageToolCall,
   ChatCompletionToolMessageParam,
-  ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
-import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
-
 type ChatCompletionRequestBase = Omit<
   ChatCompletionCreateParamsStreaming,
   'stream' | 'stream_options'
@@ -104,6 +106,7 @@ type ChatCompletionRequestWithThinking = ChatCompletionRequestBase & {
 type ChatCompletionSummaryParams = ChatCompletionCreateParamsNonStreaming & {
   thinking?: { type: 'enabled' | 'disabled' };
 };
+type ErrorWithRequestId = Error & { request_id?: string };
 
 /**
  * DeepSeek's official (non-OpenRouter) chat API caps `max_tokens` well below
@@ -388,17 +391,16 @@ export class ModelHandlerOpenAI<
     const thinking = this.createThinkingStream();
     const output = this.createOutputStream();
 
-    const streamParams: ChatCompletionStreamParams = {
+    const streamParams: ChatCompletionCreateParamsStreaming = {
       ...baseParams,
       stream: true,
       stream_options: { include_usage: true },
     };
 
-    const stream = await client.chat.completions.stream(streamParams, {
-      signal,
-    });
-    const connect = trackStreamConnect(stream);
     const streamingAggregator = this.createStreamingAggregator();
+    let requestId: string | undefined;
+    let stream: ChatCompletionStream | undefined;
+    let connect: ReturnType<typeof trackStreamConnect> | undefined;
 
     const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
       if (delta) {
@@ -416,16 +418,15 @@ export class ModelHandlerOpenAI<
       }
     };
 
-    stream.on('content.delta', onContentDelta);
-    stream.on('chunk', onChunk);
-
-    const cleanup = (): void => {
-      connect.cleanup();
-      stream.off('content.delta', onContentDelta);
-      stream.off('chunk', onChunk);
-    };
-
     try {
+      const request = client.chat.completions.create(streamParams, { signal });
+      const { data, response } = await request.withResponse();
+      requestId = detectRequestId({ headers: response.headers });
+      stream = ChatCompletionStream.fromReadableStream(data.toReadableStream());
+      connect = trackStreamConnect(stream);
+      stream.on('content.delta', onContentDelta);
+      stream.on('chunk', onChunk);
+
       let finalResponse = await this.awaitFinalResponse(
         stream,
         streamingAggregator,
@@ -465,14 +466,18 @@ export class ModelHandlerOpenAI<
         // the tail.
         partialTail: () =>
           extractOpenAIPartialTail(
-            stream.currentChatCompletionSnapshot,
+            stream?.currentChatCompletionSnapshot,
             PARTIAL_TEXT_TAIL_MAX,
           ),
-        retryEligible: (tail) => connect.isConnected() || tail.length > 0,
+        retryEligible: (tail) =>
+          (connect?.isConnected() ?? false) || tail.length > 0,
         decorateError: (err, tail) => {
           // Tag at the boundary so abort identity survives wrapping and
           // minification (mirrors the Anthropic stream catch).
           tagOpenAISdkError(err, this.config.provider);
+          if (requestId && err instanceof Error) {
+            (err as ErrorWithRequestId).request_id = requestId;
+          }
           // Aborts are control flow; log at debug, skip warn.
           if (!isUserAbort(err)) {
             this.logger.warn('Stream failed', {
@@ -486,7 +491,9 @@ export class ModelHandlerOpenAI<
         },
       });
     } finally {
-      cleanup();
+      connect?.cleanup();
+      stream?.off('content.delta', onContentDelta);
+      stream?.off('chunk', onChunk);
     }
   }
 

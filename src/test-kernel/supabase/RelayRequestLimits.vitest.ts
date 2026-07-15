@@ -23,7 +23,7 @@ import {
 } from '../../../supabase/functions/relay/diagnostics';
 import {
   acquireRelayRequestSlot,
-  releaseAfterUpstreamFailure,
+  releaseRelaySlotSafely,
   releaseWhenStreamCloses,
 } from '../../../supabase/functions/relay/requestGate';
 import {
@@ -434,7 +434,8 @@ describe('relay free-tier request limits', () => {
   });
 
   it('measures buffered relay request bytes without reading content', () => {
-    assert.equal(getRelayRequestBytes('a€', null), 4);
+    assert.equal(getRelayRequestBytes('a€😀', null), 8);
+    assert.equal(getRelayRequestBytes('\ud800', null), 3);
     assert.equal(getRelayRequestBytes(new Uint8Array([0, 1, 2]), '999'), 3);
     assert.equal(getRelayRequestBytes(byteStream([]), '60000'), 60_000);
     assert.equal(getRelayRequestBytes(byteStream([]), null), null);
@@ -468,11 +469,11 @@ describe('relay free-tier request limits', () => {
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     try {
-      await releaseAfterUpstreamFailure(async () => {
+      await releaseRelaySlotSafely(async () => {
         throw new Error('release failed with sensitive details');
       });
       assert.deepEqual(errorLog.mock.calls, [
-        ['[RELAY] Failed to release request slot after upstream failure'],
+        ['[RELAY] Failed to release request slot'],
       ]);
     } finally {
       errorLog.mockRestore();
@@ -500,6 +501,23 @@ describe('relay free-tier request limits', () => {
 
     await assert.rejects(wrapped.getReader().read(), upstreamError);
     assert.equal(releases, 1);
+  });
+
+  it('preserves bodyless upstream responses when slot release fails', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const wrapped = await releaseWhenStreamCloses(null, async () => {
+        throw new Error('release failed');
+      });
+
+      assert.equal(wrapped, null);
+      assert.deepEqual(errorLog.mock.calls, [
+        ['[RELAY] Failed to release request slot'],
+      ]);
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 
   it('preserves upstream errors and slot release when the observer throws', async () => {
@@ -554,7 +572,7 @@ describe('relay free-tier request limits', () => {
 
       await assert.rejects(wrapped.getReader().read(), upstreamError);
       assert.deepEqual(errorLog.mock.calls, [
-        ['[RELAY] Failed to release request slot after upstream failure'],
+        ['[RELAY] Failed to release request slot'],
       ]);
     } finally {
       errorLog.mockRestore();
