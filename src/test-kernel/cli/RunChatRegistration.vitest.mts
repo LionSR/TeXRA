@@ -65,7 +65,7 @@ describe('CLI chat execution registration', () => {
 
     await markRegisteredChatExecutionError(executionId, {
       executionRegistered: true,
-      agentSettled: false,
+      lifecycleStarted: false,
       reportFinalizationFailure: mocks.reportFinalizationFailure,
     });
 
@@ -81,19 +81,19 @@ describe('CLI chat execution registration', () => {
 
     await markRegisteredChatExecutionError(executionId, {
       executionRegistered: false,
-      agentSettled: false,
+      lifecycleStarted: false,
       reportFinalizationFailure: mocks.reportFinalizationFailure,
     });
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 
-  it('does not overwrite terminal status after the agent has settled', async () => {
+  it('does not overwrite terminal status after the lifecycle starts', async () => {
     const executionId = 'completed' as ExecutionId;
 
     await markRegisteredChatExecutionError(executionId, {
       executionRegistered: true,
-      agentSettled: true,
+      lifecycleStarted: true,
       reportFinalizationFailure: mocks.reportFinalizationFailure,
     });
 
@@ -113,7 +113,7 @@ describe('CLI chat execution registration', () => {
     await expect(
       markRegisteredChatExecutionError(executionId, {
         executionRegistered: true,
-        agentSettled: false,
+        lifecycleStarted: false,
         reportFinalizationFailure: mocks.reportFinalizationFailure,
       }),
     ).resolves.toBeUndefined();
@@ -134,7 +134,7 @@ describe('CLI chat execution registration', () => {
     await expect(
       markRegisteredChatExecutionError('registered' as ExecutionId, {
         executionRegistered: true,
-        agentSettled: false,
+        lifecycleStarted: false,
         reportFinalizationFailure: mocks.reportFinalizationFailure,
       }),
     ).resolves.toBeUndefined();
@@ -159,7 +159,7 @@ describe('CLI chat execution registration', () => {
 
     await markRegisteredChatExecutionError('registered' as ExecutionId, {
       executionRegistered: true,
-      agentSettled: false,
+      lifecycleStarted: false,
       reportFinalizationFailure: mocks.reportFinalizationFailure,
     });
 

@@ -165,11 +165,11 @@ export async function markRegisteredChatExecutionError(
   executionId: ExecutionId,
   options: {
     readonly executionRegistered: boolean;
-    readonly agentSettled: boolean;
+    readonly lifecycleStarted: boolean;
     readonly reportFinalizationFailure: CliFinalizationFailureReporter;
   },
 ): Promise<void> {
-  if (!options.executionRegistered || options.agentSettled) return;
+  if (!options.executionRegistered || options.lifecycleStarted) return;
   await finalizeCliExecution(
     executionId,
     EXECUTION_STATUS.ERROR,
@@ -411,7 +411,7 @@ export function createChatSessionController(
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
     let executionRegistered = false;
-    let agentSettled = false;
+    let lifecycleStarted = false;
     session.executionId = executionId;
 
     const runPromise = registerFreshChatExecution(executionId, config)
@@ -422,6 +422,9 @@ export function createChatSessionController(
           enforceCategory: true,
           approvalPromptsUnavailable: approvalsUnavailable,
           runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+          onRun: () => {
+            lifecycleStarted = true;
+          },
           onStreamResolved: (resolvedStreamId) => {
             session.streamId = resolvedStreamId;
             publishChatTuiRunState(session);
@@ -437,7 +440,6 @@ export function createChatSessionController(
         });
       })
       .then((result) => {
-        agentSettled = true;
         session.runExitCode = runOutcomeExitCode(
           result.outcome,
           sessionContext,
@@ -450,7 +452,7 @@ export function createChatSessionController(
       .catch(async (error: unknown) => {
         await markRegisteredChatExecutionError(executionId, {
           executionRegistered,
-          agentSettled,
+          lifecycleStarted,
           reportFinalizationFailure,
         });
         reportRunFailure(error);

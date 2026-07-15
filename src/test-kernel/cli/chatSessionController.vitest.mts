@@ -501,6 +501,35 @@ describe('createChatSessionController', () => {
     expect(session.runExitCode).toBe(CliExitCode.Success);
   });
 
+  it('does not delete a flow after the run lifecycle has taken ownership', async () => {
+    const session = makeSession();
+    mocks.executeAgent.mockImplementationOnce(
+      async (
+        _config: unknown,
+        _executionId: unknown,
+        options: { readonly onRun?: () => void },
+      ) => {
+        options.onRun?.();
+        throw new Error('recovery remains resumable');
+      },
+    );
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    ctrl.startRootRun({
+      agent: 'chat',
+      model: 'gpt54',
+      instruction: 'Continue the recoverable proof.',
+      workingDirectory: '/tmp/test',
+      agentCategory: 'toolUse',
+    });
+    await session.runPromise;
+
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
+      'recovery remains resumable',
+    );
+  });
+
   it('canStartRootRun() delegates to chatTuiCanStartRootRun(session)', () => {
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
