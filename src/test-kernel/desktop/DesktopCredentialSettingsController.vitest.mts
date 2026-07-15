@@ -365,6 +365,51 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    {
+      name: 'provider streaming',
+      run: (fixture: Awaited<ReturnType<typeof createFixture>>) =>
+        requireAction(fixture.controller.profileActions.setProviderStreaming)(
+          'openai',
+          false,
+        ),
+    },
+    {
+      name: 'provider endpoint',
+      run: (fixture: Awaited<ReturnType<typeof createFixture>>) =>
+        requireAction(fixture.controller.profileActions.setProviderEndpoint)(
+          'openai',
+          'https://example.com/v1',
+        ),
+    },
+    {
+      name: 'global streaming',
+      run: (fixture: Awaited<ReturnType<typeof createFixture>>) =>
+        requireAction(fixture.controller.profileActions.setGlobalStreaming)(
+          false,
+        ),
+    },
+  ])('persists $name before refreshing profile data', async ({ run }) => {
+    const fixture = await createFixture();
+    let finishUpdate: (() => void) | undefined;
+    vi.spyOn(fixture.globalState, 'update').mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishUpdate = resolve;
+        }),
+    );
+
+    const action = run(fixture);
+    await vi.waitFor(() => expect(finishUpdate).toBeTypeOf('function'));
+    expect(fixture.posted).toEqual([]);
+
+    finishUpdate?.();
+    await action;
+    expect(fixture.posted.map(commandOf)).toEqual([
+      SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+    ]);
+  });
+
   it('delegates Researcher Access sign-in and sign-out without stale posts', async () => {
     const fixture = await createFixture();
 

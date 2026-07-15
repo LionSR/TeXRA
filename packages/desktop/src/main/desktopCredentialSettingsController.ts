@@ -289,7 +289,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     enabled: boolean,
   ): Promise<void> {
     if (!(await this.acceptKnownProvider(provider))) return;
-    setProviderStreaming(provider, enabled);
+    await setProviderStreaming(provider, enabled);
     await this.postProfileData();
   }
 
@@ -298,12 +298,12 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     endpoint: string,
   ): Promise<void> {
     if (!(await this.acceptKnownProvider(provider))) return;
-    setProviderEndpoint(provider, endpoint);
+    await setProviderEndpoint(provider, endpoint);
     await this.postProfileData();
   }
 
   private async setGlobalStreaming(enabled: boolean): Promise<void> {
-    setGlobalStreaming(enabled);
+    await setGlobalStreaming(enabled);
     await this.postProfileData();
   }
 
