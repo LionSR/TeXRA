@@ -28,61 +28,44 @@ import {
   type DesktopCommandActions,
 } from '../desktopCommandSurface.js';
 
-export type DesktopShellIpcOptions =
-  DesktopShellActionFactoryOptions | DesktopShellActionInstanceOptions;
-
 export interface DesktopShellActionFactoryOptions {
-  actions?: never;
-  getCustomAgentDirectory?: () => Promise<string>;
-  openExternalUrl?: (url: string) => Promise<void>;
-  openLogFolder?: () => Promise<void>;
-  openPath?: (filePath: string) => Promise<void>;
-  openWorkspaceInNewWindow?: () => Promise<void>;
-  openWorkspaceFolder?: () => Promise<void>;
-  signIn?: () => Promise<void>;
-  /**
-   * Synchronous probe for "is the active workspace a git repo". Used as a
-   * fallback when `getRecentCommits` is not supplied so the desktop still
-   * reports the correct `isGitRepo` state to the renderer banner. When
-   * `getRecentCommits` is wired (production path in `index.ts`), this probe
-   * is unused — the git host's own result is authoritative.
-   */
-  isWorkspaceGitRepo?: () => boolean;
+  getCustomAgentDirectory(): Promise<string>;
+  openExternalUrl(url: string): Promise<void>;
+  openLogFolder(): Promise<void>;
+  openPath(filePath: string): Promise<void>;
+  openWorkspaceInNewWindow(): Promise<void>;
+  openWorkspaceFolder(): Promise<void>;
+  signIn(): Promise<void>;
   /**
    * Async git log host — closes audit item A from
-   * `docs/dev/standalone-trajectory-audit.md` (trajectory #16). When
-   * provided, the shell forwards the workspace's most recent commits to
-   * the renderer instead of replying with an empty list. Errors are
-   * swallowed by the host itself; failures surface as `commits: []` plus
-   * the best-effort `isGitRepo` boolean.
+   * `docs/dev/standalone-trajectory-audit.md` (trajectory #16). The shell
+   * forwards its recent-commit result to the renderer. The host converts
+   * expected git failures into an empty result with its best-effort
+   * `isGitRepo` value.
    */
-  getRecentCommits?: () => Promise<{
+  getRecentCommits(): Promise<{
     commits: string[];
     isGitRepo: boolean;
   }>;
-  showInfoMessage?: (message: string) => Promise<void> | void;
-  onAsyncError?: (error: unknown) => void;
-}
-
-export interface DesktopShellActionInstanceOptions {
-  actions: DesktopShellActions;
-  getCustomAgentDirectory?: never;
-  openPath?: never;
+  showInfoMessage(message: string): Promise<void> | void;
   onAsyncError?: (error: unknown) => void;
 }
 
 export interface DesktopShellActions extends DesktopCommandActions {
   signIn(): void;
   openAgentDirectory(customDirSet?: boolean): void;
+  openDesktopDocs(): void;
+  openLogFolder(): void;
+  openWorkspaceFolder(): void;
+  openWorkspaceInNewWindow(): void;
+  resetMainView(): void;
+  showFirstRunWalkthrough(): void;
   /**
    * Posts the most recent git commits to the renderer in response to
-   * `MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS`. When the host has a real
-   * git port wired (`getRecentCommits`), the response includes the actual
-   * `git log` output; otherwise it falls back to an empty list with a
-   * best-effort `isGitRepo` flag derived from `isWorkspaceGitRepo`.
+   * `MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS`.
    */
   sendRecentCommits(): void;
-  showInfoMessage?(message: string): void;
+  showInfoMessage(message: string): void;
 }
 
 const SWITCH_VIEW_ROUTES = {
@@ -93,7 +76,7 @@ const SWITCH_VIEW_ROUTES = {
 
 export function createDesktopShellActions(
   renderer: DesktopRenderer,
-  options: DesktopShellActionFactoryOptions = {},
+  options: DesktopShellActionFactoryOptions,
 ): DesktopShellActions {
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
 
@@ -116,10 +99,6 @@ export function createDesktopShellActions(
   }
 
   async function openCustomAgentDirectory() {
-    if (!options.getCustomAgentDirectory || !options.openPath) {
-      postSettingsRoute(SETTINGS_TAB.AGENTS);
-      return;
-    }
     const customDir = await options.getCustomAgentDirectory();
     await options.openPath(customDir);
   }
@@ -133,26 +112,22 @@ export function createDesktopShellActions(
   }
 
   function openLogFolder() {
-    void options.openLogFolder?.().catch(reportAsyncError);
+    void options.openLogFolder().catch(reportAsyncError);
   }
 
   function openWorkspaceFolder() {
-    void options.openWorkspaceFolder?.().catch(reportAsyncError);
+    void options.openWorkspaceFolder().catch(reportAsyncError);
   }
 
   function openWorkspaceInNewWindow() {
-    void options.openWorkspaceInNewWindow?.().catch(reportAsyncError);
+    void options.openWorkspaceInNewWindow().catch(reportAsyncError);
   }
 
   function openDesktopDocs() {
-    void options.openExternalUrl?.(DESKTOP_DOCS_URL).catch(reportAsyncError);
+    void options.openExternalUrl(DESKTOP_DOCS_URL).catch(reportAsyncError);
   }
 
   function signIn() {
-    if (!options.signIn) {
-      postSettingsRoute(SETTINGS_TAB.MODELS);
-      return;
-    }
     void options.signIn().catch(reportAsyncError);
   }
 
@@ -177,40 +152,27 @@ export function createDesktopShellActions(
           isGitRepo,
         });
       };
-      const { getRecentCommits } = options;
-      if (getRecentCommits) {
-        void getRecentCommits()
-          .then(({ commits, isGitRepo }) => postReply(commits, isGitRepo))
-          .catch((error) => {
-            // The git host swallows expected errors; reaching this catch
-            // is a programmer bug. Log and send a conservative reply so
-            // the launcher banner doesn't hang.
-            reportAsyncError(error);
-            postReply([], false);
-          });
-        return;
-      }
-      // No git host wired (tests / pre-init): best-effort isGitRepo probe.
-      let isGitRepo = false;
-      try {
-        isGitRepo = options.isWorkspaceGitRepo?.() ?? false;
-      } catch (error) {
-        reportAsyncError(error);
-      }
-      postReply([], isGitRepo);
+      void options
+        .getRecentCommits()
+        .then(({ commits, isGitRepo }) => postReply(commits, isGitRepo))
+        .catch((error) => {
+          // The git host swallows expected errors; reaching this catch is a
+          // programmer bug. Log and send a conservative reply so the launcher
+          // banner does not hang.
+          reportAsyncError(error);
+          postReply([], false);
+        });
     },
     showRoute: postRoute,
     showSettings: postSettingsRoute,
     showFirstRunWalkthrough: () => {
       renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
     },
-    showInfoMessage: options.showInfoMessage
-      ? (message) => {
-          void Promise.resolve(options.showInfoMessage!(message)).catch(
-            reportAsyncError,
-          );
-        }
-      : undefined,
+    showInfoMessage: (message) => {
+      void Promise.resolve(options.showInfoMessage(message)).catch(
+        reportAsyncError,
+      );
+    },
   };
 }
 
@@ -264,7 +226,7 @@ function dispatchMainViewInboundOnShell(
       return true;
     case MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION:
       if (message.action === 'openWalkthrough') {
-        actions.showFirstRunWalkthrough?.();
+        actions.showFirstRunWalkthrough();
       } else {
         const labels: Record<typeof message.action, string> = {
           runSetup: 'Run setup assistant',
@@ -272,7 +234,7 @@ function dispatchMainViewInboundOnShell(
           cloneOverleaf: 'Import from Overleaf',
           downloadArxiv: 'Import from arXiv',
         };
-        actions.showInfoMessage?.(
+        actions.showInfoMessage(
           `"${labels[message.action]}" requires the VS Code extension.`,
         );
       }
@@ -288,19 +250,19 @@ function dispatchDesktopLocalOnShell(
 ): boolean {
   switch (message.command) {
     case DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER:
-      actions.openLogFolder?.();
+      actions.openLogFolder();
       return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
-      actions.openWorkspaceFolder?.();
+      actions.openWorkspaceFolder();
       return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW:
-      actions.openWorkspaceInNewWindow?.();
+      actions.openWorkspaceInNewWindow();
       return true;
     case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
-      actions.showFirstRunWalkthrough?.();
+      actions.showFirstRunWalkthrough();
       return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
-      actions.openDesktopDocs?.();
+      actions.openDesktopDocs();
       return true;
     default:
       return false;
@@ -308,14 +270,8 @@ function dispatchDesktopLocalOnShell(
 }
 
 export function createDesktopShellIpc(
-  renderer: DesktopRenderer,
-  options: DesktopShellIpcOptions = {},
+  actions: DesktopShellActions,
 ): DesktopMessageHandler {
-  const actions =
-    options.actions != null
-      ? options.actions
-      : createDesktopShellActions(renderer, options);
-
   return {
     handleMessage(message: DesktopCommandMessage): boolean {
       // Single discriminated-union parse at the entry point. Every shell

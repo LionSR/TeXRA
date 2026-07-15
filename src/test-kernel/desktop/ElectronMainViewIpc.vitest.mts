@@ -14,6 +14,21 @@ import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
+interface TestDesktopShellActions {
+  showRoute: ReturnType<typeof vi.fn>;
+  showSettings: ReturnType<typeof vi.fn>;
+  signIn: ReturnType<typeof vi.fn>;
+  openAgentDirectory: ReturnType<typeof vi.fn>;
+  openDesktopDocs: ReturnType<typeof vi.fn>;
+  openLogFolder: ReturnType<typeof vi.fn>;
+  openWorkspaceFolder: ReturnType<typeof vi.fn>;
+  openWorkspaceInNewWindow: ReturnType<typeof vi.fn>;
+  resetMainView: ReturnType<typeof vi.fn>;
+  showFirstRunWalkthrough: ReturnType<typeof vi.fn>;
+  sendRecentCommits: ReturnType<typeof vi.fn>;
+  showInfoMessage: ReturnType<typeof vi.fn>;
+}
+
 interface MainViewIpcModule {
   installDesktopMainViewIpc(
     window: {
@@ -30,6 +45,7 @@ interface MainViewIpcModule {
       fileSelection?: { handleMessage(message: { command: string }): boolean };
       settings?: { handleMessage(message: { command: string }): boolean };
       progress?: { handleMessage(message: { command: string }): boolean };
+      shellActions: TestDesktopShellActions;
       modelListRefresh?: PromiseLike<void>;
       getAuthStatus?: () => Promise<{ authenticated: boolean }>;
       loadStartupOptions?: () => Promise<{
@@ -153,6 +169,23 @@ function createWindowMock(
   return { window, webContents };
 }
 
+function createMainViewShellActions(): TestDesktopShellActions {
+  return {
+    showRoute: vi.fn(),
+    showSettings: vi.fn(),
+    signIn: vi.fn(),
+    openAgentDirectory: vi.fn(),
+    openDesktopDocs: vi.fn(),
+    openLogFolder: vi.fn(),
+    openWorkspaceFolder: vi.fn(),
+    openWorkspaceInNewWindow: vi.fn(),
+    resetMainView: vi.fn(),
+    showFirstRunWalkthrough: vi.fn(),
+    sendRecentCommits: vi.fn(),
+    showInfoMessage: vi.fn(),
+  };
+}
+
 function createMainViewCommandCapabilities() {
   return {
     executeAgent: vi.fn(async (_message: unknown) => {}),
@@ -161,6 +194,7 @@ function createMainViewCommandCapabilities() {
       copyLog: vi.fn(async (_text: string) => {}),
       exportLog: vi.fn(async (_text: string) => {}),
     },
+    shellActions: createMainViewShellActions(),
   };
 }
 
@@ -214,8 +248,9 @@ describe('desktop main-view IPC', () => {
       closedListeners.push(listener);
     });
 
+    const capabilities = createMainViewCommandCapabilities();
     const ipc = installDesktopMainViewIpc(window, {
-      ...createMainViewCommandCapabilities(),
+      ...capabilities,
       debugMode: true,
       fileSelection,
       settings,
@@ -296,16 +331,8 @@ describe('desktop main-view IPC', () => {
       { sender: webContents },
       { command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS },
     );
-    expect(sends).toEqual([
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: {
-          command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-          commits: [],
-          isGitRepo: false,
-        },
-      },
-    ]);
+    expect(capabilities.shellActions.sendRecentCommits).toHaveBeenCalledOnce();
+    expect(sends).toEqual([]);
 
     sends.length = 0;
     nativeTheme.shouldUseDarkColors = false;
@@ -337,12 +364,10 @@ describe('desktop main-view IPC', () => {
       { sender: webContents },
       { command: COMMON_COMMANDS.SWITCH_VIEW, view: 'progress' },
     );
-    expect(sends).toEqual([
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: { command: 'desktop:setRoute', route: 'progress' },
-      },
-    ]);
+    expect(capabilities.shellActions.showRoute).toHaveBeenCalledWith(
+      'progress',
+    );
+    expect(sends).toEqual([]);
 
     sends.length = 0;
     rendererListener?.(
@@ -368,76 +393,36 @@ describe('desktop main-view IPC', () => {
       { sender: webContents },
       { command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY },
     );
-    expect(sends).toEqual([
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: { command: 'desktop:setRoute', route: 'settings' },
-      },
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: { command: 'desktop:setRoute', route: 'settings' },
-      },
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: {
-          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-          tabIndex: SETTINGS_TAB.MODELS,
-        },
-      },
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: { command: 'desktop:setRoute', route: 'settings' },
-      },
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: {
-          agentSubTab: AgentCategory.ToolUse,
-          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-          tabIndex: SETTINGS_TAB.AGENTS,
-        },
-      },
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: { command: 'desktop:setRoute', route: 'settings' },
-      },
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: {
-          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-          tabIndex: SETTINGS_TAB.MULTI_AGENT,
-        },
-      },
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: { command: 'desktop:setRoute', route: 'settings' },
-      },
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: {
-          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-          tabIndex: SETTINGS_TAB.AGENTS,
-        },
-      },
-    ]);
+    expect(capabilities.shellActions.showRoute).toHaveBeenCalledWith(
+      'settings',
+    );
+    expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(
+      1,
+      SETTINGS_TAB.MODELS,
+    );
+    expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(
+      2,
+      SETTINGS_TAB.AGENTS,
+      AgentCategory.ToolUse,
+    );
+    expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(
+      3,
+      SETTINGS_TAB.MULTI_AGENT,
+    );
+    expect(capabilities.shellActions.openAgentDirectory).toHaveBeenCalledWith(
+      false,
+    );
+    expect(sends).toEqual([]);
 
     sends.length = 0;
     rendererListener?.(
       { sender: webContents },
       { command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY, customDirSet: true },
     );
-    expect(sends).toEqual([
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: { command: 'desktop:setRoute', route: 'settings' },
-      },
-      {
-        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: {
-          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-          tabIndex: SETTINGS_TAB.AGENTS,
-        },
-      },
-    ]);
+    expect(capabilities.shellActions.openAgentDirectory).toHaveBeenCalledWith(
+      true,
+    );
+    expect(sends).toEqual([]);
 
     const executeMessage = {
       command: MAIN_VIEW_COMMANDS.EXECUTE,

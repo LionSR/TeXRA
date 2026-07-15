@@ -34,7 +34,7 @@ export interface DesktopMainViewIpcOptions {
   progress?: DesktopProgressIpc;
   onboarding?: DesktopMessageHandler;
   logs: DesktopLogIpcOptions;
-  shellActions?: DesktopShellActions;
+  shellActions: DesktopShellActions;
   modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   loadStartupOptions?: () => Promise<MainViewStartupOptions>;
@@ -68,12 +68,7 @@ export function installDesktopMainViewIpc(
     debugMode: options.debugMode,
     getTheme: options.getTheme,
   });
-  const shell = createDesktopShellIpc(
-    bridge,
-    options.shellActions == null
-      ? { onAsyncError: options.onAsyncError }
-      : { actions: options.shellActions, onAsyncError: options.onAsyncError },
-  );
+  const shell = createDesktopShellIpc(options.shellActions);
   const execution = createDesktopExecutionIpc({
     executeAgent: options.executeAgent,
     onAsyncError: options.onAsyncError,
