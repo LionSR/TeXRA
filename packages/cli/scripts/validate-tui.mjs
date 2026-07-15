@@ -3351,6 +3351,14 @@ const SCENARIOS = [
     expectExit: true,
   },
   {
+    name: 'ctrl-c-clears-draft',
+    frame: 'viewport',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['unfinished draft', ETX],
+    expect: ['Ctrl-C exit'],
+    unexpect: ['unfinished draft'],
+  },
+  {
     name: 'ctrl-c-interrupt-active',
     env: {
       HARNESS_ENTRIES: '4',

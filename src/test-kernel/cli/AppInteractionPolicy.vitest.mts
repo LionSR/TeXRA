@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - TUI interaction policy
 import {
+  appDraftDiscardActive,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
   approvalVisibleForActiveStream,
@@ -11,7 +12,9 @@ import {
   foregroundMaxRowsForKind,
   foregroundSurfaceKind,
   shouldDeferEscapeInterruptForMetaChord,
+  triggerAppCtrlC,
   triggerEscapeInterrupt,
+  type AppCtrlCState,
   type EscapeInterruptState,
   type ForegroundSurfaceKind,
 } from '@cli/chat/tui/appInteractionPolicy';
@@ -45,6 +48,39 @@ const escChordHidden = {
   taskControlsAvailable: false,
 } satisfies MetaChordState;
 
+function ctrlCFixture({
+  active,
+  draft,
+  delegate,
+}: {
+  readonly active: boolean;
+  readonly draft: string;
+  readonly delegate?: boolean;
+}): {
+  readonly events: string[];
+  readonly readDraft: () => string;
+  readonly state: AppCtrlCState;
+} {
+  const events: string[] = [];
+  let currentDraft = draft;
+  return {
+    events,
+    readDraft: () => currentDraft,
+    state: {
+      discardDraft: () => {
+        if (currentDraft.length === 0) return false;
+        currentDraft = '';
+        events.push('clear');
+        return true;
+      },
+      canStopActiveRun: () => active,
+      onInterruptActive: () => events.push('interrupt'),
+      onExit: () => events.push('exit'),
+      onCtrlC: delegate ? () => events.push('delegate') : undefined,
+    },
+  };
+}
+
 function bashApproval(streamId?: StreamTabId): PendingApproval {
   return {
     payload: {
@@ -72,6 +108,79 @@ function foregroundInput(
 }
 
 describe('app interaction policy', () => {
+  it('clears a non-empty draft without interrupting an active response', () => {
+    const fixture = ctrlCFixture({ active: true, draft: 'unfinished' });
+
+    expect(triggerAppCtrlC(fixture.state)).toBe('clear-draft');
+    expect(fixture.readDraft()).toBe('');
+    expect(fixture.events).toEqual(['clear']);
+  });
+
+  it('clears a non-empty draft without exiting while idle', () => {
+    const fixture = ctrlCFixture({ active: false, draft: 'unfinished' });
+
+    expect(triggerAppCtrlC(fixture.state)).toBe('clear-draft');
+    expect(fixture.readDraft()).toBe('');
+    expect(fixture.events).toEqual(['clear']);
+  });
+
+  it('interrupts an active response when the draft is empty', () => {
+    const fixture = ctrlCFixture({ active: true, draft: '' });
+
+    expect(triggerAppCtrlC(fixture.state)).toBe('interrupt');
+    expect(fixture.events).toEqual(['interrupt']);
+  });
+
+  it('exits an idle chat when the draft is empty', () => {
+    const fixture = ctrlCFixture({ active: false, draft: '' });
+
+    expect(triggerAppCtrlC(fixture.state)).toBe('exit');
+    expect(fixture.events).toEqual(['exit']);
+  });
+
+  it('delegates the second Ctrl+C after clearing to existing signal policy', () => {
+    const fixture = ctrlCFixture({
+      active: true,
+      draft: 'unfinished',
+      delegate: true,
+    });
+
+    expect(triggerAppCtrlC(fixture.state)).toBe('clear-draft');
+    expect(triggerAppCtrlC(fixture.state)).toBe('delegate');
+    expect(fixture.events).toEqual(['clear', 'delegate']);
+  });
+
+  it('does not let a background draft consume Ctrl+C', () => {
+    const cases = [
+      {
+        inputDisabled: true,
+        reverseSearchOpen: false,
+        sessionListFocused: false,
+      },
+      {
+        inputDisabled: false,
+        reverseSearchOpen: true,
+        sessionListFocused: false,
+      },
+      {
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        sessionListFocused: true,
+      },
+    ];
+
+    for (const state of cases) {
+      expect(appDraftDiscardActive(state)).toBe(false);
+    }
+    expect(
+      appDraftDiscardActive({
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        sessionListFocused: false,
+      }),
+    ).toBe(true);
+  });
+
   it('resolves exhaustive foreground row caps', () => {
     const surfaceCases = [
       [{ childControlHasItems: false, kind: 'childControls' }, 6],
