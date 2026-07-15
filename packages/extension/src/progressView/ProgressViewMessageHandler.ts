@@ -98,11 +98,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ) {
     super('ProgressView', { trackActiveView: true });
 
-    this.recordingManager = new RecordingManager(context, {
-      buildRecordingMessage: ({ status, error }) => ({
+    this.recordingManager = new RecordingManager({
+      buildRecordingMessage: (message) => ({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING,
-        status,
-        ...(error && { error }),
+        ...message,
       }),
       buildTranscriptionMessage: (text) => ({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
