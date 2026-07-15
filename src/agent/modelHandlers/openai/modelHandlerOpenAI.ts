@@ -401,6 +401,8 @@ export class ModelHandlerOpenAI<
     let requestId: string | undefined;
     let stream: ChatCompletionStream | undefined;
     let connect: ReturnType<typeof trackStreamConnect> | undefined;
+    const abortReconstructedStream = () => stream?.abort();
+    signal?.addEventListener('abort', abortReconstructedStream, { once: true });
 
     const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
       if (delta) {
@@ -423,6 +425,7 @@ export class ModelHandlerOpenAI<
       const { data, response } = await request.withResponse();
       requestId = detectRequestId({ headers: response.headers });
       stream = ChatCompletionStream.fromReadableStream(data.toReadableStream());
+      if (signal?.aborted) stream.abort();
       connect = trackStreamConnect(stream);
       stream.on('content.delta', onContentDelta);
       stream.on('chunk', onChunk);
@@ -491,6 +494,7 @@ export class ModelHandlerOpenAI<
         },
       });
     } finally {
+      signal?.removeEventListener('abort', abortReconstructedStream);
       connect?.cleanup();
       stream?.off('content.delta', onContentDelta);
       stream?.off('chunk', onChunk);
