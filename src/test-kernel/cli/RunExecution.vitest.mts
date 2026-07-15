@@ -26,6 +26,7 @@ import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
+  emit: vi.fn(),
   detachRunProgressRenderer: vi.fn(),
   detachSessionProgressProjection: vi.fn(),
   createHeadlessCliHostInteractions: vi.fn(),
@@ -141,7 +142,7 @@ function stubRunExecutionDeps(): void {
     dispose: mocks.disposeHostInteractions,
   });
   mocks.createCliRuntimeHost.mockReturnValue({
-    emit: vi.fn(),
+    emit: mocks.emit,
     attachRunProgressRenderer: vi.fn(() => mocks.detachRunProgressRenderer),
     prepareInteractivePrompt: mocks.prepareInteractivePrompt,
     close: mocks.close,
@@ -700,15 +701,29 @@ describe('executeCliRequest', () => {
     });
     await Promise.resolve();
     await platform.lifecycle.runShutdown();
+    expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
+      message:
+        'Failed to persist interrupted status for execution exec-1: terminal metadata disk full',
+    });
     resolveRun?.({
       category: 'toolUse',
       executionId: 'exec-1',
       outcome: 'completed',
       streamId: 'stream-1',
     });
+    mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
 
-    await expect(run).rejects.toBe(persistenceError);
+    await expect(run).resolves.toEqual({
+      ok: true,
+      result: {
+        category: 'toolUse',
+        executionId: 'exec-1',
+        outcome: 'cancelled',
+        streamId: 'stream-1',
+      },
+    });
     expect(mocks.finalizeExecution).toHaveBeenCalledTimes(2);
+    expect(mocks.emit).toHaveBeenCalledTimes(1);
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 

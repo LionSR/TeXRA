@@ -12,6 +12,7 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
@@ -207,7 +208,14 @@ export async function executeCliRequest(
     ? request.executionId
     : undefined;
   let shutdownInterrupted = false;
-  let shutdownFinalizationError: unknown;
+  let shutdownFinalizationFailureReported = false;
+  const reportShutdownFinalizationFailure = (error: unknown): void => {
+    if (shutdownFinalizationFailureReported) return;
+    shutdownFinalizationFailureReported = true;
+    interactionHost.emit('requestShowError', {
+      message: `Failed to persist interrupted status for execution ${ownedExecutionId}: ${toErrorMessage(error)}`,
+    });
+  };
   const disposeShutdownStatus = ownedExecutionId
     ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
         shutdownInterrupted = true;
@@ -217,9 +225,8 @@ export async function executeCliRequest(
             EXECUTION_STATUS.INTERRUPTED,
             'preserve',
           );
-          shutdownFinalizationError = undefined;
         } catch (error) {
-          shutdownFinalizationError = error;
+          reportShutdownFinalizationFailure(error);
         }
       })
     : undefined;
@@ -288,9 +295,8 @@ export async function executeCliRequest(
           EXECUTION_STATUS.INTERRUPTED,
           'preserve',
         );
-        shutdownFinalizationError = undefined;
       } catch (error) {
-        shutdownFinalizationError = error;
+        reportShutdownFinalizationFailure(error);
       }
     }
     detachResultToast();
@@ -307,10 +313,6 @@ export async function executeCliRequest(
     } finally {
       await interactionHost.close();
     }
-  }
-
-  if (shutdownFinalizationError !== undefined) {
-    throw shutdownFinalizationError;
   }
 
   if (!runResult.ok) {
