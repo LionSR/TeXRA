@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -87,21 +88,10 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
 }));
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
-  return {
-    cwd: '/tmp/project',
-    mode: 'headless',
-    outputFormat: 'text',
-    approvalPolicy: 'never',
-    quietLogs: false,
+  return createTestCliContext({
     renderRunProgress: true,
-    stderrIsTty: false,
-    stdoutColorEnabled: false,
-    stderrColorEnabled: false,
-    colorEnabled: false,
-    version: '0.0.0',
-    resourcesPath: '/tmp/resources',
     ...overrides,
-  };
+  });
 }
 
 describe('CLI workflow run command', () => {

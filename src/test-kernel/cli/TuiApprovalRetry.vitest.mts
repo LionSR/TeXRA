@@ -40,6 +40,7 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({ secrets: mocks.secrets }),
 }));
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import {
@@ -62,15 +63,13 @@ import {
 import { setGoalSessionBashAutoApproval } from '@tools/goal';
 
 function context(): CliContext {
-  return {
+  return createTestCliContext({
     cwd: '/work',
     mode: 'interactive',
-    outputFormat: 'text',
     approvalPolicy: 'ask',
-    colorEnabled: false,
     version: 'test',
     resourcesPath: '/resources',
-  };
+  });
 }
 
 function host(): CliRuntimeHost {
