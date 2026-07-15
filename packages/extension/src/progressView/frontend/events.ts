@@ -91,7 +91,7 @@ type Decision<
 
 type RejectDecision = Decision<'reject', { feedback?: string }>;
 
-export interface PermissionDecisionByKind {
+interface PermissionDecisionByKind {
   toolEdit:
     | Decision<'approve'>
     | Decision<typeof APPROVE_SESSION_ACTION>
