@@ -1,16 +1,13 @@
 import { platform } from '@platform/platform';
 import {
   AgentRosterController,
-  getAgentsByCategory,
-  getRosterAgent,
+  createWorkspaceAgentRosterController,
   loadAgents,
 } from '@agent/index';
-import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 import type {
   AgentRosterCategorySelection,
   AgentRosterSelection,
 } from '@shared/schemas/agentRoster';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { loadWorkspaceCliConfig, resolveConfiguredAgent } from './cliConfig';
 
 export interface CliAgentRosterRecord {
@@ -29,18 +26,7 @@ export interface CliAgentRosterRecord {
 
 /** Construct the CLI's single roster controller over the active host stores. */
 export function cliAgentRosterController(): AgentRosterController {
-  const { workspaceState, globalState } = platform();
-  return new AgentRosterController({
-    workspaceState,
-    globalState,
-    getAgents: getAgentsByCategory,
-    getPresets: () =>
-      parseAgentModePresets(
-        workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-      ),
-    resolveAgent: getRosterAgent,
-    fallbackTeamId: null,
-  });
+  return createWorkspaceAgentRosterController();
 }
 
 export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
