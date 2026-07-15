@@ -17,6 +17,7 @@ import {
   classifyPreHeaderFailure,
   getRelayRequestBytes,
   getUpstreamRequestId,
+  logRelayFailure,
   RELAY_REQUEST_ID_HEADER,
   withRelayErrorRequestId,
 } from '../../../supabase/functions/relay/diagnostics';
@@ -388,6 +389,38 @@ describe('relay free-tier request limits', () => {
       getCanonicalRelayModelName('prompt-or-secret@example.com'),
       null,
     );
+  });
+
+  it('sanitizes the complete structured failure log', () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      logRelayFailure({
+        relayRequestId: 'relay-123',
+        provider: 'anthropic',
+        model: 'prompt-or-secret@example.com',
+        requestBytes: 60_000,
+        elapsedMs: 390_000,
+        failurePhase: 'response_body_failure',
+        upstreamRequestId: 'https://secret.example/prompt',
+      });
+
+      const serialized = String(errorLog.mock.calls[0]?.[0]);
+      assert.equal(serialized.includes('prompt-or-secret@example.com'), false);
+      assert.equal(serialized.includes('secret.example'), false);
+      assert.deepEqual(JSON.parse(serialized.slice('[RELAY] '.length)), {
+        event: 'upstream_failure',
+        relayRequestId: 'relay-123',
+        provider: 'anthropic',
+        model: null,
+        requestBytes: 60_000,
+        elapsedMs: 390_000,
+        failurePhase: 'response_body_failure',
+        upstreamRequestId: null,
+      });
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 
   it('exposes relay-generated error ids through the SDK request-id contract', () => {

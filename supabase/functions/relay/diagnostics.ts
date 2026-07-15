@@ -1,3 +1,5 @@
+import { getCanonicalRelayModelName } from './models.ts';
+
 export type RelayFailurePhase =
   'pre_headers_timeout' | 'pre_headers_failure' | 'response_body_failure';
 
@@ -12,6 +14,16 @@ const SAFE_REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
 
 type RelayRequestBody =
   string | Uint8Array | ReadableStream<Uint8Array> | null | undefined;
+
+export interface RelayFailureDiagnostic {
+  relayRequestId: string;
+  provider: string;
+  model: string | null;
+  requestBytes: number | null;
+  elapsedMs: number;
+  failurePhase: RelayFailurePhase;
+  upstreamRequestId: string | null;
+}
 
 /** Attach the relay id to a relay-generated error using both its specific
  * header and the standard request-id header understood by SDK clients. */
@@ -31,10 +43,26 @@ export function classifyPreHeaderFailure(error: unknown): RelayFailurePhase {
     : 'pre_headers_failure';
 }
 
+function sanitizeRequestId(requestId: string | null): string | null {
+  const trimmed = requestId?.trim();
+  return trimmed && SAFE_REQUEST_ID_RE.test(trimmed) ? trimmed : null;
+}
+
+export function logRelayFailure(diagnostic: RelayFailureDiagnostic): void {
+  console.error(
+    `[RELAY] ${JSON.stringify({
+      event: 'upstream_failure',
+      ...diagnostic,
+      model: getCanonicalRelayModelName(diagnostic.model),
+      upstreamRequestId: sanitizeRequestId(diagnostic.upstreamRequestId),
+    })}`,
+  );
+}
+
 export function getUpstreamRequestId(headers: Headers): string | null {
   for (const header of UPSTREAM_REQUEST_ID_HEADERS) {
-    const requestId = headers.get(header)?.trim();
-    if (requestId && SAFE_REQUEST_ID_RE.test(requestId)) return requestId;
+    const requestId = sanitizeRequestId(headers.get(header));
+    if (requestId) return requestId;
   }
   return null;
 }

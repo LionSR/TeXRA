@@ -74,7 +74,6 @@ import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import {
   TIER_CONFIG,
   TIER_SPENDING_LIMITS,
-  getCanonicalRelayModelName,
   getSpendingLimit,
   getRequestLimits,
   isRetiredModelRequest,
@@ -105,8 +104,8 @@ import {
   classifyPreHeaderFailure,
   getRelayRequestBytes,
   getUpstreamRequestId,
+  logRelayFailure,
   RELAY_REQUEST_ID_HEADER,
-  type RelayFailurePhase,
   withRelayErrorRequestId,
 } from './diagnostics.ts';
 import {
@@ -188,16 +187,6 @@ interface ProviderConfig {
   authType: AuthType;
 }
 
-interface RelayFailureDiagnostic {
-  relayRequestId: string;
-  provider: string;
-  model: string | null;
-  requestBytes: number | null;
-  elapsedMs: number;
-  failurePhase: RelayFailurePhase;
-  upstreamRequestId: string | null;
-}
-
 type ProviderKey =
   | 'openai'
   | 'anthropic'
@@ -269,15 +258,6 @@ function getEnabledProviders(): string[] {
   return Object.entries(PROVIDER_CONFIGS)
     .filter(([, config]) => Deno.env.get(config.envKey))
     .map(([name]) => name);
-}
-
-function logRelayFailure(diagnostic: RelayFailureDiagnostic): void {
-  console.error(
-    `[RELAY] ${JSON.stringify({
-      event: 'upstream_failure',
-      ...diagnostic,
-    })}`,
-  );
 }
 
 /**
@@ -872,7 +852,6 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   const bodyToSend =
     c.req.method === 'GET' ? undefined : (requestBody ?? c.req.raw.body);
   const relayRequestId = crypto.randomUUID();
-  const diagnosticModel = getCanonicalRelayModelName(modelName);
   const requestBytes = getRelayRequestBytes(
     bodyToSend,
     c.req.raw.headers.get('content-length'),
@@ -892,7 +871,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     logRelayFailure({
       relayRequestId,
       provider,
-      model: diagnosticModel,
+      model: modelName,
       requestBytes,
       elapsedMs: Math.round(performance.now() - upstreamStartedAt),
       failurePhase,
@@ -961,7 +940,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
           logRelayFailure({
             relayRequestId,
             provider,
-            model: diagnosticModel,
+            model: modelName,
             requestBytes,
             elapsedMs: Math.round(performance.now() - upstreamStartedAt),
             failurePhase: 'response_body_failure',
