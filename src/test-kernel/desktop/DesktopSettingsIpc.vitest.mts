@@ -15,7 +15,10 @@ import {
 import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-import { createStubDesktopAgentSettingsController } from './desktopSettingsTestSupport';
+import {
+  createStubDesktopAgentSettingsController,
+  createStubDesktopHistoryOptions,
+} from './desktopSettingsTestSupport';
 import type { StateStore } from '@platform/interfaces';
 
 const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
@@ -36,16 +39,18 @@ type DesktopSettingsIpcModule =
 type DesktopSettingsIpcOptions = Parameters<
   DesktopSettingsIpcModule['createDesktopSettingsIpc']
 >[0];
+type DesktopHistoryOptions = ReturnType<typeof createStubDesktopHistoryOptions>;
 
 type RendererMessage = Parameters<
   DesktopSettingsIpcOptions['postToRenderer']
 >[0];
 
 type SettingsFixtureOverrides = Omit<
-  DesktopSettingsIpcOptions,
-  'agentSettingsController' | 'postToRenderer'
+  Partial<DesktopSettingsIpcOptions>,
+  'agentSettingsController' | 'postToRenderer' | keyof DesktopHistoryOptions
 > & {
   agentSettingsController?: DesktopSettingsIpcOptions['agentSettingsController'];
+  history?: Partial<DesktopHistoryOptions>;
   postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
 };
 
@@ -149,10 +154,12 @@ async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
 let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];
 
 function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
+  const { history, ...settingsOverrides } = overrides;
   const globalState = overrides.globalState ?? new MemoryStateStore();
   const workspaceState = overrides.workspaceState ?? new MemoryStateStore();
   const settings = createDesktopSettingsIpc({
-    ...overrides,
+    ...settingsOverrides,
+    ...createStubDesktopHistoryOptions(history),
     agentSettingsController:
       overrides.agentSettingsController ??
       createStubDesktopAgentSettingsController(),
@@ -1304,8 +1311,10 @@ describe('desktop settings IPC', () => {
       showInfoMessage: async (message) => {
         infos.push(message);
       },
-      runExecution: async (request) => {
-        runRequests.push(request);
+      history: {
+        runExecution: async (request) => {
+          runRequests.push(request);
+        },
       },
     });
 

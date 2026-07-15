@@ -34,11 +34,11 @@ type HistoryExportFormat = 'md' | 'tex' | 'html';
 /** History-specific capabilities supplied by the desktop host. */
 export interface DesktopHistoryOptions {
   /** Resolved extension resources used by chat export templates. */
-  resourcesPath?: string;
+  resourcesPath: string;
   /** Run a validated request created from a persisted history entry. */
-  runExecution?: (request: ValidatedExecutionRequest) => Promise<void>;
+  runExecution: (request: ValidatedExecutionRequest) => Promise<void>;
   /** Restore a persisted agent configuration into the main view. */
-  restoreTaskState?: (taskState: TaskState) => Promise<boolean>;
+  restoreTaskState: (taskState: TaskState) => Promise<boolean>;
 }
 
 interface DesktopHistoryHandlerDependencies extends DesktopHistoryOptions {
@@ -129,12 +129,6 @@ export class DesktopHistoryHandlers {
       await this.dependencies.showErrorMessage?.(validated.message);
       return;
     }
-    if (!this.dependencies.runExecution) {
-      await this.dependencies.showErrorMessage?.(
-        'Rerunning agents from history is not available in this build',
-      );
-      return;
-    }
     await this.dependencies.showInfoMessage?.('Rerunning agent from history');
     await this.dependencies.runExecution(validated.request);
   }
@@ -147,10 +141,9 @@ export class DesktopHistoryHandlers {
       );
       return;
     }
-    const restored =
-      (await this.dependencies.restoreTaskState?.(
-        agentConfigToTaskState(result.config),
-      )) ?? false;
+    const restored = await this.dependencies.restoreTaskState(
+      agentConfigToTaskState(result.config),
+    );
     if (!restored) {
       await this.dependencies.showErrorMessage?.(
         'Failed to restore configuration',
@@ -158,21 +151,16 @@ export class DesktopHistoryHandlers {
     }
   }
 
-  private getResourcesPath(): string {
-    if (!this.dependencies.resourcesPath) {
-      throw new Error(
-        'Desktop settings IPC missing resourcesPath; cannot export chat.',
-      );
-    }
-    return this.dependencies.resourcesPath;
-  }
-
   private getChatExportController(): Promise<ChatExportController> {
     this.chatExportControllerLoad ??=
       import('@controllers/settingsView/ChatExportController')
         .then(({ ChatExportController }) => {
           const latexPreamble = readFileSync(
-            path.join(this.getResourcesPath(), 'templates', 'chatExport.tex'),
+            path.join(
+              this.dependencies.resourcesPath,
+              'templates',
+              'chatExport.tex',
+            ),
             'utf8',
           );
           return new ChatExportController({ latexPreamble });
@@ -218,7 +206,11 @@ export class DesktopHistoryHandlers {
     const controller = await this.getChatExportController();
     const outcome = await controller.exportAsHtml(
       historyId,
-      path.join(this.getResourcesPath(), 'traceViewerStandalone', 'index.html'),
+      path.join(
+        this.dependencies.resourcesPath,
+        'traceViewerStandalone',
+        'index.html',
+      ),
     );
     if (outcome.status !== 'ok') {
       await this.reportHtmlExportError(outcome.status);
