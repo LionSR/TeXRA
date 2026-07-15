@@ -1,6 +1,7 @@
 // Desktop imports
 import { createModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
+import type { DesktopCrashReportingSettingsController } from '@desktop/main/desktopCrashReportingSettingsController';
 import type { DesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import type { DesktopHistoryOptions } from '@desktop/main/desktopHistoryHandlers';
 import type { DesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
@@ -55,6 +56,20 @@ export function createStubDesktopAgentSettingsController(): DesktopAgentSettings
     },
     postStartupData: noOp,
     refreshCatalogData: noOp,
+  };
+}
+
+export function createStubDesktopCrashReportingSettingsController(
+  overrides: Partial<DesktopCrashReportingSettingsController> = {},
+): DesktopCrashReportingSettingsController {
+  return {
+    actions: {
+      get: noOp,
+      setEnabled: noOp,
+      setDsn: noOp,
+    },
+    postStartupData: noOp,
+    ...overrides,
   };
 }
 
