@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { flowKey } from '@agent/node/persistedFlow';
 import * as logger from '@logger/logUtils';
 import {
   EXECUTION_STATUS,
@@ -12,6 +13,7 @@ import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const mocks = vi.hoisted(() => ({
   getExecutionStore: vi.fn(),
+  delete: vi.fn(),
   readMeta: vi.fn(),
   readResultMeta: vi.fn(),
   writeConfig: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock('@agent/storage/executionListing', () => ({
 }));
 
 import {
+  finalizeExecution,
   registerExecution,
   synchronizeAgentResultOutcome,
   writeTerminalStatus,
@@ -55,6 +58,7 @@ describe('execution lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getExecutionStore.mockReturnValue({
+      delete: mocks.delete,
       readMeta: mocks.readMeta,
       readResultMeta: mocks.readResultMeta,
       writeConfig: mocks.writeConfig,
@@ -63,6 +67,7 @@ describe('execution lifecycle', () => {
     });
     mocks.readMeta.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
+    mocks.delete.mockResolvedValue(undefined);
     mocks.writeConfig.mockResolvedValue(undefined);
     mocks.writeMeta.mockResolvedValue(undefined);
     mocks.writeResultMeta.mockResolvedValue(undefined);
@@ -177,7 +182,7 @@ describe('execution lifecycle', () => {
     expect(mocks.writeResultMeta).not.toHaveBeenCalled();
   });
 
-  it('does not change the result outcome when terminal metadata cannot be written', async () => {
+  it('rejects when terminal metadata cannot be written', async () => {
     mocks.readMeta.mockResolvedValue({
       schemaVersion: 1,
       timestamp: '2026-07-10T00:00:00.000Z',
@@ -199,11 +204,104 @@ describe('execution lifecycle', () => {
     mocks.writeMeta.mockRejectedValueOnce(new Error('disk full'));
 
     const executionId = 'failed-terminal-write' as ExecutionId;
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.INTERRUPTED);
-    await synchronizeAgentResultOutcome(executionId, RUN_OUTCOME.CANCELLED);
+    await expect(
+      writeTerminalStatus(executionId, EXECUTION_STATUS.INTERRUPTED),
+    ).rejects.toThrow('disk full');
 
     expect(mocks.readResultMeta).not.toHaveBeenCalled();
     expect(mocks.writeResultMeta).not.toHaveBeenCalled();
+  });
+
+  it('finalizes durably while preserving the flow record', async () => {
+    const executionId = 'preserved-flow' as ExecutionId;
+    mocks.readMeta.mockResolvedValue({
+      schemaVersion: 1,
+      timestamp: '2026-07-10T00:00:00.000Z',
+    });
+
+    const result = await finalizeExecution({
+      executionId,
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      flowRecord: 'preserve',
+    });
+
+    expect(result).toEqual({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'preserved',
+    });
+    expect(mocks.delete).not.toHaveBeenCalled();
+  });
+
+  it('finalizes durably after deleting the flow record', async () => {
+    const executionId = 'deleted-flow' as ExecutionId;
+    mocks.readMeta.mockResolvedValue({
+      schemaVersion: 1,
+      timestamp: '2026-07-10T00:00:00.000Z',
+    });
+
+    const result = await finalizeExecution({
+      executionId,
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      flowRecord: 'delete',
+    });
+
+    expect(result).toEqual({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    });
+    expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
+  });
+
+  it('does not delete the flow record when terminal metadata fails', async () => {
+    const executionId = 'metadata-failed-flow' as ExecutionId;
+    const error = new Error('metadata disk full');
+    mocks.readMeta.mockRejectedValueOnce(error);
+
+    const result = await finalizeExecution({
+      executionId,
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
+
+    expect(result).toEqual({
+      status: 'failed',
+      error,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+    expect(mocks.delete).not.toHaveBeenCalled();
+  });
+
+  it('reports durable terminal metadata when flow deletion fails', async () => {
+    const executionId = 'flow-delete-failed' as ExecutionId;
+    const error = new Error('flow delete failed');
+    mocks.readMeta.mockResolvedValue({
+      schemaVersion: 1,
+      timestamp: '2026-07-10T00:00:00.000Z',
+    });
+    mocks.delete.mockRejectedValueOnce(error);
+
+    const result = await finalizeExecution({
+      executionId,
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
+
+    expect(result).toEqual({
+      status: 'failed',
+      error,
+      stage: 'flow-record-delete',
+      terminalStatusPersisted: true,
+    });
+    expect(mocks.writeMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        terminalStatus: EXECUTION_STATUS.ERROR,
+        outcome: RUN_OUTCOME.FAILED,
+      }),
+    );
+    expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
   });
 
   it('warns when the persisted result outcome cannot be reconciled', async () => {

@@ -10,6 +10,7 @@
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
+import { flowKey } from '@agent/node/persistedFlow';
 
 import * as logger from '@logger/logUtils';
 import {
@@ -84,7 +85,9 @@ function enqueueMetaUpdate(
   const next = prev.then(async () => {
     const store = getExecutionStore(executionId);
     const existing = await store.readMeta();
-    if (!existing) return;
+    if (!existing) {
+      throw new Error(`Execution metadata not found for ${executionId}`);
+    }
     await store.writeMeta({ ...existing, ...updater(existing) });
     invalidateListingCache();
   });
@@ -142,16 +145,14 @@ export async function registerExecution(
 }
 
 /**
- * Persist supplementary metadata fields on an existing execution.
+ * Persist supplementary metadata fields on an existing execution as a
+ * best-effort operation.
  * Serialized with other meta updates for the same execution to prevent
  * read-modify-write races (e.g. between terminal status and description).
- * Never throws: storage failures are swallowed and logged so callers'
- * lifecycle logic (registry untrack, follow-up delivery) always runs — even
- * for fields like terminal status that are the resumability/status source of
- * truth, not incidental bookkeeping. Callers must not add their own
- * `.catch()` around this; it can never reject.
+ * Never throws because these fields are caches or presentation metadata, not
+ * lifecycle state. Authoritative metadata must use enqueueMetaUpdate directly.
  */
-async function persistMetaField(
+async function persistSupplementaryMetaFieldsBestEffort(
   executionId: ExecutionId,
   fields: Partial<ExecutionMeta>,
   what: string,
@@ -212,11 +213,71 @@ export async function writeTerminalStatus(
   status: string,
 ): Promise<void> {
   const outcome = executionStatusToRunOutcome(status);
-  await persistMetaField(
-    executionId,
-    { terminalStatus: status, ...(outcome && { outcome }) },
-    'terminal status',
-  );
+  await enqueueMetaUpdate(executionId, () => ({
+    terminalStatus: status,
+    ...(outcome && { outcome }),
+  }));
+}
+
+export interface FinalizeExecutionInput {
+  executionId: ExecutionId;
+  terminalStatus: string;
+  flowRecord: 'preserve' | 'delete';
+}
+
+export type FinalizeExecutionResult =
+  | {
+      status: 'durable';
+      terminalStatusPersisted: true;
+      flowRecord: 'preserved' | 'deleted';
+    }
+  | {
+      status: 'failed';
+      error: unknown;
+      stage: 'terminal-status' | 'flow-record-delete';
+      terminalStatusPersisted: boolean;
+    };
+
+/** Persist terminal metadata, then apply the requested flow-record policy. */
+export async function finalizeExecution({
+  executionId,
+  terminalStatus,
+  flowRecord,
+}: FinalizeExecutionInput): Promise<FinalizeExecutionResult> {
+  try {
+    await writeTerminalStatus(executionId, terminalStatus);
+  } catch (error) {
+    return {
+      status: 'failed',
+      error,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    };
+  }
+
+  if (flowRecord === 'preserve') {
+    return {
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'preserved',
+    };
+  }
+
+  try {
+    await getExecutionStore(executionId).delete(flowKey(executionId));
+    return {
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    };
+  } catch (error) {
+    return {
+      status: 'failed',
+      error,
+      stage: 'flow-record-delete',
+      terminalStatusPersisted: true,
+    };
+  }
 }
 
 /** Persist an AI-generated session description on an existing execution's metadata. */
@@ -224,7 +285,11 @@ export async function writeSessionDescription(
   executionId: ExecutionId,
   description: string,
 ): Promise<void> {
-  await persistMetaField(executionId, { description }, 'session description');
+  await persistSupplementaryMetaFieldsBestEffort(
+    executionId,
+    { description },
+    'session description',
+  );
 }
 
 /**
@@ -237,5 +302,9 @@ export async function writeExecutionStreamId(
   executionId: ExecutionId,
   streamId: StreamTabId,
 ): Promise<void> {
-  await persistMetaField(executionId, { streamId }, 'execution stream id');
+  await persistSupplementaryMetaFieldsBestEffort(
+    executionId,
+    { streamId },
+    'execution stream id',
+  );
 }
