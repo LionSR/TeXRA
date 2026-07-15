@@ -60,7 +60,7 @@ vi.mock('@agent/index/agentRegistry', () => ({
       : [],
 }));
 
-const { getDelegationAgent, getDelegationAgents } =
+const { getDelegationAgent, getDelegationAgentForScope, getDelegationAgents } =
   await import('@tools/delegationAgentAvailability');
 
 describe('execution-scoped delegation agents', () => {
@@ -80,5 +80,20 @@ describe('execution-scoped delegation agents', () => {
     expect(getDelegationAgents('toolUse')).toEqual([remoteReview]);
     expect(getDelegationAgent('toolUse', 'review')).toBe(remoteReview);
     expect(getDelegationAgent('toolUse', 'custom:review')).toBeUndefined();
+  });
+
+  it('can enforce a captured scope without ambient run context', () => {
+    mocks.context = undefined;
+    const scope = {
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['remote:review'],
+    };
+
+    expect(getDelegationAgentForScope('toolUse', 'review', scope)).toBe(
+      remoteReview,
+    );
+    expect(
+      getDelegationAgentForScope('toolUse', 'custom:review', scope),
+    ).toBeUndefined();
   });
 });

@@ -24,6 +24,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import {
   isApprovalBypassedForStream,
   proposalApprovals,
@@ -34,7 +35,9 @@ import {
 } from '@tools/delegationModelAvailability';
 import {
   getDelegationAgent,
+  getDelegationAgentForScope,
   getDelegationAgents,
+  getDelegationAgentsForScope,
 } from '@tools/delegationAgentAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -69,10 +72,17 @@ export async function selectAvailableDelegationModel(input: {
 export function requireVisibleAgent(
   category: AgentCategory,
   name: string,
+  scope?: AgentDelegationScope,
 ): AgentEntry {
-  const agent = getDelegationAgent(category, name);
+  const agent = scope
+    ? getDelegationAgentForScope(category, name, scope)
+    : getDelegationAgent(category, name);
   if (agent) return agent;
-  const available = getDelegationAgents(category)
+  const available = (
+    scope
+      ? getDelegationAgentsForScope(category, scope)
+      : getDelegationAgents(category)
+  )
     .map((a) => a.name)
     .join(', ');
   throw new Error(

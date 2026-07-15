@@ -14,6 +14,7 @@ import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
+  pathToLocation,
 } from './fileLocation';
 import {
   CHANNEL,
@@ -23,6 +24,8 @@ import {
   getRunDir,
   getOriginalSnapshotPath,
   getRunStorageAbsolutePath,
+  inspectRunStorageEntry,
+  runStorageLocationFromAnyAbsolutePath,
   shouldSkipRelocation,
   snapshotExists,
 } from './runStorageFs';
@@ -46,7 +49,10 @@ export {
   getRunDir,
   findRunDir,
   findExistingRunStoragePath,
+  inspectRunStorageEntry,
+  runStorageLocationFromAnyAbsolutePath,
   runStorageLocationFromAbsolutePath,
+  type RunStorageEntryInspection,
 } from './runStorageFs';
 
 logger.initialize(CHANNEL);
@@ -188,6 +194,9 @@ export class TaskRunFileService {
 
   /** Create a FileLocation for a workflow output file. */
   public createLocation(inputPath: string): FileLocation {
+    const runStorageLocation = runStorageLocationFromAnyAbsolutePath(inputPath);
+    if (runStorageLocation) return runStorageLocation;
+
     const resolved = WorkspaceFS.locatePath(inputPath);
 
     if (resolved.kind === 'external') {
@@ -210,6 +219,14 @@ export class TaskRunFileService {
     return createWorkspaceLocation(
       resolved.absolutePath,
       resolved.relativePath,
+    );
+  }
+
+  /** Preserve the storage provenance of an existing input or comparison base. */
+  public locateSource(inputPath: string): FileLocation {
+    return (
+      runStorageLocationFromAnyAbsolutePath(inputPath) ??
+      pathToLocation(inputPath)
     );
   }
 

@@ -95,6 +95,49 @@ return [a, b]`,
     expect(run.meta.name).toBe('test-flow');
   });
 
+  it('passes typed workflow outputs into the next stage input files', async () => {
+    const outputPath =
+      '/storage/executions/bbbbbb222222/r1/drafted-section.tex';
+    const invocations: WorkflowAgentInvocation[] = [];
+    const run = await runWorkflowScript({
+      script: `${META}
+const drafted = await agent('draft')
+return await agent('merge', {
+  inputFiles: drafted.outputs.map((output) => output.absolutePath),
+})`,
+      runAgent: async (call) => {
+        invocations.push(call);
+        return {
+          category: 'workflow',
+          outcome: 'completed',
+          outputs:
+            call.index === 0
+              ? [
+                  {
+                    round: 1,
+                    relativePath: 'r1/drafted-section.tex',
+                    absolutePath: outputPath,
+                    location: 'runStorage',
+                    originalPath: null,
+                    added: null,
+                    removed: null,
+                  },
+                ]
+              : [],
+          compileFailures: [],
+          diffs: [],
+          cost: 0,
+        };
+      },
+    });
+
+    expect(invocations[1]?.options.inputFiles).toEqual([outputPath]);
+    expect(run.result).toMatchObject({
+      category: 'workflow',
+      outcome: 'completed',
+    });
+  });
+
   it('parallel(): failed thunks resolve to null without aborting siblings', async () => {
     const run = await runWorkflowScript({
       script: `${META}
@@ -352,6 +395,12 @@ return null`,
         runAgent: echoRunner,
       }),
     ).rejects.toThrow(/must be a plain object/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('x', { inputFiles: [''] })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/inputFiles.*array of non-empty strings/);
   });
 
   it.each(['schema', 'outputSchema'] as const)(
