@@ -5,6 +5,7 @@ import { defineCommand } from 'citty';
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
 import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
 import { type ExecutionId } from '@shared/schemas';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import {
@@ -42,10 +43,6 @@ export function parseHistoryListLimit(
   if (!/^\d+$/.test(value)) return undefined;
   const limit = Number(value);
   return Number.isSafeInteger(limit) && limit > 0 ? limit : undefined;
-}
-
-function storedExecutionsNoun(count: number): string {
-  return count === 1 ? 'stored execution' : 'stored executions';
 }
 
 async function runHistoryList(
@@ -211,9 +208,7 @@ async function runHistoryDelete(
     });
     if (!preflight.proceed) {
       writeTextStderr(
-        `Refusing to delete ${preflight.count} ${storedExecutionsNoun(
-          preflight.count,
-        )}. Re-run with --yes to confirm.`,
+        `Refusing to delete ${formatResultCount(preflight.count, 'stored execution')}. Re-run with --yes to confirm.`,
       );
       return CliExitCode.Usage;
     }
@@ -242,7 +237,7 @@ async function runHistoryDelete(
 
   let text: string;
   if (result.deleted === 'all') {
-    text = `Deleted ${result.count} ${storedExecutionsNoun(result.count)}.`;
+    text = `Deleted ${formatResultCount(result.count, 'stored execution')}.`;
   } else if (result.found) {
     text = `Deleted execution ${result.id}.`;
   } else {

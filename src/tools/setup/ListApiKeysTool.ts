@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { apiKeySecretName } from '@model/apiProviders';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/define';
@@ -96,7 +97,7 @@ export class ListApiKeysTool extends defineTool({
     if (otherKeys.length > 0) {
       lines.push(
         '',
-        `Other stored secrets: ${otherKeys.length} redacted key name${otherKeys.length === 1 ? '' : 's'}`,
+        `Other stored secrets: ${formatResultCount(otherKeys.length, 'redacted key name')}`,
       );
     }
 
@@ -107,7 +108,7 @@ export class ListApiKeysTool extends defineTool({
 
     return {
       status: 'executed',
-      summary: `${storedKeys.length} stored secret${storedKeys.length === 1 ? '' : 's'}: ${providerSummary}`,
+      summary: `${formatResultCount(storedKeys.length, 'stored secret')}: ${providerSummary}`,
       output: lines.join('\n'),
     };
   }

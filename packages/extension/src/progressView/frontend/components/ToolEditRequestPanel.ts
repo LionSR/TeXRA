@@ -23,6 +23,7 @@ import type { ToolEditPermission } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
@@ -165,7 +166,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel<'toolEdit'> {
     const added = toCount(request.addedLines);
     const removed = toCount(request.removedLines);
     const total = added + removed;
-    const lineLabel = total === 1 ? 'line' : 'lines';
+    const lineLabel = pluralize(total, 'line');
 
     const parts: string[] = [];
     if (added > 0) parts.push(`+${added}`);

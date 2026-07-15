@@ -10,6 +10,7 @@ import {
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
   activeStreamId as activeStreamIdSignal,
@@ -209,7 +210,7 @@ export function TodosPlanPanel(
             <Text
               dimColor
               wrap="truncate-end"
-            >{`… +${hiddenCount} more todo/plan item${hiddenCount === 1 ? '' : 's'}`}</Text>
+            >{`… +${formatResultCount(hiddenCount, 'more todo/plan item')}`}</Text>
           </Box>
         ) : null}
       </Box>

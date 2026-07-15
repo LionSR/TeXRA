@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import { ConfirmCard } from './ConfirmCard';
 import { COLOR_HINT } from '../ui/colors';
@@ -98,7 +99,7 @@ export function editApprovalFeedbackRows({
 }
 
 export function formatEditApprovalHunkCount(count: number): string {
-  return `${count} ${count === 1 ? 'hunk' : 'hunks'}`;
+  return formatResultCount(count, 'hunk');
 }
 
 export function EditApproval(props: EditApprovalProps): React.JSX.Element {

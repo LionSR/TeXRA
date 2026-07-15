@@ -36,6 +36,7 @@ import {
 } from '@utils/files';
 
 import { getConfig } from '@utils/config';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
 
@@ -479,7 +480,7 @@ export class FileManager extends BaseWebviewManager {
     if (attachedCount > 0 && rejectedCount === 0) return;
     if (attachedCount > 0) {
       vscode.window.showInformationMessage(
-        `Attached ${attachedCount} dropped file${attachedCount === 1 ? '' : 's'}; skipped ${rejectedCount} unsupported, folder, or out-of-workspace item${rejectedCount === 1 ? '' : 's'}.`,
+        `Attached ${formatResultCount(attachedCount, 'dropped file')}; skipped ${formatResultCount(rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
       );
       return;
     }
