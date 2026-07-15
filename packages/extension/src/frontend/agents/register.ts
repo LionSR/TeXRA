@@ -4,15 +4,8 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { platform } from '@platform/platform';
-import {
-  AgentRosterController,
-  getAgentsByCategory,
-  getRosterAgent,
-} from '@agent/index';
-import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import { createWorkspaceAgentRosterController } from '@agent/index';
 import * as logger from '@logger/logUtils';
-import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 import type { AgentSource } from '@shared/schemas/agent';
 
 const CHANNEL = 'AgentRegister';
@@ -36,17 +29,7 @@ export async function promptToAddAgentToConfig(
   autoAdd = false,
   category: 'workflow' | 'toolUse' = 'workflow',
 ): Promise<void> {
-  const roster = new AgentRosterController({
-    workspaceState: workspaceSM,
-    globalState: platform().globalState,
-    getAgents: getAgentsByCategory,
-    getPresets: () =>
-      parseAgentModePresets(
-        workspaceSM.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-      ),
-    resolveAgent: getRosterAgent,
-    fallbackTeamId: null,
-  });
+  const roster = createWorkspaceAgentRosterController();
   const current = roster.getVisibleAgents(category).map((entry) => entry.name);
 
   const skipReason = getAgentRegistrationSkipReason(agentName, current);

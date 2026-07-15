@@ -16,6 +16,10 @@ vi.mock('@utils/config/worktreeConfig', () => ({
 vi.mock('@agent/index/agentRegistry', () => ({
   getVisibleAgents: mocks.getVisibleAgents,
   getVisibleAgent: mocks.getVisibleAgent,
+  // No test here activates a delegation scope (no RunContext mock), so this
+  // always falls through to the workspace-visible roster.
+  resolveDelegationScopeAgents: (scope: unknown, category: string) =>
+    scope ? [] : mocks.getVisibleAgents(category),
 }));
 
 vi.mock('@model/computeModelOptions', () => ({

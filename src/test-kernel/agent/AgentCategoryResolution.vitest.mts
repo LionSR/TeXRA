@@ -13,10 +13,12 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   findAgentByIdentifier,
   getCategoryAgent,
+  getRosterAgent,
   getVisibleAgent,
   refresh,
   resolveAgent,
   resolveAgentForLaunch,
+  resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index/agentEntry';
@@ -68,6 +70,18 @@ describe('cross-category agent resolution', () => {
         '  internal: true',
         'prompts:',
         '  systemPrompt: Internal agent.',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(
+      resolve(customDir, 'review.yaml'),
+      [
+        'name: review',
+        'description: Custom tool-use agent that shadows a built-in name.',
+        'settings:',
+        '  agentCategory: toolUse',
+        'prompts:',
+        '  systemPrompt: Custom review agent.',
         '',
       ].join('\n'),
     );
@@ -185,6 +199,45 @@ describe('cross-category agent resolution', () => {
     // …but a command launch (no pinned source) still reaches them by name.
     expect(resolveAgent('secretAgent')?.entry.name).toBe('secretAgent');
     expect(getCategoryAgent('toolUse', 'secretAgent')?.internal).toBe(true);
+  });
+
+  it('resolves scoped names within category and excludes internal agents', () => {
+    const scoped = resolveDelegationScopeAgents(
+      {
+        workflowAgentKeys: [],
+        toolUseAgentKeys: [
+          'assistant',
+          'builtInToolUse:assistant',
+          'secretAgent',
+          'missing-agent',
+        ],
+      },
+      AgentCategory.ToolUse,
+    );
+
+    expect(scoped.map((entry) => `${entry.source}:${entry.name}`)).toEqual([
+      'builtInToolUse:assistant',
+    ]);
+  });
+
+  it('preserves exact source-qualified roster entries before name deduplication', () => {
+    expect(getRosterAgent('toolUse', 'custom:review')?.source).toBe('custom');
+    expect(getRosterAgent('toolUse', 'builtInToolUse:review')?.source).toBe(
+      'builtInToolUse',
+    );
+
+    const scoped = resolveDelegationScopeAgents(
+      {
+        workflowAgentKeys: [],
+        toolUseAgentKeys: ['builtInToolUse:review', 'custom:review'],
+      },
+      AgentCategory.ToolUse,
+    );
+
+    expect(scoped.map((entry) => `${entry.source}:${entry.name}`)).toEqual([
+      'builtInToolUse:review',
+      'custom:review',
+    ]);
   });
 });
 

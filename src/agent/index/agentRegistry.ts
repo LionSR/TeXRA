@@ -12,6 +12,7 @@ import type {
   AgentCategory as AgentCategoryType,
   AgentSource,
 } from '@shared/schemas/agent';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import {
   agentMatchesIdentifier,
   agentKey as createKey,
@@ -544,8 +545,34 @@ export function getRosterAgent(
   category: AgentCategoryType,
   identifier: string,
 ): AgentEntry | undefined {
-  const entry = getAgent(identifier, category);
+  const name = agentName(identifier);
+  const entry =
+    identifier === name
+      ? getCategoryAgent(category, identifier)
+      : getAgent(identifier, category);
   return entry?.category === category && !entry.internal ? entry : undefined;
+}
+
+/**
+ * Resolve a delegation scope's agent keys to roster entries, deduped by
+ * canonical key. Internal to `resolveDelegationScopeAgents` below, which is
+ * the single exported entry point for scope resolution.
+ */
+function resolveScopedAgentKeys(
+  keys: readonly string[],
+  category: AgentCategoryType,
+): AgentEntry[] {
+  const resolved: AgentEntry[] = [];
+  const seen = new Set<string>();
+  for (const key of keys) {
+    const entry = getRosterAgent(category, key);
+    if (!entry) continue;
+    const canonicalKey = agentKeyOf(entry);
+    if (seen.has(canonicalKey)) continue;
+    seen.add(canonicalKey);
+    resolved.push(entry);
+  }
+  return resolved;
 }
 
 // =============================================================================
@@ -564,11 +591,11 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
 // =============================================================================
 
 /**
- * Get visible agents for a category (filtered by user visibility config).
- * Agents are already deduplicated by name from the getter functions.
- * No default → undefined means "never configured" (show all).
+ * Construct the roster controller over the active host stores. This is the one
+ * place the durable roster's dependencies are wired, so every host reads and
+ * writes the same selection through identical resolution rules.
  */
-export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
+export function createWorkspaceAgentRosterController(): AgentRosterController<AgentEntry> {
   const { workspaceState, globalState } = platform();
   return new AgentRosterController({
     workspaceState,
@@ -580,7 +607,37 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
       ),
     resolveAgent: getRosterAgent,
     fallbackTeamId: null,
-  }).getVisibleAgents(category);
+  });
+}
+
+/**
+ * Get visible agents for a category (filtered by user visibility config).
+ * Agents are already deduplicated by name from the getter functions.
+ * No default → undefined means "never configured" (show all).
+ */
+export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
+  return createWorkspaceAgentRosterController().getVisibleAgents(category);
+}
+
+/**
+ * Resolve delegation targets for a run: the scope's pinned keys when a
+ * delegation scope is active (dropping `internal` agents, same as the
+ * unscoped roster below), or the workspace-visible roster otherwise. The
+ * single resolver behind both the "Available agents:" tool-description block
+ * (`delegationAgentAvailability.ts`) and the prompt-template agent lists
+ * (`userVars.ts`), so a delegating agent's tool description and its own
+ * prompt vars can never list a different roster for the same run.
+ */
+export function resolveDelegationScopeAgents(
+  scope: AgentDelegationScope | undefined,
+  category: AgentCategoryType,
+): AgentEntry[] {
+  if (!scope) return getVisibleAgents(category);
+  const keys =
+    category === AgentCategory.Workflow
+      ? scope.workflowAgentKeys
+      : scope.toolUseAgentKeys;
+  return resolveScopedAgentKeys(keys, category);
 }
 
 /**

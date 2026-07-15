@@ -14,13 +14,11 @@
 
 import { z } from 'zod';
 
-import { platform } from '@platform/platform';
-import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import {
+  createWorkspaceAgentRosterController,
   getAgentsByCategory,
-  getRosterAgent,
+  refresh,
 } from '@agent/index/agentRegistry';
-import { refresh } from '@agent/index/agentRegistry';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { preflightTeamAvailability } from '@common/teams/TeamAvailabilityPreflight';
 import {
@@ -31,10 +29,8 @@ import { resolveBuiltInTeamPreset } from '@common/teams/builtInTeamPresets';
 import { agentName } from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
-  parseAgentModePresets,
   STARTER_AGENT_MODE_PRESET,
 } from '@shared/schemas/agentPresets';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 import { defineTool } from '../core/define';
@@ -94,7 +90,6 @@ ${describeTeams()}`,
       );
     }
 
-    const { workspaceState, globalState } = platform();
     const state = { getAgents: getAgentsByCategory };
     const initial = {
       preset,
@@ -161,17 +156,7 @@ ${describeTeams()}`,
 
     const { workflowKeys, toolUseKeys, unresolvedNames } =
       preflight.value.resolution;
-    const roster = new AgentRosterController({
-      workspaceState,
-      globalState,
-      getAgents: getAgentsByCategory,
-      getPresets: () =>
-        parseAgentModePresets(
-          workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-        ),
-      resolveAgent: getRosterAgent,
-      fallbackTeamId: null,
-    });
+    const roster = createWorkspaceAgentRosterController();
     await roster.setTeam(preset.id);
     await roster.setDefaultTeam(preset.id);
 
