@@ -17,6 +17,7 @@ import {
   RUN_OUTCOME,
   executionStatusToRunOutcome,
   type ExecutionId,
+  type ExecutionStatus,
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
@@ -215,7 +216,7 @@ export async function synchronizeAgentResultOutcome(
  */
 export async function writeTerminalStatus(
   executionId: ExecutionId,
-  status: string,
+  status: ExecutionStatus,
 ): Promise<void> {
   const outcome = executionStatusToRunOutcome(status);
   await enqueueMetaUpdate(executionId, () => ({
@@ -225,28 +226,29 @@ export async function writeTerminalStatus(
 }
 
 export interface FinalizeExecutionInput {
-  executionId: ExecutionId;
-  terminalStatus: string;
-  flowRecord: 'preserve' | 'delete';
+  readonly executionId: ExecutionId;
+  readonly terminalStatus: ExecutionStatus;
+  readonly flowRecord: 'preserve' | 'delete';
 }
 
 export type FinalizeExecutionResult =
   | {
-      status: 'durable';
-      terminalStatusPersisted: true;
-      flowRecord: 'preserved' | 'deleted';
+      readonly status: 'durable';
+      readonly terminalStatusPersisted: true;
+      readonly flowRecord: 'preserved' | 'deleted';
     }
   | {
-      status: 'failed';
-      error: unknown;
-      stage: 'terminal-status' | 'terminal-status-and-flow-record-delete';
-      terminalStatusPersisted: false;
+      readonly status: 'failed';
+      readonly error: unknown;
+      readonly stage:
+        'terminal-status' | 'terminal-status-and-flow-record-delete';
+      readonly terminalStatusPersisted: false;
     }
   | {
-      status: 'failed';
-      error: unknown;
-      stage: 'flow-record-delete';
-      terminalStatusPersisted: true;
+      readonly status: 'failed';
+      readonly error: unknown;
+      readonly stage: 'flow-record-delete';
+      readonly terminalStatusPersisted: true;
     };
 
 /** Persist terminal metadata, then apply the requested flow-record policy. */

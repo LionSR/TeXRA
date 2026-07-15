@@ -1,4 +1,5 @@
 import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
+import type { ExecutionStatus } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export type CliFinalizationFailureReporter = (error: Error) => void;
@@ -10,7 +11,7 @@ type FailedFinalizationResult = Extract<
 function finalizationFailureMessage(
   result: FailedFinalizationResult,
   executionId: FinalizeExecutionInput['executionId'],
-  terminalStatus: string,
+  terminalStatus: ExecutionStatus,
 ): string {
   const status = terminalStatus.toLowerCase();
   const detail = toErrorMessage(result.error);
@@ -30,7 +31,7 @@ function finalizationFailureMessage(
  */
 export async function finalizeCliExecution(
   executionId: FinalizeExecutionInput['executionId'],
-  terminalStatus: string,
+  terminalStatus: ExecutionStatus,
   flowRecord: FinalizeExecutionInput['flowRecord'],
   reportFailure: CliFinalizationFailureReporter,
 ): Promise<void> {
