@@ -15,6 +15,9 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 type DesktopShellIpcModule = typeof import('@desktop/main/desktopShellIpc');
+type DesktopShellActionFactoryOptions = Parameters<
+  DesktopShellIpcModule['createDesktopShellActions']
+>[1];
 type DesktopLogIpcModule = typeof import('@desktop/main/desktopLogIpc');
 type DesktopExecutionIpcModule =
   typeof import('@desktop/main/desktopExecutionIpc');
@@ -68,6 +71,34 @@ async function loadDesktopShellIpc(): Promise<DesktopShellIpcModule> {
   return import(
     moduleFileUrl(desktopSourcePath('main', 'desktopShellIpc.ts'))
   ) as Promise<DesktopShellIpcModule>;
+}
+
+async function createShellHarness(
+  overrides: Partial<DesktopShellActionFactoryOptions> = {},
+) {
+  const { createDesktopShellActions, createDesktopShellIpc } =
+    await loadDesktopShellIpc();
+  const postToRenderer = vi.fn();
+  const actions = createDesktopShellActions(
+    { postToRenderer },
+    {
+      getCustomAgentDirectory: async () => '/agents/custom',
+      openExternalUrl: vi.fn(async () => {}),
+      openLogFolder: vi.fn(async () => {}),
+      openPath: vi.fn(async () => {}),
+      openWorkspaceInNewWindow: vi.fn(async () => {}),
+      openWorkspaceFolder: vi.fn(async () => {}),
+      signIn: vi.fn(async () => {}),
+      getRecentCommits: async () => ({ commits: [], isGitRepo: false }),
+      showInfoMessage: vi.fn(),
+      ...overrides,
+    },
+  );
+  return {
+    actions,
+    postToRenderer,
+    shellIpc: createDesktopShellIpc(actions),
+  };
 }
 
 async function loadDesktopExecutionIpc(): Promise<DesktopExecutionIpcModule> {
@@ -221,17 +252,9 @@ describe('desktop IPC adapters', () => {
     expect(nativeTheme.off).toHaveBeenCalledWith('updated', themeListener);
   });
 
-  it('keeps shell routing and launcher fallbacks in the shell adapter', async () => {
-    const { createDesktopShellIpc } = await loadDesktopShellIpc();
-    const postToRenderer = vi.fn();
+  it('keeps shell routing and launcher actions in the shell adapter', async () => {
     const openPath = vi.fn(async (_filePath: string) => {});
-    const shellIpc = createDesktopShellIpc(
-      { postToRenderer },
-      {
-        getCustomAgentDirectory: async () => '/agents/custom',
-        openPath,
-      },
-    );
+    const { postToRenderer, shellIpc } = await createShellHarness({ openPath });
 
     shellIpc.handleMessage({
       command: COMMON_COMMANDS.SWITCH_VIEW,
@@ -245,6 +268,8 @@ describe('desktop IPC adapters', () => {
     shellIpc.handleMessage({
       command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
     });
+    await Promise.resolve();
+    await Promise.resolve();
 
     expect(postToRenderer).toHaveBeenNthCalledWith(1, {
       command: 'desktop:setRoute',
@@ -282,9 +307,9 @@ describe('desktop IPC adapters', () => {
     expect(openPath).toHaveBeenCalledWith('/agents/custom');
 
     postToRenderer.mockClear();
-    createDesktopShellIpc({ postToRenderer }).handleMessage({
+    shellIpc.handleMessage({
       command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
-      customDirSet: true,
+      customDirSet: false,
     });
     expect(postToRenderer).toHaveBeenCalledWith({
       command: 'desktop:setRoute',
@@ -300,16 +325,13 @@ describe('desktop IPC adapters', () => {
     // Closes audit item A: `getRecentCommits` is now a first-class shell
     // option, so the launcher banner sees the actual `git log` output
     // instead of the legacy empty stub.
-    const { createDesktopShellIpc } = await loadDesktopShellIpc();
-    const postToRenderer = vi.fn();
     const getRecentCommits = vi.fn(async () => ({
       commits: ['abc1234: Add feature (2 days ago)'],
       isGitRepo: true,
     }));
-    const shellIpc = createDesktopShellIpc(
-      { postToRenderer },
-      { getRecentCommits },
-    );
+    const { postToRenderer, shellIpc } = await createShellHarness({
+      getRecentCommits,
+    });
 
     expect(
       shellIpc.handleMessage({
@@ -327,32 +349,9 @@ describe('desktop IPC adapters', () => {
     });
   });
 
-  it('falls back to empty list + isWorkspaceGitRepo when no git host is wired', async () => {
-    const { createDesktopShellIpc } = await loadDesktopShellIpc();
-    const postToRenderer = vi.fn();
-    const isWorkspaceGitRepo = vi.fn(() => true);
-    const shellIpc = createDesktopShellIpc(
-      { postToRenderer },
-      { isWorkspaceGitRepo },
-    );
-
-    shellIpc.handleMessage({
-      command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
-    });
-
-    expect(isWorkspaceGitRepo).toHaveBeenCalledOnce();
-    expect(postToRenderer).toHaveBeenCalledWith({
-      command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-      commits: [],
-      isGitRepo: true,
-    });
-  });
-
   it('wires the main login banner to desktop sign-in', async () => {
-    const { createDesktopShellIpc } = await loadDesktopShellIpc();
-    const postToRenderer = vi.fn();
     const signIn = vi.fn(async () => {});
-    const shellIpc = createDesktopShellIpc({ postToRenderer }, { signIn });
+    const { postToRenderer, shellIpc } = await createShellHarness({ signIn });
 
     expect(
       shellIpc.handleMessage({
@@ -366,9 +365,7 @@ describe('desktop IPC adapters', () => {
   });
 
   it('rejects shell payloads that fail the MainView inbound schema', async () => {
-    const { createDesktopShellIpc } = await loadDesktopShellIpc();
-    const postToRenderer = vi.fn();
-    const shellIpc = createDesktopShellIpc({ postToRenderer });
+    const { postToRenderer, shellIpc } = await createShellHarness();
 
     // SWITCH_VIEW with an invalid `view` value fails the discriminated-union
     // parse and is no longer dispatched as a real switch — i.e. the single
