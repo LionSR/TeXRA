@@ -241,14 +241,22 @@ export async function runWorkflowScript(
 
     const prior = priorEntries.get(index);
     if (prior && prior.key === key) {
-      const payload = serializeBridgeValue(
-        prior.result,
-        'Cached agent() result',
-      );
-      journal.set(index, {
-        ...prior,
-        result: deserializeBridgeValue(payload),
-      });
+      let payload: string | undefined;
+      let normalizedResult: unknown;
+      try {
+        payload = serializeBridgeValue(prior.result, 'Cached agent() result');
+        normalizedResult = deserializeBridgeValue(payload);
+      } catch (error) {
+        emit({
+          type: 'agent:end',
+          index,
+          label,
+          cached: true,
+          error: toErrorMessage(error),
+        });
+        throw error;
+      }
+      journal.set(index, { ...prior, result: normalizedResult });
       emit({ type: 'agent:end', index, label, cached: true });
       return payload;
     }

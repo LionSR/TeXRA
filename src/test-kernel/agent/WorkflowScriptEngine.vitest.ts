@@ -217,6 +217,33 @@ return b`,
     );
   });
 
+  it('ends a cached call with an error when its journal value is invalid', async () => {
+    const script = `${META}return await agent('cached')`;
+    const first = await runWorkflowScript({ script, runAgent: echoRunner });
+    const events: WorkflowScriptEvent[] = [];
+    const runner = vi.fn(echoRunner);
+
+    await expect(
+      runWorkflowScript({
+        script,
+        runAgent: runner,
+        journal: [{ ...first.journal[0], result: () => undefined }],
+        onEvent: (event) => events.push(event),
+      }),
+    ).rejects.toThrow(/Cached agent\(\) result must be JSON-serializable/i);
+
+    expect(runner).not.toHaveBeenCalled();
+    expect(events).toEqual([
+      {
+        type: 'agent:end',
+        index: 0,
+        label: 'cached',
+        cached: true,
+        error: expect.stringMatching(/must be JSON-serializable/i),
+      },
+    ]);
+  });
+
   it('concat() joins parts and drops nulls', async () => {
     const run = await runWorkflowScript({
       script: `${META}return concat(['a', null, 'b', '', 'c'], { separator: ' | ' })`,
