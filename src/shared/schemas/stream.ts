@@ -285,10 +285,9 @@ export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
 
 /**
  * Fields shared by every stream tab regardless of what's running underneath
- * it — split out (rather than folded into the discriminated union below) so
- * consumers that only need the common metadata (e.g. `StreamHintsSchema` in
- * `ProgressViewState.ts`) can `.pick()` from a plain object schema; Zod's
- * discriminated unions don't support `.pick()`/`.partial()` directly.
+ * it — split out rather than folded into the discriminated union below so
+ * consumers can validate the common fields directly; Zod's discriminated
+ * unions don't support `.pick()`/`.partial()`.
  */
 export const StreamTabInfoBaseSchema = z.object({
   name: z.string(),

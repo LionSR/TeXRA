@@ -90,7 +90,7 @@ function makeMockState(overrides: Record<string, any> = {}): any {
   return {
     activeStream: '',
     streamLogs: createStreamLogs(),
-    updateStreamHints: vi.fn(),
+    updateStreamMetadata: vi.fn(),
     snapshots: {
       getTaskState: vi.fn(() => undefined),
       getRunConfig: vi.fn(() => undefined),
@@ -101,7 +101,7 @@ function makeMockState(overrides: Record<string, any> = {}): any {
       setTaskState: vi.fn(),
       read: vi.fn(async () => ({})),
     },
-    getStreamHints: vi.fn(() => ({})),
+    getStreamMetadata: vi.fn(() => ({ creationTimestamp: 0 })),
     ...overrides,
   };
 }
@@ -230,14 +230,14 @@ describe('DesktopSessionProgressBridge', () => {
       }
     });
 
-    it('seeds stream hints and log entries from the snapshot', () => {
+    it('seeds canonical stream metadata and log entries from the snapshot', () => {
       const ensureStream = vi.fn();
-      const updateStreamHints = vi.fn();
+      const updateStreamMetadata = vi.fn();
 
       const bridge = createBridge({
         state: makeMockState({
           streamLogs: createStreamLogs({ ensureStream }),
-          updateStreamHints,
+          updateStreamMetadata,
         }),
         streamSnapshotStore: createSnapshotStore({
           hydrated: [
@@ -256,7 +256,7 @@ describe('DesktopSessionProgressBridge', () => {
 
       try {
         expect(ensureStream).toHaveBeenCalledWith('ghost-seeded');
-        expect(updateStreamHints).toHaveBeenCalledWith('ghost-seeded', {
+        expect(updateStreamMetadata).toHaveBeenCalledWith('ghost-seeded', {
           agent: 'proofreader',
           agentCategory: AgentCategory.Workflow,
           inputFile: 'paper.tex',

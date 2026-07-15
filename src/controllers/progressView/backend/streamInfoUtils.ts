@@ -2,7 +2,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
 import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
-import { buildStreamTabInfo, pickAgentCategory } from './streamTabInfo';
+import { buildStreamTabInfo } from './streamTabInfo';
 import { compareByNewestCreationTime } from './streamOrdering';
 import type { ProgressViewState } from './state/ProgressViewState';
 
@@ -43,20 +43,13 @@ export function buildStreamInfo(
   id: string,
   filter: AgentCategoryFilter,
 ): StreamTabInfo | null {
-  const hints = state.getStreamHints(id);
-  const config = state.snapshots.getRunConfig(id);
+  const metadata = state.getStreamMetadata(id);
 
   // Determine category and check filter
-  const rawCategory = pickAgentCategory(config, hints);
-  const category = matchesFilter(rawCategory, filter);
+  const category = matchesFilter(metadata.agentCategory, filter);
   if (category === null) return null;
 
-  const creationTimestamp =
-    state.streamLogs.getFirstTimestamp(id) ??
-    hints.creationTimestamp ??
-    Date.now();
-
-  const workingDirectory = config?.workingDirectory;
+  const workingDirectory = metadata.workingDirectory;
   let worktreeInfo;
   if (workingDirectory) {
     worktreeInfo = peekWorktreeInfo(workingDirectory);
@@ -65,13 +58,7 @@ export function buildStreamInfo(
 
   return buildStreamTabInfo({
     streamId: id,
-    config,
-    hints,
-    creationTimestamp,
-    executionId: state.snapshots.getExecutionId(id) ?? hints.executionId,
-    parentStreamId:
-      state.snapshots.getParentStreamId(id) ?? hints.parentStreamId,
-    description: state.snapshots.getDescription(id) ?? hints.description,
+    metadata,
     worktreeInfo,
   });
 }
