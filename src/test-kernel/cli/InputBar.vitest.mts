@@ -196,7 +196,7 @@ describe('InputBar draft discard', () => {
     expect(imagePasteQueue.hasDeferredAction).toBe(false);
   });
 
-  it('drops late image, attachment, error, and submit effects in the mounted input', async () => {
+  it('discards a pending image submit from an otherwise empty mounted input', async () => {
     const ink = (await import(cliRequire.resolve('ink'))) as any;
     const React = ((await import(cliRequire.resolve('react'))) as any).default;
     const firstPaste = deferredValue<{
@@ -240,7 +240,6 @@ describe('InputBar draft discard', () => {
         () =>
           controlRef.current !== null && stdin.listenerCount('readable') > 0,
       );
-      stdin.write('unfinished draft');
       stdin.write('\u0016');
       await waitFor(
         () => clipboardMock.attachClipboardImage.mock.calls.length === 1,

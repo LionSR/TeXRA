@@ -160,10 +160,16 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     return { value: '', cursor: 0 };
   }, [clearDraft]);
   const discardDraft = useCallback((): boolean => {
-    if (draftValueRef.current.length === 0) return false;
+    if (
+      draftValueRef.current.length === 0 &&
+      !imagePasteQueue.hasPending &&
+      !imagePasteQueue.hasDeferredAction
+    ) {
+      return false;
+    }
     clearDraft();
     return true;
-  }, [clearDraft]);
+  }, [clearDraft, imagePasteQueue]);
   useImperativeHandle(props.controlRef, () => ({ discardDraft }), [
     discardDraft,
   ]);
