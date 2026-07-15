@@ -2,10 +2,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { LatexSettingsStatus } from '@shared/schemas/settingsViewMessages';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
-import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latex';
 import {
   isWorktreeSupportEnabled,
   setWorktreeSupportEnabled,
@@ -17,6 +15,7 @@ import {
   createStubDesktopAgentSettingsController,
   createStubDesktopCredentialSettingsController,
   createStubDesktopHistoryOptions,
+  createStubDesktopToolingSettingsController,
 } from './desktopSettingsTestSupport';
 import type { StateStore } from '@platform/interfaces';
 
@@ -48,11 +47,13 @@ type SettingsFixtureOverrides = Omit<
   Partial<DesktopSettingsIpcOptions>,
   | 'agentSettingsController'
   | 'credentialSettingsController'
+  | 'toolingSettingsController'
   | 'postToRenderer'
   | keyof DesktopHistoryOptions
 > & {
   agentSettingsController?: DesktopSettingsIpcOptions['agentSettingsController'];
   credentialSettingsController?: DesktopSettingsIpcOptions['credentialSettingsController'];
+  toolingSettingsController?: DesktopSettingsIpcOptions['toolingSettingsController'];
   history?: Partial<DesktopHistoryOptions>;
   postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
 };
@@ -160,6 +161,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const { history, ...settingsOverrides } = overrides;
   const globalState = overrides.globalState ?? new MemoryStateStore();
   const workspaceState = overrides.workspaceState ?? new MemoryStateStore();
+  const postToRenderer = overrides.postToRenderer ?? (() => undefined);
   const settings = createDesktopSettingsIpc({
     ...settingsOverrides,
     ...createStubDesktopHistoryOptions(history),
@@ -172,8 +174,17 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
         globalState,
         workspaceState,
       }),
+    toolingSettingsController:
+      overrides.toolingSettingsController ??
+      createStubDesktopToolingSettingsController({
+        postLatexConfigValues: () =>
+          postToRenderer({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+            values: {},
+          }),
+      }),
     globalState,
-    postToRenderer: overrides.postToRenderer ?? (() => undefined),
+    postToRenderer,
     workspaceState,
   });
   return { globalState, settings, workspaceState };
@@ -209,28 +220,6 @@ function createDeferred(): {
 
 function commandOf(message: unknown): string | undefined {
   return (message as { command?: string }).command;
-}
-
-function inactiveLatexSettingsStatus(): LatexSettingsStatus {
-  return {
-    outDir: true,
-    autoRevealExclude: true,
-    texDistributionInstalled: false,
-    latexWorkshopInstalled: false,
-    latexdiffInstalled: false,
-    latexindentInstalled: false,
-    texcountInstalled: false,
-    imageProcessingInstalled: false,
-    platform: 'linux',
-    pdflatexPath: null,
-    latexmkPath: null,
-    latexdiffPath: null,
-    latexindentPath: null,
-    texcountPath: null,
-    ghostscriptPath: null,
-    graphicsmagickPath: null,
-    packageManager: null,
-  };
 }
 
 describe('desktop settings IPC', () => {
@@ -503,49 +492,51 @@ describe('desktop settings IPC', () => {
     expect(revealed).toEqual(['goal-owning-stream']);
   });
 
-  it('runs allowlisted LaTeX install commands through the desktop host', async () => {
-    const commands: string[] = [];
-
-    const { settings } = createSettingsFixture({
-      runInstallCommand: async (command) => {
-        commands.push(command);
-      },
-    });
+  it('delegates Tools and LaTeX commands to the required controller', async () => {
+    const baseController = createStubDesktopToolingSettingsController();
+    const toggle = vi.fn(async () => undefined);
+    const runInstallCommand = vi.fn(async () => undefined);
+    const setConfigValue = vi.fn(async () => undefined);
+    const toolingSettingsController =
+      createStubDesktopToolingSettingsController({
+        toolsActions: { ...baseController.toolsActions, toggle },
+        latexActions: {
+          ...baseController.latexActions,
+          runInstallCommand,
+          setConfigValue,
+        },
+      });
+    const { settings } = createSettingsFixture({ toolingSettingsController });
 
     expect(
       settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
+        toolId: 'zotero',
+        enabled: false,
+      }),
+    ).toBe(true);
+    expect(
+      settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
-        installCommand: HOMEBREW_INSTALL_COMMAND,
+        installCommand: 'brew install --cask mactex-no-gui',
+      }),
+    ).toBe(true);
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
+        field: 'latexFormatter',
+        value: 'none',
       }),
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(commands).toEqual([HOMEBREW_INSTALL_COMMAND]);
-  });
-
-  it('rejects unknown desktop LaTeX install commands', async () => {
-    const commands: string[] = [];
-    const errors: unknown[] = [];
-
-    const { settings } = createSettingsFixture({
-      runInstallCommand: async (command) => {
-        commands.push(command);
-      },
-      onError: (error) => errors.push(error),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
-        installCommand: 'echo not-allowlisted',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(commands).toEqual([]);
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatchObject({
-      message: 'Rejected unknown install command: echo not-allowlisted',
+    expect(toggle).toHaveBeenCalledWith('zotero', false);
+    expect(runInstallCommand).toHaveBeenCalledWith(
+      'brew install --cask mactex-no-gui',
+    );
+    expect(setConfigValue).toHaveBeenCalledWith({
+      field: 'latexFormatter',
+      value: 'none',
     });
   });
 
@@ -602,82 +593,6 @@ describe('desktop settings IPC', () => {
     expect(signOut).toHaveBeenCalledOnce();
     expect(setProviderKey).toHaveBeenCalledWith('google', 'sk-test');
     expect(setPreferSubscription).toHaveBeenCalledWith(true);
-  });
-
-  it('round-trips LaTeX config writes through workspace state and refreshes the renderer', async () => {
-    const workspaceState = new MemoryStateStore();
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
-        field: 'latexFormatter',
-        value: 'none',
-      }),
-    ).toBe(true);
-    await Promise.resolve();
-
-    expect(workspaceState.values.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
-      'none',
-    );
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values: {
-        latexFormatter: 'none',
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
-        field: 'latexFormatter',
-        value: null,
-      }),
-    ).toBe(true);
-    await Promise.resolve();
-
-    expect(workspaceState.values.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
-      undefined,
-    );
-    expect(workspaceState.values.has(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
-      false,
-    );
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values: {},
-    });
-  });
-
-  it('reports invalid LaTeX config writes without mutating workspace state', async () => {
-    const workspaceState = new MemoryStateStore();
-
-    const errors: unknown[] = [];
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
-      onError: (error) => errors.push(error),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
-        field: 'latexdiffTimeoutMs',
-        value: 100,
-      }),
-    ).toBe(true);
-    await Promise.resolve();
-
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatchObject({
-      message: 'Invalid LaTeX config value for latexdiffTimeoutMs',
-    });
-    expect(
-      workspaceState.values.has(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS),
-    ).toBe(false);
-    expect(posted).toEqual([]);
   });
 
   it('persists model settings through global state', async () => {
@@ -752,7 +667,7 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it('loads desktop tool dashboard and approval settings on settings readiness', async () => {
+  it('delegates tooling startup and posts approval settings on readiness', async () => {
     const workspaceState = new MemoryStateStore();
     workspaceState.values.set(
       WorkspaceStateKey.CODEX_SANDBOX_MODE,
@@ -761,26 +676,22 @@ describe('desktop settings IPC', () => {
     const config = new MemoryConfigStore();
     config.values.set('texra.toolUse.requireBashApproval', false);
     const agentSettingsController = createStubDesktopAgentSettingsController();
-    const postStartupData = vi.fn(async () => undefined);
-    agentSettingsController.postStartupData = postStartupData;
+    const postAgentStartupData = vi.fn(async () => undefined);
+    agentSettingsController.postStartupData = postAgentStartupData;
+    const postToolingStartupData = vi.fn(async () => undefined);
+    const postLatexConfigValues = vi.fn();
+    const toolingSettingsController =
+      createStubDesktopToolingSettingsController({
+        postLatexConfigValues,
+        postStartupData: postToolingStartupData,
+      });
 
     const { settings, posted } = createCapturedSettingsFixture({
       agentSettingsController,
+      toolingSettingsController,
       workspaceState,
       config,
       sendStartupCatalogData: true,
-      buildToolDashboardItems: async () => [
-        {
-          id: 'file-ops',
-          name: 'File & Shell Operations',
-          category: 'file',
-          description: 'Built-in file tools',
-          tools: [],
-          status: 'available',
-          requiresSetup: false,
-        },
-      ],
-      detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
       onError: () => undefined,
     });
 
@@ -792,7 +703,9 @@ describe('desktop settings IPC', () => {
     ).toBe(false);
     await flushAsyncWork();
 
-    expect(postStartupData).toHaveBeenCalledOnce();
+    expect(postLatexConfigValues).toHaveBeenCalledOnce();
+    expect(postToolingStartupData).toHaveBeenCalledOnce();
+    expect(postAgentStartupData).toHaveBeenCalledOnce();
 
     expect(
       posted.find(
@@ -805,15 +718,6 @@ describe('desktop settings IPC', () => {
       bashApprovalEnabled: false,
       codexSandboxMode: 'danger-full-access',
     });
-    expect(
-      posted.find(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      ),
-    ).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items: [expect.objectContaining({ id: 'file-ops' })],
-    });
   });
 
   it('writes the bash-approval toggle to the workspace config scope, not global', async () => {
@@ -821,7 +725,6 @@ describe('desktop settings IPC', () => {
 
     const { settings, posted } = createCapturedSettingsFixture({
       config,
-      detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
       onError: () => undefined,
     });
 
@@ -867,8 +770,6 @@ describe('desktop settings IPC', () => {
       config: new MemoryConfigStore(),
       sendStartupCatalogData: true,
       credentialSettingsController,
-      buildToolDashboardItems: async () => [],
-      detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
       onError: () => undefined,
     });
 
@@ -907,65 +808,6 @@ describe('desktop settings IPC', () => {
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
     });
-  });
-
-  it('handles desktop tool dashboard refreshes and toggles', async () => {
-    const globalState = new MemoryStateStore();
-
-    let refreshCount = 0;
-    const buildCalls: unknown[][] = [];
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      globalState,
-      config: new MemoryConfigStore(),
-      buildToolDashboardItems: async (cachedResults = []) => {
-        buildCalls.push(cachedResults);
-        return [
-          {
-            id: 'zotero',
-            name: 'Zotero Integration',
-            category: 'academic',
-            description: 'Citation tools',
-            tools: [],
-            status: 'available',
-            requiresSetup: true,
-            toggleable: true,
-            enabled: !(
-              globalState.values.get(GlobalStateKey.DISABLED_TOOLS) as
-                string[] | undefined
-            )?.includes('zotero'),
-          },
-        ];
-      },
-      refreshToolAvailability: async () => {
-        refreshCount++;
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
-        toolId: 'zotero',
-        enabled: false,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-    expect(globalState.values.get(GlobalStateKey.DISABLED_TOOLS)).toEqual([
-      'zotero',
-    ]);
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items: [expect.objectContaining({ id: 'zotero', enabled: false })],
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-    expect(refreshCount).toBe(1);
-    expect(buildCalls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('refreshes credentials before conditionally refreshing the agent catalog', async () => {

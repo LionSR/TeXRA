@@ -14,6 +14,8 @@ import {
 
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -28,6 +30,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { normalizePlatform } from '@shared/constants/latex';
 import {
   AgentCategory,
   agentKeyOf,
@@ -36,6 +39,11 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
+import { BinaryResolver } from '@utils/system/binaryResolver';
+import {
+  checkToolInstalled,
+  detectPackageManager,
+} from '@utils/system/toolUtils';
 import { setDesktopAgentResumeHandler } from './desktopAgentResume.js';
 import {
   openDesktopStreamSnapshotStore,
@@ -62,6 +70,14 @@ import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
+import {
+  buildDefaultToolDashboardItems,
+  findToolCommand,
+  getCachedToolCheckResults,
+  refreshDefaultDisabledToolCache,
+  refreshDefaultToolAvailability,
+} from './desktopSettingsIpcHelpers.js';
+import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 import { createDesktopGitHost } from './desktopGitHost.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
 import {
@@ -757,10 +773,68 @@ function createWindow(options: {
       },
       onError: reportAsyncError,
     });
+  const presentExtensionInstall = async (extensionId: string) => {
+    // TeXRA Desktop cannot host VS Code extensions. This action explicitly
+    // offers navigation to the VS Code marketplace or the extension id.
+    const result = await dialog.showMessageBox(window, {
+      type: 'info',
+      message: 'VS Code extension referenced',
+      detail:
+        `${extensionId}\n\n` +
+        'TeXRA Desktop runs standalone and cannot host VS Code extensions. ' +
+        'If you also use VS Code, you can install this extension there.',
+      buttons: ['Open in Marketplace', 'Copy ID', 'Close'],
+      defaultId: 0,
+      cancelId: 2,
+    });
+    if (result.response === 0) {
+      await previewHost.openExternal(
+        `https://marketplace.visualstudio.com/items?itemName=${encodeURIComponent(extensionId)}`,
+      );
+    } else if (result.response === 1) {
+      clipboard.writeText(extensionId);
+    }
+  };
+  const toolingSettingsController = new DefaultDesktopToolingSettingsController(
+    {
+      workspaceState: platform().workspaceState,
+      globalState: platform().globalState,
+      renderer: {
+        postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+      },
+      dashboard: {
+        buildItems: buildDefaultToolDashboardItems,
+        getCachedCheckResults: getCachedToolCheckResults,
+        refreshAvailability: refreshDefaultToolAvailability,
+        refreshDisabledCache: refreshDefaultDisabledToolCache,
+        findCommand: findToolCommand,
+      },
+      navigation: {
+        openExternal: previewHost.openExternal,
+        presentExtensionInstall,
+      },
+      commands: { run: runSetupCommand },
+      latexToolingController: new LatexToolingController({
+        checkToolInstalled: (tool) => checkToolInstalled(tool, false),
+        findPath: (tool) => BinaryResolver.findPath(tool),
+        detectPackageManager,
+        getPlatform: () => normalizePlatform(process.platform),
+        // Extension hosting is deliberately unavailable in TeXRA Desktop.
+        isLatexWorkshopInstalled: () => false,
+        getRecommendedStatus: () => ({
+          outDir: true,
+          autoRevealExclude: true,
+        }),
+        onDetectionError: reportAsyncError,
+      }),
+      latexConfigPersistenceController: new LatexConfigPersistenceController(),
+    },
+  );
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     agentSettingsController,
     credentialSettingsController,
+    toolingSettingsController,
     sendStartupCatalogData: true,
     resourcesPath: options.resourcesPath,
     // Rerun/Restore from history: same host-neutral owners the extension's
@@ -794,43 +868,6 @@ function createWindow(options: {
       } catch (error) {
         if (!windowClosed) reportAsyncError(error);
       }
-    },
-    openExternalUrl: (url) => previewHost.openExternal(url),
-    installToolExtension: async (extensionId) => {
-      // The desktop shell can't host VS Code extensions, so opening the
-      // marketplace URL was misleading. Surface an info dialog that names
-      // the extension and lets the user open the marketplace listing only
-      // if they explicitly want to install it inside VS Code. The 'Copy ID'
-      // button gives them the bare extension id for `code --install-extension`.
-      const result = await dialog.showMessageBox(window, {
-        type: 'info',
-        message: 'VS Code extension referenced',
-        detail:
-          `${extensionId}\n\n` +
-          'TeXRA Desktop runs standalone and cannot host VS Code extensions. ' +
-          'If you also use VS Code, you can install this extension there.',
-        buttons: ['Open in Marketplace', 'Copy ID', 'Close'],
-        defaultId: 0,
-        cancelId: 2,
-      });
-      if (result.response === 0) {
-        await previewHost.openExternal(
-          `https://marketplace.visualstudio.com/items?itemName=${encodeURIComponent(extensionId)}`,
-        );
-      } else if (result.response === 1) {
-        clipboard.writeText(extensionId);
-      }
-    },
-    runToolCommand: async ({ command }) => {
-      await runSetupCommand(command);
-    },
-    refreshToolAvailability: async () => {
-      const { refreshToolAvailability } =
-        await import('@tools/toolAvailability');
-      await refreshToolAvailability();
-    },
-    runInstallCommand: async (command) => {
-      await runSetupCommand(command);
     },
     onError: reportAsyncError,
   });
