@@ -22,6 +22,9 @@ import type {
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { CHATGPT_TOOL_USE_ONLY_DESCRIPTION } from '@shared/schemas/coreSettings';
 
+// Local imports - utilities
+import { pluralize } from '@utils/text/stringUtils';
+
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
 import '../components/profile/RelayQuotaMeter';
@@ -344,8 +347,8 @@ export class ModelsTab extends LitElement {
     const status = consentModel
       ? 'VS Code is ready to ask for your consent.'
       : readyCount > 0
-        ? `${readyCount} Copilot model${readyCount === 1 ? ' is' : 's are'} ready.`
-        : `${unavailableCount} Copilot model${unavailableCount === 1 ? ' is' : 's are'} unavailable.`;
+        ? `${readyCount} ${pluralize(readyCount, 'Copilot model is', 'Copilot models are')} ready.`
+        : `${unavailableCount} ${pluralize(unavailableCount, 'Copilot model is', 'Copilot models are')} unavailable.`;
 
     return html`
       <section id="copilot-access" class="keyless-source">

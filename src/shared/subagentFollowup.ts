@@ -19,6 +19,7 @@
 import escapeRegExp from 'escape-string-regexp';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { DELIVERY_TAG, DELIVERY_TAGS } from '@shared/deliveryTags';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Derived from the single owned DELIVERY_TAGS list (@shared/deliveryTags),
 // same derivation pattern UserMessage.ts uses for its structured-delivery
@@ -184,7 +185,7 @@ function resultResponsePreview(response: string): string {
 
   const extraLines = lines.length - RESULT_RESPONSE_PREVIEW_LINES;
   const hidden = lineLimited
-    ? `${extraLines} more line${extraLines === 1 ? '' : 's'}`
+    ? formatResultCount(extraLines, 'more line')
     : 'more text';
   return `${preview}\n… ${hidden}; open the subagent transcript for the full response`;
 }

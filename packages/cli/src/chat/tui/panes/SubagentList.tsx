@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 // Local imports - shared stream state
 import type { ActiveChildInfo } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and controls
 import {
@@ -107,7 +108,7 @@ function SessionRow({
           <Text dimColor>
             {` · ${[
               hiddenSessionCount > 0
-                ? `+${hiddenSessionCount} session${hiddenSessionCount === 1 ? '' : 's'}`
+                ? `+${formatResultCount(hiddenSessionCount, 'session')}`
                 : undefined,
               processSummary,
             ]
@@ -141,7 +142,7 @@ function ProcessRow({
         <Box flexShrink={0}>
           <Text
             dimColor
-          >{` · +${hiddenProcessCount} more process${hiddenProcessCount === 1 ? '' : 'es'}`}</Text>
+          >{` · +${formatResultCount(hiddenProcessCount, 'more process')}`}</Text>
         </Box>
       ) : null}
     </Box>
@@ -239,7 +240,7 @@ export function SubagentList(
   const hiddenProcessCount = activeProcesses.length - visibleProcesses.length;
   const processSummary =
     hiddenProcessCount > 0 && visibleProcesses.length === 0
-      ? `+${hiddenProcessCount} process${hiddenProcessCount === 1 ? '' : 'es'}`
+      ? `+${formatResultCount(hiddenProcessCount, 'process')}`
       : undefined;
   return (
     <Box

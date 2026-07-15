@@ -28,6 +28,7 @@ import {
 } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import { pluralize } from '@utils/text/stringUtils';
 import { AgentSelectionEvents } from './events';
 import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';
 
@@ -571,7 +572,7 @@ export class AgentSelectionPanel extends LitElement {
       </div>
       <div class="agent-count">
         ${enabledCount}/${this.agents.length}
-        agent${this.agents.length !== 1 ? 's' : ''} in dropdown
+        ${pluralize(this.agents.length, 'agent')} in dropdown
       </div>
     `;
   }

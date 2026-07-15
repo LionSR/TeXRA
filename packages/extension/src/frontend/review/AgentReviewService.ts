@@ -45,6 +45,7 @@ import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
+import { formatResultCount } from '@utils/text/stringUtils';
 import {
   AgentReviewRunController,
   type AgentReviewRunToken,
@@ -330,7 +331,7 @@ class AgentReviewServiceImpl {
         // launch resolves it within tool-use (the config default is Workflow).
         agentCategory: AgentCategory.ToolUse,
         instruction,
-        displayInstruction: `Agent review: diff with ${baseDescription} (${changedFiles.length} file${changedFiles.length === 1 ? '' : 's'})${options.userInstructions ? ' · custom focus' : ''}`,
+        displayInstruction: `Agent review: diff with ${baseDescription} (${formatResultCount(changedFiles.length, 'file')})${options.userInstructions ? ' · custom focus' : ''}`,
         // The instruction's paths are repo-relative; anchor the session's
         // tool calls (read_file, grep, bash) to the repository root, which
         // may sit above the opened workspace folder.
@@ -385,8 +386,7 @@ class AgentReviewServiceImpl {
       if (restored) {
         suffix = ' · showing previous results';
       } else if (this.issues.length > 0) {
-        const plural = this.issues.length === 1 ? '' : 's';
-        suffix = ` · showing the ${this.issues.length} issue${plural} reported before the session ended`;
+        suffix = ` · showing the ${formatResultCount(this.issues.length, 'issue')} reported before the session ended`;
       }
       this.summary = `Review ${verb}${suffix}`;
       logger.warn(CHANNEL, `Agent review session ${verb}`);
@@ -397,7 +397,7 @@ class AgentReviewServiceImpl {
     this.summary =
       count === 0
         ? `No issues found (diff with ${baseDescription})`
-        : `Found ${count} potential issue${count === 1 ? '' : 's'} (diff with ${baseDescription})${truncated ? ' · diff truncated' : ''}`;
+        : `Found ${formatResultCount(count, 'potential issue')} (diff with ${baseDescription})${truncated ? ' · diff truncated' : ''}`;
     logger.info(
       CHANNEL,
       `Agent review (${trigger}): ${count} issue(s) across ${changedFiles.length} changed file(s)`,
@@ -552,7 +552,7 @@ class AgentReviewServiceImpl {
       return;
     }
     void vscode.window.showInformationMessage(
-      `Launched the ${FIX_AGENT} agent to fix ${targets.length} review issue${targets.length === 1 ? '' : 's'}. Run the review again once it finishes.`,
+      `Launched the ${FIX_AGENT} agent to fix ${formatResultCount(targets.length, 'review issue')}. Run the review again once it finishes.`,
     );
   }
 

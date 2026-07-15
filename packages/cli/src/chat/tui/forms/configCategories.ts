@@ -1,4 +1,5 @@
 import type { StateSettingEntry } from '@shared/schemas/stateSettings';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import type { SelectItem } from '../ui/Select';
 
@@ -33,6 +34,6 @@ export function buildConfigCategoryItems(
   return [...counts].map(([category, count]) => ({
     value: category,
     label: configCategoryLabel(category),
-    description: `${count} ${count === 1 ? 'setting' : 'settings'}`,
+    description: formatResultCount(count, 'setting'),
   }));
 }

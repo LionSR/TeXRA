@@ -1,6 +1,7 @@
 import type { AgentEntry } from '@agent/index';
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
   cliMultiAgentPresetCanLaunchTeam,
@@ -166,7 +167,7 @@ export function buildCliOrchestrationItems(
     items.push({
       value: { kind: 'browse-resumes' },
       label: 'Resume',
-      description: `${resumeItems.length} resumable ${resumeItems.length === 1 ? 'session' : 'sessions'}`,
+      description: formatResultCount(resumeItems.length, 'resumable session'),
     });
   }
   if (buildCliAgentItems(input.toolUseAgents).length > 0) {

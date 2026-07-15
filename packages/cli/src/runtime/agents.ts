@@ -6,6 +6,7 @@ import {
 } from '@agent/index';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';
 import { getCliAuthProvider } from './supabaseAuth';
@@ -232,7 +233,7 @@ export function formatCliHiddenAgentsNotice(
 ): string | undefined {
   if (hiddenCount <= 0) return undefined;
   const { categoryArg, catalog } = cliAgentCatalogHint(category);
-  return `Showing visible agents only; ${hiddenCount} hidden agent${hiddenCount === 1 ? '' : 's'} omitted. Use \`texra agents list${categoryArg} --all\` to show the ${catalog}.`;
+  return `Showing visible agents only; ${formatResultCount(hiddenCount, 'hidden agent')} omitted. Use \`texra agents list${categoryArg} --all\` to show the ${catalog}.`;
 }
 
 function cliAgentCatalogHint(category?: AgentCategory): {

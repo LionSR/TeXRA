@@ -7,6 +7,7 @@ import { Box, Text } from 'ink';
 import { formatRuntimeSkillActivation } from '@skills/runtimeSkills';
 import { readCliRuntimeSkills, skillListRecord } from '@cli/runtime/skills';
 import { escapeText } from '@shared/utils/xmlEscape';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import { COLOR_WARNING } from '../ui/colors';
 import { KeyHints } from '../ui/KeyHints';
@@ -80,7 +81,7 @@ export function skillSelectItemsForTui(
 
 function skillImportIssueSummary(issueCount: number): string | undefined {
   if (issueCount === 0) return undefined;
-  return `${issueCount} import issue${issueCount === 1 ? '' : 's'}`;
+  return formatResultCount(issueCount, 'import issue');
 }
 
 export function skillsSelectWindow(args: {
