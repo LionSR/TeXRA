@@ -67,6 +67,13 @@ export interface FlowLifecycleControl {
   setFlowRecordDisposition(disposition: FlowRecordDisposition): void;
 }
 
+export type RunTerminalPersistence =
+  | { readonly kind: 'skip' }
+  | {
+      readonly kind: 'finalize';
+      readonly flowRecord: FinalizeExecutionInput['flowRecord'];
+    };
+
 export interface FinalizeRunTerminalParams {
   /** Live handle for this terminal attempt; its settled flag is the exactly-once guard. */
   readonly handle: AgentExecutionHandle;
@@ -91,12 +98,7 @@ export interface FinalizeRunTerminalParams {
    */
   readonly trace?: AgentTrace;
   /** Durable execution-state action owned by the storage finalizer. */
-  readonly persistence:
-    | { readonly kind: 'skip' }
-    | {
-        readonly kind: 'finalize';
-        readonly flowRecord: FinalizeExecutionInput['flowRecord'];
-      };
+  readonly persistence: RunTerminalPersistence;
   /**
    * Delivery hook (subagent onError) run after the result settles and before
    * untrack, so the parent still sees this child as active while the

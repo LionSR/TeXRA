@@ -4,7 +4,10 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
+import {
+  finalizeRunTerminal,
+  type RunTerminalPersistence,
+} from '@agent/runtime/AgentRunLifecycle';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
   currentSession,
@@ -50,11 +53,8 @@ interface FinalizeChildStreamOptions {
   cancelled?: boolean;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
-  /**
-   * Persist the outcome projection to execution history. Callers that own a
-   * richer persistence block (background bash) leave this unset.
-   */
-  persistTerminalStatus?: boolean;
+  /** Durable execution-state action; background bash owns its richer block. */
+  persistence?: RunTerminalPersistence;
   /** Remove the child stream tab from the progress view once finalized. */
   autoClose?: boolean;
 }
@@ -265,10 +265,7 @@ async function finalizeChildStream(
     stage: options?.stage,
     // No trace emit: child-stream results must stay out of `session.onResult`
     // (host toast) consumers — the loop already presents them as follow-ups.
-    persistence:
-      options?.persistTerminalStatus === true
-        ? { kind: 'finalize', flowRecord: 'delete' }
-        : { kind: 'skip' },
+    persistence: options?.persistence ?? { kind: 'skip' },
   });
   disposeTrace();
 

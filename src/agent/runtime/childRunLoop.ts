@@ -663,7 +663,7 @@ export function startChildRunLoop<TTurn>(
           failed: sawTurnFailure,
           cancelled: loop.isInterrupted(),
           stage: sessionStage,
-          persistTerminalStatus: true,
+          persistence: { kind: 'finalize', flowRecord: 'delete' },
         });
       } else {
         // Native: every GENUINE terminal turn already finalized its own
