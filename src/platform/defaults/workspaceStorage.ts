@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join, normalize, relative } from 'node:path';
 
 import { isPathWithin } from '@utils/core/pathCore';
+import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 // Local imports - platform
 import type { StorageProvider } from '../interfaces';
@@ -33,12 +34,13 @@ function legacyWorkspaceStorageId(workspacePath: string | undefined): string {
 }
 
 function sanitizeWorkspaceBasename(workspacePath: string): string {
-  return (
-    basename(workspacePath)
-      .replaceAll(/[^A-Za-z0-9._-]/g, '-')
-      .replaceAll(/-+/g, '-')
-      .replaceAll(/^-|-$/g, '') || 'workspace'
-  );
+  return sanitizePathSegment(basename(workspacePath), {
+    invalidCharPattern: /[^A-Za-z0-9._-]/g,
+    replacement: '-',
+    collapseRepeats: true,
+    trimReplacement: true,
+    fallback: 'workspace',
+  });
 }
 
 export function workspaceStorageId(workspacePath: string | undefined): string {

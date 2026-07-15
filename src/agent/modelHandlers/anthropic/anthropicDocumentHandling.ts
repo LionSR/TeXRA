@@ -7,6 +7,8 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 import { toFile } from '@anthropic-ai/sdk';
 
 // Local imports
+import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
+
 import { FILES_API_BETA } from './anthropicContextManagement';
 import { wipeBuffer } from '../utils/toolAttachmentUtils';
 
@@ -119,13 +121,13 @@ export async function countPdfPagesFromBuffer(buffer: Buffer): Promise<number> {
  */
 export function sanitizeAnthropicFilename(filename: string): string {
   const baseName = basename(filename) || filename;
-  const trimmed = baseName.trim();
-  const withoutControlChars = Array.from(trimmed, (char) =>
-    char.charCodeAt(0) < 32 ? '_' : char,
-  ).join('');
-  const withoutForbidden = withoutControlChars.replaceAll(/[:<>"|?*\\/]/g, '_');
-  const sanitized = withoutForbidden || 'document.pdf';
-  return sanitized.slice(0, 255);
+  return sanitizePathSegment(baseName.trim(), {
+    // eslint-disable-next-line no-control-regex -- control chars are forbidden in filenames
+    invalidCharPattern: /[\x00-\x1F:<>"|?*\\/]/g,
+    replacement: '_',
+    fallback: 'document.pdf',
+    maxLength: 255,
+  });
 }
 
 interface ReplaceDocumentUploadsResult {
