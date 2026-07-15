@@ -9,7 +9,7 @@ import {
   type AgentCreatorUI,
   type CreatorConfig,
   TOOL_GROUPS,
-  createAgentCreatorFlow,
+  runAgentCreator,
 } from '@agent/implementations/flows/agentCreator/agentCreatorFlow';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
@@ -227,8 +227,7 @@ export async function handleCreateAgentWithAI(
 ): Promise<void> {
   try {
     const config = await loadCreatorConfig(context);
-    const flow = createAgentCreatorFlow(buildVSCodeUI());
-    await flow.run({ config, category });
+    await runAgentCreator(config, category, buildVSCodeUI());
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to create agent', err);
   }
