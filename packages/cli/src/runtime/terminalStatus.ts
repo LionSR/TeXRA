@@ -9,6 +9,7 @@ import {
   legacyEndGroupStatusForOutcome,
   runOutcomeToExecutionStatus,
 } from '@shared/streams/streamStatus';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { hasCliApprovalDenied } from './approvalAdapter';
 import { CliExitCode } from './exitCodes';
@@ -103,7 +104,18 @@ export function runOutcomeExitCode(
 
 export async function readCliRunOutcome(
   result: ExecuteAgentResult,
+  reportReadFailure?: (error: Error) => void,
 ): Promise<RunOutcome> {
-  const meta = await getExecutionStore(result.executionId).readMeta();
-  return meta?.outcome ?? result.outcome;
+  try {
+    const meta = await getExecutionStore(result.executionId).readMeta();
+    return meta?.outcome ?? result.outcome;
+  } catch (error) {
+    reportReadFailure?.(
+      new Error(
+        `Could not verify the persisted outcome for execution ${result.executionId}; using the current run outcome: ${toErrorMessage(error)}`,
+        { cause: error },
+      ),
+    );
+    return result.outcome;
+  }
 }

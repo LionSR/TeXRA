@@ -44,7 +44,10 @@ import {
   withExecutionRunContext,
   type AgentLaunchContext,
 } from './AgentLaunchContext';
-import { runFlowWithLifecycle } from './AgentRunLifecycle';
+import {
+  runFlowWithLifecycle,
+  type FlowLifecycleControl,
+} from './AgentRunLifecycle';
 import {
   AgentFlowError,
   buildOptionalFlowResultFields,
@@ -149,6 +152,7 @@ function assertAllowedWaitingResult(
 async function runToolUseAgent(
   ctx: AgentLaunchContext,
   handle: AgentExecutionHandle,
+  lifecycle: FlowLifecycleControl,
   setting: AgentToolUseSetting,
   options: Pick<
     ExecuteAgentOptions,
@@ -183,6 +187,8 @@ async function runToolUseAgent(
           ctx,
           options.onFollowUpConsumed,
         ),
+        onFlowRecordDisposition: (disposition) =>
+          lifecycle.setFlowRecordDisposition(disposition),
         onModelChanged: (modelHandler) => {
           // The tool-use flow already wrote services.config.model
           // (=== ctx.config.model, same object), so the live model is updated
@@ -425,7 +431,7 @@ export async function executeAgent(
     ).catch(() => {});
     const result = await runFlowWithLifecycle(
       ctx,
-      async (handle) => {
+      async (handle, lifecycle) => {
         // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
         if (executionId) await ensureRunDir(executionId);
         logger.info(`Starting task execution (streamId: ${runStreamId})`);
@@ -450,7 +456,7 @@ export async function executeAgent(
         });
 
         if (setting.agentCategory === AgentCategory.ToolUse) {
-          return runToolUseAgent(ctx, handle, setting, options);
+          return runToolUseAgent(ctx, handle, lifecycle, setting, options);
         }
         return runReflectionAgent(ctx, handle, setting);
       },
@@ -551,7 +557,7 @@ export async function resumeToolUseFromSnapshot(
     const isSubagent = delegationDepth > 0;
     const result = await runFlowWithLifecycle(
       ctx,
-      async (handle) => {
+      async (handle, lifecycle) => {
         const result = await runToolUseFlow(
           {
             ...ctx,
@@ -571,6 +577,8 @@ export async function resumeToolUseFromSnapshot(
               ctx,
               options.onFollowUpConsumed,
             ),
+            onFlowRecordDisposition: (disposition) =>
+              lifecycle.setFlowRecordDisposition(disposition),
           },
           undefined,
           (flowContext) => {

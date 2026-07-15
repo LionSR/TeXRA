@@ -20,7 +20,6 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import {
   PersistedFlowStateError,
-  flowKey,
   readPersistedFlowRecord,
 } from '@agent/node/persistedFlow';
 import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
@@ -360,14 +359,8 @@ export async function runReflectionFlow<C = unknown>(
     outcome = RUN_OUTCOME.FAILED;
     throw error;
   } finally {
-    if (outcome === RUN_OUTCOME.COMPLETED) {
-      try {
-        await kv.delete(flowKey(executionId));
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
-
+    // AgentRunLifecycle owns terminal metadata and flow-record disposition as
+    // one storage finalization. This flow only determines its outcome.
     runSession.interactions.cancel({ streamId, cause: 'Run ended.' });
   }
 

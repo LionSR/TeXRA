@@ -5,6 +5,7 @@ import {
   clearStoreCache,
   deriveResumability,
   EXECUTION_META_SCHEMA_VERSION,
+  finalizeExecution,
   getExecutionStore,
   RESUMABILITY_CAUSE,
 } from '@agent/storage';
@@ -88,6 +89,61 @@ describe('deriveResumability', () => {
       resumable: false,
       cause: RESUMABILITY_CAUSE.TERMINAL_FAILED,
       terminalStatus: EXECUTION_STATUS.ERROR,
+    });
+  });
+
+  it('stays non-resumable when terminal metadata persists but flow deletion fails', async () => {
+    const executionId = 'failed-finalization-with-flow' as ExecutionId;
+    await writeMeta(executionId, {});
+    await writeFlow(executionId);
+    const store = getExecutionStore(executionId);
+    vi.spyOn(store, 'delete').mockRejectedValueOnce(
+      new Error('flow delete failed'),
+    );
+
+    await expect(
+      finalizeExecution({
+        executionId,
+        terminalStatus: EXECUTION_STATUS.ERROR,
+        flowRecord: 'delete',
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'flow-record-delete',
+      terminalStatusPersisted: true,
+    });
+
+    await expect(deriveResumability(executionId)).resolves.toMatchObject({
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.TERMINAL_FAILED,
+      terminalStatus: EXECUTION_STATUS.ERROR,
+    });
+  });
+
+  it('fails closed when terminal metadata fails for a failed execution', async () => {
+    const executionId = 'failed-terminal-metadata-with-flow' as ExecutionId;
+    await writeMeta(executionId, {});
+    await writeFlow(executionId);
+    const store = getExecutionStore(executionId);
+    vi.spyOn(store, 'writeMeta').mockRejectedValueOnce(
+      new Error('metadata disk full'),
+    );
+
+    await expect(
+      finalizeExecution({
+        executionId,
+        terminalStatus: EXECUTION_STATUS.ERROR,
+        flowRecord: 'preserve',
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    await expect(deriveResumability(executionId)).resolves.toMatchObject({
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
     });
   });
 

@@ -25,8 +25,11 @@ export {
   resolveExecutionWorkspaceFilePath,
 } from './executionWorkspaceFiles';
 export {
+  finalizeExecution,
   registerExecution,
   synchronizeAgentResultOutcome,
+  type FinalizeExecutionInput,
+  type FinalizeExecutionResult,
   writeTerminalStatus,
   writeSessionDescription,
 } from './executionLifecycle';

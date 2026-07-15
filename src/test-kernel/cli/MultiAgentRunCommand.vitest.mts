@@ -39,7 +39,11 @@ vi.mock('@agent/index', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  writeTerminalStatus: vi.fn(),
+  finalizeExecution: vi.fn().mockResolvedValue({
+    status: 'durable',
+    terminalStatusPersisted: true,
+    flowRecord: 'deleted',
+  }),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
