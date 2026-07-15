@@ -12,36 +12,14 @@ import {
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
-import {
-  codexCoordinator,
-  getChatGptAuthStatus,
-  loginWithLoopback,
-  setCodexSubscriptionToolUseOnly,
-  setPreferCodexSubscription,
-} from '@auth/codex';
-import {
-  API_PROVIDERS,
-  apiKeySecretName,
-  invalidateApiKeyCache,
-  isApiProvider,
-  loadApiKeyStatusMap,
-} from '@model/apiProviders';
-import {
-  computeModelOptionsData,
-  invalidateModelOptionsCache,
-} from '@model/computeModelOptions';
-import { SETTINGS_VIEW_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  PROVIDER_DISPLAY_NAMES,
-  PROVIDER_URLS,
-} from '@shared/constants/providers';
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
 } from '@shared/constants/latex';
 import type { LatexConfigField } from '@shared/constants/latex';
-import { AgentCategory } from '@shared/schemas/agent';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
@@ -57,11 +35,9 @@ import {
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
-import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import { GoalStore } from '@tools/goal';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { StorageFS } from '@utils/files';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   applyGitAuthorSettings,
   buildGitAuthorSettingsMessage,
@@ -73,22 +49,11 @@ import {
   detectPackageManager,
 } from '@utils/system/toolUtils';
 import {
-  getProviderDisplayName,
-  getProviderEndpoint,
-  getProviderKeyUrl,
-  getProviderStreaming,
-  setGlobalStreaming,
-  setProviderEndpoint,
-  setProviderStreaming,
-  supportsCustomEndpoint,
-} from '@utils/config/providerConfig';
-import {
   type DesktopCrashReportingStatus,
   getDesktopCrashReportingStatus,
   setDesktopCrashReportingDsn,
   setDesktopCrashReportingEnabled,
 } from './desktopCrashReporting.js';
-import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import {
   buildDefaultToolDashboardItems,
   defaultOnError,
@@ -109,6 +74,7 @@ import {
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
+import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 
 type ToolDashboardBuilder = (
   cachedResults?: ExternalToolCheckResult[],
@@ -117,6 +83,7 @@ type ToolDashboardBuilder = (
 export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   postToRenderer(message: unknown): void;
   agentSettingsController: DesktopAgentSettingsController;
+  credentialSettingsController: DesktopCredentialSettingsController;
   sendStartupCatalogData?: boolean;
   globalState?: StateStore;
   workspaceState?: StateStore;
@@ -127,13 +94,6 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   /** Route this window to the progress view and select the given stream. */
   revealStream?: (streamId: string) => Promise<void>;
   openExternalUrl?: (url: string) => Promise<void>;
-  /**
-   * Offer the ChatGPT sign-in URL as a copyable link. `openExternalUrl` only
-   * targets the system default browser; this lets a user whose ChatGPT
-   * subscription lives in a different browser open the same link there (the
-   * loopback callback accepts the redirect from any browser).
-   */
-  presentChatGptSignInUrl?: (url: string) => void | Promise<void>;
   installToolExtension?: (extensionId: string) => Promise<void>;
   promptSecret?: (input: {
     title: string;
@@ -142,9 +102,6 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   showInfoMessage?: (message: string) => Promise<void>;
   showErrorMessage?: (message: string) => Promise<void>;
   confirmAction?: (message: string, confirmLabel?: string) => Promise<boolean>;
-  signIn?: () => Promise<void>;
-  signOut?: () => Promise<void>;
-  setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
   initializeCrashReporting?: () => Promise<void>;
   secrets?: PlatformSecrets;
   detectLatexSettingsStatus?: () => Promise<LatexSettingsStatus>;
@@ -155,9 +112,6 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
     kind: 'install' | 'auth';
   }) => Promise<void>;
   onError?: (error: unknown) => void;
-  modelListRefresh?: PromiseLike<void>;
-  /** Called after a provider API key is saved or removed. */
-  onApiKeyChanged?: () => Promise<void>;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
@@ -213,16 +167,15 @@ export function createDesktopSettingsIpc(
     }),
     onDetectionError: onError,
   });
-  const modelListRefresh =
-    options.modelListRefresh ??
-    refreshDesktopModelListStateIfNeeded({
-      globalState,
-      onError,
-    });
   const settingsHost = createSettingsViewHost({
     state: { workspaceState, globalState },
     respond: options.postToRenderer,
-    beforeModelSelectionMessage: () => modelListRefresh,
+    beforeModelSelectionMessage: () =>
+      options.credentialSettingsController.prepareModelSelectionData(),
+    controllers: {
+      modelSelection:
+        options.credentialSettingsController.modelSelectionController,
+    },
     memoryPrompt: {
       confirm: (message, promptOptions) =>
         options.confirmAction?.(message, promptOptions?.confirmLabel) ??
@@ -230,74 +183,6 @@ export function createDesktopSettingsIpc(
       warning: async (message) => {
         await options.showInfoMessage?.(message);
       },
-    },
-    profile: {
-      globalState,
-      providerIds: API_PROVIDERS,
-      providerVscodeSettings: {},
-      providerDisplayNames: PROVIDER_DISPLAY_NAMES,
-      providerKeyUrls: PROVIDER_URLS,
-      loadProviderKeyStatuses: () =>
-        loadApiKeyStatusMap(secrets, API_PROVIDERS),
-      getProviderDisplayName,
-      getProviderKeyUrl,
-      getProviderStreaming,
-      getProviderEndpoint,
-      supportsCustomEndpoint,
-      getConfig: (key, defaultValue) =>
-        getConfigProvider().get(key, defaultValue),
-      updateConfig: (key, value) =>
-        getConfigProvider().update(key, value, 'global'),
-      setUseIncludedModelAccess: (enabled) =>
-        options.setApiAccessMode?.(enabled ? 'included' : 'personal') ??
-        Promise.resolve(),
-      invalidateModelOptionsCache,
-    },
-    profileKey: {
-      prompt: {
-        input: (input) =>
-          options.promptSecret?.({
-            title: input.title ?? input.prompt ?? 'Set API key',
-            prompt: input.prompt ?? 'Enter API key',
-          }) ?? Promise.resolve(undefined),
-        info: async (message) => {
-          await options.showInfoMessage?.(message);
-          return undefined;
-        },
-        confirm: (message, promptOptions) =>
-          options.confirmAction?.(message, promptOptions?.confirmLabel) ??
-          Promise.resolve(true),
-      },
-      externalOpener: {
-        openExternal: (url) =>
-          options.openExternalUrl?.(url) ?? Promise.resolve(),
-      },
-      getProviderDisplayName: (provider) =>
-        getProviderDisplayName(
-          provider,
-          PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-        ),
-      getProviderKeyUrl: (provider) => {
-        const defaultUrl = PROVIDER_URLS[provider];
-        return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
-      },
-      getApiKeySecretName: (provider) => {
-        if (!isApiProvider(provider)) {
-          throw new Error(`Unknown API provider: ${provider}`);
-        }
-        return apiKeySecretName(provider);
-      },
-      setSecret: (key, value) => secrets.set(key, value),
-      deleteSecret: (key) => secrets.delete(key),
-      refreshAfterKeyChange: () => refreshAfterCredentialChange(),
-    },
-    providerConfig: {
-      isApiProvider,
-      onUnknownProvider: (provider) =>
-        options.showErrorMessage?.(`Unknown API provider: ${provider}`),
-      setProviderStreaming,
-      setProviderEndpoint,
-      setGlobalStreaming,
     },
   });
 
@@ -329,36 +214,6 @@ export function createDesktopSettingsIpc(
 
   async function postModelSelectionData(): Promise<void> {
     await settingsHost.sendModelSelectionData();
-  }
-
-  async function postMainModelOptionsData(): Promise<void> {
-    const visibleModels = settingsHost.getVisibleModels();
-    const [workflowModelOptions, toolUseModelOptions] = await Promise.all([
-      computeModelOptionsData(visibleModels, undefined, {
-        agentCategory: AgentCategory.Workflow,
-      }),
-      computeModelOptionsData(visibleModels, undefined, {
-        agentCategory: AgentCategory.ToolUse,
-      }),
-    ]);
-    options.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData: workflowModelOptions,
-      optionsDataByCategory: {
-        workflow: workflowModelOptions,
-        toolUse: toolUseModelOptions,
-      },
-    });
-  }
-
-  async function postProfileData(): Promise<void> {
-    await settingsHost.sendProfileData();
-  }
-
-  async function postChatGptAuthStatus(): Promise<void> {
-    options.postToRenderer(
-      await buildChatGptAuthStatusMessage(getChatGptAuthStatus),
-    );
   }
 
   async function postMemoryData(): Promise<void> {
@@ -492,8 +347,7 @@ export function createDesktopSettingsIpc(
       postMemoryData(),
       historyHandlers.postHistoryData(),
       modelSelectionDataPosted,
-      postProfileData(),
-      postChatGptAuthStatus(),
+      options.credentialSettingsController.postStartupData(),
       postLatexSettingsStatus(),
       postDesktopCrashReportingStatus(),
       options.agentSettingsController.postStartupData(),
@@ -533,7 +387,8 @@ export function createDesktopSettingsIpc(
   }): Promise<void> {
     await settingsHost.setModelEnabled(input, {
       afterUpdate: () => invalidateModelOptionsCache(),
-      afterPost: () => postMainModelOptionsData(),
+      afterPost: () =>
+        options.credentialSettingsController.postMainModelOptionsData(),
     });
   }
 
@@ -550,192 +405,6 @@ export function createDesktopSettingsIpc(
 
   async function updatePreferShortModelNames(enabled: boolean): Promise<void> {
     await settingsHost.setPreferShortModelNames(enabled);
-  }
-
-  async function refreshAfterCredentialChange(): Promise<void> {
-    invalidateApiKeyCache();
-    invalidateModelOptionsCache();
-    await postProfileData();
-    await postModelSelectionData();
-    await postMainModelOptionsData();
-    await options.onApiKeyChanged?.();
-  }
-
-  async function setProviderKey(
-    provider: string,
-    submittedApiKey?: string,
-  ): Promise<void> {
-    await settingsHost.setProviderKey(provider, submittedApiKey);
-  }
-
-  async function removeProviderKey(provider: string): Promise<void> {
-    await settingsHost.removeProviderKey(provider);
-  }
-
-  async function openProviderKeyUrl(provider: string): Promise<void> {
-    await settingsHost.openProviderKeyUrl(provider);
-  }
-
-  async function updateProviderStreaming(input: {
-    provider: string;
-    enabled: boolean;
-  }): Promise<void> {
-    await settingsHost.setProviderStreaming(input.provider, input.enabled);
-  }
-
-  async function updateProviderEndpoint(input: {
-    provider: string;
-    endpoint: string;
-  }): Promise<void> {
-    await settingsHost.setProviderEndpoint(input.provider, input.endpoint);
-  }
-
-  async function updateGlobalStreaming(enabled: boolean): Promise<void> {
-    await settingsHost.setGlobalStreaming(enabled);
-  }
-
-  async function signIn(): Promise<void> {
-    if (options.signIn) {
-      await options.signIn();
-      return;
-    }
-    await options.showInfoMessage?.(
-      'Researcher Access sign-in is not connected in this desktop build. Add a provider API key in Settings > Models to run agents with your own account.',
-    );
-    await postProfileData();
-  }
-
-  async function signOut(): Promise<void> {
-    if (options.signOut) {
-      await options.signOut();
-    } else {
-      await postProfileData();
-    }
-  }
-
-  async function setApiAccessMode(
-    mode: 'included' | 'personal',
-  ): Promise<void> {
-    await settingsHost.setApiAccessMode(mode);
-    // Switching included ↔ personal access mode changes the credential
-    // predicate (`getUseIncludedModelAccess()`), so refresh the onboarding
-    // funnel — otherwise a user enabling included access stays on
-    // `needs-credential` until a reload.
-    await options.onApiKeyChanged?.();
-  }
-
-  async function refreshAfterChatGptAuthChange(): Promise<void> {
-    invalidateModelOptionsCache();
-    await Promise.all([
-      postChatGptAuthStatus(),
-      postModelSelectionData(),
-      postMainModelOptionsData(),
-    ]);
-    // ChatGPT sign-in/out is a credential change too: refresh the onboarding
-    // funnel so a user who signs in from Settings leaves `needs-credential`
-    // without needing a reload.
-    await options.onApiKeyChanged?.();
-  }
-
-  async function signInChatGpt(signInOptions?: {
-    enableSubscription?: boolean;
-  }): Promise<void> {
-    try {
-      if (!options.openExternalUrl) {
-        await options.showErrorMessage?.(
-          'ChatGPT sign-in is not connected in this desktop build.',
-        );
-        return;
-      }
-      const openExternalUrl = options.openExternalUrl;
-      const session = await loginWithLoopback({
-        coordinator: codexCoordinator(),
-        openBrowser: async (url) => {
-          await openExternalUrl(url);
-          // Fire-and-forget: the dialog is informational, so don't await it.
-          // `loginWithLoopback` awaits `openBrowser` before it waits for the
-          // OAuth callback, so awaiting a modal here would block sign-in
-          // completion until the user dismisses a dialog that the completed
-          // browser tab has already made redundant (matches the extension's
-          // non-blocking notification). Route a rejection through `onError`
-          // instead of letting it surface as an unhandled rejection.
-          void Promise.resolve(options.presentChatGptSignInUrl?.(url)).catch(
-            onError,
-          );
-        },
-      });
-      // The onboarding welcome card's "Sign in with ChatGPT" implies the user
-      // wants subscription routing, so enable the preference after a successful
-      // login (mirrors the extension's `codexSubscriptionSignIn`). Without this
-      // `isCodexSubscriptionActive` stays false (the preference defaults off)
-      // and the funnel bounces the user straight back to `needs-credential`.
-      // The Settings sign-in command leaves the preference to its own toggle.
-      if (signInOptions?.enableSubscription) {
-        await setPreferCodexSubscription(true);
-      }
-      await options.showInfoMessage?.(
-        `Signed in with ChatGPT as ${session.email ?? session.accountId ?? 'your account'}.`,
-      );
-    } catch (error) {
-      await options.showErrorMessage?.(
-        `ChatGPT sign-in failed: ${toErrorMessage(error)}`,
-      );
-      onError(error);
-    } finally {
-      await refreshAfterChatGptAuthChange();
-    }
-  }
-
-  async function signOutChatGpt(): Promise<void> {
-    try {
-      await codexCoordinator().signOut();
-      await options.showInfoMessage?.('Signed out of ChatGPT.');
-    } catch (error) {
-      await options.showErrorMessage?.(
-        `ChatGPT sign-out failed: ${toErrorMessage(error)}`,
-      );
-      onError(error);
-    } finally {
-      await refreshAfterChatGptAuthChange();
-    }
-  }
-
-  async function setChatGptPreferSubscription(enabled: boolean): Promise<void> {
-    try {
-      const update = await setPreferCodexSubscription(enabled);
-      if (update.effective !== enabled) {
-        await options.showInfoMessage?.(
-          `A more specific setting still keeps ChatGPT subscription ${update.effective ? 'enabled' : 'disabled'}.`,
-        );
-      }
-    } catch (error) {
-      await options.showErrorMessage?.(
-        `ChatGPT subscription preference update failed: ${toErrorMessage(error)}`,
-      );
-      onError(error);
-    } finally {
-      await refreshAfterChatGptAuthChange();
-    }
-  }
-
-  async function setChatGptSubscriptionToolUseOnly(
-    enabled: boolean,
-  ): Promise<void> {
-    try {
-      const update = await setCodexSubscriptionToolUseOnly(enabled);
-      if (update.effective !== enabled) {
-        await options.showInfoMessage?.(
-          `The effective "subscription for tool-use only" setting remains ${update.effective ? 'enabled' : 'disabled'}.`,
-        );
-      }
-    } catch (error) {
-      await options.showErrorMessage?.(
-        `ChatGPT subscription scope update failed: ${toErrorMessage(error)}`,
-      );
-      onError(error);
-    } finally {
-      await refreshAfterChatGptAuthChange();
-    }
   }
 
   async function updateDesktopCrashReportingEnabled(
@@ -758,10 +427,7 @@ export function createDesktopSettingsIpc(
   async function refreshAuthDependentData(
     refreshOptions: { deferAgentCatalogRefresh?: boolean } = {},
   ): Promise<void> {
-    invalidateModelOptionsCache();
-    await postModelSelectionData();
-    await postMainModelOptionsData();
-    await postProfileData();
+    await options.credentialSettingsController.refreshAuthDependentData();
     if (refreshOptions.deferAgentCatalogRefresh) return;
     await options.agentSettingsController.refreshCatalogData();
   }
@@ -863,24 +529,7 @@ export function createDesktopSettingsIpc(
       unpin: (storagePath) => setMemoryPinned(storagePath, false),
     },
     history: historyHandlers.actions,
-    profile: {
-      signIn: () => signIn(),
-      signOut: () => signOut(),
-      setApiAccessMode: (mode) => setApiAccessMode(mode),
-      setProviderKey: (provider, apiKey) => setProviderKey(provider, apiKey),
-      removeProviderKey: (provider) => removeProviderKey(provider),
-      openProviderKeyUrl: (provider) => openProviderKeyUrl(provider),
-      setProviderStreaming: (provider, enabled) =>
-        updateProviderStreaming({ provider, enabled }),
-      setProviderEndpoint: (provider, endpoint) =>
-        updateProviderEndpoint({ provider, endpoint }),
-      setGlobalStreaming: (enabled) => updateGlobalStreaming(enabled),
-      setProviderVscodeSetting: unsupported(
-        'VS Code provider settings are not applicable in the desktop app.',
-      ),
-      openExternalUrl: (url) =>
-        options.openExternalUrl?.(url) ?? Promise.resolve(),
-    },
+    profile: options.credentialSettingsController.profileActions,
     modelSelection: {
       setEnabled: (modelName, enabled) =>
         updateModelEnabled({ modelName, enabled }),
@@ -934,13 +583,7 @@ export function createDesktopSettingsIpc(
         'GitHub PR subscriptions are not available in the desktop app yet.',
       ),
     },
-    chatGpt: {
-      signIn: () => signInChatGpt(),
-      signOut: () => signOutChatGpt(),
-      setPreferSubscription: (enabled) => setChatGptPreferSubscription(enabled),
-      setSubscriptionToolUseOnly: (enabled) =>
-        setChatGptSubscriptionToolUseOnly(enabled),
-    },
+    chatGpt: options.credentialSettingsController.chatGptActions,
     approval: {
       setBashApprovalEnabled: (enabled) => updateBashApprovalEnabled(enabled),
       setCodexSandboxMode: (mode) =>
@@ -1006,7 +649,8 @@ export function createDesktopSettingsIpc(
 
   return {
     refreshAuthDependentData,
-    signInChatGpt,
+    signInChatGpt: (signInOptions) =>
+      options.credentialSettingsController.signInChatGpt(signInOptions),
 
     handleMessage(message: DesktopCommandMessage) {
       // WEBVIEW_READY is a broadcast: act on it but return false so sibling

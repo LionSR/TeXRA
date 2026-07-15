@@ -1,9 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { LatexSettingsStatus } from '@shared/schemas/settingsViewMessages';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
@@ -17,20 +15,21 @@ import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 import {
   createStubDesktopAgentSettingsController,
+  createStubDesktopCredentialSettingsController,
   createStubDesktopHistoryOptions,
 } from './desktopSettingsTestSupport';
 import type { StateStore } from '@platform/interfaces';
 
-const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
 const computeModelOptionsData = vi.hoisted(() =>
   vi.fn(async (models: readonly string[] = []) =>
-    models.map((model) => ({ value: model })),
+    models.map((model) => ({ value: model, label: model })),
   ),
 );
 
-vi.mock('@model/computeModelOptions', () => ({
+vi.mock('@model/computeModelOptions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@model/computeModelOptions')>()),
   computeModelOptionsData,
-  invalidateModelOptionsCache,
+  invalidateModelOptionsCache: vi.fn(),
 }));
 
 type DesktopSettingsIpcModule =
@@ -47,9 +46,13 @@ type RendererMessage = Parameters<
 
 type SettingsFixtureOverrides = Omit<
   Partial<DesktopSettingsIpcOptions>,
-  'agentSettingsController' | 'postToRenderer' | keyof DesktopHistoryOptions
+  | 'agentSettingsController'
+  | 'credentialSettingsController'
+  | 'postToRenderer'
+  | keyof DesktopHistoryOptions
 > & {
   agentSettingsController?: DesktopSettingsIpcOptions['agentSettingsController'];
+  credentialSettingsController?: DesktopSettingsIpcOptions['credentialSettingsController'];
   history?: Partial<DesktopHistoryOptions>;
   postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
 };
@@ -163,6 +166,12 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     agentSettingsController:
       overrides.agentSettingsController ??
       createStubDesktopAgentSettingsController(),
+    credentialSettingsController:
+      overrides.credentialSettingsController ??
+      createStubDesktopCredentialSettingsController({
+        globalState,
+        workspaceState,
+      }),
     globalState,
     postToRenderer: overrides.postToRenderer ?? (() => undefined),
     workspaceState,
@@ -540,111 +549,47 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it('shows provider key rows and stores desktop API keys', async () => {
-    const secrets = new MemorySecrets();
-
-    const infoMessages: string[] = [];
-    let promptCalls = 0;
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      secrets,
-      promptSecret: async () => {
-        promptCalls += 1;
-        return '  sk-test  ';
-      },
-      showInfoMessage: async (message) => {
-        infoMessages.push(message);
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-        provider: 'google',
-        apiKey: '  sk-modal  ',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(promptCalls).toBe(0);
-    expect(secrets.values.get('apiKey.google')).toBe('sk-modal');
-    expect(infoMessages).toEqual(['Google API key has been set']);
-    expect(
-      posted.findLast(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      ),
-    ).toMatchObject({
-      providerKeyStatuses: expect.arrayContaining([
-        expect.objectContaining({ provider: 'google', status: 'set' }),
-      ]),
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-        provider: 'google',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(secrets.values.has('apiKey.google')).toBe(false);
-    expect(infoMessages).toEqual([
-      'Google API key has been set',
-      'Google API key has been removed',
-    ]);
-  });
-
-  it('falls back to the host secret prompt when no provider key is submitted', async () => {
-    const secrets = new MemorySecrets();
-
+  it('delegates profile and ChatGPT commands to the credential controller', async () => {
+    const state = {
+      globalState: new MemoryStateStore(),
+      workspaceState: new MemoryStateStore(),
+    };
+    const setProviderKey = vi.fn(async () => undefined);
+    const signIn = vi.fn(async () => undefined);
+    const signOut = vi.fn(async () => undefined);
+    const setPreferSubscription = vi.fn(async () => undefined);
+    const stub = createStubDesktopCredentialSettingsController(state);
+    const credentialSettingsController =
+      createStubDesktopCredentialSettingsController(state, {
+        profileActions: {
+          ...stub.profileActions,
+          signIn,
+          signOut,
+          setProviderKey,
+        },
+        chatGptActions: {
+          ...stub.chatGptActions,
+          setPreferSubscription,
+        },
+      });
     const { settings } = createSettingsFixture({
-      secrets,
-      promptSecret: async () => '  sk-prompt  ',
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-        provider: 'google',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(secrets.values.get('apiKey.google')).toBe('sk-prompt');
-  });
-
-  it('delegates desktop sign-in without posting stale profile data', async () => {
-    let signInCalls = 0;
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      signIn: async () => {
-        signInCalls += 1;
-      },
+      ...state,
+      credentialSettingsController,
     });
 
     expect(
       settings.handleMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_IN }),
     ).toBe(true);
-    await flushAsyncWork();
-
-    expect(signInCalls).toBe(1);
     expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      ),
-    ).toBe(false);
-  });
-
-  it('handles ChatGPT subscription preference commands in desktop settings', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform());
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      modelListRefresh: Promise.resolve(),
-    });
-
+      settings.handleMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_OUT }),
+    ).toBe(true);
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+        provider: 'google',
+        apiKey: 'sk-test',
+      }),
+    ).toBe(true);
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
@@ -653,55 +598,10 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
-    expect(
-      posted.findLast(
-        (message) =>
-          commandOf(message) ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      ),
-    ).toMatchObject({
-      status: {
-        signedIn: false,
-        preferSubscription: true,
-        subscriptionToolUseOnly: false,
-      },
-    });
-    posted.length = 0;
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY,
-        enabled: false,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(2);
-    expect(
-      posted.findLast(
-        (message) =>
-          commandOf(message) ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      ),
-    ).toMatchObject({
-      status: {
-        signedIn: false,
-        preferSubscription: true,
-        subscriptionToolUseOnly: false,
-      },
-    });
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ),
-    ).toBe(true);
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      ),
-    ).toBe(true);
+    expect(signIn).toHaveBeenCalledOnce();
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(setProviderKey).toHaveBeenCalledWith('google', 'sk-test');
+    expect(setPreferSubscription).toHaveBeenCalledWith(true);
   });
 
   it('round-trips LaTeX config writes through workspace state and refreshes the renderer', async () => {
@@ -794,10 +694,17 @@ describe('desktop settings IPC', () => {
     globalState.values.set(GlobalStateKey.HELPER_MODEL, 'gpt55');
 
     const errors: unknown[] = [];
+    const postMainModelOptionsData = vi.fn(async () => undefined);
+    const credentialSettingsController =
+      createStubDesktopCredentialSettingsController(
+        { globalState, workspaceState },
+        { postMainModelOptionsData },
+      );
 
     const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
       globalState,
+      credentialSettingsController,
       onError: (error) => errors.push(error),
     });
 
@@ -826,16 +733,7 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       helperModel: 'sonnet46T',
     });
-    const modelOptionsMessage = posted.at(-1) as {
-      command?: string;
-      optionsData?: Array<{ value?: string }>;
-    };
-    expect(modelOptionsMessage.command).toBe('setModelOptions');
-    expect(modelOptionsMessage.optionsData).toContainEqual(
-      expect.objectContaining({
-        value: 'sonnet46T',
-      }),
-    );
+    expect(postMainModelOptionsData).toHaveBeenCalledOnce();
 
     expect(
       settings.handleMessage({
@@ -955,11 +853,20 @@ describe('desktop settings IPC', () => {
 
   it('does not delay unrelated startup settings behind model-list refresh', async () => {
     const modelListRefresh = createDeferred();
+    const state = {
+      globalState: new MemoryStateStore(),
+      workspaceState: new MemoryStateStore(),
+    };
+    const credentialSettingsController =
+      createStubDesktopCredentialSettingsController(state, {
+        prepareModelSelectionData: () => modelListRefresh.promise,
+      });
 
     const { settings, posted } = createCapturedSettingsFixture({
+      ...state,
       config: new MemoryConfigStore(),
       sendStartupCatalogData: true,
-      modelListRefresh: modelListRefresh.promise,
+      credentialSettingsController,
       buildToolDashboardItems: async () => [],
       detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
       onError: () => undefined,
@@ -1061,206 +968,42 @@ describe('desktop settings IPC', () => {
     expect(buildCalls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('persists desktop API access mode changes before refreshing settings data', async () => {
-    const persistedModes: string[] = [];
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      setApiAccessMode: async (mode) => {
-        persistedModes.push(mode);
-      },
+  it('refreshes credentials before conditionally refreshing the agent catalog', async () => {
+    const state = {
+      globalState: new MemoryStateStore(),
+      workspaceState: new MemoryStateStore(),
+    };
+    const events: string[] = [];
+    const refreshAuthDependentData = vi.fn(async () => {
+      events.push('credentials');
     });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
-        mode: 'personal',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(persistedModes).toEqual(['personal']);
-    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      ),
-    ).toBe(true);
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ),
-    ).toBe(true);
-  });
-
-  it('clears OpenRouter routing when desktop users enable included access', async () => {
-    const globalState = new MemoryStateStore();
-    globalState.values.set(GlobalStateKey.USE_OPENROUTER, true);
-    const persistedModes: string[] = [];
-
-    const { settings } = createSettingsFixture({
-      globalState,
-      setApiAccessMode: async (mode) => {
-        persistedModes.push(mode);
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
-        mode: 'included',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(persistedModes).toEqual(['included']);
-    expect(globalState.values.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
-    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
-  });
-
-  it('delegates agent refresh after desktop auth model data is current', async () => {
+    const credentialSettingsController =
+      createStubDesktopCredentialSettingsController(state, {
+        refreshAuthDependentData,
+      });
     const agentSettingsController = createStubDesktopAgentSettingsController();
-    const refreshCatalogData = vi.fn(async () => undefined);
-    agentSettingsController.refreshCatalogData = refreshCatalogData;
-    const { settings, posted } = createCapturedSettingsFixture({
+    agentSettingsController.refreshCatalogData = vi.fn(async () => {
+      events.push('agents');
+    });
+    const { settings } = createSettingsFixture({
+      ...state,
       agentSettingsController,
+      credentialSettingsController,
     });
 
     await settings.refreshAuthDependentData();
 
-    expect(refreshCatalogData).toHaveBeenCalledOnce();
-    expect(invalidateModelOptionsCache).toHaveBeenCalled();
-    expect(computeModelOptionsData).toHaveBeenCalled();
-    expect(
-      invalidateModelOptionsCache.mock.invocationCallOrder[0],
-    ).toBeLessThan(computeModelOptionsData.mock.invocationCallOrder[0]);
-    expect(
-      computeModelOptionsData.mock.invocationCallOrder.at(-1),
-    ).toBeLessThan(refreshCatalogData.mock.invocationCallOrder[0]);
-    expect(posted.map((message) => commandOf(message))).toEqual(
-      expect.arrayContaining([
-        SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-        SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-        MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      ]),
-    );
-  });
+    expect(events).toEqual(['credentials', 'agents']);
 
-  it('defers the controller refresh while roster sign-in owns the catalog', async () => {
-    const agentSettingsController = createStubDesktopAgentSettingsController();
-    const refreshCatalogData = vi.fn(async () => undefined);
-    agentSettingsController.refreshCatalogData = refreshCatalogData;
-    const { settings, posted } = createCapturedSettingsFixture({
-      agentSettingsController,
-    });
-
+    events.length = 0;
     await settings.refreshAuthDependentData({
       deferAgentCatalogRefresh: true,
     });
 
-    expect(refreshCatalogData).not.toHaveBeenCalled();
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      ),
-    ).toBe(true);
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      ),
-    ).toBe(false);
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      ),
-    ).toBe(false);
-  });
-
-  it('refreshes persisted model list on desktop startup', async () => {
-    const globalState = new MemoryStateStore();
-    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 12);
-    globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
-      'custom-model',
-      'gpt54pro',
-      'opus46T',
-      'haiku3',
-    ]);
-    const errors: unknown[] = [];
-
-    createSettingsFixture({
-      globalState,
-      onError: (error) => errors.push(error),
-    });
-    await flushAsyncWork();
-
-    expect(errors).toEqual([]);
-    expect(globalState.values.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
-      MODEL_LIST_VERSION,
-    );
-    const expectedDefaults = DEFAULT_MODELS.filter(
-      (model) => !(MODEL_CONFIGS[model]?.deprecated ?? false),
-    );
-    expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
-      'custom-model',
-      ...expectedDefaults,
-    ]);
-  });
-
-  it('strips retired models from recent persisted model lists', async () => {
-    const globalState = new MemoryStateStore();
-    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 20);
-    globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
-      'custom-model',
-      'haiku3',
-    ]);
-    const errors: unknown[] = [];
-
-    createSettingsFixture({
-      globalState,
-      onError: (error) => errors.push(error),
-    });
-    await flushAsyncWork();
-
-    expect(errors).toEqual([]);
-    expect(globalState.values.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
-      MODEL_LIST_VERSION,
-    );
-    const expectedDefaults = DEFAULT_MODELS.filter(
-      (model) =>
-        !(MODEL_CONFIGS[model]?.deprecated ?? false) &&
-        !(MODEL_CONFIGS[model]?.retired ?? false),
-    );
-    expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
-      'custom-model',
-      ...expectedDefaults,
-    ]);
-  });
-
-  it('does not duplicate profile refresh after delegated desktop sign-out', async () => {
-    let signOutCalls = 0;
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      signOut: async () => {
-        signOutCalls += 1;
-      },
-    });
-
-    expect(
-      settings.handleMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_OUT }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(signOutCalls).toBe(1);
-    expect(
-      posted.filter(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      ),
-    ).toEqual([]);
+    expect(events).toEqual(['credentials']);
+    expect(refreshAuthDependentData).toHaveBeenCalledTimes(2);
+    expect(refreshAuthDependentData).toHaveBeenLastCalledWith();
+    expect(agentSettingsController.refreshCatalogData).toHaveBeenCalledOnce();
   });
 
   it('handles desktop memory toggle messages', async () => {
