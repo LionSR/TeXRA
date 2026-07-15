@@ -137,8 +137,10 @@ describe('progress view snapshot hydration', () => {
     state.snapshots.addUsage(stream, runId, usage);
     state.snapshots.setTodos(stream, [todo]);
     state.snapshots.setPlan(stream, plan);
-    state.snapshots.setParentStream(stream, parentStream);
-    state.updateStreamHints(stream, { agentCategory: AgentCategory.ToolUse });
+    state.setStreamParent(stream, parentStream);
+    state.updateStreamMetadata(stream, {
+      agentCategory: AgentCategory.ToolUse,
+    });
     state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
     state.updateStreamState(stream, (prev) => ({
       ...prev,
