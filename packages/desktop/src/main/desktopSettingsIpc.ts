@@ -1,4 +1,4 @@
-import { platform, tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
@@ -30,13 +30,7 @@ import {
   buildGitAuthorSettingsMessage,
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
-import {
-  type DesktopCrashReportingStatus,
-  getDesktopCrashReportingStatus,
-  setDesktopCrashReportingDsn,
-  setDesktopCrashReportingEnabled,
-} from './desktopCrashReporting.js';
-import { defaultOnError, emptySecrets } from './desktopSettingsIpcHelpers.js';
+import { defaultOnError } from './desktopSettingsIpcHelpers.js';
 import {
   createDesktopErrorReporter,
   type DesktopCommandMessage,
@@ -47,14 +41,15 @@ import {
   type DesktopHistoryOptions,
 } from './desktopHistoryHandlers.js';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
+import type { DesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 
 export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   postToRenderer(message: unknown): void;
   agentSettingsController: DesktopAgentSettingsController;
+  crashReportingSettingsController: DesktopCrashReportingSettingsController;
   credentialSettingsController: DesktopCredentialSettingsController;
   toolingSettingsController: DesktopToolingSettingsController;
   sendStartupCatalogData?: boolean;
@@ -64,15 +59,9 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   openPath?: (filePath: string) => Promise<void>;
   /** Route this window to the progress view and select the given stream. */
   revealStream?: (streamId: string) => Promise<void>;
-  promptSecret?: (input: {
-    title: string;
-    prompt: string;
-  }) => Promise<string | undefined>;
   showInfoMessage?: (message: string) => Promise<void>;
   showErrorMessage?: (message: string) => Promise<void>;
   confirmAction?: (message: string, confirmLabel?: string) => Promise<boolean>;
-  initializeCrashReporting?: () => Promise<void>;
-  secrets?: PlatformSecrets;
   onError?: (error: unknown) => void;
 }
 
@@ -106,7 +95,6 @@ export function createDesktopSettingsIpc(
     showErrorMessage: options.showErrorMessage,
     onError,
   });
-  const secrets = options.secrets ?? tryPlatform()?.secrets ?? emptySecrets;
   const goalController = new SettingsGoalController({
     listGoals: () => GoalStore.list(),
   });
@@ -191,28 +179,6 @@ export function createDesktopSettingsIpc(
     await options.openPath?.(StorageFS.fullPath(resolveMemoryStoragePath()));
   }
 
-  function postDesktopCrashReportingStatusMessage(
-    status: DesktopCrashReportingStatus,
-  ): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
-      ...status,
-    });
-  }
-
-  async function postDesktopCrashReportingStatus(): Promise<void> {
-    const status = await getDesktopCrashReportingStatus(globalState, secrets);
-    postDesktopCrashReportingStatusMessage(status);
-  }
-
-  async function finishDesktopCrashReportingSettingsChange(): Promise<void> {
-    const status = await getDesktopCrashReportingStatus(globalState, secrets);
-    if (status.enabled && status.configured) {
-      await options.initializeCrashReporting?.();
-    }
-    postDesktopCrashReportingStatusMessage(status);
-  }
-
   function postSuperYoloEnabled(): void {
     options.postToRenderer(
       buildSuperYoloMessage({
@@ -260,7 +226,7 @@ export function createDesktopSettingsIpc(
       modelSelectionDataPosted,
       options.credentialSettingsController.postStartupData(),
       options.toolingSettingsController.postStartupData(),
-      postDesktopCrashReportingStatus(),
+      options.crashReportingSettingsController.postStartupData(),
       options.agentSettingsController.postStartupData(),
     ]);
   }
@@ -297,23 +263,6 @@ export function createDesktopSettingsIpc(
 
   async function updatePreferShortModelNames(enabled: boolean): Promise<void> {
     await settingsHost.setPreferShortModelNames(enabled);
-  }
-
-  async function updateDesktopCrashReportingEnabled(
-    enabled: boolean,
-  ): Promise<void> {
-    await setDesktopCrashReportingEnabled(globalState, enabled);
-    await finishDesktopCrashReportingSettingsChange();
-  }
-
-  async function updateDesktopCrashReportingDsn(): Promise<void> {
-    const dsn = await options.promptSecret?.({
-      title: 'Set Sentry DSN',
-      prompt: 'Enter the Sentry DSN for opt-in desktop crash reports',
-    });
-    if (dsn == null) return;
-    await setDesktopCrashReportingDsn(secrets, dsn);
-    await finishDesktopCrashReportingSettingsChange();
   }
 
   async function refreshAuthDependentData(
@@ -468,11 +417,7 @@ export function createDesktopSettingsIpc(
       revealStream: (streamId) =>
         options.revealStream?.(streamId) ?? Promise.resolve(),
     },
-    desktopCrashReporting: {
-      get: () => postDesktopCrashReportingStatus(),
-      setEnabled: (enabled) => updateDesktopCrashReportingEnabled(enabled),
-      setDsn: () => updateDesktopCrashReportingDsn(),
-    },
+    desktopCrashReporting: options.crashReportingSettingsController.actions,
   };
 
   const settingsHandlers = createSettingsViewCommandHandlers(settingsActions);
