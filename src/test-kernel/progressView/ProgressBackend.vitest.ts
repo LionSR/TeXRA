@@ -1419,7 +1419,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream('tool-stream');
-      backend.state.updateStreamHints('tool-stream', {
+      backend.state.updateStreamMetadata('tool-stream', {
         agentCategory: AgentCategory.ToolUse,
       });
       backend.state.getOrCreateStreamState(
@@ -1461,15 +1461,15 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([]);
       backend.state.streamLogs.ensureStream(stream);
+      // Simulate persistence receiving run.config before progress state sees
+      // the RUNNING transition. The transition boundary must refresh the
+      // durable category before replacing stale execution state.
       backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         'abc123' as ExecutionId,
       );
-      backend.state.updateStreamHints(stream, {
-        agentCategory: AgentCategory.ToolUse,
-      });
-      backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
+      backend.state.getOrCreateStreamState(stream, AgentCategory.Workflow);
       backend.state.updateStreamState(stream, (prev) => ({
         ...prev,
         conversationProgress: { toolCallCount: 7 },
@@ -1523,7 +1523,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.updateStreamHints(stream, {
+      backend.state.updateStreamMetadata(stream, {
         agentCategory: AgentCategory.ToolUse,
       });
       backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
@@ -1551,12 +1551,12 @@ describe('ProgressBackend', () => {
       await backend.state.snapshots.load([]);
       backend.state.streamLogs.ensureStream(stream);
       backend.state.activeStream = stream;
-      backend.state.snapshots.setTaskState(
+      backend.state.setStreamTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         'abc123' as ExecutionId,
       );
-      backend.state.updateStreamHints(stream, {
+      backend.state.updateStreamMetadata(stream, {
         agentCategory: AgentCategory.ToolUse,
       });
       backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
@@ -1606,7 +1606,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream('tool-stream');
-      backend.state.updateStreamHints('tool-stream', {
+      backend.state.updateStreamMetadata('tool-stream', {
         agentCategory: AgentCategory.ToolUse,
       });
       backend.state.getOrCreateStreamState(
@@ -1616,14 +1616,14 @@ describe('ProgressBackend', () => {
       backend.state.activeStream = 'tool-stream';
       backend.state.agentCategoryFilter = 'toolUse';
       backend.state.streamLogs.ensureStream('workflow-existing');
-      backend.state.updateStreamHints('workflow-existing', {
+      backend.state.updateStreamMetadata('workflow-existing', {
         agentCategory: AgentCategory.Workflow,
       });
       backend.state.getOrCreateStreamState(
         'workflow-existing',
         AgentCategory.Workflow,
       );
-      backend.state.updateStreamHints('workflow-stream', {
+      backend.state.updateStreamMetadata('workflow-stream', {
         agentCategory: AgentCategory.Workflow,
       });
       vi.spyOn(backend.state, 'pickValidActiveStream').mockReturnValue(
@@ -1664,34 +1664,50 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('agrees on the resolved agentCategory across the filter, tab-render, and sync-content paths (#7583)', async () => {
-    // Regression test for the config/hints agentCategory single-owner fix:
-    // buildStreamInfos (matchesFilter + buildStreamTabInfo, streamInfoUtils.ts
-    // / streamTabInfo.ts) and syncStreamContent (getStreamCategory,
-    // ProgressFactApplier.ts) must resolve the same category from the same
-    // config/hints inputs, even when hints deliberately disagree with the
-    // live config.
+  it('keeps task-state metadata canonical across filtering, rendering, and sync content', async () => {
     const { backend, messages } = createRecordingBackend();
     const stream = 'search@deepseek#de5711c' as StreamTabId;
+    const executionId = 'de5711c' as ExecutionId;
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setTaskState(
+      backend.state.updateStreamMetadata(stream, {
+        agent: 'provisional-workflow',
+        agentCategory: AgentCategory.Workflow,
+        inputFile: 'draft.tex',
+        isRemote: true,
+        creationTimestamp: 123,
+      });
+      backend.state.setStreamTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
-        'de5711c' as ExecutionId,
+        executionId,
       );
-      // Stale hint disagrees with the live config on purpose — config must
-      // win consistently everywhere the category is resolved.
-      backend.state.updateStreamHints(stream, {
+      // A late provisional event cannot replace task-state authority.
+      backend.state.updateStreamMetadata(stream, {
+        agent: 'late-workflow',
         agentCategory: AgentCategory.Workflow,
+      });
+
+      expect(backend.state.getStreamMetadata(stream)).toMatchObject({
+        agent: 'search',
+        agentCategory: AgentCategory.ToolUse,
+        model: 'deepseekproT',
+        isRemote: true,
+        creationTimestamp: 123,
+        executionId,
       });
 
       const toolUseInfos = buildStreamInfos(backend.state, 'toolUse');
       expect(toolUseInfos.map((info) => info.name)).toContain(stream);
-      expect(
-        toolUseInfos.find((info) => info.name === stream)?.agentCategory,
-      ).toBe(AgentCategory.ToolUse);
+      expect(toolUseInfos.find((info) => info.name === stream)).toMatchObject({
+        agent: 'search',
+        agentCategory: AgentCategory.ToolUse,
+        model: 'deepseekproT',
+        isRemote: true,
+        creationTimestamp: 123,
+        executionId,
+      });
 
       const workflowInfos = buildStreamInfos(backend.state, 'workflow');
       expect(workflowInfos.map((info) => info.name)).not.toContain(stream);
@@ -1711,6 +1727,39 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('promotes the transcript first timestamp into canonical metadata', () => {
+    const { backend } = createRecordingBackend();
+    const stream = 'timestamp-stream' as StreamTabId;
+
+    try {
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.updateStreamMetadata(stream, { creationTimestamp: 500 });
+      expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(
+        500,
+      );
+
+      backend.state.streamLogs.append(stream, {
+        id: 'first-entry',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 100,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'first transcript entry',
+      });
+
+      expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(
+        100,
+      );
+      expect(
+        buildStreamInfos(backend.state, 'all').find(
+          (streamInfo) => streamInfo.name === stream,
+        ),
+      ).toMatchObject({ name: stream, creationTimestamp: 100 });
+    } finally {
+      backend.dispose();
+    }
+  });
+
   it('deletes the execution directory named by stream metadata when a stream is cleared', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966a' as StreamTabId;
@@ -1719,7 +1768,7 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setTaskState(
+      backend.state.setStreamTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         executionId,
