@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -178,7 +179,7 @@ vi.mock('@cli/chat/chatSessionController', async (importOriginal) => {
   };
 });
 
-const INTERACTIVE_CONTEXT: CliContext = {
+const INTERACTIVE_CONTEXT: CliContext = createTestCliContext({
   cwd: '/tmp/texra-chat',
   mode: 'interactive',
   outputFormat: 'text',
@@ -193,7 +194,7 @@ const INTERACTIVE_CONTEXT: CliContext = {
   commandName: 'texra',
   version: '0.0.0',
   resourcesPath: '/tmp/resources',
-};
+});
 
 function deferred(): { readonly promise: Promise<void>; resolve(): void } {
   let resolvePromise = (): void => undefined;

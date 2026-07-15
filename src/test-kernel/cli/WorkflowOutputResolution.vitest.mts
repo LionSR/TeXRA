@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   expectedOutputFilesForOutputDir,
@@ -29,17 +30,11 @@ async function makeTempDir(): Promise<string> {
 }
 
 function testContext(cwd: string): CliContext {
-  return {
+  return createTestCliContext({
     cwd,
-    mode: 'headless',
-    outputFormat: 'text',
-    approvalPolicy: 'never',
-    stdoutColorEnabled: false,
-    stderrColorEnabled: false,
-    colorEnabled: false,
     version: 'test',
     resourcesPath: cwd,
-  };
+  });
 }
 
 function workflowResult(

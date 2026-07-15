@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type {
   RuntimePresentationEvent,
@@ -35,21 +36,15 @@ vi.mock('@agent/index', () => ({
 }));
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
-  return {
-    cwd: '/tmp/project',
+  return createTestCliContext({
     mode: 'interactive',
-    outputFormat: 'text',
-    approvalPolicy: 'never',
-    quietLogs: false,
     renderRunProgress: true,
     stderrIsTty: true,
     stdoutColorEnabled: true,
     stderrColorEnabled: true,
     colorEnabled: true,
-    version: '0.0.0',
-    resourcesPath: '/tmp/resources',
     ...overrides,
-  };
+  });
 }
 
 type RuntimePresentationNdjsonPolicy =

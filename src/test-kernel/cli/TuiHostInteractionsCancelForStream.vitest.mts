@@ -9,6 +9,7 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: vi.fn(),
 }));
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   clearApprovals,
   currentApproval,
@@ -24,15 +25,13 @@ import {
 } from '@shared/schemas';
 
 function context(): CliContext {
-  return {
+  return createTestCliContext({
     cwd: '/work',
     mode: 'interactive',
-    outputFormat: 'text',
     approvalPolicy: 'ask',
-    colorEnabled: false,
     version: 'test',
     resourcesPath: '/resources',
-  };
+  });
 }
 
 function host(): CliRuntimeHost {
