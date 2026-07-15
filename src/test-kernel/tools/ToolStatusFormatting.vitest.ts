@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - storage
 import type { ExecutionListingEntry } from '@agent/storage';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 
 // Local imports - schemas
 import { STATUS_DISPLAY, TODO_STATUS } from '@shared/schemas';
@@ -98,13 +99,16 @@ describe('tool status formatting', () => {
 
   it('renders bash execution history as a process without a model', () => {
     const entry: ExecutionListingEntry = {
+      kind: 'process',
       id: '16c0f3f748e4',
       timestamp: '2026-05-15T23:42:06.000Z',
       parentExecutionId: 'fcf5150d37c6',
-      agent: 'bash',
-      model: 'gemini31p',
-      agentConfig: null,
-      category: 'toolUse',
+      agentConfig: AgentConfigSchema.parse({
+        agent: 'bash',
+        model: 'gemini31p',
+        instruction: 'ls',
+        agentCategory: 'toolUse',
+      }),
       terminalStatus: 'completed',
     };
 

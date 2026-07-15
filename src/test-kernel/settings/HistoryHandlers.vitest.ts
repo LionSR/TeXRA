@@ -29,6 +29,7 @@ describe('settings history handlers', () => {
   it('includes persisted edited files for tool-use history items', async () => {
     mocks.listExecutions.mockResolvedValue([
       {
+        kind: 'agent',
         id: 'abc123',
         timestamp: '2026-05-31T12:00:00.000Z',
         agentConfig: {
@@ -37,7 +38,6 @@ describe('settings history handlers', () => {
           instruction: 'Check a proof.',
           agentCategory: AgentCategory.ToolUse,
         },
-        category: 'toolUse',
       },
     ]);
     mocks.readWorkspaceFiles.mockResolvedValue(['proofs/lemma.md']);
@@ -63,6 +63,7 @@ describe('settings history handlers', () => {
   it('hides internal process-bookkeeping and configless entries', async () => {
     mocks.listExecutions.mockResolvedValue([
       {
+        kind: 'agent',
         id: 'abc123',
         timestamp: '2026-05-31T12:00:00.000Z',
         agentConfig: {
@@ -71,9 +72,9 @@ describe('settings history handlers', () => {
           instruction: 'Check a proof.',
           agentCategory: AgentCategory.ToolUse,
         },
-        category: 'toolUse',
       },
       {
+        kind: 'process',
         id: 'bash-process',
         timestamp: '2026-05-31T12:01:00.000Z',
         agentConfig: {
@@ -82,12 +83,11 @@ describe('settings history handlers', () => {
           instruction: 'ls -la',
           agentCategory: AgentCategory.ToolUse,
         },
-        category: 'process',
       },
       {
+        kind: 'incomplete',
         id: 'configless',
         timestamp: '2026-05-31T12:02:00.000Z',
-        agentConfig: null,
       },
     ]);
 

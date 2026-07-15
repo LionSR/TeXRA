@@ -22,7 +22,7 @@ export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
   const visibleEntries = entries.filter(isUserVisibleExecution);
   const historyItems = await Promise.all(
     visibleEntries.map(async (entry): Promise<HistoryItem> => {
-      const cfg = entry.agentConfig!;
+      const cfg = entry.agentConfig;
       const base = {
         agent: cfg.agent,
         model: cfg.model,
