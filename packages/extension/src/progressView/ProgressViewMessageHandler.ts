@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
+import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressStreamLifecycleController } from '@controllers/progressView/ProgressStreamLifecycleController';
 import {
   ProgressFollowUpController,
@@ -72,7 +73,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly recordingManager: RecordingManager;
   private readonly progressHost: ProgressViewHost;
   private readonly streamLifecycleController: ProgressStreamLifecycleController;
-  private readonly workflowActionsController: ProgressViewHost['workflowActionsController'];
+  private readonly workflowActionsController: ProgressWorkflowActionsController;
   private readonly workflowFileActionsController: ProgressViewHost['workflowFileActionsController'];
   private readonly agentProposalController: ProgressViewHost['agentProposalController'];
   private readonly apiKeyRetryController: ProgressApiKeyRetryController;
@@ -106,9 +107,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       progressTitle: 'Transcribing follow-up message',
     });
 
+    this.workflowActionsController = this.createWorkflowActionsController();
     this.progressHost = this.createProgressViewHost();
-    this.workflowActionsController =
-      this.progressHost.workflowActionsController;
     this.workflowFileActionsController =
       this.progressHost.workflowFileActionsController;
     this.agentProposalController = this.progressHost.agentProposalController;
@@ -330,27 +330,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private createProgressViewHost(): ProgressViewHost {
     return new ProgressViewHost({
-      workflowActions: {
+      run: {
         state: {
           getTaskState: (stream) =>
             this.provider.state.snapshots.getTaskState(stream),
           getExecutionId: (stream) =>
             this.provider.state.snapshots.getExecutionId(stream),
-          getOutputFiles: (stream) =>
-            this.provider.state.snapshots.getOutputFiles(stream),
-          getKnownWorkspaceOutputPaths: (stream) =>
-            this.provider.state.snapshots.getKnownFilePaths(stream, {
-              workspaceOnly: true,
-            }),
         },
         executeAgent: async (request) => {
           await this.executeValidated(request);
-        },
-        runDiff: async (request) => {
-          await this.runViewCommand('texra.runLatexdiff', [request]);
-        },
-        runFileOperation: async (operation, request) => {
-          await this.runViewCommand(`texra.${operation}`, [request]);
         },
       },
       workflowFileActions: {
@@ -537,6 +525,29 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             this.handleUserQuestionAction(message),
         },
         externalInquiry: {},
+      },
+    });
+  }
+
+  private createWorkflowActionsController(): ProgressWorkflowActionsController {
+    return new ProgressWorkflowActionsController({
+      state: {
+        getTaskState: (stream) =>
+          this.provider.state.snapshots.getTaskState(stream),
+        getExecutionId: (stream) =>
+          this.provider.state.snapshots.getExecutionId(stream),
+        getOutputFiles: (stream) =>
+          this.provider.state.snapshots.getOutputFiles(stream),
+        getKnownWorkspaceOutputPaths: (stream) =>
+          this.provider.state.snapshots.getKnownFilePaths(stream, {
+            workspaceOnly: true,
+          }),
+      },
+      runDiff: async (request) => {
+        await this.runViewCommand('texra.runLatexdiff', [request]);
+      },
+      runFileOperation: async (operation, request) => {
+        await this.runViewCommand(`texra.${operation}`, [request]);
       },
     });
   }
