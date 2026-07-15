@@ -178,7 +178,7 @@ class DesktopSessionProgressBridgeImpl implements DesktopSessionProgressBridge {
       if (this.liveStreams.has(snapshot.streamId)) continue;
       this.restoredStreams.set(snapshot.streamId, snapshot);
       this.opts.state.streamLogs.ensureStream(snapshot.streamId);
-      this.opts.state.updateStreamHints(snapshot.streamId, {
+      this.opts.state.updateStreamMetadata(snapshot.streamId, {
         agent: snapshot.agent,
         agentCategory: snapshot.agentCategory,
         inputFile: snapshot.inputFile,
