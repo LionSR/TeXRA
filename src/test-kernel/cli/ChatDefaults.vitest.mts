@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { listExecutions } from '@agent/storage';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   BUILTIN_DEFAULT_CHAT_AGENT,
@@ -13,6 +14,7 @@ import {
   resolveChatDefaults,
 } from '@cli/runtime/chatDefaults';
 import * as logSinks from '@cli/runtime/logSinks';
+import type { ExecutionId } from '@shared/schemas';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 /** A missing user config, shaped like a genuine `fs` ENOENT rejection. */
@@ -24,7 +26,8 @@ function enoentError(): NodeJS.ErrnoException {
   return error;
 }
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage')>()),
   listExecutions: vi.fn(async () => []),
 }));
 
@@ -36,14 +39,16 @@ function historyEntry(
   timestamp = '2026-05-21T08:00:00.000Z',
 ) {
   return {
+    kind: 'agent',
+    id: 'abc123' as ExecutionId,
     timestamp,
-    agentConfig: {
+    agentConfig: AgentConfigSchema.parse({
       agent,
       model: 'sonnet46T',
       agentCategory: AgentCategory.ToolUse,
       ...overrides,
-    },
-  } as unknown as Awaited<ReturnType<typeof listExecutions>>[number];
+    }),
+  } satisfies Awaited<ReturnType<typeof listExecutions>>[number];
 }
 
 vi.mock('@utils/files/storageFS', () => ({

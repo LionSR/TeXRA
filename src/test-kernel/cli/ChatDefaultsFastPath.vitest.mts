@@ -14,7 +14,8 @@ vi.mock('@cli/runtime/cliConfig', async (importOriginal) => {
   };
 });
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage')>()),
   listExecutions: vi.fn(async () => []),
 }));
 

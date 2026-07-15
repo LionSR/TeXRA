@@ -44,11 +44,14 @@ const { discoverLatestExecutionOutputs } =
 
 function matchingExecution(id: string) {
   return {
+    kind: 'agent',
     id,
-    agent: 'polish',
-    model: 'deepseek',
     timestamp: '2026-01-01T00:00:00.000Z',
-    agentConfig: { inputFiles: ['paper.tex'] },
+    agentConfig: {
+      agent: 'polish',
+      model: 'deepseek',
+      inputFiles: ['paper.tex'],
+    },
   };
 }
 

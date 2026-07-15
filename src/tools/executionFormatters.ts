@@ -18,6 +18,33 @@ export function resolveExecutionDisplayCategory(
   return isProcessAgent(agent) ? 'process' : category;
 }
 
+function listingDisplay(entry: ExecutionListingEntry): {
+  agent: string;
+  model: string | null;
+  category: string | undefined;
+} {
+  switch (entry.kind) {
+    case 'agent':
+      return {
+        agent: entry.agentConfig.agent,
+        model: entry.agentConfig.model,
+        category: entry.runtimeCategory ?? entry.agentConfig.agentCategory,
+      };
+    case 'process':
+      return {
+        agent: entry.agentConfig.agent,
+        model: null,
+        category: 'process',
+      };
+    case 'incomplete':
+      return {
+        agent: 'unknown',
+        model: entry.runtimeCategory === 'process' ? null : 'unknown',
+        category: entry.runtimeCategory,
+      };
+  }
+}
+
 /** Return paths available for a given agent category. */
 export function getAvailablePaths(
   category?: string,
@@ -76,14 +103,14 @@ export function getExecutionStatusInfo(
 export function formatListingLine(entry: ExecutionListingEntry): string {
   const ts = formatTimestamp(entry.timestamp);
   const info = getExecutionStatusInfo(entry.id, entry.terminalStatus);
-  const category = resolveExecutionDisplayCategory(entry.agent, entry.category);
+  const { agent, model, category } = listingDisplay(entry);
   const categoryTag = category ? `  ${category}` : '';
-  const modelTag = category === 'process' ? '' : `  ${entry.model}`;
+  const modelTag = model == null ? '' : `  ${model}`;
   const parentSuffix = entry.parentExecutionId
     ? `  parent=${entry.parentExecutionId}`
     : '';
   const descSuffix = entry.description ? `  — ${entry.description}` : '';
-  return `${entry.id}  ${ts}  ${entry.agent}${categoryTag}${modelTag}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
+  return `${entry.id}  ${ts}  ${agent}${categoryTag}${modelTag}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
 }
 
 function getTodoStatusIcon(status: string | undefined): string {

@@ -1,5 +1,9 @@
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
-import { listExecutions } from '@agent/storage';
+import {
+  isUserVisibleExecution,
+  listExecutions,
+  type ExecutionListingEntry,
+} from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { isFileNotFoundError } from '@common/errors';
 import {
@@ -97,19 +101,21 @@ async function loadUserDefaults(): Promise<PartialDefaults> {
 
 async function loadHistoryDefaults(): Promise<PartialDefaults> {
   // An unreadable history listing means no history defaults.
-  const entries = await listExecutions().catch(() => []);
+  const entries: ExecutionListingEntry[] = await listExecutions().catch(
+    () => [],
+  );
   const candidates = toNewestFirstByTimestamp(
-    entries.filter(
+    entries.filter(isUserVisibleExecution).filter(
       (entry) =>
-        entry.agentConfig?.agentCategory === AgentCategory.ToolUse &&
+        entry.agentConfig.agentCategory === AgentCategory.ToolUse &&
         // A multi-agent team run's root is an orchestrator agent, not a
         // sensible default for a plain single-agent chat session.
-        !entry.agentConfig?.cliMultiAgentPresetId,
+        !entry.agentConfig.cliMultiAgentPresetId,
     ),
     (item) => item.timestamp,
   );
   const mostRecent = candidates[0];
-  if (!mostRecent?.agentConfig) return {};
+  if (!mostRecent) return {};
   return {
     model: commandConfigModel(
       parseCliConfigValues({ model: mostRecent.agentConfig.model }),
