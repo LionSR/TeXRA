@@ -15,7 +15,7 @@ import {
   createStubDesktopAgentSettingsController,
   createStubDesktopCrashReportingSettingsController,
   createStubDesktopCredentialSettingsController,
-  createStubDesktopHistoryOptions,
+  createStubDesktopHistorySettingsController,
   createStubDesktopToolingSettingsController,
 } from './desktopSettingsTestSupport';
 import type { StateStore } from '@platform/interfaces';
@@ -38,8 +38,6 @@ type DesktopSettingsIpcModule =
 type DesktopSettingsIpcOptions = Parameters<
   DesktopSettingsIpcModule['createDesktopSettingsIpc']
 >[0];
-type DesktopHistoryOptions = ReturnType<typeof createStubDesktopHistoryOptions>;
-
 type RendererMessage = Parameters<
   DesktopSettingsIpcOptions['postToRenderer']
 >[0];
@@ -51,9 +49,9 @@ type SettingsFixtureOverrides = Omit<
   | 'credentialSettingsController'
   | 'state'
   | 'config'
+  | 'historySettingsController'
   | 'toolingSettingsController'
   | 'postToRenderer'
-  | keyof DesktopHistoryOptions
 > & {
   agentSettingsController?: DesktopSettingsIpcOptions['agentSettingsController'];
   crashReportingSettingsController?: DesktopSettingsIpcOptions['crashReportingSettingsController'];
@@ -61,8 +59,8 @@ type SettingsFixtureOverrides = Omit<
   globalState?: StateStore;
   workspaceState?: StateStore;
   config?: DesktopSettingsIpcOptions['config'];
+  historySettingsController?: DesktopSettingsIpcOptions['historySettingsController'];
   toolingSettingsController?: DesktopSettingsIpcOptions['toolingSettingsController'];
-  history?: Partial<DesktopHistoryOptions>;
   postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
 };
 
@@ -139,7 +137,6 @@ let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIp
 
 function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const {
-    history,
     globalState = new MemoryStateStore(),
     workspaceState = new MemoryStateStore(),
     config = new MemoryConfigStore(),
@@ -148,7 +145,6 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const postToRenderer = overrides.postToRenderer ?? (() => undefined);
   const settings = createDesktopSettingsIpc({
     ...settingsOverrides,
-    ...createStubDesktopHistoryOptions(history),
     agentSettingsController:
       overrides.agentSettingsController ??
       createStubDesktopAgentSettingsController(),
@@ -161,6 +157,9 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
         globalState,
         workspaceState,
       }),
+    historySettingsController:
+      overrides.historySettingsController ??
+      createStubDesktopHistorySettingsController(),
     toolingSettingsController:
       overrides.toolingSettingsController ??
       createStubDesktopToolingSettingsController({
@@ -305,6 +304,31 @@ describe('desktop settings IPC', () => {
       source: 'custom',
       name: 'proofreader',
       enabled: false,
+    });
+  });
+
+  it('delegates history commands to the required controller', async () => {
+    const baseController = createStubDesktopHistorySettingsController();
+    const rerunAgent = vi.fn(async () => undefined);
+    const historySettingsController = {
+      ...baseController,
+      actions: { ...baseController.actions, rerunAgent },
+    };
+    const { settings } = createSettingsFixture({
+      historySettingsController,
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+        historyId: 'history-entry',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(rerunAgent).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+      historyId: 'history-entry',
     });
   });
 
@@ -636,10 +660,14 @@ describe('desktop settings IPC', () => {
         postLatexConfigValues,
         postStartupData: postToolingStartupData,
       });
+    const postHistoryData = vi.fn(async () => undefined);
+    const historySettingsController =
+      createStubDesktopHistorySettingsController({ postHistoryData });
 
     const { settings, posted } = createCapturedSettingsFixture({
       agentSettingsController,
       crashReportingSettingsController,
+      historySettingsController,
       toolingSettingsController,
       workspaceState,
       config,
@@ -658,6 +686,7 @@ describe('desktop settings IPC', () => {
     expect(postLatexConfigValues).toHaveBeenCalledOnce();
     expect(postToolingStartupData).toHaveBeenCalledOnce();
     expect(postCrashReportingStartupData).toHaveBeenCalledOnce();
+    expect(postHistoryData).toHaveBeenCalledOnce();
     expect(postAgentStartupData).toHaveBeenCalledOnce();
 
     expect(
@@ -821,51 +850,6 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
       enabled: false,
     });
-  });
-
-  it('reruns an agent from history through the shared runAgent path', async () => {
-    const { clearStoreCache, getExecutionStore } =
-      await import('@agent/storage');
-    const { AgentConfigSchema } =
-      await import('@agent/core/definition/AgentConfig');
-    const { AgentCategory } = await import('@shared/schemas/agent');
-    const { installPlatform } = await import('@test/support/setupPlatform');
-
-    clearStoreCache();
-    await installPlatform();
-
-    const historyId = 'aaaa1111';
-    const config = AgentConfigSchema.parse({
-      agent: 'chat',
-      model: 'deepseekT',
-      instruction: 'Check a proof.',
-      agentCategory: AgentCategory.ToolUse,
-    });
-    await getExecutionStore(historyId).writeConfig(config);
-
-    const infos: string[] = [];
-    const runRequests: unknown[] = [];
-    const { settings } = createSettingsFixture({
-      showInfoMessage: async (message) => {
-        infos.push(message);
-      },
-      history: {
-        runExecution: async (request) => {
-          runRequests.push(request);
-        },
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
-        historyId,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(infos).toEqual(['Rerunning agent from history']);
-    expect(runRequests).toEqual([{ config, executionId: undefined }]);
   });
 
   it('ignores unsupported or malformed settings messages', async () => {
