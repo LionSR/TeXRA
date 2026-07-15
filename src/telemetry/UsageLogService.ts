@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import ky from 'ky';
+import pTimeout from 'p-timeout';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import * as logger from '@logger/logUtils';
-import { delay } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
@@ -21,6 +21,7 @@ logger.initialize(CHANNEL);
 const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-usage`;
 const MAX_QUEUE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
+const DISPOSE_WARNING_TIMEOUT_MS = 5000;
 
 export const USAGE_LOG_FLUSH_OUTCOME = {
   ACCEPTED: 'accepted',
@@ -242,18 +243,22 @@ class UsageLogServiceImpl {
     }
   }
 
+  private async waitForFlushQuiescence(): Promise<void> {
+    while (this.activeFlush) {
+      await Promise.allSettled([this.activeFlush]);
+    }
+  }
+
   async dispose(): Promise<void> {
     this.stopFlushTimer();
     this.config.enabled = false;
 
-    const deadline = Date.now() + 5000;
-    while (this.activeFlush && Date.now() < deadline) {
-      await delay(50);
-    }
-
-    if (this.activeFlush) {
-      logger.warn(CHANNEL, 'Dispose timeout waiting for in-flight flush');
-    }
+    await pTimeout(this.waitForFlushQuiescence(), {
+      milliseconds: DISPOSE_WARNING_TIMEOUT_MS,
+      fallback: () => {
+        logger.warn(CHANNEL, 'Dispose timeout waiting for in-flight flush');
+      },
+    });
 
     await this.flush();
 
