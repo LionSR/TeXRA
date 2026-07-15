@@ -42,9 +42,10 @@ interface MainViewIpcModule {
     options: {
       debugMode?: boolean;
       getTheme?: () => 'dark' | 'light' | 'high-contrast';
-      fileSelection?: { handleMessage(message: { command: string }): boolean };
-      settings?: { handleMessage(message: { command: string }): boolean };
-      progress?: { handleMessage(message: { command: string }): boolean };
+      fileSelection: { handleMessage(message: { command: string }): boolean };
+      settings: { handleMessage(message: { command: string }): boolean };
+      progress: { handleMessage(message: { command: string }): boolean };
+      onboarding: { handleMessage(message: { command: string }): boolean };
       shellActions: TestDesktopShellActions;
       modelListRefresh?: PromiseLike<void>;
       getAuthStatus?: () => Promise<{ authenticated: boolean }>;
@@ -187,8 +188,15 @@ function createMainViewShellActions(): TestDesktopShellActions {
 }
 
 function createMainViewCommandCapabilities() {
+  const createUnhandledCapability = () => ({
+    handleMessage: vi.fn(() => false),
+  });
   return {
     executeAgent: vi.fn(async (_message: unknown) => {}),
+    fileSelection: createUnhandledCapability(),
+    settings: createUnhandledCapability(),
+    progress: createUnhandledCapability(),
+    onboarding: createUnhandledCapability(),
     logs: {
       readLog: () => ({ path: undefined, text: '', truncated: false }),
       copyLog: vi.fn(async (_text: string) => {}),
