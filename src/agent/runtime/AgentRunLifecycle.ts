@@ -60,6 +60,13 @@ export interface RunFlowLifecycleOptions {
   onRun?: (handle: AgentRunHandle) => void | Promise<void>;
 }
 
+export type FlowRecordDisposition = FinalizeExecutionInput['flowRecord'];
+
+/** Private control channel through which a flow reports its retention policy. */
+export interface FlowLifecycleControl {
+  setFlowRecordDisposition(disposition: FlowRecordDisposition): void;
+}
+
 export interface FinalizeRunTerminalParams {
   /** Live handle for this terminal attempt; its settled flag is the exactly-once guard. */
   readonly handle: AgentExecutionHandle;
@@ -280,7 +287,10 @@ function emitRunStart(ctx: AgentLaunchContext): void {
  */
 export async function runFlowWithLifecycle(
   ctx: AgentLaunchContext,
-  runner: (handle: AgentExecutionHandle) => Promise<AgentRuntimeFlowResult>,
+  runner: (
+    handle: AgentExecutionHandle,
+    lifecycle: FlowLifecycleControl,
+  ) => Promise<AgentRuntimeFlowResult>,
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentRuntimeFlowResult> {
   const { streamId, executionId, runtimeHost, session } = ctx.runScope;
@@ -304,6 +314,12 @@ export async function runFlowWithLifecycle(
   // missed the emitRunStart() `run.config` below and replays it from here (#8258).
   handle.initialRunFacts = { config: ctx.config };
   session.executions.track(handle);
+  let flowRecordDisposition: FlowRecordDisposition | undefined;
+  const lifecycleControl: FlowLifecycleControl = {
+    setFlowRecordDisposition(disposition): void {
+      flowRecordDisposition = disposition;
+    },
+  };
   // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
   // throw nor an async rejection from a consumer callback may abort the run.
   if (options?.onRun) {
@@ -337,11 +353,11 @@ export async function runFlowWithLifecycle(
       trace: ctx.logger,
       persistence: {
         kind: 'finalize',
-        // Completed runs have no resume state left to retain. Failed and
-        // cancelled runs keep their last flow record for diagnosis or resume;
-        // terminal metadata still prevents failed runs from being resumed.
+        // Tool-use flows report the exact recovery decision through the
+        // private lifecycle control. Other flows retain the historical policy.
         flowRecord:
-          arm.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve',
+          flowRecordDisposition ??
+          (arm.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve'),
       },
       ...arm,
     });
@@ -356,7 +372,7 @@ export async function runFlowWithLifecycle(
     if (!handle.hasPendingInterrupt) transitionRunStart(ctx);
     let result: AgentRuntimeFlowResult;
     try {
-      result = await runner(handle);
+      result = await runner(handle, lifecycleControl);
     } finally {
       handle.closePendingInterruptWindow();
     }
