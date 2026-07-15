@@ -1,11 +1,6 @@
 import { platform, tryPlatform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
-import {
-  isAllowedLatexInstallCommand,
-  LatexToolingController,
-} from '@controllers/settingsView/LatexToolingController';
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
 import {
   createSettingsViewCommandHandlers,
@@ -14,18 +9,11 @@ import {
 import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  LATEX_WORKSHOP_EXT_ID,
-  normalizePlatform,
-} from '@shared/constants/latex';
-import type { LatexConfigField } from '@shared/constants/latex';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
-  type LatexSettingsStatus,
   type ReasoningLevel,
-  type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
@@ -36,32 +24,19 @@ import {
 } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import { GoalStore } from '@tools/goal';
-import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,
   buildGitAuthorSettingsMessage,
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
-import { BinaryResolver } from '@utils/system/binaryResolver';
-import {
-  checkToolInstalled,
-  detectPackageManager,
-} from '@utils/system/toolUtils';
 import {
   type DesktopCrashReportingStatus,
   getDesktopCrashReportingStatus,
   setDesktopCrashReportingDsn,
   setDesktopCrashReportingEnabled,
 } from './desktopCrashReporting.js';
-import {
-  buildDefaultToolDashboardItems,
-  defaultOnError,
-  emptySecrets,
-  findToolCommand,
-  getCachedToolCheckResults,
-  refreshDefaultDisabledToolCache,
-} from './desktopSettingsIpcHelpers.js';
+import { defaultOnError, emptySecrets } from './desktopSettingsIpcHelpers.js';
 import {
   createDesktopErrorReporter,
   type DesktopCommandMessage,
@@ -75,26 +50,20 @@ import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
-
-type ToolDashboardBuilder = (
-  cachedResults?: ExternalToolCheckResult[],
-) => Promise<ToolDashboardItem[]>;
+import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 
 export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   postToRenderer(message: unknown): void;
   agentSettingsController: DesktopAgentSettingsController;
   credentialSettingsController: DesktopCredentialSettingsController;
+  toolingSettingsController: DesktopToolingSettingsController;
   sendStartupCatalogData?: boolean;
   globalState?: StateStore;
   workspaceState?: StateStore;
   config?: ConfigProvider;
-  buildToolDashboardItems?: ToolDashboardBuilder;
-  refreshToolAvailability?: () => Promise<void>;
   openPath?: (filePath: string) => Promise<void>;
   /** Route this window to the progress view and select the given stream. */
   revealStream?: (streamId: string) => Promise<void>;
-  openExternalUrl?: (url: string) => Promise<void>;
-  installToolExtension?: (extensionId: string) => Promise<void>;
   promptSecret?: (input: {
     title: string;
     prompt: string;
@@ -104,13 +73,6 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   confirmAction?: (message: string, confirmLabel?: string) => Promise<boolean>;
   initializeCrashReporting?: () => Promise<void>;
   secrets?: PlatformSecrets;
-  detectLatexSettingsStatus?: () => Promise<LatexSettingsStatus>;
-  runInstallCommand?: (command: string) => Promise<void>;
-  runToolCommand?: (input: {
-    toolId: string;
-    command: string;
-    kind: 'install' | 'auth';
-  }) => Promise<void>;
   onError?: (error: unknown) => void;
 }
 
@@ -144,28 +106,9 @@ export function createDesktopSettingsIpc(
     showErrorMessage: options.showErrorMessage,
     onError,
   });
-  const usesDefaultToolDashboardBuilder =
-    options.buildToolDashboardItems == null;
-  const buildToolDashboardItems =
-    options.buildToolDashboardItems ?? buildDefaultToolDashboardItems;
-  const refreshToolAvailability = options.refreshToolAvailability;
   const secrets = options.secrets ?? tryPlatform()?.secrets ?? emptySecrets;
-  const latexConfigPersistenceController =
-    new LatexConfigPersistenceController();
   const goalController = new SettingsGoalController({
     listGoals: () => GoalStore.list(),
-  });
-  const latexToolingController = new LatexToolingController({
-    checkToolInstalled: (tool) => checkToolInstalled(tool, false),
-    findPath: (tool) => BinaryResolver.findPath(tool),
-    detectPackageManager,
-    getPlatform: () => normalizePlatform(process.platform),
-    isLatexWorkshopInstalled: () => false,
-    getRecommendedStatus: () => ({
-      outDir: true,
-      autoRevealExclude: true,
-    }),
-    onDetectionError: onError,
   });
   const settingsHost = createSettingsViewHost({
     state: { workspaceState, globalState },
@@ -202,14 +145,6 @@ export function createDesktopSettingsIpc(
     settings = readCurrentGitAuthorSettings(),
   ): void {
     options.postToRenderer(buildGitAuthorSettingsMessage(settings));
-  }
-
-  function postLatexConfigValues(): void {
-    options.postToRenderer(
-      latexConfigPersistenceController.buildConfigMessage((key) =>
-        workspaceState.get(key),
-      ),
-    );
   }
 
   async function postModelSelectionData(): Promise<void> {
@@ -254,30 +189,6 @@ export function createDesktopSettingsIpc(
   async function openMemoryFolder(): Promise<void> {
     await StorageFS.ensureDir(resolveMemoryStoragePath());
     await options.openPath?.(StorageFS.fullPath(resolveMemoryStoragePath()));
-  }
-
-  async function postToolDashboardData(postOptions?: {
-    skipChecks?: boolean;
-  }): Promise<void> {
-    const cachedResults =
-      postOptions?.skipChecks && usesDefaultToolDashboardBuilder
-        ? await getCachedToolCheckResults()
-        : undefined;
-    const items = await buildToolDashboardItems(cachedResults);
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items,
-    });
-  }
-
-  async function postLatexSettingsStatus(): Promise<void> {
-    const settings =
-      (await options.detectLatexSettingsStatus?.()) ??
-      (await latexToolingController.detectStatus());
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-      settings,
-    });
   }
 
   function postDesktopCrashReportingStatusMessage(
@@ -336,7 +247,7 @@ export function createDesktopSettingsIpc(
 
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
-    postLatexConfigValues();
+    options.toolingSettingsController.postLatexConfigValues();
     postGoalList();
     const memoryEnabledPosted = postMemoryEnabled();
     const modelSelectionDataPosted = postModelSelectionData();
@@ -348,10 +259,9 @@ export function createDesktopSettingsIpc(
       historyHandlers.postHistoryData(),
       modelSelectionDataPosted,
       options.credentialSettingsController.postStartupData(),
-      postLatexSettingsStatus(),
+      options.toolingSettingsController.postStartupData(),
       postDesktopCrashReportingStatus(),
       options.agentSettingsController.postStartupData(),
-      postToolDashboardData(),
     ]);
   }
 
@@ -361,24 +271,6 @@ export function createDesktopSettingsIpc(
   ): Promise<void> {
     await workspaceState.update(key, value);
     postGitAuthorSettings(applyCurrentGitAuthorSettings());
-  }
-
-  async function updateLatexConfigValue(input: {
-    field: LatexConfigField;
-    value: unknown;
-  }): Promise<void> {
-    const plan = latexConfigPersistenceController.planUpdate(input);
-    if (!plan.ok) {
-      onError(
-        new Error(`Invalid LaTeX config value for ${input.field}`, {
-          cause: plan.error,
-        }),
-      );
-      return;
-    }
-
-    await workspaceState.update(plan.update.key, plan.update.value);
-    postLatexConfigValues();
   }
 
   async function updateModelEnabled(input: {
@@ -455,44 +347,6 @@ export function createDesktopSettingsIpc(
   ): Promise<void> {
     await workspaceState.update(key, enabled);
     postSuperYoloEnabled();
-  }
-
-  async function setToolEnabled(
-    toolId: string,
-    enabled: boolean,
-  ): Promise<void> {
-    const current = globalState.get<string[]>(
-      GlobalStateKey.DISABLED_TOOLS,
-      [],
-    );
-    const disabled = new Set(current);
-    if (enabled) {
-      disabled.delete(toolId);
-    } else {
-      disabled.add(toolId);
-    }
-    await globalState.update(GlobalStateKey.DISABLED_TOOLS, [...disabled]);
-    if (usesDefaultToolDashboardBuilder) {
-      await refreshDefaultDisabledToolCache();
-    }
-    await postToolDashboardData({ skipChecks: true });
-  }
-
-  async function recheckToolStatus(): Promise<void> {
-    const didRefresh = refreshToolAvailability != null;
-    if (didRefresh) {
-      await refreshToolAvailability();
-    }
-    await postToolDashboardData({ skipChecks: didRefresh });
-  }
-
-  async function runToolCommand(input: {
-    toolId: string;
-    kind: 'install' | 'auth';
-  }): Promise<void> {
-    const command = await findToolCommand(input.toolId, input.kind);
-    if (!command) return;
-    await options.runToolCommand?.({ ...input, command });
   }
 
   function runAsync(work: Promise<void>): void {
@@ -599,32 +453,8 @@ export function createDesktopSettingsIpc(
       setClaudeAgentEffort: (effort) =>
         setAgent(StateKeys.CLAUDE_AGENT_EFFORT, effort),
     },
-    tools: {
-      openInstallUrl: (url) =>
-        options.openExternalUrl?.(url) ?? Promise.resolve(),
-      installExtension: (extensionId) =>
-        options.installToolExtension?.(extensionId) ?? Promise.resolve(),
-      recheckStatus: () => recheckToolStatus(),
-      toggle: (toolId, enabled) => setToolEnabled(toolId, enabled),
-      runCommand: ({ toolId, kind }) => runToolCommand({ toolId, kind }),
-    },
-    latex: {
-      applySettings: () => postLatexSettingsStatus(),
-      installLatexWorkshop: () =>
-        options.installToolExtension?.(LATEX_WORKSHOP_EXT_ID) ??
-        Promise.resolve(),
-      runInstallCommand: (installCommand) => {
-        if (!isAllowedLatexInstallCommand(installCommand)) {
-          onError(
-            new Error(`Rejected unknown install command: ${installCommand}`),
-          );
-          return;
-        }
-        return options.runInstallCommand?.(installCommand) ?? Promise.resolve();
-      },
-      setConfigValue: ({ field, value }) =>
-        updateLatexConfigValue({ field, value }),
-    },
+    tools: options.toolingSettingsController.toolsActions,
+    latex: options.toolingSettingsController.latexActions,
     inlineCriticism: {
       getEnabled: unsupported(
         'Inline criticism is not available in the desktop app yet.',
@@ -667,7 +497,7 @@ export function createDesktopSettingsIpc(
             runAsync(postInitialSettingsData());
           } else {
             postGitAuthorSettings();
-            postLatexConfigValues();
+            options.toolingSettingsController.postLatexConfigValues();
             postGoalList();
           }
         }
