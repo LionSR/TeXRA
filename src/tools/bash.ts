@@ -6,9 +6,9 @@ import { tryPlatform } from '@platform/platform';
 
 // Local imports - agent
 import {
+  finalizeExecution,
   getExecutionStore,
   registerExecution,
-  writeTerminalStatus,
 } from '@agent/storage';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
@@ -476,10 +476,12 @@ export class BashTool extends defineTool({
             timedOut: result.timedOut ?? false,
             command,
           });
-          await writeTerminalStatus(
+          const finalization = await finalizeExecution({
             executionId,
-            backgroundBashTerminalStatus(result.success),
-          );
+            terminalStatus: backgroundBashTerminalStatus(result.success),
+            flowRecord: 'delete',
+          });
+          if (finalization.status === 'failed') throw finalization.error;
           await store.writeReport(msg);
         } catch (err: unknown) {
           logBackgroundFailure('persist', err);
@@ -492,10 +494,12 @@ export class BashTool extends defineTool({
       const { error } = outcome;
       const msg = formatBashError(executionId, command, error);
       try {
-        await writeTerminalStatus(
+        const finalization = await finalizeExecution({
           executionId,
-          backgroundBashTerminalStatus(false),
-        );
+          terminalStatus: backgroundBashTerminalStatus(false),
+          flowRecord: 'delete',
+        });
+        if (finalization.status === 'failed') throw finalization.error;
         await getExecutionStore(executionId).writeReport(msg);
       } catch (err: unknown) {
         logBackgroundFailure('persist', err);

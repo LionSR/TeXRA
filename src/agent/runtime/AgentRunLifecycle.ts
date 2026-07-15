@@ -1,5 +1,5 @@
 import { platform } from '@platform/platform';
-import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
+import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import {
   logSdkError,
   type AgentTrace,
@@ -7,7 +7,6 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import { flowKey } from '@agent/node/persistedFlow';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AGENT_ERROR_OUTCOME,
@@ -84,12 +83,13 @@ export interface FinalizeRunTerminalParams {
    * bash) omit it so their per-turn results stay out of the host result plane.
    */
   readonly trace?: AgentTrace;
-  /**
-   * Persist the outcome projection to execution history (best-effort). Callers
-   * that own a richer persistence block (background bash writes result meta,
-   * report, and status together) pass false.
-   */
-  readonly persistTerminalStatus: boolean;
+  /** Durable execution-state action owned by the storage finalizer. */
+  readonly persistence:
+    | { readonly kind: 'skip' }
+    | {
+        readonly kind: 'finalize';
+        readonly flowRecord: FinalizeExecutionInput['flowRecord'];
+      };
   /**
    * Delivery hook (subagent onError) run after the result settles and before
    * untrack, so the parent still sees this child as active while the
@@ -124,11 +124,23 @@ export async function finalizeRunTerminal(
   // live registration to clear in the common case — this guards a future
   // caller that registers one outside that branch.
   handle.clearWaitingCleanup();
-  if (params.persistTerminalStatus) {
-    await writeTerminalStatus(
-      handle.executionId,
-      projectRunOutcome(outcome).executionStatus,
-    ).catch(() => {});
+  if (params.persistence.kind === 'finalize') {
+    const finalization = await finalizeExecution({
+      executionId: handle.executionId,
+      terminalStatus: projectRunOutcome(outcome).executionStatus,
+      flowRecord: params.persistence.flowRecord,
+    });
+    if (finalization.status === 'failed') {
+      logger.warn('Failed to finalize durable execution state', {
+        data: {
+          agentIdentifier: handle.agentName,
+          executionId: handle.executionId,
+          stage: finalization.stage,
+          terminalStatusPersisted: finalization.terminalStatusPersisted,
+          error: finalization.error,
+        },
+      });
+    }
   }
   if (params.stage) {
     try {
@@ -313,7 +325,14 @@ export async function runFlowWithLifecycle(
       isSubagent: options?.isSubagent ?? false,
       stage: ctx.parentStage,
       trace: ctx.logger,
-      persistTerminalStatus: true,
+      persistence: {
+        kind: 'finalize',
+        // Completed runs have no resume state left to retain. Failed and
+        // cancelled runs keep their last flow record for diagnosis or resume;
+        // terminal metadata still prevents failed runs from being resumed.
+        flowRecord:
+          arm.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve',
+      },
       ...arm,
     });
   try {
@@ -342,15 +361,6 @@ export async function runFlowWithLifecycle(
       const parentStageId = ctx.parentStage.id;
       handle.registerWaitingCleanup(() => {
         session.followUps.release(streamId);
-        // Best-effort: this deletes the persisted flow-record for a run that
-        // is already being torn down and has no caller left awaiting this
-        // closure (it only fires from a later kill, well after the original
-        // request context is gone) — a failed delete just leaves a stale
-        // record on disk, not a correctness gap, so there is nothing useful
-        // to propagate an error to.
-        void getExecutionStore(executionId)
-          .delete(flowKey(executionId))
-          .catch(() => {});
         // Close this turn's "Run: ..." transcript group so a killed suspended
         // subagent doesn't leave it stuck at `running` forever (every other
         // terminal path reaches this via `finalizeRunTerminal`'s stage end,

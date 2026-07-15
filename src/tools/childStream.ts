@@ -265,7 +265,10 @@ async function finalizeChildStream(
     stage: options?.stage,
     // No trace emit: child-stream results must stay out of `session.onResult`
     // (host toast) consumers — the loop already presents them as follow-ups.
-    persistTerminalStatus: options?.persistTerminalStatus === true,
+    persistence:
+      options?.persistTerminalStatus === true
+        ? { kind: 'finalize', flowRecord: 'delete' }
+        : { kind: 'skip' },
   });
   disposeTrace();
 

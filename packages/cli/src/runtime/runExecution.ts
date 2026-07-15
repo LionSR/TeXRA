@@ -1,7 +1,6 @@
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { tryPlatform } from '@platform/platform';
 import { flushPendingRunTraces, StreamSnapshotStore } from '@transcript';
-import { writeTerminalStatus } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -16,6 +15,7 @@ import { generateExecutionId } from '@utils/core';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
+import { finalizeCliExecutionOrThrow } from './executionFinalization';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { initializeHeadlessTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
@@ -107,7 +107,11 @@ export async function executeCliConfig<
   const { result } = execution;
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    await finalizeCliExecutionOrThrow(
+      executionId,
+      EXECUTION_STATUS.ERROR,
+      'delete',
+    );
     writeTextStderr(
       categoryMismatchMessage ??
         `Agent resolved to a non ${expectedCategory} run.`,
@@ -206,9 +210,10 @@ export async function executeCliRequest(
   const disposeShutdownStatus = ownedExecutionId
     ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
         shutdownInterrupted = true;
-        await writeTerminalStatus(
+        await finalizeCliExecutionOrThrow(
           ownedExecutionId,
           EXECUTION_STATUS.INTERRUPTED,
+          'preserve',
         );
       })
     : undefined;
@@ -248,7 +253,11 @@ export async function executeCliRequest(
     runResult = { ok: true, result };
   } catch (err) {
     if (options.markErrorOnThrow && request.executionId && !invokeSettledOk) {
-      await writeTerminalStatus(request.executionId, EXECUTION_STATUS.ERROR);
+      await finalizeCliExecutionOrThrow(
+        request.executionId,
+        EXECUTION_STATUS.ERROR,
+        'delete',
+      );
     }
     // Only a classified, already-handled AgentError resolves to a non-zero
     // exit code here; anything else (e.g. registerExecution disk I/O,
@@ -262,7 +271,11 @@ export async function executeCliRequest(
     // If the run settles while shutdown is in progress, keep the
     // signal-owned interrupted status as the final write.
     if (shutdownInterrupted && ownedExecutionId) {
-      await writeTerminalStatus(ownedExecutionId, EXECUTION_STATUS.INTERRUPTED);
+      await finalizeCliExecutionOrThrow(
+        ownedExecutionId,
+        EXECUTION_STATUS.INTERRUPTED,
+        'preserve',
+      );
     }
     detachResultToast();
     detachRunProgressRenderer();

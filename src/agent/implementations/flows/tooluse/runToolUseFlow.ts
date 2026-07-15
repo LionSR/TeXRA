@@ -586,15 +586,9 @@ export async function runToolUseFlow<C = unknown>(
     const preserveFollowUpQueue =
       preserveFlowRecord && !persistenceRecoveryPending;
 
-    if (preservationReason) {
-      logger.debug(preservationReason);
-    } else {
-      try {
-        await kv.delete(flowKey(executionId));
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
+    if (preservationReason) logger.debug(preservationReason);
+    // AgentRunLifecycle applies the terminal metadata and flow-record policy
+    // through one storage finalization after this flow reports its outcome.
 
     // Recovery failures preserve the unread record but release the rebuilt
     // live queue. The resume wrapper owns the drained batch and restores it

@@ -234,8 +234,14 @@ export type FinalizeExecutionResult =
   | {
       status: 'failed';
       error: unknown;
-      stage: 'terminal-status' | 'flow-record-delete';
-      terminalStatusPersisted: boolean;
+      stage: 'terminal-status';
+      terminalStatusPersisted: false;
+    }
+  | {
+      status: 'failed';
+      error: unknown;
+      stage: 'flow-record-delete';
+      terminalStatusPersisted: true;
     };
 
 /** Persist terminal metadata, then apply the requested flow-record policy. */

@@ -8,11 +8,7 @@
 import PQueue from 'p-queue';
 
 import { StreamSnapshotStore } from '@transcript';
-import {
-  getExecutionStore,
-  registerExecution,
-  writeTerminalStatus,
-} from '@agent/storage';
+import { getExecutionStore, registerExecution } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -31,6 +27,7 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { finalizeCliExecutionOrThrow } from '@cli/runtime/executionFinalization';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -169,7 +166,11 @@ export async function markRegisteredChatExecutionError(
   },
 ): Promise<void> {
   if (!options.executionRegistered || options.agentSettled) return;
-  await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+  await finalizeCliExecutionOrThrow(
+    executionId,
+    EXECUTION_STATUS.ERROR,
+    'delete',
+  );
 }
 
 // ---------------------------------------------------------------------------

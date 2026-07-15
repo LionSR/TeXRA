@@ -6,10 +6,10 @@
  */
 
 import {
+  finalizeExecution,
   synchronizeAgentResultOutcome,
-  writeTerminalStatus,
 } from '@agent/storage';
-import type { ResultEvent } from '@agent/trace';
+import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -40,6 +40,8 @@ import {
 } from './ExecutionHandle';
 import { ProcessOutputPoller } from './ProcessOutputPoller';
 import { SessionEventHub } from './SessionEventHub';
+
+const logger = createChannelTrace('executionRegistry');
 
 export type { ExecutionHandle } from './ExecutionHandle';
 export {
@@ -911,18 +913,34 @@ export class ExecutionRegistry {
     handle.trace?.emit(cancelledResult);
     this.publishResult?.(cancelledResult, handle.childStreamId);
     handle.settleResult(cancelledResult);
-    const statusWrite = writeTerminalStatus(
-      handle.executionId,
-      projectRunOutcome(RUN_OUTCOME.CANCELLED).executionStatus,
-    );
+    const finalization = finalizeExecution({
+      executionId: handle.executionId,
+      terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED).executionStatus,
+      flowRecord: 'delete',
+    });
     // No later result write is guaranteed here, including during RESUMING:
     // the resume can fail before installing its own handle, while this method
     // untracks the suspended one below. Align the interim envelope only after
     // durable terminal metadata exists. A turn that does continue will replace
     // it with its own result.
-    void statusWrite.then(() =>
-      synchronizeAgentResultOutcome(handle.executionId, RUN_OUTCOME.CANCELLED),
-    );
+    void finalization.then((result) => {
+      if (result.status === 'failed') {
+        logger.warn('Failed to finalize stopped waiting execution', {
+          data: {
+            executionId: handle.executionId,
+            stage: result.stage,
+            terminalStatusPersisted: result.terminalStatusPersisted,
+            error: result.error,
+          },
+        });
+      }
+      if (result.terminalStatusPersisted) {
+        void synchronizeAgentResultOutcome(
+          handle.executionId,
+          RUN_OUTCOME.CANCELLED,
+        );
+      }
+    });
     this.untrackHandle(handle);
     this.cancelStreamStatus(handle.childStreamId, handle);
     return true;
