@@ -129,6 +129,11 @@ const SetPreferShortModelNamesMessageSchema = enabledFlag(
   CMD.SET_PREFER_SHORT_MODEL_NAMES,
 );
 
+const RequestModelAccessMessageSchema = z.object({
+  command: z.literal(CMD.REQUEST_MODEL_ACCESS),
+  modelName: z.string().min(1),
+});
+
 // Agent selection inbound messages
 const OpenAgentYamlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_YAML),
@@ -448,6 +453,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetHelperModelMessageSchema,
     SetModelReasoningLevelMessageSchema,
     SetPreferShortModelNamesMessageSchema,
+    RequestModelAccessMessageSchema,
     // Agent selection messages
     OpenAgentYamlMessageSchema,
     SetAgentEnabledMessageSchema,

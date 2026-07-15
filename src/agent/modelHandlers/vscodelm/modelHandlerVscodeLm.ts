@@ -144,7 +144,13 @@ function sdkErrorKind(error: LanguageModelPortError): SdkErrorKind {
 
 function tagVscodeLmError(error: unknown, provider: string): void {
   if (!(error instanceof LanguageModelPortError)) return;
-  attachSdkErrorMetadata(error, { provider, kind: sdkErrorKind(error) });
+  attachSdkErrorMetadata(error, {
+    provider,
+    kind: sdkErrorKind(error),
+    ...(error.code === LANGUAGE_MODEL_PORT_ERROR_CODE.QUOTA_EXCEEDED
+      ? { exhaustionReason: 'copilot-subscription' as const }
+      : {}),
+  });
 }
 
 function requireTextOnly(mediaFiles?: readonly FileLocation[]): void {

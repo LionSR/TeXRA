@@ -64,6 +64,7 @@ function createActions(): SettingsViewCommandActions {
       setHelperModel: action(),
       setReasoningLevel: action(),
       setPreferShortModelNames: action(),
+      requestAccess: action(),
     },
     orchestration: {
       setAllowOrchestratorKill: action(),
@@ -216,5 +217,13 @@ describe('createSettingsViewCommandHandlers', () => {
       toolId: 'latex',
       kind: 'install',
     });
+
+    assertSupported(registry.requestModelAccess)({
+      command: SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
+      modelName: 'copilot:sonnet46',
+    });
+    expect(actions.modelSelection.requestAccess).toHaveBeenCalledWith(
+      'copilot:sonnet46',
+    );
   });
 });

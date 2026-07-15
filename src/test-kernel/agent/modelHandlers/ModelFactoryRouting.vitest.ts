@@ -78,7 +78,6 @@ const AVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = {
       // Factory tests do not make model requests.
     })(),
   countTokens: async () => 0,
-  canSendRequest: async () => true,
   onDidChangeAccess: () => ({ dispose() {} }),
 };
 

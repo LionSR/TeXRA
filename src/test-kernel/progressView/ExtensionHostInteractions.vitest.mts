@@ -254,6 +254,7 @@ describe('createExtensionHostInteractions', () => {
     const interactions = createInteractions({ handlers, session });
 
     void interactions.requestRetry?.({
+      requestId: 'retry:subagent',
       streamId: 'failing-subagent' as StreamTabId,
       operation: 'Model invocation',
     });
@@ -282,6 +283,46 @@ describe('createExtensionHostInteractions', () => {
     );
   });
 
+  it('does not let an old retry action resolve its replacement', async () => {
+    const handlers = createHandlers();
+    const interactions = createInteractions({
+      handlers,
+      session: createTestSession(),
+    });
+    const first = interactions.requestRetry?.({
+      requestId: 'retry:first',
+      streamId: 'stream-a' as StreamTabId,
+      operation: 'First model invocation',
+    });
+    const replacement = interactions.requestRetry?.({
+      requestId: 'retry:replacement',
+      streamId: 'stream-a' as StreamTabId,
+      operation: 'Replacement model invocation',
+    });
+
+    await expect(first).resolves.toEqual({ action: 'cancel' });
+    expect(
+      interactions.resolveRetry('stream-a' as StreamTabId, 'retry:first', {
+        kind: 'retry',
+        action: 'retry',
+      }),
+    ).toBe(false);
+    expect(
+      interactions.isRetryPending(
+        'stream-a' as StreamTabId,
+        'retry:replacement',
+      ),
+    ).toBe(true);
+    expect(
+      interactions.resolveRetry(
+        'stream-a' as StreamTabId,
+        'retry:replacement',
+        { kind: 'retry', action: 'retry' },
+      ),
+    ).toBe(true);
+    await expect(replacement).resolves.toEqual({ action: 'retry' });
+  });
+
   it('cancels pending retry requests for a removed stream', async () => {
     const runtimeHost = createRuntimeHost();
     const handlers = createHandlers();
@@ -292,6 +333,7 @@ describe('createExtensionHostInteractions', () => {
     });
 
     const resultPromise = interactions.requestRetry?.({
+      requestId: 'retry:removed-stream',
       streamId: 'stream-a' as StreamTabId,
       operation: 'Model invocation',
     });
@@ -380,6 +422,7 @@ describe('createExtensionHostInteractions', () => {
     });
 
     const retryPromise = interactions.requestRetry?.({
+      requestId: 'retry:scoped-cancel',
       streamId: 'stream-a' as StreamTabId,
       operation: 'Model invocation',
     });

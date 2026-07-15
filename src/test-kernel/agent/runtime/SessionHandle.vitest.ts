@@ -140,6 +140,7 @@ describe('SessionHandle', () => {
         goalEnabled: false,
       });
       const retryA = a.interactions.requestRetry({
+        requestId: 'retry:a',
         streamId,
         operation: 'Model invocation',
       });
@@ -150,6 +151,7 @@ describe('SessionHandle', () => {
         goalEnabled: false,
       });
       const retryB = b.interactions.requestRetry({
+        requestId: 'retry:b',
         streamId,
         operation: 'Model invocation',
       });

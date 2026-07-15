@@ -320,6 +320,7 @@ export function createDesktopSettingsIpc(
         updateModelReasoningLevel({ modelName, level }),
       setPreferShortModelNames: (enabled) =>
         updatePreferShortModelNames(enabled),
+      requestAccess: unsupported('Copilot models require VS Code.'),
     },
     orchestration: {
       setAllowOrchestratorKill: (enabled) =>

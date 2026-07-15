@@ -28,7 +28,10 @@ import '../components/profile/RelayQuotaMeter';
 import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
 import '../components/profile/ReliabilitySettingsSection';
-import { ChatGptAuthEvents } from '../components/profile/events';
+import {
+  ChatGptAuthEvents,
+  ModelSelectionEvents,
+} from '../components/profile/events';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('models-tab')
@@ -43,34 +46,34 @@ export class ModelsTab extends LitElement {
 
       /* max-width and centering provided by .tab-content-container */
 
-      .chatgpt-subscription {
+      .keyless-source {
         margin-top: var(--wa-space-l, 1rem);
         padding-top: var(--wa-space-m, 0.75rem);
         border-top: 1px solid var(--wa-color-surface-border);
       }
-      .chatgpt-subscription__header {
+      .keyless-source__header {
         display: flex;
         align-items: center;
         gap: var(--wa-space-xs);
       }
-      .chatgpt-subscription__title {
+      .keyless-source__title {
         font-weight: var(--font-weight-semibold);
       }
-      .chatgpt-subscription__badge {
+      .keyless-source__badge {
         font-size: var(--font-size-xs);
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0;
         opacity: 0.65;
         border: 1px solid currentColor;
         border-radius: var(--border-radius-small);
         padding: 0 0.4em;
       }
-      .chatgpt-subscription__hint {
+      .keyless-source__hint {
         margin: var(--wa-space-2xs) 0 var(--wa-space-xs);
         opacity: 0.8;
         font-size: var(--font-size-sm);
       }
-      .chatgpt-subscription__limit {
+      .keyless-source__limit {
         display: flex;
         align-items: flex-start;
         gap: var(--wa-space-xs);
@@ -78,20 +81,20 @@ export class ModelsTab extends LitElement {
         opacity: 0.85;
         font-size: var(--font-size-sm);
       }
-      .chatgpt-subscription__limit wa-icon {
+      .keyless-source__limit wa-icon {
         flex: 0 0 auto;
         margin-top: var(--wa-space-3xs);
       }
-      .chatgpt-subscription__row {
+      .keyless-source__row {
         display: flex;
         align-items: center;
         gap: var(--wa-space-s);
         flex-wrap: wrap;
       }
-      .chatgpt-subscription__setting {
+      .keyless-source__setting {
         margin-bottom: var(--wa-space-xs);
       }
-      .chatgpt-subscription__account {
+      .keyless-source__account {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-2xs);
@@ -116,7 +119,10 @@ export class ModelsTab extends LitElement {
 
   private scrollToSection(
     selector:
-      'api-access-section' | 'provider-key-list' | '#chatgpt-subscription',
+      | 'api-access-section'
+      | 'provider-key-list'
+      | '#chatgpt-subscription'
+      | '#copilot-access',
   ): void {
     const el = this.shadowRoot?.querySelector(selector);
     if (el instanceof HTMLElement) {
@@ -148,6 +154,9 @@ export class ModelsTab extends LitElement {
   };
 
   private renderTabHint(): TemplateResult {
+    const copilotAvailable = this.modelSelectionItems.some(
+      (model) => model.provider === 'copilot',
+    );
     const description =
       this.apiAccessMode === 'included'
         ? 'Use included access, ChatGPT subscription for Codex models, or personal provider API keys.'
@@ -181,6 +190,18 @@ export class ModelsTab extends LitElement {
               ${waIcon('comment-discussion', { slot: 'start' })} ChatGPT
               Subscription
             </wa-button>
+            ${
+              copilotAvailable
+                ? html`<wa-button
+                    appearance="outlined"
+                    variant="neutral"
+                    size="s"
+                    @click=${() => this.scrollToSection('#copilot-access')}
+                  >
+                    ${waIcon('shield', { slot: 'start' })} Copilot in VS Code
+                  </wa-button>`
+                : nothing
+            }
             <wa-button
               appearance="outlined"
               variant="neutral"
@@ -213,7 +234,7 @@ export class ModelsTab extends LitElement {
     return html`
       <div class="models-container tab-content-container">
         ${this.renderTabHint()} ${apiAccessSection} ${quotaMeter}
-        ${this.renderChatGptSection()}
+        ${this.renderChatGptSection()} ${this.renderCopilotSection()}
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
           .apiAccessMode=${this.apiAccessMode}
@@ -245,23 +266,23 @@ export class ModelsTab extends LitElement {
     const account =
       this.chatgptAuth?.email ?? this.chatgptAuth?.accountId ?? 'your account';
     return html`
-      <section id="chatgpt-subscription" class="chatgpt-subscription">
-        <div class="chatgpt-subscription__header">
-          <span class="chatgpt-subscription__title">ChatGPT subscription</span>
-          <span class="chatgpt-subscription__badge">experimental</span>
+      <section id="chatgpt-subscription" class="keyless-source">
+        <div class="keyless-source__header">
+          <span class="keyless-source__title">ChatGPT subscription</span>
+          <span class="keyless-source__badge">experimental</span>
         </div>
-        <p class="chatgpt-subscription__hint">
+        <p class="keyless-source__hint">
           Use OpenAI models through your ChatGPT Plus, Pro, or Team
           subscription. No OpenAI API key is needed.
         </p>
-        <p class="chatgpt-subscription__limit">
+        <p class="keyless-source__limit">
           ${waIcon('circle-info')}
           <span>
             Subscription routing currently uses a 272,000-token Codex context
             cap, not the full 1,000,000-token API context.
           </span>
         </p>
-        <div class="chatgpt-subscription__setting">
+        <div class="keyless-source__setting">
           <wa-switch
             ?checked=${preferSubscription}
             @change=${this.handlePreferSubscriptionChange}
@@ -269,7 +290,7 @@ export class ModelsTab extends LitElement {
             Prefer ChatGPT subscription
           </wa-switch>
         </div>
-        <div class="chatgpt-subscription__setting">
+        <div class="keyless-source__setting">
           <wa-switch
             ?checked=${subscriptionToolUseOnly}
             ?disabled=${!preferSubscription}
@@ -281,13 +302,13 @@ export class ModelsTab extends LitElement {
         </div>
         ${
           signedIn
-            ? html`<div class="chatgpt-subscription__row">
-                <span class="chatgpt-subscription__account">
+            ? html`<div class="keyless-source__row">
+                <span class="keyless-source__account">
                   ${waIcon('circle-check')} Signed in as ${account}
                 </span>
                 <wa-button
                   appearance="outlined"
-                  size="small"
+                  size="s"
                   @click=${() => this.dispatchEvent(ChatGptAuthEvents.signOut())}
                 >
                   Sign out
@@ -300,6 +321,73 @@ export class ModelsTab extends LitElement {
               >
                 Sign in with ChatGPT
               </wa-button>`
+        }
+      </section>
+    `;
+  }
+
+  private renderCopilotSection(): TemplateResult | typeof nothing {
+    const models = this.modelSelectionItems.filter(
+      (model) => model.provider === 'copilot',
+    );
+    if (models.length === 0) return nothing;
+
+    const readyCount = models.filter(
+      (model) => model.availability === 'copilot-access',
+    ).length;
+    const consentModel = models.find(
+      (model) => model.availability === 'copilot-consent-required',
+    );
+    const unavailableCount = models.filter(
+      (model) => model.availability === 'copilot-unavailable',
+    ).length;
+    const status = consentModel
+      ? 'VS Code is ready to ask for your consent.'
+      : readyCount > 0
+        ? `${readyCount} Copilot model${readyCount === 1 ? ' is' : 's are'} ready.`
+        : `${unavailableCount} Copilot model${unavailableCount === 1 ? ' is' : 's are'} unavailable.`;
+
+    return html`
+      <section id="copilot-access" class="keyless-source">
+        <div class="keyless-source__header">
+          <span class="keyless-source__title">Copilot in VS Code</span>
+          <span class="keyless-source__badge">keyless</span>
+        </div>
+        <p class="keyless-source__hint">
+          Use models supplied by your GitHub Copilot subscription. No provider
+          API key is needed.
+        </p>
+        <div class="keyless-source__row">
+          <span class="keyless-source__account">
+            ${waIcon(readyCount > 0 ? 'circle-check' : 'circle-info')} ${status}
+          </span>
+          ${
+            consentModel
+              ? html`<wa-button
+                  variant="brand"
+                  size="s"
+                  @click=${() =>
+                    this.dispatchEvent(
+                      ModelSelectionEvents.requestAccess({
+                        modelName: consentModel.name,
+                      }),
+                    )}
+                >
+                  ${waIcon('shield', { slot: 'start' })} Grant access
+                </wa-button>`
+              : nothing
+          }
+        </div>
+        ${
+          unavailableCount > 0 && !consentModel
+            ? html`<p class="keyless-source__limit">
+                ${waIcon('warning')}
+                <span>
+                  Check Copilot availability and Language Models access in VS
+                  Code before trying again.
+                </span>
+              </p>`
+            : nothing
         }
       </section>
     `;

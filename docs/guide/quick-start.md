@@ -40,7 +40,7 @@ available.
 ## Sign in, use ChatGPT, or add a key
 
 A credential is the one step no agent can do for you. On a fresh install, the **Welcome to TeXRA** card in the
-TeXRA panel offers the same three choices, in the same order:
+TeXRA panel offers the main access choices:
 
 1. **Sign in — free for academics** — Researcher Access: no API key needed (recommended). Run **TeXRA: Sign In**
    from the Command Palette, or pick the sign-in option on the welcome card. Signing in also unlocks remote
@@ -48,7 +48,10 @@ TeXRA panel offers the same three choices, in the same order:
 2. **Use ChatGPT subscription** — Codex models through your ChatGPT plan. Open the Dashboard's **Models** tab
    (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
    use the **ChatGPT subscription** sign-in section.
-3. **Use your own provider API key** — Anthropic, OpenAI, Google, and more. In the same **Models** tab, set your
+3. **Use GitHub Copilot in VS Code** — compatible models through a Copilot subscription. Open **Models →
+   Copilot in VS Code** and grant access through VS Code's native consent prompt. This source does not appear in
+   the CLI or desktop applications.
+4. **Use your own provider API key** — Anthropic, OpenAI, Google, and more. In the same **Models** tab, set your
    provider's key in the **API Configuration** table, or place a `.env` file in your workspace with variables
    like `OPENAI_API_KEY`.
 

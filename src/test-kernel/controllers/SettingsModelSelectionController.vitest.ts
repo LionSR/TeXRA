@@ -8,6 +8,11 @@ import { MAX_TIER } from '@auth/sharedConfig';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
+import type { ModelConfig } from 'llm-zoo';
+
+const NO_RUNTIME_MODELS = async (): Promise<
+  readonly (readonly [string, ModelConfig])[]
+> => [];
 
 // Stub the injected availability resolver so the controller stays decoupled
 // from the global platform / server-side key service in unit tests.
@@ -63,6 +68,7 @@ describe('SettingsModelSelectionController', () => {
       useIncludedAccess: () => true,
       getUserTier: () => MAX_TIER,
       resolveModelOptions,
+      getRuntimeModelEntries: NO_RUNTIME_MODELS,
     });
 
     const { models } = await controller.buildSelectionData();
@@ -82,6 +88,7 @@ describe('SettingsModelSelectionController', () => {
     const controller = new SettingsModelSelectionController({
       state,
       resolveModelOptions,
+      getRuntimeModelEntries: NO_RUNTIME_MODELS,
     });
 
     expect((await controller.buildSelectionData()).helperModel).toBe('gpt55');
@@ -96,6 +103,7 @@ describe('SettingsModelSelectionController', () => {
     const controller = new SettingsModelSelectionController({
       state: createState({ enabledModels: [] }),
       resolveModelOptions,
+      getRuntimeModelEntries: NO_RUNTIME_MODELS,
     });
 
     const { models } = await controller.buildSelectionData();
@@ -111,10 +119,60 @@ describe('SettingsModelSelectionController', () => {
         enabledModels: ['gpt55', 'sonnet46T'],
       }),
       resolveModelOptions,
+      getRuntimeModelEntries: NO_RUNTIME_MODELS,
     });
 
     expect((await controller.buildSelectionData()).helperModel).toBe(
       DEFAULT_HELPER_MODEL,
+    );
+  });
+
+  it('includes discovered Copilot models without exposing static Copilot entries', async () => {
+    const runtimeConfig = {
+      name: 'copilot:sonnet46',
+      label: 'Copilot · Claude Sonnet 4.6',
+      provider: 'copilot',
+      contextWindow: 160_000,
+      inputPrice: 0,
+      outputPrice: 0,
+      deprecated: false,
+      retired: false,
+      capabilities: {},
+    } as ModelConfig;
+    const controller = new SettingsModelSelectionController({
+      state: createState(),
+      getRuntimeModelEntries: async () => [
+        ['copilot:sonnet46', runtimeConfig] as const,
+      ],
+      resolveModelOptions: async (models) =>
+        models.map((model) => ({
+          value: model,
+          label: model === 'copilot:sonnet46' ? runtimeConfig.label : model,
+          provider: model === 'copilot:sonnet46' ? 'copilot' : 'openai',
+          availability:
+            model === 'copilot:sonnet46'
+              ? 'copilot-consent-required'
+              : 'provider-key',
+          availabilityLabel:
+            model === 'copilot:sonnet46'
+              ? 'Copilot consent required'
+              : 'API key set',
+          requiresKey: false,
+          disabled: model === 'copilot:sonnet46',
+        })),
+    });
+
+    const { models } = await controller.buildSelectionData();
+
+    expect(models).toContainEqual(
+      expect.objectContaining({
+        name: 'copilot:sonnet46',
+        provider: 'copilot',
+        availability: 'copilot-consent-required',
+      }),
+    );
+    expect(models.filter((model) => model.provider === 'copilot')).toHaveLength(
+      1,
     );
   });
 });

@@ -18,7 +18,9 @@ const PROVIDERS = [
 interface HarnessOptions {
   keys?: Partial<Record<ApiProvider, string | undefined>>;
   prompt?(keys: Map<ApiProvider, string | undefined>): void;
+  preferChatGptSubscription?: boolean;
   retryAvailable?: boolean;
+  retryPending?: boolean;
 }
 
 function createHarness(options: HarnessOptions = {}): {
@@ -26,7 +28,7 @@ function createHarness(options: HarnessOptions = {}): {
   keys: Map<ApiProvider, string | undefined>;
   prompts: Array<ApiProvider | undefined>;
   includedAccessValues: boolean[];
-  codexDisableCount: number;
+  chatGptSubscriptionValues: boolean[];
   invalidations: number;
   retries: string[];
 } {
@@ -37,7 +39,8 @@ function createHarness(options: HarnessOptions = {}): {
   );
   const prompts: Array<ApiProvider | undefined> = [];
   const includedAccessValues: boolean[] = [];
-  let codexDisableCount = 0;
+  const chatGptSubscriptionValues: boolean[] = [];
+  let preferChatGptSubscription = options.preferChatGptSubscription ?? true;
   let invalidations = 0;
   const retries: string[] = [];
 
@@ -45,9 +48,7 @@ function createHarness(options: HarnessOptions = {}): {
     keys,
     prompts,
     includedAccessValues,
-    get codexDisableCount() {
-      return codexDisableCount;
-    },
+    chatGptSubscriptionValues,
     get invalidations() {
       return invalidations;
     },
@@ -61,15 +62,19 @@ function createHarness(options: HarnessOptions = {}): {
         prompts.push(provider);
         options.prompt?.(keys);
       },
+      getUseIncludedModelAccess: () => true,
       setUseIncludedModelAccess: async (enabled) => {
         includedAccessValues.push(enabled);
       },
-      disablePreferCodexSubscription: async () => {
-        codexDisableCount += 1;
+      getPreferChatGptSubscription: () => preferChatGptSubscription,
+      setPreferChatGptSubscription: async (enabled) => {
+        preferChatGptSubscription = enabled;
+        chatGptSubscriptionValues.push(enabled);
       },
       invalidateModelOptionsCache: () => {
         invalidations += 1;
       },
+      isRetryPending: () => options.retryPending ?? true,
       triggerRetry: (stream) => {
         retries.push(stream);
         return options.retryAvailable ?? true;
@@ -89,8 +94,9 @@ describe('ProgressApiKeyRetryController', () => {
 
     const result = await harness.controller.useOwnApiKey({
       stream: 'stream-a',
+      requestId: 'retry-a',
       provider: 'anthropic',
-      upstreamCreditDepleted: true,
+      exhaustionReason: 'upstream-credit',
       viaRelay: true,
     });
 
@@ -116,8 +122,9 @@ describe('ProgressApiKeyRetryController', () => {
 
     const result = await harness.controller.useOwnApiKey({
       stream: 'stream-a',
+      requestId: 'retry-a',
       provider: 'anthropic',
-      upstreamCreditDepleted: true,
+      exhaustionReason: 'upstream-credit',
       viaRelay: true,
     });
 
@@ -133,6 +140,30 @@ describe('ProgressApiKeyRetryController', () => {
     assert.deepEqual(harness.retries, []);
   });
 
+  it('does not change routing after the retry request was replaced', async () => {
+    const harness = createHarness({
+      keys: { anthropic: 'stored-key' },
+      retryPending: false,
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-a',
+      requestId: 'retry:stale',
+      provider: 'anthropic',
+      exhaustionReason: 'copilot-subscription',
+    });
+
+    assert.deepEqual(result, {
+      proceeded: false,
+      retried: false,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
+    });
+    assert.deepEqual(harness.includedAccessValues, []);
+    assert.equal(harness.invalidations, 0);
+    assert.deepEqual(harness.retries, []);
+  });
+
   it('accepts a changed key from any provider when depletion has no provider hint', async () => {
     const harness = createHarness({
       keys: { openai: 'old-openai', anthropic: undefined },
@@ -143,7 +174,8 @@ describe('ProgressApiKeyRetryController', () => {
 
     const result = await harness.controller.useOwnApiKey({
       stream: 'stream-b',
-      upstreamCreditDepleted: true,
+      requestId: 'retry-b',
+      exhaustionReason: 'upstream-credit',
       viaRelay: true,
     });
 
@@ -166,6 +198,7 @@ describe('ProgressApiKeyRetryController', () => {
 
     const result = await harness.controller.useOwnApiKey({
       stream: 'stream-b',
+      requestId: 'retry-b',
       viaRelay: true,
     });
 
@@ -190,12 +223,13 @@ describe('ProgressApiKeyRetryController', () => {
 
     const result = await harness.controller.useOwnApiKey({
       stream: 'stream-c',
+      requestId: 'retry-c',
       provider: 'anthropic',
       viaRelay: false,
     });
 
     assert.deepEqual(result, {
-      proceeded: true,
+      proceeded: false,
       retried: false,
       disabledIncludedModelAccess: false,
       disabledChatGptSubscription: false,
@@ -205,6 +239,31 @@ describe('ProgressApiKeyRetryController', () => {
     assert.deepEqual(harness.retries, ['stream-c']);
   });
 
+  it('restores routing when the exact retry disappears during the switch', async () => {
+    const harness = createHarness({
+      keys: { openai: 'stored-openai' },
+      retryAvailable: false,
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-race',
+      requestId: 'retry-race',
+      provider: 'openai',
+      exhaustionReason: 'chatgpt-subscription',
+    });
+
+    assert.deepEqual(result, {
+      proceeded: false,
+      retried: false,
+      disabledIncludedModelAccess: false,
+      disabledChatGptSubscription: false,
+    });
+    assert.deepEqual(harness.includedAccessValues, [false, true]);
+    assert.deepEqual(harness.chatGptSubscriptionValues, [false, true]);
+    assert.equal(harness.invalidations, 3);
+    assert.deepEqual(harness.retries, ['stream-race']);
+  });
+
   it('disables the ChatGPT subscription and retries with the existing OpenAI key, no prompt', async () => {
     const harness = createHarness({
       keys: { openai: 'stored-openai' },
@@ -212,8 +271,9 @@ describe('ProgressApiKeyRetryController', () => {
 
     const result = await harness.controller.useOwnApiKey({
       stream: 'stream-d',
+      requestId: 'retry-d',
       provider: 'openai',
-      chatgptSubscription: true,
+      exhaustionReason: 'chatgpt-subscription',
     });
 
     // The subscription switch also drops relay so the retry reaches the stored
@@ -228,7 +288,7 @@ describe('ProgressApiKeyRetryController', () => {
     // usable, so "Use your own API key" must not jump to the key-input prompt.
     assert.deepEqual(harness.prompts, []);
     assert.deepEqual(harness.includedAccessValues, [false]);
-    assert.equal(harness.codexDisableCount, 1);
+    assert.deepEqual(harness.chatGptSubscriptionValues, [false]);
     assert.equal(harness.invalidations, 2);
     assert.deepEqual(harness.retries, ['stream-d']);
   });
@@ -238,8 +298,9 @@ describe('ProgressApiKeyRetryController', () => {
 
     const result = await harness.controller.useOwnApiKey({
       stream: 'stream-e',
+      requestId: 'retry-e',
       provider: 'openai',
-      chatgptSubscription: true,
+      exhaustionReason: 'chatgpt-subscription',
     });
 
     assert.deepEqual(result, {
@@ -250,7 +311,94 @@ describe('ProgressApiKeyRetryController', () => {
     });
     // No usable key exists, so the prompt is still shown (then declined here).
     assert.deepEqual(harness.prompts, ['openai']);
-    assert.equal(harness.codexDisableCount, 0);
+    assert.deepEqual(harness.chatGptSubscriptionValues, []);
     assert.deepEqual(harness.retries, []);
+  });
+
+  it('prepares an existing direct key for a fresh Copilot fallback without retrying in place', async () => {
+    const harness = createHarness({
+      keys: { anthropic: 'stored-anthropic' },
+    });
+
+    const proceeded = await harness.controller.ensureOwnApiKey({
+      provider: 'anthropic',
+      exhaustionReason: 'copilot-subscription',
+    });
+
+    assert.equal(proceeded, true);
+    assert.deepEqual(harness.prompts, []);
+    assert.deepEqual(harness.includedAccessValues, []);
+
+    const result = await harness.controller.applyOwnApiKeyRouting({
+      provider: 'anthropic',
+      exhaustionReason: 'copilot-subscription',
+    });
+    assert.deepEqual(result, {
+      proceeded: true,
+      disabledIncludedModelAccess: true,
+      disabledChatGptSubscription: false,
+    });
+    assert.deepEqual(harness.includedAccessValues, [false]);
+    assert.deepEqual(harness.retries, []);
+  });
+
+  it('restores included access when a fresh Copilot fallback does not start', async () => {
+    const harness = createHarness();
+
+    const started = await harness.controller.runCopilotFallbackWithRouting(
+      { exhaustionReason: 'copilot-subscription' },
+      async () => false,
+    );
+
+    assert.equal(started, false);
+    assert.deepEqual(harness.includedAccessValues, [false, true]);
+    assert.equal(harness.invalidations, 2);
+  });
+
+  it('keeps a Copilot fallback on the OpenAI key instead of ChatGPT access', async () => {
+    const harness = createHarness();
+
+    const started = await harness.controller.runCopilotFallbackWithRouting(
+      {
+        exhaustionReason: 'copilot-subscription',
+        chatGptSubscriptionEligible: true,
+      },
+      async () => true,
+    );
+
+    assert.equal(started, true);
+    assert.deepEqual(harness.includedAccessValues, [false]);
+    assert.deepEqual(harness.chatGptSubscriptionValues, [false]);
+    assert.equal(harness.invalidations, 2);
+  });
+
+  it('restores ChatGPT access when an eligible Copilot fallback does not start', async () => {
+    const harness = createHarness();
+
+    const started = await harness.controller.runCopilotFallbackWithRouting(
+      {
+        exhaustionReason: 'copilot-subscription',
+        chatGptSubscriptionEligible: true,
+      },
+      async () => false,
+    );
+
+    assert.equal(started, false);
+    assert.deepEqual(harness.includedAccessValues, [false, true]);
+    assert.deepEqual(harness.chatGptSubscriptionValues, [false, true]);
+    assert.equal(harness.invalidations, 3);
+  });
+
+  it('keeps direct routing when a fresh Copilot fallback starts', async () => {
+    const harness = createHarness();
+
+    const started = await harness.controller.runCopilotFallbackWithRouting(
+      { exhaustionReason: 'copilot-subscription' },
+      async () => true,
+    );
+
+    assert.equal(started, true);
+    assert.deepEqual(harness.includedAccessValues, [false]);
+    assert.equal(harness.invalidations, 1);
   });
 });

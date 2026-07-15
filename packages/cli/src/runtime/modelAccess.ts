@@ -116,7 +116,8 @@ const INCLUDED_ACCESS_STATUS_BY_AVAILABILITY = {
   'missing-key': 'included: unavailable; missing API key',
   'subscription-access': 'chatgpt subscription',
   'copilot-access': 'copilot: unavailable in CLI',
-  'copilot-permission-required': 'copilot: unavailable in CLI',
+  'copilot-consent-required': 'copilot: unavailable in CLI',
+  'copilot-unavailable': 'copilot: unavailable in CLI',
   retired: 'retired',
 } satisfies Record<ModelAvailabilityKind, string>;
 

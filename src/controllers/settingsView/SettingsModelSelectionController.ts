@@ -1,5 +1,4 @@
 import {
-  MODELS,
   MODEL_CONFIGS,
   ModelProvider,
   ReasoningEffort,
@@ -12,10 +11,11 @@ import { FREE_TIER, MAX_TIER } from '@auth/sharedConfig';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { isGpt5ModelName } from '@model/modelNames';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { discoveredRuntimeModelConfigEntries } from '@model/runtimeModelRegistry';
 import type { ModelOptionData } from '@shared/schemas';
 import {
   DEFAULT_HELPER_MODEL,
-  MODEL_PROVIDERS_ORDER,
+  MODEL_SOURCE_ORDER,
 } from '@shared/constants/providers';
 import { isFastFirstResponseModel } from '@shared/constants/fastModels';
 import {
@@ -38,9 +38,12 @@ export interface SettingsModelSelectionState {
 
 export interface SettingsModelSelectionControllerDeps {
   state: SettingsModelSelectionState;
-  modelProviders?: readonly string[];
+  modelSources?: readonly string[];
   useIncludedAccess?: () => boolean;
   getUserTier?: () => string | undefined;
+  getRuntimeModelEntries?: () => Promise<
+    readonly (readonly [string, ModelConfig])[]
+  >;
   /**
    * Resolve availability-decorated options for the given models. Injected as a
    * port so the controller stays unit-testable; production wiring uses the
@@ -64,10 +67,10 @@ const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
 );
 
 export class SettingsModelSelectionController {
-  private readonly modelProviders: Set<string>;
+  private readonly modelSources: Set<string>;
 
   constructor(private readonly deps: SettingsModelSelectionControllerDeps) {
-    this.modelProviders = new Set(deps.modelProviders ?? MODEL_PROVIDERS_ORDER);
+    this.modelSources = new Set(deps.modelSources ?? MODEL_SOURCE_ORDER);
   }
 
   getVisibleModels(): string[] {
@@ -145,10 +148,25 @@ export class SettingsModelSelectionController {
     // models this host shows, via the same shared computation the CLI picker
     // uses. Passing an explicit list keeps the picker's view authoritative and
     // avoids re-deriving availability at render time.
-    const candidates = MODELS.filter((name) => {
-      const config = MODEL_CONFIGS[name];
-      return config != null && this.modelProviders.has(config.provider);
-    });
+    const runtimeEntries = await (
+      this.deps.getRuntimeModelEntries ?? discoveredRuntimeModelConfigEntries
+    )();
+    const configs = new Map<string, ModelConfig>([
+      ...Object.entries(MODEL_CONFIGS),
+      ...runtimeEntries,
+    ]);
+    const candidates = [
+      ...Object.entries(MODEL_CONFIGS)
+        .filter(
+          ([, config]) =>
+            config.provider !== ModelProvider.COPILOT &&
+            this.modelSources.has(config.provider),
+        )
+        .map(([name]) => name),
+      ...runtimeEntries
+        .filter(([, config]) => this.modelSources.has(config.provider))
+        .map(([name]) => name),
+    ];
     const resolveModelOptions =
       this.deps.resolveModelOptions ?? computeModelOptionsData;
     const optionsData = await resolveModelOptions(candidates);
@@ -156,7 +174,7 @@ export class SettingsModelSelectionController {
     const items: ModelSelectionItem[] = [];
     for (const option of optionsData) {
       const name = option.value;
-      const config = MODEL_CONFIGS[name];
+      const config = configs.get(name);
       if (!config) continue;
 
       const item: ModelSelectionItem = {

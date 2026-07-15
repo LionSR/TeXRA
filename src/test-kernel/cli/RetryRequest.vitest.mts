@@ -8,6 +8,7 @@ describe('CLI retry request', () => {
   it('uses immediate rejection with a plain give-up action', () => {
     const card = RetryRequest({
       payload: {
+        requestId: 'retry-request',
         streamId: 'retry-stream' as StreamTabId,
         operation: 'Model invocation',
         errorMessage: 'Connection error',
