@@ -30,7 +30,7 @@ import type { SettingsViewCommandActions } from '@controllers/settingsView/Setti
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
 
-/** History-specific capabilities supplied by the desktop host. */
+/** Dependencies required by the desktop history controller. */
 export interface DesktopHistoryOptions {
   /** Resolved extension resources used by chat export templates. */
   readonly resourcesPath: string;
