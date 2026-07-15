@@ -259,7 +259,7 @@ export async function initCliPlatform(
     Pick<CliContext, 'quietLogs'> & { skipIncludedModelAccess?: boolean },
 ): Promise<void> {
   cliWorkspaceCwd = context.cwd;
-  quietPlatformLogs = context.quietLogs ?? false;
+  quietPlatformLogs = context.quietLogs;
   setOutputChannelFactory(
     quietPlatformLogs ? () => ({ appendLine: () => undefined }) : null,
   );

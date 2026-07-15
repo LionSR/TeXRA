@@ -33,33 +33,35 @@ export interface CliPromptRequest {
   readonly prompt: string;
 }
 
+/** Fully normalized CLI state produced by {@link buildCliContext}. */
 export interface CliContext {
   readonly cwd: string;
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: CliApprovalPolicy;
   readonly helperModel?: string;
+  /** Absent until the invocation or initialized platform selects a mode. */
   readonly apiMode?: CliApiMode;
-  readonly quietLogs?: boolean;
+  readonly quietLogs: boolean;
   readonly renderRunProgress?: boolean;
-  readonly stdoutIsTty?: boolean;
-  readonly termIsDumb?: boolean;
-  readonly stderrIsTty?: boolean;
+  readonly stdoutIsTty: boolean;
+  readonly termIsDumb: boolean;
+  readonly stderrIsTty: boolean;
   /** Color allowed when writing to stdout. */
-  readonly stdoutColorEnabled?: boolean;
+  readonly stdoutColorEnabled: boolean;
   /** Color allowed when writing to stderr. */
-  readonly stderrColorEnabled?: boolean;
+  readonly stderrColorEnabled: boolean;
   /** Back-compat alias for `stderrColorEnabled`. */
   readonly colorEnabled: boolean;
-  readonly commandName?: string;
+  readonly commandName: string;
   readonly version: string;
   readonly resourcesPath: string;
-  readonly cliConfig?: CliConfigValues;
+  readonly cliConfig: CliConfigValues;
   readonly configFilePath?: string;
-  readonly configWarnings?: readonly string[];
+  readonly configWarnings: readonly string[];
   readonly envAgent?: string;
   readonly envModel?: string;
-  readonly skillSourceOptions?: SkillSourceOptions;
+  readonly skillSourceOptions: SkillSourceOptions;
   readonly approvalPrompt?: (request: CliPromptRequest) => Promise<string>;
 }
 

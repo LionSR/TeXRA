@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import stripAnsi from 'strip-ansi';
 
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   buildDoctorReport,
   doctorExitCode,
@@ -12,15 +13,10 @@ import {
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
 
-const context: CliContext = {
+const context: CliContext = createTestCliContext({
   cwd: '/workspace',
-  mode: 'headless',
-  outputFormat: 'text',
-  approvalPolicy: 'never',
-  colorEnabled: false,
-  version: '0.0.0',
   resourcesPath: '/resources',
-};
+});
 
 const directory = {
   isDirectory: () => true,

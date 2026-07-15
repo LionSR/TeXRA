@@ -118,6 +118,7 @@ vi.mock('@cli/runtime/sessionResume', () => ({
 }));
 
 import { StreamSnapshotStore } from '@transcript';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { wakeQueuedFollowUpStream } from '@agent/followUp/ToolUseFollowUp';
 import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
@@ -169,10 +170,9 @@ function makeSession(overrides: Partial<TuiSession> = {}): TuiSession {
 }
 
 function makeSessionContext(): CliContext {
-  return {
+  return createTestCliContext({
     cwd: '/tmp/test',
     mode: 'interactive',
-    outputFormat: 'text',
     approvalPolicy: 'ask',
     stdoutIsTty: true,
     stderrIsTty: true,
@@ -182,7 +182,7 @@ function makeSessionContext(): CliContext {
     helperModel: 'test-model',
     commandName: 'chat',
     apiMode: 'included',
-  } as CliContext;
+  });
 }
 
 describe('CLI terminal outcome resolution', () => {

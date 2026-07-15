@@ -23,7 +23,7 @@ export async function runResumeExecution(
 ): Promise<number> {
   const terminalFailure = interactiveTerminalFailure(context);
   if (terminalFailure) {
-    const commandName = context.commandName || 'texra';
+    const commandName = context.commandName;
     const runCommand = `${commandName} run`;
     writeTextStderr(
       formatInteractiveTerminalFailure(terminalFailure, {
