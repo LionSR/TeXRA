@@ -31,7 +31,7 @@ export {
   trackStreamConnect,
 } from './sdkError/streamFailure';
 
-export { detectStatusCode } from './sdkError/errorInspection';
+export { detectRequestId, detectStatusCode } from './sdkError/errorInspection';
 
 export {
   PARTIAL_TEXT_TAIL_MAX,
