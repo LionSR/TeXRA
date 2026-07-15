@@ -45,6 +45,7 @@ import {
 } from '../progressTestUtils';
 
 interface TestRetryServices {
+  config: { model: string };
   streamId: StreamTabId;
   runtimeHost: AgentRuntimeHost;
   streamStatus: StreamStatusMachine;
@@ -79,6 +80,7 @@ function createRetryNode(streamId: StreamTabId): RetryNodeKit {
   const streamStatus = new StreamStatusMachine();
   const requestRetry = vi.fn<RetryNodeKit['requestRetry']>();
   const node = new ExposedRetryNode().setServices({
+    config: { model: 'copilot:sonnet46' },
     streamId,
     runtimeHost: noopAgentRuntimeHost,
     streamStatus,
@@ -242,6 +244,7 @@ describe('RetryState', () => {
         expect.objectContaining({
           streamId,
           operation: 'Tool-use call',
+          model: 'copilot:sonnet46',
         }),
       );
     } finally {

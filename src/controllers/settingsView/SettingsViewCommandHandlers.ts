@@ -86,6 +86,7 @@ export interface SettingsViewCommandActions {
       ]
     >;
     readonly setPreferShortModelNames: EnabledAction;
+    readonly requestAccess: StringAction;
   };
   readonly orchestration: {
     readonly setAllowOrchestratorKill: EnabledAction;
@@ -307,6 +308,10 @@ export function createSettingsViewCommandHandlers(
     setPreferShortModelNames: mapAction(
       actions.modelSelection.setPreferShortModelNames,
       (data) => [data.enabled],
+    ),
+    requestModelAccess: mapAction(
+      actions.modelSelection.requestAccess,
+      (data) => [data.modelName],
     ),
 
     setAllowOrchestratorKill: mapAction(

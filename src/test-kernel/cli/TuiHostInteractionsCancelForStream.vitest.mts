@@ -170,6 +170,7 @@ describe('createTuiHostInteractions().cancel', () => {
       // modal decision settles; cancel({}) must settle the route (resolving
       // the pending retry with 'cancel'), not just clear the modal queue.
       const retryResult = interactions.requestRetry?.({
+        requestId: 'retry:first',
         streamId: 'stream-a',
         operation: 'Model invocation',
       });
@@ -189,6 +190,7 @@ describe('createTuiHostInteractions().cancel', () => {
       // The route registry entry is gone: a stale decision on the old route
       // cannot resurrect the retry (a fresh request gets a fresh route).
       const second = interactions.requestRetry?.({
+        requestId: 'retry:second',
         streamId: 'stream-a',
         operation: 'Model invocation',
       });
@@ -276,7 +278,11 @@ describe('HostInteractionOptions.timeoutMs threading', () => {
     const interactions = createTuiHostInteractions(host(), context());
     try {
       const result = interactions.requestRetry?.(
-        { streamId: 'stream-a', operation: 'Model invocation' },
+        {
+          requestId: 'retry:timeout',
+          streamId: 'stream-a',
+          operation: 'Model invocation',
+        },
         { timeoutMs: 15 },
       );
 

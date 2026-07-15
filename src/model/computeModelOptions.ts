@@ -23,9 +23,9 @@ import { getVisibleModels } from './modelOptionsState';
 import { shouldRouteModelThroughOpenRouter } from './openRouterRouting';
 import {
   availableRuntimeModelIds,
+  discoveredRuntimeModelConfigEntries,
   getRuntimeModelConfig,
   isRuntimeModel,
-  refreshRuntimeModelRegistry,
   runtimeModelAccess,
   runtimeModelConfigEntries,
 } from './runtimeModelRegistry';
@@ -108,8 +108,13 @@ const AVAILABILITY_STATUS_FIELDS: Record<
     available: true,
     requiresKey: false,
   },
-  'copilot-permission-required': {
-    label: 'Copilot access required',
+  'copilot-consent-required': {
+    label: 'Copilot consent required',
+    available: false,
+    requiresKey: false,
+  },
+  'copilot-unavailable': {
+    label: 'Copilot unavailable',
     available: false,
     requiresKey: false,
   },
@@ -193,9 +198,15 @@ async function resolveModelAvailability(
   }
 
   if (isRuntimeModel(model)) {
-    return runtimeModelAccess(model) === true
-      ? availabilityStatus('copilot-access')
-      : availabilityStatus('copilot-permission-required');
+    switch (runtimeModelAccess(model)) {
+      case 'allowed':
+        return availabilityStatus('copilot-access');
+      case 'consent-required':
+        return availabilityStatus('copilot-consent-required');
+      case 'unavailable':
+      case undefined:
+        return availabilityStatus('copilot-unavailable');
+    }
   }
 
   // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
@@ -310,7 +321,7 @@ export async function getModelUnavailableReason(
   access?: ModelOptionsAccess,
   options: ModelOptionsComputationOptions = {},
 ): Promise<string | null> {
-  await refreshRuntimeModelRegistry();
+  await discoveredRuntimeModelConfigEntries();
   const config = getRuntimeModelConfig(model);
   if (!config) return `Model "${model}" is not recognized.`;
 
@@ -340,8 +351,12 @@ export async function getModelUnavailableReason(
     return `Model "${model}" is unavailable because your monthly TeXRA relay quota is exhausted. Switch to personal API keys or wait for the next quota period.`;
   }
 
-  if (availability.kind === 'copilot-permission-required') {
-    return `Model "${model}" requires permission to use your Copilot subscription in VS Code.`;
+  if (availability.kind === 'copilot-consent-required') {
+    return `Model "${model}" needs your consent before TeXRA can use it through Copilot in VS Code.`;
+  }
+
+  if (availability.kind === 'copilot-unavailable') {
+    return `Model "${model}" is currently unavailable through Copilot in VS Code.`;
   }
 
   // Personal key mode or unauthenticated — missing key or keyless provider.
@@ -477,7 +492,7 @@ async function computeModelOptionsDataUncached(
   access: ModelOptionsAccess,
   useApiKeyCache: boolean,
 ): Promise<ModelOptionData[]> {
-  await refreshRuntimeModelRegistry();
+  await discoveredRuntimeModelConfigEntries();
   const availabilityCtx = await buildAvailabilityContext(
     access,
     useApiKeyCache,
