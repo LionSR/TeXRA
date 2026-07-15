@@ -61,7 +61,6 @@ export interface DesktopSettingsIpcOptions {
   state: SettingsStatePorts;
   config: ConfigProvider;
   ui: DesktopSettingsUiHost;
-  sendStartupCatalogData?: boolean;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
@@ -417,13 +416,7 @@ export function createDesktopSettingsIpc(
             command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
             commands: unsupportedCommands(settingsHandlers),
           });
-          if (options.sendStartupCatalogData) {
-            runAsync(postInitialSettingsData());
-          } else {
-            postGitAuthorSettings();
-            options.toolingSettingsController.postLatexConfigValues();
-            postGoalList();
-          }
+          runAsync(postInitialSettingsData());
         }
         return false;
       }

@@ -902,7 +902,6 @@ function createWindow(options: {
     },
     config: platform().config,
     ui: settingsUi,
-    sendStartupCatalogData: true,
   });
   settingsIpcRef.current = settingsIpc;
   const progressIpc = createDesktopProgressIpc({
