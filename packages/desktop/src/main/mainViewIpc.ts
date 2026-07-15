@@ -33,12 +33,12 @@ export interface DesktopMainViewIpcOptions {
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
   onboarding?: DesktopMessageHandler;
-  logs?: DesktopLogIpcOptions;
+  logs: DesktopLogIpcOptions;
   shellActions?: DesktopShellActions;
   modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   loadStartupOptions?: () => Promise<MainViewStartupOptions>;
-  executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
+  executeAgent(message: MainViewExecuteMessage): Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -49,7 +49,7 @@ export interface DesktopMainViewIpc {
 
 export function installDesktopMainViewIpc(
   window: BrowserWindow,
-  options: DesktopMainViewIpcOptions = {},
+  options: DesktopMainViewIpcOptions,
 ): DesktopMainViewIpc {
   let disposed = false;
   let messageHandlers: DesktopMessageHandler[] = [];

@@ -24,7 +24,7 @@ interface MainViewIpcModule {
         send(channel: string, message: unknown): void;
       };
     },
-    options?: {
+    options: {
       debugMode?: boolean;
       getTheme?: () => 'dark' | 'light' | 'high-contrast';
       fileSelection?: { handleMessage(message: { command: string }): boolean };
@@ -36,7 +36,16 @@ interface MainViewIpcModule {
         agentOptions: { workflow: unknown[]; toolUse: unknown[] };
         modelOptions: unknown[];
       }>;
-      executeAgent?: (message: unknown) => Promise<void>;
+      logs: {
+        readLog(): {
+          path: string | undefined;
+          text: string;
+          truncated: boolean;
+        };
+        copyLog(text: string): Promise<void>;
+        exportLog(text: string): Promise<void>;
+      };
+      executeAgent(message: unknown): Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
   ): {
@@ -144,6 +153,17 @@ function createWindowMock(
   return { window, webContents };
 }
 
+function createMainViewCommandCapabilities() {
+  return {
+    executeAgent: vi.fn(async (_message: unknown) => {}),
+    logs: {
+      readLog: () => ({ path: undefined, text: '', truncated: false }),
+      copyLog: vi.fn(async (_text: string) => {}),
+      exportLog: vi.fn(async (_text: string) => {}),
+    },
+  };
+}
+
 describe('desktop main-view IPC', () => {
   afterEach(() => {
     vi.doUnmock('electron');
@@ -195,6 +215,7 @@ describe('desktop main-view IPC', () => {
     });
 
     const ipc = installDesktopMainViewIpc(window, {
+      ...createMainViewCommandCapabilities(),
       debugMode: true,
       fileSelection,
       settings,
@@ -462,6 +483,7 @@ describe('desktop main-view IPC', () => {
     const { window, webContents } = createWindowMock(sends);
 
     installDesktopMainViewIpc(window, {
+      ...createMainViewCommandCapabilities(),
       getAuthStatus: async () => ({ authenticated: true }),
       loadStartupOptions: async () => ({
         agentOptions: {
@@ -531,6 +553,7 @@ describe('desktop main-view IPC', () => {
     const { window, webContents } = createWindowMock(sends);
 
     installDesktopMainViewIpc(window, {
+      ...createMainViewCommandCapabilities(),
       modelListRefresh: modelListRefresh.promise,
     });
     rendererListener?.(

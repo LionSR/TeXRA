@@ -8,12 +8,12 @@ import {
 } from './desktopIpcTypes.js';
 
 export interface DesktopExecutionIpcOptions {
-  executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
+  executeAgent(message: MainViewExecuteMessage): Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
 export function createDesktopExecutionIpc(
-  options: DesktopExecutionIpcOptions = {},
+  options: DesktopExecutionIpcOptions,
 ): DesktopMessageHandler {
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
 
@@ -39,7 +39,7 @@ export function createDesktopExecutionIpc(
           );
           return;
         }
-        return options.executeAgent?.(parsed.data);
+        return options.executeAgent(parsed.data);
       },
     },
     { onAsyncError: options.onAsyncError },
