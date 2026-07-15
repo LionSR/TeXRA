@@ -467,6 +467,45 @@ describe('desktop settings IPC', () => {
     expect(revealed).toEqual(['goal-owning-stream']);
   });
 
+  it('shows unsupported-command reasons without reporting an error', async () => {
+    const showInfoMessage = vi.fn(async () => undefined);
+    const onError = vi.fn();
+    const { settings } = createSettingsFixture({
+      ui: { showInfoMessage, onError },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(showInfoMessage).toHaveBeenCalledWith(
+      'No VS Code settings in the desktop app.',
+    );
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('reports a failure to show an unsupported-command reason', async () => {
+    const failure = new Error('notification failed');
+    const showInfoMessage = vi.fn(async () => Promise.reject(failure));
+    const onError = vi.fn();
+    const { settings } = createSettingsFixture({
+      ui: { showInfoMessage, onError },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(failure);
+  });
+
   it('delegates Tools and LaTeX commands to the required controller', async () => {
     const baseController = createStubDesktopToolingSettingsController();
     const toggle = vi.fn(async () => undefined);
