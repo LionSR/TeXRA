@@ -19,7 +19,10 @@ import { apiKeySecretName } from '@model/apiProviders';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - desktop test support
-import { createStubDesktopAgentSettingsController } from './desktopSettingsTestSupport';
+import {
+  createStubDesktopAgentSettingsController,
+  createStubDesktopHistoryOptions,
+} from './desktopSettingsTestSupport';
 
 // Local imports - platform
 import type { StateStore } from '@platform/interfaces';
@@ -92,6 +95,7 @@ async function createSettingsIpc(options: {
   } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
 
   return createDesktopSettingsIpc({
+    ...createStubDesktopHistoryOptions(),
     postToRenderer: () => {},
     agentSettingsController: createStubDesktopAgentSettingsController(),
     globalState: new MemoryStateStore(),
