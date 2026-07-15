@@ -44,6 +44,7 @@ export const BashPermissionSchema = PermissionBaseSchema.extend({
 export type BashPermission = z.infer<typeof BashPermissionSchema>;
 
 export const RetryPermissionSchema = z.strictObject({
+  requestId: z.string(),
   streamId: StreamTabIdSchema,
   operation: z.string(),
   model: z.string().optional(),

@@ -19,6 +19,10 @@ import {
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { createSettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { platform } from '@platform/platform';
+import {
+  LANGUAGE_MODEL_PORT_ERROR_CODE,
+  LanguageModelPortError,
+} from '@platform/languageModel';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -43,6 +47,10 @@ import {
   setInlineCriticismEnabled,
 } from '@frontend/latex/inlineCriticism';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import {
+  invalidateRuntimeModelRegistry,
+  requestRuntimeModelAccess,
+} from '@model/runtimeModelRegistry';
 import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
@@ -262,6 +270,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.sendToolDashboardData(w, { skipChecks: true }),
       );
     });
+    appSignals.on('languageModelsChanged', () => {
+      void this.withActiveWebview((webview) =>
+        this.sendModelSelectionData(webview),
+      );
+    });
     const unsubscribeGoals = subscribeGoalStateChanges(defaultSession(), () => {
       void this.withActiveWebview((w) => this.sendGoalList(w));
     });
@@ -371,6 +384,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.settingsHost.setPreferShortModelNames(enabled, {
             respond: (message) => this.postMessageToActiveWebview(message),
           }),
+        requestAccess: (modelName) => this.handleRequestModelAccess(modelName),
       },
       orchestration: {
         setAllowOrchestratorKill: (enabled) =>
@@ -954,6 +968,43 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((w) => this.sendModelSelectionData(w)),
     ]);
+  }
+
+  private async handleRequestModelAccess(modelName: string): Promise<void> {
+    try {
+      const result = await requestRuntimeModelAccess(modelName);
+      if (result === 'unavailable') {
+        await showLoggedInfoMessage(
+          this.channel,
+          'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
+        );
+      }
+    } catch (error) {
+      if (
+        error instanceof LanguageModelPortError &&
+        error.code === LANGUAGE_MODEL_PORT_ERROR_CODE.NO_PERMISSIONS
+      ) {
+        await showLoggedInfoMessage(
+          this.channel,
+          'Copilot access was not granted. TeXRA will leave these models disabled.',
+        );
+      } else {
+        await showLoggedErrorMessage(
+          this.channel,
+          'Could not request Copilot model access',
+          error,
+        );
+      }
+    } finally {
+      invalidateRuntimeModelRegistry();
+      invalidateModelOptionsCache();
+      await Promise.all([
+        safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+        this.withActiveWebview((webview) =>
+          this.sendModelSelectionData(webview),
+        ),
+      ]);
+    }
   }
 
   /** Refresh settings-view agent list and main-view dropdown after agent mutations. */

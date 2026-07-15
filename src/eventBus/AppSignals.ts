@@ -29,6 +29,9 @@ export interface AppSignalPayloads {
    */
   toolAvailabilityChanged: undefined;
 
+  /** The editor's language-model catalogue or access permissions changed. */
+  languageModelsChanged: undefined;
+
   /**
    * One or more files were written directly to the workspace. Frontends can
    * badge or refresh those files without routing through a run-scoped channel.

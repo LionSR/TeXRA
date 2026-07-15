@@ -273,6 +273,24 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(true);
   });
 
+  it('carries an SDK exhaustion reason into the provider error', () => {
+    const error = new Error('Copilot quota exceeded');
+    attachSdkErrorMetadata(error, {
+      provider: 'copilot',
+      kind: 'rate_limit',
+      exhaustionReason: 'copilot-subscription',
+    });
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted).toMatchObject({
+      provider: 'copilot',
+      statusCode: 429,
+      exhaustionReason: 'copilot-subscription',
+      userRetryable: true,
+    });
+  });
+
   it('classifies relay monthly-limit messages as credential exhaustion', () => {
     const error = new Error(
       '429 Monthly spending limit reached ($300). Current usage: $623.16.',

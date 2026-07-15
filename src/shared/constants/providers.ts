@@ -46,7 +46,7 @@ export type ProviderEndpointStateEntry = ProviderStateEntry & {
 
 /**
  * Canonical provider registry. All provider lists are derived from this.
- * Order here determines display order in MODEL_PROVIDERS_ORDER.
+ * Order here determines display order for direct model providers.
  *
  * To add a new provider: add a single entry here.
  * hasServerKey: true → automatically included in SERVER_SIDE_PROVIDERS.
@@ -166,10 +166,11 @@ const EXTRA_DISPLAY_NAMES: Record<string, string> = {
 // Derived lists — keep in sync automatically
 // ============================================================================
 
-/** Providers shown in the model selection list (display order). */
-export const MODEL_PROVIDERS_ORDER: ModelProvider[] = PROVIDER_REGISTRY.map(
-  (p) => p.id,
-);
+/** Model sources shown in selection lists. Keyless sources stay outside the API-key registry. */
+export const MODEL_SOURCE_ORDER: ModelProvider[] = [
+  ...PROVIDER_REGISTRY.map((provider) => provider.id),
+  ModelProvider.COPILOT,
+];
 
 /**
  * All providers that support server-side API keys.

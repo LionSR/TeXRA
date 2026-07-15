@@ -4,9 +4,6 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent runtime
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
-
 // Local imports - progress view
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -46,10 +43,12 @@ type ProgressViewProviderFake = ProgressViewProvider & {
 };
 
 function createHostInteractions(
-  overrides: Partial<HostInteractions> = {},
+  overrides: Partial<ExtensionHostInteractions> = {},
 ): ExtensionHostInteractions {
   return {
     approvePendingDelegatedWork: vi.fn(async () => undefined),
+    isRetryPending: vi.fn(() => false),
+    resolveRetry: vi.fn(() => false),
     resolve: vi.fn(() => false),
     cancel: vi.fn(),
     ...overrides,
@@ -151,6 +150,71 @@ describe('progress-view onboarding refresh wiring', () => {
     });
   });
 
+  it('acknowledges a replacement run when the runtime publishes its handle', async () => {
+    let finishCommand: ((value: boolean) => void) | undefined;
+    mocks.safeExecuteCommand.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishCommand = resolve;
+        }),
+    );
+    const handler = createMessageHandler(
+      createProgressViewProvider(),
+      createExtensionContext(),
+    );
+    const start = (
+      handler as unknown as {
+        executeValidatedUntilStarted(request: {
+          config: Record<string, never>;
+        }): Promise<boolean>;
+      }
+    ).executeValidatedUntilStarted({ config: {} });
+
+    const commandInput = mocks.safeExecuteCommand.mock.calls[0]?.[1]?.[0] as
+      { onRun?: () => void } | undefined;
+    expect(commandInput?.onRun).toBeTypeOf('function');
+    commandInput?.onRun?.();
+
+    await expect(start).resolves.toBe(true);
+    finishCommand?.(true);
+  });
+
+  it('reports a replacement launch failure before a run handle exists', async () => {
+    mocks.safeExecuteCommand.mockResolvedValue(false);
+    const handler = createMessageHandler(
+      createProgressViewProvider(),
+      createExtensionContext(),
+    );
+
+    await expect(
+      (
+        handler as unknown as {
+          executeValidatedUntilStarted(request: {
+            config: Record<string, never>;
+          }): Promise<boolean>;
+        }
+      ).executeValidatedUntilStarted({ config: {} }),
+    ).resolves.toBe(false);
+  });
+
+  it('settles a replacement launch when command error handling rejects', async () => {
+    mocks.safeExecuteCommand.mockRejectedValue(new Error('command failed'));
+    const handler = createMessageHandler(
+      createProgressViewProvider(),
+      createExtensionContext(),
+    );
+
+    await expect(
+      (
+        handler as unknown as {
+          executeValidatedUntilStarted(request: {
+            config: Record<string, never>;
+          }): Promise<boolean>;
+        }
+      ).executeValidatedUntilStarted({ config: {} }),
+    ).resolves.toBe(false);
+  });
+
   it.each([
     'createSampleProject',
     'cloneOverleaf',
@@ -222,7 +286,7 @@ describe('progress-view onboarding refresh wiring', () => {
 
   it('routes retry request actions through host interactions', async () => {
     const interactions = createHostInteractions({
-      resolve: vi.fn(() => true),
+      resolveRetry: vi.fn(() => true),
     });
     const directHandler = createMessageHandler(
       createProgressViewProvider(),
@@ -235,6 +299,7 @@ describe('progress-view onboarding refresh wiring', () => {
       {
         command: PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST,
         stream: 'stream-a',
+        requestId: 'retry-a',
         feedback: 'try the other branch',
       },
       createWebviewView(),
@@ -243,19 +308,28 @@ describe('progress-view onboarding refresh wiring', () => {
       {
         command: PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST,
         stream: 'stream-a',
+        requestId: 'retry-a',
       },
       createWebviewView(),
     );
 
-    expect(interactions.resolve).toHaveBeenCalledWith('stream-a', {
-      kind: 'retry',
-      action: 'retry',
-      feedback: 'try the other branch',
-    });
-    expect(interactions.resolve).toHaveBeenCalledWith('stream-a', {
-      kind: 'retry',
-      action: 'cancel',
-    });
+    expect(interactions.resolveRetry).toHaveBeenCalledWith(
+      'stream-a',
+      'retry-a',
+      {
+        kind: 'retry',
+        action: 'retry',
+        feedback: 'try the other branch',
+      },
+    );
+    expect(interactions.resolveRetry).toHaveBeenCalledWith(
+      'stream-a',
+      'retry-a',
+      {
+        kind: 'retry',
+        action: 'cancel',
+      },
+    );
   });
 
   it('reports missing retry requests when no pending interaction matches', async () => {
@@ -266,13 +340,14 @@ describe('progress-view onboarding refresh wiring', () => {
       provider,
       context,
       prompt,
-      createHostInteractions({ resolve: vi.fn(() => false) }),
+      createHostInteractions({ resolveRetry: vi.fn(() => false) }),
     );
 
     await handler.handleMessage(
       {
         command: PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST,
         stream: 'stream-a',
+        requestId: 'retry-a',
       },
       createWebviewView(),
     );

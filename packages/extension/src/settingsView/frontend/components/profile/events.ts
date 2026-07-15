@@ -15,6 +15,8 @@ export const ModelSelectionEvents = {
     createEvent('model-reasoning-level-set', detail),
   setPreferShortModelNames: (detail: { enabled: boolean }) =>
     createEvent('prefer-short-model-names-set', detail),
+  requestAccess: (detail: { modelName: string }) =>
+    createEvent('model-access-request', detail),
 } as const;
 
 export const ChatGptAuthEvents = {

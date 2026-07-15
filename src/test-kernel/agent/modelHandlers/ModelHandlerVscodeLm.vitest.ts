@@ -22,9 +22,10 @@ import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import {
   detectPartialText,
   isUserAbort,
+  normalizeProviderError,
   requiresFlowAutoRetry,
 } from '@common/errors/sdkErrorUtils';
-import type { FileLocation } from '@shared/schemas';
+import { isCredentialExhausted, type FileLocation } from '@shared/schemas';
 
 function modelConfig(supportsFunctionCalling = true): ModelConfig {
   return {
@@ -65,7 +66,6 @@ function fakePort(
     onDidChangeModels: () => ({ dispose() {} }),
     sendRequest,
     countTokens,
-    canSendRequest: async () => true,
     onDidChangeAccess: () => ({ dispose() {} }),
   };
 }
@@ -402,5 +402,39 @@ describe('ModelHandlerVscodeLm port errors', () => {
     await response.catch((error: unknown) =>
       expect(isUserAbort(error)).toBe(true),
     );
+  });
+
+  it('classifies Copilot quota exhaustion without automatic retry', async () => {
+    const port = fakePort();
+    port.sendRequest.mockImplementation(() => ({
+      [Symbol.asyncIterator]() {
+        return {
+          next: async () => {
+            throw new LanguageModelPortError(
+              LANGUAGE_MODEL_PORT_ERROR_CODE.QUOTA_EXCEEDED,
+              'Copilot quota exceeded',
+            );
+          },
+        };
+      },
+    }));
+    const handler = new ModelHandlerVscodeLm(modelConfig());
+
+    const response = handler.createResponse({
+      client: port,
+      messages: [],
+      temperature: 0,
+    });
+
+    await response.catch((error: unknown) => {
+      const formatted = normalizeProviderError(error);
+      expect(formatted).toMatchObject({
+        provider: ModelProvider.COPILOT,
+        statusCode: 429,
+        exhaustionReason: 'copilot-subscription',
+        userRetryable: true,
+      });
+      expect(isCredentialExhausted(formatted)).toBe(true);
+    });
   });
 });

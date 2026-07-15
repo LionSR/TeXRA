@@ -58,6 +58,7 @@ function useCliHostInteractions(
 
 const credentialExhaustedRetry: RuntimeInteractionEventPayloads['showRetryRequest'] =
   {
+    requestId: 'relay-limit-retry',
     streamId:
       'test-stream' as RuntimeInteractionEventPayloads['showRetryRequest']['streamId'],
     operation: 'Tool-use call',
@@ -248,6 +249,7 @@ describe('approval prompt hooks', () => {
 
 describe('requestRetry classification (#7331)', () => {
   const retryRequest: HostRetryRequest = {
+    requestId: 'headless-retry',
     streamId: 'root@deepseekT#abc' as StreamTabId,
     operation: 'Model invocation',
     errorMessage: 'stream dropped before first token',

@@ -42,8 +42,8 @@ function normalizeProviderErrorRetryFlag(value: unknown): unknown {
   };
 }
 
-/** Reason a credential/quota is exhausted, requiring the user to switch
- *  credentials before any retry can succeed. The three reasons are mutually
+/** Reason a credential/quota is exhausted, requiring user action before an
+ *  identical retry can succeed. The reasons are mutually
  *  exclusive — a single error is classified as exactly one — which is why
  *  this is a discriminant rather than independent booleans (see
  *  `isCredentialExhausted` below for the pre-refactor combined check). */
@@ -57,6 +57,9 @@ export const ExhaustionReasonSchema = z.enum([
    *  usage quota is exhausted; accepting the switch disables the "prefer
    *  ChatGPT subscription" preference rather than disabling relay. */
   'chatgpt-subscription',
+  /** A GitHub Copilot request was rejected because the subscription quota is
+   *  exhausted. */
+  'copilot-subscription',
 ]);
 export type ExhaustionReason = z.infer<typeof ExhaustionReasonSchema>;
 
@@ -134,7 +137,7 @@ const ProviderErrorObjectSchema = z.object({
    *  depletion) with no relay involved. */
   isRelayError: z.boolean().optional(),
   /** Reason the credential/quota is exhausted (relay monthly limit, upstream
-   *  provider credit depletion, or ChatGPT-subscription usage limit). Auto-
+   *  provider credit depletion, or a subscription usage limit). Auto-
    *  retry is skipped and the retry panel offers a "Use your own API key"
    *  button for any of these. Use the `isCredentialExhausted` helper below
    *  for the pre-refactor combined boolean check. */
@@ -204,7 +207,7 @@ export function isUpstreamCreditDepletedError(
 /** Single source of truth for "auto-retry should be skipped because the
  *  credential/quota is exhausted" — the combined check the pre-refactor
  *  `isCredentialExhausted` boolean used to store directly. Kept as a derived
- *  predicate (not a stored field) so the three exhaustion reasons can't drift
+ *  predicate (not a stored field) so the exhaustion reasons cannot drift
  *  out of sync with it. */
 export function isCredentialExhausted(
   errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,

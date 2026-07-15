@@ -31,6 +31,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
             executionId?: ExecutionId;
             preferHelperModel?: boolean;
             modelHandlerCompatibilityKey?: unknown;
+            onRun?: () => void;
           })
         : null;
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
@@ -51,6 +52,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
         // keeps the user's selected model.
         preferHelperModel: wrapped?.preferHelperModel === true,
         modelHandlerCompatibilityKey,
+        onRun: wrapped?.onRun,
       },
     );
   } catch (error) {

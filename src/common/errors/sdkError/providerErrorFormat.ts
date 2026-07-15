@@ -155,6 +155,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const streamDiagnostics = detectStreamDiagnostics(err);
   const partialText = detectPartialText(err);
   const extractedMessage = extractErrorMessage(err);
+  const sdkExhaustionReason = detectSdkErrorMetadata(err)?.exhaustionReason;
   const isRelayMonthlyLimitByMessage =
     isRelayMonthlyLimitMessage(extractedMessage);
   const isRelay = isRelayError(rawErrorBody) || isRelayMonthlyLimitByMessage;
@@ -173,15 +174,17 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     : undefined;
   // Priority mirrors the pre-refactor OR order: ChatGPT-subscription and
   // upstream-credit are independently detected first; relay monthly limit
-  // (by body or message) is the remaining exhaustion condition.
+  // (by body or message) is the remaining exhaustion condition. Explicit SDK
+  // metadata precedes these legacy body heuristics.
   const exhaustionReason: ExhaustionReason | undefined =
-    isChatGptSubscriptionLimited
+    sdkExhaustionReason ??
+    (isChatGptSubscriptionLimited
       ? 'chatgpt-subscription'
       : isUpstreamCreditDepleted
         ? 'upstream-credit'
         : isRelayMonthlyLimitBody(rawErrorBody) || isRelayMonthlyLimitByMessage
           ? 'relay-limit'
-          : undefined;
+          : undefined);
   const isCredentialExhausted = exhaustionReason !== undefined;
 
   // Terminal failures (user abort, local disk-full): never retryable and never

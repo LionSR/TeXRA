@@ -8,7 +8,12 @@ export interface LanguageModelInfo {
   readonly vendor: string;
   readonly version: string;
   readonly maxInputTokens: number;
+  /** Access reported by the host for this exact discovered model. */
+  readonly access: LanguageModelAccessState;
 }
+
+export type LanguageModelAccessState =
+  'allowed' | 'consent-required' | 'unavailable';
 
 export interface LanguageModelSelector {
   readonly vendor?: string;
@@ -121,7 +126,6 @@ export interface LanguageModelPort {
     input: LanguageModelTokenCountInput,
     signal?: AbortSignal,
   ): Promise<number>;
-  canSendRequest(model: LanguageModelReference): Promise<boolean | undefined>;
   onDidChangeAccess(listener: () => void): Disposable;
 }
 
@@ -156,7 +160,6 @@ export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
         UNAVAILABLE_MESSAGE,
       );
     },
-    canSendRequest: async () => undefined,
     onDidChangeAccess: () => ({ dispose() {} }),
   },
 );

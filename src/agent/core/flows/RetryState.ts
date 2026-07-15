@@ -1,9 +1,11 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
 import { StatusCodes } from 'http-status-codes';
+import { nanoid } from 'nanoid';
 
 import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -54,6 +56,7 @@ export type InvocationResult<TSuccess> =
   | { kind: 'skipped' };
 
 interface RetryableNodeServices {
+  config: Pick<AgentConfig, 'model'>;
   streamStatus: StreamStatusMachine;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
@@ -288,8 +291,10 @@ export abstract class RetryableInvocationNode<
     });
     // No timeout: the retry panel waits indefinitely for the user's decision.
     const interaction = session.interactions.requestRetry({
+      requestId: `retry-${nanoid()}`,
       streamId,
       operation: operationName,
+      model: this.services.config.model,
       errorMessage: formatted.message,
       errorDetails: formatted,
     });

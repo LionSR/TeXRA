@@ -140,6 +140,19 @@ developers.
 
 ## Setting API Keys
 
+### Subscription-backed models in VS Code
+
+The VS Code extension can also use compatible models from a GitHub Copilot
+subscription. Open **Settings → Models → Copilot in VS Code**, then choose
+**Grant access**. VS Code presents its own consent prompt; TeXRA never asks for
+or stores a Copilot API key.
+
+Copilot models appear only in the VS Code extension because the official
+Language Model API is an editor capability. They do not appear in the CLI or
+desktop model lists. If Copilot quota is exhausted, the retry panel can start a
+new run through the corresponding provider model after a usable provider API
+key is available.
+
 Using your own provider API key? TeXRA stores keys securely using VS Code's secret storage — they are never written to settings files.
 
 1.  **Open the Settings Dashboard**: Click the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel, or run **TeXRA: Show Settings Dashboard** from the Command Palette.
