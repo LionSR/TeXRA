@@ -2,6 +2,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchProgressViewInbound,
   ProgressViewInboundMessageSchema,
+  type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 import { UnsupportedCommandError } from '@shared/utils/dispatcher';
@@ -11,12 +12,26 @@ import {
   type DesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
-import type { DesktopProgressBridge } from './desktopAgentExecution.js';
 
-type DesktopProgressIpcBridge = Pick<
-  DesktopProgressBridge,
-  'progressViewInboundHandlers' | 'completeWebviewReady'
+const PASS_THROUGH_COMMANDS = [
+  PROGRESS_VIEW_COMMANDS.SWITCH_VIEW,
+  PROGRESS_VIEW_COMMANDS.THEME_SET,
+  PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET,
+] as const;
+
+type DesktopProgressIpcOwnedCommand =
+  | typeof PROGRESS_VIEW_COMMANDS.WEBVIEW_READY
+  | (typeof PASS_THROUGH_COMMANDS)[number];
+
+export type DesktopProgressInboundHandlerRegistry = Omit<
+  ProgressViewInboundHandlerRegistry,
+  DesktopProgressIpcOwnedCommand
 >;
+
+interface DesktopProgressIpcBridge {
+  readonly progressViewInboundHandlers: DesktopProgressInboundHandlerRegistry;
+  completeWebviewReady(): Promise<void>;
+}
 
 export interface DesktopProgressIpcOptions {
   progress?: DesktopProgressIpcBridge;
@@ -36,11 +51,7 @@ export interface DesktopProgressIpcOptions {
 
 export type DesktopProgressIpc = DesktopMessageHandler;
 
-const passThroughCommands = new Set<string>([
-  PROGRESS_VIEW_COMMANDS.SWITCH_VIEW,
-  PROGRESS_VIEW_COMMANDS.THEME_SET,
-  PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET,
-]);
+const passThroughCommands: ReadonlySet<string> = new Set(PASS_THROUGH_COMMANDS);
 
 function isProgressWebviewReadyMessage(
   message: DesktopCommandMessage,
@@ -70,17 +81,24 @@ export function createDesktopProgressIpc(
   // as a generic error.
   function dispatchAndReport(
     message: DesktopCommandMessage,
-    handlers: Parameters<typeof dispatchProgressViewInbound>[1],
+    handlers: DesktopProgressInboundHandlerRegistry,
     parsed: ProgressViewInboundMessage,
   ): boolean {
     let unsupportedReason: string | undefined;
-    const handled = dispatchProgressViewInbound(message, handlers, (error) => {
-      if (error instanceof UnsupportedCommandError) {
-        unsupportedReason = error.reason;
-        return;
-      }
-      reportAsyncError(error);
-    });
+    // handleMessage returns before this point for every omitted command. The
+    // shared dispatcher cannot express that runtime narrowing because it
+    // parses the raw message itself, so keep the assertion at this boundary.
+    const handled = dispatchProgressViewInbound(
+      message,
+      handlers as ProgressViewInboundHandlerRegistry,
+      (error) => {
+        if (error instanceof UnsupportedCommandError) {
+          unsupportedReason = error.reason;
+          return;
+        }
+        reportAsyncError(error);
+      },
+    );
     if (!handled) onUnsupportedCommand(parsed, unsupportedReason);
     return handled;
   }

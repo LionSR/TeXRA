@@ -77,7 +77,6 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
-import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
@@ -112,6 +111,7 @@ import {
   type DesktopPresentationPayloads,
   type DesktopSessionProgressBridge,
 } from './desktopSessionProgressBridge.js';
+import type { DesktopProgressInboundHandlerRegistry } from './desktopProgressIpc.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
@@ -206,7 +206,7 @@ export class DesktopProgressBridge {
   private readonly restartRepair: Promise<void>;
 
   readonly runtimeHost: AgentRuntimeHost;
-  readonly progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
+  readonly progressViewInboundHandlers: DesktopProgressInboundHandlerRegistry;
 
   /**
    * This window's own session. Each desktop BrowserWindow gets a fresh one so
@@ -544,7 +544,7 @@ export class DesktopProgressBridge {
     });
   }
 
-  private createProgressViewInboundHandlers(): ProgressViewInboundHandlerRegistry {
+  private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
     return {
       ...this.progressHost.commandHandlers,
       // Getting-started actions from the progress empty-state. openWalkthrough
@@ -564,15 +564,6 @@ export class DesktopProgressBridge {
           `"${labels[data.action]}" requires the VS Code extension.`,
         );
       },
-      // These are intercepted in desktopProgressIpc.ts's passThroughCommands
-      // (theme/debug-mode/switch-view) or handled before dispatch even
-      // reaches this registry (webview-ready), so these entries are never
-      // actually invoked — they exist only to satisfy the exhaustive
-      // registry type.
-      setTheme: () => {},
-      setDebugMode: () => {},
-      switchView: () => {},
-      webviewReady: () => {},
       // Trivially wireable with existing desktop infrastructure.
       showInformationMessage: (data) => {
         void this.options.host.showInfoMessage(data.text);
