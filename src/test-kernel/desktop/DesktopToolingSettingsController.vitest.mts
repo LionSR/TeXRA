@@ -208,7 +208,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
     ]);
   });
 
-  it('resolves tool commands before execution and rejects missing commands', async () => {
+  it('resolves configured tool commands and ignores absent commands', async () => {
     const findCommand = vi
       .fn<ControllerOptions['dashboard']['findCommand']>()
       .mockResolvedValueOnce('npm install codex')
@@ -227,12 +227,10 @@ describe('DefaultDesktopToolingSettingsController', () => {
       toolId: 'codex',
       kind: 'install',
     });
-    await expect(
-      assertSupported(controller.toolsActions.runCommand)({
-        toolId: 'codex',
-        kind: 'auth',
-      }),
-    ).rejects.toThrow('No auth command is configured for tool "codex".');
+    await assertSupported(controller.toolsActions.runCommand)({
+      toolId: 'codex',
+      kind: 'auth',
+    });
 
     expect(findCommand).toHaveBeenNthCalledWith(1, 'codex', 'install');
     expect(findCommand).toHaveBeenNthCalledWith(2, 'codex', 'auth');

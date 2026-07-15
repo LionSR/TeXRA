@@ -16,7 +16,7 @@ import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
-export interface DesktopToolDashboardPort {
+interface DesktopToolDashboardPort {
   buildItems(
     cachedResults?: ExternalToolCheckResult[],
   ): Promise<ToolDashboardItem[]>;
@@ -29,20 +29,20 @@ export interface DesktopToolDashboardPort {
   ): Promise<string | undefined>;
 }
 
-export interface DesktopToolingRendererPort {
+interface DesktopToolingRendererPort {
   postToRenderer(message: unknown): void;
 }
 
-export interface DesktopToolingNavigationPort {
+interface DesktopToolingNavigationPort {
   openExternal(url: string): Promise<void>;
   presentExtensionInstall(extensionId: string): Promise<void>;
 }
 
-export interface DesktopToolingCommandPort {
+interface DesktopToolingCommandPort {
   run(command: string): Promise<void>;
 }
 
-export interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePorts {
+interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePorts {
   readonly renderer: DesktopToolingRendererPort;
   readonly dashboard: DesktopToolDashboardPort;
   readonly navigation: DesktopToolingNavigationPort;
@@ -156,11 +156,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       input.toolId,
       input.kind,
     );
-    if (!command) {
-      throw new Error(
-        `No ${input.kind} command is configured for tool "${input.toolId}".`,
-      );
-    }
+    if (!command) return;
     await this.options.commands.run(command);
   }
 
