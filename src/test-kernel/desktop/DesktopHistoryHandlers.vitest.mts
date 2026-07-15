@@ -5,6 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { DesktopHistoryOptions } from '@desktop/main/desktopHistoryHandlers';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
 import { assertSupported } from '@shared/utils/dispatcher';
@@ -15,6 +16,7 @@ import {
   moduleFileUrl,
   repoPath,
 } from './desktopTestPaths.mjs';
+import { createStubDesktopHistoryOptions } from './desktopSettingsTestSupport';
 
 // Local imports - controller types
 import type { ChatExportInput } from '@controllers/settingsView/ChatExportController';
@@ -49,6 +51,11 @@ type DesktopHistoryHandlersModule =
 type DesktopHistoryDependencies = ConstructorParameters<
   DesktopHistoryHandlersModule['DesktopHistoryHandlers']
 >[0];
+type DesktopHistoryActionOverrides = Partial<
+  Omit<DesktopHistoryDependencies, keyof DesktopHistoryOptions>
+> & {
+  history?: Partial<DesktopHistoryOptions>;
+};
 
 const RESOURCES_PATH = repoPath('packages', 'extension', 'resources');
 const HISTORY_ID = 'bbbb2222';
@@ -68,14 +75,21 @@ let DesktopHistoryHandlers!: DesktopHistoryHandlersModule['DesktopHistoryHandler
 
 setupPlatform();
 
-function createHistoryActions(
-  overrides: Partial<DesktopHistoryDependencies> = {},
-) {
+function createHistoryActions(overrides: DesktopHistoryActionOverrides = {}) {
+  const {
+    history,
+    postToRenderer = vi.fn(),
+    onError = vi.fn(),
+    ...optionalDependencies
+  } = overrides;
   return new DesktopHistoryHandlers({
-    postToRenderer: vi.fn(),
-    resourcesPath: RESOURCES_PATH,
-    onError: vi.fn(),
-    ...overrides,
+    ...createStubDesktopHistoryOptions({
+      resourcesPath: RESOURCES_PATH,
+      ...history,
+    }),
+    postToRenderer,
+    onError,
+    ...optionalDependencies,
   }).actions;
 }
 
@@ -103,7 +117,7 @@ describe('DesktopHistoryHandlers', () => {
     const restoreTaskState = vi.fn(async () => true);
     const actions = createHistoryActions({
       showErrorMessage,
-      restoreTaskState,
+      history: { restoreTaskState },
     });
 
     await assertSupported(actions.restoreAgent)({
@@ -142,23 +156,25 @@ describe('DesktopHistoryHandlers', () => {
     );
   });
 
-  it('errors instead of a false success when rerun has no runExecution dependency wired (Copilot #7827)', async () => {
+  it('reports when restoring the task state fails', async () => {
     await writeHistoryConfig();
-    const showInfoMessage = vi.fn();
     const showErrorMessage = vi.fn();
+    const restoreTaskState = vi.fn(async () => false);
     const actions = createHistoryActions({
-      showInfoMessage,
       showErrorMessage,
+      history: { restoreTaskState },
     });
 
-    await assertSupported(actions.rerunAgent)({
-      command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+    await assertSupported(actions.restoreAgent)({
+      command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
       historyId: HISTORY_ID,
     });
 
-    expect(showInfoMessage).not.toHaveBeenCalled();
+    expect(restoreTaskState).toHaveBeenCalledWith({
+      agentConfig: HISTORY_CONFIG,
+    });
     expect(showErrorMessage).toHaveBeenCalledWith(
-      'Rerunning agents from history is not available in this build',
+      'Failed to restore configuration',
     );
   });
 
