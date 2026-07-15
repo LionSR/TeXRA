@@ -37,14 +37,18 @@ interface DesktopProgressIpcBridgeStub {
 
 interface DesktopProgressIpcModule {
   createDesktopProgressIpc(options: {
-    progress?: DesktopProgressIpcBridgeStub;
-    getProgress?: () => DesktopProgressIpcBridgeStub | undefined;
+    source:
+      | { kind: 'eager'; progress: DesktopProgressIpcBridgeStub }
+      | {
+          kind: 'lazy';
+          get(): DesktopProgressIpcBridgeStub | undefined;
+          ensure(): Promise<DesktopProgressIpcBridgeStub>;
+        };
     onUnsupportedCommand?: (
       message: { command: string },
       reason?: string,
     ) => void;
     onAsyncError?: (error: unknown) => void;
-    ensureProgress?: () => Promise<DesktopProgressIpcBridgeStub>;
   }): {
     handleMessage(
       message: { command: string } & Record<string, unknown>,
@@ -68,6 +72,10 @@ function createProgress(
   };
 }
 
+function eagerSource(progress: DesktopProgressIpcBridgeStub) {
+  return { kind: 'eager' as const, progress };
+}
+
 describe('desktop Progress IPC', () => {
   let createDesktopProgressIpc: DesktopProgressIpcModule['createDesktopProgressIpc'];
   beforeEach(async () => {
@@ -76,7 +84,7 @@ describe('desktop Progress IPC', () => {
 
   it('syncs Progress state on readiness while allowing shared view-state handling', async () => {
     const progress = createProgress();
-    const ipc = createDesktopProgressIpc({ progress });
+    const ipc = createDesktopProgressIpc({ source: eagerSource(progress) });
 
     expect(
       ipc.handleMessage({
@@ -91,7 +99,7 @@ describe('desktop Progress IPC', () => {
 
   it('ignores main-view readiness broadcasts for Progress prompt replay', async () => {
     const progress = createProgress();
-    const ipc = createDesktopProgressIpc({ progress });
+    const ipc = createDesktopProgressIpc({ source: eagerSource(progress) });
 
     expect(
       ipc.handleMessage({
@@ -106,7 +114,11 @@ describe('desktop Progress IPC', () => {
   it('replays pending prompts after lazy Progress readiness load', async () => {
     const progress = createProgress();
     const ipc = createDesktopProgressIpc({
-      ensureProgress: async () => progress,
+      source: {
+        kind: 'lazy',
+        get: () => undefined,
+        ensure: async () => progress,
+      },
     });
 
     expect(
@@ -125,7 +137,7 @@ describe('desktop Progress IPC', () => {
     const progress = createProgress({
       [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: switchStream,
     });
-    const ipc = createDesktopProgressIpc({ progress });
+    const ipc = createDesktopProgressIpc({ source: eagerSource(progress) });
 
     expect(
       ipc.handleMessage({
@@ -139,10 +151,35 @@ describe('desktop Progress IPC', () => {
     });
   });
 
+  it('loads a lazy Progress bridge before dispatching recognized commands', async () => {
+    const switchStream = vi.fn();
+    const progress = createProgress({
+      [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: switchStream,
+    });
+    const ensure = vi.fn(async () => progress);
+    const ipc = createDesktopProgressIpc({
+      source: { kind: 'lazy', get: () => undefined, ensure },
+    });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
+        stream: 'run-1',
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+
+    expect(ensure).toHaveBeenCalledTimes(1);
+    expect(switchStream).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
+      stream: 'run-1',
+    });
+  });
+
   it('consumes recognized but unhandled commands with an explicit warning path', async () => {
     const onUnsupportedCommand = vi.fn();
     const ipc = createDesktopProgressIpc({
-      progress: createProgress(),
+      source: eagerSource(createProgress()),
       onUnsupportedCommand,
     });
 
@@ -161,7 +198,7 @@ describe('desktop Progress IPC', () => {
   it('leaves shell-level pass-through commands for sibling desktop handlers', async () => {
     const onUnsupportedCommand = vi.fn();
     const ipc = createDesktopProgressIpc({
-      progress: createProgress(),
+      source: eagerSource(createProgress()),
       onUnsupportedCommand,
     });
 
@@ -178,9 +215,11 @@ describe('desktop Progress IPC', () => {
     const error = new Error('dispatch failed');
     const onAsyncError = vi.fn();
     const ipc = createDesktopProgressIpc({
-      progress: createProgress({
-        [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: () => Promise.reject(error),
-      }),
+      source: eagerSource(
+        createProgress({
+          [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: () => Promise.reject(error),
+        }),
+      ),
       onAsyncError,
     });
 
@@ -201,7 +240,10 @@ describe('desktop Progress IPC', () => {
       completeWebviewReady: vi.fn(() => Promise.reject(error)),
       progressViewInboundHandlers: fillRegistry(),
     };
-    const ipc = createDesktopProgressIpc({ progress, onAsyncError });
+    const ipc = createDesktopProgressIpc({
+      source: eagerSource(progress),
+      onAsyncError,
+    });
 
     expect(
       ipc.handleMessage({
@@ -215,7 +257,9 @@ describe('desktop Progress IPC', () => {
   });
 
   it('ignores invalid Progress IPC payloads', async () => {
-    const ipc = createDesktopProgressIpc({ progress: createProgress() });
+    const ipc = createDesktopProgressIpc({
+      source: eagerSource(createProgress()),
+    });
 
     expect(ipc.handleMessage({ command: 'not-a-progress-command' })).toBe(
       false,
