@@ -115,7 +115,7 @@ export async function runReflectionFlow<C = unknown>(
 
   const baseFiles: FileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
-  ).map((file) => fileService.createLocation(file));
+  ).map((file) => fileService.locateSource(file));
 
   const outputState = createOutputState();
   const xmlManager = new XmlOutputManager(config, logger, fileService);

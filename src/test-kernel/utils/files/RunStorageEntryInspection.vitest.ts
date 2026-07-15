@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { FileType, type FileStat } from '@platform/interfaces';
+import { setupPlatform } from '@test/support/setupPlatform';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import {
   inspectRunStorageEntry,
   runStorageLocationFromAnyAbsolutePath,
+  TaskRunFileService,
 } from '@utils/files/taskRunStorage';
 
 const executionId = 'abcdef123456' as ExecutionId;
 const originalStat = StorageFS.stat;
 const originalFullPath = StorageFS.fullPath;
+
+setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
 function fileStat(type: number): FileStat {
   return { type, ctime: 0, mtime: 0, size: 1 };
@@ -190,5 +194,31 @@ describe('inspectRunStorageEntry', () => {
     expect(
       runStorageLocationFromAnyAbsolutePath('/workspace/result.tex'),
     ).toBeUndefined();
+  });
+
+  it('preserves source provenance instead of treating workspace inputs as outputs', () => {
+    const fileService = new TaskRunFileService(executionId);
+
+    expect(fileService.locateSource('draft.tex')).toEqual({
+      kind: 'workspace',
+      absolutePath: '/workspace/draft.tex',
+      relativePath: 'draft.tex',
+    });
+    expect(
+      fileService.locateSource(
+        `/storage/executions/${executionId}/r1/draft.tex`,
+      ),
+    ).toMatchObject({
+      kind: 'runStorage',
+      executionId,
+      relativePath: 'r1/draft.tex',
+    });
+    expect(
+      fileService.locateSource(`/storage/taskRuns/${executionId}/legacy.tex`),
+    ).toMatchObject({
+      kind: 'runStorage',
+      executionId,
+      relativePath: 'legacy.tex',
+    });
   });
 });

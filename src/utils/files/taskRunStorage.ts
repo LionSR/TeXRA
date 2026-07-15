@@ -14,6 +14,7 @@ import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
+  pathToLocation,
 } from './fileLocation';
 import {
   CHANNEL,
@@ -218,6 +219,14 @@ export class TaskRunFileService {
     return createWorkspaceLocation(
       resolved.absolutePath,
       resolved.relativePath,
+    );
+  }
+
+  /** Preserve the storage provenance of an existing input or comparison base. */
+  public locateSource(inputPath: string): FileLocation {
+    return (
+      runStorageLocationFromAnyAbsolutePath(inputPath) ??
+      pathToLocation(inputPath)
     );
   }
 
