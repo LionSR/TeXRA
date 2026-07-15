@@ -255,6 +255,7 @@ describe('desktop settings IPC', () => {
         view: 'settings',
       }),
     ).toBe(false);
+    await flushAsyncWork();
     // First post is the derived capability broadcast (commands this host's
     // registry declares `unsupported(...)`); asserted structurally rather
     // than as an exact list so it doesn't need updating every time a
@@ -265,23 +266,19 @@ describe('desktop settings IPC', () => {
         SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
       ]),
     });
-    expect(posted.slice(1)).toEqual([
-      {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-        markCommits: DEFAULT_GIT_MARK_COMMITS,
-        authorName: 'TeXRA Bot',
-        authorEmail: 'bot@example.com',
-        worktreeSupport: false,
-      },
-      {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-        values: {},
-      },
-      {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-        items: [],
-      },
-    ]);
+    expect(
+      posted.find(
+        (message) =>
+          commandOf(message) ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
+      ),
+    ).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
+      markCommits: DEFAULT_GIT_MARK_COMMITS,
+      authorName: 'TeXRA Bot',
+      authorEmail: 'bot@example.com',
+      worktreeSupport: false,
+    });
   }, 15_000);
 
   it('delegates agent-selection commands to the required controller', async () => {
@@ -429,6 +426,7 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
       view: 'settings',
     });
+    await flushAsyncWork();
     const capabilities = posted[0] as { commands?: string[] };
     expect(capabilities.commands).not.toContain(
       SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
@@ -678,7 +676,6 @@ describe('desktop settings IPC', () => {
       toolingSettingsController,
       workspaceState,
       config,
-      sendStartupCatalogData: true,
       ui: { onError: () => undefined },
     });
 
@@ -757,7 +754,6 @@ describe('desktop settings IPC', () => {
     const { settings, posted } = createCapturedSettingsFixture({
       ...state,
       config: new MemoryConfigStore(),
-      sendStartupCatalogData: true,
       credentialSettingsController,
       ui: { onError: () => undefined },
     });
