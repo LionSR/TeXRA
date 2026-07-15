@@ -26,7 +26,11 @@ import {
   isUnhandledControlInput,
   metaChordInput,
 } from './inputKeys';
-import { ImagePasteQueue, withImagePasteTimeout } from './imagePasteQueue';
+import {
+  ImagePasteQueue,
+  withImagePasteTimeout,
+  type ImagePasteAttempt,
+} from './imagePasteQueue';
 import { textDisplayWidth } from '../render/terminalText';
 
 const ESC_SLASH_PREFIX = '\u001B/';
@@ -58,7 +62,9 @@ export interface BaseTextInputProps {
   readonly transformPaste?: (text: string) => string;
   /** Ctrl-V handler: probe the OS clipboard for an image. Resolves to the chip
    *  text to insert (e.g. `[Image #1]`) or null when there is no image. */
-  readonly onImagePaste?: () => Promise<string | null>;
+  readonly onImagePaste?: (
+    attempt: ImagePasteAttempt,
+  ) => Promise<string | null>;
   readonly onImagePasteError?: (error: unknown) => void;
   readonly imagePasteQueue?: ImagePasteQueue;
   /** Optional parent-owned value ref for same-tick programmatic draft changes. */
@@ -522,14 +528,17 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         // Insert the chip at whatever the caret is when the async probe
         // resolves (read from a ref, not a keypress-time snapshot) so typing
         // during the probe isn't clobbered.
+        const attempt = imagePasteQueue.beginAttempt();
         const paste = withImagePasteTimeout(
-          Promise.resolve().then(() => props.onImagePaste?.() ?? null),
+          Promise.resolve().then(() => props.onImagePaste?.(attempt) ?? null),
         )
           .then((chip) => {
-            if (!chip) return;
+            if (!chip || !attempt.isCurrent()) return;
             insertIntoLatestDraft(chip);
           })
-          .catch((err: unknown) => props.onImagePasteError?.(err));
+          .catch((err: unknown) => {
+            if (attempt.isCurrent()) props.onImagePasteError?.(err);
+          });
         imagePasteQueue.track(paste);
         return;
       }
