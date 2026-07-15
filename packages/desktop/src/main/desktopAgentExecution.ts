@@ -8,7 +8,7 @@ import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
-import { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import { StreamLogStore, type StreamSnapshotStore } from '@transcript';
 import {
   isProgressBackendInteractionEvent,
   type ProgressBackendInteractionPayloads,
@@ -65,7 +65,6 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import type { DiffViewHost, ExternalOpener } from '@hosts/uiHosts';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   STREAM_PHASE,
@@ -88,7 +87,6 @@ import {
 import type { RegisteredToolName } from '@tools/registry';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
-import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -114,6 +112,7 @@ import {
   type DesktopPresentationPayloads,
   type DesktopSessionProgressBridge,
 } from './desktopSessionProgressBridge.js';
+import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
@@ -124,13 +123,7 @@ const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
 ];
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
-  opener?: Pick<ExternalOpener, 'openPath'> & {
-    openBuildDisplay?: BuildDisplayFn;
-  };
-  diff?: Pick<DiffViewHost, 'openDiff'>;
-  confirmAcceptFile?: (message: string) => Promise<boolean>;
-  showErrorMessage?: (message: string) => Promise<void> | void;
-  showInfoMessage?: (message: string) => Promise<void> | void;
+  host: DesktopAgentExecutionHost;
   /**
    * Optional snapshot store wired by the desktop entrypoint. When
    * provided, the bridge persists a slim snapshot of the rail on each
@@ -138,15 +131,7 @@ export interface DesktopAgentExecutionOptions {
    * previously-persisted "ghost" streams in the rail at launch.
    */
   streamSnapshotStore?: DesktopStreamSnapshotStore;
-  progressSnapshotStore?: StreamSnapshotStore;
-  /**
-   * Fired once a run in this window's session reaches a completed terminal
-   * result. Used to recompute the onboarding funnel after a user's first run
-   * (the lifecycle has already persisted `firstRunDone` by the time the
-   * terminal `result` event reaches `session.onResult`), so the renderer leaves
-   * the setup card without waiting for a restart.
-   */
-  onRunCompleted?: () => void;
+  progressSnapshotStore: StreamSnapshotStore;
 }
 
 export interface DesktopAgentExecution {
@@ -169,16 +154,9 @@ interface DesktopRunExecutionOptions {
 export interface DesktopProgressBridgeOptions {
   transcripts: StreamLogStore;
   logger?: AgentTrace;
-  openPath?: (filePath: string, line?: number) => Promise<void>;
-  openBuildDisplay?: BuildDisplayFn;
-  openDiff?: DiffViewHost['openDiff'];
-  confirmAcceptFile?: (message: string) => Promise<boolean>;
-  showInfoMessage?: (message: string) => Promise<void> | void;
-  showErrorMessage?: (message: string) => Promise<void> | void;
+  host: DesktopAgentExecutionHost;
   streamSnapshotStore?: DesktopStreamSnapshotStore;
-  progressSnapshotStore?: StreamSnapshotStore;
-  /** See DesktopAgentExecutionOptions.onRunCompleted. */
-  onRunCompleted?: () => void;
+  progressSnapshotStore: StreamSnapshotStore;
 }
 
 class MemoryProgressStorage implements MementoStorage {
@@ -266,10 +244,7 @@ export class DesktopProgressBridge {
     this.toolEditApprovals = createDesktopToolEditApprovalController({
       runtimeHost: this.runtimeHost,
       session: this.session,
-      openPath: options.openPath,
-      openBuildDisplay: options.openBuildDisplay,
-      openDiff: options.openDiff,
-      showErrorMessage: this.options.showErrorMessage,
+      ui: options.host,
     });
     this.hostInteractions = createDesktopHostInteractions({
       runtimeHost: this.runtimeHost,
@@ -284,7 +259,7 @@ export class DesktopProgressBridge {
     this.backend = new ProgressBackend({
       session: this.session,
       storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
-      snapshots: options.progressSnapshotStore ?? new StreamSnapshotStore(),
+      snapshots: options.progressSnapshotStore,
       sendMessage: (message) => {
         return this.postToRenderer(message) !== false;
       },
@@ -346,7 +321,7 @@ export class DesktopProgressBridge {
         );
       },
       onShowError: (message) => {
-        void this.options.showErrorMessage?.(message);
+        void this.options.host.showErrorMessage(message);
       },
     });
     const backendSubscription = this.backend.setupEventListeners();
@@ -367,7 +342,7 @@ export class DesktopProgressBridge {
     // still safe — the derivation is idempotent.
     const unsubscribeResult = this.session.onResult((event) => {
       if (event.outcome === 'completed') {
-        this.options.onRunCompleted?.();
+        this.options.host.onRunCompleted();
       }
     });
     this.unsubscribe = () => {
@@ -384,20 +359,10 @@ export class DesktopProgressBridge {
       this.session,
       this.runtimeHost,
     );
-    this.fileActions = new DesktopProgressFileActions(
-      {
-        openPath: options.openPath,
-        openBuildDisplay: options.openBuildDisplay,
-        openDiff: options.openDiff,
-        confirmAcceptFile: options.confirmAcceptFile,
-        showInfoMessage: options.showInfoMessage,
-        showErrorMessage: options.showErrorMessage,
-      },
-      {
-        runExecution: (request) => this.runExecution(request),
-        listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
-      },
-    );
+    this.fileActions = new DesktopProgressFileActions(options.host, {
+      runExecution: (request) => this.runExecution(request),
+      listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
+    });
     this.progressHost = this.createProgressViewHost();
     this.workflowFileActions = this.progressHost.workflowFileActionsController;
     this.agentProposalController = this.progressHost.agentProposalController;
@@ -424,7 +389,7 @@ export class DesktopProgressBridge {
             this.logger.error('Invalid desktop workflow execution request', {
               data: validated.issue,
             });
-            await this.options.showErrorMessage?.(validated.message);
+            await this.options.host.showErrorMessage(validated.message);
             return;
           }
           await this.runExecution(validated.request);
@@ -459,15 +424,15 @@ export class DesktopProgressBridge {
           latexdiffFile: (baseFile, editedFile) =>
             this.runLatexdiffFile(baseFile, editedFile),
           openDirectory: async (directory) => {
-            await this.options.openPath?.(directory);
+            await this.options.host.openPath(directory);
           },
           openLabel: (label) => this.fileActions.findAndOpenLabel(label),
           readFile: (file) => readFile(file, 'utf8'),
           showInfo: async (message) => {
-            await this.options.showInfoMessage?.(message);
+            await this.options.host.showInfoMessage(message);
           },
           showError: async (message) => {
-            await this.options.showErrorMessage?.(message);
+            await this.options.host.showErrorMessage(message);
           },
           logError: (message, error) => {
             this.logger.error(message, {
@@ -542,7 +507,7 @@ export class DesktopProgressBridge {
         },
         file: {
           openFile: async (file, line) => {
-            await this.options.openPath?.(file, line);
+            await this.options.host.openPath(file, line);
           },
           openFileCompile: (file) => this.openFileCompile(file),
         },
@@ -610,7 +575,7 @@ export class DesktopProgressBridge {
           cloneOverleaf: 'Import from Overleaf',
           downloadArxiv: 'Import from arXiv',
         };
-        await this.options.showInfoMessage?.(
+        await this.options.host.showInfoMessage(
           `"${labels[data.action]}" requires the VS Code extension.`,
         );
       },
@@ -625,7 +590,7 @@ export class DesktopProgressBridge {
       webviewReady: () => {},
       // Trivially wireable with existing desktop infrastructure.
       showInformationMessage: (data) => {
-        void this.options.showInfoMessage?.(data.text);
+        void this.options.host.showInfoMessage(data.text);
       },
       restoreProposalConfig: async (data) => {
         await this.agentProposalController.restoreProposalConfig(data.proposal);
@@ -640,7 +605,7 @@ export class DesktopProgressBridge {
         if (!taskState) return;
         const restored = this.restoreTaskState(taskState);
         if (!restored) {
-          await this.options.showErrorMessage?.('Failed to restore state');
+          await this.options.host.showErrorMessage('Failed to restore state');
         }
       },
       compactResponse: unsupported(
@@ -1055,11 +1020,13 @@ export class DesktopProgressBridge {
         // so open the resolved path through the same preview-with-fallback
         // host `openWorkflowOutput` already uses (see runExecution above).
         const data = payload as RequestOpenFilePayload;
-        this.options.openPath?.(data.location.absolutePath).catch((error) => {
-          this.logger.warn('Failed to open requested file on desktop', {
-            data: toLogData(error),
+        this.options.host
+          .openPath(data.location.absolutePath)
+          .catch((error) => {
+            this.logger.warn('Failed to open requested file on desktop', {
+              data: toLogData(error),
+            });
           });
-        });
         return;
       }
       default:
@@ -1216,7 +1183,7 @@ export class DesktopProgressBridge {
         this.logger.error(`Failed to load desktop transcript ${streamId}`, {
           data: toLogData(error),
         });
-        void this.options.showErrorMessage?.(
+        void this.options.host.showErrorMessage(
           `Transcript load failed: ${toErrorMessage(error)}`,
         );
       });
@@ -1263,13 +1230,13 @@ export class DesktopProgressBridge {
       resolveResumeState: async (id) => {
         const resumeState = await this.resolveResumeState(id);
         if (!resumeState) {
-          await this.options.showInfoMessage?.(
+          await this.options.host.showInfoMessage(
             'No persisted run state was found for this stream. Start a new run instead.',
           );
           return undefined;
         }
         if (!resumeState.executionId) {
-          await this.options.showInfoMessage?.(
+          await this.options.host.showInfoMessage(
             'This stream has no persisted execution id. Start a new run instead.',
           );
           return undefined;
@@ -1295,7 +1262,7 @@ export class DesktopProgressBridge {
           { modelHandlerCompatibilityKey },
         ),
       reportNoResumableSession: async () => {
-        await this.options.showInfoMessage?.(
+        await this.options.host.showInfoMessage(
           'This run has no resumable session state. Start a new run instead.',
         );
       },
@@ -1316,7 +1283,7 @@ export class DesktopProgressBridge {
     this.logger.error(`Failed to resume desktop stream ${streamId}`, {
       data: toLogData(error),
     });
-    await this.options.showErrorMessage?.(
+    await this.options.host.showErrorMessage(
       `Resume failed: ${toErrorMessage(error)}`,
     );
   }
@@ -1468,12 +1435,12 @@ export class DesktopProgressBridge {
             },
           });
         }
-        await this.options.showInfoMessage?.(presentation.message);
+        await this.options.host.showInfoMessage(presentation.message);
       }
       return;
     }
 
-    await this.options.showInfoMessage?.(
+    await this.options.host.showInfoMessage(
       'No active session. Start a new agent task to continue.',
     );
   }
@@ -1526,7 +1493,7 @@ export class DesktopProgressBridge {
         // (selectAutoOpenFinalOutput); the desktop host only supplies openPath.
         const output = selectAutoOpenFinalOutput(result);
         if (!output) return;
-        await this.options.openPath?.(output.absolutePath);
+        await this.options.host.openPath(output.absolutePath);
       },
     });
   }
@@ -1582,15 +1549,9 @@ export async function createDesktopAgentExecution(
   const transcripts = await StreamLogStore.open();
   const progress = new DesktopProgressBridge(options.postToRenderer, {
     transcripts,
-    openPath: options.opener?.openPath,
-    openBuildDisplay: options.opener?.openBuildDisplay,
-    openDiff: options.diff?.openDiff,
-    confirmAcceptFile: options.confirmAcceptFile,
-    showInfoMessage: options.showInfoMessage,
-    showErrorMessage: options.showErrorMessage,
+    host: options.host,
     streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore: options.progressSnapshotStore,
-    onRunCompleted: options.onRunCompleted,
   });
 
   return {
@@ -1598,7 +1559,7 @@ export async function createDesktopAgentExecution(
     async handleExecute(message) {
       const preparation = prepareMainViewExecutionRequest(message);
       if (!preparation.valid) {
-        await options.showErrorMessage?.(preparation.message);
+        await options.host.showErrorMessage(preparation.message);
         return;
       }
 
