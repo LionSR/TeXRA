@@ -273,8 +273,7 @@ describe('RetryState', () => {
       expect(
         session.interactions.resolve(streamId, {
           kind: 'retry',
-          action: 'retry',
-          feedback: 'try again',
+          decision: { action: 'retry', feedback: 'try again' },
         }),
       ).toBe(true);
 

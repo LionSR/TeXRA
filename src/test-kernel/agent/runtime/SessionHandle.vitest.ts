@@ -166,14 +166,13 @@ describe('SessionHandle', () => {
       expect(
         b.interactions.resolve('approval:b', {
           kind: 'plan',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(true);
       expect(
         b.interactions.resolve(streamId, {
           kind: 'retry',
-          action: 'retry',
-          feedback: 'retry B',
+          decision: { action: 'retry', feedback: 'retry B' },
         }),
       ).toBe(true);
       await expect(planB).resolves.toEqual({ action: 'approve' });

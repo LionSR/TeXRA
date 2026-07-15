@@ -149,15 +149,11 @@ function createControllablePlanAdapter(
         }),
       );
     },
-    resolve(requestId, result) {
+    resolve(requestId, settlement) {
       const entry = pending.get(requestId);
-      if (!entry || result.kind !== 'plan') return false;
+      if (!entry || settlement.kind !== 'plan') return false;
       pending.delete(requestId);
-      entry.settle(
-        result.action === 'approve'
-          ? { action: 'approve' }
-          : { action: 'reject', feedback: result.feedback },
-      );
+      entry.settle(settlement.decision);
       return true;
     },
     cancel(selector = {}) {
@@ -252,7 +248,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     expect(
       target.interactions.resolve('approval:target-owner', {
         kind: 'plan',
-        action: 'approve',
+        decision: { action: 'approve' },
       }),
     ).toBe(true);
     await expect(targetPending).resolves.toEqual({ action: 'approve' });
@@ -330,7 +326,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       expect(
         session.interactions.resolve('approval:unattached', {
           kind: 'plan',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(true);
       await expect(pending).resolves.toEqual({ action: 'approve' });
@@ -360,7 +356,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       expect(
         session.interactions.resolve('approval:reattach', {
           kind: 'plan',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(true);
       await expect(pending).resolves.toEqual({ action: 'approve' });
@@ -387,14 +383,14 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       expect(
         first.interactions.resolve('approval:stale', {
           kind: 'plan',
-          action: 'reject',
+          decision: { action: 'reject' },
         }),
       ).toBe(true);
       await Promise.resolve();
       expect(
         session.interactions.resolve('approval:stale', {
           kind: 'plan',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(true);
       await expect(pending).resolves.toEqual({ action: 'approve' });
@@ -484,7 +480,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       expect(
         session.interactions.resolve('approval:first-wins', {
           kind: 'plan',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(true);
       await expect(pending).resolves.toEqual({ action: 'approve' });
@@ -493,7 +489,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       expect(
         session.interactions.resolve('approval:first-wins', {
           kind: 'plan',
-          action: 'reject',
+          decision: { action: 'reject' },
         }),
       ).toBe(false);
     } finally {
@@ -525,7 +521,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       expect(
         session.interactions.resolve('approval:replace', {
           kind: 'plan',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(true);
       await expect(second).resolves.toEqual({ action: 'approve' });
@@ -565,13 +561,13 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       expect(
         session.interactions.resolve('approval:cleanup', {
           kind: 'plan',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(false);
       expect(
         session.interactions.resolve('proposal:cleanup', {
           kind: 'proposal',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(false);
 
@@ -579,7 +575,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       expect(
         session.interactions.resolve('approval:survives', {
           kind: 'plan',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(true);
       await expect(surviving).resolves.toEqual({ action: 'approve' });
@@ -615,7 +611,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       expect(
         session.interactions.resolve('proposal:kind-scope', {
           kind: 'proposal',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(true);
       await expect(pendingProposal).resolves.toMatchObject({

@@ -95,7 +95,7 @@ describe('PlanTool — update (plan approval)', () => {
     expect(
       host.interactions?.resolve(
         (approval.payload as { approvalId: string }).approvalId,
-        { kind: 'plan', action: 'approve' },
+        { kind: 'plan', decision: { action: 'approve' } },
       ),
     ).toBe(true);
 
@@ -117,7 +117,10 @@ describe('PlanTool — update (plan approval)', () => {
     expect(
       host.interactions?.resolve(
         (approval.payload as { approvalId: string }).approvalId,
-        { kind: 'plan', action: 'reject', feedback: 'Too broad.' },
+        {
+          kind: 'plan',
+          decision: { action: 'reject', feedback: 'Too broad.' },
+        },
       ),
     ).toBe(true);
 
@@ -143,7 +146,7 @@ describe('PlanTool — update (plan approval)', () => {
       expect(
         host.interactions?.resolve(
           (approval.payload as { approvalId: string }).approvalId,
-          { kind: 'plan', action: 'approve_and_goal' },
+          { kind: 'plan', decision: { action: 'approve_and_goal' } },
         ),
       ).toBe(true);
 
@@ -177,7 +180,7 @@ describe('PlanTool — update (plan approval)', () => {
       expect(
         host.interactions?.resolve(
           (approval.payload as { approvalId: string }).approvalId,
-          { kind: 'plan', action: 'approve_and_goal' },
+          { kind: 'plan', decision: { action: 'approve_and_goal' } },
         ),
       ).toBe(true);
 
@@ -218,7 +221,7 @@ describe('PlanTool — update (plan approval)', () => {
       expect(
         host.interactions?.resolve(
           (approval.payload as { approvalId: string }).approvalId,
-          { kind: 'plan', action: 'approve_and_goal' },
+          { kind: 'plan', decision: { action: 'approve_and_goal' } },
         ),
       ).toBe(true);
 
@@ -243,7 +246,7 @@ describe('PlanTool — update (plan approval)', () => {
     expect(
       host.interactions?.resolve(
         (approval.payload as { approvalId: string }).approvalId,
-        { kind: 'plan', action: 'timeout' },
+        { kind: 'plan', decision: { action: 'timeout' } },
       ),
     ).toBe(true);
 

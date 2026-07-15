@@ -1,4 +1,5 @@
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
+import type { UserQuestionSettlement } from '@agent/runtime/HostInteractions';
 
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
@@ -95,11 +96,12 @@ export function handleUserQuestion(
     }
 
     const submitted = Object.keys(answers).length > 0;
+    const decision: UserQuestionSettlement = submitted
+      ? { action: 'submit', answers }
+      : { action: 'skip', feedback: 'User question skipped by user.' };
     await handleUserQuestionAction({
       requestId: payload.requestId,
-      action: submitted ? 'submit' : 'skip',
-      answers: submitted ? answers : undefined,
-      feedback: submitted ? undefined : 'User question skipped by user.',
+      ...decision,
     });
   })();
 }
