@@ -106,6 +106,7 @@ import {
   initializeDesktopServerSideKeyAccess,
   type DesktopAuthCallbackState,
   type DesktopAuthCoordinator,
+  type DesktopAuthHost,
 } from './desktopSupabaseAuth.js';
 import { DESKTOP_DOCS_URL } from '../desktopCommandSurface.js';
 import { reportFatalStartupError } from './fatalStartupError.js';
@@ -470,16 +471,19 @@ function createWindow(options: {
     });
     await onboardingIpcRef.current?.refreshOnboardingFunnel();
   };
-  const desktopAuth = createDesktopSupabaseAuth({
-    router: protocolLifecycle.router,
-    coordinator: options.authCoordinator,
-    secrets: platform().secrets,
-    openExternalUrl: (url) => previewHost.openExternal(url),
+  const desktopAuthHost: DesktopAuthHost = {
+    openExternalUrl: previewHost.openExternal,
     showInfoMessage,
     showErrorMessage,
     onSessionChanged: refreshDesktopAuthSurfaces,
-    log: console,
+  };
+  const desktopAuth = createDesktopSupabaseAuth({
+    router: protocolLifecycle.router,
+    coordinator: options.authCoordinator,
     callbackState: options.authCallbackState,
+    oauthClient: SupabaseClient.getClient(),
+    host: desktopAuthHost,
+    log: console,
   });
   const signInForRemoteAgentCatalog = async (): Promise<boolean> => {
     teamSignInPending = true;

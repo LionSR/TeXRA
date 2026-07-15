@@ -14,7 +14,9 @@ import {
   createDesktopAuthCallbackState,
   createDesktopSupabaseAuth,
   type DesktopAuthCallbackState,
+  type DesktopAuthHost,
   type DesktopOAuthClient,
+  type DesktopSupabaseAuthOptions,
 } from '@desktop/main/desktopSupabaseAuth';
 import type { StateStore } from '@platform/interfaces';
 
@@ -41,17 +43,6 @@ function createCoordinator() {
           }
         : null,
     ),
-  };
-}
-
-function createSecrets() {
-  return {
-    get: vi.fn(async () => undefined),
-    getStored: vi.fn(async () => undefined),
-    set: vi.fn(async () => {}),
-    delete: vi.fn(async () => {}),
-    listStoredKeys: vi.fn(async () => []),
-    getEnv: vi.fn(() => undefined),
   };
 }
 
@@ -104,6 +95,32 @@ function createOAuthClient() {
         error: null,
       })),
     },
+  };
+}
+
+function createAuthHost(
+  overrides: Partial<DesktopAuthHost> = {},
+): DesktopAuthHost {
+  return {
+    openExternalUrl: vi.fn(async () => {}),
+    showInfoMessage: vi.fn(async () => {}),
+    showErrorMessage: vi.fn(async () => {}),
+    onSessionChanged: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
+function createAuthOptions(
+  overrides: Partial<DesktopSupabaseAuthOptions> = {},
+): DesktopSupabaseAuthOptions {
+  return {
+    router: createDesktopProtocolCallbackRouter(),
+    coordinator: createCoordinator(),
+    callbackState: createDesktopAuthCallbackState(),
+    oauthClient: createOAuthClient(),
+    host: createAuthHost(),
+    log: createLog(),
+    ...overrides,
   };
 }
 
@@ -175,13 +192,14 @@ describe('desktop Supabase auth', () => {
     const coordinator = createCoordinator();
     const oauthClient = createOAuthClient();
     const openExternalUrl = vi.fn(async () => {});
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        router,
+        coordinator,
+        oauthClient,
+        host: createAuthHost({ openExternalUrl }),
+      }),
+    );
 
     await auth.signIn();
 
@@ -227,14 +245,15 @@ describe('desktop Supabase auth', () => {
     const openExternalUrl = vi.fn(async () => {
       events.push('open');
     });
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      callbackState,
-      secrets: createSecrets(),
-      openExternalUrl,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        router,
+        coordinator,
+        oauthClient,
+        callbackState,
+        host: createAuthHost({ openExternalUrl }),
+      }),
+    );
 
     await auth.signIn();
 
@@ -247,14 +266,14 @@ describe('desktop Supabase auth', () => {
     const coordinator = createCoordinator();
     const onSessionChanged = vi.fn(async () => {});
     const oauthClient = createOAuthClient();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      onSessionChanged,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        router,
+        coordinator,
+        oauthClient,
+        host: createAuthHost({ onSessionChanged }),
+      }),
+    );
 
     await auth.signIn();
     router.routeUrl(
@@ -288,13 +307,9 @@ describe('desktop Supabase auth', () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
     const oauthClient = createOAuthClient();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({ router, coordinator, oauthClient }),
+    );
 
     let completed = false;
     const completion = auth
@@ -324,13 +339,9 @@ describe('desktop Supabase auth', () => {
   it('cancels a waiting sign-in when its window auth is disposed', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const oauthClient = createOAuthClient();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator: createCoordinator(),
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({ router, oauthClient }),
+    );
     const completion = auth.signInAndWaitForSession(undefined, {
       timeoutMs: 1_000,
     });
@@ -348,14 +359,9 @@ describe('desktop Supabase auth', () => {
     const coordinator = createCoordinator();
     const oauthClient = createOAuthClient();
     const log = createLog();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      log,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({ router, coordinator, oauthClient, log }),
+    );
 
     await auth.signIn();
     // Attacker-delivered deeplink carrying valid tokens for another account but
@@ -380,13 +386,9 @@ describe('desktop Supabase auth', () => {
   it('rejects a callback with no nonce while a sign-in is pending', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient: createOAuthClient(),
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({ router, coordinator }),
+    );
 
     await auth.signIn();
     router.routeUrl(
@@ -406,14 +408,9 @@ describe('desktop Supabase auth', () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
     const log = createLog();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient: createOAuthClient(),
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      log,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({ router, coordinator, log }),
+    );
 
     router.routeUrl(
       'texra://texra-ai.texra/auth-callback#access_token=access-token&refresh_token=refresh-token',
@@ -435,14 +432,14 @@ describe('desktop Supabase auth', () => {
     const stateStore = createStateStore();
     const callbackState = createDesktopAuthCallbackState(stateStore);
     const oauthClient = createOAuthClient();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      callbackState,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        router,
+        coordinator,
+        oauthClient,
+        callbackState,
+      }),
+    );
 
     await auth.signIn();
     auth.dispose();
@@ -455,14 +452,13 @@ describe('desktop Supabase auth', () => {
       }),
     );
 
-    const recreatedAuth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient: createOAuthClient(),
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      callbackState: persistedCallbackState,
-    });
+    const recreatedAuth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        router,
+        coordinator,
+        callbackState: persistedCallbackState,
+      }),
+    );
 
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledWith(
@@ -483,28 +479,27 @@ describe('desktop Supabase auth', () => {
       const coordinator = createCoordinator();
       const stateStore = createStateStore();
       const oauthClient = createOAuthClient();
-      const auth = createDesktopSupabaseAuth({
-        router,
-        coordinator,
-        oauthClient,
-        secrets: createSecrets(),
-        openExternalUrl: vi.fn(async () => {}),
-        callbackState: createDesktopAuthCallbackState(stateStore),
-      });
+      const auth = createDesktopSupabaseAuth(
+        createAuthOptions({
+          router,
+          coordinator,
+          oauthClient,
+          callbackState: createDesktopAuthCallbackState(stateStore),
+        }),
+      );
 
       await auth.signIn();
       auth.dispose();
 
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
       const expiredCallbackState = createDesktopAuthCallbackState(stateStore);
-      const recreatedAuth = createDesktopSupabaseAuth({
-        router,
-        coordinator,
-        oauthClient: createOAuthClient(),
-        secrets: createSecrets(),
-        openExternalUrl: vi.fn(async () => {}),
-        callbackState: expiredCallbackState,
-      });
+      const recreatedAuth = createDesktopSupabaseAuth(
+        createAuthOptions({
+          router,
+          coordinator,
+          callbackState: expiredCallbackState,
+        }),
+      );
 
       router.routeUrl(
         authCallbackUrl({
@@ -582,15 +577,15 @@ describe('desktop Supabase auth', () => {
     const callbackState = createDesktopAuthCallbackState();
     const oauthClient = createOAuthClient();
     const log = createLog();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      callbackState,
-      log,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        router,
+        coordinator,
+        oauthClient,
+        callbackState,
+        log,
+      }),
+    );
 
     await auth.signIn();
     await auth.signOut();
@@ -617,14 +612,9 @@ describe('desktop Supabase auth', () => {
     const coordinator = createCoordinator();
     const log = createLog();
     const oauthClient = createOAuthClient();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      log,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({ router, coordinator, oauthClient, log }),
+    );
 
     await auth.signIn();
     router.routeUrl(
@@ -658,14 +648,14 @@ describe('desktop Supabase auth', () => {
       await callbackProcessing.promise;
       return callbackSessionResult();
     });
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      callbackState,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        router,
+        coordinator,
+        oauthClient,
+        callbackState,
+      }),
+    );
 
     await auth.signIn();
     router.routeUrl(
@@ -700,15 +690,14 @@ describe('desktop Supabase auth', () => {
     });
     const onSessionChanged = vi.fn(async () => {});
     const showInfoMessage = vi.fn(async () => {});
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      onSessionChanged,
-      showInfoMessage,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        router,
+        coordinator,
+        oauthClient,
+        host: createAuthHost({ onSessionChanged, showInfoMessage }),
+      }),
+    );
 
     await auth.signIn();
     router.routeUrl(
@@ -746,15 +735,15 @@ describe('desktop Supabase auth', () => {
       await storeSession?.(session);
     });
     const onSessionChanged = vi.fn(async () => {});
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      callbackState,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      onSessionChanged,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        router,
+        coordinator,
+        oauthClient,
+        callbackState,
+        host: createAuthHost({ onSessionChanged }),
+      }),
+    );
 
     await auth.signIn();
     router.routeUrl(
@@ -809,14 +798,14 @@ describe('desktop Supabase auth', () => {
       const onSessionChanged = vi.fn(async () => {
         await sessionRefresh.promise;
       });
-      const auth = createDesktopSupabaseAuth({
-        router,
-        coordinator,
-        oauthClient,
-        secrets: createSecrets(),
-        openExternalUrl: vi.fn(async () => {}),
-        onSessionChanged,
-      });
+      const auth = createDesktopSupabaseAuth(
+        createAuthOptions({
+          router,
+          coordinator,
+          oauthClient,
+          host: createAuthHost({ onSessionChanged }),
+        }),
+      );
 
       await auth.signIn();
       router.routeUrl(
@@ -857,13 +846,9 @@ describe('desktop Supabase auth', () => {
         await callbackProcessing.promise;
         return callbackSessionResult();
       });
-      const auth = createDesktopSupabaseAuth({
-        router,
-        coordinator,
-        oauthClient,
-        secrets: createSecrets(),
-        openExternalUrl: vi.fn(async () => {}),
-      });
+      const auth = createDesktopSupabaseAuth(
+        createAuthOptions({ router, coordinator, oauthClient }),
+      );
 
       await auth.signIn();
       router.routeUrl(
@@ -891,13 +876,9 @@ describe('desktop Supabase auth', () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
     const oauthClient = createOAuthClient();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({ router, coordinator, oauthClient }),
+    );
 
     const first = auth.signInAndWaitForSession(undefined, { timeoutMs: 10 });
     await vi.waitFor(() => {
@@ -931,15 +912,15 @@ describe('desktop Supabase auth', () => {
     const showErrorMessage = vi.fn(async () => {});
     const log = createLog();
     const oauthClient = createOAuthClient();
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient,
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      showErrorMessage,
-      log,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        router,
+        coordinator,
+        oauthClient,
+        host: createAuthHost({ showErrorMessage }),
+        log,
+      }),
+    );
 
     await auth.signIn();
     router.routeUrl(
@@ -963,17 +944,10 @@ describe('desktop Supabase auth', () => {
   });
 
   it('clears included-access caches on sign-out', async () => {
-    const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
     const clearAllCaches = vi.fn();
     setServerSideKeyService({ clearAllCaches } as never);
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient: createOAuthClient(),
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-    });
+    const auth = createDesktopSupabaseAuth(createAuthOptions({ coordinator }));
 
     await auth.signOut();
 
@@ -992,15 +966,13 @@ describe('desktop Supabase auth', () => {
     const coordinator = createCoordinator();
     const onSessionChanged = vi.fn(async () => {});
     const log = createLog();
-    const auth = createDesktopSupabaseAuth({
-      router: createDesktopProtocolCallbackRouter(),
-      coordinator,
-      oauthClient: createOAuthClient(),
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      onSessionChanged,
-      log,
-    });
+    const auth = createDesktopSupabaseAuth(
+      createAuthOptions({
+        coordinator,
+        host: createAuthHost({ onSessionChanged }),
+        log,
+      }),
+    );
 
     await expect(auth.signOut()).resolves.toBeUndefined();
 
@@ -1029,13 +1001,7 @@ describe('desktop Supabase auth', () => {
         visibility: ['public', 'researcher'],
       },
     ]);
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator: createCoordinator(),
-      oauthClient: createOAuthClient(),
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-    });
+    const auth = createDesktopSupabaseAuth(createAuthOptions({ router }));
 
     const message = await buildProfileMessage({
       getProviderKeyStatuses: async () => [],
@@ -1070,13 +1036,7 @@ describe('desktop Supabase auth', () => {
     const getAgentsBySource = vi
       .spyOn(agentRegistry, 'getAgentsBySource')
       .mockReturnValue([]);
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator: createCoordinator(),
-      oauthClient: createOAuthClient(),
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-    });
+    const auth = createDesktopSupabaseAuth(createAuthOptions({ router }));
 
     const message = await buildProfileMessage({
       getProviderKeyStatuses: async () => [],

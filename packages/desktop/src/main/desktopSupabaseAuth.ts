@@ -59,17 +59,22 @@ export interface DesktopAuthCallbackState {
   clearAwaitingCallback(nonce?: string): Promise<void>;
 }
 
+export interface DesktopAuthHost {
+  openExternalUrl(url: string): Promise<void>;
+  showInfoMessage(message: string): Promise<void> | void;
+  showErrorMessage(message: string): Promise<void> | void;
+  onSessionChanged(): Promise<void> | void;
+}
+
+type DesktopAuthLogger = Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
+
 export interface DesktopSupabaseAuthOptions {
   router: DesktopProtocolCallbackRouter;
-  secrets: PlatformSecrets;
-  openExternalUrl(url: string): Promise<void>;
-  showInfoMessage?(message: string): Promise<void> | void;
-  showErrorMessage?(message: string): Promise<void> | void;
-  onSessionChanged?: () => Promise<void> | void;
-  log?: Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
-  coordinator?: DesktopAuthCoordinator;
-  oauthClient?: DesktopOAuthClient;
-  callbackState?: DesktopAuthCallbackState;
+  coordinator: DesktopAuthCoordinator;
+  callbackState: DesktopAuthCallbackState;
+  oauthClient: DesktopOAuthClient;
+  host: DesktopAuthHost;
+  log: DesktopAuthLogger;
 }
 
 export interface DesktopOAuthClient {
@@ -169,11 +174,7 @@ function isPendingOAuthStateExpired(state: DesktopPendingOAuthState): boolean {
 export function createDesktopSupabaseAuth(
   options: DesktopSupabaseAuthOptions,
 ): DesktopSupabaseAuth {
-  const coordinator =
-    options.coordinator ?? createDesktopAuthCoordinator(options);
-  const oauthClient = options.oauthClient ?? SupabaseClient.getClient();
-  const callbackState =
-    options.callbackState ?? createDesktopAuthCallbackState();
+  const { callbackState, coordinator, host, log, oauthClient } = options;
   const callbackQueue: Array<{
     callback: DesktopProtocolCallback;
     nonce: string;
@@ -260,8 +261,8 @@ export function createDesktopSupabaseAuth(
             activeAttempt = undefined;
           }
           const message = toErrorMessage(error);
-          options.log?.error?.(`Desktop auth callback failed: ${message}`);
-          await options.showErrorMessage?.(`Sign-in failed: ${message}`);
+          log.error(`Desktop auth callback failed: ${message}`);
+          await host.showErrorMessage(`Sign-in failed: ${message}`);
         }
       }
     } finally {
@@ -271,7 +272,7 @@ export function createDesktopSupabaseAuth(
   };
   const subscription = options.router.subscribe((callback) => {
     if (!callbackState.hasPendingSignIn()) {
-      options.log?.debug?.(
+      log.debug(
         'Desktop auth callback ignored because no sign-in is in progress',
       );
       return;
@@ -279,7 +280,7 @@ export function createDesktopSupabaseAuth(
     const callbackNonce =
       new URLSearchParams(callback.query).get('app_nonce') ?? undefined;
     if (!callbackNonce || !callbackState.matchesPendingNonce(callbackNonce)) {
-      options.log?.warn?.(
+      log.warn(
         'Desktop auth callback rejected: nonce mismatch (possible login-CSRF or stale callback)',
       );
       return;
@@ -293,7 +294,7 @@ export function createDesktopSupabaseAuth(
     void callbackState
       .clearAwaitingCallback(callbackNonce)
       .catch((error: unknown) => {
-        options.log?.debug?.(
+        log.debug(
           `Desktop auth callback state clear failed: ${toErrorMessage(error)}`,
         );
       });
@@ -303,7 +304,7 @@ export function createDesktopSupabaseAuth(
       generation: claimedAttempt.generation,
     });
     if (isProcessingCallbacks) {
-      options.log?.debug?.(
+      log.debug(
         'Desktop auth callback queued while another callback is being processed',
       );
     }
@@ -344,16 +345,14 @@ export function createDesktopSupabaseAuth(
       }
       if (!ownsAttempt(generation, nonce)) return;
 
-      await options.openExternalUrl(data.url);
-      await options.showInfoMessage?.(
+      await host.openExternalUrl(data.url);
+      await host.showInfoMessage(
         'Complete sign-in in your browser. TeXRA will update when the browser returns to the desktop app.',
       );
     } catch (error) {
       if (ownsAttempt(generation, nonce)) activeAttempt = undefined;
       await callbackState.clearAwaitingCallback(nonce);
-      await options.showErrorMessage?.(
-        `Sign-in failed: ${toErrorMessage(error)}`,
-      );
+      await host.showErrorMessage(`Sign-in failed: ${toErrorMessage(error)}`);
       throw error;
     }
   };
@@ -392,13 +391,13 @@ export function createDesktopSupabaseAuth(
         await coordinator.clearSession();
       });
       SupabaseClient.setTokenExpiry(null);
-      clearDesktopServerSideKeyCaches(options.log);
+      clearDesktopServerSideKeyCaches(log);
       await invalidateRemoteAgentsAfterSignOut().catch((error: unknown) => {
-        options.log?.warn?.(
+        log.warn(
           `Local agent catalog refresh failed after sign-out: ${toErrorMessage(error)}`,
         );
       });
-      await options.onSessionChanged?.();
+      await host.onSessionChanged();
     },
 
     dispose() {
@@ -408,9 +407,10 @@ export function createDesktopSupabaseAuth(
   };
 }
 
-export function createDesktopAuthCoordinator(
-  options: Pick<DesktopSupabaseAuthOptions, 'secrets' | 'log'>,
-): DesktopAuthCoordinator {
+export function createDesktopAuthCoordinator(options: {
+  secrets: PlatformSecrets;
+  log: DesktopAuthLogger;
+}): DesktopAuthCoordinator {
   return createHostAuthCoordinator({
     secrets: options.secrets,
     log: createSessionLog(options.log),
@@ -418,7 +418,7 @@ export function createDesktopAuthCoordinator(
 }
 
 export function initializeDesktopServerSideKeyAccess(
-  log: DesktopSupabaseAuthOptions['log'],
+  log: DesktopAuthLogger,
 ): void {
   initializeServerSideKeyAccess(
     {
@@ -433,13 +433,11 @@ export function initializeDesktopServerSideKeyAccess(
   );
 }
 
-function clearDesktopServerSideKeyCaches(
-  log: DesktopSupabaseAuthOptions['log'],
-): void {
+function clearDesktopServerSideKeyCaches(log: DesktopAuthLogger): void {
   try {
     getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
   } catch (error) {
-    log?.debug?.(
+    log.debug(
       `Desktop server-side key cache clear skipped: ${toErrorMessage(error)}`,
     );
   }
@@ -460,9 +458,9 @@ async function processProtocolCallback(
 
   if (!result.success) {
     if (result.isAuthError) {
-      await options.showErrorMessage?.(`Sign-in failed: ${result.error}`);
+      await options.host.showErrorMessage(`Sign-in failed: ${result.error}`);
     } else {
-      options.log?.debug?.(`Desktop auth callback ignored: ${result.error}`);
+      options.log.debug(`Desktop auth callback ignored: ${result.error}`);
     }
     return false;
   }
@@ -478,11 +476,11 @@ async function processProtocolCallback(
 
     clearDesktopServerSideKeyCaches(options.log);
     try {
-      await options.showInfoMessage?.(
+      await options.host.showInfoMessage(
         `Signed in as ${result.session.account.label}`,
       );
     } catch (error) {
-      options.log?.warn?.(
+      options.log.warn(
         `Desktop sign-in notification failed: ${toErrorMessage(error)}`,
       );
     }
@@ -491,9 +489,9 @@ async function processProtocolCallback(
       return false;
     }
     try {
-      await options.onSessionChanged?.();
+      await options.host.onSessionChanged();
     } catch (error) {
-      options.log?.warn?.(
+      options.log.warn(
         `Desktop auth surface refresh failed: ${toErrorMessage(error)}`,
       );
     }
@@ -505,22 +503,20 @@ async function processProtocolCallback(
   });
 }
 
-function createSessionLog(
-  log: Pick<Console, 'debug' | 'info' | 'warn' | 'error'> | undefined,
-): SupabaseSessionLog {
+function createSessionLog(log: DesktopAuthLogger): SupabaseSessionLog {
   return {
-    debug: (source, message) => log?.debug?.(`[${source}] ${message}`),
-    info: (source, message) => log?.info?.(`[${source}] ${message}`),
-    warn: (source, message) => log?.warn?.(`[${source}] ${message}`),
-    error: (source, message) => log?.error?.(`[${source}] ${message}`),
+    debug: (source, message) => log.debug(`[${source}] ${message}`),
+    info: (source, message) => log.info(`[${source}] ${message}`),
+    warn: (source, message) => log.warn(`[${source}] ${message}`),
+    error: (source, message) => log.error(`[${source}] ${message}`),
   };
 }
 
 function createAuthServiceLogger(
-  log: Pick<Console, 'info' | 'error'> | undefined,
+  log: Pick<Console, 'info' | 'error'>,
 ): AuthServiceLogger {
   return {
-    info: (source, message) => log?.info?.(`[${source}] ${message}`),
-    error: (source, message) => log?.error?.(`[${source}] ${message}`),
+    info: (source, message) => log.info(`[${source}] ${message}`),
+    error: (source, message) => log.error(`[${source}] ${message}`),
   };
 }
