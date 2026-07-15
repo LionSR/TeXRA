@@ -16,9 +16,9 @@ All notable changes to this project will be documented in this file.
 
 - **OpenAI-compatible conversations no longer stop unexpectedly** — valid
   answers now continue to completion instead of being interrupted.
-- **Relay failures can be traced without exposing request content** — provider
-  responses now include a correlation identifier that can be shared with
-  support when a request fails before or during its response.
+- **Relay failures can be traced without exposing request content** — relay
+  responses now include a correlation identifier that support can use to
+  investigate failures before or during a model response.
 
 ### Extension (VS Code)
 
