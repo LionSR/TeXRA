@@ -20,6 +20,7 @@ import {
 import { defineTool } from '@tools/core/define';
 import { ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';
@@ -232,7 +233,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         query,
         result: {
           status: 'executed',
-          summary: `${hits.length} result${hits.length > 1 ? 's' : ''}`,
+          summary: formatResultCount(hits.length, 'result'),
           output: formatted,
           results: hits,
         },
@@ -301,7 +302,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
     const allFailed = errorCount === queries.length;
     let summary: string;
     if (totalHits > 0) {
-      summary = `${totalHits} result${totalHits > 1 ? 's' : ''} across ${queries.length} queries`;
+      summary = `${formatResultCount(totalHits, 'result')} across ${queries.length} queries`;
     } else if (allFailed) {
       summary = `All ${queries.length} queries failed`;
     } else {

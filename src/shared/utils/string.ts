@@ -1,6 +1,8 @@
 import { intlFormatDistance } from 'date-fns';
 import prettyBytes from 'pretty-bytes';
 
+import { formatResultCount } from '@utils/text/stringUtils';
+
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
   month: 'short',
@@ -39,7 +41,7 @@ export function formatUpdatedDate(
 }
 
 export function formatLineCount(count: number): string {
-  return count === 1 ? '1 line' : `${count} lines`;
+  return formatResultCount(count, 'line');
 }
 
 export function formatBytes(bytes: number): string {

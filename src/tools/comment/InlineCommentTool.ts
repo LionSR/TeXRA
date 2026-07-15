@@ -10,6 +10,7 @@ import * as logger from '@logger/logUtils';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/define';
@@ -245,9 +246,7 @@ export class InlineCommentTool extends defineTool({
           : 'No comment threads are open.',
       };
     }
-    const summary = `${threads.length} comment thread${
-      threads.length === 1 ? '' : 's'
-    }`;
+    const summary = formatResultCount(threads.length, 'comment thread');
     return {
       status: 'executed',
       summary,

@@ -32,6 +32,7 @@ import { scrollToBottom } from '@shared/utils/dom';
 import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatDuration } from '@utils/core';
+import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
@@ -343,7 +344,7 @@ export class TaskGroupList extends LitElement {
     label: string;
   }): TemplateResult {
     const revealCount = Math.min(options.hiddenCount, options.step);
-    const suffix = revealCount === 1 ? options.label : `${options.label}s`;
+    const suffix = pluralize(revealCount, options.label);
     return html`
       <div class="log-reveal-row">
         <wa-button

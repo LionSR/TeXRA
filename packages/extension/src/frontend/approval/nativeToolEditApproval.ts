@@ -48,7 +48,7 @@ import {
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { normalizeLineEndings, pluralize } from '@utils/text/stringUtils';
 
 const CHANNEL = 'nativeToolEditApproval';
 
@@ -322,7 +322,7 @@ export async function nativeRequestApproval(
     added > 0 && `+${added}`,
     removed > 0 && `-${removed}`,
   ].filter(Boolean);
-  const lineWord = totalChanged === 1 ? 'line' : 'lines';
+  const lineWord = pluralize(totalChanged, 'line');
   const changeSuffix = changeParts.length
     ? ` · ${changeParts.join(' / ')} ${lineWord}`
     : '';

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { formatResultCount } from '@utils/text/stringUtils';
 import {
   countBySeverity,
   formatCounts,
@@ -344,7 +345,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
     const goalCount = data.goals.length;
     return {
       status: 'executed',
-      summary: `${goalCount} goal${goalCount > 1 ? 's' : ''}`,
+      summary: formatResultCount(goalCount, 'goal'),
       output: data.rendered,
       goalState: {
         goals: data.goals,

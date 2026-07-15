@@ -21,6 +21,7 @@ import {
   TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY,
 } from '@shared/constants/cliRuntime';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - CLI runtime
 import { CliExitCode } from './exitCodes';
@@ -237,7 +238,7 @@ async function checkModels(
       return pass(
         'models',
         'Models',
-        `${available.length} model${available.length === 1 ? '' : 's'} available.`,
+        `${formatResultCount(available.length, 'model')} available.`,
       );
     }
     return fail(
