@@ -1,4 +1,3 @@
-import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
@@ -23,6 +22,7 @@ import {
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
+import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { GoalStore } from '@tools/goal';
 import { StorageFS } from '@utils/files';
 import {
@@ -40,7 +40,7 @@ import {
   DesktopHistoryHandlers,
   type DesktopHistoryOptions,
 } from './desktopHistoryHandlers.js';
-import type { ConfigProvider, StateStore } from '@platform/interfaces';
+import type { ConfigProvider } from '@platform/interfaces';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import type { DesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
@@ -52,10 +52,9 @@ export interface DesktopSettingsIpcOptions extends DesktopHistoryOptions {
   crashReportingSettingsController: DesktopCrashReportingSettingsController;
   credentialSettingsController: DesktopCredentialSettingsController;
   toolingSettingsController: DesktopToolingSettingsController;
+  state: SettingsStatePorts;
+  config: ConfigProvider;
   sendStartupCatalogData?: boolean;
-  globalState?: StateStore;
-  workspaceState?: StateStore;
-  config?: ConfigProvider;
   openPath?: (filePath: string) => Promise<void>;
   /** Route this window to the progress view and select the given stream. */
   revealStream?: (streamId: string) => Promise<void>;
@@ -75,8 +74,7 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): DesktopSettingsIpc {
-  const workspaceState = options.workspaceState ?? platform().workspaceState;
-  const globalState = options.globalState ?? platform().globalState;
+  const { globalState, workspaceState } = options.state;
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
   const onError = createDesktopErrorReporter(
@@ -119,10 +117,6 @@ export function createDesktopSettingsIpc(
 
   function readCurrentGitAuthorSettings() {
     return readGitAuthorSettingsFromState(workspaceState);
-  }
-
-  function getConfigProvider(): ConfigProvider {
-    return options.config ?? platform().config;
   }
 
   function applyCurrentGitAuthorSettings() {
@@ -194,7 +188,7 @@ export function createDesktopSettingsIpc(
       buildApprovalSettingsMessage({
         workspaceState,
         globalState,
-        config: getConfigProvider(),
+        config: options.config,
       }),
     );
   }
@@ -283,7 +277,7 @@ export function createDesktopSettingsIpc(
 
   async function updateBashApprovalEnabled(enabled: boolean): Promise<void> {
     await setBashApprovalEnabled(
-      { workspaceState, globalState, config: getConfigProvider() },
+      { workspaceState, globalState, config: options.config },
       enabled,
       BASH_APPROVAL_CONFIG_TARGET,
     );
