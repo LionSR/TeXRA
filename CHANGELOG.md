@@ -2,40 +2,62 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.39.5] - Unreleased
+## [0.39.5] - 2026-07-15
 
-### CLI
+### Shared (all surfaces)
 
-#### New Features
+#### Breaking Changes
 
-- **Delegation prompts can approve the rest of a stream** — press `a` to
-  approve the current delegated task and stop repeated task, edit, and command
-  approval prompts for that stream.
+- **Built-in access to OpenAI, Anthropic, and Google now requires Ultra** —
+  Free and Max users can continue using these providers with their own API
+  keys. Built-in access to other supported providers is unchanged.
 
 #### Bug Fixes
 
-- **Session navigation remembers its place** — after returning from the
-  vertical session list to the input, pressing `Tab` again restores the same
-  highlighted session instead of jumping back to the main conversation.
-- **Retry prompts no longer ask for discarded feedback** — choosing “give up”
-  now cancels immediately instead of opening a rejection note that the retry
-  flow cannot use.
+- **OpenAI-compatible conversations no longer stop unexpectedly** — valid
+  answers now continue to completion instead of being interrupted.
 
 ### Extension (VS Code)
 
 #### New Features
 
-- **Copilot subscription models appear alongside other model choices** — TeXRA
-  discovers compatible models from VS Code and uses the user's existing
-  Copilot access without requiring a provider API key. The Models tab now owns
-  consent, and exhausted Copilot runs can restart through a matching direct
-  model without asking again when its provider key is already available.
+- **Use GitHub Copilot models in VS Code** — compatible models from the user's
+  existing Copilot subscription can now be selected in the Models tab without
+  adding a provider API key. If Copilot usage is exhausted, TeXRA can retry
+  with a saved key for the same provider.
 
 #### Bug Fixes
 
-- **Delegated-work approval uses a clear name** — proposal menus now describe
-  the stream-scoped task, edit, and command grant instead of calling it
-  “Super Yolo.”
+- **Delegated approval choices are clearer** — proposal menus now explain when
+  one choice will approve the remaining tasks, file changes, and commands for
+  the current delegated session.
+
+### CLI
+
+#### New Features
+
+- **Manage agents and teams from one place** — `texra config`, the launcher's
+  Settings screen, and `/config` now provide the same controls for choosing
+  available agents, a default team, and a default chat agent. Scripts can use
+  `texra config agents` without opening the interactive interface.
+- **Approve the rest of a delegated session at once** — press `a` to approve
+  the current task and avoid repeated approval prompts for its remaining file
+  changes and commands.
+
+#### Bug Fixes
+
+- **Session navigation uses one persistent list** — `Tab` opens the vertical
+  list for the main and delegated sessions; arrow keys select a session,
+  `Enter` focuses it, and reopening the list restores the previous selection.
+- **Nested settings lists remain responsive after going back** — returning from
+  a `/config` subsection no longer leaves the parent list unable to accept
+  keyboard input.
+- **Retry prompts no longer ask for discarded feedback** — choosing “give up”
+  now cancels immediately instead of opening a rejection note that the retry
+  flow cannot use.
+- **Concurrent team runs keep their own agent choices** — starting or stopping
+  one team no longer changes which agents are available to another session or
+  rewrites the workspace's agent settings.
 
 ## [0.39.4] - 2026-07-13
 
@@ -154,11 +176,6 @@ All notable changes to this project will be documented in this file.
 - **Startup and settings lists are easier to scan** — resumable sessions,
   agents, and teams now live behind one entry each; the launcher also provides
   account sign-in and sign-out controls. `/config` groups settings by subject.
-- **Agent configuration has one CLI interface** — `texra config`, the launcher
-  Settings row, and `/config` now share controls for inherited, complete,
-  team-based, and custom workspace rosters, the user default team, and the
-  workspace default chat agent. Headless scripts can use
-  `texra config agents` with the corresponding flags.
 
 #### Bug Fixes
 
@@ -172,11 +189,6 @@ All notable changes to this project will be documented in this file.
 - **Terminal status stays readable during long sessions** — history omits
   internal process bookkeeping, completed transcripts repaint after resizing,
   and the Ctrl-C hint follows whether a run is actually active.
-- **Team runs no longer rewrite workspace visibility** — each execution now
-  carries its own delegation roster, inherited by its child agents, so
-  concurrent sessions cannot overwrite or restore one another's folder
-  settings. Listing agents, initializing a project, and starting chat are now
-  read-only with respect to roster configuration.
 
 ## [0.39.3] - 2026-07-10
 

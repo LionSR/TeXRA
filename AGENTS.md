@@ -9,6 +9,14 @@ When updating CHANGELOG.md:
 - Focus on user-visible features and bug fixes
 - Use clear, concise language that end users can understand
 - Group changes into Features, Bug Fixes, and (rarely) Breaking Changes
+- Describe the net difference from the previous released version, not the
+  sequence of commits made during development
+- Do not include defects that were introduced and fixed before the release;
+  intermediate implementation states are not release changes
+- Do not expose internal architecture, protocol names, schemas, codenames, or
+  implementation mechanics; describe the effect in product terms
+- Exclude refactors, tests, dependency maintenance, and other changes with no
+  user-visible effect
 
 ## Development workflow
 
