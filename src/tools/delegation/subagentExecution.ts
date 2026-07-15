@@ -8,17 +8,12 @@
  */
 
 // Local imports - agent
-import type { ResultMeta } from '@agent/storage';
 import { registerExecution } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import {
-  getAgentFlowErrorResult,
-  type AgentFlowResult,
-} from '@agent/runtime/AgentFlowResult';
 import {
   getRunContextExecutionId,
   getRunContextRuntimeHost,
@@ -42,21 +37,13 @@ import {
   enableYoloOnChildStream,
   inheritBashBypassOnChildStream,
 } from '@tools/approval';
-import {
-  buildSubagentFailureResultMeta,
-  formatSubagentError,
-} from '@tools/subagentResults';
-import {
-  persistChildRunReport,
-  persistChildRunResultMeta,
-} from '@tools/childRunDelivery';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - utils
-import { subagentDeliveryMessage } from './subagentDeliveryFormat';
+import { executeSubagentForDeliveryInBand } from './inBandSubagentExecution';
+
 // `createNativeToolUseStrategy`/`createNativeWorkflowStrategy` are lazy-
-// imported below, alongside `executeAgent` — both strategy modules import
+// imported below. Both strategy modules import
 // `@agent/runtime/executeAgent` (directly, or transitively via
 // `resumeQueuedToolUseSnapshot`), which pulls in `runToolUseFlow.ts` ->
 // `@tools/registry`. An eager import here would close the same
@@ -79,32 +66,8 @@ interface ApprovalMeta {
   requestedAgent?: string;
 }
 
-/** Persist a subagent's report and result manifest, logging (not throwing) on failure. */
-async function persistSubagentDeliveryBestEffort(
-  executionId: ExecutionId,
-  msg: string,
-  resultMeta: ResultMeta,
-): Promise<void> {
-  const [reportResult, metaResult] = await Promise.all([
-    persistChildRunReport(executionId, msg),
-    persistChildRunResultMeta(executionId, resultMeta),
-  ]);
-  if (reportResult.kind === 'failed') {
-    logger.warn(
-      LOG_CHANNEL,
-      `Failed to persist subagent report for ${executionId}: ${toErrorMessage(reportResult.err)}`,
-    );
-  }
-  if (metaResult.kind === 'failed') {
-    logger.warn(
-      LOG_CHANNEL,
-      `Failed to persist subagent result manifest for ${executionId}: ${toErrorMessage(metaResult.err)}`,
-    );
-  }
-}
-
 /**
- * Execute a subagent asynchronously.
+ * Execute a subagent through the delegation tool boundary.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
  * are consistent and usable with the executions tool.
  *
@@ -117,10 +80,6 @@ export async function executeSubagent(
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
-  // Lazy import: the delegation tool runs agents, and the agent runtime loads
-  // this tool through the registry. Same intentional recursion pattern as the
-  // dynamic RemoteAgentLoader import in agentRegistry.
-  const { executeAgent } = await import('@agent/runtime/executeAgent');
   const parentContext = tryUseRunContext();
   const runtimeHost = getRunContextRuntimeHost(parentContext);
   if (!parentContext || !runtimeHost) {
@@ -150,8 +109,6 @@ export async function executeSubagent(
     recordSubagentCost?.(totalCostUsd ?? 0);
   }
 
-  const executionId = generateExecutionId();
-  const startedAt = Date.now();
   const delegationAgentScope =
     parentContext.kind === 'launch'
       ? parentContext.runScope.delegationAgentScope
@@ -161,14 +118,6 @@ export async function executeSubagent(
     ...(delegationAgentScope ? { delegationAgentScope } : {}),
   };
   const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
-
-  const syntheticConfig = AgentConfigSchema.parse(childConfigPayload);
-  await registerExecution(
-    executionId,
-    syntheticConfig,
-    agentName,
-    parentExecutionId,
-  );
 
   const inheritChildStreamApprovals = (resolvedStreamId: StreamTabId): void => {
     // Bash bypass follows the parent regardless of edit-YOLO, so a bash-only
@@ -180,80 +129,45 @@ export async function executeSubagent(
   };
 
   if (parentContext.stopAfterCycle) {
-    const failureResult = async (
-      err: unknown,
-      result?: AgentFlowResult,
-    ): Promise<ToolResult> => {
-      const wallTimeMs = Date.now() - startedAt;
-      const msg = formatSubagentError(executionId, agentName, err, {
-        wallTimeMs,
-        workingDirectory,
-        memoryMisses: result?.memoryMisses,
-      });
-      // Keep the failed run's data (partial outputs, category, cost) in the
-      // manifest, matching the async error path.
-      await persistSubagentDeliveryBestEffort(
-        executionId,
-        msg,
-        buildSubagentFailureResultMeta(
-          agentName,
-          syntheticConfig.agentCategory,
-          result,
-          wallTimeMs,
-        ),
-      );
-      return {
-        status: 'error',
-        summary: `Subagent '${agentName}' failed`,
-        error: toErrorMessage(err),
-      };
-    };
     try {
-      let subagentError: unknown;
-      const result = await executeAgent(childConfigPayload, executionId, {
+      const { result, delivery } = await executeSubagentForDeliveryInBand({
+        configPayload: childConfigPayload,
+        agentName,
+        parentExecutionId,
+        parentStreamId: orchestratorStreamId,
         runtimeHost,
         session: parentSession,
-        isSubagent: true,
-        enforceCategory: true,
-        parentStreamId: orchestratorStreamId,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-        stopAfterCycle: true,
         onStreamResolved: inheritChildStreamApprovals,
-        onRunError: (err) => {
-          subagentError = err;
-        },
+        onCost: settleSubagentCost,
       });
-      settleSubagentCost(result.totalCostUsd);
-      if (result.outcome === 'failed') {
-        return failureResult(
-          subagentError ?? 'Subagent ended with failed outcome.',
-          result,
-        );
-      }
-      const { msg, resultMeta } = await subagentDeliveryMessage(
-        executionId,
-        agentName,
-        result,
-        { startedAt, workingDirectory },
-      );
-      await persistSubagentDeliveryBestEffort(executionId, msg, resultMeta);
       return {
         status: 'executed',
         summary:
           result.outcome === 'cancelled'
             ? `Cancelled '${agentName}'`
             : `Completed '${agentName}'`,
-        output: msg,
+        output: delivery,
       };
     } catch (err) {
-      // AgentFlowError carries the failed run's result — keep its category,
-      // partial outputs, and cost in the failure manifest for chaining.
-      const errorResult = getAgentFlowErrorResult(err);
-      settleSubagentCost(errorResult?.totalCostUsd);
-      return failureResult(err, errorResult);
+      return {
+        status: 'error',
+        summary: `Subagent '${agentName}' failed`,
+        error: toErrorMessage(err),
+      };
     }
   }
+
+  const executionId = generateExecutionId();
+  const startedAt = Date.now();
+  const syntheticConfig = AgentConfigSchema.parse(childConfigPayload);
+  await registerExecution(
+    executionId,
+    syntheticConfig,
+    agentName,
+    parentExecutionId,
+  );
 
   const isToolUse = childConfigPayload.agentCategory === AgentCategory.ToolUse;
   // Must match the id `buildAgentLaunchContext` actually reserves for this
