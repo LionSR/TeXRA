@@ -13,6 +13,8 @@
 // Promise<ToolEditApprovalResult>, not a fire-and-forget event.
 
 import { nanoid } from 'nanoid';
+import pDefer from 'p-defer';
+import pTimeout from 'p-timeout';
 
 import { platform } from '@platform/platform';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -295,7 +297,7 @@ function validTimeoutMs(timeoutMs: number | undefined): number | undefined {
   if (timeoutMs == null || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     return undefined;
   }
-  return Math.floor(timeoutMs);
+  return Math.max(1, Math.floor(timeoutMs));
 }
 
 /**
@@ -315,30 +317,20 @@ function withInteractionTimeout<T>(
   const timeoutMs = validTimeoutMs(options?.timeoutMs);
   if (timeoutMs == null) return start();
 
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
+  const interaction = pDefer<T>();
+  const timedInteraction = pTimeout(interaction.promise, {
+    milliseconds: timeoutMs,
+    fallback: () => {
       onTimeout();
-      resolve(timeoutResult);
-    }, timeoutMs);
-
-    start().then(
-      (result) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(result);
-      },
-      (error: unknown) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
+      return timeoutResult;
+    },
   });
+  try {
+    start().then(interaction.resolve, interaction.reject);
+  } catch (error) {
+    interaction.reject(error);
+  }
+  return timedInteraction;
 }
 
 function createRetryRouteState(): RetryRouteState {
