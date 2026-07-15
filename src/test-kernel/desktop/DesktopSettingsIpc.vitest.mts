@@ -49,6 +49,8 @@ type SettingsFixtureOverrides = Omit<
   | 'agentSettingsController'
   | 'crashReportingSettingsController'
   | 'credentialSettingsController'
+  | 'state'
+  | 'config'
   | 'toolingSettingsController'
   | 'postToRenderer'
   | keyof DesktopHistoryOptions
@@ -56,6 +58,9 @@ type SettingsFixtureOverrides = Omit<
   agentSettingsController?: DesktopSettingsIpcOptions['agentSettingsController'];
   crashReportingSettingsController?: DesktopSettingsIpcOptions['crashReportingSettingsController'];
   credentialSettingsController?: DesktopSettingsIpcOptions['credentialSettingsController'];
+  globalState?: StateStore;
+  workspaceState?: StateStore;
+  config?: DesktopSettingsIpcOptions['config'];
   toolingSettingsController?: DesktopSettingsIpcOptions['toolingSettingsController'];
   history?: Partial<DesktopHistoryOptions>;
   postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
@@ -133,9 +138,13 @@ async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
 let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];
 
 function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
-  const { history, ...settingsOverrides } = overrides;
-  const globalState = overrides.globalState ?? new MemoryStateStore();
-  const workspaceState = overrides.workspaceState ?? new MemoryStateStore();
+  const {
+    history,
+    globalState = new MemoryStateStore(),
+    workspaceState = new MemoryStateStore(),
+    config = new MemoryConfigStore(),
+    ...settingsOverrides
+  } = overrides;
   const postToRenderer = overrides.postToRenderer ?? (() => undefined);
   const settings = createDesktopSettingsIpc({
     ...settingsOverrides,
@@ -161,9 +170,9 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
             values: {},
           }),
       }),
-    globalState,
+    state: { globalState, workspaceState },
+    config,
     postToRenderer,
-    workspaceState,
   });
   return { globalState, settings, workspaceState };
 }

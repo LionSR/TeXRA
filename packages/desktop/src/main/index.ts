@@ -850,6 +850,11 @@ function createWindow(options: {
     crashReportingSettingsController,
     credentialSettingsController,
     toolingSettingsController,
+    state: {
+      globalState: platform().globalState,
+      workspaceState: platform().workspaceState,
+    },
+    config: platform().config,
     sendStartupCatalogData: true,
     resourcesPath: options.resourcesPath,
     // Rerun/Restore from history: same host-neutral owners the extension's
