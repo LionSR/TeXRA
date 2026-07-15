@@ -1461,15 +1461,15 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.setStreamTaskState(
+      // Simulate persistence receiving run.config before progress state sees
+      // the RUNNING transition. The transition boundary must refresh the
+      // durable category before replacing stale execution state.
+      backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         'abc123' as ExecutionId,
       );
-      backend.state.updateStreamMetadata(stream, {
-        agentCategory: AgentCategory.ToolUse,
-      });
-      backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
+      backend.state.getOrCreateStreamState(stream, AgentCategory.Workflow);
       backend.state.updateStreamState(stream, (prev) => ({
         ...prev,
         conversationProgress: { toolCallCount: 7 },

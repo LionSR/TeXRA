@@ -266,9 +266,11 @@ export class ProgressFactApplier {
   private handleRunningTransition(
     streamId: StreamTabId,
   ): AgentCategory | undefined {
-    const knownCategory = this.getStreamCategory(streamId);
-    const category = knownCategory ?? AgentCategory.Workflow;
+    const provisionalCategory = this.getStreamCategory(streamId);
     this.state.resetStreamMetadataForRun(streamId);
+    const knownCategory =
+      this.getStreamCategory(streamId) ?? provisionalCategory;
+    const category = knownCategory ?? AgentCategory.Workflow;
     this.state.getOrCreateStreamState(streamId, category);
     this.state.resetFinishedChildCounters(streamId);
     this.pendingProgressUpdates.delete(streamId);
