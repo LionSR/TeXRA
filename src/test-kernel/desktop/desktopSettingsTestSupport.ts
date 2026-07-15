@@ -3,6 +3,7 @@ import { createModelSelectionController } from '@controllers/settingsView/Settin
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import type { DesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import type { DesktopHistoryOptions } from '@desktop/main/desktopHistoryHandlers';
+import type { DesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 
 // Shared imports - settings controllers
 import type { SettingsStatePorts } from '@shared/settingsView/types';
@@ -89,6 +90,29 @@ export function createStubDesktopCredentialSettingsController(
     postStartupData: noOp,
     refreshAuthDependentData: noOp,
     signInChatGpt: noOp,
+    ...overrides,
+  };
+}
+
+export function createStubDesktopToolingSettingsController(
+  overrides: Partial<DesktopToolingSettingsController> = {},
+): DesktopToolingSettingsController {
+  return {
+    toolsActions: {
+      openInstallUrl: noOp,
+      installExtension: noOp,
+      recheckStatus: noOp,
+      toggle: noOp,
+      runCommand: noOp,
+    },
+    latexActions: {
+      applySettings: noOp,
+      installLatexWorkshop: noOp,
+      runInstallCommand: noOp,
+      setConfigValue: noOp,
+    },
+    postLatexConfigValues: () => undefined,
+    postStartupData: noOp,
     ...overrides,
   };
 }
