@@ -158,6 +158,22 @@ describe('signInWithChatGptSubscription', () => {
     );
   });
 
+  it('cancels sign-in without logging an error when the dialog is dismissed', async () => {
+    mocks.showInformationMessage.mockResolvedValue(undefined);
+    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
+      await openBrowser('https://auth.openai.com/authorize?x=1');
+      return loopbackSession();
+    });
+
+    const signedIn = await signInWithChatGptSubscription('TestChannel');
+
+    expect(signedIn).toBe(false);
+    expect(mocks.openExternal).not.toHaveBeenCalled();
+    expect(mocks.writeText).not.toHaveBeenCalled();
+    expect(mocks.showLoggedErrorMessage).not.toHaveBeenCalled();
+    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
+  });
+
   it('returns true when OAuth and preference enablement both succeed', async () => {
     mocks.loginWithLoopback.mockResolvedValue(loopbackSession());
     mocks.setPreferCodexSubscription.mockResolvedValue({

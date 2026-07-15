@@ -15,6 +15,10 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
 
+/** Dismissing the browser-choice dialog cancels sign-in, matching this
+ * repo's modal convention (e.g. authCommands.ts, compareCommands.ts). */
+class ChatGptSignInCancelled extends Error {}
+
 async function runChatGptSignIn(): Promise<CodexSession> {
   const coordinator = codexCoordinator();
   if (vscode.env.remoteName) {
@@ -60,6 +64,9 @@ async function runChatGptSignIn(): Promise<CodexSession> {
         );
         return;
       }
+      if (choice !== OPEN_DEFAULT_BROWSER) {
+        throw new ChatGptSignInCancelled();
+      }
       await vscode.env.openExternal(vscode.Uri.parse(url));
     },
   });
@@ -80,6 +87,9 @@ export async function signInWithChatGptSubscription(
       () => runChatGptSignIn(),
     );
   } catch (error) {
+    if (error instanceof ChatGptSignInCancelled) {
+      return false;
+    }
     await showLoggedErrorMessage(channel, 'ChatGPT sign-in failed', error);
     return false;
   }
