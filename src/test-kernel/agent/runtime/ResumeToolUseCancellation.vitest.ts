@@ -1,9 +1,9 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchContext: vi.fn(),
-  computeDelegationDepthFromStorage: vi.fn(),
+  hasPersistedParent: vi.fn(),
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
@@ -22,8 +22,8 @@ vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
   runFlowWithLifecycle: mocks.runFlowWithLifecycle,
 }));
 
-vi.mock('@agent/runtime/delegationPolicy', () => ({
-  computeDelegationDepthFromStorage: mocks.computeDelegationDepthFromStorage,
+vi.mock('@agent/storage/executionLifecycle', () => ({
+  hasPersistedParent: mocks.hasPersistedParent,
 }));
 
 vi.mock('@agent/implementations/flows/reflection/runReflectionFlow', () => ({
@@ -58,6 +58,28 @@ interface TestFlowContext {
 }
 
 describe('resumeToolUseFromSnapshot cancellation handoff', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('resolves execution lineage before activating the resume stream', async () => {
+    const storageError = new Error('execution metadata unavailable');
+    const runtimeHost = { emit: vi.fn() } as unknown as AgentRuntimeHost;
+    const snapshot = {
+      executionId: 'e8048' as ExecutionId,
+      streamId: 'stream-8048' as StreamTabId,
+      agentConfig: { agent: 'test-agent', model: 'test-model' },
+      messages: [],
+    } as unknown as ToolUseSessionSnapshot;
+    mocks.hasPersistedParent.mockRejectedValueOnce(storageError);
+
+    await expect(resumeToolUseFromSnapshot(snapshot, runtimeHost)).rejects.toBe(
+      storageError,
+    );
+
+    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
+  });
+
   it('interrupts at flow attachment before substantive work starts', async () => {
     const executionId = 'e8049' as ExecutionId;
     const streamId = 'stream-8049' as StreamTabId;
@@ -87,7 +109,7 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
     };
 
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(context);
-    mocks.computeDelegationDepthFromStorage.mockResolvedValueOnce(0);
+    mocks.hasPersistedParent.mockResolvedValueOnce(false);
     mocks.runFlowWithLifecycle.mockImplementationOnce(
       async (
         _context: unknown,

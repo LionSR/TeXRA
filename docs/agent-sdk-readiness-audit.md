@@ -179,7 +179,7 @@ The public barrels (`@agent/index`, `@agent/core`, `@agent/types`) are
 1. **Deep-import leakage.** ~44 files in `packages/extension/src` import directly
    from `@agent/runtime/*`, `@agent/implementations/*`, `@agent/followUp/*`,
    `@agent/storage/*` (e.g. `StreamStatusService`, `ToolUseFollowUpQueue`,
-   `delegationPolicy`). Acceptable for internal command handlers, but there's no
+   `executionLifecycle`). Acceptable for internal command handlers, but there's no
    shielded "public runtime" subset.
    - **Action:** Add a small `@agent/runtime/index.ts` facade re-exporting the
      genuinely-public subset (`runAgent`/`validateExecutionRequest`, `executeAgent`,
@@ -243,8 +243,8 @@ tool-approval events live only on the bus, with no trace counterpart.
 
 TeXRA **already has** a working subagent mechanism: delegation tools
 (`delegate_workflow`, `delegate_agent`, `resume_agent`, `propose_workflow`,
-`propose_agent` in `shared/constants/delegationTools.ts`), depth tracking
-(`runtime/delegationPolicy.ts`), parent-linked spawns via the execution registry,
+`propose_agent` in `shared/constants/delegationTools.ts`), persisted child lineage
+(`storage/executionLifecycle.ts`), parent-linked spawns via the execution registry,
 and multi-agent presets (Physicist / Mathematician / CS-ML / Lean). The agents
 themselves are config-driven (5 workflow + 10 tool-use YAMLs over 2 flows) — so
 new subagents are a YAML + tool-list concern, not new code.
@@ -1107,7 +1107,7 @@ removal.
   `platform().workspaceState` as removable ("inline or drop"); #5349 had already removed the
   `core/config` sibling. This pass inlined the two state passthroughs at all repo call sites
   found by `rg`, including the CLI TUI harness (`ModelFactory`, `helperModel`, `registerMemory`,
-  `agentRegistry`, `diffCommandExecutor`, `texFormatter`, `delegationPolicy`, `OutputNode`,
+  `agentRegistry`, `diffCommandExecutor`, `texFormatter`, `executionLifecycle`, `OutputNode`,
   `LatexDiffManager`, `compileCheck`, `executionListing`, `indent`, `ExecutionsTool`,
   `goalStore`, `enumConfig`, `tui-harness`)
   to read `platform()` directly — the documented `@platform` accessor — and reduced
@@ -2565,7 +2565,7 @@ candidate is behavior-touching, so each is recorded for a future tidy pass, not 
   boilerplate.** `resumeToolUseFromSnapshot` (`runtime/executeAgent.ts:438`) repeats ~80% of
   `executeAgent`'s body (`buildAgentLaunchContext` → `withExecutionRunContext` → `runFlowWithLifecycle`
   → `runToolUseFlow` + `buildToolUseFlowResult`), differing only in resume-snapshot wiring and
-  delegation-depth recovery. Candidate to unify as `executeAgent` with a `resumeSnapshot` option.
+  persisted child-lineage lookup. Candidate to unify as `executeAgent` with a `resumeSnapshot` option.
   _Caveat / honest framing:_ the `runAgent` / `runAgentStream` two-tier split itself was re-confirmed
   "thin and correct" in §21 and is **not** the finding — the net-new sliver is only the resume path as
   a near-duplicate of the engine body. Behavior-touching (resume wiring); record, don't over-claim.

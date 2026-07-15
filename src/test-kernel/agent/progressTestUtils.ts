@@ -360,7 +360,6 @@ export function withTestRunContext<T>(
   streamId: string,
   fn: () => Promise<T>,
   options: {
-    delegationDepth?: number;
     approvalPromptsUnavailable?: boolean;
     runtimeUnavailableTools?: readonly string[];
     stopAfterCycle?: boolean;

@@ -120,10 +120,7 @@ export async function withExecutionRunContext<T>(
   ctx: AgentLaunchContext,
   options: Pick<
     CreateLaunchRunContextOptions,
-    | 'delegationDepth'
-    | 'approvalPromptsUnavailable'
-    | 'runtimeUnavailableTools'
-    | 'stopAfterCycle'
+    'approvalPromptsUnavailable' | 'runtimeUnavailableTools' | 'stopAfterCycle'
   >,
   fn: () => T | Promise<T>,
 ): Promise<T> {

@@ -136,7 +136,6 @@ export async function executeSubagent(
     };
   }
   const parentExecutionId = getRunContextExecutionId(parentContext);
-  const parentDelegationDepth = parentContext.delegationDepth ?? 0;
   const parentSession = currentSession();
   // Captured now (while the launching tool call's ALS frame is live) so the
   // child-run loop can still roll the child's cost into the parent run after
@@ -169,8 +168,6 @@ export async function executeSubagent(
     syntheticConfig,
     agentName,
     parentExecutionId,
-    undefined,
-    parentDelegationDepth + 1,
   );
 
   const inheritChildStreamApprovals = (resolvedStreamId: StreamTabId): void => {
@@ -219,7 +216,6 @@ export async function executeSubagent(
         isSubagent: true,
         enforceCategory: true,
         parentStreamId: orchestratorStreamId,
-        delegationDepth: parentDelegationDepth + 1,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
         stopAfterCycle: true,
@@ -282,7 +278,6 @@ export async function executeSubagent(
     parentSession,
     runtimeHost,
     startedAt,
-    delegationDepth: parentDelegationDepth + 1,
     workingDirectory,
     approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
     runtimeUnavailableTools: parentContext.runtimeUnavailableTools,

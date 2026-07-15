@@ -108,11 +108,9 @@ describe('CLI history status formatting', () => {
     expect(
       userStartedCliHistoryEntries([
         { id: 'root' },
-        { id: 'root-with-depth', delegationDepth: 0 },
         { id: 'child-with-parent', parentExecutionId: 'root' as ExecutionId },
-        { id: 'child-with-depth', delegationDepth: 1 },
       ]),
-    ).toEqual([{ id: 'root' }, { id: 'root-with-depth', delegationDepth: 0 }]);
+    ).toEqual([{ id: 'root' }]);
   });
 
   it('reports legacy terminal-status-free entries as unknown when no flow remains', () => {
@@ -129,7 +127,6 @@ describe('CLI history status formatting', () => {
         schemaVersion: EXECUTION_META_SCHEMA_VERSION,
         timestamp: '2026-06-03T05:03:06.717Z',
         category: 'toolUse',
-        delegationDepth: 0,
       },
       config: null,
       result: null,
@@ -140,7 +137,6 @@ describe('CLI history status formatting', () => {
     });
 
     expect(text).toContain('Status: resumable');
-    expect(text).toContain('Delegation depth: 0');
     expect(text).toContain('Resumable flow record: present');
     expect(text).not.toContain(`Status: ${EXECUTION_STATUS.COMPLETED}`);
   });

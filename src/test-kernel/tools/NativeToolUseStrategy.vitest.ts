@@ -80,7 +80,6 @@ function baseParams(parentSession = createTestSession()) {
     parentSession,
     runtimeHost: { emit: vi.fn() } as never,
     startedAt: Date.now(),
-    delegationDepth: 1,
     onStreamResolved: vi.fn(),
   };
 }

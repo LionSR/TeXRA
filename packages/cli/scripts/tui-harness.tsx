@@ -382,7 +382,6 @@ function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
       inputBasename: '-',
       category: AgentCategory.ToolUse,
       parentExecutionId: 'root-session' as ExecutionId,
-      delegationDepth: 1,
     },
     {
       id: 'bbbbbbbbbbbb' as ExecutionId,
@@ -392,7 +391,7 @@ function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
       status: CLI_HISTORY_RESUMABLE_STATUS,
       inputBasename: '-',
       category: AgentCategory.ToolUse,
-      delegationDepth: 1,
+      parentExecutionId: 'root-session' as ExecutionId,
     },
     {
       id: 'cccccccccccc' as ExecutionId,
