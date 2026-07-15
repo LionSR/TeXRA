@@ -21,6 +21,7 @@ import {
   formatCompactDuration,
   formatCompactTokenCount,
 } from '@utils/core';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import { numberedFollowUpPreview } from '../render/followUpPreview';
 import {
@@ -265,7 +266,7 @@ function pendingInteractionSegment({
 }): StatusBarSegment | undefined {
   if (depth <= 0) return undefined;
   return {
-    text: `${depth} ${kind}${depth === 1 ? '' : 's'}`,
+    text: formatResultCount(depth, kind),
     color: COLOR_WARNING,
     compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalDepth,
   };
@@ -725,9 +726,7 @@ export function buildStatusBarDisplay(
       // Exiting drops queued follow-ups silently — warn before the user
       // confirms with the second Ctrl-C.
       left.push({
-        text: `${queuedCount} queued follow-up${
-          queuedCount === 1 ? '' : 's'
-        } will be discarded`,
+        text: `${formatResultCount(queuedCount, 'queued follow-up')} will be discarded`,
         color: COLOR_ERROR,
       });
     }

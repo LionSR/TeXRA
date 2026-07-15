@@ -22,6 +22,7 @@ import {
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { assertNever } from '@utils/core';
+import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
@@ -422,8 +423,7 @@ function formatActiveChildren(
   const first = namedChildren[0];
   if (!first) return undefined;
 
-  const plural = kind === 'tool' ? 'tools' : 'subagents';
-  const label = namedChildren.length === 1 ? kind : plural;
+  const label = pluralize(namedChildren.length, kind);
   const suffix =
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
   return `${label}: ${first}${suffix}`;

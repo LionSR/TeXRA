@@ -15,6 +15,7 @@ import {
 import { debounce, filterNotNull, isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
   isRunningGroupEntry,
@@ -1049,8 +1050,7 @@ export class StreamLogStore {
       const count = parsed.preservedRawEntries.length;
       log.warn(
         LOG_TAG,
-        `Stream ${streamId}: ${count} persisted transcript ` +
-          `entr${count === 1 ? 'y' : 'ies'} did not parse; ` +
+        `Stream ${streamId}: ${formatResultCount(count, 'persisted transcript entry')} did not parse; ` +
           `preserving raw for round-trip on save.`,
       );
     }

@@ -31,6 +31,7 @@ import {
   AGENT_DECORATORS,
   getAgentCategoryDecorator,
 } from '@shared/utils/icons';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -143,7 +144,7 @@ export class StreamTab extends LitElement {
     const tooltip = this._tooltip;
     const agentDecorator = this._agentDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
-    const childStreamLabel = `${this.childCount} child stream${this.childCount > 1 ? 's' : ''}`;
+    const childStreamLabel = formatResultCount(this.childCount, 'child stream');
 
     return html`
       <div
