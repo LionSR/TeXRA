@@ -12,7 +12,12 @@ import {
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
+const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
+
+/** Dismissing the browser-choice dialog cancels sign-in, matching this
+ * repo's modal convention (e.g. authCommands.ts, compareCommands.ts). */
+class ChatGptSignInCancelled extends Error {}
 
 async function runChatGptSignIn(): Promise<CodexSession> {
   const coordinator = codexCoordinator();
@@ -40,21 +45,29 @@ async function runChatGptSignIn(): Promise<CodexSession> {
   return loginWithLoopback({
     coordinator,
     openBrowser: async (url) => {
-      await vscode.env.openExternal(vscode.Uri.parse(url));
       // `openExternal` always targets the system default browser. The loopback
-      // callback accepts the redirect from *any* browser, so offer the raw link
-      // for users whose ChatGPT subscription is signed in elsewhere (e.g. their
-      // default browser is Chrome but the subscription lives in Firefox).
-      void vscode.window
-        .showInformationMessage(
-          'Signing in with ChatGPT in your default browser. Using a different browser for ChatGPT? Copy the link and open it there.',
-          COPY_SIGN_IN_LINK,
-        )
-        .then((choice) => {
-          if (choice === COPY_SIGN_IN_LINK) {
-            void vscode.env.clipboard.writeText(url);
-          }
-        });
+      // callback accepts the redirect from *any* browser, so ask up front
+      // instead of racing an auto-launched tab against a dismissible toast —
+      // users whose ChatGPT subscription lives in a different browser (e.g.
+      // default is Safari but ChatGPT is signed in on Chrome) get a link they
+      // can paste there instead.
+      const choice = await vscode.window.showInformationMessage(
+        'Sign in with ChatGPT. If your ChatGPT session is in a different browser than your OS default, copy the link and open it there instead.',
+        { modal: true },
+        OPEN_DEFAULT_BROWSER,
+        COPY_SIGN_IN_LINK,
+      );
+      if (choice === COPY_SIGN_IN_LINK) {
+        await vscode.env.clipboard.writeText(url);
+        void vscode.window.showInformationMessage(
+          'Sign-in link copied. Paste it into the browser where you use ChatGPT.',
+        );
+        return;
+      }
+      if (choice !== OPEN_DEFAULT_BROWSER) {
+        throw new ChatGptSignInCancelled();
+      }
+      await vscode.env.openExternal(vscode.Uri.parse(url));
     },
   });
 }
@@ -74,6 +87,9 @@ export async function signInWithChatGptSubscription(
       () => runChatGptSignIn(),
     );
   } catch (error) {
+    if (error instanceof ChatGptSignInCancelled) {
+      return false;
+    }
     await showLoggedErrorMessage(channel, 'ChatGPT sign-in failed', error);
     return false;
   }
