@@ -115,8 +115,31 @@ describe('signInWithChatGptSubscription', () => {
     );
   });
 
-  it('opens the default browser and offers the link for a non-default browser', async () => {
+  it('opens the default browser when the user chooses it', async () => {
     mocks.openExternal.mockResolvedValue(true);
+    mocks.showInformationMessage.mockResolvedValue('Open in Default Browser');
+    mocks.setPreferCodexSubscription.mockResolvedValue({
+      effective: true,
+      target: 'global',
+    });
+    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
+      await openBrowser('https://auth.openai.com/authorize?x=1');
+      return loopbackSession();
+    });
+
+    await signInWithChatGptSubscription('TestChannel');
+
+    expect(mocks.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('different browser'),
+      { modal: true },
+      'Open in Default Browser',
+      'Copy Sign-in Link',
+    );
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1);
+    expect(mocks.writeText).not.toHaveBeenCalled();
+  });
+
+  it('copies the sign-in link instead of opening the browser when chosen', async () => {
     mocks.showInformationMessage.mockResolvedValue('Copy Sign-in Link');
     mocks.setPreferCodexSubscription.mockResolvedValue({
       effective: true,
@@ -128,15 +151,8 @@ describe('signInWithChatGptSubscription', () => {
     });
 
     await signInWithChatGptSubscription('TestChannel');
-    // The deferred clipboard write is queued on a resolved-promise microtask.
-    await Promise.resolve();
-    await Promise.resolve();
 
-    expect(mocks.openExternal).toHaveBeenCalledTimes(1);
-    expect(mocks.showInformationMessage).toHaveBeenCalledWith(
-      expect.stringContaining('different browser'),
-      'Copy Sign-in Link',
-    );
+    expect(mocks.openExternal).not.toHaveBeenCalled();
     expect(mocks.writeText).toHaveBeenCalledWith(
       'https://auth.openai.com/authorize?x=1',
     );
