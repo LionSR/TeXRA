@@ -1,14 +1,34 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - progress view component types
 import type { ExternalInquiryPanel } from '@progressView/frontend/components/ExternalInquiryPanel';
 
 // Local imports - shared schemas
+import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+
+interface PostedMessage {
+  command: string;
+  action?: string;
+  threadId?: string;
+  draft?: unknown;
+}
+
+let posted: PostedMessage[] = [];
+
+// hostBridge resolves this global when the panel module is first imported.
+(globalThis as Record<string, unknown>)[HOST_BRIDGE_API_KEY] = {
+  postMessage: (message: unknown) => {
+    posted.push(message as PostedMessage);
+  },
+  getState: () => undefined,
+  setState: () => undefined,
+};
 
 function createPermission(
   overrides: Partial<ExternalInquiryPermission> = {},
@@ -58,6 +78,14 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/ExternalInquiryPanel'),
   );
+
+  beforeEach(() => {
+    posted = [];
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('renders wa-textarea for the answer and session-link inputs, never a native textarea', async () => {
     const element = await mountPanel();
@@ -115,5 +143,93 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
         sessionLinks: ['https://chatgpt.com/c/abc'],
       },
     ]);
+  });
+
+  it('debounces draft persistence from the latest input', async () => {
+    const element = await mountPanel(
+      createPermission({
+        requestId: 'debounce-1',
+        threadId: 'thread-debounce',
+      }),
+    );
+    const answerInput = element.shadowRoot!.querySelector(
+      '.external-inquiry-request__answer-input',
+    ) as HTMLElement;
+    vi.useFakeTimers();
+
+    setTextareaValue(answerInput, 'first answer');
+    vi.advanceTimersByTime(399);
+    setTextareaValue(answerInput, 'latest answer');
+    vi.advanceTimersByTime(399);
+
+    expect(posted).toEqual([]);
+
+    vi.advanceTimersByTime(1);
+
+    expect(posted).toEqual([
+      {
+        command: PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION,
+        action: 'draft',
+        threadId: 'thread-debounce',
+        draft: { answer: 'latest answer', sessionLinks: '' },
+      },
+    ]);
+  });
+
+  it('flushes a pending draft once when disconnected', async () => {
+    const element = await mountPanel(
+      createPermission({
+        requestId: 'disconnect-1',
+        threadId: 'thread-disconnect',
+      }),
+    );
+    const answerInput = element.shadowRoot!.querySelector(
+      '.external-inquiry-request__answer-input',
+    ) as HTMLElement;
+    vi.useFakeTimers();
+
+    setTextareaValue(answerInput, 'saved on disconnect');
+    element.remove();
+
+    expect(posted).toEqual([
+      {
+        command: PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION,
+        action: 'draft',
+        threadId: 'thread-disconnect',
+        draft: { answer: 'saved on disconnect', sessionLinks: '' },
+      },
+    ]);
+
+    vi.advanceTimersByTime(400);
+    expect(posted).toHaveLength(1);
+  });
+
+  it('cancels the timer and flushes the saved draft on permission replacement', async () => {
+    const element = await mountPanel(
+      createPermission({ requestId: 'replace-1', threadId: 'thread-old' }),
+    );
+    const answerInput = element.shadowRoot!.querySelector(
+      '.external-inquiry-request__answer-input',
+    ) as HTMLElement;
+    vi.useFakeTimers();
+
+    setTextareaValue(answerInput, 'answer for old permission');
+    element.permission = createPermission({
+      requestId: 'replace-2',
+      threadId: 'thread-new',
+    });
+    await element.updateComplete;
+
+    expect(posted).toEqual([
+      {
+        command: PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION,
+        action: 'draft',
+        threadId: 'thread-old',
+        draft: { answer: 'answer for old permission', sessionLinks: '' },
+      },
+    ]);
+
+    vi.advanceTimersByTime(400);
+    expect(posted).toHaveLength(1);
   });
 });
