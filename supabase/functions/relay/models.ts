@@ -312,6 +312,10 @@ export function isModelAllowedForTier(
   }
   if (!modelName) return false;
   if (isRetiredModelRequest(modelName)) return false;
+  // Ultra-only-provider enforcement lives at the route level (the URL
+  // provider segment, checked against ULTRA_ONLY_PROVIDER_SET before this
+  // function runs), not here by model name — this stays a blanket allow for
+  // Max.
   if (tier === MAX_TIER) return true;
 
   const models = resolveAllModelsByApiName(modelName);
