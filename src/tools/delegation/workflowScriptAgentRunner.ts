@@ -1,8 +1,5 @@
 import { resolveChildRunOutput } from '@agent/storage';
-import type {
-  WorkflowAgentRunner,
-  WorkflowAgentInvocation,
-} from '@agent/workflowScript';
+import type { WorkflowAgentRunner } from '@agent/workflowScript';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
@@ -41,12 +38,6 @@ async function resolveInvocationInputFiles(
   return resolved.filter(filterNotNullish);
 }
 
-function inputFilesFrom(
-  invocation: WorkflowAgentInvocation,
-): readonly string[] {
-  return invocation.options.inputFiles ?? [];
-}
-
 /** Build the production `agent()` adapter for one workflow-script run. */
 export function createWorkflowScriptAgentRunner(
   parent: LaunchRunContext,
@@ -70,7 +61,7 @@ export function createWorkflowScriptAgentRunner(
       }),
       resolveInvocationInputFiles(
         runScope.executionId,
-        inputFilesFrom(invocation),
+        invocation.options.inputFiles ?? [],
       ),
     ]);
     const configPayload: AgentConfigPayload = {
