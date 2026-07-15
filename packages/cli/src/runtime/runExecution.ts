@@ -1,7 +1,6 @@
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { tryPlatform } from '@platform/platform';
 import { flushPendingRunTraces, StreamSnapshotStore } from '@transcript';
-import { writeTerminalStatus } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -13,9 +12,11 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
+import { finalizeCliExecution } from './executionFinalization';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { initializeHeadlessTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
@@ -107,7 +108,13 @@ export async function executeCliConfig<
   const { result } = execution;
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    await finalizeCliExecution(
+      executionId,
+      EXECUTION_STATUS.ERROR,
+      'delete',
+      (finalizationError) =>
+        writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
+    );
     writeTextStderr(
       categoryMismatchMessage ??
         `Agent resolved to a non ${expectedCategory} run.`,
@@ -203,21 +210,38 @@ export async function executeCliRequest(
     ? request.executionId
     : undefined;
   let shutdownInterrupted = false;
+  let shutdownFinalizationFailureReported = false;
+  const reportFinalizationFailure = (error: unknown): void => {
+    interactionHost.emit('requestShowError', {
+      message: toErrorMessage(error),
+    });
+  };
+  const reportShutdownFinalizationFailure = (error: Error): void => {
+    if (shutdownFinalizationFailureReported) return;
+    shutdownFinalizationFailureReported = true;
+    reportFinalizationFailure(error);
+  };
   const disposeShutdownStatus = ownedExecutionId
     ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
         shutdownInterrupted = true;
-        await writeTerminalStatus(
+        await finalizeCliExecution(
           ownedExecutionId,
           EXECUTION_STATUS.INTERRUPTED,
+          'preserve',
+          reportShutdownFinalizationFailure,
         );
       })
     : undefined;
+  let lifecycleStarted = false;
   const invoke = (): Promise<ExecuteAgentResult> =>
     runAgent(request, {
       runtimeHost: interactionHost,
       session,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
+      onRun: () => {
+        lifecycleStarted = true;
+      },
       stopAfterCycle: options.stopAfterCycle,
       approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
       runtimeUnavailableTools: [
@@ -247,8 +271,18 @@ export async function executeCliRequest(
       : trackedInvoke());
     runResult = { ok: true, result };
   } catch (err) {
-    if (options.markErrorOnThrow && request.executionId && !invokeSettledOk) {
-      await writeTerminalStatus(request.executionId, EXECUTION_STATUS.ERROR);
+    if (
+      options.markErrorOnThrow &&
+      request.executionId &&
+      !invokeSettledOk &&
+      !lifecycleStarted
+    ) {
+      await finalizeCliExecution(
+        request.executionId,
+        EXECUTION_STATUS.ERROR,
+        'delete',
+        reportFinalizationFailure,
+      );
     }
     // Only a classified, already-handled AgentError resolves to a non-zero
     // exit code here; anything else (e.g. registerExecution disk I/O,
@@ -262,7 +296,12 @@ export async function executeCliRequest(
     // If the run settles while shutdown is in progress, keep the
     // signal-owned interrupted status as the final write.
     if (shutdownInterrupted && ownedExecutionId) {
-      await writeTerminalStatus(ownedExecutionId, EXECUTION_STATUS.INTERRUPTED);
+      await finalizeCliExecution(
+        ownedExecutionId,
+        EXECUTION_STATUS.INTERRUPTED,
+        'preserve',
+        reportShutdownFinalizationFailure,
+      );
     }
     detachResultToast();
     detachRunProgressRenderer();
@@ -291,6 +330,9 @@ export async function executeCliRequest(
     };
   }
 
-  const outcome = await readCliRunOutcome(runResult.result);
+  const outcome = await readCliRunOutcome(
+    runResult.result,
+    reportFinalizationFailure,
+  );
   return { ok: true, result: { ...runResult.result, outcome } };
 }

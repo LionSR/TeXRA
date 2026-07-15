@@ -13,10 +13,18 @@ import pDefer, { type DeferredPromise } from 'p-defer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  finalizeExecution: vi.fn(),
+  synchronizeAgentResultOutcome: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   enqueueChildRunFollowUp: vi.fn(),
   wakeChildRunFollowUp: vi.fn(),
+}));
+
+vi.mock('@agent/storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage')>()),
+  finalizeExecution: mocks.finalizeExecution,
+  synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
 }));
 
 vi.mock('@tools/childRunDelivery', () => ({
@@ -141,6 +149,12 @@ function createFakeStrategy(): FakeStrategyHandle {
 beforeEach(() => {
   session = defaultSession();
   vi.clearAllMocks();
+  mocks.finalizeExecution.mockResolvedValue({
+    status: 'durable',
+    terminalStatusPersisted: true,
+    flowRecord: 'deleted',
+  });
+  mocks.synchronizeAgentResultOutcome.mockResolvedValue(undefined);
   mocks.persistChildRunReport.mockImplementation(async (_id, msg: string) => {
     return { kind: 'persisted' as const, msg };
   });
@@ -360,7 +374,7 @@ describe('childRunLoop E2E fixtures', () => {
     expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(1);
   });
 
-  it('stop between turns (native, no ChildStream) settles and untracks the dangling handle — no ghost subagent', async () => {
+  it('stop between turns settles without result sync when terminal metadata fails', async () => {
     // Regression: for a native strategy (no ChildStream — each turn owns its
     // own AgentExecutionHandle via runFlowWithLifecycle, not the loop), a
     // stop landing BETWEEN turns interrupts the loop through the run handle
@@ -374,6 +388,12 @@ describe('childRunLoop E2E fixtures', () => {
     const parentStreamId = 'parent' as StreamTabId;
     const executionId = 'exec-ghost-handle-stop' as ExecutionId;
     const { strategy, resolveTurn } = createFakeStrategy();
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: new Error('metadata disk full'),
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
 
     startChildRunLoop({
       childStreamId,
@@ -422,6 +442,7 @@ describe('childRunLoop E2E fixtures', () => {
     // Untracked: no longer resumable — a later delegate_agent(execution_id=…)
     // would correctly report "not found" instead of finding a ghost handle.
     expect(session.executions.getHandle(executionId)).toBeUndefined();
+    expect(mocks.synchronizeAgentResultOutcome).not.toHaveBeenCalled();
   });
 
   it('reattaches the loop interrupt handler immediately when a turn settles, before delivery (Copilot review: no interrupt gap during delivery)', async () => {

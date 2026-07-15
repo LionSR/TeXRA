@@ -6,9 +6,9 @@ import { tryPlatform } from '@platform/platform';
 
 // Local imports - agent
 import {
+  finalizeExecution,
   getExecutionStore,
   registerExecution,
-  writeTerminalStatus,
 } from '@agent/storage';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
@@ -466,8 +466,8 @@ export class BashTool extends defineTool({
             : 0,
         );
 
+        const store = getExecutionStore(executionId);
         try {
-          const store = getExecutionStore(executionId);
           await store.writeResultMeta({
             producer: 'backgroundBash',
             exitCode: result.exitCode ?? (result.success ? 0 : 1),
@@ -476,13 +476,23 @@ export class BashTool extends defineTool({
             timedOut: result.timedOut ?? false,
             command,
           });
-          await writeTerminalStatus(
+        } catch (err: unknown) {
+          logBackgroundFailure('persist result metadata', err);
+        }
+        try {
+          const finalization = await finalizeExecution({
             executionId,
-            backgroundBashTerminalStatus(result.success),
-          );
+            terminalStatus: backgroundBashTerminalStatus(result.success),
+            flowRecord: 'delete',
+          });
+          if (finalization.status === 'failed') throw finalization.error;
+        } catch (err: unknown) {
+          logBackgroundFailure('finalize execution', err);
+        }
+        try {
           await store.writeReport(msg);
         } catch (err: unknown) {
-          logBackgroundFailure('persist', err);
+          logBackgroundFailure('persist report', err);
         }
 
         await deliverAndFinalize(msg, { wallTimeMs, error, autoClose: true });
@@ -492,13 +502,19 @@ export class BashTool extends defineTool({
       const { error } = outcome;
       const msg = formatBashError(executionId, command, error);
       try {
-        await writeTerminalStatus(
+        const finalization = await finalizeExecution({
           executionId,
-          backgroundBashTerminalStatus(false),
-        );
+          terminalStatus: backgroundBashTerminalStatus(false),
+          flowRecord: 'delete',
+        });
+        if (finalization.status === 'failed') throw finalization.error;
+      } catch (err: unknown) {
+        logBackgroundFailure('finalize execution', err);
+      }
+      try {
         await getExecutionStore(executionId).writeReport(msg);
       } catch (err: unknown) {
-        logBackgroundFailure('persist', err);
+        logBackgroundFailure('persist report', err);
       }
 
       await deliverAndFinalize(msg, { error, autoClose: true });

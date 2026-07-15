@@ -14,13 +14,15 @@ const mocks = vi.hoisted(() => {
   return {
     executeCliConfig: vi.fn(),
     emitCliResult: vi.fn(),
+    finalizeExecution: vi.fn(),
     withExpandedRunInputs: vi.fn(),
     initLocalCliPlatform: vi.fn(),
     isAuthenticated: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
     selectCliRunModel: vi.fn(),
+    writeErrorStderr: vi.fn(),
     writeResultMeta: vi.fn(),
-    writeTerminalStatus: vi.fn(),
+    writeTextStderr: vi.fn(),
   };
 });
 
@@ -29,7 +31,7 @@ vi.mock('@agent/storage', async (importOriginal) => ({
   getExecutionStore: vi.fn(() => ({
     writeResultMeta: mocks.writeResultMeta,
   })),
-  writeTerminalStatus: mocks.writeTerminalStatus,
+  finalizeExecution: mocks.finalizeExecution,
 }));
 
 vi.mock('@agent/index', () => ({
@@ -75,6 +77,11 @@ vi.mock('@cli/runtime/runExecution', () => ({
   executeCliConfig: mocks.executeCliConfig,
 }));
 
+vi.mock('@cli/runtime/logSinks', () => ({
+  writeErrorStderr: mocks.writeErrorStderr,
+  writeTextStderr: mocks.writeTextStderr,
+}));
+
 vi.mock('@cli/runtime/workflowInputs', () => ({
   withExpandedRunInputs: mocks.withExpandedRunInputs,
   hasMixedStdinWorkflowInputSpecs: vi.fn((inputFiles: readonly string[]) => {
@@ -97,6 +104,11 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 describe('CLI workflow run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.finalizeExecution.mockResolvedValue({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    });
     mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'polish',
       category: AgentCategory.Workflow,
@@ -574,9 +586,59 @@ describe('CLI workflow run command', () => {
         cost: 0,
       },
     });
-    expect(mocks.writeTerminalStatus).toHaveBeenCalledWith(
-      'exec-copy-fail',
-      EXECUTION_STATUS.ERROR,
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-copy-fail',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
+  });
+
+  it('keeps a copy error primary when execution finalization also fails', async () => {
+    mocks.executeCliConfig.mockResolvedValueOnce({
+      ok: true,
+      executionId: 'exec-copy-fail',
+      result: {
+        category: AgentCategory.Workflow,
+        executionId: 'exec-copy-fail',
+        streamId: 'stream-copy-fail',
+        outcome: RUN_OUTCOME.COMPLETED,
+        outputs: [
+          {
+            round: 1,
+            relativePath: 'r1/paper.tex',
+            absolutePath: '/missing/run/r1/paper.tex',
+            location: 'runStorage',
+            originalPath: '/workspace/paper.tex',
+            added: null,
+            removed: null,
+          },
+        ],
+        compileFailures: [],
+      },
+    });
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      error: new Error('terminal metadata disk full'),
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
+
+    const { runWorkflowAgent } = await import('@cli/commands/workflow');
+    await expect(
+      runWorkflowAgent(cliContext(), {
+        agent: 'polish',
+        inputFiles: ['paper.tex'],
+        contextFiles: [],
+        output: 'polished.tex',
+        instruction: '',
+      }),
+    ).resolves.toBe(CliExitCode.AgentError);
+
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'Warning: Failed to persist error status for execution exec-copy-fail: terminal metadata disk full',
+    );
+    expect(mocks.writeErrorStderr).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: 'ENOENT' }),
     );
   });
 

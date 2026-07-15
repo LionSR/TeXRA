@@ -208,7 +208,7 @@ export interface ExecutionKVStore {
  */
 class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   constructor(private readonly executionId: ExecutionId) {
-    super(resolveRunStoragePath(executionId));
+    super(resolveRunStoragePath(executionId), { throwOnErrors: true });
   }
 
   async clear(): Promise<void> {
