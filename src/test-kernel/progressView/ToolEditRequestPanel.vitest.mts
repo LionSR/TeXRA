@@ -56,10 +56,14 @@ function querySplitButton(element: ToolEditRequestPanel): ApproveSplit | null {
   );
 }
 
-function recordPermissionActions(element: ToolEditRequestPanel): string[] {
-  const actions: string[] = [];
+function recordPermissionActions(
+  element: ToolEditRequestPanel,
+): Array<{ action: string }> {
+  const actions: Array<{ action: string }> = [];
   element.addEventListener('permission-action', (event) => {
-    actions.push((event as CustomEvent<{ action: string }>).detail.action);
+    actions.push(
+      (event as CustomEvent<{ decision: { action: string } }>).detail.decision,
+    );
   });
   return actions;
 }
@@ -132,7 +136,7 @@ describe('tool-edit-request-panel', () => {
     expect(split?.canBypass).toBe(true);
 
     expect(element.handleKeyboardShortcut('a')).toBe(true);
-    expect(actions).toEqual(['approveSession']);
+    expect(actions).toEqual([{ action: 'approveSession' }]);
   });
 
   it('ignores "a" while the rejection feedback box is open', async () => {

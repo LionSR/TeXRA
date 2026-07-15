@@ -46,16 +46,16 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     const data = this.permission.data;
     switch (key) {
       case 'r':
-        this.emitAction('retry');
+        this.emitAction({ action: 'retry' });
         return true;
       case 'k':
         if (isCredentialExhausted(data.errorDetails)) {
-          this.emitAction('useOwnApiKey');
+          this.emitAction({ action: 'useOwnApiKey' });
           return true;
         }
         return false;
       case 'escape':
-        this.emitAction('cancel');
+        this.emitAction({ action: 'cancel' });
         return true;
       default:
         return false;
@@ -125,7 +125,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
                 : 'Use your own API key (k)',
               action: 'useOwnApiKey',
               disabled,
-              onClick: () => this.emitAction('useOwnApiKey'),
+              onClick: () => this.emitAction({ action: 'useOwnApiKey' }),
             }),
           )}
           ${renderLabeledActionButton({
@@ -134,7 +134,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
             title: copilotQuotaExhausted ? 'Retry Copilot (r)' : 'Retry (r)',
             action: 'retry',
             disabled,
-            onClick: () => this.emitAction('retry'),
+            onClick: () => this.emitAction({ action: 'retry' }),
           })}
           ${renderLabeledActionButton({
             icon: 'close',
@@ -142,7 +142,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
             title: 'Dismiss (Esc)',
             action: 'cancel',
             disabled,
-            onClick: () => this.emitAction('cancel'),
+            onClick: () => this.emitAction({ action: 'cancel' }),
           })}
         </div>
       </div>

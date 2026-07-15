@@ -5,6 +5,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
   type GettingStartedActionDetail,
+  type ProgressViewInboundMessage,
   type StreamTabId,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -276,29 +277,16 @@ export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
   ctx: MessageHandlerContext,
 ): void {
-  const {
-    permission,
-    action,
-    feedback,
-    modelOverride,
-    agentOverride,
-    answer,
-    answers,
-    sessionLinks,
-  } = event.detail;
+  const detail = event.detail;
 
-  switch (permission.kind) {
-    case PERMISSION_KIND.TOOL_EDIT:
-    case PERMISSION_KIND.BASH: {
-      const command =
-        permission.kind === PERMISSION_KIND.TOOL_EDIT
-          ? PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
-          : PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION;
+  switch (detail.kind) {
+    case PERMISSION_KIND.TOOL_EDIT: {
+      const { data, decision } = detail;
       // "Yolo (this session)" approves the current request like a normal
       // approve and enables auto-approval (edits + bash) for the rest of the
       // stream — mirroring the toolbar shield and the CLI's `a` = approve
       // session. It never reaches the backend approval protocol.
-      const isYolo = action === APPROVE_SESSION_ACTION;
+      const isYolo = decision.action === APPROVE_SESSION_ACTION;
       if (isYolo) {
         // Enable session bypass BEFORE settling the approval. Webview messages
         // are delivered FIFO and ENABLE_APPROVAL_BYPASS sets the per-stream
@@ -308,66 +296,100 @@ export function handlePermissionAction(
         // inversion-proof: edit and bash bypass can be decoupled on a delegated
         // child stream. The button only renders with a real stream (see
         // canBypass), but guard anyway.
-        const stream = permission.data.streamId;
+        const stream = data.streamId;
         if (stream) {
           postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, {
             stream,
           });
         }
       }
-      postMessage(command, {
-        requestId: permission.data.requestId,
-        action: isYolo ? 'approve' : action,
-        feedback,
-      });
+      const action = isYolo ? 'approve' : decision.action;
+      postPermissionMessage(
+        decision.action === 'reject'
+          ? {
+              command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+              requestId: data.requestId,
+              action,
+              ...(decision.feedback ? { feedback: decision.feedback } : {}),
+            }
+          : {
+              command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+              requestId: data.requestId,
+              action,
+            },
+      );
       // Only remove for terminal actions (approve/reject/approveSession).
       // Non-terminal actions like openDiff, previewProposed, showLatexdiff
       // just open editors without settling the approval.
-      if (action === 'approve' || action === 'reject' || isYolo) {
-        removePrompt(ctx, permission.kind, permission.data.requestId);
+      if (action === 'approve' || action === 'reject') {
+        removePrompt(ctx, detail.kind, data.requestId);
       }
       break;
     }
-    case PERMISSION_KIND.RETRY:
-      if (action === 'useOwnApiKey') {
+    case PERMISSION_KIND.BASH: {
+      const { data, decision } = detail;
+      const isYolo = decision.action === APPROVE_SESSION_ACTION;
+      if (isYolo && data.streamId) {
+        postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, {
+          stream: data.streamId,
+        });
+      }
+      postPermissionMessage(
+        decision.action === 'reject'
+          ? {
+              command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
+              requestId: data.requestId,
+              action: decision.action,
+              ...(decision.feedback ? { feedback: decision.feedback } : {}),
+            }
+          : {
+              command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
+              requestId: data.requestId,
+              action: 'approve',
+            },
+      );
+      removePrompt(ctx, detail.kind, data.requestId);
+      break;
+    }
+    case PERMISSION_KIND.RETRY: {
+      const { data, decision } = detail;
+      if (decision.action === 'useOwnApiKey') {
         // Non-terminal: panel stays open. The extension handler will
         // trigger retry on success, or leave the panel for the user
         // to choose Retry/Dismiss if the user cancels the key picker.
-        const exhaustionReason = permission.data.errorDetails?.exhaustionReason;
+        const exhaustionReason = data.errorDetails?.exhaustionReason;
         postMessage(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY, {
-          stream: permission.data.streamId,
-          requestId: permission.data.requestId,
-          model: permission.data.model,
+          stream: data.streamId,
+          requestId: data.requestId,
+          model: data.model,
           exhaustionReason,
           // Subscription quota exhaustion always means the OpenAI key is the
           // fallback credential, regardless of how the error tagged provider.
           provider:
             exhaustionReason === 'chatgpt-subscription'
               ? 'openai'
-              : permission.data.errorDetails?.provider,
-          viaRelay:
-            permission.data.errorDetails?.isRelayError === true
-              ? true
-              : undefined,
+              : data.errorDetails?.provider,
+          viaRelay: data.errorDetails?.isRelayError === true ? true : undefined,
         });
         break;
       }
-      if (action === 'retry') {
+      if (decision.action === 'retry') {
         postMessage(PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST, {
-          stream: permission.data.streamId,
-          requestId: permission.data.requestId,
-          feedback,
+          stream: data.streamId,
+          requestId: data.requestId,
         });
       } else {
         postMessage(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST, {
-          stream: permission.data.streamId,
-          requestId: permission.data.requestId,
+          stream: data.streamId,
+          requestId: data.requestId,
         });
       }
       // Optimistic removal
-      removePrompt(ctx, PERMISSION_KIND.RETRY, permission.data.streamId);
+      removePrompt(ctx, PERMISSION_KIND.RETRY, data.streamId);
       break;
+    }
     case PERMISSION_KIND.PROPOSAL: {
+      const { data, decision } = detail;
       // Approve-all accepts this proposal and enables delegated-task approval
       // for the rest of the stream. It never reaches the backend proposal
       // protocol (action stays approve|reject|setup). Enable the bypass BEFORE
@@ -380,81 +402,103 @@ export function handlePermissionAction(
       // auto-resolve the open proposal), and a toggle would then flip bypass back
       // OFF here — the opposite of "enable". Mirrors edit/bash ENABLE_APPROVAL_BYPASS.
       const approveAllDelegatedWork =
-        action === APPROVE_ALL_DELEGATED_WORK_ACTION;
+        decision.action === APPROVE_ALL_DELEGATED_WORK_ACTION;
       if (approveAllDelegatedWork) {
         postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS, {
-          stream: permission.data.streamId,
-          initiatingProposalId: permission.data.proposalId,
+          stream: data.streamId,
+          initiatingProposalId: data.proposalId,
         });
       }
-      postMessage(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
-        proposalId: permission.data.proposalId,
-        action: approveAllDelegatedWork ? 'approve' : action,
-        feedback,
-        model: modelOverride,
-        agent: agentOverride,
-      });
+      const message: ProgressViewInboundMessage =
+        decision.action === 'approve' || approveAllDelegatedWork
+          ? {
+              command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+              proposalId: data.proposalId,
+              action: 'approve',
+              ...(decision.model ? { model: decision.model } : {}),
+              ...(decision.agent ? { agent: decision.agent } : {}),
+            }
+          : decision.action === 'reject'
+            ? {
+                command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+                proposalId: data.proposalId,
+                action: 'reject',
+                ...(decision.feedback ? { feedback: decision.feedback } : {}),
+              }
+            : {
+                command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+                proposalId: data.proposalId,
+                action: 'setup',
+              };
+      postPermissionMessage(message);
       // Optimistic removal — track resolved ID so late SHOW is a no-op
       const removed = removePrompt(
         ctx,
         PERMISSION_KIND.PROPOSAL,
-        permission.data.proposalId,
+        data.proposalId,
       );
       if (!removed) {
-        addResolvedProposalId(permission.data.proposalId);
+        addResolvedProposalId(data.proposalId);
       }
       break;
     }
-    case PERMISSION_KIND.PLAN_APPROVAL:
-      postMessage(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION, {
-        approvalId: permission.data.approvalId,
-        action,
-        feedback,
-      });
-      removePrompt(
-        ctx,
-        PERMISSION_KIND.PLAN_APPROVAL,
-        permission.data.approvalId,
+    case PERMISSION_KIND.PLAN_APPROVAL: {
+      const { data, decision } = detail;
+      postPermissionMessage(
+        decision.action === 'reject'
+          ? {
+              command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+              approvalId: data.approvalId,
+              action: decision.action,
+              ...(decision.feedback ? { feedback: decision.feedback } : {}),
+            }
+          : {
+              command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+              approvalId: data.approvalId,
+              action: decision.action,
+            },
       );
+      removePrompt(ctx, PERMISSION_KIND.PLAN_APPROVAL, data.approvalId);
       break;
+    }
     case PERMISSION_KIND.EXTERNAL_INQUIRY: {
-      const { requestId } = permission.data;
-      // The host now packs `threadId` into `requestId` for the showExternalInquiry
-      // emit; the panel addresses inquiries by their durable thread id.
-      const threadId = (permission.data.threadId ?? requestId) as string;
-      if (action === 'submit' && answer !== undefined) {
-        postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
+      const { data, decision } = detail;
+      if (decision.action === 'submit') {
+        postPermissionMessage({
+          command: PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION,
           action: 'submit',
-          threadId,
-          answer,
-          sessionLinks,
+          threadId: data.threadId,
+          answer: decision.answer,
+          ...(decision.sessionLinks
+            ? { sessionLinks: decision.sessionLinks }
+            : {}),
         });
       } else {
-        // 'reject' (and any other non-submit action) → drop the thread.
-        postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
+        postPermissionMessage({
+          command: PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION,
           action: 'drop',
-          threadId,
-          feedback,
+          threadId: data.threadId,
+          ...(decision.feedback ? { feedback: decision.feedback } : {}),
         });
       }
-      removePrompt(ctx, PERMISSION_KIND.EXTERNAL_INQUIRY, requestId);
-      clearInquiryDraft(requestId);
+      removePrompt(ctx, PERMISSION_KIND.EXTERNAL_INQUIRY, data.requestId);
+      clearInquiryDraft(data.requestId);
       break;
     }
     case PERMISSION_KIND.USER_QUESTION: {
-      const { requestId } = permission.data;
-      const message =
-        action === 'submit'
-          ? answers
-            ? { requestId, action, answers }
-            : undefined
-          : action === 'reject' || action === 'skip'
-            ? { requestId, action, feedback }
-            : undefined;
-      if (!message) return;
-      postMessage(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION, message);
-      removePrompt(ctx, PERMISSION_KIND.USER_QUESTION, requestId);
+      const { data, decision } = detail;
+      postPermissionMessage({
+        command: PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION,
+        requestId: data.requestId,
+        ...decision,
+      });
+      removePrompt(ctx, PERMISSION_KIND.USER_QUESTION, data.requestId);
       break;
     }
   }
+}
+
+function postPermissionMessage(message: ProgressViewInboundMessage): void {
+  const { command, ...payload } = message;
+  postMessage(command, payload);
 }

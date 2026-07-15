@@ -9,10 +9,11 @@ import type { TaskState } from '@agent/core/state/TaskState';
 import type { AgentProposal, AgentProposalPermission } from '@shared/schemas';
 import type { ProgressAgentProposalActionMessage } from '@shared/schemas/progressView';
 
-type AgentProposalActionInput = Omit<
-  ProgressAgentProposalActionMessage,
-  'command'
->;
+type WithoutCommand<Message> = Message extends unknown
+  ? Omit<Message, 'command'>
+  : never;
+type AgentProposalActionInput =
+  WithoutCommand<ProgressAgentProposalActionMessage>;
 
 export interface ProgressAgentProposalControllerDeps {
   getPendingProposal(proposalId: string): AgentProposalPermission | undefined;
@@ -43,8 +44,6 @@ export class ProgressAgentProposalController {
           ...(input.feedback ? { feedback: input.feedback } : {}),
         });
         return true;
-      default:
-        return false;
     }
   }
 
