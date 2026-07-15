@@ -12,6 +12,7 @@
  */
 
 // Third-party imports
+import { LRUCache } from 'lru-cache';
 import { LitElement, html, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
@@ -89,7 +90,9 @@ export class LogList extends LitElement {
   private static readonly MAX_CACHED_STREAMS = 5;
 
   /** Per-stream DOM cache: one TaskGroupList per visited stream */
-  private streamCache = new Map<string, CachedStream>();
+  private readonly streamCache = new LRUCache<string, CachedStream>({
+    max: LogList.MAX_CACHED_STREAMS,
+  });
   private storage = webviewStorage;
   private activeStreamId: string | null = null;
   private shouldScrollToBottom = false;
@@ -135,9 +138,6 @@ export class LogList extends LitElement {
       entry.status = this.streamContext.streamStatus;
       entry.isToolUse = this.streamContext.isToolUse;
       entry.terminalMode = this.streamContext.terminalMode;
-
-      // Evict oldest non-active entries when cache exceeds cap
-      this.evictStaleCacheEntries();
     }
   }
 
@@ -151,7 +151,7 @@ export class LogList extends LitElement {
     }
 
     return html`${repeat(
-      this.streamCache,
+      this.streamCache.rentries() as Iterable<[string, CachedStream]>,
       ([id]) => id,
       ([id, data]) => html`
         <task-group-list
@@ -200,23 +200,10 @@ export class LogList extends LitElement {
   // Private methods
   // ============================================================
 
-  /** Evict oldest non-active cache entries when over the cap */
-  private evictStaleCacheEntries(): void {
-    if (this.streamCache.size <= LogList.MAX_CACHED_STREAMS) return;
-    for (const [id] of this.streamCache) {
-      if (id === this.activeStreamId) continue;
-      this.streamCache.delete(id);
-      if (this.streamCache.size <= LogList.MAX_CACHED_STREAMS) break;
-    }
-  }
-
   /** Get or create a cached entry for a stream, loading persisted toggle states */
   private getOrCreateEntry(streamId: string): CachedStream {
-    let entry = this.streamCache.get(streamId);
+    const entry = this.streamCache.get(streamId);
     if (entry) {
-      // Move to end of Map iteration order so LRU eviction works correctly
-      this.streamCache.delete(streamId);
-      this.streamCache.set(streamId, entry);
       return entry;
     }
 
@@ -237,7 +224,7 @@ export class LogList extends LitElement {
       toggleStates.load(previous.groupToggleStates);
     }
 
-    entry = {
+    const createdEntry: CachedStream = {
       groups: [],
       messages: [],
       updatedMessageIndices: [],
@@ -249,8 +236,8 @@ export class LogList extends LitElement {
       isToolUse: false,
       terminalMode: false,
     };
-    this.streamCache.set(streamId, entry);
-    return entry;
+    this.streamCache.set(streamId, createdEntry);
+    return createdEntry;
   }
 
   /** Handle click events for file links, copy buttons, etc. */

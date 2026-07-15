@@ -41,7 +41,7 @@ import {
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
-import { tryParseUrl } from '@utils/core';
+import { createFlushableDebounce, tryParseUrl } from '@utils/core';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
@@ -64,7 +64,6 @@ interface InquiryPermissionIds {
 
 interface PendingDraftSave extends InquiryPermissionIds {
   draft: InquiryDraft | null;
-  timer: ReturnType<typeof setTimeout>;
 }
 
 function getRequestId(permission: { data: unknown }): string {
@@ -110,6 +109,13 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   private copyController = new CopyButtonController(this);
   private draftRestored = false;
   private pendingDraftSave: PendingDraftSave | undefined;
+  private readonly draftSaveDebounce = createFlushableDebounce(() => {
+    const pending = this.pendingDraftSave;
+    this.pendingDraftSave = undefined;
+    if (!pending) return;
+    if (!idsEqual(this.getPermissionIds(), pending)) return;
+    this.writeDraft(pending, pending.draft, { persist: true });
+  }, DRAFT_SAVE_DELAY_MS);
 
   // ── Lifecycle ──
 
@@ -177,34 +183,29 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     }
   }
 
-  private clearPendingDraftSave(): void {
-    if (!this.pendingDraftSave) return;
-    clearTimeout(this.pendingDraftSave.timer);
-    this.pendingDraftSave = undefined;
-  }
-
   private scheduleDraftSave(): void {
     // Read-only trace-viewer export: no live backend for a draft to reach.
     if (this.archived) return;
     const ids = this.getPermissionIds();
     const draft = this.currentDraft();
     this.writeDraft(ids, draft, { persist: false });
-    this.clearPendingDraftSave();
-    const timer = setTimeout(() => {
-      const pending = this.pendingDraftSave;
-      this.pendingDraftSave = undefined;
-      if (!pending) return;
-      if (!idsEqual(this.getPermissionIds(), pending)) return;
-      this.writeDraft(pending, pending.draft, { persist: true });
-    }, DRAFT_SAVE_DELAY_MS);
-    this.pendingDraftSave = { ...ids, draft, timer };
+    this.pendingDraftSave = { ...ids, draft };
+    this.draftSaveDebounce.schedule();
   }
 
   private flushDraft(permission: { data: unknown } = this.permission): void {
     const ids = this.getPermissionIds(permission);
     const pending = this.pendingDraftSave;
     if (pending && idsEqual(pending, ids)) {
-      this.clearPendingDraftSave();
+      if (idsEqual(this.getPermissionIds(), ids)) {
+        this.draftSaveDebounce.flush();
+        return;
+      }
+
+      // During a permission replacement, Lit has already assigned the new
+      // permission. Cancel the timer and persist the saved old draft directly.
+      this.draftSaveDebounce.cancel();
+      this.pendingDraftSave = undefined;
       this.writeDraft(ids, pending.draft, { persist: true });
       return;
     }
