@@ -232,12 +232,16 @@ export async function executeCliRequest(
         );
       })
     : undefined;
+  let lifecycleStarted = false;
   const invoke = (): Promise<ExecuteAgentResult> =>
     runAgent(request, {
       runtimeHost: interactionHost,
       session,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
+      onRun: () => {
+        lifecycleStarted = true;
+      },
       stopAfterCycle: options.stopAfterCycle,
       approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
       runtimeUnavailableTools: [
@@ -271,7 +275,7 @@ export async function executeCliRequest(
       options.markErrorOnThrow &&
       request.executionId &&
       !invokeSettledOk &&
-      !(err instanceof AgentError)
+      !lifecycleStarted
     ) {
       await finalizeCliExecution(
         request.executionId,

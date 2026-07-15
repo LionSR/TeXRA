@@ -208,7 +208,11 @@ export async function synchronizeAgentResultOutcome(
   }
 }
 
-/** Persist a terminal status and its canonical outcome projection. */
+/**
+ * Persist a terminal status and its canonical outcome projection.
+ * @deprecated Use {@link finalizeExecution} so flow-record disposition and
+ * durability failures are handled together.
+ */
 export async function writeTerminalStatus(
   executionId: ExecutionId,
   status: string,
@@ -255,6 +259,8 @@ export async function finalizeExecution({
     await writeTerminalStatus(executionId, terminalStatus);
   } catch (error) {
     const outcome = executionStatusToRunOutcome(terminalStatus);
+    // A terminal COMPLETED/FAILED result must never retain a resumable flow,
+    // even when the caller requested preservation before the status write failed.
     const deleteToFailClosed =
       flowRecord === 'delete' ||
       outcome === RUN_OUTCOME.COMPLETED ||

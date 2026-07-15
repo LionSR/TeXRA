@@ -544,7 +544,12 @@ describe('executeCliRequest', () => {
   it('does not finalize a classified run failure a second time', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
-    mocks.runAgent.mockRejectedValueOnce(new AgentError('provider boom'));
+    mocks.runAgent.mockImplementationOnce(
+      async (_request: unknown, options: { readonly onRun?: () => void }) => {
+        options.onRun?.();
+        throw new AgentError('provider boom');
+      },
+    );
 
     await expect(
       executeCliRequest(request, cliContext(), { markErrorOnThrow: true }),
@@ -552,6 +557,23 @@ describe('executeCliRequest', () => {
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('finalizes a classified launch failure before the lifecycle starts', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    mocks.runAgent.mockRejectedValueOnce(new AgentError('model not found'));
+
+    await expect(
+      executeCliRequest(baseRequest(), cliContext(), {
+        markErrorOnThrow: true,
+      }),
+    ).resolves.toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
   });
 
   it('keeps a completed run terminal status when wrap cleanup fails after invoke succeeded (#7863)', async () => {
@@ -584,7 +606,12 @@ describe('executeCliRequest', () => {
   it('resolves a classified run failure to a non-zero exit code without rethrowing', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
-    mocks.runAgent.mockRejectedValueOnce(new AgentError('provider boom'));
+    mocks.runAgent.mockImplementationOnce(
+      async (_request: unknown, options: { readonly onRun?: () => void }) => {
+        options.onRun?.();
+        throw new AgentError('provider boom');
+      },
+    );
 
     const result = await executeCliRequest(request, cliContext(), {
       markErrorOnThrow: true,

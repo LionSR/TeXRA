@@ -242,6 +242,39 @@ describe('runFlowWithLifecycle', () => {
     });
   }
 
+  it('persists terminal state before updating onboarding state', async () => {
+    const fake = await initLifecycleTestPlatform(false);
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'terminal-before-onboarding',
+      'assistant',
+    );
+    const updateOnboarding = vi.spyOn(fake.globalState, 'update');
+    storageMocks.finalizeExecution.mockClear();
+
+    try {
+      await runFlowWithLifecycle(ctx, async () => ({
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.COMPLETED,
+        executionId,
+        streamId,
+      }));
+
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledOnce();
+      expect(updateOnboarding).toHaveBeenCalledWith(
+        GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+        true,
+      );
+      expect(
+        storageMocks.finalizeExecution.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        updateOnboarding.mock.invocationCallOrder[0] ??
+          Number.POSITIVE_INFINITY,
+      );
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
   it('finalizes the status machine owned by the run session', async () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-status-owner',

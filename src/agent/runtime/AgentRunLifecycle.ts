@@ -424,6 +424,11 @@ export async function runFlowWithLifecycle(
       });
       return result;
     }
+    // Persist the terminal fact before any supplementary UX state. In
+    // particular, a completed tool-use flow must not remain resumable while an
+    // onboarding write is pending.
+    await finalizeTerminal({ outcome: result.outcome });
+
     // Onboarding funnel (PRD: agent-native onboarding): State 1 ends when any
     // real run completes. The setup conversation itself doesn't count, but the
     // demo it delegates does (subagent runs land here too). Best-effort: a
@@ -442,13 +447,6 @@ export async function runFlowWithLifecycle(
       }
     }
 
-    // The flow's outcome is the canonical terminal fact; the finalizer owns
-    // every projection of it. No other layer may re-derive these. Success
-    // has no delivery hook: a native subagent's own turn value IS the
-    // strategy's returned result (see childRunLoop.ts), so there is nothing
-    // left to deliver here — only a subagent failure needs the caller to
-    // format and route an error (see the catch arm's `onError` below).
-    await finalizeTerminal({ outcome: result.outcome });
     logger.debug(`Task completed with outcome: ${result.outcome}`);
     return result;
   } catch (err) {
