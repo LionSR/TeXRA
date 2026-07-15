@@ -12,6 +12,7 @@ import {
 } from '@test/helpers/streamStatusTestUtils';
 import { platform } from '@platform/platform';
 import { installPlatform } from '@test/support/setupPlatform';
+import type { FinalizeExecutionResult } from '@agent/storage';
 import { noopTrace, TraceEmitter } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -50,16 +51,37 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
-  writeTerminalStatus: vi.fn().mockResolvedValue(undefined),
+  finalizeExecution: vi.fn(
+    async (input: {
+      flowRecord: 'preserve' | 'delete';
+    }): Promise<FinalizeExecutionResult> => ({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: input.flowRecord === 'delete' ? 'deleted' : 'preserved',
+    }),
+  ),
   synchronizeAgentResultOutcome: vi.fn().mockResolvedValue(undefined),
-  deleteFlowRecord: vi.fn().mockResolvedValue(undefined),
+}));
+
+const channelTraceMocks = vi.hoisted(() => ({
+  warn: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
-  writeTerminalStatus: storageMocks.writeTerminalStatus,
+  finalizeExecution: storageMocks.finalizeExecution,
   synchronizeAgentResultOutcome: storageMocks.synchronizeAgentResultOutcome,
-  getExecutionStore: () => ({ delete: storageMocks.deleteFlowRecord }),
 }));
+
+vi.mock('@agent/trace', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/trace')>();
+  return {
+    ...actual,
+    createChannelTrace: vi.fn(() => ({
+      ...actual.noopTrace,
+      warn: channelTraceMocks.warn,
+    })),
+  };
+});
 
 async function initLifecycleTestPlatform(firstRunDone: boolean) {
   await installPlatform({
@@ -425,7 +447,7 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-subagent-waiting',
     );
     const onError = vi.fn();
-    storageMocks.writeTerminalStatus.mockClear();
+    storageMocks.finalizeExecution.mockClear();
 
     try {
       const result = await runFlowWithLifecycle(
@@ -446,7 +468,7 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-      expect(storageMocks.writeTerminalStatus).not.toHaveBeenCalled();
+      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
       expect(onError).not.toHaveBeenCalled();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
       expect(defaultSession().executions.getHandle(executionId)).toBeDefined();
@@ -546,7 +568,7 @@ describe('runFlowWithLifecycle', () => {
       ctx.runScope.session.transcripts,
       'update',
     );
-    storageMocks.deleteFlowRecord.mockClear();
+    storageMocks.finalizeExecution.mockClear();
 
     try {
       const result = await runFlowWithLifecycle(
@@ -563,7 +585,7 @@ describe('runFlowWithLifecycle', () => {
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
       expect(defaultSession().executions.getHandle(executionId)).toBeDefined();
       expect(followUpsRelease).not.toHaveBeenCalled();
-      expect(storageMocks.deleteFlowRecord).not.toHaveBeenCalled();
+      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
       // The fixture's ctx.logger is noopTrace, and the run handle carries it
       // as its trace channel.
       const traceEmit = vi.spyOn(noopTrace, 'emit');
@@ -609,9 +631,11 @@ describe('runFlowWithLifecycle', () => {
         STREAM_PHASE.CANCELLED,
       );
       expect(followUpsRelease).toHaveBeenCalledWith(streamId);
-      expect(storageMocks.deleteFlowRecord).toHaveBeenCalledWith(
-        `flow_${executionId}`,
-      );
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+        executionId,
+        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        flowRecord: 'delete',
+      });
       // The kill path never resumes, so the per-suspension parent stage must
       // be closed here rather than dangling open forever. `ctx.parentStage`
       // is already desubscribed by this point (disposeTrace ran in the
@@ -668,7 +692,7 @@ describe('runFlowWithLifecycle', () => {
         `outcome-${expected.outcome}`,
       );
       const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-      storageMocks.writeTerminalStatus.mockClear();
+      storageMocks.finalizeExecution.mockClear();
 
       try {
         const result = await runFlowWithLifecycle(ctx, async () => ({
@@ -679,10 +703,12 @@ describe('runFlowWithLifecycle', () => {
         }));
 
         expect(result.outcome).toBe(expected.outcome);
-        expect(storageMocks.writeTerminalStatus).toHaveBeenCalledWith(
+        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
           executionId,
-          expected.terminal,
-        );
+          terminalStatus: expected.terminal,
+          flowRecord:
+            expected.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve',
+        });
         // The stage closes with the literal outcome — no
         // legacyEndGroupStatusForOutcome fold at this production call site.
         expect(stageEnd).toHaveBeenCalledWith(expected.outcome);
@@ -698,7 +724,7 @@ describe('runFlowWithLifecycle', () => {
       'outcome-thrown-abort',
     );
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-    storageMocks.writeTerminalStatus.mockClear();
+    storageMocks.finalizeExecution.mockClear();
 
     try {
       const result = await runFlowWithLifecycle(ctx, async () => {
@@ -706,10 +732,11 @@ describe('runFlowWithLifecycle', () => {
       });
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(storageMocks.writeTerminalStatus).toHaveBeenCalledWith(
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
         executionId,
-        EXECUTION_STATUS.INTERRUPTED,
-      );
+        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        flowRecord: 'preserve',
+      });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
     } finally {
@@ -722,7 +749,7 @@ describe('runFlowWithLifecycle', () => {
       'outcome-thrown-error',
     );
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-    storageMocks.writeTerminalStatus.mockClear();
+    storageMocks.finalizeExecution.mockClear();
 
     try {
       await expect(
@@ -731,10 +758,11 @@ describe('runFlowWithLifecycle', () => {
         }),
       ).rejects.toThrow('model exploded');
 
-      expect(storageMocks.writeTerminalStatus).toHaveBeenCalledWith(
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
         executionId,
-        EXECUTION_STATUS.ERROR,
-      );
+        terminalStatus: EXECUTION_STATUS.ERROR,
+        flowRecord: 'preserve',
+      });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
     } finally {
@@ -821,14 +849,19 @@ describe('finalizeRunTerminal', () => {
     );
     const untrack = vi.fn();
     const traceEmit = vi.spyOn(noopTrace, 'emit');
-    storageMocks.writeTerminalStatus.mockClear();
+    storageMocks.finalizeExecution.mockClear();
     // Park the first caller at its persist await so the second caller arrives
     // while the first has not yet emitted or settled anything.
     let releasePersist: (() => void) | undefined;
-    storageMocks.writeTerminalStatus.mockImplementationOnce(
+    storageMocks.finalizeExecution.mockImplementationOnce(
       () =>
-        new Promise<void>((resolve) => {
-          releasePersist = resolve;
+        new Promise((resolve) => {
+          releasePersist = () =>
+            resolve({
+              status: 'durable' as const,
+              terminalStatusPersisted: true as const,
+              flowRecord: 'deleted' as const,
+            });
         }),
     );
 
@@ -841,8 +874,8 @@ describe('finalizeRunTerminal', () => {
         outcome: RUN_OUTCOME.COMPLETED,
         isSubagent: false,
         trace: noopTrace,
-        persistTerminalStatus: true,
-      };
+        persistence: { kind: 'finalize', flowRecord: 'delete' },
+      } as const;
 
       const first = finalizeRunTerminal(params);
       const second = finalizeRunTerminal(params);
@@ -859,7 +892,7 @@ describe('finalizeRunTerminal', () => {
         executionId,
         streamId,
       });
-      expect(storageMocks.writeTerminalStatus).toHaveBeenCalledTimes(1);
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledTimes(1);
       // The stream-status transition also emits on the trace; the terminal
       // `result` event itself must be published exactly once.
       expect(
@@ -872,6 +905,67 @@ describe('finalizeRunTerminal', () => {
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
       traceEmit.mockRestore();
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('settles and untracks once while reporting terminal metadata failure', async () => {
+    const executionId = 'exec-finalize-metadata-failure';
+    const streamId = 'stream-finalize-metadata-failure' as StreamTabId;
+    const streamStatus = new StreamStatusMachine();
+    const handle = new AgentExecutionHandle(
+      executionId,
+      streamId,
+      streamId,
+      'test-agent',
+      'toolUse',
+      createRecordingHost().host,
+      noopTrace,
+    );
+    const untrack = vi.fn();
+    const durabilityError = new Error('metadata disk write failed');
+    storageMocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+      error: durabilityError,
+    });
+    channelTraceMocks.warn.mockClear();
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
+
+      const event = await finalizeRunTerminal({
+        handle,
+        executions: { untrack },
+        streamStatus,
+        outcome: RUN_OUTCOME.FAILED,
+        isSubagent: false,
+        trace: noopTrace,
+        persistence: { kind: 'finalize', flowRecord: 'preserve' },
+      });
+
+      expect(event).toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.FAILED,
+        executionId,
+      });
+      await expect(handle.result).resolves.toBe(event);
+      expect(untrack).toHaveBeenCalledExactlyOnceWith(executionId);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+      expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
+        'Failed to finalize durable execution state',
+        {
+          data: {
+            agentIdentifier: 'test-agent',
+            executionId,
+            stage: 'terminal-status',
+            terminalStatusPersisted: false,
+            error: durabilityError,
+          },
+        },
+      );
+    } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
