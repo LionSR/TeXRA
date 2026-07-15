@@ -86,7 +86,6 @@ const TraceExecutionMetaSchema = z.object({
   outcome: RunOutcomeSchema.optional(),
   category: z.string().optional(),
   description: z.string().optional(),
-  delegationDepth: z.int().nonnegative().optional(),
   streamId: StreamTabIdSchema.optional(),
 });
 

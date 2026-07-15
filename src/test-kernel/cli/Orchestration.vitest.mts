@@ -435,12 +435,11 @@ describe('CLI orchestration items', () => {
           agent: 'search',
           status: CLI_HISTORY_RESUMABLE_STATUS,
           parentExecutionId: 'root-session' as ExecutionId,
-          delegationDepth: 1,
         }),
         historyEntry('bbbbbbbbbbbb', {
           agent: 'review',
           status: CLI_HISTORY_RESUMABLE_STATUS,
-          delegationDepth: 1,
+          parentExecutionId: 'root-session' as ExecutionId,
         }),
         historyEntry('cccccccccccc', {
           agent: 'orchestrator',

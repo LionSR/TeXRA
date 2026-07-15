@@ -45,7 +45,6 @@ export interface CliHistoryEntry {
   readonly description?: string;
   readonly teamPresetId?: string;
   readonly parentExecutionId?: ExecutionId;
-  readonly delegationDepth?: number;
 }
 
 export interface CliHistoryDetails {
@@ -95,15 +94,13 @@ export function resumableCliHistoryEntries<
 }
 
 function isCliHistoryEntryUserStarted(
-  entry: Pick<CliHistoryEntry, 'parentExecutionId' | 'delegationDepth'>,
+  entry: Pick<CliHistoryEntry, 'parentExecutionId'>,
 ): boolean {
-  return (
-    entry.parentExecutionId === undefined && (entry.delegationDepth ?? 0) === 0
-  );
+  return entry.parentExecutionId === undefined;
 }
 
 export function userStartedCliHistoryEntries<
-  T extends Pick<CliHistoryEntry, 'parentExecutionId' | 'delegationDepth'>,
+  T extends Pick<CliHistoryEntry, 'parentExecutionId'>,
 >(entries: readonly T[]): T[] {
   return entries.filter(isCliHistoryEntryUserStarted);
 }
@@ -444,9 +441,6 @@ export function formatCliHistoryDetailsText(
   if (config?.agentCategory) lines.push(`Category: ${config.agentCategory}`);
   if (cliOutputFile) lines.push(`CLI output: ${cliOutputFile}`);
   if (meta?.parentExecutionId) lines.push(`Parent: ${meta.parentExecutionId}`);
-  if (meta?.delegationDepth !== undefined) {
-    lines.push(`Delegation depth: ${meta.delegationDepth}`);
-  }
   if (meta?.description) lines.push(`Description: ${meta.description}`);
   if (details.result) {
     lines.push(`Result: ${JSON.stringify(details.result)}`);
@@ -495,7 +489,6 @@ async function toCliHistoryEntry(
     description: entry.description,
     teamPresetId: teamPresetId(config),
     parentExecutionId: entry.parentExecutionId,
-    delegationDepth: entry.delegationDepth,
   };
 }
 
