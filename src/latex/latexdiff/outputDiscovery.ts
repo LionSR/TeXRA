@@ -10,11 +10,7 @@ import * as path from 'node:path';
 // Local imports
 import { platform } from '@platform/platform';
 import { StreamSnapshotStore } from '@transcript';
-import { listExecutions } from '@agent/storage';
-import {
-  WORKFLOW_OUTPUT_BASENAME,
-  parseWorkflowOutputRoundDir,
-} from '@shared/constants/workflowOutput';
+import { listExecutions, type ExecutionListingEntry } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
@@ -24,6 +20,10 @@ import type {
   OutputFileInfo,
   RoundIndexed,
 } from '@shared/schemas';
+import {
+  WORKFLOW_OUTPUT_BASENAME,
+  parseWorkflowOutputRoundDir,
+} from '@shared/constants/workflowOutput';
 import {
   WorkspaceFS,
   createRunStorageLocation,
@@ -213,23 +213,31 @@ export async function discoverLatestExecutionOutputs(query: {
     const normalizedInput = path.normalize(query.inputFile);
 
     const candidates = executions
-      .filter((entry) => {
-        if (entry.agent !== query.agent || entry.model !== query.model) {
-          return false;
-        }
-        const entryInput = entry.agentConfig?.inputFiles?.[0];
-        return (
-          typeof entryInput === 'string' &&
-          path.normalize(entryInput) === normalizedInput
-        );
-      })
+      .filter(
+        (entry): entry is Extract<ExecutionListingEntry, { kind: 'agent' }> => {
+          if (
+            entry.kind !== 'agent' ||
+            entry.agentConfig.agent !== query.agent ||
+            entry.agentConfig.model !== query.model
+          ) {
+            return false;
+          }
+          const entryInput = entry.agentConfig.inputFiles[0];
+          return (
+            typeof entryInput === 'string' &&
+            path.normalize(entryInput) === normalizedInput
+          );
+        },
+      )
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
     const snapshots = new StreamSnapshotStore();
     for (const candidate of candidates) {
-      const streamId = getStreamTabId(candidate.agent, candidate.model, {
-        executionId: candidate.id,
-      });
+      const streamId = getStreamTabId(
+        candidate.agentConfig.agent,
+        candidate.agentConfig.model,
+        { executionId: candidate.id },
+      );
       const rounds = await snapshots.readOutputFiles(streamId);
       if (rounds && Object.keys(rounds).length > 0) {
         return { executionId: candidate.id, rounds };
@@ -247,7 +255,7 @@ export async function discoverLatestExecutionOutputs(query: {
       const scanned = await scanRunDirForOutputs(
         candidate.id,
         query.inputFile,
-        candidate.agentConfig?.inputFiles?.slice(1),
+        candidate.agentConfig.inputFiles.slice(1),
       );
       if (scanned && Object.keys(scanned).length > 0) {
         return { executionId: candidate.id, rounds: scanned };
