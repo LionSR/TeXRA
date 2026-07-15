@@ -7,6 +7,7 @@ import {
   type WorkflowAgentInvocation,
   type WorkflowScriptEvent,
 } from '@agent/workflowScript';
+import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
 import { delay } from '@utils/core';
 
 const META = `export const meta = {
@@ -214,6 +215,33 @@ return b`,
     expect(editedRunner.mock.calls[0][0].prompt).toBe(
       'stage-b-EDITED:result:stage-a',
     );
+  });
+
+  it('ends a cached call with an error when its journal value is invalid', async () => {
+    const script = `${META}return await agent('cached')`;
+    const first = await runWorkflowScript({ script, runAgent: echoRunner });
+    const events: WorkflowScriptEvent[] = [];
+    const runner = vi.fn(echoRunner);
+
+    await expect(
+      runWorkflowScript({
+        script,
+        runAgent: runner,
+        journal: [{ ...first.journal[0], result: () => undefined }],
+        onEvent: (event) => events.push(event),
+      }),
+    ).rejects.toThrow(/Cached agent\(\) result must be JSON-serializable/i);
+
+    expect(runner).not.toHaveBeenCalled();
+    expect(events).toEqual([
+      {
+        type: 'agent:end',
+        index: 0,
+        label: 'cached',
+        cached: true,
+        error: expect.stringMatching(/must be JSON-serializable/i),
+      },
+    ]);
   });
 
   it('concat() joins parts and drops nulls', async () => {
@@ -479,6 +507,39 @@ return [typeof globalThis.__wfDeliver, typeof globalThis.__wfBody]`,
     expect(run.result).toEqual(['undefined', 'undefined']);
   });
 
+  it('keeps a delivered result when a later guest microtask throws', async () => {
+    const run = await runWorkflowScript({
+      script: `${META}
+Promise.resolve().then(() => {
+  Promise.resolve().then(() => { throw new Error('late rejection') })
+})
+return 'delivered'`,
+      runAgent: echoRunner,
+    });
+
+    expect(run.result).toBe('delivered');
+  });
+
+  it('does not time out a delivered result while preempting leftover work', async () => {
+    const onTimeout = vi.fn();
+    const result = await runScriptInSandbox(
+      `
+Promise.resolve().then(() => {
+  Promise.resolve().then(() => { while (true) {} })
+})
+return 'delivered'`,
+      { asyncFns: {}, syncFns: {}, argsJson: undefined },
+      {
+        filename: 'delivered-before-deadline.workflow.js',
+        timeoutMs: 40,
+        onTimeout,
+      },
+    );
+
+    expect(result).toBe('delivered');
+    expect(onTimeout).not.toHaveBeenCalled();
+  });
+
   it('aborts un-awaited agent() calls left pending when the script returns', async () => {
     // A script that fires an agent() call without awaiting it, then returns,
     // must not leave model work running past the reported-complete point:
@@ -541,7 +602,7 @@ Math.random = () => 0.5
 return Math.random()`,
         runAgent: echoRunner,
       }),
-    ).rejects.toThrow(/read only property|unavailable/i);
+    ).rejects.toThrow(/read.?only|unavailable/i);
     await expect(
       runWorkflowScript({
         script: `${META}return new Date()`,
@@ -562,7 +623,7 @@ Date.prototype.constructor = function () { return { now: () => 1 } }
 return 'reassigned'`,
         runAgent: echoRunner,
       }),
-    ).rejects.toThrow(/read only property|Cannot assign/i);
+    ).rejects.toThrow(/read.?only|Cannot assign/i);
   });
 
   it('does not let parallel() swallow the agent-call cap', async () => {
@@ -622,6 +683,166 @@ return await agent('two')`,
     await delay(250);
     expect(calls).toBe(1);
     expect(sawAbort).toBe(true);
+  });
+
+  it('preempts a CPU loop reached after an agent await', async () => {
+    const startedAt = Date.now();
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+await agent('one')
+while (true) {}`,
+        runAgent: echoRunner,
+        timeoutMs: 40,
+      }),
+    ).rejects.toThrow(/timed out/);
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
+
+  it('preempts a CPU loop reached through the guest microtask queue', async () => {
+    const startedAt = Date.now();
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+await Promise.resolve()
+while (true) {}`,
+        runAgent: echoRunner,
+        timeoutMs: 40,
+      }),
+    ).rejects.toThrow(/timed out/);
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
+
+  it('ignores a host promise that settles after its runtime is disposed', async () => {
+    let resolveHost!: (payload: string) => void;
+    const hostResult = new Promise<string>((resolve) => {
+      resolveHost = resolve;
+    });
+    const onTimeout = vi.fn();
+
+    await expect(
+      runScriptInSandbox(
+        `await agent('slow'); return 'unreachable'`,
+        {
+          asyncFns: { agent: () => hostResult },
+          syncFns: {},
+          argsJson: undefined,
+        },
+        {
+          filename: 'late-host-promise.workflow.js',
+          timeoutMs: 30,
+          onTimeout,
+        },
+      ),
+    ).rejects.toThrow(/timed out/);
+
+    resolveHost('"late"');
+    await delay(0);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+
+    const nextRun = await runWorkflowScript({
+      script: `${META}return 7`,
+      runAgent: echoRunner,
+    });
+    expect(nextRun.result).toBe(7);
+  });
+
+  it('surfaces malformed host result JSON instead of substituting a value', async () => {
+    await expect(
+      runScriptInSandbox(
+        `return await agent('malformed')`,
+        {
+          asyncFns: { agent: async () => '{' },
+          syncFns: {},
+          argsJson: undefined,
+        },
+        { filename: 'malformed-host-result.workflow.js', timeoutMs: 1_000 },
+      ),
+    ).rejects.toThrow(/expecting property name|JSON|unexpected end/i);
+  });
+
+  it('rejects non-serializable agent results instead of journaling null', async () => {
+    const events: WorkflowScriptEvent[] = [];
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('function-result')`,
+        runAgent: async () => () => undefined,
+        onEvent: (event) => events.push(event),
+      }),
+    ).rejects.toThrow(/agent\(\) result must be JSON-serializable/i);
+    expect(events).toEqual([
+      {
+        type: 'agent:start',
+        index: 0,
+        label: 'function-result',
+        phase: undefined,
+      },
+      {
+        type: 'agent:end',
+        index: 0,
+        label: 'function-result',
+        cached: false,
+        error: expect.stringMatching(/must be JSON-serializable/i),
+      },
+    ]);
+  });
+
+  it('rejects explicitly supplied non-serializable workflow args', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return args`,
+        args: Symbol('not-json'),
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/Workflow args must be JSON-serializable/i);
+  });
+
+  it('rejects malformed args JSON while installing the bridge', async () => {
+    await expect(
+      runScriptInSandbox(
+        `return args`,
+        { asyncFns: {}, syncFns: {}, argsJson: '{' },
+        { filename: 'malformed-args.workflow.js', timeoutMs: 1_000 },
+      ),
+    ).rejects.toThrow(/expecting property name|JSON|unexpected end/i);
+  });
+
+  it('aborts parallel siblings when one continuation runs forever', async () => {
+    let sawAbort = false;
+    const runner = (invocation: WorkflowAgentInvocation) =>
+      new Promise<string>((resolve) => {
+        invocation.signal.addEventListener('abort', () => {
+          sawAbort = true;
+          resolve('aborted');
+        });
+      });
+
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+return await parallel([
+  () => agent('waiting-sibling'),
+  async () => { await Promise.resolve(); while (true) {} },
+])`,
+        runAgent: runner,
+        timeoutMs: 40,
+      }),
+    ).rejects.toThrow(/timed out/);
+    expect(sawAbort).toBe(true);
+  });
+
+  it('contains guest memory exhaustion inside the QuickJS runtime', async () => {
+    const startedAt = Date.now();
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+const values = []
+while (true) values.push(new Uint8Array(1024 * 1024))`,
+        runAgent: echoRunner,
+        timeoutMs: 2_000,
+      }),
+    ).rejects.toThrow(/memory/i);
+    expect(Date.now() - startedAt).toBeLessThan(3_000);
   });
 
   it('aborts in-flight agents when the call cap trips', async () => {
