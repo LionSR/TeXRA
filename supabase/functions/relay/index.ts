@@ -79,7 +79,7 @@ import {
   isRetiredModelRequest,
   isModelAllowedForTier,
   FREE_TIER_SUGGESTED_MODEL,
-  ULTRA_ONLY_PROVIDERS,
+  ULTRA_ONLY_PROVIDER_SET,
   ULTRA_TIER,
   FREE_TIER,
   MAX_TIER,
@@ -134,8 +134,6 @@ const OPENAI_GPT5_REASONING_EFFORT_CAPS: Record<string, ReasoningEffortCap> = {
   [FREE_TIER]: 'medium',
   [MAX_TIER]: 'high',
 };
-
-const ULTRA_ONLY_PROVIDER_SET = new Set<string>(ULTRA_ONLY_PROVIDERS);
 
 // Hop-by-hop and auth headers stripped before forwarding to the upstream
 // provider (auth is re-added from the server-side key).

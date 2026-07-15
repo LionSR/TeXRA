@@ -77,7 +77,7 @@ interface RelayModel {
  * proxied through relay's server-side keys below Ultra.
  */
 export const ULTRA_ONLY_PROVIDERS = ['openai', 'anthropic', 'google'] as const;
-const ULTRA_ONLY_PROVIDER_SET = new Set<string>(ULTRA_ONLY_PROVIDERS);
+export const ULTRA_ONLY_PROVIDER_SET = new Set<string>(ULTRA_ONLY_PROVIDERS);
 
 // =============================================================================
 // Tier Assignment Logic
@@ -163,11 +163,13 @@ const RETIRED_MODEL_PATTERNS = Object.values(MODEL_CONFIGS)
 // =============================================================================
 
 const FREE_TIER_SHORT_NAMES = RELAY_MODELS.filter(
-  (m) => m.minTier === FREE_TIER && !ULTRA_ONLY_PROVIDER_SET.has(m.provider),
+  (m) =>
+    m.minTier === FREE_TIER &&
+    !ULTRA_ONLY_PROVIDER_SET.has(m.provider.toLowerCase()),
 ).map((m) => m.shortName);
 
 const MAX_TIER_SHORT_NAMES = RELAY_MODELS.filter(
-  (m) => !ULTRA_ONLY_PROVIDER_SET.has(m.provider),
+  (m) => !ULTRA_ONLY_PROVIDER_SET.has(m.provider.toLowerCase()),
 ).map((m) => m.shortName);
 
 // =============================================================================
