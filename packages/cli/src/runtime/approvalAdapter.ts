@@ -244,6 +244,7 @@ export function createHeadlessCliHostInteractions(
     },
     async requestRetry(request: HostRetryRequest) {
       const payload: RuntimeInteractionEventPayloads['showRetryRequest'] = {
+        requestId: request.requestId,
         streamId: request.streamId,
         operation: request.operation,
         ...(request.model ? { model: request.model } : {}),

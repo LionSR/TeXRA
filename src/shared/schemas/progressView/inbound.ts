@@ -29,6 +29,7 @@ import {
 } from '../prompts';
 import { AgentCategoryFilterSchema, StreamScopedBaseSchema } from './data';
 import { GettingStartedActionSchema } from '../mainView/state';
+import { ExhaustionReasonSchema } from '../errors';
 
 const TrimmedStringSchema = z
   .string()
@@ -66,21 +67,15 @@ const RunFollowupMessageSchema = FollowupConfigSchema.extend({
 
 const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY),
+  requestId: z.string(),
   provider: z.string().optional(),
-  /** True when the underlying cause is an upstream provider credit
-   *  depletion (Anthropic 400 "credit balance is too low"), meaning the
-   *  stored key IS the depleted credential. The handler requires a new
-   *  key for these rather than reusing the stored one. */
-  upstreamCreditDepleted: z.boolean().optional(),
+  model: z.string().optional(),
+  exhaustionReason: ExhaustionReasonSchema.optional(),
   /** True when the failing request went through the TeXRA relay. When
    *  false, relay wasn't in the path (direct-key call) and the handler
    *  must not globally disable relay access — other providers may still
    *  be served successfully by relay. */
   viaRelay: z.boolean().optional(),
-  /** True when the failing request went through the ChatGPT subscription
-   *  (Codex) and hit its usage limit. The handler turns off the "prefer
-   *  ChatGPT subscription" preference so the retry uses the OpenAI key. */
-  chatgptSubscription: z.boolean().optional(),
 });
 
 const EnableDelegatedWorkApprovalMessageSchema = StreamScopedBaseSchema.extend({
@@ -111,7 +106,13 @@ const PolishFollowUpMessageSchema = StreamScopedBaseSchema.extend({
 
 const RetryStreamRequestMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST),
+  requestId: z.string(),
   feedback: z.string().optional(),
+});
+
+const CancelRetryRequestMessageSchema = StreamScopedBaseSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST),
+  requestId: z.string(),
 });
 
 const FilterStreamsMessageSchema = z.object({
@@ -261,7 +262,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     SendFollowUpMessageSchema,
     PolishFollowUpMessageSchema,
     RetryStreamRequestMessageSchema,
-    streamScopedCommand(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST),
+    CancelRetryRequestMessageSchema,
     UseOwnApiKeyMessageSchema,
     commandOnly(PROGRESS_VIEW_COMMANDS.START_RECORDING),
     commandOnly(PROGRESS_VIEW_COMMANDS.STOP_RECORDING),

@@ -27,7 +27,9 @@ All notable changes to this project will be documented in this file.
 
 - **Copilot subscription models appear alongside other model choices** — TeXRA
   discovers compatible models from VS Code and uses the user's existing
-  Copilot access without requiring a provider API key.
+  Copilot access without requiring a provider API key. The Models tab now owns
+  consent, and exhausted Copilot runs can restart through a matching direct
+  model without asking again when its provider key is already available.
 
 #### Bug Fixes
 

@@ -66,6 +66,8 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     const data = this.permission.data;
     const isRelay = data.errorDetails?.isRelayError === true;
     const credentialExhausted = isCredentialExhausted(data.errorDetails);
+    const copilotQuotaExhausted =
+      data.errorDetails?.exhaustionReason === 'copilot-subscription';
     const userRetryable = data.errorDetails?.userRetryable !== false;
     const metaParts: MetaPart[] = [
       ...(data.model ? [`Model: ${data.model}`] : []),
@@ -115,8 +117,12 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
           ${when(credentialExhausted, () =>
             renderLabeledActionButton({
               icon: 'key',
-              text: 'Use your own API key',
-              title: 'Use your own API key (k)',
+              text: copilotQuotaExhausted
+                ? 'Start with own API key'
+                : 'Use your own API key',
+              title: copilotQuotaExhausted
+                ? 'Start a new run with your own API key (k)'
+                : 'Use your own API key (k)',
               action: 'useOwnApiKey',
               disabled,
               onClick: () => this.emitAction('useOwnApiKey'),
@@ -124,8 +130,8 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
           )}
           ${renderLabeledActionButton({
             icon: 'refresh',
-            text: 'Retry',
-            title: 'Retry (r)',
+            text: copilotQuotaExhausted ? 'Retry Copilot' : 'Retry',
+            title: copilotQuotaExhausted ? 'Retry Copilot (r)' : 'Retry (r)',
             action: 'retry',
             disabled,
             onClick: () => this.emitAction('retry'),

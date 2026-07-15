@@ -21,6 +21,7 @@ function createRetryPermission(): RetryRequestPanel['permission'] {
   return {
     kind: PERMISSION_KIND.RETRY,
     data: {
+      requestId: 'relay-retry',
       streamId: 'stream-1',
       operation: 'model request',
       model: 'test-model',
@@ -69,6 +70,34 @@ describe('retry-request-panel', () => {
     expect(buttons.map((button) => button.getAttribute('data-action'))).toEqual(
       ['useOwnApiKey', 'retry', 'cancel'],
     );
+  });
+
+  it('distinguishes a fresh direct-model run from retrying Copilot', async () => {
+    const element = await mountPanel();
+    element.permission = {
+      kind: PERMISSION_KIND.RETRY,
+      data: {
+        requestId: 'copilot-retry',
+        streamId: 'stream-1',
+        operation: 'model request',
+        model: 'copilot:sonnet46',
+        errorMessage: 'Copilot quota exhausted',
+        errorDetails: {
+          exhaustionReason: 'copilot-subscription',
+          isRelayError: false,
+          userRetryable: true,
+        },
+      },
+    };
+    await element.updateComplete;
+
+    const actions = element.shadowRoot?.querySelector(
+      '.retry-request__actions',
+    );
+    expect(actions?.textContent?.replaceAll(/\s+/g, ' ')).toContain(
+      'Start with own API key',
+    );
+    expect(actions?.textContent).toContain('Retry Copilot');
   });
 
   it('shows exactly the claimed number of tail characters for truncated partial output', async () => {

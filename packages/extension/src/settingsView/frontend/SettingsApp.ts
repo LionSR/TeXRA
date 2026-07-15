@@ -402,6 +402,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES,
   );
 
+  private handleRequestModelAccess = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
+  );
+
   // Agent selection event handlers
   private handleOpenAgentYaml = forwardDetail(
     SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
@@ -810,6 +814,7 @@ export class SettingsApp extends SettingsAppBase {
               @prefer-short-model-names-set=${
                 this.handleSetPreferShortModelNames
               }
+              @model-access-request=${this.handleRequestModelAccess}
               @chatgpt-sign-in=${this.handleChatGptSignIn}
               @chatgpt-sign-out=${this.handleChatGptSignOut}
               @chatgpt-prefer-subscription-set=${

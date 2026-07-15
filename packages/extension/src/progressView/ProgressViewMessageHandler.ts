@@ -19,7 +19,10 @@ import {
   type ExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { setPreferCodexSubscription } from '@auth/codex';
+import {
+  isPreferCodexSubscription,
+  setPreferCodexSubscription,
+} from '@auth/codex';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';
 import { SecretManager } from '@frontend/secretManager';
@@ -31,6 +34,7 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { PromptHost } from '@hosts/uiHosts';
 import { isApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { GETTING_STARTED_COMMANDS } from '@shared/schemas/mainView';
@@ -49,6 +53,7 @@ import {
   WorkspaceFS,
 } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { ProgressStreamLifecycleHost } from './managers/ProgressStreamLifecycleHost';
 import type { ProgressViewProvider } from './ProgressViewProvider';
@@ -344,6 +349,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             }),
         },
         executeAgent: async (request) => {
+          // Workflow actions intentionally wait for the run to finish; the
+          // command owns user-facing failure reporting, so this caller does
+          // not need the boolean launch result.
           await this.executeValidated(request);
         },
         runDiff: async (request) => {
@@ -550,14 +558,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       promptForApiKey: async (provider) => {
         await this.runViewCommand(apiKeyCommands.setApiKey, [provider]);
       },
+      getUseIncludedModelAccess: () =>
+        getServerSideKeyService().getUseIncludedModelAccess(),
       setUseIncludedModelAccess: (enabled) =>
         getServerSideKeyService().setUseIncludedModelAccess(enabled),
-      disablePreferCodexSubscription: async () => {
-        await setPreferCodexSubscription(false);
+      getPreferChatGptSubscription: isPreferCodexSubscription,
+      setPreferChatGptSubscription: async (enabled) => {
+        await setPreferCodexSubscription(enabled);
       },
       invalidateModelOptionsCache,
-      triggerRetry: (stream) =>
-        this.interactions.resolve(stream, { kind: 'retry', action: 'retry' }),
+      isRetryPending: (stream, requestId) =>
+        this.interactions.isRetryPending(stream, requestId),
+      triggerRetry: (stream, requestId) =>
+        this.interactions.resolveRetry(stream, requestId, {
+          kind: 'retry',
+          action: 'retry',
+        }),
     });
   }
 
@@ -610,11 +626,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleRetryStreamRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST>,
   ): Promise<void> {
-    const resolved = this.interactions.resolve(data.stream, {
-      kind: 'retry',
-      action: 'retry',
-      feedback: data.feedback,
-    });
+    const resolved = this.interactions.resolveRetry(
+      data.stream,
+      data.requestId,
+      {
+        kind: 'retry',
+        action: 'retry',
+        feedback: data.feedback,
+      },
+    );
     if (!resolved) {
       await this.host.info(
         'No retryable request is available for this stream yet.',
@@ -625,7 +645,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private handleCancelRetryRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST>,
   ): void {
-    this.interactions.resolve(data.stream, {
+    this.interactions.resolveRetry(data.stream, data.requestId, {
       kind: 'retry',
       action: 'cancel',
     });
@@ -655,6 +675,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleUseOwnApiKey(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY>,
   ): Promise<void> {
+    if (data.exhaustionReason === 'copilot-subscription') {
+      await this.startCopilotFallbackRun(data);
+      return;
+    }
+
     const providerArg =
       data.provider !== undefined && isApiProvider(data.provider)
         ? data.provider
@@ -662,16 +687,120 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     const result = await this.apiKeyRetryController.useOwnApiKey({
       stream: data.stream,
+      requestId: data.requestId,
       provider: providerArg,
-      upstreamCreditDepleted: data.upstreamCreditDepleted,
+      exhaustionReason: data.exhaustionReason,
       viaRelay: data.viaRelay,
-      chatgptSubscription: data.chatgptSubscription,
     });
     if (result.proceeded && !result.retried) {
       await this.host.info(
         'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
       );
     }
+  }
+
+  private async startCopilotFallbackRun(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY>,
+  ): Promise<void> {
+    if (!this.interactions.isRetryPending(data.stream, data.requestId)) return;
+
+    if (!data.model) {
+      await this.host.info(
+        'This retry was created before TeXRA recorded the Copilot model. Choose a direct model and start the agent again.',
+      );
+      return;
+    }
+
+    let fallback = getRuntimeModelDirectFallback(
+      data.model,
+      getUseOpenRouter(),
+    );
+    if (!fallback) {
+      await this.host.info(
+        'No direct API model matches this Copilot model. Choose another model and start the agent again.',
+      );
+      return;
+    }
+
+    // Key entry can outlive the retry panel, and the user can change the
+    // OpenRouter preference while that prompt is open. Revalidate both the
+    // exact retry identity and the effective credential owner after each
+    // prompt so an old action cannot launch or alter a replacement request.
+    let prepared = await this.apiKeyRetryController.ensureOwnApiKey({
+      provider: fallback.provider,
+      exhaustionReason: data.exhaustionReason,
+      viaRelay: data.viaRelay,
+    });
+    if (!prepared) return;
+    if (!this.interactions.isRetryPending(data.stream, data.requestId)) return;
+
+    const currentFallback = getRuntimeModelDirectFallback(
+      data.model,
+      getUseOpenRouter(),
+    );
+    if (!currentFallback) {
+      await this.host.info(
+        'Model availability changed while TeXRA was preparing the API key. Try the action again.',
+      );
+      return;
+    }
+    if (currentFallback.provider !== fallback.provider) {
+      fallback = currentFallback;
+      prepared = await this.apiKeyRetryController.ensureOwnApiKey({
+        provider: fallback.provider,
+        exhaustionReason: data.exhaustionReason,
+        viaRelay: data.viaRelay,
+      });
+      if (!prepared) return;
+      if (!this.interactions.isRetryPending(data.stream, data.requestId)) {
+        return;
+      }
+      const finalFallback = getRuntimeModelDirectFallback(
+        data.model,
+        getUseOpenRouter(),
+      );
+      if (!finalFallback || finalFallback.provider !== fallback.provider) {
+        await this.host.info(
+          'Model routing changed while TeXRA was preparing the API key. Try the action again.',
+        );
+        return;
+      }
+    }
+
+    const taskState = this.provider.state.snapshots.getTaskState(data.stream);
+    if (!taskState) {
+      await this.host.info(
+        'The original run configuration is no longer available. Choose the direct model and start the agent again.',
+      );
+      return;
+    }
+
+    const started =
+      await this.apiKeyRetryController.runCopilotFallbackWithRouting(
+        {
+          provider: fallback.provider,
+          exhaustionReason: data.exhaustionReason,
+          chatGptSubscriptionEligible: fallback.chatGptSubscriptionEligible,
+          viaRelay: data.viaRelay,
+        },
+        async () => {
+          if (!this.interactions.isRetryPending(data.stream, data.requestId)) {
+            return false;
+          }
+          return this.executeValidatedUntilStarted({
+            config: {
+              ...taskState.agentConfig,
+              model: fallback.model,
+            },
+          });
+        },
+      );
+    if (!started) return;
+
+    this.interactions.resolveRetry(data.stream, data.requestId, {
+      kind: 'retry',
+      action: 'cancel',
+    });
   }
 
   private async handlePolishFollowUp(
@@ -775,12 +904,41 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       this.logger.error(this.channel, validation.message);
       return false;
     }
-    await this.runViewCommand('texra.execute', [
+    const started = await this.runViewCommand<boolean>('texra.execute', [
       options.preferHelperModel
         ? { ...validation.request, preferHelperModel: true }
         : validation.request,
     ]);
-    return true;
+    return started === true;
+  }
+
+  /** Validate a request and acknowledge it once the runtime owns a run handle. */
+  private async executeValidatedUntilStarted(
+    request: ExecutionRequest,
+  ): Promise<boolean> {
+    const validation = validateExecutionRequest(request);
+    if (!validation.valid) {
+      this.logger.error(this.channel, validation.message);
+      return false;
+    }
+
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      const settle = (started: boolean): void => {
+        if (settled) return;
+        settled = true;
+        resolve(started);
+      };
+      void this.runViewCommand<boolean>('texra.execute', [
+        {
+          ...validation.request,
+          onRun: () => settle(true),
+        },
+      ]).then(
+        (completed) => settle(completed === true),
+        () => settle(false),
+      );
+    });
   }
 
   private async handleGetFollowupOptions(streamId: StreamTabId): Promise<void> {

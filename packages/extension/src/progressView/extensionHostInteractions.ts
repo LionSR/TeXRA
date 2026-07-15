@@ -49,6 +49,12 @@ export interface ExtensionHostInteractions extends HostInteractions {
     streamId: StreamTabId,
     initiatingProposalId: string,
   ): Promise<void>;
+  isRetryPending(streamId: StreamTabId, requestId: string): boolean;
+  resolveRetry(
+    streamId: StreamTabId,
+    requestId: string,
+    result: HostInteractionResolution,
+  ): boolean;
 }
 
 type PendingKind = Extract<
@@ -58,6 +64,7 @@ type PendingKind = Extract<
 
 interface PendingExtensionInteraction<T> {
   readonly id: string;
+  readonly requestId?: string;
   readonly kind: PendingKind;
   readonly streamId?: StreamTabId;
   readonly cancellationScope?: object;
@@ -222,8 +229,32 @@ export function createExtensionHostInteractions(
     await approveNativeToolEditApprovals(options.session, streamId);
   };
 
+  const isRetryPending = (
+    streamId: StreamTabId,
+    requestId: string,
+  ): boolean => {
+    const pending = pendingRequests.get(streamId);
+    return pending?.kind === 'retry' && pending.requestId === requestId;
+  };
+
+  const resolveRetry = (
+    streamId: StreamTabId,
+    requestId: string,
+    result: HostInteractionResolution,
+  ): boolean => {
+    if (!isRetryPending(streamId, requestId)) return false;
+    return resolvePending<RetryResult>(
+      streamId,
+      'retry',
+      toRetryResult(result),
+      () => handlers().retry.resolve(streamId),
+    );
+  };
+
   return {
     approvePendingDelegatedWork,
+    isRetryPending,
+    resolveRetry,
     requestToolEditApproval(
       request: ToolEditApprovalRequest,
       interactionOptions?: HostInteractionOptions,
@@ -299,6 +330,7 @@ export function createExtensionHostInteractions(
       return showPending<RetryResult>(
         {
           id: request.streamId,
+          requestId: request.requestId,
           kind: 'retry',
           streamId: request.streamId,
           cancellationScope: interactionOptions?.cancellationScope,

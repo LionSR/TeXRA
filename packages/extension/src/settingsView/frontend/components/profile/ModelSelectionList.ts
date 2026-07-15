@@ -22,7 +22,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 // Local imports - shared constants
 import {
   PROVIDER_DISPLAY_NAMES,
-  MODEL_PROVIDERS_ORDER,
+  MODEL_SOURCE_ORDER,
 } from '@shared/constants/providers';
 import {
   EXPENSIVE_MODEL_HINT,
@@ -84,7 +84,7 @@ export class ModelSelectionList extends LitElement {
       byProvider.set(model.provider, list);
     }
 
-    return MODEL_PROVIDERS_ORDER.filter((p) => byProvider.has(p)).map(
+    return MODEL_SOURCE_ORDER.filter((p) => byProvider.has(p)).map(
       (provider) => {
         const models = byProvider.get(provider)!;
         return {

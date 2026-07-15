@@ -104,6 +104,53 @@ describe('createLanguageModelPort', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cancellationSources.length = 0;
+    mocks.canSendRequest.mockReturnValue(undefined);
+  });
+
+  it.each([
+    [true, 'allowed'],
+    [undefined, 'consent-required'],
+    [false, 'unavailable'],
+  ] as const)(
+    'maps native access %s to %s on the discovered model',
+    async (nativeAccess, access) => {
+      mocks.canSendRequest.mockReturnValue(nativeAccess);
+      mocks.selectChatModels.mockResolvedValue([fakeModel()]);
+      const port = createPort();
+
+      expect(port.isAvailable()).toBe(true);
+      await expect(
+        port.selectModels({ vendor: 'copilot', version: '2026-07' }),
+      ).resolves.toEqual([
+        {
+          id: 'copilot-gpt-4o',
+          name: 'GPT-4o',
+          family: 'gpt-4o',
+          vendor: 'copilot',
+          version: '2026-07',
+          maxInputTokens: 128_000,
+          access,
+        },
+      ]);
+      expect(mocks.selectChatModels).toHaveBeenCalledWith({
+        vendor: 'copilot',
+        version: '2026-07',
+      });
+      expect(mocks.canSendRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'copilot-gpt-4o' }),
+      );
+    },
+  );
+
+  it('forwards native model and access change events', () => {
+    const port = createPort();
+    const listener = vi.fn();
+
+    port.onDidChangeModels(listener);
+    port.onDidChangeAccess(listener);
+
+    expect(mocks.onDidChangeChatModels).toHaveBeenCalledWith(listener);
+    expect(mocks.onDidChangeAccess).toHaveBeenCalledWith(listener);
   });
 
   it('maps model descriptors and forwards selectors', async () => {
@@ -121,6 +168,7 @@ describe('createLanguageModelPort', () => {
         vendor: 'copilot',
         version: '2026-07',
         maxInputTokens: 128_000,
+        access: 'consent-required',
       },
     ]);
     expect(mocks.selectChatModels).toHaveBeenCalledWith({
@@ -134,25 +182,14 @@ describe('createLanguageModelPort', () => {
     mocks.selectChatModels.mockImplementation(async ({ id }) =>
       id === 'missing' ? [] : [model],
     );
-    mocks.canSendRequest.mockReturnValue(true);
     const port = createPort();
 
     const reference = { vendor: 'copilot', id: 'copilot-gpt-4o' };
     await expect(port.countTokens(reference, 'hello')).resolves.toBe(42);
-    await expect(port.canSendRequest(reference)).resolves.toBe(true);
     await expect(
       port.countTokens({ vendor: 'copilot', id: 'missing' }, 'hello'),
     ).rejects.toThrow('Language model "missing" is unavailable.');
-    await expect(
-      createPort({}).canSendRequest(reference),
-    ).resolves.toBeUndefined();
-    expect(() =>
-      createPort({})
-        .onDidChangeAccess(() => {})
-        .dispose(),
-    ).not.toThrow();
     expect(model.countTokens).toHaveBeenCalledWith('hello', expect.anything());
-    expect(mocks.canSendRequest).toHaveBeenCalledWith(model);
     expect(mocks.selectChatModels).toHaveBeenCalledWith(reference);
   });
 
