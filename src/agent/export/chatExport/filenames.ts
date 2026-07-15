@@ -1,5 +1,6 @@
 /** Descriptive filename generation for chat exports. */
 
+import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import { isoDateOnly } from '@utils/text/stringUtils';
 
 /**
@@ -37,9 +38,11 @@ export function generateExportFilename(
 }
 
 function sanitizeFilename(name: string): string {
-  return name
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9-]/g, '-')
-    .replaceAll(/-+/g, '-')
-    .replaceAll(/^-|-$/g, '');
+  return sanitizePathSegment(name, {
+    lowercase: true,
+    invalidCharPattern: /[^a-z0-9-]/g,
+    replacement: '-',
+    collapseRepeats: true,
+    trimReplacement: true,
+  });
 }
