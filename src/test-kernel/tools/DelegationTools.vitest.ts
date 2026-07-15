@@ -189,7 +189,6 @@ describe('DelegateAgentTool resume (issue #7289)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.tryUseRunContext.mockReturnValue({
-      delegationDepth: 0,
       streamId: parentStreamId,
     } as never);
     mocks.currentSession.mockReturnValue({

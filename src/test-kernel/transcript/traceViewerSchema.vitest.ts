@@ -129,6 +129,24 @@ describe('trace-viewer TraceDataSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('ignores obsolete delegation depth in exported metadata', () => {
+    const legacyTrace = {
+      executionId: 'abcdef',
+      streamId: 'stream-1',
+      config: config(),
+      meta: {
+        timestamp: '2026-07-05T00:00:00.000Z',
+        delegationDepth: 2,
+      },
+      entries: [],
+      snapshot: { streamId: 'stream-1' },
+      terminalStatus: null,
+    };
+
+    const parsed = TraceDataSchema.parse(legacyTrace);
+    expect(parsed.meta).not.toHaveProperty('delegationDepth');
+  });
+
   it('throws a clear, identifying error via parseTraceData for a malformed trace', () => {
     const malformed = { totally: 'not a trace' };
 

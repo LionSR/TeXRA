@@ -105,6 +105,21 @@ describe('ExecutionKVStore meta read shims', () => {
     });
   });
 
+  it('ignores obsolete delegation depth in persisted metadata', async () => {
+    const id = 'legacy-delegation-depth' as ExecutionId;
+    await getExecutionStore(id).write('meta', {
+      timestamp: '2026-07-04T00:00:00.000Z',
+      parentExecutionId: 'abcdef',
+      delegationDepth: 3,
+    });
+
+    await expect(getExecutionStore(id).readMeta()).resolves.toEqual({
+      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
+      timestamp: '2026-07-04T00:00:00.000Z',
+      parentExecutionId: 'abcdef',
+    });
+  });
+
   it('normalizes legacy flat CLI workflow result metadata', async () => {
     const id = 'legacy-result-workflow' as ExecutionId;
     const output = {

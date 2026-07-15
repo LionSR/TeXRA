@@ -89,7 +89,6 @@ describe('AgentLaunchContext', () => {
     await withExecutionRunContext(
       ctx,
       {
-        delegationDepth: 1,
         approvalPromptsUnavailable: true,
         runtimeUnavailableTools: ['inquiry'],
         stopAfterCycle: true,
@@ -102,7 +101,6 @@ describe('AgentLaunchContext', () => {
           throw new Error('expected launch context');
         }
         expect(context.runScope).toBe(runScope);
-        expect(context.delegationDepth).toBe(1);
         expect(context.approvalPromptsUnavailable).toBe(true);
         expect(context.runtimeUnavailableTools).toEqual(['inquiry']);
         expect(context.stopAfterCycle).toBe(true);
