@@ -94,7 +94,7 @@ function runtimeConfig(
       supportsFunctionCalling: base.capabilities.supportsFunctionCalling,
       supportsReasoning: base.capabilities.supportsReasoning,
       supportsTokenCounting: true,
-      supportsVision: false,
+      supportsVision: base.capabilities.supportsVision,
       supportsSystemPrompt: false,
     },
   };

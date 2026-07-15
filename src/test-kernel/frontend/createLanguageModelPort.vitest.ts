@@ -22,6 +22,17 @@ class LanguageModelToolResultPart {
   ) {}
 }
 
+class LanguageModelDataPart {
+  static image(data: Uint8Array, mimeType: string) {
+    return new LanguageModelDataPart(data, mimeType);
+  }
+
+  constructor(
+    public readonly data: Uint8Array,
+    public readonly mimeType: string,
+  ) {}
+}
+
 class LanguageModelChatMessage {
   private constructor(
     public readonly role: 'user' | 'assistant',
@@ -80,6 +91,7 @@ vi.mock('vscode', () => ({
   LanguageModelTextPart,
   LanguageModelToolCallPart,
   LanguageModelToolResultPart,
+  LanguageModelDataPart,
   LanguageModelChatMessage,
   LanguageModelChatToolMode: { Auto: 1, Required: 2 },
   CancellationTokenSource,
@@ -241,7 +253,14 @@ describe('createLanguageModelPort', () => {
         },
         {
           role: 'user',
-          content: [{ kind: 'toolResult', callId: 'call-1', text: 'done' }],
+          content: [
+            {
+              kind: 'data',
+              data: new Uint8Array([1, 2, 3]),
+              mimeType: 'image/png',
+            },
+            { kind: 'toolResult', callId: 'call-1', text: 'done' },
+          ],
         },
       ],
       {
@@ -278,6 +297,7 @@ describe('createLanguageModelPort', () => {
         new LanguageModelToolCallPart('call-1', 'search', { query: 'input' }),
       ]),
       LanguageModelChatMessage.User([
+        LanguageModelDataPart.image(new Uint8Array([1, 2, 3]), 'image/png'),
         new LanguageModelToolResultPart('call-1', [
           new LanguageModelTextPart('done'),
         ]),

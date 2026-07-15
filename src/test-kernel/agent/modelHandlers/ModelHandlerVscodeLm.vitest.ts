@@ -1,3 +1,6 @@
+// Standard library imports
+import { Buffer } from 'node:buffer';
+
 // Third-party imports
 import {
   DEFAULT_MODEL_CAPABILITIES,
@@ -19,6 +22,7 @@ import {
   ModelHandlerVscodeLm,
 } from '@agent/modelHandlers/vscodelm/modelHandlerVscodeLm';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 import {
   detectPartialText,
   isUserAbort,
@@ -27,7 +31,10 @@ import {
 } from '@common/errors/sdkErrorUtils';
 import { isCredentialExhausted, type FileLocation } from '@shared/schemas';
 
-function modelConfig(supportsFunctionCalling = true): ModelConfig {
+function modelConfig(
+  supportsFunctionCalling = true,
+  supportsVision = true,
+): ModelConfig {
   return {
     name: 'copilot-test',
     label: 'Copilot Test',
@@ -41,11 +48,38 @@ function modelConfig(supportsFunctionCalling = true): ModelConfig {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsFunctionCalling,
-      supportsVision: true,
+      supportsVision,
       supportsNativeAudio: true,
     },
     openRouterOnly: false,
   };
+}
+
+const IMAGE_LOCATION: FileLocation = {
+  kind: 'external',
+  absolutePath: '/tmp/figure.png',
+};
+const AUDIO_LOCATION: FileLocation = {
+  kind: 'external',
+  absolutePath: '/tmp/recording.wav',
+};
+
+function mockMediaEntries(
+  handler: ModelHandlerVscodeLm,
+  entries: MediaEntry[],
+) {
+  const processor = (
+    handler as unknown as {
+      mediaProcessor: {
+        loadEntries(
+          mediaFiles: FileLocation[],
+        ): Promise<{ entries: MediaEntry[]; results: [] }>;
+      };
+    }
+  ).mediaProcessor;
+  return vi
+    .spyOn(processor, 'loadEntries')
+    .mockResolvedValue({ entries, results: [] });
 }
 
 function fakePort(
@@ -101,16 +135,77 @@ describe('ModelHandlerVscodeLm messages', () => {
     ]);
   });
 
-  it('rejects image, PDF, and audio attachment input', async () => {
+  it('preserves image bytes across initial, round, and insertion paths', async () => {
     const handler = new ModelHandlerVscodeLm(modelConfig());
-    expect(handler.capabilities.supportsVision).toBe(false);
+    const data = Buffer.from([1, 2, 3, 4]);
+    const loadEntries = mockMediaEntries(handler, [
+      {
+        file_name: 'figure.png',
+        data: data.toString('base64'),
+        binary_data: data,
+        media_type: 'image/png',
+        media_category: 'image',
+      },
+    ]);
+
+    expect(handler.capabilities.supportsVision).toBe(true);
     expect(handler.capabilities.supportsNativeAudio).toBe(false);
+    expect(handler.capabilities.supportsNativePdf).toBe(false);
+
+    const initial = await handler.initializeMessages(
+      'prefix',
+      'request',
+      [IMAGE_LOCATION],
+      'system',
+    );
+    expect(initial).toEqual([
+      {
+        role: 'user',
+        content: [
+          { kind: 'text', text: 'system\n\nprefix\n\nrequest' },
+          { kind: 'data', data, mimeType: 'image/png' },
+        ],
+      },
+    ]);
+
+    const rounds = await handler.createRoundMessages(initial, 'next question', [
+      IMAGE_LOCATION,
+    ]);
+    expect(rounds.at(-1)).toEqual({
+      role: 'user',
+      content: [
+        { kind: 'text', text: 'next question' },
+        { kind: 'data', data, mimeType: 'image/png' },
+      ],
+    });
+
+    const withTrailingAssistant: LanguageModelMessage[] = [
+      ...rounds,
+      { role: 'assistant', content: [{ kind: 'text', text: 'working' }] },
+    ];
+    await expect(
+      handler.addMediaToUserMessage(withTrailingAssistant, [IMAGE_LOCATION]),
+    ).resolves.toEqual(['image']);
+    expect(withTrailingAssistant.at(-2)?.content.at(-1)).toEqual({
+      kind: 'data',
+      data,
+      mimeType: 'image/png',
+    });
+    expect(loadEntries).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects media for non-vision models and rejects audio for vision models', async () => {
+    const textOnlyHandler = new ModelHandlerVscodeLm(modelConfig(true, false));
+    expect(textOnlyHandler.capabilities.supportsVision).toBe(false);
 
     await expect(
-      handler.createRoundMessages([], 'question', [
-        'figure.png' as unknown as FileLocation,
-      ]),
-    ).rejects.toThrow('text input only');
+      textOnlyHandler.createRoundMessages([], 'question', [IMAGE_LOCATION]),
+    ).rejects.toThrow('does not support image input');
+
+    const visionHandler = new ModelHandlerVscodeLm(modelConfig());
+    await expect(
+      visionHandler.initializeMessages('', 'question', [AUDIO_LOCATION]),
+    ).rejects.toThrow('audio and other native file inputs are not supported');
   });
 
   it('does not insert empty text before a tool result', () => {
