@@ -12,7 +12,7 @@ import type {
   ToolUnion,
 } from '@anthropic-ai/sdk/resources/messages';
 import type { Tool as GeminiTool, FunctionDeclaration } from '@google/genai';
-import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type {
   FunctionTool,
   WebSearchTool,
@@ -218,8 +218,10 @@ const DYNAMIC_FILTERING_TOOLS = new Set(['web_search', 'web_fetch']);
  * Note: We intentionally don't use zodFunction() here because it doesn't support
  * the unrepresentable option, causing failures with tool schemas that use .transform().
  */
-export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
-  return defs.map((d): ChatCompletionTool => {
+export function toOpenAITools(
+  defs: ToolDefinition[],
+): ChatCompletionFunctionTool[] {
+  return defs.map((d): ChatCompletionFunctionTool => {
     const parameters = toOpenAISchemaObject(d);
     return {
       type: 'function',
