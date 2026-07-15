@@ -436,8 +436,7 @@ export class DesktopProgressBridge {
         settleProposal: (proposalId, result) => {
           const resolved = this.session.interactions.resolve(proposalId, {
             kind: 'proposal',
-            action: result.action,
-            value: result,
+            decision: result,
           });
           if (!resolved) {
             this.logger.warn(
@@ -515,24 +514,27 @@ export class DesktopProgressBridge {
           handleBashApprovalAction: (message) =>
             void this.session.interactions.resolve(message.requestId, {
               kind: 'bash',
-              action: message.action,
-              feedback: message.feedback,
+              decision:
+                message.action === 'approve'
+                  ? { action: 'approve' }
+                  : { action: 'reject', feedback: message.feedback },
             }),
           handlePlanApprovalAction: (message) => {
             this.session.interactions.resolve(message.approvalId, {
               kind: 'plan',
-              action: message.action,
-              ...(message.action === 'reject' && {
-                feedback: message.feedback,
-              }),
+              decision:
+                message.action === 'reject'
+                  ? { action: 'reject', feedback: message.feedback }
+                  : { action: message.action },
             });
           },
           handleUserQuestionAction: (message) => {
             this.session.interactions.resolve(message.requestId, {
               kind: 'userQuestion',
-              action: message.action,
-              value: message.answers,
-              feedback: message.feedback,
+              decision:
+                message.action === 'submit'
+                  ? { action: 'submit', answers: message.answers }
+                  : { action: message.action, feedback: message.feedback },
             });
             return undefined;
           },

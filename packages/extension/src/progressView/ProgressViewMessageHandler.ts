@@ -439,8 +439,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         settleProposal: (proposalId, result) => {
           const resolved = this.interactions.resolve(proposalId, {
             kind: 'proposal',
-            action: result.action,
-            value: result,
+            decision: result,
           });
           if (!resolved) {
             this.logger.warn(
@@ -581,7 +580,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.interactions.isRetryPending(stream, requestId),
       triggerRetry: (stream, requestId) =>
         this.interactions.resolveRetry(stream, requestId, {
-          kind: 'retry',
           action: 'retry',
         }),
     });
@@ -640,7 +638,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       data.stream,
       data.requestId,
       {
-        kind: 'retry',
         action: 'retry',
         feedback: data.feedback,
       },
@@ -656,7 +653,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST>,
   ): void {
     this.interactions.resolveRetry(data.stream, data.requestId, {
-      kind: 'retry',
       action: 'cancel',
     });
   }
@@ -666,8 +662,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): void {
     this.interactions.resolve(data.requestId, {
       kind: 'bash',
-      action: data.action,
-      feedback: data.feedback,
+      decision:
+        data.action === 'approve'
+          ? { action: 'approve' }
+          : { action: 'reject', feedback: data.feedback },
     });
   }
 
@@ -676,9 +674,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): void {
     this.interactions.resolve(data.requestId, {
       kind: 'userQuestion',
-      action: data.action,
-      value: data.answers,
-      feedback: data.feedback,
+      decision:
+        data.action === 'submit'
+          ? { action: 'submit', answers: data.answers }
+          : { action: data.action, feedback: data.feedback },
     });
   }
 
@@ -808,7 +807,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!started) return;
 
     this.interactions.resolveRetry(data.stream, data.requestId, {
-      kind: 'retry',
       action: 'cancel',
     });
   }
@@ -892,8 +890,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const { approvalId, action } = data;
     this.interactions.resolve(approvalId, {
       kind: 'plan',
-      action,
-      feedback: data.feedback,
+      decision:
+        action === 'reject'
+          ? { action: 'reject', feedback: data.feedback }
+          : { action },
     });
   }
 

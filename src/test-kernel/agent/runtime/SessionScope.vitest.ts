@@ -205,7 +205,7 @@ describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
       expect(
         b.interactions.resolve('approval:b', {
           kind: 'plan',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(true);
       await expect(planB).resolves.toEqual({ action: 'approve' });
