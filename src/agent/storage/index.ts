@@ -46,3 +46,4 @@ export {
   deriveResumability,
   type ResumabilityDecision,
 } from './resumability';
+export { resolveChildRunOutput } from './childRunOutput';

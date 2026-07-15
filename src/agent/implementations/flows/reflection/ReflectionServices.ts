@@ -8,7 +8,7 @@ import type { OutputState } from '@agent/output/outputState';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { LatexMediaManager } from '@latex/LatexMediaManager';
-import type { AgentFileLocation, WorkspaceFileLocation } from '@shared/schemas';
+import type { AgentFileLocation, FileLocation } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
 
 export interface WorkflowOutputPolicy {
@@ -30,6 +30,6 @@ export interface ReflectionServices<
     round: number,
   ) => AgentFileLocation | Promise<AgentFileLocation>;
   readonly workflowOutputPolicy: WorkflowOutputPolicy;
-  readonly baseFiles: WorkspaceFileLocation[];
+  readonly baseFiles: FileLocation[];
   readonly onRoundFinalized: RoundFinalizedCallback;
 }

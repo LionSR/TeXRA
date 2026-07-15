@@ -457,10 +457,10 @@ function normalizeAgentOptions(
   if (source.inputFiles !== undefined) {
     if (
       !Array.isArray(source.inputFiles) ||
-      source.inputFiles.some((file) => typeof file !== 'string')
+      source.inputFiles.some((file) => !isNonEmptyString(file))
     ) {
       throw new Error(
-        'agent() option "inputFiles" must be an array of strings.',
+        'agent() option "inputFiles" must be an array of non-empty strings.',
       );
     }
     options.inputFiles = [...(source.inputFiles as string[])];
