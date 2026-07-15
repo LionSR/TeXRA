@@ -72,7 +72,10 @@ import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsCon
 import { DefaultDesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
 import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import { DesktopHistoryHandlers } from './desktopHistoryHandlers.js';
-import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
+import {
+  createDesktopSettingsIpc,
+  type DesktopSettingsUiHost,
+} from './desktopSettingsIpc.js';
 import {
   buildDefaultToolDashboardItems,
   findToolCommand,
@@ -846,36 +849,9 @@ function createWindow(options: {
       },
       initialization: { initialize: options.initializeCrashReporting },
     });
-  const historySettingsController = new DesktopHistoryHandlers({
-    resourcesPath: options.resourcesPath,
-    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
-    // Rerun and restore use the same host-neutral owners as the extension,
-    // reached through the desktop execution bridge instead of VS Code commands.
-    runExecution: async (request) => {
-      await (await getAgentExecution()).progress.runExecution(request);
-    },
-    restoreTaskState: async (taskState) =>
-      (await getAgentExecution()).progress.restoreTaskState(taskState),
-    getActiveExecutionIds: getAllActiveExecutionIds,
-    openPath: previewHost.openPath,
+  const settingsUi: DesktopSettingsUiHost = {
     showInfoMessage,
     showErrorMessage,
-    onError: reportAsyncError,
-  });
-  const settingsIpc = createDesktopSettingsIpc({
-    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
-    agentSettingsController,
-    crashReportingSettingsController,
-    credentialSettingsController,
-    historySettingsController,
-    toolingSettingsController,
-    state: {
-      globalState: platform().globalState,
-      workspaceState: platform().workspaceState,
-    },
-    config: platform().config,
-    sendStartupCatalogData: true,
-    showInfoMessage,
     confirmAction: async (message, confirmLabel = 'OK') => {
       const result = await dialog.showMessageBox(window, {
         type: 'warning',
@@ -896,6 +872,37 @@ function createWindow(options: {
       }
     },
     onError: reportAsyncError,
+  };
+  const historySettingsController = new DesktopHistoryHandlers({
+    resourcesPath: options.resourcesPath,
+    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    // Rerun and restore use the same host-neutral owners as the extension,
+    // reached through the desktop execution bridge instead of VS Code commands.
+    runExecution: async (request) => {
+      await (await getAgentExecution()).progress.runExecution(request);
+    },
+    restoreTaskState: async (taskState) =>
+      (await getAgentExecution()).progress.restoreTaskState(taskState),
+    getActiveExecutionIds: getAllActiveExecutionIds,
+    openPath: settingsUi.openPath,
+    showInfoMessage: settingsUi.showInfoMessage,
+    showErrorMessage: settingsUi.showErrorMessage,
+    onError: settingsUi.onError,
+  });
+  const settingsIpc = createDesktopSettingsIpc({
+    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    agentSettingsController,
+    crashReportingSettingsController,
+    credentialSettingsController,
+    historySettingsController,
+    toolingSettingsController,
+    state: {
+      globalState: platform().globalState,
+      workspaceState: platform().workspaceState,
+    },
+    config: platform().config,
+    ui: settingsUi,
+    sendStartupCatalogData: true,
   });
   settingsIpcRef.current = settingsIpc;
   const progressIpc = createDesktopProgressIpc({
