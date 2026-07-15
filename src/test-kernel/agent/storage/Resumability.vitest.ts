@@ -5,6 +5,7 @@ import {
   clearStoreCache,
   deriveResumability,
   EXECUTION_META_SCHEMA_VERSION,
+  finalizeExecution,
   getExecutionStore,
   RESUMABILITY_CAUSE,
 } from '@agent/storage';
@@ -83,6 +84,34 @@ describe('deriveResumability', () => {
     const executionId = 'failed-with-flow' as ExecutionId;
     await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
     await writeFlow(executionId);
+
+    await expect(deriveResumability(executionId)).resolves.toMatchObject({
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.TERMINAL_FAILED,
+      terminalStatus: EXECUTION_STATUS.ERROR,
+    });
+  });
+
+  it('stays non-resumable when terminal metadata persists but flow deletion fails', async () => {
+    const executionId = 'failed-finalization-with-flow' as ExecutionId;
+    await writeMeta(executionId, {});
+    await writeFlow(executionId);
+    const store = getExecutionStore(executionId);
+    vi.spyOn(store, 'delete').mockRejectedValueOnce(
+      new Error('flow delete failed'),
+    );
+
+    await expect(
+      finalizeExecution({
+        executionId,
+        terminalStatus: EXECUTION_STATUS.ERROR,
+        flowRecord: 'delete',
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'flow-record-delete',
+      terminalStatusPersisted: true,
+    });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
       resumable: false,

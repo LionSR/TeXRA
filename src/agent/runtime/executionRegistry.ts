@@ -923,24 +923,30 @@ export class ExecutionRegistry {
     // untracks the suspended one below. Align the interim envelope only after
     // durable terminal metadata exists. A turn that does continue will replace
     // it with its own result.
-    void finalization.then((result) => {
-      if (result.status === 'failed') {
-        logger.warn('Failed to finalize stopped waiting execution', {
-          data: {
-            executionId: handle.executionId,
-            stage: result.stage,
-            terminalStatusPersisted: result.terminalStatusPersisted,
-            error: result.error,
-          },
+    void finalization
+      .then((result) => {
+        if (result.status === 'failed') {
+          logger.warn('Failed to finalize stopped waiting execution', {
+            data: {
+              executionId: handle.executionId,
+              stage: result.stage,
+              terminalStatusPersisted: result.terminalStatusPersisted,
+              error: result.error,
+            },
+          });
+        }
+        if (result.terminalStatusPersisted) {
+          void synchronizeAgentResultOutcome(
+            handle.executionId,
+            RUN_OUTCOME.CANCELLED,
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        logger.warn('Waiting-execution finalizer rejected unexpectedly', {
+          data: { executionId: handle.executionId, error },
         });
-      }
-      if (result.terminalStatusPersisted) {
-        void synchronizeAgentResultOutcome(
-          handle.executionId,
-          RUN_OUTCOME.CANCELLED,
-        );
-      }
-    });
+      });
     this.untrackHandle(handle);
     this.cancelStreamStatus(handle.childStreamId, handle);
     return true;

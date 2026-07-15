@@ -125,19 +125,29 @@ export async function finalizeRunTerminal(
   // caller that registers one outside that branch.
   handle.clearWaitingCleanup();
   if (params.persistence.kind === 'finalize') {
-    const finalization = await finalizeExecution({
-      executionId: handle.executionId,
-      terminalStatus: projectRunOutcome(outcome).executionStatus,
-      flowRecord: params.persistence.flowRecord,
-    });
-    if (finalization.status === 'failed') {
-      logger.warn('Failed to finalize durable execution state', {
+    try {
+      const finalization = await finalizeExecution({
+        executionId: handle.executionId,
+        terminalStatus: projectRunOutcome(outcome).executionStatus,
+        flowRecord: params.persistence.flowRecord,
+      });
+      if (finalization.status === 'failed') {
+        logger.warn('Failed to finalize durable execution state', {
+          data: {
+            agentIdentifier: handle.agentName,
+            executionId: handle.executionId,
+            stage: finalization.stage,
+            terminalStatusPersisted: finalization.terminalStatusPersisted,
+            error: finalization.error,
+          },
+        });
+      }
+    } catch (error) {
+      logger.warn('Execution finalizer rejected unexpectedly', {
         data: {
           agentIdentifier: handle.agentName,
           executionId: handle.executionId,
-          stage: finalization.stage,
-          terminalStatusPersisted: finalization.terminalStatusPersisted,
-          error: finalization.error,
+          error,
         },
       });
     }
