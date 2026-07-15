@@ -16,14 +16,20 @@ import * as logger from '@logger/logUtils';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { getDefaultToolRegistry } from '@tools/registry';
 
+// Local imports - language model tools
+import {
+  buildLanguageModelToolInvocationMessage,
+  type LanguageModelResearchToolName,
+} from './languageModelToolInvocationMessage';
+
 const CHANNEL = 'LanguageModelTools';
 
 /** VS Code tool name (manifest) → canonical TeXRA registry tool name. */
-const LM_TOOL_NAMES: Record<string, string> = {
+const LM_TOOL_NAMES = {
   texra_arxiv_search: 'arxiv_search',
   texra_web_fetch: 'web_fetch',
   texra_crossref_search: 'crossref_search',
-};
+} as const satisfies Record<string, LanguageModelResearchToolName>;
 
 /** Flatten a TeXRA ToolResult into the plain text VS Code chat expects. */
 function toResultText(result: ToolResult): string {
@@ -58,6 +64,16 @@ export function registerLanguageModelTools(
       continue;
     }
     const disposable = lm.registerTool(lmName, {
+      prepareInvocation(
+        options: vscode.LanguageModelToolInvocationPrepareOptions<unknown>,
+      ) {
+        return {
+          invocationMessage: buildLanguageModelToolInvocationMessage(
+            toolName,
+            options.input,
+          ),
+        };
+      },
       async invoke(
         options: vscode.LanguageModelToolInvocationOptions<unknown>,
       ) {
