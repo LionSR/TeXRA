@@ -914,8 +914,11 @@ function createWindow(options: {
   });
   settingsIpcRef.current = settingsIpc;
   const progressIpc = createDesktopProgressIpc({
-    getProgress: () => agentExecution?.progress,
-    ensureProgress: async () => (await getAgentExecution()).progress,
+    source: {
+      kind: 'lazy',
+      get: () => agentExecution?.progress,
+      ensure: async () => (await getAgentExecution()).progress,
+    },
     onAsyncError: reportAsyncError,
     // A registry entry declared `unsupported(...)` carries a user-facing
     // reason; fall back to a generic message for a truly unrecognized
