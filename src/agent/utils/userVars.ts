@@ -7,8 +7,7 @@ import {
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
-  getRosterAgent,
-  getVisibleAgents,
+  resolveDelegationScopeAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import {
@@ -18,7 +17,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import type { FileListEntry } from '@shared/schemas';
-import { agentKeyOf } from '@shared/schemas/agent';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -247,23 +245,10 @@ function getBasicVars(
   }
 
   function getPromptAgents(category: AgentCategory): AgentEntry[] {
-    const scope = options.delegationAgentScope;
-    if (!scope) return getVisibleAgents(category);
-
-    const keys =
-      category === AgentCategory.Workflow
-        ? scope.workflowAgentKeys
-        : scope.toolUseAgentKeys;
-    const seen = new Set<string>();
-    return keys.flatMap((key) => {
-      const entry = getRosterAgent(category, key);
-      if (!entry) return [];
-
-      const canonicalKey = agentKeyOf(entry);
-      if (seen.has(canonicalKey)) return [];
-      seen.add(canonicalKey);
-      return [entry];
-    });
+    return resolveDelegationScopeAgents(
+      options.delegationAgentScope ?? undefined,
+      category,
+    );
   }
 
   // Filter out the current agent so it doesn't see itself as a delegation target
