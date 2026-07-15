@@ -207,13 +207,15 @@ export async function releaseWhenStreamCloses(
       try {
         readResult = await reader.read();
       } catch (error) {
-        try {
-          onUpstreamBodyError?.();
-        } catch {
-          console.error('[RELAY] Upstream body failure observer failed');
+        if (!leaseError) {
+          try {
+            onUpstreamBodyError?.();
+          } catch {
+            console.error('[RELAY] Upstream body failure observer failed');
+          }
         }
         await releaseRelaySlotSafely(releaseOnce);
-        throw error;
+        throw leaseError ?? error;
       }
 
       if (leaseError) {

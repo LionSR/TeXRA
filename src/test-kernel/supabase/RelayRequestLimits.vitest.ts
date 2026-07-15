@@ -764,9 +764,14 @@ describe('relay free-tier request limits', () => {
       if (!slot.allowed) assert.fail('expected slot to be allowed');
 
       let upstreamBodyFailures = 0;
+      const pendingBody = new ReadableStream<Uint8Array>({
+        pull() {
+          return new Promise<void>(() => {});
+        },
+      });
 
       const wrapped = await releaseWhenStreamCloses(
-        byteStream([new Uint8Array([1])]),
+        pendingBody,
         slot.release,
         slot.refresh,
         10,
@@ -776,6 +781,12 @@ describe('relay free-tier request limits', () => {
       );
       if (wrapped === null) assert.fail('expected wrapped stream');
 
+      const reader = wrapped.getReader();
+      const pendingRead = reader.read();
+      const rejectedRead = assert.rejects(
+        pendingRead,
+        /relay_request_refresh did not find request slot/,
+      );
       await vi.advanceTimersByTimeAsync(10);
       assert.deepEqual(calls, [
         'relay_request_gate',
@@ -783,11 +794,7 @@ describe('relay free-tier request limits', () => {
         'relay_request_release',
       ]);
 
-      const reader = wrapped.getReader();
-      await assert.rejects(
-        reader.read(),
-        /relay_request_refresh did not find request slot/,
-      );
+      await rejectedRead;
       assert.equal(upstreamBodyFailures, 0);
     } finally {
       vi.useRealTimers();
