@@ -6,6 +6,7 @@ import {
   formatTimestamp,
   formatCompactDuration,
   formatCompactTokenCount,
+  formatResultCount,
   objectToLogString,
   pluralize,
   splitContentLines,
@@ -84,6 +85,17 @@ describe('pluralize', () => {
 
   it('honors explicit plural overrides', () => {
     expect(pluralize(2, 'person', 'people')).toBe('people');
+  });
+});
+
+describe('formatResultCount', () => {
+  it('formats singular and library-backed plural counts', () => {
+    expect(formatResultCount(1, 'entry')).toBe('1 entry');
+    expect(formatResultCount(2, 'entry')).toBe('2 entries');
+  });
+
+  it('honors explicit invariant plurals', () => {
+    expect(formatResultCount(2, 'info', 'info')).toBe('2 info');
   });
 });
 

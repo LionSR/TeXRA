@@ -12,7 +12,10 @@
  */
 
 import { warn } from '@logger/logUtils';
-import { formatCompactDuration } from '@utils/text/stringUtils';
+import {
+  formatCompactDuration,
+  formatResultCount,
+} from '@utils/text/stringUtils';
 
 import { LEAN_SERVER_MODE_LABELS } from './leanConstants';
 
@@ -153,9 +156,6 @@ export function summarizeLeanServers(
     const toolchain = info.toolchain ? `, ${info.toolchain}` : '';
     return `• ${info.workspaceRoot} (${modeLabel}${toolchain})${statusTail(info, now)}`;
   });
-  const header =
-    list.length === 1
-      ? '1 Lean server registered:'
-      : `${list.length} Lean servers registered:`;
+  const header = `${formatResultCount(list.length, 'Lean server')} registered:`;
   return [header, ...lines].join('\n');
 }

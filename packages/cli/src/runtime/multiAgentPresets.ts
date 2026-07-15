@@ -9,6 +9,7 @@ import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { agentKeyOf } from '@shared/schemas/agent';
+import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import {
   AGENT_MODE_PRESETS,
   parseAgentModePresets,
@@ -520,9 +521,7 @@ function availablePresetTeamMemberCount(
 }
 
 function formatAvailableTeamAgentCount(count: number): string {
-  return count === 1
-    ? '1 available team agent'
-    : `${count} available team agents`;
+  return formatResultCount(count, 'available team agent');
 }
 
 function formatPresetAvailabilityForLauncher(
@@ -567,8 +566,7 @@ function launcherAgentKindLabel(
   kind: 'workflow' | 'tool-use',
   count: number,
 ): string {
-  if (kind === 'tool-use') return count === 1 ? 'tool' : 'tools';
-  return count === 1 ? 'workflow' : 'workflows';
+  return pluralize(count, kind === 'tool-use' ? 'tool' : 'workflow');
 }
 
 function agentHasDelegationTools(agent: AgentEntry): boolean {

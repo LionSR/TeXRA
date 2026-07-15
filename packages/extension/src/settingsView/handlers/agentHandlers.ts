@@ -39,6 +39,7 @@ import {
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
 import { AbsoluteFS } from '@utils/files';
+import { formatResultCount } from '@utils/text/stringUtils';
 import type { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
@@ -477,7 +478,7 @@ export class AgentHandlers {
       void vscode.window.showInformationMessage(
         unresolvedCount === 0
           ? `Applied "${result.preset.name}" team`
-          : `Applied "${result.preset.name}" with ${unresolvedCount} ${unresolvedCount === 1 ? 'member' : 'members'} still unavailable`,
+          : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
       );
     } catch (error) {
       await showLoggedErrorMessage(

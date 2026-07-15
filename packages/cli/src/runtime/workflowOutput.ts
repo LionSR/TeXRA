@@ -15,6 +15,7 @@ import { getRunDir } from '@utils/files';
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.
 import { toPosixPath } from '@utils/core/pathCore';
+import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from './cliContext';
 import { type CliRunResult, type ExecuteAgentResult } from './terminalStatus';
@@ -250,7 +251,7 @@ export async function resolveWorkflowOutput(
     );
     if (missing.length > 0) {
       throw new Error(
-        `Workflow ${terminalStatus} without expected output${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${expectedRelativePaths.length} expected output${expectedRelativePaths.length === 1 ? '' : 's'} to ${targetRoot}.`,
+        `Workflow ${terminalStatus} without expected ${pluralize(missing.length, 'output')}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${formatResultCount(expectedRelativePaths.length, 'expected output')} to ${targetRoot}.`,
       );
     }
 

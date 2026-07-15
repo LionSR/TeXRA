@@ -6,6 +6,8 @@
  * and Lean tool diagnostics satisfy this interface.
  */
 
+import { formatResultCount } from '@utils/text/stringUtils';
+
 /**
  * Minimal diagnostic shape required by the formatting functions.
  * Compatible with `vscode.Diagnostic` and `LeanDiagnostic`.
@@ -84,7 +86,7 @@ export function formatCounts(counts: SeverityCounts): string {
   const parts = COUNT_FORMAT_ORDER.filter(({ key }) => counts[key] > 0).map(
     ({ key, label, plural }) => {
       const count = counts[key];
-      return `${count} ${count === 1 ? label : plural}`;
+      return formatResultCount(count, label, plural);
     },
   );
   return parts.length > 0 ? parts.join(', ') : 'No issues';

@@ -33,6 +33,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { setReportReviewIssueSink } from '@tools/ReportReviewIssueTool';
 import { WorkspaceFS } from '@utils/files';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'AgentReview';
 
@@ -114,7 +115,7 @@ export function registerAgentReviewCommands(
       count > 0
         ? {
             value: count,
-            tooltip: `${count} agent review issue${count === 1 ? '' : 's'}`,
+            tooltip: formatResultCount(count, 'agent review issue'),
           }
         : undefined;
   };
