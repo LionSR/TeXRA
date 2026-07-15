@@ -52,6 +52,7 @@ import {
 
 // Local imports - desktop test support
 import {
+  createStubDesktopAgentExecutionHost,
   disposeAfterTest,
   makeFakeTrace,
   type DesktopAgentExecutionModule,
@@ -213,7 +214,8 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   bridgeModule: DesktopAgentExecutionModule;
   openTranscripts(): Promise<StreamLogStore>;
   ephemeralTranscripts(): StreamLogStore;
-  progressSnapshotStore?: ProgressSnapshotStore;
+  createProgressSnapshotStore(): ProgressSnapshotStore;
+  progressSnapshotStore: ProgressSnapshotStore;
 }> {
   vi.resetModules();
   const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
@@ -372,10 +374,11 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
       workspaceFolders: [],
     },
   }));
-  let progressSnapshotStore: ProgressSnapshotStore | undefined;
+  const { StreamLogStore, StreamSnapshotStore } = await import('@transcript');
+  const createProgressSnapshotStore = (): ProgressSnapshotStore =>
+    new StreamSnapshotStore();
+  const progressSnapshotStore = createProgressSnapshotStore();
   if (options.configureProgressSnapshotStore) {
-    const { StreamSnapshotStore } = await import('@transcript');
-    progressSnapshotStore = new StreamSnapshotStore();
     await progressSnapshotStore.load([]);
     options.configureProgressSnapshotStore(progressSnapshotStore);
     await progressSnapshotStore.flush();
@@ -383,7 +386,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   const bridgeModule = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
-  const { StreamLogStore } = await import('@transcript');
   const { initializeDefaultSession } =
     await import('@agent/runtime/SessionHandle');
   initializeDefaultSession({
@@ -391,6 +393,7 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   });
   return {
     bridgeModule,
+    createProgressSnapshotStore,
     openTranscripts: () => StreamLogStore.open(),
     ephemeralTranscripts: () => StreamLogStore.ephemeral('desktop bridge test'),
     progressSnapshotStore,
@@ -416,8 +419,12 @@ async function createBridge(
           : undefined,
         streamSnapshotStore: options.streamSnapshotStore,
         progressSnapshotStore,
-        showErrorMessage: options.showErrorMessage,
-        openPath: options.openPath,
+        host: createStubDesktopAgentExecutionHost({
+          ...(options.showErrorMessage
+            ? { showErrorMessage: options.showErrorMessage }
+            : {}),
+          ...(options.openPath ? { openPath: options.openPath } : {}),
+        }),
       },
     ) as unknown as TestableBridge,
   );
@@ -2933,7 +2940,11 @@ describe('DesktopProgressBridge', () => {
     };
 
     async function createWindowPair(): Promise<WindowPair> {
-      const { bridgeModule, ephemeralTranscripts } = await loadBridgeModule();
+      const {
+        bridgeModule,
+        createProgressSnapshotStore,
+        ephemeralTranscripts,
+      } = await loadBridgeModule();
       // Same registry as the bridge module graph — identity comparisons
       // against process-wide defaults must use this instance, not a
       // statically imported copy from the pre-reset registry.
@@ -2947,7 +2958,9 @@ describe('DesktopProgressBridge', () => {
           },
           {
             transcripts: ephemeralTranscripts(),
+            progressSnapshotStore: createProgressSnapshotStore(),
             streamSnapshotStore: snapshots,
+            host: createStubDesktopAgentExecutionHost(),
           },
         ) as unknown as TestableBridge;
         const session = (bridge as unknown as { session: SessionHandle })
@@ -3346,7 +3359,11 @@ describe('DesktopProgressBridge', () => {
       messages?: unknown[];
     }) {
       let activeExecutionIds: readonly string[] = [];
-      const { bridgeModule, ephemeralTranscripts } = await loadBridgeModule({
+      const {
+        bridgeModule,
+        createProgressSnapshotStore,
+        ephemeralTranscripts,
+      } = await loadBridgeModule({
         activeExecutionIds: () => activeExecutionIds,
       });
       const { AgentExecutionHandle, ProcessExecutionHandle } =
@@ -3357,7 +3374,11 @@ describe('DesktopProgressBridge', () => {
         (message) => {
           messages.push(message);
         },
-        { transcripts: ephemeralTranscripts() },
+        {
+          transcripts: ephemeralTranscripts(),
+          progressSnapshotStore: createProgressSnapshotStore(),
+          host: createStubDesktopAgentExecutionHost(),
+        },
       ) as unknown as TestableBridge & { session: SessionHandle };
       await settleProgressEvents();
       const createHandle = (
@@ -3407,7 +3428,12 @@ describe('DesktopProgressBridge', () => {
           (message) => {
             reopenedMessages.push(message);
           },
-          { transcripts: ephemeralTranscripts(), streamSnapshotStore },
+          {
+            transcripts: ephemeralTranscripts(),
+            progressSnapshotStore: createProgressSnapshotStore(),
+            streamSnapshotStore,
+            host: createStubDesktopAgentExecutionHost(),
+          },
         ) as unknown as TestableBridge & {
           session: SessionHandle;
         };

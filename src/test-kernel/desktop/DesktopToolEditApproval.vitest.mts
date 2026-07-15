@@ -11,14 +11,10 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
-import type {
-  DiffOptions,
-  DiffSession,
-  DiffSource,
-  DiffViewHost,
-} from '@hosts/uiHosts';
+import type { DiffOptions, DiffSession, DiffSource } from '@hosts/uiHosts';
 import { delay } from '@utils/core';
 
+import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.mjs';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 import type {
   ToolEditApprovalRequest,
@@ -33,13 +29,7 @@ interface DesktopToolEditApprovalModule {
   createDesktopToolEditApprovalController(options: {
     runtimeHost: AgentRuntimeHost;
     session: SessionHandle;
-    openPath?: (filePath: string) => Promise<void>;
-    openBuildDisplay?: (
-      location: { absolutePath: string },
-      options?: { preserveFocus?: boolean },
-    ) => Promise<void>;
-    openDiff?: DiffViewHost['openDiff'];
-    showErrorMessage?: (message: string) => Promise<void> | void;
+    ui: ReturnType<typeof createStubDesktopAgentExecutionHost>;
     tempRoot?: string;
   }): {
     approvePendingForStream(streamId: string): Promise<void>;
@@ -262,6 +252,7 @@ describe('desktop tool edit approval', () => {
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
         session,
+        ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
       });
 
@@ -312,7 +303,7 @@ describe('desktop tool edit approval', () => {
   );
 
   approvalTest(
-    'routes preview and diff actions through desktop temp files before rejection',
+    'routes proposed-file previews through desktop temp files before rejection',
     async () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { requestToolEditApproval, desktopModule } =
@@ -326,9 +317,11 @@ describe('desktop tool edit approval', () => {
         runtimeHost,
         session,
         tempRoot,
-        openPath: async (filePath) => {
-          opened.push(filePath);
-        },
+        ui: createStubDesktopAgentExecutionHost({
+          openPath: async (filePath) => {
+            opened.push(filePath);
+          },
+        }),
       });
       useControllerApproval(controller);
       const { shownToolEditPermissions: shown } = runtimeHost;
@@ -371,14 +364,6 @@ describe('desktop tool edit approval', () => {
 
         controller.handleAction({
           requestId: shown[0].requestId,
-          action: 'openDiff',
-        });
-        await vi.waitFor(() => expect(opened).toHaveLength(2));
-        expect(opened[1].endsWith('.diff')).toBe(true);
-        await expect(pathExists(opened[1])).resolves.toBe(true);
-
-        controller.handleAction({
-          requestId: shown[0].requestId,
           action: 'reject',
           feedback: 'not yet',
         });
@@ -388,7 +373,6 @@ describe('desktop tool edit approval', () => {
         });
         await vi.waitFor(async () => {
           await expect(pathExists(opened[0])).resolves.toBe(false);
-          await expect(pathExists(opened[1])).resolves.toBe(false);
         });
       } finally {
         controller.dispose();
@@ -398,7 +382,7 @@ describe('desktop tool edit approval', () => {
   );
 
   approvalTest(
-    'routes diff actions through the injected desktop diff host when available',
+    'routes diff actions through the required desktop diff host',
     async () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { requestToolEditApproval, desktopModule } =
@@ -417,8 +401,7 @@ describe('desktop tool edit approval', () => {
         runtimeHost,
         session: createTestSession(),
         tempRoot,
-        openPath,
-        openDiff,
+        ui: createStubDesktopAgentExecutionHost({ openPath, openDiff }),
       });
       useControllerApproval(controller);
       const { shownToolEditPermissions: shown } = runtimeHost;
@@ -469,9 +452,11 @@ describe('desktop tool edit approval', () => {
         runtimeHost,
         session: createTestSession(),
         tempRoot,
-        openPath: async (filePath) => {
-          opened.push(filePath);
-        },
+        ui: createStubDesktopAgentExecutionHost({
+          openPath: async (filePath) => {
+            opened.push(filePath);
+          },
+        }),
       });
       useControllerApproval(controller);
       const { shownToolEditPermissions: shown } = runtimeHost;
@@ -534,12 +519,14 @@ describe('desktop tool edit approval', () => {
         runtimeHost,
         session: createTestSession(),
         tempRoot,
-        openBuildDisplay: async (location, options) => {
-          displayed.push({ absolutePath: location.absolutePath, options });
-        },
-        showErrorMessage: (message) => {
-          messages.push(message);
-        },
+        ui: createStubDesktopAgentExecutionHost({
+          openBuildDisplay: async (location, options) => {
+            displayed.push({ absolutePath: location.absolutePath, options });
+          },
+          showErrorMessage: (message) => {
+            messages.push(message);
+          },
+        }),
       });
       useControllerApproval(controller);
       const { shownToolEditPermissions: shown } = runtimeHost;
@@ -595,6 +582,7 @@ describe('desktop tool edit approval', () => {
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
         session: createTestSession(),
+        ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
       });
       useControllerApproval(controller);
@@ -637,6 +625,7 @@ describe('desktop tool edit approval', () => {
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
         session: createTestSession(),
+        ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
       });
       useControllerApproval(controller);
@@ -675,6 +664,7 @@ describe('desktop tool edit approval', () => {
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
         session: createTestSession(),
+        ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
       });
       useControllerApproval(controller);
@@ -750,6 +740,7 @@ describe('desktop tool edit approval', () => {
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
         session,
+        ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
       });
       useControllerApproval(controller);
@@ -788,6 +779,7 @@ describe('desktop tool edit approval', () => {
     const controller = desktopModule.createDesktopToolEditApprovalController({
       runtimeHost,
       session: createTestSession(),
+      ui: createStubDesktopAgentExecutionHost(),
       tempRoot,
     });
     useControllerApproval(controller);

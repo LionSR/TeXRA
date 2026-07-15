@@ -8,6 +8,7 @@ import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
 // Local imports - desktop test support
 import {
+  createStubDesktopAgentExecutionHost,
   disposeAfterTest,
   makeFakeTrace,
   type DesktopAgentExecutionModule,
@@ -81,12 +82,25 @@ async function createExecution(options: {
   const { createDesktopAgentExecution } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
+  const { StreamSnapshotStore } = await import('@transcript');
   return disposeAfterTest(
     await createDesktopAgentExecution({
       postToRenderer: options.postToRenderer ?? vi.fn(),
-      opener: options.opener,
-      showErrorMessage: options.showErrorMessage,
-      onRunCompleted: options.onRunCompleted,
+      progressSnapshotStore: new StreamSnapshotStore(),
+      host: createStubDesktopAgentExecutionHost({
+        ...(options.opener?.openPath
+          ? { openPath: options.opener.openPath }
+          : {}),
+        ...(options.opener?.openBuildDisplay
+          ? { openBuildDisplay: options.opener.openBuildDisplay }
+          : {}),
+        ...(options.showErrorMessage
+          ? { showErrorMessage: options.showErrorMessage }
+          : {}),
+        ...(options.onRunCompleted
+          ? { onRunCompleted: options.onRunCompleted }
+          : {}),
+      }),
     }),
   );
 }
@@ -322,24 +336,5 @@ describe('createDesktopAgentExecution', () => {
       expect.objectContaining({ absolutePath: '/tmp/output.tex' }),
     );
     expect(opener.openPath).not.toHaveBeenCalled();
-  });
-
-  it('does not fall back to plain file open for compile-file actions', async () => {
-    const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
-    const showErrorMessage = vi.fn();
-    const execution = await createExecution({
-      opener,
-      showErrorMessage,
-      prepareMainViewExecutionRequest: vi.fn(() => ({
-        valid: false,
-        message: 'not used',
-      })),
-    });
-
-    await execution.progress.openFileCompile('/tmp/output.tex');
-    expect(opener.openPath).not.toHaveBeenCalled();
-    expect(showErrorMessage).toHaveBeenCalledWith(
-      'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
-    );
   });
 });
