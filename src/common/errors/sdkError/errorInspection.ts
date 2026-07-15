@@ -164,13 +164,19 @@ export function detectRequestId(err: unknown): string | undefined {
     headers?: HeaderBag;
   };
 
+  const relayRequestId = getHeaderValue(
+    candidate.headers,
+    'x-relay-request-id',
+  );
+  if (relayRequestId) return relayRequestId;
+
   const directId =
     candidate.request_id ?? candidate.requestId ?? candidate.requestID;
   if (isString(directId) && directId) {
     return directId;
   }
 
-  // Try headers (Anthropic SDK uses 'request-id'; relay may use 'x-request-id')
+  // Try provider headers after the relay-specific correlation id.
   return (
     getHeaderValue(candidate.headers, 'request-id') ??
     getHeaderValue(candidate.headers, 'x-request-id')

@@ -101,7 +101,16 @@ import {
   readRequestBodyWithinSizeLimit,
 } from './requestLimits.ts';
 import {
+  classifyPreHeaderFailure,
+  getRelayRequestBytes,
+  getUpstreamRequestId,
+  logRelayFailure,
+  RELAY_REQUEST_ID_HEADER,
+  withRelayErrorRequestId,
+} from './diagnostics.ts';
+import {
   acquireRelayRequestSlot,
+  releaseRelaySlotSafely,
   releaseWhenStreamCloses,
 } from './requestGate.ts';
 
@@ -394,7 +403,12 @@ app.use(
       'x-stainless-runtime',
       'x-stainless-runtime-version',
     ],
-    exposeHeaders: ['content-length', 'content-type', 'x-request-id'],
+    exposeHeaders: [
+      'content-length',
+      'content-type',
+      'x-request-id',
+      RELAY_REQUEST_ID_HEADER,
+    ],
     maxAge: 86400,
   }),
 );
@@ -835,26 +849,48 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   // 11. Forward request with timeout
   let upstreamResponse: Response;
+  const bodyToSend =
+    c.req.method === 'GET' ? undefined : (requestBody ?? c.req.raw.body);
+  const relayRequestId = crypto.randomUUID();
+  const requestBytes = getRelayRequestBytes(
+    bodyToSend,
+    c.req.raw.headers.get('content-length'),
+  );
+  const upstreamStartedAt = performance.now();
   try {
-    const bodyToSend =
-      c.req.method === 'GET' ? undefined : (requestBody ?? c.req.raw.body);
-
     upstreamResponse = await fetch(targetUrl, {
       method: c.req.method,
       headers: upstreamHeaders,
-      body: bodyToSend,
+      // The buffered body owns its ArrayBuffer, although its existing public
+      // type predates typed-array buffer generics in newer TypeScript versions.
+      body: bodyToSend as BodyInit | null | undefined,
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch (error) {
-    await releaseRelaySlot?.();
-    if (
-      error instanceof Error &&
-      (error.name === 'TimeoutError' || error.name === 'AbortError')
-    ) {
-      return jsonError('Upstream request timed out', 504);
+    const failurePhase = classifyPreHeaderFailure(error);
+    logRelayFailure({
+      relayRequestId,
+      provider,
+      model: modelName,
+      requestBytes,
+      elapsedMs: Math.round(performance.now() - upstreamStartedAt),
+      failurePhase,
+      upstreamRequestId: null,
+    });
+    await releaseRelaySlotSafely(releaseRelaySlot);
+    if (failurePhase === 'pre_headers_timeout') {
+      return withRelayErrorRequestId(
+        jsonError('Upstream request timed out', 504),
+        relayRequestId,
+      );
     }
-    throw error;
+    return withRelayErrorRequestId(
+      jsonError('Internal server error', 500),
+      relayRequestId,
+    );
   }
+
+  const upstreamRequestId = getUpstreamRequestId(upstreamResponse.headers);
 
   if (upstreamResponse.status >= 400) {
     console.error(
@@ -871,6 +907,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   });
 
   responseHeaders.set('X-Accel-Buffering', 'no');
+  responseHeaders.set(RELAY_REQUEST_ID_HEADER, relayRequestId);
 
   // FUTURE: SSE keepalive injection to prevent proxy idle timeouts.
   //
@@ -898,6 +935,18 @@ app.all('/:provider{[^/]+}/*', async (c) => {
         upstreamResponse.body,
         releaseRelaySlot,
         refreshRelaySlot ?? undefined,
+        undefined,
+        () => {
+          logRelayFailure({
+            relayRequestId,
+            provider,
+            model: modelName,
+            requestBytes,
+            elapsedMs: Math.round(performance.now() - upstreamStartedAt),
+            failurePhase: 'response_body_failure',
+            upstreamRequestId,
+          });
+        },
       )
     : upstreamResponse.body;
 

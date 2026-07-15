@@ -69,6 +69,18 @@ function once(release: () => Promise<void>): () => Promise<void> {
   };
 }
 
+/** Release a slot without allowing bookkeeping failure to replace the
+ * upstream response or error that the caller is already handling. */
+export async function releaseRelaySlotSafely(
+  release: (() => Promise<void>) | null | undefined,
+): Promise<void> {
+  try {
+    await release?.();
+  } catch {
+    console.error('[RELAY] Failed to release request slot');
+  }
+}
+
 function startStreamLeaseRefresh(
   refresh: (() => Promise<void>) | undefined,
   intervalMs: number,
@@ -156,9 +168,10 @@ export async function releaseWhenStreamCloses(
   release: () => Promise<void>,
   refresh?: () => Promise<void>,
   refreshIntervalMs = RELAY_SLOT_REFRESH_INTERVAL_MS,
+  onUpstreamBodyError?: () => void,
 ): Promise<ReadableStream<Uint8Array> | null> {
   if (body === null) {
-    await release();
+    await releaseRelaySlotSafely(release);
     return null;
   }
 
@@ -175,15 +188,10 @@ export async function releaseWhenStreamCloses(
     leaseError = error instanceof Error ? error : new Error(String(error));
     stopRefreshing();
     streamController?.error(leaseError);
-    void reader
-      .cancel(leaseError)
-      .then(releaseOnce, releaseOnce)
-      .catch((releaseError) => {
-        console.error(
-          '[RELAY] Failed to release request slot after lease loss:',
-          releaseError,
-        );
-      });
+    void reader.cancel(leaseError).then(
+      () => releaseRelaySlotSafely(releaseOnce),
+      () => releaseRelaySlotSafely(releaseOnce),
+    );
   };
   return new ReadableStream<Uint8Array>({
     start(controller) {
@@ -195,27 +203,37 @@ export async function releaseWhenStreamCloses(
       );
     },
     async pull(controller) {
+      let readResult: ReadableStreamReadResult<Uint8Array>;
       try {
-        const { done, value } = await reader.read();
-        if (leaseError) {
-          throw leaseError;
-        }
-        if (done) {
-          controller.close();
-          await releaseOnce();
-          return;
-        }
-        controller.enqueue(value);
+        readResult = await reader.read();
       } catch (error) {
-        await releaseOnce();
-        throw error;
+        if (!leaseError) {
+          try {
+            onUpstreamBodyError?.();
+          } catch {
+            console.error('[RELAY] Upstream body failure observer failed');
+          }
+        }
+        await releaseRelaySlotSafely(releaseOnce);
+        throw leaseError ?? error;
       }
+
+      if (leaseError) {
+        await releaseRelaySlotSafely(releaseOnce);
+        throw leaseError;
+      }
+      if (readResult.done) {
+        controller.close();
+        await releaseRelaySlotSafely(releaseOnce);
+        return;
+      }
+      controller.enqueue(readResult.value);
     },
     async cancel(reason) {
       try {
         await reader.cancel(reason);
       } finally {
-        await releaseOnce();
+        await releaseRelaySlotSafely(releaseOnce);
       }
     },
   });
