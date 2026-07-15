@@ -222,13 +222,11 @@ design, in `ToolUseDispatchNode`).
 
 ### 8. Sandbox
 
-Prototype: `node:vm` with code generation disabled, no `require`/`process`,
-determinism prelude. This is an isolation convenience, not a hardened
-security boundary — acceptable while scripts are generated exclusively by
-TeXRA's own orchestrator and the only reachable capabilities are the
-injected primitives. If scripts ever come from untrusted sources (shared
-workflow libraries), swap `sandbox.ts` for quickjs-emscripten (WASM; works
-in all three hosts) behind the same `runScriptInSandbox` signature.
+The engine runs each script in a fresh QuickJS runtime and context with a CPU
+interrupt deadline, bounded heap and stack, disabled dynamic code generation,
+no `require`/`process`, and the determinism prelude. Host capabilities and
+results cross the boundary only as JSON text. The shared WASM module is embedded
+in all three hosts, so packaged execution does not depend on a filesystem path.
 
 ## Validation
 
@@ -258,7 +256,8 @@ consolidated result.
    it requires no model-constrained JSON mechanism.
 3. **The engine as a `delegate_workflow_script` tool**: prototype engine
    (`src/agent/workflowScript/`) wired to the in-band execution path,
-   zero-depth child spawning, run-storage file binding, journal persistence,
+   ordinary parent-child lineage (delegation depth is observational, not a
+   budget), run-storage file binding, journal persistence,
    progress-event bridging onto the existing stream tree (extension board
    already renders arbitrary depth; CLI shows direct children per stream).
 
@@ -266,7 +265,7 @@ consolidated result.
 
 `src/agent/workflowScript/` (host-agnostic, VS Code-free; `runAgent`
 injected). Implements: meta parsing/validation (Zod), import ban,
-`node:vm` sandbox with determinism guards, `agent()` / `parallel()` /
+preemptible QuickJS sandbox with determinism guards, `agent()` / `parallel()` /
 `pipeline()` / `concat()` / `log()` / `phase()` / `args`, concurrency
 semaphore, call cap, fan-out caps, wall-clock timeout, and journal-based
 resume. The Vitest suite in

@@ -185,9 +185,8 @@ function isWorkflowAbort(error: unknown): boolean {
  * call is bounded by one shared concurrency semaphore and journaled for
  * resume (same call index + same prompt/options → cached result).
  *
- * On wall-clock timeout the run's AbortSignal (passed to every runAgent
- * invocation) fires and new agent() calls are refused; the orphaned script
- * continuation can then only run pure JS to completion.
+ * On wall-clock timeout the sandbox preempts guest execution, fires the run's
+ * AbortSignal (passed to every runAgent invocation), and refuses new calls.
  */
 export async function runWorkflowScript(
   options: WorkflowScriptRunOptions,
@@ -220,7 +219,7 @@ export async function runWorkflowScript(
   async function agentPrimitive(
     prompt: unknown,
     rawOptions?: unknown,
-  ): Promise<unknown> {
+  ): Promise<string | undefined> {
     if (runAbort.signal.aborted) {
       throw new WorkflowRunAbortError(
         'Workflow run aborted (timeout or call cap); no new agent() calls may start.',
@@ -242,9 +241,16 @@ export async function runWorkflowScript(
 
     const prior = priorEntries.get(index);
     if (prior && prior.key === key) {
-      journal.set(index, prior);
+      const payload = serializeBridgeValue(
+        prior.result,
+        'Cached agent() result',
+      );
+      journal.set(index, {
+        ...prior,
+        result: deserializeBridgeValue(payload),
+      });
       emit({ type: 'agent:end', index, label, cached: true });
-      return prior.result;
+      return payload;
     }
 
     liveCallCounter += 1;
@@ -258,8 +264,9 @@ export async function runWorkflowScript(
     }
 
     emit({ type: 'agent:start', index, label, phase: callOptions.phase });
+    let result: unknown;
     try {
-      const result = await semaphore.run(() => {
+      result = await semaphore.run(() => {
         // Re-check after waiting for a slot: a timeout/cap abort while this
         // call was queued must not launch fresh model work.
         if (runAbort.signal.aborted) {
@@ -274,9 +281,6 @@ export async function runWorkflowScript(
           signal: runAbort.signal,
         });
       });
-      journal.set(index, { index, key, result });
-      emit({ type: 'agent:end', index, label, cached: false });
-      return result;
     } catch (error) {
       // A runner may surface the run abort (it holds runAbort.signal);
       // that must stop the workflow, not degrade into a null agent result.
@@ -290,31 +294,22 @@ export async function runWorkflowScript(
         cached: false,
         error: toErrorMessage(error),
       });
-      return null;
-    }
-  }
-
-  // JSON payloads for the sandbox bridge: results are revived inside the
-  // realm with the sandbox's own JSON.parse, so scripts never hold
-  // host-realm objects (see sandbox.ts). Non-JSON-safe values degrade the
-  // way JSON always does; agent results are JSON-safe by contract.
-  // The ?? fallback is reachable — JSON.stringify returns undefined for
-  // function/symbol VALUES too, not only for undefined input — so hitting
-  // it means a runner returned a non-JSON-safe result (a contract
-  // violation); log it so the resulting `null` is debuggable.
-  const toPayload = (value: unknown): string | undefined => {
-    if (value === undefined) return undefined;
-    const json = JSON.stringify(value);
-    if (json === undefined) {
-      emit({
-        type: 'log',
-        message:
-          'agent() result was not JSON-serializable (function/symbol?); coercing to null.',
-      });
       return 'null';
     }
-    return json;
-  };
+
+    // Validate before journaling. Resume storage must never contain a value
+    // that the sandbox boundary cannot reproduce.
+    const payload = serializeBridgeValue(result, 'agent() result');
+    journal.set(index, {
+      index,
+      key,
+      result: deserializeBridgeValue(payload),
+    });
+    emit({ type: 'agent:end', index, label, cached: false });
+    return payload;
+  }
+
+  const argsJson = serializeBridgeValue(options.args, 'Workflow args');
 
   let result: unknown;
   try {
@@ -326,7 +321,7 @@ export async function runWorkflowScript(
             const invocation = agentPrimitive(args[0], args[1]);
             pendingAgentCalls.add(invocation);
             try {
-              return toPayload(await invocation);
+              return await invocation;
             } finally {
               pendingAgentCalls.delete(invocation);
             }
@@ -343,8 +338,7 @@ export async function runWorkflowScript(
             return undefined;
           },
         },
-        argsJson:
-          options.args === undefined ? undefined : JSON.stringify(options.args),
+        argsJson,
         realmPreludes: [ORCHESTRATION_PRELUDE],
       },
       {
@@ -354,10 +348,8 @@ export async function runWorkflowScript(
       },
     );
   } finally {
-    // Abort unconditionally once the sandbox returns: any agent() call the
-    // script schedules from an abandoned promise chain after its result was
-    // delivered must be refused (agentPrimitive checks runAbort at entry),
-    // not silently run model work past the reported-complete point.
+    // Abort unconditionally once the sandbox returns. This stops in-flight
+    // work the script abandoned and makes agentPrimitive reject any late call.
     runAbort.abort();
     if (pendingAgentCalls.size > 0) {
       // The script finished (or threw) with agent() calls still in flight
@@ -387,6 +379,31 @@ export async function runWorkflowScript(
     journal: [...journal.values()].toSorted((a, b) => a.index - b.index),
     agentCalls: callCounter,
   };
+}
+
+function serializeBridgeValue(
+  value: unknown,
+  label: string,
+): string | undefined {
+  if (value === undefined) return undefined;
+  let payload: string | undefined;
+  try {
+    payload = JSON.stringify(value);
+  } catch (error) {
+    throw new Error(
+      `${label} must be JSON-serializable: ${toErrorMessage(error)}`,
+    );
+  }
+  if (payload === undefined) {
+    throw new Error(
+      `${label} must be JSON-serializable; functions and symbols are not supported.`,
+    );
+  }
+  return payload;
+}
+
+function deserializeBridgeValue(payload: string | undefined): unknown {
+  return payload === undefined ? undefined : JSON.parse(payload);
 }
 
 function normalizeAgentOptions(

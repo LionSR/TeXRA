@@ -42,8 +42,11 @@ return concat(sections, { separator: '\n\n' });
   `runAgent` callback. Production wiring should use the in-band subagent
   execution path so the engine consumes the post-flow `AgentFinalResult`
   envelope — never the XML follow-up delivery string.
-- **Sandbox**: `node:vm` with code generation disabled and no
-  `require`/`process`. The boundary is **data-only in both directions**
+- **Sandbox**: a fresh QuickJS runtime and context per script, with a CPU
+  interrupt deadline, 64 MB heap limit, 1 MB stack limit, dynamic code
+  generation disabled, and no `require`/`process`. The WASM module is loaded
+  once, while script heaps and interrupt state remain isolated. The boundary
+  is **data-only in both directions**
   (`sandbox.ts`): only JSON text crosses it, so neither side ever holds the
   other realm's callables or objects. Scripts reach the host through
   realm-local bridge wrappers whose arguments are stringified realm-side
@@ -58,14 +61,9 @@ return concat(sections, { separator: '\n\n' });
   host resolve function (via a malicious `thenable.then`) whose
   `.constructor` is the host's ungated `Function`. This closes the classic
   `fn.constructor('return process')()` escape in both directions. Script
-  bodies are also forced into strict mode (defense in depth) so
-  sandbox-authored thunks cannot walk `arguments.callee.caller` to a host
-  function. Known hard limit: `node:vm` cannot preempt CPU-bound
-  continuations after an `await` (`await agent(...); while (true) {}`
-  blocks the event loop, defeating both the vm timeout and the wall-clock
-  timer) — the preemptible-isolate swap (quickjs-emscripten) behind the
-  same `runScriptInSandbox` signature is a **hard gate** before this engine
-  is wired to a `delegate_workflow_script` tool.
+  bodies are also forced into strict mode. QuickJS promise jobs are pumped
+  explicitly, so the same interrupt deadline preempts synchronous loops and
+  loops reached after an `await` without blocking the host event loop.
 - **Determinism**: `Date.now()`, `Math.random()`, and argless `new Date()`
   throw inside scripts, installed non-writable so scripts cannot restore
   them (`new Date(timestamp)` stays usable). Resume relies on replaying the
@@ -82,8 +80,9 @@ return concat(sections, { separator: '\n\n' });
   timeout raise `WorkflowRunAbortError`, which the realm-side
   `parallel()`/`pipeline()` match by name and deliberately do NOT convert
   to `null` — the whole run fails. On timeout
-  the run's `AbortSignal` (on every `runAgent` invocation) fires and new
-  `agent()` calls are refused; runners should cancel in-flight work on it.
+  guest execution is interrupted, the run's `AbortSignal` (on every
+  `runAgent` invocation) fires, and new `agent()` calls are refused; runners
+  should cancel in-flight work on it.
 - **Debuggability**: a thrown error inside a `parallel()` thunk or
   `pipeline()` stage (a script bug, as opposed to an `agent()` failure,
   which already resolves to `null` with its own `agent:end` event) is
@@ -93,9 +92,6 @@ return concat(sections, { separator: '\n\n' });
 
 - Production `runAgent` wiring that returns the fixed `AgentFinalResult`
   envelope after workflow diffs have been generated.
-- Depth semantics: script-internal `agent()` calls should spawn children at
-  the workflow's own delegation depth (scripted orchestration is not LLM
-  delegation and must not burn the depth budget).
 - File hand-off: binding a stage's `outputs` (`OutputFileSummary[]`) as the
   next stage's `inputFiles` directly from run storage, without an
   `accept_run_files` round-trip. Domain-specific structures travel as JSON
