@@ -1,4 +1,4 @@
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import { nanoid } from 'nanoid';
@@ -11,10 +11,8 @@ import {
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import type { DiffViewHost } from '@hosts/uiHosts';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
-import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
   previewProposedLatex,
   runLatexdiff,
@@ -23,7 +21,6 @@ import {
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
-  computeUserPatch,
   emitToolEditApprovalPrompt,
   registerPendingApproval,
   unregisterPendingApproval,
@@ -34,14 +31,17 @@ import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { createTexraTempDir } from './desktopTempDir.js';
+import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+
+type DesktopToolEditApprovalUi = Pick<
+  DesktopAgentExecutionHost,
+  'openPath' | 'openBuildDisplay' | 'openDiff' | 'showErrorMessage'
+>;
 
 export interface DesktopToolEditApprovalOptions {
   runtimeHost: AgentRuntimeHost;
   session: SessionHandle;
-  openPath?: (filePath: string) => Promise<void>;
-  openBuildDisplay?: BuildDisplayFn;
-  openDiff?: DiffViewHost['openDiff'];
-  showErrorMessage?: (message: string) => Promise<void> | void;
+  ui: DesktopToolEditApprovalUi;
   tempRoot?: string;
 }
 
@@ -188,7 +188,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
         void this.runAction(payload.requestId, () =>
           runLatexdiff(entry, {
             subtype: 'ONLYCHANGEDPAGE',
-            openBuildDisplay: this.options.openBuildDisplay,
+            openBuildDisplay: this.options.ui.openBuildDisplay,
           }),
         );
         return true;
@@ -351,18 +351,14 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   private async previewProposed(
     entry: DesktopPendingToolEditApproval,
   ): Promise<void> {
-    const openBuildDisplay = this.options.openBuildDisplay;
-    if (isLatexFile(entry.request.path) && openBuildDisplay) {
-      await previewProposedLatex(entry, { openBuildDisplay });
+    if (isLatexFile(entry.request.path)) {
+      await previewProposedLatex(entry, {
+        openBuildDisplay: this.options.ui.openBuildDisplay,
+      });
       return;
     }
 
-    if (!this.options.openPath) {
-      await this.report('Desktop preview is unavailable.');
-      return;
-    }
-
-    await this.options.openPath(entry.proposedUri.fsPath);
+    await this.options.ui.openPath(entry.proposedUri.fsPath);
   }
 
   private async approveProposedEdit(
@@ -379,28 +375,12 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   private async openDiffPatch(
     entry: DesktopPendingToolEditApproval,
   ): Promise<void> {
-    if (this.options.openDiff) {
-      await this.options.openDiff(
-        { filePath: entry.originalUri.fsPath },
-        { filePath: entry.proposedUri.fsPath },
-        `Tool edit: ${path.basename(entry.request.path)}`,
-        { preserveFocus: true },
-      );
-      return;
-    }
-
-    if (!this.options.openPath) {
-      await this.report('Desktop diff preview is unavailable.');
-      return;
-    }
-
-    const patch =
-      computeUserPatch(entry.originalContent, entry.proposedContent) ??
-      `No textual changes for ${entry.request.path}.\n`;
-    const diffPath = path.join(entry.tempDir, `${nanoid()}-changes.diff`);
-    await writeFile(diffPath, patch, 'utf8');
-    entry.workspaceTempCleanup.push(() => rm(diffPath, { force: true }));
-    await this.options.openPath(diffPath);
+    await this.options.ui.openDiff(
+      { filePath: entry.originalUri.fsPath },
+      { filePath: entry.proposedUri.fsPath },
+      `Tool edit: ${path.basename(entry.request.path)}`,
+      { preserveFocus: true },
+    );
   }
 
   private cleanupEntry(entry: DesktopPendingToolEditApproval): void {
@@ -413,7 +393,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   }
 
   private async report(message: string): Promise<void> {
-    await this.options.showErrorMessage?.(message);
+    await this.options.ui.showErrorMessage(message);
   }
 }
 
