@@ -134,14 +134,14 @@ a **boundary declaration, not code deletion.**
 
 **Minimal public entry points (the real API):**
 
-| Symbol | Location | Role |
-| --- | --- | --- |
-| `runAgent(request, options)` | `runtime/runAgent.ts` | documented "START HERE" |
-| `executeAgent(config, id, options)` | `runtime/executeAgent.ts` | lower engine (owns id/registration/lineage) |
-| `resumeToolUseFromSnapshot` / `resumeQueuedToolUse` / `resolveAndResumeStream` | `runtime/` | resume entry points |
-| `AgentRuntimeHost` | `runtime/AgentRuntimeHost.ts` | host-implemented DI seam |
-| `AgentFlowResult` / `AgentFinalResult` | `runtime/` | result contracts (composed via `.pick().extend()`, correctly separated) |
-| `AgentConfig` / `AgentConfigPayload` / `AgentDataclass` | `core/definition/` | definition inputs |
+| Symbol                                                                         | Location                      | Role                                                                    |
+| ------------------------------------------------------------------------------ | ----------------------------- | ----------------------------------------------------------------------- |
+| `runAgent(request, options)`                                                   | `runtime/runAgent.ts`         | documented "START HERE"                                                 |
+| `executeAgent(config, id, options)`                                            | `runtime/executeAgent.ts`     | lower engine (owns id/registration/lineage)                             |
+| `resumeToolUseFromSnapshot` / `resumeQueuedToolUse` / `resolveAndResumeStream` | `runtime/`                    | resume entry points                                                     |
+| `AgentRuntimeHost`                                                             | `runtime/AgentRuntimeHost.ts` | host-implemented DI seam                                                |
+| `AgentFlowResult` / `AgentFinalResult`                                         | `runtime/`                    | result contracts (composed via `.pick().extend()`, correctly separated) |
+| `AgentConfig` / `AgentConfigPayload` / `AgentDataclass`                        | `core/definition/`            | definition inputs                                                       |
 
 **Machinery that leaks into the surface and should go behind the façade:**
 `executionRegistry` (+ its 8 option/result types), `StreamStatusService`,
