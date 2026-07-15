@@ -14,8 +14,13 @@ import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
-import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { DelegateAgentTool } from '@tools/DelegationTools';
+import { executeSubagentInBand } from '@tools/delegation/inBandSubagentExecution';
 
 const mocks = vi.hoisted(() => ({
   enableYoloOnChildStream: vi.fn(),
@@ -28,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   isProposalBypassed: vi.fn(),
   registerExecution: vi.fn(),
   writeReport: vi.fn(),
+  writeResultMeta: vi.fn(),
   computeModelOptionsData: vi.fn(),
 }));
 
@@ -133,8 +139,10 @@ describe('headless delegation', () => {
     mocks.isApprovalBypassedForStream.mockReturnValue(false);
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.writeReport.mockResolvedValue(undefined);
+    mocks.writeResultMeta.mockResolvedValue(undefined);
     mocks.getExecutionStore.mockReturnValue({
       writeReport: mocks.writeReport,
+      writeResultMeta: mocks.writeResultMeta,
     });
     mocks.executeAgent.mockResolvedValue({
       category: 'toolUse',
@@ -186,6 +194,207 @@ describe('headless delegation', () => {
     expect(result.output).toContain('<response>');
     expect(result.output).toContain('The proof is correct.');
     expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
+  });
+
+  it('returns and persists the typed final result for in-band consumers', async () => {
+    const result = await executeSubagentInBand({
+      configPayload: {
+        agent: 'review',
+        agentCategory: AgentCategory.ToolUse,
+        model: 'deepseekT',
+      },
+      agentName: 'review',
+      parentExecutionId: 'parent-exec' as ExecutionId,
+      parentStreamId: 'parent-stream' as StreamTabId,
+      runtimeHost: runtimeHost(),
+      session: defaultSession(),
+    });
+
+    expect(result.result).toEqual({
+      category: 'toolUse',
+      outcome: 'completed',
+      response: 'The proof is correct.',
+      files: [],
+      cost: 0,
+    });
+    expect(mocks.writeReport).not.toHaveBeenCalled();
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      result.executionId,
+      expect.objectContaining({ agent: 'review' }),
+      'review',
+      'parent-exec',
+    );
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith({
+      producer: 'subagent',
+      agentName: 'review',
+      wallTimeMs: expect.any(Number),
+      result: result.result,
+    });
+  });
+
+  it('does not return a typed result when its durable manifest cannot be written', async () => {
+    mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
+
+    await expect(
+      executeSubagentInBand({
+        configPayload: {
+          agent: 'review',
+          agentCategory: AgentCategory.ToolUse,
+          model: 'deepseekT',
+        },
+        agentName: 'review',
+        parentExecutionId: 'parent-exec' as ExecutionId,
+        parentStreamId: 'parent-stream' as StreamTabId,
+        runtimeHost: runtimeHost(),
+        session: defaultSession(),
+      }),
+    ).rejects.toThrow('Failed to persist result for subagent');
+    expect(mocks.writeReport).not.toHaveBeenCalled();
+  });
+
+  it('does not rewrite a completed child when typed result construction fails', async () => {
+    mocks.executeAgent.mockResolvedValueOnce({
+      category: 'toolUse',
+      outcome: 'completed',
+      executionId: 'child-exec',
+      streamId: 'child-stream',
+      touchedFiles: [42],
+    });
+
+    await expect(
+      executeSubagentInBand({
+        configPayload: {
+          agent: 'review',
+          agentCategory: AgentCategory.ToolUse,
+          model: 'deepseekT',
+        },
+        agentName: 'review',
+        parentExecutionId: 'parent-exec' as ExecutionId,
+        parentStreamId: 'parent-stream' as StreamTabId,
+        runtimeHost: runtimeHost(),
+        session: defaultSession(),
+      }),
+    ).rejects.toThrow();
+    expect(mocks.writeResultMeta).not.toHaveBeenCalled();
+    expect(mocks.writeReport).not.toHaveBeenCalled();
+  });
+
+  it('interrupts the live child when the in-band caller aborts', async () => {
+    const controller = new AbortController();
+    const onCost = vi.fn();
+    let childReady!: () => void;
+    let childInterrupted!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      childReady = resolve;
+    });
+    const interrupted = new Promise<void>((resolve) => {
+      childInterrupted = resolve;
+    });
+    const interrupt = vi.fn(() => {
+      childInterrupted();
+      return true;
+    });
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      await options.onRun?.({ interrupt } as never);
+      childReady();
+      await interrupted;
+      return {
+        category: 'toolUse',
+        outcome: 'cancelled',
+        executionId: 'child-exec',
+        streamId: 'child-stream',
+      };
+    });
+
+    const run = executeSubagentInBand({
+      configPayload: {
+        agent: 'review',
+        agentCategory: AgentCategory.ToolUse,
+        model: 'deepseekT',
+      },
+      agentName: 'review',
+      parentExecutionId: 'parent-exec' as ExecutionId,
+      parentStreamId: 'parent-stream' as StreamTabId,
+      runtimeHost: runtimeHost(),
+      session: defaultSession(),
+      signal: controller.signal,
+      onCost,
+    });
+    await ready;
+    controller.abort(new Error('Workflow stopped.'));
+
+    await expect(run).rejects.toThrow('Workflow stopped.');
+    expect(interrupt).toHaveBeenCalledOnce();
+    expect(onCost).toHaveBeenCalledOnce();
+    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+    expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        producer: 'subagent',
+        result: expect.objectContaining({ outcome: 'cancelled' }),
+      }),
+    );
+  });
+
+  it('keeps the completed child result when cancellation arrives during persistence', async () => {
+    const controller = new AbortController();
+    let finishPersistence!: () => void;
+    const persistencePending = new Promise<void>((resolve) => {
+      finishPersistence = resolve;
+    });
+    mocks.writeResultMeta.mockReturnValueOnce(persistencePending);
+
+    const run = executeSubagentInBand({
+      configPayload: {
+        agent: 'review',
+        agentCategory: AgentCategory.ToolUse,
+        model: 'deepseekT',
+      },
+      agentName: 'review',
+      parentExecutionId: 'parent-exec' as ExecutionId,
+      parentStreamId: 'parent-stream' as StreamTabId,
+      runtimeHost: runtimeHost(),
+      session: defaultSession(),
+      signal: controller.signal,
+    });
+    await vi.waitFor(() => {
+      expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+    });
+    controller.abort(new Error('Workflow stopped after child completion.'));
+    finishPersistence();
+
+    await expect(run).rejects.toThrow(
+      'Workflow stopped after child completion.',
+    );
+    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        producer: 'subagent',
+        result: expect.objectContaining({ outcome: 'completed' }),
+      }),
+    );
+  });
+
+  it('does not register a child when the in-band caller is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort(new Error('Workflow already stopped.'));
+
+    await expect(
+      executeSubagentInBand({
+        configPayload: {
+          agent: 'review',
+          agentCategory: AgentCategory.ToolUse,
+          model: 'deepseekT',
+        },
+        agentName: 'review',
+        parentExecutionId: 'parent-exec' as ExecutionId,
+        parentStreamId: 'parent-stream' as StreamTabId,
+        runtimeHost: runtimeHost(),
+        session: defaultSession(),
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow('Workflow already stopped.');
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
   it('carries the validated agent source to executeAgent for source-pinned launch', async () => {
