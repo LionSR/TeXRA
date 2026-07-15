@@ -2,6 +2,7 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { describe, it, vi } from 'vitest';
 
 // A retired model whose provider is not in RELAY_PROVIDERS (e.g. 'meta') is
@@ -31,14 +32,28 @@ import {
   FREE_TIER,
   MAX_TIER,
   TIER_CONFIG,
+  ULTRA_ONLY_PROVIDER_SET,
   ULTRA_TIER,
   isModelAllowedForTier,
   isRetiredModelRequest,
 } from '../../../supabase/functions/relay/models';
 
 describe('relay tier model access', () => {
-  it('gives Max full explicit-model access and Ultra passthrough', () => {
-    assert.equal(TIER_CONFIG.tiers.Max?.models, '*');
+  it('limits Max to non-Ultra providers and keeps Ultra passthrough', () => {
+    const maxModels = TIER_CONFIG.tiers.Max?.models;
+    assert.ok(Array.isArray(maxModels));
+    assert.deepEqual(
+      maxModels,
+      Object.values(MODEL_CONFIGS)
+        .filter(
+          (model) =>
+            TIER_CONFIG.providers.includes(model.provider) &&
+            !model.openRouterOnly &&
+            !model.retired &&
+            !ULTRA_ONLY_PROVIDER_SET.has(model.provider.toLowerCase()),
+        )
+        .map((model) => model.name),
+    );
     assert.equal(TIER_CONFIG.tiers.Ultra?.models, '*');
 
     assert.equal(isModelAllowedForTier(MAX_TIER, 'unknown-model'), true);
