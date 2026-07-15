@@ -19,26 +19,49 @@ export interface HostInteractionOptions {
 }
 
 export type PlanApprovalResult =
-  | { action: 'approve' }
-  | { action: 'approve_and_goal' }
+  | { action: 'approve'; feedback?: never }
+  | { action: 'approve_and_goal'; feedback?: never }
   | { action: 'reject'; feedback?: string }
-  | { action: 'timeout' };
+  | { action: 'timeout'; feedback?: never };
 
 export type ProposalResult =
-  | { action: 'approve'; model?: string; agent?: string }
-  | { action: 'reject'; feedback?: string }
-  | { action: 'setup' }
-  | { action: 'timeout' };
+  | {
+      action: 'approve';
+      model?: string;
+      agent?: string;
+      feedback?: never;
+    }
+  | {
+      action: 'reject';
+      feedback?: string;
+      model?: never;
+      agent?: never;
+    }
+  | {
+      action: 'setup';
+      model?: never;
+      agent?: never;
+      feedback?: never;
+    }
+  | {
+      action: 'timeout';
+      model?: never;
+      agent?: never;
+      feedback?: never;
+    };
+
+export type RetrySettlement =
+  | { action: 'retry'; feedback?: string; reason?: never }
+  | { action: 'cancel'; feedback?: never; reason?: never }
+  | { action: 'timeout'; feedback?: never; reason?: never };
 
 export type RetryResult =
-  | { action: 'retry'; feedback?: string }
-  | { action: 'cancel' }
-  | { action: 'timeout' }
+  | RetrySettlement
   // Policy/headless auto-denial: the retry could not be approved because no
   // human input was available (e.g. `--approval-policy never --no-input`).
   // Distinct from a user `cancel` so retry-exhaustion with no human lands in
   // the `failed` fallback (→ RUN_OUTCOME.FAILED) instead of `cancelled`. See #7331.
-  | { action: 'deny'; reason?: string };
+  | { action: 'deny'; reason?: string; feedback?: never };
 
 export interface HostPlanApprovalRequest {
   readonly approvalId: string;
@@ -83,10 +106,24 @@ export interface HostRetryRequest {
 
 export type HostUserQuestionRequest = UserQuestionPermission;
 
-export interface HostUserQuestionResult {
-  readonly submitted: boolean;
-  readonly answers?: UserQuestionAnswers;
-  readonly feedback?: string;
+export type HostUserQuestionResult =
+  | {
+      readonly submitted: true;
+      readonly answers: UserQuestionAnswers;
+      readonly feedback?: never;
+    }
+  | {
+      readonly submitted: false;
+      readonly feedback?: string;
+      readonly answers?: never;
+    };
+
+export interface HostInteractionResultByKind {
+  readonly bash: HostBashApprovalResult;
+  readonly plan: PlanApprovalResult;
+  readonly proposal: ProposalResult;
+  readonly retry: RetryResult;
+  readonly userQuestion: HostUserQuestionResult;
 }
 
 export type HostExternalInquiryRequest = ExternalInquiryPermission;
@@ -95,12 +132,39 @@ export interface HostExternalInquiryHandle {
   readonly threadId: string;
 }
 
-export interface HostInteractionResolution {
-  readonly kind: string;
-  readonly action: string;
-  readonly feedback?: string;
-  readonly value?: unknown;
-}
+export type BashSettlement =
+  | { readonly action: 'approve'; readonly feedback?: never }
+  | { readonly action: 'reject'; readonly feedback?: string }
+  | { readonly action: 'timeout'; readonly feedback?: never };
+
+export type UserQuestionSettlement =
+  | {
+      readonly action: 'submit';
+      readonly answers: UserQuestionAnswers;
+      readonly feedback?: never;
+    }
+  | {
+      readonly action: 'reject' | 'skip';
+      readonly feedback?: string;
+      readonly answers?: never;
+    };
+
+/** Exact host-to-adapter settlement vocabulary for every interaction kind. */
+export type HostInteractionSettlement = (
+  | { readonly kind: 'bash'; readonly decision: BashSettlement }
+  | { readonly kind: 'plan'; readonly decision: PlanApprovalResult }
+  | { readonly kind: 'proposal'; readonly decision: ProposalResult }
+  | { readonly kind: 'retry'; readonly decision: RetrySettlement }
+  | {
+      readonly kind: 'userQuestion';
+      readonly decision: UserQuestionSettlement;
+    }
+  | { readonly kind: 'externalInquiry'; readonly decision?: never }
+) & {
+  readonly action?: never;
+  readonly feedback?: never;
+  readonly value?: never;
+};
 
 export type PendingInteractionKind =
   | 'toolEdit'
@@ -110,6 +174,45 @@ export type PendingInteractionKind =
   | 'retry'
   | 'userQuestion'
   | 'externalInquiry';
+
+export type SettledInteractionKind = keyof HostInteractionResultByKind;
+
+type SettlementFor<K extends SettledInteractionKind> = Extract<
+  HostInteractionSettlement,
+  { kind: K }
+>;
+
+type CancellationSettlementFactories = {
+  [K in SettledInteractionKind]: (feedback?: string) => SettlementFor<K>;
+};
+
+const cancellationSettlementFactories: CancellationSettlementFactories = {
+  bash: (feedback?: string) => ({
+    kind: 'bash',
+    decision: { action: 'reject', feedback },
+  }),
+  plan: (feedback?: string) => ({
+    kind: 'plan',
+    decision: { action: 'reject', feedback },
+  }),
+  proposal: (feedback?: string) => ({
+    kind: 'proposal',
+    decision: { action: 'reject', feedback },
+  }),
+  retry: () => ({ kind: 'retry', decision: { action: 'cancel' } }),
+  userQuestion: (feedback?: string) => ({
+    kind: 'userQuestion',
+    decision: { action: 'reject', feedback },
+  }),
+};
+
+/** Typed cancellation result shared by every presenting host. */
+export function cancellationSettlementFor<K extends SettledInteractionKind>(
+  kind: K,
+  feedback?: string,
+): SettlementFor<K> {
+  return cancellationSettlementFactories[kind](feedback);
+}
 
 export type ApprovalBypassKind = 'bash' | 'toolEdit' | 'superYolo';
 
@@ -196,7 +299,7 @@ export interface HostInteractions {
     request: HostExternalInquiryRequest,
   ): Promise<HostExternalInquiryHandle> | undefined;
   setApprovalBypassState?(update: HostApprovalBypassStateUpdate): void;
-  resolve(requestId: string, result: HostInteractionResolution): boolean;
+  resolve(requestId: string, settlement: HostInteractionSettlement): boolean;
   /** Settle pending requests matching the selector with their reject/cancel defaults. */
   cancel(selector?: HostInteractionCancelSelector): void;
   dispose?(): void;
@@ -339,9 +442,10 @@ export class SessionHostInteractions implements HostInteractions {
     this.activeAttachment?.interactions.setApprovalBypassState?.(update);
   }
 
-  resolve(requestId: string, result: HostInteractionResolution): boolean {
+  resolve(requestId: string, settlement: HostInteractionSettlement): boolean {
     return (
-      this.activeAttachment?.interactions.resolve(requestId, result) ?? false
+      this.activeAttachment?.interactions.resolve(requestId, settlement) ??
+      false
     );
   }
 

@@ -94,7 +94,7 @@ describe('human prompt progress events', () => {
     expect(
       explicit.host.interactions?.resolve(show.payload.requestId, {
         kind: 'bash',
-        action: 'approve',
+        decision: { action: 'approve' },
       }),
     ).toBe(true);
 
@@ -152,9 +152,11 @@ describe('human prompt progress events', () => {
     expect(
       explicit.host.interactions?.resolve(show.payload.requestId, {
         kind: 'userQuestion',
-        action: 'submit',
-        value: {
-          'Which path should the agent take?': 'Run the build',
+        decision: {
+          action: 'submit',
+          answers: {
+            'Which path should the agent take?': 'Run the build',
+          },
         },
       }),
     ).toBe(true);
@@ -249,7 +251,7 @@ describe('human prompt progress events', () => {
       expect(
         explicit.host.interactions?.resolve(show.payload.requestId, {
           kind: 'bash',
-          action: 'approve',
+          decision: { action: 'approve' },
         }),
       ).toBe(true);
       await expect(approval).resolves.toMatchObject({ accepted: true });

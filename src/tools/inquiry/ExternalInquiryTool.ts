@@ -169,7 +169,6 @@ export async function handleExternalInquiryAction(
     // submits so duplicate/delayed UI actions do not leave a leaked permission.
     session.interactions.resolve(payload.threadId, {
       kind: 'externalInquiry',
-      action: 'submit',
     });
     if (!persisted) {
       logger.warn(
@@ -198,8 +197,6 @@ export async function handleExternalInquiryAction(
   const droppedManifest = await markDropped({ threadId: payload.threadId });
   session.interactions.resolve(payload.threadId, {
     kind: 'externalInquiry',
-    action: 'drop',
-    feedback: payload.feedback,
   });
   if (droppedManifest) {
     await injectContinuationForDroppedThread(

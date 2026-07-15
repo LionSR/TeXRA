@@ -443,12 +443,16 @@ export function handlePermissionAction(
     }
     case PERMISSION_KIND.USER_QUESTION: {
       const { requestId } = permission.data;
-      postMessage(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION, {
-        requestId,
-        action,
-        feedback,
-        answers,
-      });
+      const message =
+        action === 'submit'
+          ? answers
+            ? { requestId, action, answers }
+            : undefined
+          : action === 'reject' || action === 'skip'
+            ? { requestId, action, feedback }
+            : undefined;
+      if (!message) return;
+      postMessage(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION, message);
       removePrompt(ctx, PERMISSION_KIND.USER_QUESTION, requestId);
       break;
     }

@@ -321,7 +321,6 @@ describe('progress-view onboarding refresh wiring', () => {
       'stream-a',
       'retry-a',
       {
-        kind: 'retry',
         action: 'retry',
         feedback: 'try the other branch',
       },
@@ -330,7 +329,6 @@ describe('progress-view onboarding refresh wiring', () => {
       'stream-a',
       'retry-a',
       {
-        kind: 'retry',
         action: 'cancel',
       },
     );
@@ -386,8 +384,7 @@ describe('progress-view onboarding refresh wiring', () => {
 
     expect(interactions.resolve).toHaveBeenCalledWith('proposal-a', {
       kind: 'proposal',
-      action: 'approve',
-      value: {
+      decision: {
         action: 'approve',
         model: 'gemini31p',
         agent: 'critic',
@@ -418,8 +415,10 @@ describe('progress-view onboarding refresh wiring', () => {
 
     expect(interactions.resolve).toHaveBeenCalledWith('plan-a', {
       kind: 'plan',
-      action: 'reject',
-      feedback: 'state the invariant first',
+      decision: {
+        action: 'reject',
+        feedback: 'state the invariant first',
+      },
     });
   });
 

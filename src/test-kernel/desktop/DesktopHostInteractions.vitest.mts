@@ -5,7 +5,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import type { HostInteractionResolution } from '@agent/runtime/HostInteractions';
+import type { HostInteractionSettlement } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 
@@ -38,7 +38,7 @@ interface DesktopHostInteractions {
     plan: { objective: string };
   }): Promise<unknown>;
   requestAgentProposal(request: unknown): Promise<unknown>;
-  resolve(requestId: string, result: HostInteractionResolution): boolean;
+  resolve(requestId: string, settlement: HostInteractionSettlement): boolean;
   cancel(selector?: {
     streamId?: StreamTabId | null;
     kind?: string;
@@ -178,7 +178,7 @@ describe('createDesktopHostInteractions', () => {
     expect(
       interactions.resolve('proposal-current', {
         kind: 'proposal',
-        action: 'approve',
+        decision: { action: 'approve' },
       }),
     ).toBe(true);
     const streamBRequestId = (
@@ -190,7 +190,7 @@ describe('createDesktopHostInteractions', () => {
     expect(
       interactions.resolve(streamBRequestId!, {
         kind: 'bash',
-        action: 'reject',
+        decision: { action: 'reject' },
       }),
     ).toBe(true);
     await expect(current).resolves.toEqual({ action: 'approve' });
@@ -233,11 +233,17 @@ describe('createDesktopHostInteractions', () => {
     // pending bash approval as a plan action would — matches the extension
     // host's discriminant check.
     expect(
-      interactions.resolve(requestId, { kind: 'plan', action: 'approve' }),
+      interactions.resolve(requestId, {
+        kind: 'plan',
+        decision: { action: 'approve' },
+      }),
     ).toBe(false);
 
     expect(
-      interactions.resolve(requestId, { kind: 'bash', action: 'approve' }),
+      interactions.resolve(requestId, {
+        kind: 'bash',
+        decision: { action: 'approve' },
+      }),
     ).toBe(true);
     await expect(resultPromise).resolves.toEqual({ accepted: true });
     expect(runtimeHost.emit).toHaveBeenCalledWith(
@@ -338,7 +344,10 @@ describe('createDesktopHostInteractions', () => {
     const requestId = firstShowRequestId(handlers.bash.show);
 
     expect(
-      interactions.resolve(requestId, { kind: 'bash', action: 'timeout' }),
+      interactions.resolve(requestId, {
+        kind: 'bash',
+        decision: { action: 'timeout' },
+      }),
     ).toBe(true);
 
     await expect(resultPromise).resolves.toEqual({
@@ -348,7 +357,7 @@ describe('createDesktopHostInteractions', () => {
     expect(handlers.bash.resolve).toHaveBeenCalledWith(requestId);
   });
 
-  it('whitelists only known proposal actions from a pass-through value', async () => {
+  it('preserves typed proposal approval overrides', async () => {
     const handlers = createHandlers();
     const { interactions } = await createInteractions(handlers);
 
@@ -359,21 +368,21 @@ describe('createDesktopHostInteractions', () => {
       agent: 'demo-agent',
     });
 
-    // An unrelated object shape smuggled through `value` (containing an
-    // `action` that isn't a real ProposalResult action) must not be trusted
-    // verbatim — it should fall back to the resolution's own `action`.
     expect(
       interactions.resolve('proposal-a', {
         kind: 'proposal',
-        action: 'reject',
-        value: { action: 'not-a-real-action', foo: 'bar' },
-        feedback: 'Rejected via unrelated caller shape.',
+        decision: {
+          action: 'approve',
+          model: 'openai:gpt-5',
+          agent: 'configured-agent',
+        },
       }),
     ).toBe(true);
 
     await expect(resultPromise).resolves.toEqual({
-      action: 'reject',
-      feedback: 'Rejected via unrelated caller shape.',
+      action: 'approve',
+      model: 'openai:gpt-5',
+      agent: 'configured-agent',
     });
     expect(handlers.agentProposal.resolve).toHaveBeenCalledWith('proposal-a');
   });
