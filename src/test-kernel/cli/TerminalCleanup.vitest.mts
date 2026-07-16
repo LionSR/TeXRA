@@ -1,13 +1,84 @@
+import { writeSync } from 'node:fs';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
   installTerminalRestoreOnExit,
+  setTerminalTitle,
   supportsTerminalJobControl,
+  terminalTitleText,
   tuiInputModeRestoreSequence,
 } from '@cli/chat/tui/terminalCleanup';
 
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal()),
+  writeSync: vi.fn(),
+}));
+
 afterEach(() => {
   vi.restoreAllMocks();
+  // `writeSync` is a vi.fn() created inside the vi.mock() factory above, not
+  // a vi.spyOn() wrapping a real implementation — restoreAllMocks() has no
+  // "original" to restore it to and leaves its call history untouched, so
+  // clear it explicitly or a later test's `not.toHaveBeenCalled()` sees an
+  // earlier test's call.
+  vi.mocked(writeSync).mockClear();
+  terminalCapabilities.set({
+    kittyKeyboard: false,
+    graphemeClusters: false,
+    bracketedPaste: false,
+    oscColorReports: false,
+    discovered: false,
+  });
+});
+
+describe('terminalTitleText', () => {
+  it('names the tab after the project folder', () => {
+    expect(terminalTitleText('/Users/ray/projects/coauthor')).toBe(
+      'TeXRA — coauthor',
+    );
+  });
+
+  it('falls back to the bare brand name at the filesystem root', () => {
+    expect(terminalTitleText('/')).toBe('TeXRA');
+  });
+
+  it('strips control characters out of a hostile folder name', () => {
+    expect(terminalTitleText('/tmp/evil\x07\x1b]0;pwned\x07')).toBe(
+      'TeXRA — evil]0;pwned',
+    );
+  });
+});
+
+describe('setTerminalTitle', () => {
+  it('writes an OSC 0 title sequence on an OSC-capable terminal', () => {
+    terminalCapabilities.set({
+      kittyKeyboard: false,
+      graphemeClusters: false,
+      bracketedPaste: false,
+      oscColorReports: true,
+      discovered: true,
+    });
+
+    setTerminalTitle('/Users/ray/projects/coauthor');
+
+    expect(writeSync).toHaveBeenCalledWith(1, '\x1b]0;TeXRA — coauthor\x07');
+  });
+
+  it('leaves the title alone on a terminal that never acknowledged OSC support', () => {
+    terminalCapabilities.set({
+      kittyKeyboard: false,
+      graphemeClusters: false,
+      bracketedPaste: false,
+      oscColorReports: false,
+      discovered: true,
+    });
+
+    setTerminalTitle('/Users/ray/projects/coauthor');
+
+    expect(writeSync).not.toHaveBeenCalled();
+  });
 });
 
 describe('tuiInputModeRestoreSequence', () => {
