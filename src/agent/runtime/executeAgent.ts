@@ -468,6 +468,8 @@ export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
   readonly takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
   /** Query caller-owned cancellation once the resumed flow is interruptible. */
   readonly isCancellationRequested?: () => boolean;
+  /** Observe cancellation accepted at the live-flow attachment boundary. */
+  readonly onCancellationAtFlowAttachment?: () => void;
   /**
    * Follow-ups already drained by an external turn owner. The resumed flow
    * consumes this batch once at its persisted WAITING cursor; it must never
@@ -555,6 +557,7 @@ export async function resumeToolUseFromSnapshot(
           (flowContext) => {
             handle.attachToolUseFlow(flowContext);
             if (options.isCancellationRequested?.()) {
+              options.onCancellationAtFlowAttachment?.();
               flowContext.interrupt();
             }
             return () => handle.detachToolUseFlow(flowContext);

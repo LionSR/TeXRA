@@ -45,6 +45,7 @@ interface CapturedResumeOptions {
   drainedFollowUps?: readonly FollowUpQueueInput[];
   takePendingFollowUps: () => readonly FollowUpQueueInput[];
   onFollowUpConsumed?: () => void;
+  onCancellationAtFlowAttachment?: () => void;
 }
 
 function capturedResumeOptions(): CapturedResumeOptions {
@@ -206,6 +207,9 @@ describe('resumeToolUseSnapshot', () => {
           { text: 'queued during resume' },
           { force: true },
         );
+        if (options.isCancellationRequested?.()) {
+          options.onCancellationAtFlowAttachment?.();
+        }
         options.takePendingFollowUps();
         seedStreamStatusForTest(
           defaultSession().status,

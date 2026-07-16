@@ -159,10 +159,18 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
         expect(attachedContext).toBeDefined();
         return true;
       },
+      onCancellationAtFlowAttachment: () => order.push('cancel'),
     });
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
-    expect(order).toEqual(['attach', 'query', 'interrupt', 'take', 'detach']);
+    expect(order).toEqual([
+      'attach',
+      'query',
+      'cancel',
+      'interrupt',
+      'take',
+      'detach',
+    ]);
   });
 });

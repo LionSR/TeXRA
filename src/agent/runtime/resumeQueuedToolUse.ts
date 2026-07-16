@@ -132,6 +132,9 @@ export async function resumeQueuedToolUseSnapshot(
       onRunError: options.onRunError,
       onRun: options.onRun,
       isCancellationRequested: options.isCancellationRequested,
+      onCancellationAtFlowAttachment: () => {
+        cancelledAtFlowAttachment = true;
+      },
       drainedFollowUps: followUps.map(toFollowUpBatchItem),
       // The live context is attached before this second drain. Items arriving
       // later therefore target that context directly; this callback owns the
@@ -139,9 +142,6 @@ export async function resumeQueuedToolUseSnapshot(
       takePendingFollowUps: () => {
         const raced = followUpsQueue.drainItems(streamId);
         followUps = [...followUps, ...raced];
-        if (options.isCancellationRequested?.()) {
-          cancelledAtFlowAttachment = true;
-        }
         return raced.map(toFollowUpBatchItem);
       },
     });
