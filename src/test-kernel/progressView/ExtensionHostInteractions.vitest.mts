@@ -3,10 +3,27 @@ import { createTestSession as createIsolatedTestSession } from '@test/support/se
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
+import type {
+  HostBashApprovalResult,
+  HostUserQuestionResult,
+  PlanApprovalResult,
+  ProposalResult,
+  RetryResult,
+} from '@agent/runtime/HostInteractions';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
-import type { StreamTabId } from '@shared/schemas';
+import type {
+  AgentProposalPermission,
+  BashPermission,
+  ExternalInquiryPermission,
+  PlanApprovalPermission,
+  RetryPermission,
+  StreamTabId,
+  ToolEditPermission,
+  UserQuestionPermission,
+} from '@shared/schemas';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 
 const mocks = vi.hoisted(() => ({
@@ -21,38 +38,94 @@ vi.mock('@frontend/approval/nativeToolEditApproval', () => ({
   nativeRequestApproval: mocks.nativeRequestApproval,
 }));
 
-interface RecordingApprovalHandler {
-  readonly show: ReturnType<typeof vi.fn>;
-  readonly resolve: ReturnType<typeof vi.fn>;
-  readonly replay: ReturnType<typeof vi.fn>;
-  readonly get: ReturnType<typeof vi.fn>;
-  readonly hasPendingForStream: ReturnType<typeof vi.fn>;
-  readonly releaseForStream: ReturnType<typeof vi.fn>;
-  readonly clear: ReturnType<typeof vi.fn>;
+type ShowSpy<T> = ReturnType<typeof vi.fn<(item: T) => void>>;
+type DismissSpy = ReturnType<typeof vi.fn<(id: string) => void>>;
+
+interface RecordingTransport<T> {
+  readonly show: ShowSpy<T>;
+  readonly dismiss: DismissSpy;
 }
 
-function handler(): RecordingApprovalHandler {
-  return {
-    show: vi.fn(),
-    resolve: vi.fn(),
-    replay: vi.fn(),
-    get: vi.fn(),
-    hasPendingForStream: vi.fn(() => false),
-    releaseForStream: vi.fn(),
-    clear: vi.fn(),
+interface RecordingApprovalHandlerSet extends ApprovalRequestHandlerSet {
+  readonly transport: {
+    toolEdit: RecordingTransport<ToolEditPermission>;
+    bash: RecordingTransport<BashPermission>;
+    retry: RecordingTransport<RetryPermission>;
+    agentProposal: RecordingTransport<AgentProposalPermission>;
+    planApproval: RecordingTransport<PlanApprovalPermission>;
+    externalInquiry: RecordingTransport<ExternalInquiryPermission>;
+    userQuestion: RecordingTransport<UserQuestionPermission>;
   };
 }
 
-function createHandlers(): ApprovalRequestHandlerSet {
+function handler<
+  T extends { streamId: string },
+  K extends keyof T,
+  Result = never,
+>(
+  idField: K,
+): {
+  handler: ApprovalRequestHandler<T, K, Result>;
+  transport: RecordingTransport<T>;
+} {
+  const transport = {
+    show: vi.fn<(item: T) => void>(),
+    dismiss: vi.fn<(id: string) => void>(),
+  };
   return {
-    toolEdit: handler(),
-    bash: handler(),
-    retry: handler(),
-    agentProposal: handler(),
-    planApproval: handler(),
-    externalInquiry: handler(),
-    userQuestion: handler(),
-  } as unknown as ApprovalRequestHandlerSet;
+    handler: new ApprovalRequestHandler<T, K, Result>(
+      idField,
+      transport.show,
+      transport.dismiss,
+      () => true,
+    ),
+    transport,
+  };
+}
+
+function createHandlers(): RecordingApprovalHandlerSet {
+  const toolEdit = handler<ToolEditPermission, 'requestId'>('requestId');
+  const bash = handler<BashPermission, 'requestId', HostBashApprovalResult>(
+    'requestId',
+  );
+  const retry = handler<RetryPermission, 'streamId', RetryResult>('streamId');
+  const agentProposal = handler<
+    AgentProposalPermission,
+    'proposalId',
+    ProposalResult
+  >('proposalId');
+  const planApproval = handler<
+    PlanApprovalPermission,
+    'approvalId',
+    PlanApprovalResult
+  >('approvalId');
+  const externalInquiry = handler<ExternalInquiryPermission, 'requestId'>(
+    'requestId',
+  );
+  const userQuestion = handler<
+    UserQuestionPermission,
+    'requestId',
+    HostUserQuestionResult
+  >('requestId');
+
+  return {
+    toolEdit: toolEdit.handler,
+    bash: bash.handler,
+    retry: retry.handler,
+    agentProposal: agentProposal.handler,
+    planApproval: planApproval.handler,
+    externalInquiry: externalInquiry.handler,
+    userQuestion: userQuestion.handler,
+    transport: {
+      toolEdit: toolEdit.transport,
+      bash: bash.transport,
+      retry: retry.transport,
+      agentProposal: agentProposal.transport,
+      planApproval: planApproval.transport,
+      externalInquiry: externalInquiry.transport,
+      userQuestion: userQuestion.transport,
+    },
+  };
 }
 
 function createRuntimeHost() {
@@ -148,7 +221,7 @@ describe('createExtensionHostInteractions', () => {
       accepted: true,
       userMessage: undefined,
     });
-    expect(handlers.agentProposal.resolve).toHaveBeenCalledWith(
+    expect(handlers.transport.agentProposal.dismiss).toHaveBeenCalledWith(
       'proposal-parallel',
     );
     expect(mocks.approveNativeToolEditApprovals).toHaveBeenCalledWith(
@@ -163,7 +236,7 @@ describe('createExtensionHostInteractions', () => {
         action: 'approve',
       }),
     ).toBe(true);
-    const bashShow = handlers.bash.show as unknown as ReturnType<typeof vi.fn>;
+    const bashShow = handlers.transport.bash.show;
     const otherRequestId = firstShowRequestId(bashShow);
     const streamBRequestId = (
       bashShow.mock.calls.find(
@@ -222,7 +295,7 @@ describe('createExtensionHostInteractions', () => {
         },
       },
     });
-    expect(handlers.planApproval.show).toHaveBeenCalledWith({
+    expect(handlers.transport.planApproval.show).toHaveBeenCalledWith({
       approvalId: 'plan-a',
       streamId: 'stream-a',
       goalEnabled: true,
@@ -237,11 +310,42 @@ describe('createExtensionHostInteractions', () => {
     await expect(resultPromise).resolves.toEqual({
       action: 'approve_and_goal',
     });
-    expect(handlers.planApproval.resolve).toHaveBeenCalledWith('plan-a');
+    expect(handlers.transport.planApproval.dismiss).toHaveBeenCalledWith(
+      'plan-a',
+    );
     // The request was settled first-wins: a second resolution finds nothing.
     expect(
       interactions.submitPlanDecision('plan-a', { action: 'approve' }),
     ).toBe(false);
+  });
+
+  it('rejects a request when its show transport fails synchronously', async () => {
+    const handlers = createHandlers();
+    handlers.transport.planApproval.show.mockImplementationOnce(() => {
+      throw new Error('Progress view transport unavailable.');
+    });
+    const interactions = createInteractions({
+      handlers,
+      session: createTestSession(),
+    });
+
+    const resultPromise = interactions.requestPlanApproval?.({
+      approvalId: 'plan-show-failure',
+      streamId: 'stream-a' as StreamTabId,
+      goalEnabled: false,
+      plan: { objective: 'Fail before becoming pending.' },
+    });
+
+    await expect(resultPromise).rejects.toThrow(
+      'Progress view transport unavailable.',
+    );
+    expect(handlers.planApproval.get('plan-show-failure')).toBeUndefined();
+    expect(
+      interactions.submitPlanDecision('plan-show-failure', {
+        action: 'approve',
+      }),
+    ).toBe(false);
+    expect(handlers.transport.planApproval.dismiss).not.toHaveBeenCalled();
   });
 
   it('surfaces retry requests without stealing active-stream focus (#8246)', async () => {
@@ -275,7 +379,7 @@ describe('createExtensionHostInteractions', () => {
         },
       },
     ]);
-    expect(handlers.retry.show).toHaveBeenCalledWith(
+    expect(handlers.transport.retry.show).toHaveBeenCalledWith(
       expect.objectContaining({ streamId: 'failing-subagent' }),
     );
   });
@@ -341,7 +445,7 @@ describe('createExtensionHostInteractions', () => {
     interactions.cancel({ streamId: 'stream-a' as StreamTabId });
 
     await expect(resultPromise).resolves.toEqual({ action: 'cancel' });
-    expect(handlers.retry.resolve).toHaveBeenCalledWith('stream-a');
+    expect(handlers.transport.retry.dismiss).toHaveBeenCalledWith('stream-a');
   });
 
   it('routes tool-edit cancellation through the native approval owner', () => {
@@ -382,7 +486,7 @@ describe('createExtensionHostInteractions', () => {
       accepted: false,
       userMessage: 'Stream resources released.',
     });
-    expect(handlers.bash.resolve).toHaveBeenCalled();
+    expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
   });
 
   it('rejects a resolution whose kind does not match the pending request', async () => {
@@ -396,9 +500,7 @@ describe('createExtensionHostInteractions', () => {
       command: 'echo hi',
       streamId: 'stream-a' as StreamTabId,
     });
-    const requestId = firstShowRequestId(
-      handlers.bash.show as ReturnType<typeof vi.fn>,
-    );
+    const requestId = firstShowRequestId(handlers.transport.bash.show);
 
     // A mismatched kind for the same requestId must not settle the pending
     // bash approval as a plan action would (defends against a caller bug
@@ -442,11 +544,11 @@ describe('createExtensionHostInteractions', () => {
     });
 
     await expect(retryPromise).resolves.toEqual({ action: 'cancel' });
-    expect(handlers.retry.resolve).toHaveBeenCalledWith('stream-a');
+    expect(handlers.transport.retry.dismiss).toHaveBeenCalledWith('stream-a');
 
     // The plan approval on the same stream survives untouched and is still
     // resolvable first-wins.
-    expect(handlers.planApproval.resolve).not.toHaveBeenCalled();
+    expect(handlers.transport.planApproval.dismiss).not.toHaveBeenCalled();
     expect(
       interactions.submitPlanDecision('plan-a', { action: 'approve' }),
     ).toBe(true);
@@ -473,7 +575,7 @@ describe('createExtensionHostInteractions', () => {
       }),
     ).resolves.toEqual({ threadId: 'thread-a' });
 
-    expect(handlers.externalInquiry.show).toHaveBeenCalledWith({
+    expect(handlers.transport.externalInquiry.show).toHaveBeenCalledWith({
       requestId: 'thread-a',
       threadId: 'thread-a',
       question: 'Which convention should be used?',
@@ -482,7 +584,9 @@ describe('createExtensionHostInteractions', () => {
       mode: 'new',
     });
     interactions.dismissExternalInquiry('thread-a');
-    expect(handlers.externalInquiry.resolve).toHaveBeenCalledWith('thread-a');
+    expect(handlers.transport.externalInquiry.dismiss).toHaveBeenCalledWith(
+      'thread-a',
+    );
   });
 
   it('cancels streamless user questions during unscoped cleanup', async () => {
@@ -515,7 +619,9 @@ describe('createExtensionHostInteractions', () => {
       submitted: false,
       feedback: 'No stream owns this question.',
     });
-    expect(handlers.userQuestion.resolve).toHaveBeenCalledWith('question-a');
+    expect(handlers.transport.userQuestion.dismiss).toHaveBeenCalledWith(
+      'question-a',
+    );
     // The cancelled question was released: a later resolution finds nothing.
     expect(
       interactions.submitUserQuestionDecision('question-a', {
@@ -556,7 +662,7 @@ describe('createExtensionHostInteractions', () => {
       submitted: true,
       answers,
     });
-    expect(handlers.userQuestion.resolve).toHaveBeenCalledWith(
+    expect(handlers.transport.userQuestion.dismiss).toHaveBeenCalledWith(
       'question-submit',
     );
   });
