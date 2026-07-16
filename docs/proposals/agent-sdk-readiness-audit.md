@@ -196,13 +196,11 @@ be the highest-leverage addition to this surface.
 
 ### 2.4 Safety: make log redaction opt-out, not opt-in
 
-`redactSecrets` (`src/logger/redaction.ts:84`) is applied only by
-`desktopAppLog.ts`; the default/CLI sinks skip it by design. Any SDK consumer
-wiring a custom `setOutputChannelFactory` that persists logs inherits an
-un-enforced contract and can leak API keys. _Fix:_ make the default sink factory
-redact, with an explicit `{ trusted: true }` opt-out for the operator-terminal
-case. This is the one correctness item worth fixing before any external consumer
-wires a persistent log sink.
+`setOutputChannelFactory` now wraps sinks with `redactSecrets` by default, so an
+SDK consumer cannot accidentally persist provider credentials by omitting a
+host-side convention. The CLI's local operator terminal is the explicit
+`{ trusted: true }` exception; extension and default console sinks remain
+redacted.
 
 ---
 
@@ -273,8 +271,8 @@ SDK boundary would bypass, not an independent task.)_
 
 1. **Now (mechanical, no behavior change):** 1.1 delete `IModelHandler` shim,
    1.2/1.3 inline the two single-caller helpers. One small PR.
-2. **Next (leak cleanup):** 2.1 xAI clamp override, 2.2 move 4 host-UI ports off
-   `Platform`, 2.4 default-on redaction. Each independently landable.
+2. **Next (leak cleanup):** 2.1 xAI clamp override and 2.2 move 4 host-UI ports
+   off `Platform`. Each independently landable.
 3. **Structural (the actual SDK enablers):** §2.1 curated boundary + §2.2 accept
    `Platform` as an explicit argument to the SDK entrypoint (dissolve the global
    locator). These unlock a real `@texra/core`.
