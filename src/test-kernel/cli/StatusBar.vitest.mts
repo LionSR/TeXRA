@@ -453,6 +453,20 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
+  it('shows the planned round total when the workflow declares one', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        roundStage: { index: 1, total: 3 },
+      }),
+    );
+
+    const segment = display.left.find((item) => item.text === 'r2/3');
+    expect(segment).toBeDefined();
+    // Narrow terminals degrade to the bare current round, not to nothing.
+    expect(segment?.compactText).toBe('r2');
+  });
+
   it('prefixes the running label with the current spin frame', () => {
     const display = buildStatusBarDisplay(
       statusInput({ status: STREAM_PHASE.RUNNING, runningFrame: '/' }),

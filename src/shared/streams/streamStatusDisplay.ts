@@ -6,6 +6,7 @@ import {
   StreamStatusSchema,
   streamStatusToPhase,
   streamStatusToSubstate,
+  type RoundStage,
   type StreamPhase,
   type StreamSubstate,
 } from '@shared/schemas';
@@ -150,4 +151,20 @@ export function formatStreamStatusLabel(
     return CLI_CHILD_WAITING_LABEL;
   }
   return STREAM_STATUS_LABELS[style][key] ?? status;
+}
+
+/** Compact round/turn progress label: `r2/3` when the planned total is known
+ *  (workflow runs), else `r2`. Zero-based `index` renders one-based. */
+export function formatRoundStageLabel(stage: Readonly<RoundStage>): string;
+
+export function formatRoundStageLabel(
+  stage: Readonly<RoundStage> | undefined,
+): string | undefined;
+
+export function formatRoundStageLabel(
+  stage: Readonly<RoundStage> | undefined,
+): string | undefined {
+  if (stage === undefined) return undefined;
+  const current = `r${stage.index + 1}`;
+  return stage.total !== undefined ? `${current}/${stage.total}` : current;
 }
