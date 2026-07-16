@@ -6,7 +6,10 @@ import { useMemo } from 'react';
 
 // Local imports - shared stream state
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
-import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
+import {
+  formatRoundStageLabel,
+  formatStreamStatusLabel,
+} from '@shared/streams/streamStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and controls
@@ -100,6 +103,8 @@ function SessionRow({
     },
     nowMs,
   );
+  // Significance order — truncate-end sheds elapsed first, then the round.
+  const roundLabel = formatRoundStageLabel(session.slice?.roundStage);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Text color={focused ? COLOR_HINT : undefined}>
@@ -113,6 +118,7 @@ function SessionRow({
         <Text bold={active} wrap="truncate-end">
           {session.label}
           {statusLabel ? ` ${statusLabel}` : ''}
+          {roundLabel ? ` · ${roundLabel}` : ''}
           {elapsed ? ` · ${elapsed}` : ''}
         </Text>
       </Box>

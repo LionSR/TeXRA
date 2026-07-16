@@ -9,6 +9,10 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
+import { isEmptyUsage } from '@shared/schemas';
+import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
+import { formatCompactTokenCount } from '@utils/core';
+
 import {
   isEscapeInput,
   isJumpToBottomInput,
@@ -50,9 +54,19 @@ export function TranscriptViewer({
     // O(N) re-flatten on status-only ticks during streaming.
     [slice?.entries, width],
   );
+  const usage = slice?.cumulativeUsage;
+  const headerText = [
+    title,
+    formatRoundStageLabel(slice?.roundStage),
+    usage && !isEmptyUsage(usage)
+      ? `${formatCompactTokenCount(usage.inputTokens)} in / ${formatCompactTokenCount(usage.outputTokens)} out`
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   // Reserve one row for the footer hint strip, plus one for the title header
   // when present, so the scrollable region never overflows availableRows.
-  const titleRows = title ? 1 : 0;
+  const titleRows = headerText ? 1 : 0;
   const viewRows = Math.max(1, availableRows - 1 - titleRows);
   // Open pinned to the bottom — the latest output is what the user just asked
   // to inspect.
@@ -98,9 +112,9 @@ export function TranscriptViewer({
 
   return (
     <Box flexDirection="column" width={width}>
-      {title ? (
+      {headerText ? (
         <Text bold color={COLOR_HINT} wrap="truncate-end">
-          {title}
+          {headerText}
         </Text>
       ) : null}
       <Box flexDirection="column" overflowY="hidden">
