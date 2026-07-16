@@ -7,10 +7,11 @@ import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   LIVE_TAIL_ROWS,
-  boundedAssistantDisplayLines,
-  compactPrefixedDisplayRows,
+  boundedTranscriptEntryLayout,
   liveAssistantDisplayLines,
-} from '@cli/chat/tui/panes/TranscriptEntry';
+  transcriptEntryLayout,
+  transcriptEntryLayoutRows,
+} from '@cli/chat/tui/panes/transcriptEntryLayout';
 import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
 import {
   isInquiryContinuationText,
@@ -352,24 +353,42 @@ describe('CLI conversation transcript splitting', () => {
       '\n',
     );
 
-    const finalizedTail = boundedAssistantDisplayLines({
-      colorEnabled: false,
-      finalized: true,
-      rows: 1,
+    const assistant = (finalized: boolean): ConversationEntry => ({
+      finalized,
+      id: finalized ? 'finalized' : 'streaming',
+      role: 'assistant',
       text,
-      width: 80,
-    }).join('\n');
-    const streamingTail = boundedAssistantDisplayLines({
-      colorEnabled: false,
-      finalized: false,
-      rows: 1,
-      text,
-      width: 80,
-    }).join('\n');
+    });
+    const finalizedTail = boundedTranscriptEntryLayout(
+      transcriptEntryLayout(assistant(true), {
+        colorEnabled: false,
+        mode: 'bounded',
+        width: 80,
+      }),
+      1,
+    ).lines.join('\n');
+    const streamingTail = boundedTranscriptEntryLayout(
+      transcriptEntryLayout(assistant(false), {
+        colorEnabled: false,
+        mode: 'bounded',
+        width: 80,
+      }),
+      1,
+    ).lines.join('\n');
 
     expect(finalizedTail).toContain('bold tail marker');
     expect(finalizedTail).not.toContain('**bold tail marker**');
     expect(streamingTail).toContain('**bold tail marker**');
+
+    const cappedStreamingTail = boundedTranscriptEntryLayout(
+      transcriptEntryLayout(entry('tail', 'assistant', 'x'.repeat(25), false), {
+        maxRows: 1,
+        mode: 'bounded',
+        width: 10,
+      }),
+      1,
+    );
+    expect(cappedStreamingTail.lines).toEqual(['x'.repeat(10)]);
   });
 
   it('budgets live assistant display-math rows with the live renderer', () => {
@@ -399,24 +418,75 @@ describe('CLI conversation transcript splitting', () => {
     expect(selected.rowLimits.has('a1')).toBe(false);
   });
 
-  it('pads compact prefixed rows to the viewport width', () => {
-    expect(
-      compactPrefixedDisplayRows({
-        fillWidth: true,
-        prefix: '! ',
-        text: 'bad',
-        width: 8,
-      }),
-    ).toBe('! bad   ');
-    expect(
-      compactPrefixedDisplayRows({
-        fillWidth: true,
-        maxRows: 1,
-        prefix: '! ',
-        text: 'abcdef',
-        width: 6,
-      }),
-    ).toBe('  ef  ');
+  it('derives prefixes, insets, margins, and row counts from one layout', () => {
+    const user = entry('u1', 'user', 'x'.repeat(77), true);
+    const userLayout = transcriptEntryLayout(user, { width: 80 });
+    expect(userLayout).toMatchObject({
+      columns: 78,
+      continuationPrefix: '  ',
+      firstPrefix: '› ',
+      inset: 2,
+      marginBottomRows: 1,
+      marginTopRows: 1,
+    });
+    expect(userLayout.lines).toHaveLength(2);
+    expect(transcriptEntryLayoutRows(userLayout)).toBe(4);
+    expect(estimateTranscriptEntryRows(user, 80)).toBe(
+      transcriptEntryLayoutRows(userLayout),
+    );
+
+    const tool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'one\ntwo');
+    const toolLayout = transcriptEntryLayout(tool, { width: 80 });
+    expect(toolLayout).toMatchObject({
+      columns: 80,
+      inset: 0,
+      marginBottomRows: 1,
+      marginTopRows: 0,
+    });
+    expect(estimateTranscriptEntryRows(tool, 80)).toBe(
+      transcriptEntryLayoutRows(toolLayout),
+    );
+  });
+
+  it('budgets live rich tool rows without reflowing their display lines', () => {
+    const base = toolEntry('t1', TOOL_USE_STATUS.COMPLETED);
+    const tool: ConversationEntry = {
+      ...base,
+      toolUse: {
+        ...base.toolUse,
+        input: { command: 'x'.repeat(80) },
+      },
+    };
+    const liveLayout = transcriptEntryLayout(tool, {
+      mode: 'live',
+      width: 20,
+    });
+
+    expect(liveLayout.lines).toHaveLength(2);
+    expect(selectTranscriptEntriesForViewport([tool], 20, 20).usedRows).toBe(
+      transcriptEntryLayoutRows(liveLayout),
+    );
+  });
+
+  it('keeps bounded rich display rows unwrapped', () => {
+    const baseTool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'x'.repeat(40));
+    const baseProcess = processEntry('p1');
+    const process: ConversationEntry = {
+      ...baseProcess,
+      process: {
+        ...baseProcess.process,
+        tailLines: ['y'.repeat(40)],
+      },
+    };
+
+    for (const item of [baseTool, process]) {
+      const live = transcriptEntryLayout(item, { mode: 'live', width: 20 });
+      const bounded = boundedTranscriptEntryLayout(
+        transcriptEntryLayout(item, { mode: 'bounded', width: 20 }),
+        10,
+      );
+      expect(bounded.lines).toEqual(live.lines);
+    }
   });
 
   it('budgets live user prompt bands with their margin rows', () => {
@@ -727,6 +797,47 @@ describe('CLI conversation transcript splitting', () => {
         width: 80,
       }).map((item) => item.id),
     ).toEqual(['session-header', 'p1']);
+  });
+
+  it('keeps full tool output as the conservative static-header budget', () => {
+    const tool = {
+      ...toolEntry(
+        't1',
+        TOOL_USE_STATUS.COMPLETED,
+        Array.from({ length: 20 }, (_, index) => `line ${index}`).join('\n'),
+      ),
+      finalized: true,
+    } satisfies ConversationEntry;
+    const renderedRows = transcriptEntryLayoutRows(
+      transcriptEntryLayout(tool, { mode: 'scrollback', width: 80 }),
+    );
+    const budgetRows = transcriptEntryLayoutRows(
+      transcriptEntryLayout(tool, {
+        mode: 'scrollback-budget',
+        width: 80,
+      }),
+    );
+    expect(budgetRows).toBeGreaterThan(renderedRows);
+
+    const withoutHeader = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [tool]),
+      meta: SESSION_META,
+      maxRows: 0,
+      width: 80,
+    });
+    expect(withoutHeader.map((item) => item.id)).toEqual(['t1']);
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: withoutHeader,
+        streams: streamsFromEntries(STREAM_ID, [tool]),
+        meta: SESSION_META,
+        maxRows: renderedRows + 4,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['t1']);
   });
 
   it('budgets user band margins before inserting compact static headers', () => {
