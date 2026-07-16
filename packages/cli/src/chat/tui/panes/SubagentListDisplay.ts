@@ -7,6 +7,7 @@ import {
   COLOR_WARNING,
 } from '../ui/colors';
 import { STATUS_DOT } from '../ui/glyphs';
+import type { PendingApprovalKind } from '../state/approvalQueue';
 
 export function childStatusColor(status: string | undefined): string {
   if (!status) return COLOR_SUCCESS;
@@ -26,3 +27,24 @@ export function childStatusColor(status: string | undefined): string {
 // is conveyed by `childStatusColor`, and liveness by the `running · Ns` text, so
 // the animation bought churn without information.
 export const CHILD_STATUS_MARKER = `${STATUS_DOT} `;
+
+const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
+  bash: 'bash',
+  toolEdit: 'edit',
+  plan: 'plan',
+  proposal: 'proposal',
+  retry: 'retry',
+  externalInquiry: 'inquiry',
+  userQuestion: 'question',
+};
+
+/** One-word "waiting on what" suffix for a session row: the row's first
+ *  pending approval kind, plus a `+N` overflow when more are queued. */
+export function pendingApprovalRowSuffix(
+  kinds: readonly PendingApprovalKind[] | undefined,
+): string | undefined {
+  const first = kinds?.[0];
+  if (kinds === undefined || first === undefined) return undefined;
+  const label = PENDING_APPROVAL_ROW_LABELS[first];
+  return kinds.length > 1 ? `${label} +${kinds.length - 1}` : label;
+}
