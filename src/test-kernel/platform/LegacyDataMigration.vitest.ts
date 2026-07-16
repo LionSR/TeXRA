@@ -174,4 +174,28 @@ describe('moveEntryIfAbsent', () => {
     ).resolves.toBe('{"a":1}');
     expect(logger.infoMessages).toHaveLength(1);
   });
+
+  it('does not overwrite a file created by a concurrent migration', async () => {
+    const legacy = await makeTempDir('texra-move-race-legacy-');
+    const target = await makeTempDir('texra-move-race-target-');
+    const logger = fakeLogger();
+    const first = join(legacy, 'first.md');
+    const second = join(legacy, 'second.md');
+    const destination = join(target, 'memories', 'note.md');
+    await writeFile(first, 'first');
+    await writeFile(second, 'second');
+
+    await Promise.all([
+      moveEntryIfAbsent(first, destination, 'first', logger),
+      moveEntryIfAbsent(second, destination, 'second', logger),
+    ]);
+
+    const targetContent = await readFile(destination, 'utf8');
+    expect(['first', 'second']).toContain(targetContent);
+    const losingSource = targetContent === 'first' ? second : first;
+    await expect(readFile(losingSource, 'utf8')).resolves.toBe(
+      targetContent === 'first' ? 'second' : 'first',
+    );
+    expect(logger.warnMessages).toHaveLength(1);
+  });
 });

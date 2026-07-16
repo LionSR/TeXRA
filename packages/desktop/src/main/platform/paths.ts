@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { app } from 'electron';
 
@@ -28,10 +28,18 @@ interface ResourcesPathOptions {
 export function resolveWorkspacePath(
   options: WorkspacePathOptions = {},
 ): string | undefined {
-  const workspacePath = getWorkspacePathInput(options);
+  const workspacePath = resolveLegacyWorkspacePath(options);
   return workspacePath == null
     ? undefined
     : canonicalizeWorkspacePath(workspacePath);
+}
+
+/** Previous desktop workspace spelling, retained only for bucket migration. */
+export function resolveLegacyWorkspacePath(
+  options: WorkspacePathOptions = {},
+): string | undefined {
+  const workspacePath = getWorkspacePathInput(options);
+  return workspacePath == null ? undefined : resolve(workspacePath);
 }
 
 /**

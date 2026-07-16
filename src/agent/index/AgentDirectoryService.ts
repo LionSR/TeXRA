@@ -9,7 +9,7 @@ import {
   BUILTIN_TOOL_USE_AGENTS_DIR,
 } from './BundledAgentDirectories';
 
-const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
+export const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
 
 export interface AgentDirectoryPathStorage {
   ensureDir(relativePath: string): Promise<void>;

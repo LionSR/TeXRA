@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { platform } from '@platform/platform';
 import {
   clearStoreCache,
   getExecutionStore,
@@ -92,6 +93,38 @@ describe('execution listing normalization', () => {
         terminalStatus: 'completed',
       }),
     ]);
+  });
+
+  it('migrates history stored under a legacy workspace spelling', async () => {
+    const id = 'abc777' as ExecutionId;
+    const legacyKey = 'texra.agentHistory./workspace/symlink';
+    await installPlatform(
+      {
+        workspacePath: '/workspace/physical',
+        workspaceState: {
+          [legacyKey]: [
+            {
+              id,
+              timestamp: '2026-07-15T13:00:00.000Z',
+              agentConfig: config('assistant'),
+            },
+          ],
+        },
+      },
+      {
+        workspace: {
+          getWorkspacePath: () => '/workspace/physical',
+          getLegacyWorkspacePaths: () => ['/workspace/symlink'],
+          asRelativePath: (filePath) => filePath,
+        },
+      },
+    );
+    clearStoreCache();
+
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({ id, kind: 'agent' }),
+    ]);
+    expect(platform().workspaceState.get(legacyKey, [])).toEqual([]);
   });
 
   it('uses the config as the canonical source for visible agent fields', async () => {

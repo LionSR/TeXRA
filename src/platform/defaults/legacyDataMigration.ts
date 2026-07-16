@@ -12,8 +12,18 @@
  */
 
 // Node imports
-import { existsSync } from 'node:fs';
-import { mkdir, readdir, rename } from 'node:fs/promises';
+import { constants, existsSync } from 'node:fs';
+import {
+  copyFile,
+  link,
+  lstat,
+  mkdir,
+  readlink,
+  readdir,
+  rename,
+  symlink,
+  unlink,
+} from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 // Local imports - utils
@@ -36,6 +46,33 @@ function errorCodeOf(error: unknown): string | undefined {
     : undefined;
 }
 
+/** Move an entry without replacing a target that appears concurrently. */
+async function moveEntryNoReplace(
+  legacyPath: string,
+  targetPath: string,
+): Promise<void> {
+  const entry = await lstat(legacyPath);
+  if (entry.isFile()) {
+    try {
+      await link(legacyPath, targetPath);
+    } catch (error) {
+      if (errorCodeOf(error) !== 'EXDEV') throw error;
+      await copyFile(legacyPath, targetPath, constants.COPYFILE_EXCL);
+    }
+    await unlink(legacyPath);
+    return;
+  }
+  if (entry.isSymbolicLink()) {
+    await symlink(await readlink(legacyPath), targetPath);
+    await unlink(legacyPath);
+    return;
+  }
+
+  // Directory rename cannot replace a non-empty directory. It may replace an
+  // empty directory created in the race window, which loses no user data.
+  await rename(legacyPath, targetPath);
+}
+
 export async function moveEntryIfAbsent(
   legacyPath: string,
   targetPath: string,
@@ -51,7 +88,7 @@ export async function moveEntryIfAbsent(
   }
   try {
     await mkdir(dirname(targetPath), { recursive: true });
-    await rename(legacyPath, targetPath);
+    await moveEntryNoReplace(legacyPath, targetPath);
     logger.info(`Migrated legacy "${label}" to ${targetPath}.`);
   } catch (error) {
     // Surface the errno code (e.g. EXDEV when the legacy and target trees sit
@@ -59,6 +96,12 @@ export async function moveEntryIfAbsent(
     // when the target volume is full) so a failure is diagnosable from the
     // log line alone — this stays non-throwing/best-effort either way.
     const code = errorCodeOf(error);
+    if (code === 'EEXIST') {
+      logger.warn(
+        `Skipping legacy data migration for "${label}": an entry appeared at ${targetPath}. Legacy data is still at ${legacyPath}; move it manually if needed.`,
+      );
+      return;
+    }
     logger.warn(
       `Failed to migrate legacy "${label}" to ${targetPath}${code ? ` (${code})` : ''}. Legacy data is still at ${legacyPath}. Cause: ${toErrorMessage(error)}`,
     );

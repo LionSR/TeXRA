@@ -274,24 +274,33 @@ async function migrateIndexJson(): Promise<void> {
 
 /** Migrate entries from workspace state into per-execution KV. */
 async function migrateWorkspaceState(): Promise<void> {
-  const storageKey = getWorkspaceStorageKey();
-  const legacy = platform().workspaceState.get<unknown[]>(storageKey, []);
-  if (!Array.isArray(legacy) || legacy.length === 0) return;
+  const workspace = platform().workspace;
+  const paths = [
+    workspace.getWorkspacePath(),
+    ...(workspace.getLegacyWorkspacePaths?.() ?? []),
+  ];
+  const storageKeys = [
+    ...new Set(paths.map((path) => getWorkspaceStorageKey(path))),
+  ];
 
-  await backfillEntries(legacy);
+  for (const storageKey of storageKeys) {
+    const legacy = platform().workspaceState.get<unknown[]>(storageKey, []);
+    if (!Array.isArray(legacy) || legacy.length === 0) continue;
 
-  try {
-    await platform().workspaceState.update(storageKey, []);
-  } catch (error) {
-    logger.warn(
-      CHANNEL,
-      `Failed to clear workspace state key: ${toErrorMessage(error)}`,
-    );
+    await backfillEntries(legacy);
+
+    try {
+      await platform().workspaceState.update(storageKey, []);
+    } catch (error) {
+      logger.warn(
+        CHANNEL,
+        `Failed to clear workspace state key: ${toErrorMessage(error)}`,
+      );
+    }
   }
 }
 
-function getWorkspaceStorageKey(): string {
-  const workspacePath = WorkspaceFS.getPath();
+function getWorkspaceStorageKey(workspacePath: string | undefined): string {
   return workspacePath
     ? `${LEGACY_HISTORY_KEY}.${workspacePath}`
     : LEGACY_HISTORY_KEY;

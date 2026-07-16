@@ -142,6 +142,9 @@ export interface WorkspaceProvider {
   /** The canonical physical workspace root, or undefined if none is open. */
   getWorkspacePath(): string | undefined;
 
+  /** Previous host-specific spellings used only for one-time state migration. */
+  getLegacyWorkspacePaths?(): readonly string[];
+
   /**
    * Convert an absolute path to a workspace-relative path.
    * Should be symlink-aware where possible.

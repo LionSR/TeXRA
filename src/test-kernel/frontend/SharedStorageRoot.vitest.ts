@@ -48,7 +48,10 @@ describe('VS Code shared-storage migration', () => {
     expect(mocks.mergeLegacyStorageBucket).toHaveBeenCalledWith(
       '/legacy/global',
       '/shared/global',
-      expect.objectContaining({ label: 'vscode-global-storage' }),
+      expect.objectContaining({
+        label: 'vscode-global-storage',
+        mergePerChild: ['custom_agents'],
+      }),
     );
     expect(mocks.warn).toHaveBeenCalledWith(
       'extension',
@@ -72,7 +75,14 @@ describe('VS Code shared-storage migration', () => {
     expect(mocks.mergeLegacyStorageBucket).toHaveBeenCalledWith(
       '/legacy/workspace',
       '/shared/workspace',
-      expect.objectContaining({ label: 'vscode-workspace-storage' }),
+      expect.objectContaining({
+        label: 'vscode-workspace-storage',
+        mergePerChild: expect.arrayContaining([
+          'executions',
+          'memories',
+          'streamLogs',
+        ]),
+      }),
     );
     expect(mocks.warn).toHaveBeenCalledWith(
       'extension',
