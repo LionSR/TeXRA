@@ -749,6 +749,9 @@ export class DesktopProgressBridge {
   }
 
   private async repairOrphanedStreamsAfterRestart(): Promise<void> {
+    let waitingStreams: Set<StreamTabId>;
+    let repairActiveExecutionIds: Set<string>;
+    let repairAllExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
     try {
       const { activeExecutionIds, allExecutionIds } =
         this.refreshActiveExecutionIds();
@@ -757,35 +760,37 @@ export class DesktopProgressBridge {
           ([, executionId]) => !activeExecutionIds.has(executionId),
         ),
       );
-      const {
+      ({
         waitingStreams,
         activeExecutionIds: repairActiveExecutionIds,
         allExecutionIds: repairAllExecutionIds,
-      } = await this.detectRaceGuardedWaitingStreams(executionIdMap);
-      const repairStreams = this.getRestartRepairStreamSet(
-        repairAllExecutionIds,
-        repairActiveExecutionIds,
-        waitingStreams,
-      );
-      const repairResult = await repairRestartedStreams({
-        streamStatus: this.session.status,
-        waitingStreams,
-        executionIds: repairAllExecutionIds,
-        repairStreams,
-        closeRunningGroups: (streamIds, status, now) =>
-          this.closeRunningTaskGroupsForStreams(streamIds, status, now),
-        statusEmitOptions: {
-          trace: this.logger,
-        },
-        logger: this.logger,
-      });
-      this.syncAfterRestartRepair(repairResult);
+      } = await this.detectRaceGuardedWaitingStreams(executionIdMap));
     } catch (error) {
       this.logger.warn('Failed to detect resumable desktop streams', {
         data: toLogData(error),
       });
       await this.repairUnmappedUnfinishedStreams();
+      return;
     }
+
+    const repairStreams = this.getRestartRepairStreamSet(
+      repairAllExecutionIds,
+      repairActiveExecutionIds,
+      waitingStreams,
+    );
+    const repairResult = await repairRestartedStreams({
+      streamStatus: this.session.status,
+      waitingStreams,
+      executionIds: repairAllExecutionIds,
+      repairStreams,
+      closeRunningGroups: (streamIds, status, now) =>
+        this.closeRunningTaskGroupsForStreams(streamIds, status, now),
+      statusEmitOptions: {
+        trace: this.logger,
+      },
+      logger: this.logger,
+    });
+    this.syncAfterRestartRepair(repairResult);
   }
 
   /**

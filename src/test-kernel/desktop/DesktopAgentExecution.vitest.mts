@@ -187,6 +187,7 @@ type CreateBridgeOptions = {
   deferReady?: boolean;
   afterCanonicalLoad?: () => Promise<void>;
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
+  repairRestartedStreams?: ReturnType<typeof vi.fn>;
   activeExecutionIds?: readonly string[] | (() => readonly string[]);
   showErrorMessage?: (message: string) => Promise<void> | void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
@@ -279,6 +280,17 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     detectWaitingStreams:
       options.detectWaitingStreams ?? vi.fn(async () => new Set()),
   }));
+  vi.doMock('@controllers/progressView/backend/restartRepair', async () => {
+    const actual = await vi.importActual<
+      typeof import('@controllers/progressView/backend/restartRepair')
+    >('@controllers/progressView/backend/restartRepair');
+    return options.repairRestartedStreams
+      ? {
+          ...actual,
+          repairRestartedStreams: options.repairRestartedStreams,
+        }
+      : actual;
+  });
   vi.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
       constructor(private readonly dir: string) {}
@@ -607,6 +619,7 @@ describe('DesktopProgressBridge', () => {
     vi.doUnmock('@agent/storage/detectWaitingStreams');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
+    vi.doUnmock('@controllers/progressView/backend/restartRepair');
     vi.doUnmock('vscode');
     vi.restoreAllMocks();
   });
@@ -1090,6 +1103,23 @@ describe('DesktopProgressBridge', () => {
     expect(
       bridge.streamLogs.get(mappedStream)?.getRange(0).at(-1),
     ).not.toMatchObject({ type: STREAM_LOG_ENTRY_TYPES.GROUP_END });
+  });
+
+  it('does not mask restart repair write failures as detection failures', async () => {
+    const streamId = 'write-failure-stream' as StreamTabId;
+    const repairError = new Error('restart repair write failed');
+    const repairRestartedStreams = vi.fn(async () => {
+      throw repairError;
+    });
+
+    await expect(
+      createBridge([], {
+        canonicalStreamIds: [streamId],
+        configureTranscripts: (store) => appendRunningGroup(store, streamId),
+        repairRestartedStreams,
+      }),
+    ).rejects.toBe(repairError);
+    expect(repairRestartedStreams).toHaveBeenCalledOnce();
   });
 
   it('waits for desktop startup repair before starting a run', async () => {
