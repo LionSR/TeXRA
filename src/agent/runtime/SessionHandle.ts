@@ -118,6 +118,7 @@ export class SessionHandle {
     const events = init.events ?? new SessionEventHub();
     const transcripts = init.transcripts;
     const followUps = init.followUps ?? new ToolUseFollowUpQueue();
+    const approvals = createSessionApprovals();
     const executions =
       init.executions ??
       new ExecutionRegistry({ streamStatus: status, events });
@@ -127,6 +128,7 @@ export class SessionHandle {
     executions.attachSessionEvents(events, (event, streamId) =>
       this.publishRunEvent(streamId, event),
     );
+    executions.attachSessionApprovals(approvals);
 
     this.executions = executions;
     const subscriptions =
@@ -142,7 +144,7 @@ export class SessionHandle {
     this.transcripts = transcripts;
     this.followUps = followUps;
     this.interactions = init.interactions ?? new SessionHostInteractions();
-    this.approvals = createSessionApprovals();
+    this.approvals = approvals;
     // A fresh session owns its own flusher set; the default session aliases
     // the process-module set (`getActiveFlushers()`) so the process-wide
     // shutdown drain (`flushPendingRunTraces()`) still reaches it.

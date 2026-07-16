@@ -25,10 +25,7 @@ import {
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
-import {
-  isApprovalBypassedForStream,
-  proposalApprovals,
-} from '@tools/approval';
+import { proposalApprovals } from '@tools/approval';
 import {
   availableModelNamesFromOptions,
   selectDelegationModelFromAvailableNames,
@@ -158,8 +155,9 @@ export async function proposeAndExecute(
   streamId: StreamTabId,
 ): Promise<ToolResult> {
   if (proposalApprovals().isBypassed(streamId)) {
+    // Preserve the approved delegation's edit grant explicitly on the child.
+    // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
     return executeSubagent(proposal, agentName, streamId, {
-      enableYoloOnChild: true,
       approvalMeta: { autoApproved: true },
     });
   }
@@ -238,7 +236,6 @@ export async function proposeAndExecute(
   };
   const effectiveAgentName = resolvedAgentOverride?.name ?? agentName;
   return executeSubagent(effective, effectiveAgentName, streamId, {
-    enableYoloOnChild: isApprovalBypassedForStream(streamId),
     approvalMeta: {
       autoApproved: false,
       ...(modelOverride && {
