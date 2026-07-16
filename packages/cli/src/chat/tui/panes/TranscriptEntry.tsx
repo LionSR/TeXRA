@@ -165,6 +165,12 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   readonly fillWidth?: boolean;
   readonly userBottomMarginRows?: number;
 }): React.JSX.Element {
+  if (entry.role === 'tool') {
+    return (
+      <ToolUseRow fillWidth={fillWidth} toolUse={entry.toolUse} width={width} />
+    );
+  }
+
   const layout = transcriptEntryLayout(entry, {
     colorEnabled,
     mode: 'scrollback',
@@ -173,14 +179,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   });
 
   switch (entry.role) {
-    case 'tool':
-      return (
-        <ToolUseRow
-          fillWidth={fillWidth}
-          toolUse={entry.toolUse}
-          width={width}
-        />
-      );
     case 'process':
       return (
         <ProcessEntryRow
