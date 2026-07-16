@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - shared schemas
 import { LOG_LEVELS, type LogMessageData } from '@shared/schemas';
@@ -15,11 +15,30 @@ useLitComponentTestDom(() =>
   ]),
 );
 
+// Loaded after useLitComponentTestDom's beforeAll installs the jsdom globals
+// these modules touch at import time.
+let formatToolUseTemplate: typeof import('@progressView/frontend/formatters/logFormatters/toolFormatters').formatToolUseTemplate;
+let formatLogEntry: typeof import('@progressView/frontend/formatters').formatLogEntry;
+let getToolTimeoutMs: typeof import('@progressView/frontend/formatters/logFormatters/toolFormatters/helpers').getToolTimeoutMs;
+let formatBannerContentTemplate: typeof import('@progressView/frontend/formatters/logFormatters/bannerFormatters').formatBannerContentTemplate;
+let formatErrorTemplate: typeof import('@progressView/frontend/formatters/logFormatters/messageFormatters').formatErrorTemplate;
+let render: typeof import('lit').render;
+
+beforeAll(async () => {
+  ({ formatToolUseTemplate } =
+    await import('@progressView/frontend/formatters/logFormatters/toolFormatters'));
+  ({ formatLogEntry } = await import('@progressView/frontend/formatters'));
+  ({ getToolTimeoutMs } =
+    await import('@progressView/frontend/formatters/logFormatters/toolFormatters/helpers'));
+  ({ formatBannerContentTemplate } =
+    await import('@progressView/frontend/formatters/logFormatters/bannerFormatters'));
+  ({ formatErrorTemplate } =
+    await import('@progressView/frontend/formatters/logFormatters/messageFormatters'));
+  ({ render } = await import('lit'));
+});
+
 describe('tool-use formatter', () => {
-  it('renders workflow-script delegation details without proposal or journal data', async () => {
-    const { formatToolUseTemplate } =
-      await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
-    const { render } = await import('lit');
+  it('renders workflow-script delegation details without proposal or journal data', () => {
     const script = `export const meta = {
   name: 'Literature synthesis',
   phases: [{ title: 'Collect' }, { title: 'Compare' }],
@@ -85,10 +104,7 @@ return { papers, question: args.question };`;
     expect(container.querySelector('.proposal-banner-setup')).toBeNull();
   });
 
-  it('shows explicit null workflow-script arguments as JSON', async () => {
-    const { formatToolUseTemplate } =
-      await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
-    const { render } = await import('lit');
+  it('shows explicit null workflow-script arguments as JSON', () => {
     const message: LogMessageData = {
       id: 'workflow-script-null-args',
       text: '',
@@ -114,10 +130,7 @@ return { papers, question: args.question };`;
     ).toBe('null');
   });
 
-  it('keeps streamed bash output out of the collapsed error summary', async () => {
-    const { formatToolUseTemplate } =
-      await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
-    const { render } = await import('lit');
+  it('keeps streamed bash output out of the collapsed error summary', () => {
     const stdout = Array.from(
       { length: 20 },
       (_, i) => `[${i}/100] Built Mathlib.Example.Module${i}`,
@@ -158,10 +171,7 @@ return { papers, question: args.question };`;
     expect(container.querySelector('details')).toBeNull();
   });
 
-  it('renders write_file cards even when compact logs omit content', async () => {
-    const { formatLogEntry } =
-      await import('@progressView/frontend/formatters');
-    const { render } = await import('lit');
+  it('renders write_file cards even when compact logs omit content', () => {
     const message: LogMessageData = {
       id: 'write-file-compact',
       text: '',
@@ -183,12 +193,7 @@ return { papers, question: args.question };`;
     expect(container.textContent).not.toContain('Failed to render');
   });
 
-  it('caps executions wait timeout displays at the tool maximum', async () => {
-    const { formatToolUseTemplate } =
-      await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
-    const { getToolTimeoutMs } =
-      await import('@progressView/frontend/formatters/logFormatters/toolFormatters/helpers');
-    const { render } = await import('lit');
+  it('caps executions wait timeout displays at the tool maximum', () => {
     const input = {
       path: '/executions/abc123',
       action: 'wait',
@@ -248,9 +253,6 @@ function dispatchActivationKeydown(target: EventTarget, key: 'Enter' | ' ') {
 
 describe('wa-details summary controls: activation does not toggle the panel', () => {
   it('clicking the proposal-restore-link ("Setup") button does not toggle the panel, and the click still bubbles to an outer delegated handler', async () => {
-    const { formatToolUseTemplate } =
-      await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
-    const { render } = await import('lit');
     const message: LogMessageData = {
       id: 'proposal-1',
       text: '',
@@ -295,9 +297,6 @@ describe('wa-details summary controls: activation does not toggle the panel', ()
   it.each(['Enter', ' '] as const)(
     'keydown %j on the proposal-restore-link does not toggle the panel',
     async (key) => {
-      const { formatToolUseTemplate } =
-        await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
-      const { render } = await import('lit');
       const message: LogMessageData = {
         id: 'proposal-2',
         text: '',
@@ -334,9 +333,6 @@ describe('wa-details summary controls: activation does not toggle the panel', ()
   it.each(['Enter', ' '] as const)(
     'keydown %j on the copy button does not toggle the panel',
     async (key) => {
-      const { formatBannerContentTemplate } =
-        await import('@progressView/frontend/formatters/logFormatters/bannerFormatters');
-      const { render } = await import('lit');
       const message: LogMessageData = {
         id: 'thinking-1',
         text: 'some thinking content',
@@ -372,9 +368,6 @@ describe('wa-details summary controls: activation does not toggle the panel', ()
   it.each(['Enter', ' '] as const)(
     'keydown %j on the error banner copy button does not toggle the panel',
     async (key) => {
-      const { formatErrorTemplate } =
-        await import('@progressView/frontend/formatters/logFormatters/messageFormatters');
-      const { render } = await import('lit');
       const message: LogMessageData = {
         id: 'error-1',
         text: 'something failed',

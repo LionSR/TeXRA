@@ -137,41 +137,35 @@ function parseSendFollowUpMessage(message: unknown): SendFollowUpMessage {
   return parsed;
 }
 
+function expectDispatched(
+  message: ProgressViewInboundMessage,
+  handlers: ProgressViewInboundHandlerRegistry,
+): void {
+  expect(dispatchProgressViewInbound(message, handlers)).toBe(true);
+}
+
 describe('createProgressViewCommandHandlers', () => {
   it('routes lifecycle commands to host actions', () => {
     const actions = createActions();
     const handlers = createProgressViewCommandHandlers(actions);
 
-    expect(
-      dispatchProgressViewInbound(
-        { command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, stream: 'stream-a' },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        { command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, filter: 'all' },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        { command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM, stream: 'stream-b' },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        { command: PROGRESS_VIEW_COMMANDS.DELETE_ALL },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        { command: PROGRESS_VIEW_COMMANDS.STOP_STREAM, stream: 'stream-c' },
-        handlers,
-      ),
-    ).toBe(true);
+    expectDispatched(
+      { command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, stream: 'stream-a' },
+      handlers,
+    );
+    expectDispatched(
+      { command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, filter: 'all' },
+      handlers,
+    );
+    expectDispatched(
+      { command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM, stream: 'stream-b' },
+      handlers,
+    );
+    expectDispatched({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL }, handlers);
+    expectDispatched(
+      { command: PROGRESS_VIEW_COMMANDS.STOP_STREAM, stream: 'stream-c' },
+      handlers,
+    );
 
     expect(actions.lifecycle.setActiveStream).toHaveBeenCalledWith('stream-a');
     expect(actions.lifecycle.setAgentFilter).toHaveBeenCalledWith('all');
@@ -184,18 +178,14 @@ describe('createProgressViewCommandHandlers', () => {
     const actions = createActions();
     const handlers = createProgressViewCommandHandlers(actions);
 
-    expect(
-      dispatchProgressViewInbound(
-        { command: PROGRESS_VIEW_COMMANDS.RESUME, stream: 'stream-a' },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        { command: PROGRESS_VIEW_COMMANDS.RUN_NEW, stream: 'stream-b' },
-        handlers,
-      ),
-    ).toBe(true);
+    expectDispatched(
+      { command: PROGRESS_VIEW_COMMANDS.RESUME, stream: 'stream-a' },
+      handlers,
+    );
+    expectDispatched(
+      { command: PROGRESS_VIEW_COMMANDS.RUN_NEW, stream: 'stream-b' },
+      handlers,
+    );
 
     expect(actions.run.resumeStream).toHaveBeenCalledWith('stream-a');
     expect(actions.run.runNewStream).toHaveBeenCalledWith('stream-b');
@@ -205,91 +195,73 @@ describe('createProgressViewCommandHandlers', () => {
     const actions = createActions();
     const handlers = createProgressViewCommandHandlers(actions);
 
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
-          file: 'paper.tex',
-          line: 12,
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE,
-          file: 'paper.tex',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
-          stream: 'stream-a',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL,
-          file: 'edited.tex',
-          base: 'paper.tex',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
-          file: 'edited.tex',
-          base: 'paper.tex',
-          prev: 'previous.tex',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.ACCEPT_FILE,
-          file: 'edited.tex',
-          base: 'paper.tex',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.MERGE_FILE,
-          file: 'edited.tex',
-          base: 'paper.tex',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
-          file: 'edited.tex',
-          base: 'paper.tex',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        { command: PROGRESS_VIEW_COMMANDS.OPEN_LABEL, label: 'thm:main' },
-        handlers,
-      ),
-    ).toBe(true);
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
+        file: 'paper.tex',
+        line: 12,
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE,
+        file: 'paper.tex',
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
+        stream: 'stream-a',
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL,
+        file: 'edited.tex',
+        base: 'paper.tex',
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
+        file: 'edited.tex',
+        base: 'paper.tex',
+        prev: 'previous.tex',
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.ACCEPT_FILE,
+        file: 'edited.tex',
+        base: 'paper.tex',
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.MERGE_FILE,
+        file: 'edited.tex',
+        base: 'paper.tex',
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
+        file: 'edited.tex',
+        base: 'paper.tex',
+      },
+      handlers,
+    );
+    expectDispatched(
+      { command: PROGRESS_VIEW_COMMANDS.OPEN_LABEL, label: 'thm:main' },
+      handlers,
+    );
 
     expect(actions.file.openFile).toHaveBeenCalledWith('paper.tex', 12);
     expect(actions.file.openFileCompile).toHaveBeenCalledWith('paper.tex');
@@ -409,15 +381,13 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       createActions({ bypass: { runtimeHost: host, showInfo } }),
     );
 
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
-          stream,
-        },
-        handlers,
-      ),
-    ).toBe(true);
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
+        stream,
+      },
+      handlers,
+    );
     await Promise.resolve();
 
     expect(isApprovalBypassedForStream(stream)).toBe(true);
@@ -432,15 +402,13 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.',
     );
 
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
-          stream,
-        },
-        handlers,
-      ),
-    ).toBe(true);
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
+        stream,
+      },
+      handlers,
+    );
     await Promise.resolve();
 
     expect(isApprovalBypassedForStream(stream)).toBe(false);
@@ -466,15 +434,13 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       }),
     );
     try {
-      expect(
-        dispatchProgressViewInbound(
-          {
-            command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
-            stream,
-          },
-          handlers,
-        ),
-      ).toBe(true);
+      expectDispatched(
+        {
+          command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+          stream,
+        },
+        handlers,
+      );
       await Promise.resolve();
 
       expect(isApprovalBypassedForStream(stream, owner)).toBe(true);
@@ -502,12 +468,10 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     expect(isApprovalBypassedForStream(stream)).toBe(true);
     expect(isBashApprovalBypassedForStream(stream)).toBe(false);
 
-    expect(
-      dispatchProgressViewInbound(
-        { command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, stream },
-        handlers,
-      ),
-    ).toBe(true);
+    expectDispatched(
+      { command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, stream },
+      handlers,
+    );
     await Promise.resolve();
 
     expect(isApprovalBypassedForStream(stream)).toBe(true);
@@ -526,15 +490,13 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     });
     const handlers = createProgressViewCommandHandlers(actions);
 
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
-          stream,
-        },
-        handlers,
-      ),
-    ).toBe(true);
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
+        stream,
+      },
+      handlers,
+    );
     await Promise.resolve();
 
     expect(proposalApprovals().isBypassed(stream)).toBe(true);
@@ -554,16 +516,14 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       'Task, file-edit, and command auto-approval enabled for this stream.',
     );
 
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS,
-          stream,
-          initiatingProposalId: 'proposal-current',
-        },
-        handlers,
-      ),
-    ).toBe(true);
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS,
+        stream,
+        initiatingProposalId: 'proposal-current',
+      },
+      handlers,
+    );
     await Promise.resolve();
     expect(proposalApprovals().isBypassed(stream)).toBe(true);
     expect(isApprovalBypassedForStream(stream)).toBe(true);
@@ -573,15 +533,13 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       'proposal-current',
     );
 
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
-          stream,
-        },
-        handlers,
-      ),
-    ).toBe(true);
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
+        stream,
+      },
+      handlers,
+    );
     await Promise.resolve();
 
     expect(proposalApprovals().isBypassed(stream)).toBe(false);
@@ -605,60 +563,50 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     const actions = createActions();
     const handlers = createProgressViewCommandHandlers(actions);
 
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-          requestId: 'edit-1',
-          action: 'approve',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
-          requestId: 'bash-1',
-          action: 'reject',
-          feedback: 'needs a smaller command',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-          approvalId: 'plan-1',
-          action: 'approve_and_goal',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION,
-          requestId: 'question-1',
-          action: 'submit',
-          answers: { answer: 'yes' },
-        },
-        handlers,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-          proposalId: 'proposal-1',
-          action: 'approve',
-          agent: 'review',
-          model: 'deepseek',
-        },
-        handlers,
-      ),
-    ).toBe(true);
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+        requestId: 'edit-1',
+        action: 'approve',
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
+        requestId: 'bash-1',
+        action: 'reject',
+        feedback: 'needs a smaller command',
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+        approvalId: 'plan-1',
+        action: 'approve_and_goal',
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION,
+        requestId: 'question-1',
+        action: 'submit',
+        answers: { answer: 'yes' },
+      },
+      handlers,
+    );
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+        proposalId: 'proposal-1',
+        action: 'approve',
+        agent: 'review',
+        model: 'deepseek',
+      },
+      handlers,
+    );
 
     await Promise.resolve();
 
