@@ -1,13 +1,45 @@
+import { writeSync } from 'node:fs';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   installTerminalRestoreOnExit,
+  setTerminalTitle,
   supportsTerminalJobControl,
+  terminalTitleText,
   tuiInputModeRestoreSequence,
 } from '@cli/chat/tui/terminalCleanup';
 
+vi.mock('node:fs', () => ({ writeSync: vi.fn() }));
+
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('terminalTitleText', () => {
+  it('names the tab after the project folder', () => {
+    expect(terminalTitleText('/Users/ray/projects/coauthor')).toBe(
+      'TeXRA — coauthor',
+    );
+  });
+
+  it('falls back to the bare brand name at the filesystem root', () => {
+    expect(terminalTitleText('/')).toBe('TeXRA');
+  });
+
+  it('strips control characters out of a hostile folder name', () => {
+    expect(terminalTitleText('/tmp/evil\x07\x1b]0;pwned\x07')).toBe(
+      'TeXRA — evil]0;pwned',
+    );
+  });
+});
+
+describe('setTerminalTitle', () => {
+  it('writes an OSC 0 title sequence for the project folder', () => {
+    setTerminalTitle('/Users/ray/projects/coauthor');
+
+    expect(writeSync).toHaveBeenCalledWith(1, '\x1b]0;TeXRA — coauthor\x07');
+  });
 });
 
 describe('tuiInputModeRestoreSequence', () => {

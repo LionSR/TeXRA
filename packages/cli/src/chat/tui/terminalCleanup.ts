@@ -1,4 +1,5 @@
 import { writeSync } from 'node:fs';
+import { basename } from 'node:path';
 
 import { kittyFlags } from 'ink';
 
@@ -30,6 +31,27 @@ const REARM_INPUT_MODES = '\x1b[?2004h\x1b[?25l';
 // `<Static>` transcript lines persist in the primary-buffer scrollback.
 const CLEAR_SCREEN_AND_SCROLLBACK = '\x1b[2J\x1b[3J\x1b[H';
 const CLEAR_VISIBLE_SCREEN = '\x1b[2J\x1b[H';
+const OSC_TITLE_TERMINATOR = '\x07';
+
+/** Directory names can contain characters that would prematurely terminate
+ *  the OSC string (a stray BEL/ESC); strip C0 controls so a weird folder
+ *  name can't inject terminal escape sequences into the title. */
+function sanitizeTitleSegment(text: string): string {
+  // eslint-disable-next-line no-control-regex -- stripping C0 controls
+  return text.replaceAll(/[\x00-\x1f\x7f]/g, '');
+}
+
+/**
+ * "TeXRA" alone when the cwd has no meaningful basename (e.g. filesystem
+ * root), else "TeXRA — <project folder>" so a user running several sessions
+ * across different projects — the common case here — can tell tabs apart
+ * at a glance instead of every tab reading the launcher binary's own name
+ * (e.g. a local dev symlink like `texra-local`).
+ */
+export function terminalTitleText(cwd: string): string {
+  const project = sanitizeTitleSegment(basename(cwd));
+  return project ? `TeXRA — ${project}` : 'TeXRA';
+}
 
 export interface CleanupTerminalModesOptions {
   readonly clearItermProgress?: boolean;
@@ -101,5 +123,19 @@ export function clearTerminalVisibleScreen(): void {
     writeSync(1, CLEAR_VISIBLE_SCREEN);
   } catch {
     // The terminal may have been closed mid-clear; nothing to do.
+  }
+}
+
+/**
+ * Set the terminal tab/window title via OSC 0. Unlike the DA1-gated
+ * capability queries elsewhere in the TUI, this needs no negotiation: OSC 0
+ * is a one-way "set" with no reply to wait for, and terminals that don't
+ * recognize it just ignore it.
+ */
+export function setTerminalTitle(cwd: string): void {
+  try {
+    writeSync(1, `\x1b]0;${terminalTitleText(cwd)}${OSC_TITLE_TERMINATOR}`);
+  } catch {
+    // The tab title is cosmetic; a write failure here isn't actionable.
   }
 }
