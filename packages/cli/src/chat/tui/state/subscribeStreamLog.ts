@@ -137,6 +137,7 @@ function entriesEqual(
   if (
     prev.role !== next.role ||
     prev.text !== next.text ||
+    prev.messageType !== next.messageType ||
     prev.pendingEmbeddedSubagentFollowup !==
       next.pendingEmbeddedSubagentFollowup ||
     prev.finalized !== next.finalized
@@ -201,6 +202,7 @@ function renderLogEntry(
       id: entry.id,
       role: 'tool',
       text: '',
+      ...(entry.messageType ? { messageType: entry.messageType } : {}),
       finalized: prev?.finalized ?? false,
       toolUse,
     };
@@ -231,6 +233,7 @@ function renderLogEntry(
     id: entry.id,
     role,
     text: renderedText,
+    ...(entry.messageType ? { messageType: entry.messageType } : {}),
     ...(assistantTranscript !== undefined &&
     hasIncompleteEmbeddedSubagentFollowup(assistantTranscript)
       ? { pendingEmbeddedSubagentFollowup: true }
