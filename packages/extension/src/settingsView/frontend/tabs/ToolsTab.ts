@@ -1,10 +1,10 @@
 /** Tool dashboard showing tool status and installation guides. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import '@awesome.me/webawesome/dist/components/progress-ring/progress-ring.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -109,31 +109,11 @@ export class ToolsTab extends LitElement {
         gap: var(--wa-space-xs);
       }
 
-      .tools-health-ring svg {
-        width: 36px;
-        height: 36px;
-        transform: rotate(-90deg);
-      }
-
-      .tools-health-ring__track {
-        fill: none;
-        stroke: var(--wa-color-surface-border);
-        stroke-width: 4;
-      }
-
-      .tools-health-ring__available {
-        fill: none;
-        stroke: var(--color-status-ok);
-        stroke-width: 4;
-        stroke-linecap: round;
-      }
-
-      .tools-health-ring__missing {
-        fill: none;
-        stroke: var(--color-status-error);
-        stroke-width: 4;
-        stroke-linecap: round;
-        transform-origin: 50% 50%;
+      .tools-health-ring wa-progress-ring {
+        --size: 36px;
+        --track-width: 4px;
+        --track-color: var(--wa-color-surface-border);
+        --indicator-color: var(--color-status-ok);
       }
 
       .tools-health-labels {
@@ -336,44 +316,17 @@ export class ToolsTab extends LitElement {
       else if (item.status === 'not-found') missing++;
     }
 
-    // Early return above guarantees items.length > 0.
     const total = items.length;
-    const r = 14;
-    const circ = 2 * Math.PI * r;
-    const availPct = available / total;
-    const missPct = missing / total;
-    const availOffset = circ - circ * availPct;
-    // Missing arc starts after the available arc.
-    const missOffset = circ - circ * missPct;
-    const missRotation = availPct * 360;
+    const availablePercent = (available / total) * 100;
+    const availabilityLabel = `${available} of ${total} tools available`;
 
     return html`
       <div class="tools-summary">
         <div class="tools-health-ring">
-          <svg viewBox="0 0 36 36">
-            <circle class="tools-health-ring__track" cx="18" cy="18" r="${r}" />
-            <circle
-              class="tools-health-ring__available"
-              cx="18"
-              cy="18"
-              r="${r}"
-              stroke-dasharray="${circ}"
-              stroke-dashoffset="${availOffset}"
-            />
-            ${
-              missing > 0
-                ? html`<circle
-                    class="tools-health-ring__missing"
-                    cx="18"
-                    cy="18"
-                    r="${r}"
-                    stroke-dasharray="${circ}"
-                    stroke-dashoffset="${missOffset}"
-                    style=${styleMap({ transform: `rotate(${missRotation}deg)` })}
-                  />`
-                : nothing
-            }
-          </svg>
+          <wa-progress-ring
+            .value=${availablePercent}
+            .label=${availabilityLabel}
+          ></wa-progress-ring>
           <div class="tools-health-labels">
             <span class="tools-summary-stat tools-stat-available">
               ${waIcon('check')} ${available} available
