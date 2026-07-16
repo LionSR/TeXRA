@@ -108,10 +108,24 @@ async function mountPanel(
   return element;
 }
 
-function collectActions(element: UserQuestionPanel): string[] {
-  const actions: string[] = [];
+function collectActions(
+  element: UserQuestionPanel,
+): Array<{ action: string; answers?: Record<string, string | string[]> }> {
+  const actions: Array<{
+    action: string;
+    answers?: Record<string, string | string[]>;
+  }> = [];
   element.addEventListener('permission-action', (event) => {
-    actions.push((event as CustomEvent<{ action: string }>).detail.action);
+    actions.push(
+      (
+        event as CustomEvent<{
+          decision: {
+            action: string;
+            answers?: Record<string, string | string[]>;
+          };
+        }>
+      ).detail.decision,
+    );
   });
   return actions;
 }
@@ -186,7 +200,9 @@ describe('user-question-panel', () => {
 
     const actions = collectActions(element);
     element.handleKeyboardShortcut('y');
-    expect(actions).toEqual(['submit']);
+    expect(actions).toEqual([
+      { action: 'submit', answers: { 'Pick any': ['Red', 'Blue'] } },
+    ]);
   });
 
   it('renders single-select options as wa-radio-group/wa-radio with no native inputs', async () => {
@@ -215,6 +231,8 @@ describe('user-question-panel', () => {
 
     const actions = collectActions(element);
     element.handleKeyboardShortcut('y');
-    expect(actions).toEqual(['submit']);
+    expect(actions).toEqual([
+      { action: 'submit', answers: { 'Pick one': 'No' } },
+    ]);
   });
 });

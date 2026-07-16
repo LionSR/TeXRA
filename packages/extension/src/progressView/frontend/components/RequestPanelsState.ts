@@ -1,8 +1,5 @@
 // Local imports - shared utilities
-import {
-  PERMISSION_KIND,
-  type PermissionKind,
-} from '@shared/utils/uiConstants';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - progress view component types
 import type { BaseRequestPanel } from './BaseRequestPanel';
@@ -33,7 +30,7 @@ export function createEmptyPermissionGroups(): PermissionGroups {
   };
 }
 
-const KIND_TO_GROUP: Record<PermissionKind, keyof PermissionGroups> = {
+const KIND_TO_GROUP: Record<PermissionState['kind'], keyof PermissionGroups> = {
   [PERMISSION_KIND.TOOL_EDIT]: 'approval',
   [PERMISSION_KIND.BASH]: 'bash',
   [PERMISSION_KIND.RETRY]: 'retry',

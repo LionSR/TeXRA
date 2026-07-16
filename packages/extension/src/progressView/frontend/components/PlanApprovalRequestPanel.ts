@@ -16,7 +16,7 @@ import {
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - base class
-import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import { BaseApprovalPanel } from './BaseApprovalPanel';
 
 /**
  * Styles for the plan approval request panel. Kept inline (rather than a
@@ -32,7 +32,7 @@ const planApprovalRequestPanelStyles: CSSResult = css`
 `;
 
 @customElement('plan-approval-request-panel')
-export class PlanApprovalRequestPanel extends BaseFeedbackPanel<'planApproval'> {
+export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -40,11 +40,13 @@ export class PlanApprovalRequestPanel extends BaseFeedbackPanel<'planApproval'> 
     planApprovalRequestPanelStyles,
   ];
 
+  protected readonly approvalDecision = { action: 'approve' } as const;
+
   protected override handleExtraKey(key: string): boolean {
     if (key === 'r') {
       const data = this.permission.data;
       if (data.goalEnabled) {
-        this.emitAction('approve_and_goal');
+        this.emitAction({ action: 'approve_and_goal' });
         return true;
       }
     }
@@ -66,7 +68,7 @@ export class PlanApprovalRequestPanel extends BaseFeedbackPanel<'planApproval'> 
             text: 'Approve & Run',
             title: 'Approve and run this plan autonomously via goal mode (r)',
             action: 'approve_and_goal',
-            onClick: () => this.emitAction('approve_and_goal'),
+            onClick: () => this.emitAction({ action: 'approve_and_goal' }),
           })
         : nothing,
       feedbackPlaceholder: 'Why are you rejecting this plan?',

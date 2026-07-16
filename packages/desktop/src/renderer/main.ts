@@ -31,6 +31,7 @@ import {
   sendFollowupCommand,
 } from '@progressView/frontend/eventHandlers';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
+import type { PermissionActionDetail } from '@progressView/frontend/events';
 import {
   activeStreamId$,
   appState,
@@ -713,7 +714,9 @@ function wireConversation(): void {
   }) as EventListener);
   conversationView.addEventListener('toolbar-command', ((e: CustomEvent) =>
     handleToolbarCommand(e, ctx())) as EventListener);
-  conversationView.addEventListener('permission-action', ((e: CustomEvent) =>
+  conversationView.addEventListener('permission-action', ((
+    e: CustomEvent<PermissionActionDetail>,
+  ) =>
     handlePermissionAction(
       e,
       createHostMessageHandlerContext(),

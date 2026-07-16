@@ -64,7 +64,10 @@ function recordPermissionActions(
 ): Record<string, unknown>[] {
   const actions: Record<string, unknown>[] = [];
   element.addEventListener('permission-action', (event) => {
-    actions.push((event as CustomEvent<Record<string, unknown>>).detail);
+    actions.push(
+      (event as CustomEvent<{ decision: Record<string, unknown> }>).detail
+        .decision,
+    );
   });
   return actions;
 }
@@ -137,7 +140,6 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
 
     expect(actions).toEqual([
       {
-        permission: element.permission,
         action: 'submit',
         answer: 'the answer',
         sessionLinks: ['https://chatgpt.com/c/abc'],

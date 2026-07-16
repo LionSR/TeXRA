@@ -46,7 +46,7 @@ import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 
 // Local imports - base class
-import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import { BaseApprovalPanel } from './BaseApprovalPanel';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '../events';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
@@ -69,7 +69,7 @@ function readSelectValue(event: Event): string {
 }
 
 @customElement('proposal-request-panel')
-export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
+export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -81,6 +81,10 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
 
   @state() private selectedModel: string | null = null;
   @state() private selectedAgent: string | null = null;
+
+  protected get approvalDecision() {
+    return { action: 'approve' as const, ...this.proposalOverrides };
+  }
 
   // Reset selections only when the proposal's identity changes, so an async
   // permission upsert that just adds dropdown options doesn't wipe the user's
@@ -97,11 +101,17 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
   }
 
   protected override handleExtraKey(key: string): boolean {
-    if (key === 's') {
-      this.emitAction('setup');
-      return true;
+    switch (key) {
+      case 'a':
+        if (this.showFeedback) return false;
+        this.emitAction(this.approveAllDelegatedWorkDecision);
+        return true;
+      case 's':
+        this.emitAction({ action: 'setup' });
+        return true;
+      default:
+        return false;
     }
-    return false;
   }
 
   // Proposals carry a stronger approval action than the edit/bash bypass.
@@ -113,17 +123,11 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
         .approveTitle=${approveTitle}
         .canBypass=${false}
         .canApproveAllDelegatedWork=${true}
-        @approve=${() => this.emitAction('approve')}
+        @approve=${() => this.emitAction(this.approvalDecision)}
         @approve-all-delegated-work=${() =>
-          this.emitAction(APPROVE_ALL_DELEGATED_WORK_ACTION)}
+          this.emitAction(this.approveAllDelegatedWorkDecision)}
       ></approve-split-button>
     `;
-  }
-
-  protected override handleApproveSessionKey(): boolean {
-    if (this.showFeedback) return false;
-    this.emitAction(APPROVE_ALL_DELEGATED_WORK_ACTION);
-    return true;
   }
 
   override render(): TemplateResult {
@@ -203,7 +207,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
         text: 'Setup',
         title: 'Setup (s)',
         action: 'setup',
-        onClick: () => this.emitAction('setup'),
+        onClick: () => this.emitAction({ action: 'setup' }),
       }),
     });
   }
@@ -335,29 +339,26 @@ export class ProposalRequestPanel extends BaseFeedbackPanel<'proposal'> {
     }
   };
 
-  // ===========================================================================
-  // Override emitAction to include model/agent overrides for approve
-  // ===========================================================================
-
-  protected override emitAction(action: string, feedback?: string): void {
-    // Approve-all also accepts this proposal, so it carries the same model and
-    // agent overrides as a plain approval.
-    if (action !== 'approve' && action !== APPROVE_ALL_DELEGATED_WORK_ACTION) {
-      super.emitAction(action, feedback);
-      return;
-    }
+  private get proposalOverrides(): { model?: string; agent?: string } {
     const data = this.permission.data;
     const pickIfChanged = (
       selected: string | null,
       original: string,
     ): string | undefined =>
       selected && selected !== original ? selected : undefined;
-    super.emitAction(
-      action,
-      feedback,
-      pickIfChanged(this.selectedModel, data.model),
-      pickIfChanged(this.selectedAgent, data.agent),
-    );
+    const model = pickIfChanged(this.selectedModel, data.model);
+    const agent = pickIfChanged(this.selectedAgent, data.agent);
+    return {
+      ...(model ? { model } : {}),
+      ...(agent ? { agent } : {}),
+    };
+  }
+
+  private get approveAllDelegatedWorkDecision() {
+    return {
+      action: APPROVE_ALL_DELEGATED_WORK_ACTION,
+      ...this.proposalOverrides,
+    } as const;
   }
 }
 

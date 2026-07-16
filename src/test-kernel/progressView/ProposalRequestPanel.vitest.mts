@@ -77,7 +77,9 @@ function recordPermissionActions(
 ): Array<{ action: string }> {
   const actions: Array<{ action: string }> = [];
   element.addEventListener('permission-action', (event) => {
-    actions.push((event as CustomEvent<{ action: string }>).detail);
+    actions.push(
+      (event as CustomEvent<{ decision: { action: string } }>).detail.decision,
+    );
   });
   return actions;
 }
@@ -115,10 +117,49 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(element.handleKeyboardShortcut('y')).toBe(true);
 
-    expect(actions.map(({ action }) => action)).toEqual([
-      'approveSuperYolo',
-      'approveSuperYolo',
-      'approve',
+    expect(actions).toEqual([
+      { action: 'approveSuperYolo' },
+      { action: 'approveSuperYolo' },
+      { action: 'approve' },
+    ]);
+  });
+
+  it('attaches selected overrides only to approval decisions', async () => {
+    const permission = createPermission();
+    permission.modelOptions = [
+      { value: 'sonnet', label: 'Sonnet' },
+      { value: 'opus', label: 'Opus' },
+    ];
+    permission.agentOptions = [
+      { value: 'writer', label: 'Writer' },
+      { value: 'reviewer', label: 'Reviewer' },
+    ];
+    const element = await mountPanel(permission);
+    const actions = recordPermissionActions(element);
+    const modelSelect = element.shadowRoot?.querySelector(
+      '.proposal-model-dropdown',
+    ) as HTMLElement & { value?: string };
+    const agentSelect = element.shadowRoot?.querySelector(
+      '.proposal-agent-dropdown',
+    ) as HTMLElement & { value?: string };
+
+    modelSelect.value = 'opus';
+    modelSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    agentSelect.value = 'reviewer';
+    agentSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(element.handleKeyboardShortcut('y')).toBe(true);
+    expect(element.handleKeyboardShortcut('a')).toBe(true);
+    expect(element.handleKeyboardShortcut('s')).toBe(true);
+    expect(element.handleKeyboardShortcut('n')).toBe(true);
+    await element.updateComplete;
+    expect(element.handleKeyboardShortcut('n')).toBe(true);
+
+    expect(actions).toEqual([
+      { action: 'approve', model: 'opus', agent: 'reviewer' },
+      { action: 'approveSuperYolo', model: 'opus', agent: 'reviewer' },
+      { action: 'setup' },
+      { action: 'reject' },
     ]);
   });
 

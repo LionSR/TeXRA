@@ -26,7 +26,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class
-import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import { BaseBypassApprovalPanel } from './BaseBypassApprovalPanel';
 
 // Local imports - helpers
 import { monacoLanguageForPath } from './monacoLanguage';
@@ -35,13 +35,15 @@ import { monacoLanguageForPath } from './monacoLanguage';
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
 
 @customElement('tool-edit-request-panel')
-export class ToolEditRequestPanel extends BaseFeedbackPanel<'toolEdit'> {
+export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   static override styles = [
     designTokens,
     commonViewStyles,
     requestPanelSharedStyles,
     toolEditRequestPanelStyles,
   ];
+
+  protected readonly approvalDecision = { action: 'approve' } as const;
 
   @state() private inlineDiffOpen = false;
 
@@ -204,8 +206,13 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel<'toolEdit'> {
   ): void => {
     const action =
       (event.detail?.item as HTMLElement & { value?: string })?.value ?? '';
-    if (!action) return;
-    this.emitAction(action);
+    switch (action) {
+      case 'openDiff':
+      case 'showLatexdiff':
+      case 'previewProposed':
+        this.emitAction({ action });
+        break;
+    }
   };
 
   private handleDiffAction = (): void => {
@@ -214,7 +221,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel<'toolEdit'> {
       this.inlineDiffOpen = !this.inlineDiffOpen;
       return;
     }
-    this.emitAction('openDiff');
+    this.emitAction({ action: 'openDiff' });
   };
 
   private hasInlineDiff(data: ToolEditPermission): boolean {
