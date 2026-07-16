@@ -12,8 +12,8 @@ import type { ChatCompletion } from 'openai/resources/chat/completions';
  *
  * Note: the legacy grok-4 generation (deprecated May 2026) rejected the
  * reasoning_effort parameter outright. Current reasoning models (grok-4.3,
- * grok-4.5) document low/medium/high effort control — see
- * validateReasoningEffort in the base class for the clamp.
+ * grok-4.5) document low/medium/high effort control; this handler normalizes
+ * unsupported effort levels before sending them to xAI.
  *
  * processThinkingBlock is inherited from ModelHandlerOpenAI which already
  * extracts reasoning_content from the response message.
@@ -21,6 +21,18 @@ import type { ChatCompletion } from 'openai/resources/chat/completions';
  * usageProvider and toolCallProvider inherit from base class via config.provider.
  */
 export class ModelHandlerXAI extends ModelHandlerOpenAI {
+  protected override validateReasoningEffort(effort: string): string {
+    // xhigh only exists on the multi-agent variant, where it means agent count.
+    if (effort === 'low' || effort === 'medium' || effort === 'high') {
+      return effort;
+    }
+
+    this.logger.warn(
+      `xAI models only support 'low', 'medium', or 'high' reasoning effort. Converting '${effort}' to 'high'.`,
+    );
+    return 'high';
+  }
+
   /** Extracts response text and usage statistics from API response. */
   override extractResponse(
     responseObject: ChatCompletion,
