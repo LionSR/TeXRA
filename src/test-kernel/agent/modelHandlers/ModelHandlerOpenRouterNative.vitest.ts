@@ -9,6 +9,7 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
   ModelProvider,
+  ReasoningEffort,
 } from 'llm-zoo';
 
 // Local imports - handler under test
@@ -111,6 +112,38 @@ describe('ModelHandlerOpenRouterNative system prompt placement', () => {
 });
 
 describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
+  it('does not allow overrides for a fixed max-effort model', () => {
+    const handler = new ModelHandlerOpenRouterNative(
+      buildConfig({
+        provider: ModelProvider.MOONSHOT,
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MAX,
+        },
+      }),
+    );
+
+    assert.equal(handler.supportsReasoningLevelOverride, false);
+  });
+
+  it('allows max selection when the model declares max as its ceiling', () => {
+    const handler = new ModelHandlerOpenRouterNative(
+      buildConfig({
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MEDIUM,
+          maxReasoningEffort: ReasoningEffort.MAX,
+        },
+      }),
+    );
+
+    assert.equal(handler.supportsReasoningLevelOverride, true);
+  });
+
   it.each([
     {
       name: 'DeepSeek (via OpenRouter) with reasoning but no granular effort control',

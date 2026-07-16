@@ -37,6 +37,7 @@ import type {
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 import { toDataUrl } from '../support/dataUrl';
+import { getDeclaredMaxReasoningEffort } from '../support/reasoningEffort';
 import {
   computeOpenRouterPrice,
   normalizeOpenRouterUsage,
@@ -224,6 +225,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       request.reasoning = {
         effort: toOpenRouterReasoningEffort(
           this.validateReasoningEffort(effort),
+          getDeclaredMaxReasoningEffort(this.capabilities) === 'max',
         ),
       };
     }

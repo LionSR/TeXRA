@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 import {
   SettingsModelSelectionController,
@@ -8,7 +9,6 @@ import { MAX_TIER } from '@auth/sharedConfig';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
-import type { ModelConfig } from 'llm-zoo';
 
 const NO_RUNTIME_MODELS = async (): Promise<
   readonly (readonly [string, ModelConfig])[]
@@ -78,6 +78,24 @@ describe('SettingsModelSelectionController', () => {
       supportsReasoningLevel: true,
       includedAccessReasoningCap: 'high',
     });
+  });
+
+  it('does not expose a reasoning selector for Kimi K3 fixed max effort', async () => {
+    const controller = new SettingsModelSelectionController({
+      state: createState({ reasoningLevelOverrides: { kimi3: 'low' } }),
+      resolveModelOptions,
+      getRuntimeModelEntries: NO_RUNTIME_MODELS,
+    });
+
+    const { models } = await controller.buildSelectionData();
+    const kimi3 = models.find((model) => model.name === 'kimi3');
+
+    expect(MODEL_CONFIGS.kimi3.capabilities).toMatchObject({
+      supportsReasoningEffort: true,
+      reasoningEffort: 'max',
+    });
+    expect(kimi3).not.toHaveProperty('supportsReasoningLevel');
+    expect(kimi3).not.toHaveProperty('reasoningLevel');
   });
 
   it('moves a stale helper fallback when disabling the effective helper model', async () => {

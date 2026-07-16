@@ -49,6 +49,7 @@ import type {
   TokenCountOptions,
   TokenValidationResult,
 } from '@agent/types/ModelHandlerContracts';
+import { hasConfigurableReasoningEffort } from '@agent/modelHandlers/support/reasoningEffort';
 import type {
   ServerToolExtractionResult,
   WebSearchResult,
@@ -640,7 +641,7 @@ export abstract class ModelHandler<
    */
   get supportsReasoningLevelOverride(): boolean {
     return (
-      this.capabilities.supportsReasoningEffort ||
+      hasConfigurableReasoningEffort(this.capabilities) ||
       (this.config.provider === ModelProvider.DEEPSEEK &&
         this.capabilities.supportsReasoning)
     );

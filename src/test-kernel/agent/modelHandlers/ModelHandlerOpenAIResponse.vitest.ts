@@ -203,6 +203,38 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(reasoning?.effort, 'medium');
   });
 
+  it('sends max effort when the model declares max as its native ceiling', async () => {
+    const handler = createHandler({
+      name: 'gpt56',
+      fullName: 'gpt-5.6-sol',
+      capabilities: {
+        ...DEFAULT_MODEL_CAPABILITIES,
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.MAX,
+        maxReasoningEffort: ReasoningEffort.MAX,
+      },
+    });
+    let request: Record<string, unknown> | undefined;
+    const client = {
+      responses: {
+        create: async (params: Record<string, unknown>) => {
+          request = params;
+          return createResponse('resp-max-effort', { input_tokens: 12 });
+        },
+      },
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(1),
+      temperature: 0,
+    });
+
+    const reasoning = request?.reasoning as { effort?: string } | undefined;
+    assert.equal(reasoning?.effort, 'max');
+  });
+
   it('enables parallel tool calls by default', async () => {
     const handler = createHandler();
     let request: Record<string, unknown> | undefined;

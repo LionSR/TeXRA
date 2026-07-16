@@ -78,7 +78,13 @@ const FIXED_TEMPERATURE_BY_FULLNAME: ReadonlyMap<string, FixedTemperatureRule> =
     // kimi-k3 fixes temperature=1.0 server-side and its docs say to omit the
     // field from requests (alongside top_p/n/penalties, which TeXRA never
     // sends to Moonshot anyway).
-    ['kimi-k3', { temperature: () => undefined }],
+    [
+      'kimi-k3',
+      {
+        temperature: () => undefined,
+        disableThinkingInCompactionSummary: true,
+      },
+    ],
   ]);
 
 /** Response from Kimi's token estimation API */
@@ -178,7 +184,7 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
       );
       if (temperature === undefined) {
         delete params.temperature;
-      } else if (fixedTemperature.disableThinkingInCompactionSummary) {
+      } else {
         params.temperature = temperature;
       }
       if (fixedTemperature.disableThinkingInCompactionSummary) {

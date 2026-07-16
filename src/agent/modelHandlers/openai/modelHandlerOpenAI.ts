@@ -48,7 +48,10 @@ import { isNonEmptyString } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 import { toDataUrl } from '../support/dataUrl';
-import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
+import {
+  getDeclaredMaxReasoningEffort,
+  toOpenAIReasoningEffort,
+} from '../support/reasoningEffort';
 import { tagOpenAISdkError } from './openAISdkError';
 
 // Local file imports
@@ -312,7 +315,10 @@ export class ModelHandlerOpenAI<
     const reasoningEffort = this.getEffectiveReasoningEffort();
     if (this.capabilities.supportsReasoning && reasoningEffort) {
       baseParams.reasoning_effort = this.validateReasoningEffort(
-        toOpenAIReasoningEffort(reasoningEffort),
+        toOpenAIReasoningEffort(
+          reasoningEffort,
+          getDeclaredMaxReasoningEffort(this.capabilities),
+        ),
       ) as ChatCompletionRequestBase['reasoning_effort'];
     }
 
