@@ -420,6 +420,54 @@ wa-dialog.desktop-pdf-overlay .desktop-pdf-frame {
 }
 
 /* =====================================================================
+   Correlated text/password prompt (wa-dialog)
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-prompt-overlay {
+  --width: min(520px, calc(100vw - var(--wa-space-l) * 2));
+}
+
+wa-dialog.desktop-prompt-overlay::part(body) {
+  padding: 0;
+}
+
+wa-dialog.desktop-prompt-overlay .desktop-prompt-body {
+  padding: var(--wa-space-l);
+}
+
+wa-dialog.desktop-prompt-overlay .desktop-prompt-header {
+  margin-bottom: var(--wa-space-m);
+}
+
+wa-dialog.desktop-prompt-overlay .desktop-prompt-title {
+  margin: 0;
+  color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-l);
+  font-weight: var(--wa-font-weight-semibold);
+}
+
+wa-dialog.desktop-prompt-overlay .desktop-prompt-subtitle {
+  margin: var(--wa-space-xs) 0 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-s);
+}
+
+.desktop-prompt-form {
+  display: grid;
+  gap: var(--wa-space-m);
+}
+
+.desktop-prompt-input {
+  width: 100%;
+}
+
+.desktop-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--wa-space-xs);
+}
+
+/* =====================================================================
    Logs drawer (wa-drawer)
    --------------------------------------------------------------------- */
 

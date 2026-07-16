@@ -47,7 +47,7 @@ import {
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
-import { postMessage } from '@shared/hostBridge';
+import { hostBridge, postMessage } from '@shared/hostBridge';
 import type { StreamTabId } from '@shared/schemas';
 import { Signal } from '@shared/signals';
 import { SetThemeMessageSchema } from '@shared/schemas/commonViewMessages';
@@ -92,11 +92,13 @@ import {
   DesktopShowPdfMessageSchema,
   DesktopClosePdfMessageSchema,
 } from '../desktopPdfMessages';
+import { DesktopShowPromptMessageSchema } from '../desktopPromptMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
 import { getRendererPlatform } from './rendererPlatform';
 import { createPdfOverlay } from './pdfOverlay';
 import { createDiffOverlay } from './diffOverlay';
+import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsDrawer } from './logsDrawer';
 import { createOverlayDialog } from './overlayDialog';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
@@ -178,6 +180,9 @@ settingsView.setAttribute('data-desktop-view', 'settings');
 const logsDrawer = createLogsDrawer(appRoot);
 const diffOverlay = createDiffOverlay(appRoot);
 const pdfOverlay = createPdfOverlay(appRoot);
+const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
+  hostBridge.postMessage(message),
+);
 
 function openLogsDrawer(): void {
   setRouteState('logs');
@@ -680,6 +685,11 @@ window.addEventListener('message', (event) => {
   }
   if (DesktopClosePdfMessageSchema.safeParse(event.data).success) {
     pdfOverlay.close();
+    return;
+  }
+  const promptParsed = DesktopShowPromptMessageSchema.safeParse(event.data);
+  if (promptParsed.success) {
+    promptOverlay.open(promptParsed.data);
     return;
   }
   // Progress view messages: dispatch directly into the shared messageDispatcher
