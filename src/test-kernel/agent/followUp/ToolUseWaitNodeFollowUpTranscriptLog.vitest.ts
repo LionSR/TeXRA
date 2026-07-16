@@ -65,6 +65,52 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     );
   });
 
+  it('does not acknowledge consumption when the append throws', async () => {
+    // The resume wrapper restores an unacknowledged drained batch; firing
+    // onFollowUpConsumed before a failing append would mark the lost input
+    // as consumed and drop it instead of replaying it on the next resume.
+    const onFollowUpConsumed = vi.fn();
+    const services = buildServices({ onFollowUpConsumed });
+    (
+      services.modelHandler.createUserFollowUpMessages as ReturnType<
+        typeof vi.fn
+      >
+    ).mockRejectedValue(new Error('follow-up append failed'));
+    const node = new ToolUseWaitNode().setServices(services);
+    const shared: ToolUseRunShared = toolUseRunShared();
+    const runtimeHost = { emit: vi.fn() };
+    const execRes: WaitExecResult = {
+      kind: 'continue',
+      followUps: [{ text: 'Do the thing.', origin: 'user' }],
+    };
+
+    await expect(
+      withTestRunContext(runtimeHost, 'test-stream', () =>
+        node.post(shared, PREP_RES, execRes),
+      ),
+    ).rejects.toThrow('follow-up append failed');
+
+    expect(onFollowUpConsumed).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges consumption after a successful append', async () => {
+    const onFollowUpConsumed = vi.fn();
+    const services = buildServices({ onFollowUpConsumed });
+    const node = new ToolUseWaitNode().setServices(services);
+    const shared: ToolUseRunShared = toolUseRunShared();
+    const runtimeHost = { emit: vi.fn() };
+    const execRes: WaitExecResult = {
+      kind: 'continue',
+      followUps: [{ text: 'Do the thing.', origin: 'user' }],
+    };
+
+    await withTestRunContext(runtimeHost, 'test-stream', () =>
+      node.post(shared, PREP_RES, execRes),
+    );
+
+    expect(onFollowUpConsumed).toHaveBeenCalledOnce();
+  });
+
   it('still logs exactly once per follow-up on the success path', async () => {
     const services = buildServices();
     const node = new ToolUseWaitNode().setServices(services);
