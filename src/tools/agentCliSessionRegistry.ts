@@ -1,6 +1,28 @@
 import { getExecutionStore } from '@agent/storage';
+import { createChannelTrace } from '@agent/trace';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+
+const logger = createChannelTrace('AgentCliSessionRegistry');
+
+interface AgentCliSessionRegistryDependencies {
+  persistSessionId(
+    executionId: ExecutionId,
+    key: string,
+    sessionId: string,
+  ): Promise<void>;
+  reportPersistenceFailure(executionId: ExecutionId, error: unknown): void;
+}
+
+const DEFAULT_DEPENDENCIES: AgentCliSessionRegistryDependencies = {
+  persistSessionId: (executionId, key, sessionId) =>
+    getExecutionStore(executionId).write(key, sessionId),
+  reportPersistenceFailure: (executionId, error) => {
+    logger.debug(`Failed to persist CLI session mapping for ${executionId}`, {
+      data: error,
+    });
+  },
+};
 
 export interface AgentCliSessionEntry {
   childStreamId: StreamTabId;
@@ -19,7 +41,10 @@ type AgentCliSessionState<T> =
 export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
   private readonly sessions = new Map<string, AgentCliSessionState<T>>();
 
-  constructor(private readonly persistedSessionKey: string) {}
+  constructor(
+    private readonly persistedSessionKey: string,
+    private readonly dependencies: AgentCliSessionRegistryDependencies = DEFAULT_DEPENDENCIES,
+  ) {}
 
   /**
    * Atomically reserve an unowned SDK session id. Returns a release handle
@@ -56,9 +81,21 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
     const previous = this.sessions.get(sessionId);
     this.sessions.set(sessionId, { kind: 'active', entry });
     if (previous?.kind === 'reserved') previous.resolve(entry);
-    void getExecutionStore(entry.executionId)
-      .write(this.persistedSessionKey, sessionId)
-      .catch(() => {});
+    void Promise.resolve()
+      .then(() =>
+        this.dependencies.persistSessionId(
+          entry.executionId,
+          this.persistedSessionKey,
+          sessionId,
+        ),
+      )
+      .catch((error) => {
+        try {
+          this.dependencies.reportPersistenceFailure(entry.executionId, error);
+        } catch {
+          // Best-effort diagnostics must not create an unhandled rejection.
+        }
+      });
   }
 
   lookup(sessionId: string): T | undefined {
