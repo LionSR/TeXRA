@@ -20,6 +20,7 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
+import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import {
   filterNotNullish,
   formatCompactDuration,
@@ -206,7 +207,10 @@ function roundSegment(
 ): StatusBarSegment | undefined {
   return roundStage !== undefined
     ? {
-        text: `r${roundStage.index + 1}`,
+        text: formatRoundStageLabel(roundStage),
+        // Keep round visibility on narrow terminals: degrade to the bare
+        // current-round label instead of dropping the planned total's context.
+        compactText: `r${roundStage.index + 1}`,
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.round,
       }

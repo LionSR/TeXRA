@@ -151,3 +151,24 @@ export function formatStreamStatusLabel(
   }
   return STREAM_STATUS_LABELS[style][key] ?? status;
 }
+
+/** Compact round/turn progress label: `r2/3` when the planned total is known
+ *  (workflow runs), else `r2`. Zero-based `index` renders one-based. */
+export function formatRoundStageLabel(stage: {
+  readonly index: number;
+  readonly total?: number | undefined;
+}): string;
+
+export function formatRoundStageLabel(
+  stage:
+    { readonly index: number; readonly total?: number | undefined } | undefined,
+): string | undefined;
+
+export function formatRoundStageLabel(
+  stage:
+    { readonly index: number; readonly total?: number | undefined } | undefined,
+): string | undefined {
+  if (stage === undefined) return undefined;
+  const current = `r${stage.index + 1}`;
+  return stage.total !== undefined ? `${current}/${stage.total}` : current;
+}

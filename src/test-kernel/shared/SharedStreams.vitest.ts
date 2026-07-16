@@ -12,6 +12,7 @@ import {
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import {
+  formatRoundStageLabel,
   formatStreamStatusLabel,
   streamStatusDisplayKey,
   streamStatusIndicatorClass,
@@ -137,6 +138,20 @@ describe('buildStreamMetadata', () => {
 // ---------------------------------------------------------------------------
 // StreamStatusDisplay
 // ---------------------------------------------------------------------------
+
+describe('formatRoundStageLabel', () => {
+  it('renders the one-based round over the planned total when known', () => {
+    expect(formatRoundStageLabel({ index: 1, total: 3 })).toBe('r2/3');
+  });
+
+  it('renders the bare round when no total is planned', () => {
+    expect(formatRoundStageLabel({ index: 0 })).toBe('r1');
+  });
+
+  it('passes undefined through for streams without a round', () => {
+    expect(formatRoundStageLabel(undefined)).toBeUndefined();
+  });
+});
 
 describe('stream status display labels', () => {
   const wordingCases: Array<[StreamStatusLabelStyle, string, string]> = [
