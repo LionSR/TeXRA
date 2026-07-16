@@ -109,7 +109,9 @@ export function isPlanApprovalGoalActionVisible({
   readonly goalEnabled: boolean;
   readonly visibleBodyRows: number;
 }): boolean {
-  return goalEnabled && (!compact || visibleBodyRows > 0);
+  // Compact cards pin the notice above the body, so the action needs room
+  // for the notice row plus at least one plan row.
+  return goalEnabled && (!compact || visibleBodyRows > 1);
 }
 
 export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
@@ -134,14 +136,11 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
     visibleBodyRows: compactBodyRows ?? 0,
   });
   const goalNoticeVisible = goalActionVisible && !feedbackMode;
-  // The compact card has no room for a separate notice row; fold it into the
-  // scrollable body so it stays readable on its way past.
-  const bodyText =
-    compact && goalNoticeVisible
-      ? `${PLAN_APPROVAL_GOAL_NOTICE}\n\n${props.payload.plan.objective}`
-      : props.payload.plan.objective;
+  // The notice is pinned outside the scroll region in both layouts so the
+  // `r approve & run` action can never outlive its scope warning; in the
+  // compact card it costs one body row.
   const maxBodyRows = compact
-    ? Math.max(1, compactBodyRows ?? 1)
+    ? Math.max(1, (compactBodyRows ?? 1) - (goalNoticeVisible ? 1 : 0))
     : scrollableModalTextRowsBudget({
         availableRows: props.availableRows,
         columns,
@@ -179,13 +178,17 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       onFeedbackValueChange={setFeedbackValue}
       onDecide={props.onDecide}
     >
+      {compact && goalNoticeVisible ? (
+        <Text>{planApprovalGoalNoticeLine(contentWidth)}</Text>
+      ) : null}
       <ScrollableModalText
         hiddenNoun={PLAN_APPROVAL_HIDDEN_NOUN}
         marginWhenSpacious={!compact}
         maxRows={maxBodyRows}
         scrollActive={!feedbackMode}
         scrollHint="scroll plan"
-        text={bodyText}
+        showScrollHints={!compact}
+        text={props.payload.plan.objective}
         trimWrappedLeadingWhitespace
         width={contentWidth}
       />
