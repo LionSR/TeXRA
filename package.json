@@ -23,6 +23,7 @@
     "build:initial": "corepack pnpm run desktop:build && corepack pnpm run build:fast && corepack pnpm run check:initial-build-artifacts",
     "build": "corepack pnpm --filter texra build:fast",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "esbuild:ext": "corepack pnpm --filter texra esbuild:ext",
     "esbuild:ext:watch": "corepack pnpm --filter texra esbuild:ext:watch",
     "esbuild:ext:prod": "corepack pnpm --filter texra esbuild:ext:prod",
