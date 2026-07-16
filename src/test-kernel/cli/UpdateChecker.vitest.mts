@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { FakeStateStore } from '@test/support/FakePlatform';
 import {
   buildUpdateCommand,
   checkCliUpdateAvailable,
@@ -10,22 +11,6 @@ import {
   isPackageManagerInstall,
 } from '@cli/runtime/updateChecker';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-
-class MemoryStateStore {
-  readonly values = new Map<string, unknown>();
-
-  get<T>(key: string, defaultValue?: T): T {
-    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-    } else {
-      this.values.set(key, value);
-    }
-  }
-}
 
 describe('detectInstallMethod', () => {
   it('recognizes pnpm, yarn, and bun global layouts', () => {
@@ -282,7 +267,7 @@ describe('checkCliUpdateAvailable', () => {
   const noopNotify = async () => {};
 
   it('checks on a first launch (no prior lastCheckedAt) and reports a newer version', async () => {
-    const globalState = new MemoryStateStore();
+    const globalState = new FakeStateStore();
     let fetchCalls = 0;
     const notified: string[] = [];
 
@@ -304,7 +289,7 @@ describe('checkCliUpdateAvailable', () => {
   });
 
   it('returns undefined and does not notify when the fetched version is not newer', async () => {
-    const globalState = new MemoryStateStore();
+    const globalState = new FakeStateStore();
     const notified: string[] = [];
 
     const latest = await checkCliUpdateAvailable({
@@ -320,12 +305,12 @@ describe('checkCliUpdateAvailable', () => {
     expect(notified).toEqual([]);
     // The check itself completed, so the day's stamp is still persisted.
     expect(
-      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
     ).toBeDefined();
   });
 
   it('throttles repeated checks within the same day', async () => {
-    const globalState = new MemoryStateStore();
+    const globalState = new FakeStateStore();
     let fetchCalls = 0;
     // A realistic epoch timestamp: on the very first check ever,
     // `lastCheckedAt` defaults to 0, and this must be far enough past that
@@ -359,7 +344,7 @@ describe('checkCliUpdateAvailable', () => {
   });
 
   it('does not persist the throttle stamp on a failed fetch, so the next launch retries', async () => {
-    const globalState = new MemoryStateStore();
+    const globalState = new FakeStateStore();
     let fetchCalls = 0;
     const nowMs = Date.UTC(2026, 0, 1);
 
@@ -377,7 +362,7 @@ describe('checkCliUpdateAvailable', () => {
 
     expect(fetchCalls).toBe(1);
     expect(
-      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
     ).toBeUndefined();
 
     // Immediately "relaunching" (same day) must retry rather than being
@@ -395,7 +380,7 @@ describe('checkCliUpdateAvailable', () => {
 
     expect(fetchCalls).toBe(2);
     expect(
-      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
     ).toBe(nowMs + 1000);
   });
 
@@ -403,7 +388,7 @@ describe('checkCliUpdateAvailable', () => {
     // #8223: a failed `brew update` that still yields the locally cached
     // formula version must not count as a completed check — the next launch
     // retries the tap refresh instead of going silent for 24h.
-    const globalState = new MemoryStateStore();
+    const globalState = new FakeStateStore();
     const nowMs = Date.UTC(2026, 0, 1);
     const notified: string[] = [];
 
@@ -420,7 +405,7 @@ describe('checkCliUpdateAvailable', () => {
     expect(latest).toBe(latestVersion);
     expect(notified).toEqual([latestVersion]);
     expect(
-      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
     ).toBeUndefined();
   });
 
@@ -428,7 +413,7 @@ describe('checkCliUpdateAvailable', () => {
     // #8224: the stamp must be written only after the user actually saw the
     // notice — a prompt killed mid-way (closed stdin) leaves the attempt
     // un-stamped so the next launch re-checks.
-    const globalState = new MemoryStateStore();
+    const globalState = new FakeStateStore();
     const nowMs = Date.UTC(2026, 0, 1);
 
     await expect(
@@ -444,7 +429,7 @@ describe('checkCliUpdateAvailable', () => {
     ).rejects.toThrow('stdin closed');
 
     expect(
-      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
     ).toBeUndefined();
   });
 
@@ -454,10 +439,10 @@ describe('checkCliUpdateAvailable', () => {
     // must not reject the completed attempt (which would cancel an update the
     // user already accepted via the notify prompt) — the next launch just
     // re-checks a day early.
-    const globalState = new MemoryStateStore();
-    globalState.update = async () => {
-      throw new Error('EACCES: permission denied');
-    };
+    const globalState = new FakeStateStore();
+    vi.spyOn(globalState, 'update').mockRejectedValue(
+      new Error('EACCES: permission denied'),
+    );
     const notified: string[] = [];
 
     const latest = await checkCliUpdateAvailable({
@@ -474,7 +459,7 @@ describe('checkCliUpdateAvailable', () => {
   });
 
   it('persists the throttle stamp only after notify completes', async () => {
-    const globalState = new MemoryStateStore();
+    const globalState = new FakeStateStore();
     const nowMs = Date.UTC(2026, 0, 1);
     let stampAtNotifyTime: unknown = 'unread';
 
@@ -484,7 +469,7 @@ describe('checkCliUpdateAvailable', () => {
       now: () => nowMs,
       fetchLatest: async () => ({ version: latestVersion, refreshed: true }),
       notify: async () => {
-        stampAtNotifyTime = globalState.values.get(
+        stampAtNotifyTime = globalState.get(
           GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
         );
       },
@@ -492,7 +477,7 @@ describe('checkCliUpdateAvailable', () => {
 
     expect(stampAtNotifyTime).toBeUndefined();
     expect(
-      globalState.values.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
+      globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT),
     ).toBe(nowMs);
   });
 });
