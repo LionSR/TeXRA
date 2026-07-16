@@ -39,7 +39,7 @@ export interface DesktopPresentationPayloads {
   requestShowInstruction: RequestShowInstructionPayload;
 }
 
-export type DesktopPresentationEvent = keyof DesktopPresentationPayloads;
+type DesktopPresentationEvent = keyof DesktopPresentationPayloads;
 
 export interface DesktopSessionProgressBridge {
   /** Handle a desktop-local presentation request from the runtime host. */

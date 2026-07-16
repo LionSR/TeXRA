@@ -53,7 +53,7 @@ function defaultReportError(error: unknown): void {
 
 type CommandRunner = (message: DesktopCommandMessage) => void | Promise<void>;
 
-export interface CommandHandlerEntry {
+interface CommandHandlerEntry {
   /** The work to perform when the command matches. */
   run: CommandRunner;
   /**
