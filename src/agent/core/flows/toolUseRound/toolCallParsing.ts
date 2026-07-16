@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import type { SdkToolCall } from '@agent/types/IModelHandler';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,

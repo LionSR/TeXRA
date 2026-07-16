@@ -8,7 +8,7 @@ import {
 import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
-import type { GoogleToolCall } from '@agent/types/IModelHandler';
+import type { GoogleToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import * as configModule from '@utils/config/configUtils';
 import type { Interactions } from '@google/genai';

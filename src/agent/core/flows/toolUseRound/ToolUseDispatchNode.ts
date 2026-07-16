@@ -5,7 +5,7 @@ import {
   endToolUseCard,
   startToolUseCard,
 } from '@agent/trace';
-import type { SdkToolCall } from '@agent/types/IModelHandler';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import {
   extractToolAttachments,
   type ExtractedToolAttachments,

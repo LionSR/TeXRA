@@ -15,7 +15,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { SdkToolCall } from '@agent/types/IModelHandler';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
