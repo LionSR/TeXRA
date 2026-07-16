@@ -13,6 +13,15 @@ export interface ScrollBoundedRows<T> {
   readonly visibleRows: readonly T[];
 }
 
+// Shared by both offset functions below: with one row reserved (for an
+// overflow marker or scroll-status row), how far content can scroll.
+function maxOffsetReservingOneRow(
+  maxDisplayLines: number,
+  totalLines: number,
+): number {
+  return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
+}
+
 export function maxScrollableRowOffset({
   compactRows,
   maxDisplayLines,
@@ -25,7 +34,7 @@ export function maxScrollableRowOffset({
   if (maxDisplayLines <= compactRows || totalLines <= maxDisplayLines) {
     return 0;
   }
-  return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
+  return maxOffsetReservingOneRow(maxDisplayLines, totalLines);
 }
 
 export function scrollBoundedRows<T>({
@@ -99,7 +108,7 @@ export function compactAwareMaxScrollOffset({
 }): number {
   if (maxDisplayLines <= 0) return 0;
   if (maxDisplayLines <= compactRows && totalLines > maxDisplayLines) {
-    return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
+    return maxOffsetReservingOneRow(maxDisplayLines, totalLines);
   }
 
   return maxScrollableRowOffset({ compactRows, maxDisplayLines, totalLines });
