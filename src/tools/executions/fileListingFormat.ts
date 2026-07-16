@@ -6,7 +6,7 @@
  * source entries with differently-named directory flags.
  */
 
-import { formatSize } from '../memory/memoryUtils';
+import { formatBytes } from '@shared/utils/string';
 
 export interface SizedEntry {
   readonly path: string;
@@ -19,7 +19,7 @@ export function formatSizedEntryLines(
   entries: readonly SizedEntry[],
 ): string[] {
   return entries.map((entry) => {
-    const sizeStr = entry.isDir ? '<dir>' : formatSize(entry.size);
+    const sizeStr = entry.isDir ? '<dir>' : formatBytes(entry.size);
     return `${sizeStr.padStart(8)}  ${entry.path}`;
   });
 }
