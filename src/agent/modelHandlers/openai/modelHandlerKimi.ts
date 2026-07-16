@@ -112,8 +112,7 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
   protected override readonly convertContentToStringUnlessVision = true;
 
   protected override getThinkingParameter():
-    | { type: 'enabled' | 'disabled' }
-    | undefined {
+    { type: 'enabled' | 'disabled' } | undefined {
     // See AMBIGUOUS_THINKING_DEFAULT_FULLNAMES: these wire names default to
     // thinking-enabled on the Moonshot API, so the non-reasoning registry
     // entry must explicitly turn it off.
