@@ -50,7 +50,7 @@ describe('VS Code shared-storage migration', () => {
       '/shared/global',
       expect.objectContaining({
         label: 'vscode-global-storage',
-        mergePerChild: ['custom_agents'],
+        mergePerChild: ['custom_agents', 'ei_threads'],
       }),
     );
     expect(mocks.warn).toHaveBeenCalledWith(

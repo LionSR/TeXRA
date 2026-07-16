@@ -96,7 +96,7 @@ export async function moveEntryIfAbsent(
     // when the target volume is full) so a failure is diagnosable from the
     // log line alone — this stays non-throwing/best-effort either way.
     const code = errorCodeOf(error);
-    if (code === 'EEXIST') {
+    if (code === 'EEXIST' || code === 'ENOTEMPTY' || code === 'ENOTDIR') {
       logger.warn(
         `Skipping legacy data migration for "${label}": an entry appeared at ${targetPath}. Legacy data is still at ${legacyPath}; move it manually if needed.`,
       );

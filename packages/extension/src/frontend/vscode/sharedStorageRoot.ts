@@ -15,13 +15,16 @@ import * as vscode from 'vscode';
 // Local imports - platform
 import { mergeLegacyStorageBucket } from '@platform/defaults/legacyDataMigration';
 import {
+  CUSTOM_AGENTS_STORAGE_DIR,
+  EXTERNAL_INQUIRY_THREADS_DIR,
+} from '@platform/defaults/globalStorage';
+import {
   LEGACY_RUNS_STORAGE_DIR,
   MEMORY_STORAGE_DIR,
   RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
 import { STREAM_LOGS_DIR } from '@transcript/StreamLogStore';
 import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
-import { DEFAULT_CUSTOM_AGENTS_DIR_NAME } from '@agent/index/AgentDirectoryService';
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -41,7 +44,10 @@ const WORKSPACE_MERGE_PER_CHILD = [
   STREAM_LOGS_DIR,
   MEMORY_STORAGE_DIR,
 ] as const;
-const GLOBAL_MERGE_PER_CHILD = [DEFAULT_CUSTOM_AGENTS_DIR_NAME] as const;
+const GLOBAL_MERGE_PER_CHILD = [
+  CUSTOM_AGENTS_STORAGE_DIR,
+  EXTERNAL_INQUIRY_THREADS_DIR,
+] as const;
 
 /**
  * Best-effort, one-time move of the extension's legacy `context.storageUri` /

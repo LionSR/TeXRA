@@ -15,11 +15,26 @@ import type { WorkspaceProvider } from '../interfaces';
  * Missing or temporarily inaccessible paths retain their resolved spelling.
  */
 export function canonicalizeWorkspacePath(workspacePath: string): string {
-  let canonical = path.resolve(workspacePath);
-  try {
-    canonical = realpathSync(canonical);
-  } catch {
-    // Preserve the resolved path when the filesystem cannot canonicalize it.
+  const resolved = path.resolve(workspacePath);
+  let existingAncestor = resolved;
+  const missingSegments: string[] = [];
+  let canonical = resolved;
+  while (true) {
+    try {
+      canonical = path.join(realpathSync(existingAncestor), ...missingSegments);
+      break;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      const parent = path.dirname(existingAncestor);
+      if (
+        (code !== 'ENOENT' && code !== 'ENOTDIR') ||
+        parent === existingAncestor
+      ) {
+        break;
+      }
+      missingSegments.unshift(path.basename(existingAncestor));
+      existingAncestor = parent;
+    }
   }
   return /^[a-z]:[\\/]/.test(canonical)
     ? `${canonical.charAt(0).toUpperCase()}${canonical.slice(1)}`

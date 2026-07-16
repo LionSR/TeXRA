@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 // Local imports
+import { CUSTOM_AGENTS_STORAGE_DIR } from '@platform/defaults/globalStorage';
 import type { AgentSource } from '@shared/schemas/agent';
 
 import {
@@ -9,7 +10,7 @@ import {
   BUILTIN_TOOL_USE_AGENTS_DIR,
 } from './BundledAgentDirectories';
 
-export const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
+export const DEFAULT_CUSTOM_AGENTS_DIR_NAME = CUSTOM_AGENTS_STORAGE_DIR;
 
 export interface AgentDirectoryPathStorage {
   ensureDir(relativePath: string): Promise<void>;

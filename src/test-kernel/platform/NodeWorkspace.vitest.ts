@@ -8,7 +8,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join } from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it } from 'vitest';
@@ -44,10 +44,15 @@ describe('Node workspace identity', () => {
     const workspace = createNodeWorkspace(() => link);
     expect(workspace.getWorkspacePath()).toBe(canonical);
     expect(workspace.asRelativePath(join(link, 'paper.tex'))).toBe('paper.tex');
+    expect(workspace.asRelativePath(join(link, 'new', 'draft.tex'))).toBe(
+      'new/draft.tex',
+    );
   });
 
-  it('keeps a resolved path when realpath is unavailable', () => {
+  it('preserves a missing tail beneath its physical ancestor', async () => {
     const missing = join(tmpdir(), `texra-missing-${Date.now()}`);
-    expect(canonicalizeWorkspacePath(missing)).toBe(resolve(missing));
+    expect(canonicalizeWorkspacePath(missing)).toBe(
+      join(await realpath(tmpdir()), basename(missing)),
+    );
   });
 });
