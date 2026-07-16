@@ -14,6 +14,7 @@ import {
 } from '../state/cliState';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
+import { loadingFrameAt } from '../ui/LoadingIndicator';
 import { THINKING_MARKER } from '../ui/glyphs';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
@@ -52,7 +53,7 @@ function LivenessRow({
   readonly thinking: boolean;
 }): React.JSX.Element {
   const now = useLiveNowMs(true, startedAtMs);
-  const dots = LIVENESS_DOTS[Math.floor(now / 1000) % LIVENESS_DOTS.length];
+  const dots = loadingFrameAt(now, LIVENESS_DOTS);
   const elapsed =
     startedAtMs === undefined
       ? ''

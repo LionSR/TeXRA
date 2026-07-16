@@ -11,6 +11,7 @@ import {
   confirmCardKeyAction,
   confirmCardKeyHintsForWidth,
   type ConfirmCardHintAction,
+  confirmCardPulsedTitle,
   type ConfirmCardRejectionMode,
 } from './ConfirmCardState';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
@@ -18,6 +19,7 @@ import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput } from '../input/inputKeys';
 import { KEY_HINT_SEPARATOR, KeyHints } from '../ui/KeyHints';
 import { BorderedPanel } from '../ui/BorderedPanel';
+import { useLiveNowMs } from '../state/useLiveNowMs';
 import type {
   ApprovalBypassKind,
   ApprovalDecision,
@@ -66,6 +68,11 @@ export function ConfirmCard({
   const [feedbackMode, setFeedbackMode] = useState(false);
   const [feedback, setFeedback] = useState('');
   const { columns } = useWindowSize();
+  // A pending approval always needs the user's eyes on it — pulse the title
+  // at 1 Hz off the shared clock (same pattern as LoadingIndicator/
+  // LivenessRow) instead of a static line, so it's harder to miss.
+  const now = useLiveNowMs(true);
+  const pulsedTitle = confirmCardPulsedTitle(now, title);
 
   function setFeedbackActive(active: boolean): void {
     setFeedbackMode(active);
@@ -173,13 +180,13 @@ export function ConfirmCard({
         {stackCompactHints ? (
           <>
             <Text bold color={color} wrap="truncate-end">
-              {title}
+              {pulsedTitle}
             </Text>
             <KeyHints hints={stackedCompactHints} confirmCancel={false} />
           </>
         ) : (
           <Text bold color={color} wrap="truncate-end">
-            {title}
+            {pulsedTitle}
             <Text dimColor>{KEY_HINT_SEPARATOR}</Text>
             <Text dimColor>
               {hints.map((hint, index) => (
@@ -200,7 +207,7 @@ export function ConfirmCard({
     <BorderedPanel
       borderStyle={borderStyle}
       color={color}
-      title={title}
+      title={pulsedTitle}
       footer={<KeyHints hints={hints} confirmCancel={false} />}
     >
       {children}
