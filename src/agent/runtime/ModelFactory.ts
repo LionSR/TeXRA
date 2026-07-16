@@ -471,23 +471,36 @@ async function createModelHandlerForResolvedCompatibilityKey(
   // Responses-shaped models the user has opted to drive through their
   // subscription instead of an API key. Gated on the key not being the
   // validation override so the package-validation gate still wins.
-  if (
+  const codexSubscriptionEligible =
     options.allowCodexSubscriptionOverride &&
     compatibilityKey !== 'ModelHandlerValidation' &&
     resolveCodexSubscriptionCapabilitiesForAgentCategory(
       config,
       useOpenRouter,
       options.agentCategory,
-    ) &&
-    (await isCodexSessionRoutableForAgent())
-  ) {
-    logger.debug(CHANNEL, 'Using ChatGPT subscription (Codex) Handler');
-    const { ModelHandlerCodex } =
-      await import('@agent/modelHandlers/openai/modelHandlerCodex');
-    return finalizeModelHandler(
-      new ModelHandlerCodex(config),
-      'ModelHandlerOpenAIResponse',
-    );
+    ) !== null;
+  if (codexSubscriptionEligible) {
+    let codexSessionRoutable: boolean;
+    try {
+      codexSessionRoutable = await isCodexSessionRoutable();
+    } catch (error) {
+      if (error instanceof CodexAuthError) {
+        throw new AgentError(formatCodexAuthUnavailableMessage(error), {
+          cause: error,
+        });
+      }
+      throw error;
+    }
+
+    if (codexSessionRoutable) {
+      logger.debug(CHANNEL, 'Using ChatGPT subscription (Codex) Handler');
+      const { ModelHandlerCodex } =
+        await import('@agent/modelHandlers/openai/modelHandlerCodex');
+      return finalizeModelHandler(
+        new ModelHandlerCodex(config),
+        'ModelHandlerOpenAIResponse',
+      );
+    }
   }
 
   if (
@@ -565,19 +578,5 @@ async function createModelHandlerForResolvedCompatibilityKey(
         route.compatibilityKey,
       );
     }
-  }
-}
-
-/** Classify retryable/config preflight failures for the agent lifecycle. */
-async function isCodexSessionRoutableForAgent(): Promise<boolean> {
-  try {
-    return await isCodexSessionRoutable();
-  } catch (error) {
-    if (error instanceof CodexAuthError) {
-      throw new AgentError(formatCodexAuthUnavailableMessage(error), {
-        cause: error,
-      });
-    }
-    throw error;
   }
 }

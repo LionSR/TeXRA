@@ -8,7 +8,8 @@ import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState'
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
-import type { IModelHandler, SdkToolCall } from '@agent/types/IModelHandler';
+import type { IModelHandler } from '@agent/types/IModelHandler';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { TaskRunFileService } from '@utils/files';
 

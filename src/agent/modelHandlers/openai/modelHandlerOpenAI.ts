@@ -24,7 +24,7 @@ import type {
   ExtractResponseResult,
   DeepSeekToolCall,
   OpenAIToolCall,
-} from '@agent/types/IModelHandler';
+} from '@agent/types/ModelHandlerContracts';
 import {
   buildErrorLogData,
   detectRequestId,
@@ -297,7 +297,10 @@ export class ModelHandlerOpenAI<
    * can't drift apart.
    */
   protected get configuresEndTagStopSequence(): boolean {
-    return !this.isOReasoningModel && !this.isGrokReasoningModel;
+    const isGrokReasoningModel =
+      this.config.provider === ModelProvider.XAI &&
+      this.capabilities.supportsReasoning;
+    return !this.isOReasoningModel && !isGrokReasoningModel;
   }
 
   protected buildChatBaseParams(

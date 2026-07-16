@@ -13,7 +13,7 @@ import type {
   CreateResponseResult,
   ExtractResponseResult,
   SdkToolCall,
-} from '@agent/types/IModelHandler';
+} from '@agent/types/ModelHandlerContracts';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
