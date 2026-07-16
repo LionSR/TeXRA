@@ -29,12 +29,16 @@
  */
 
 import { Hono, type Context as HonoContext } from '@hono/hono';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseApprovalDecision } from './approvalRequest.ts';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
 import { randomBase64Url } from '../_shared/crypto.ts';
-import { mintGoTrueSession } from '../_shared/goTrueSession.ts';
+import { createEdgeClient } from '../_shared/edgeClients.ts';
+import {
+  mintGoTrueSession,
+  sessionResponseBody,
+} from '../_shared/goTrueSession.ts';
 import { sha256Hex } from '../_shared/relayCiToken.ts';
 import { versionedJsonResponse } from '../_shared/responses.ts';
 
@@ -73,17 +77,6 @@ const USER_CODE_INSERT_ATTEMPTS = 4;
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-
-/** Stateless server client (no token refresh, no persisted session). */
-function createEdgeClient(
-  url: string | undefined,
-  key: string | undefined,
-): SupabaseClient<any> | null {
-  if (!url || !key) return null;
-  return createClient<any>(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 const adminSupabase = createEdgeClient(supabaseUrl, supabaseServiceKey);
 const anonSupabase = createEdgeClient(supabaseUrl, supabaseAnonKey);
@@ -408,21 +401,7 @@ app.post('/token', async (c) => {
     return versionedJsonResponse(
       c.req.raw,
       VERSION,
-      {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        expires_at: session.expires_at,
-        expires_in: session.expires_in,
-        token_type: session.token_type,
-        user: {
-          id: session.user.id,
-          email: session.user.email,
-          user_metadata: {
-            avatar_url: session.user.user_metadata?.avatar_url,
-            user_name: session.user.user_metadata?.user_name,
-          },
-        },
-      },
+      sessionResponseBody(session),
       200,
     );
   } catch (error) {
