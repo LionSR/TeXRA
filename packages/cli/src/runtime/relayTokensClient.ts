@@ -10,7 +10,7 @@ import { fetchWithTimeout } from '@auth/SupabaseSession';
 
 const RELAY_TOKENS_REQUEST_TIMEOUT_MS = 30000;
 
-export const RelayTokenInfoSchema = z.object({
+const RelayTokenInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
   token_hint: z.string(),
@@ -22,7 +22,7 @@ export const RelayTokenInfoSchema = z.object({
 });
 export type RelayTokenInfo = z.infer<typeof RelayTokenInfoSchema>;
 
-export const MintedRelayTokenSchema = RelayTokenInfoSchema.omit({
+const MintedRelayTokenSchema = RelayTokenInfoSchema.omit({
   last_used_at: true,
   revoked_at: true,
 }).extend({
