@@ -96,7 +96,7 @@ function createHandle(
 }
 
 describe('executionRegistry', () => {
-  it('does not persist a stopped waiting handle after lease loss', () => {
+  it('settles without persisting a stopped waiting handle after lease loss', async () => {
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-waiting-lease-lost' as ExecutionId;
@@ -116,6 +116,11 @@ describe('executionRegistry', () => {
       seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.WAITING);
 
       expect(registry.kill(executionId)).toBe(true);
+      await expect(handle.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.CANCELLED,
+        executionId,
+      });
       expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
       expect(registry.getHandle(executionId)).toBeUndefined();
     } finally {

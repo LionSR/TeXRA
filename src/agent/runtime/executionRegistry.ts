@@ -928,14 +928,6 @@ export class ExecutionRegistry {
       return false;
     }
     if (!handle.runWaitingCleanup()) return false;
-    if (handle.executionLeaseLost) {
-      logger.warn('Discarding a stopped waiting execution after lease loss', {
-        data: { executionId: handle.executionId },
-      });
-      this.untrackHandle(handle);
-      this.cancelStreamStatus(handle.childStreamId, handle);
-      return true;
-    }
     const cancelledResult: ResultEvent = {
       type: 'result',
       outcome: RUN_OUTCOME.CANCELLED,
@@ -945,6 +937,17 @@ export class ExecutionRegistry {
       category: handle.category,
       isSubagent: handle.isChildExecution,
     };
+    if (handle.executionLeaseLost) {
+      logger.warn('Discarding a stopped waiting execution after lease loss', {
+        data: { executionId: handle.executionId },
+      });
+      // Settle the in-memory result only: the former owner must not publish or
+      // persist a terminal event, but this promise must resolve on every exit.
+      handle.settleResult(cancelledResult);
+      this.untrackHandle(handle);
+      this.cancelStreamStatus(handle.childStreamId, handle);
+      return true;
+    }
     handle.trace?.emit(cancelledResult);
     this.publishResult?.(cancelledResult, handle.childStreamId);
     handle.settleResult(cancelledResult);
