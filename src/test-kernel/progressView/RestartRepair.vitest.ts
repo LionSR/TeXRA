@@ -62,8 +62,8 @@ describe('repairRestartedStreams', () => {
       executionIds: new Map([[streamId, executionId]]),
       closeRunningGroups,
       finalizeExecution,
-      inspectExecutionLease: vi.fn(async () => ({
-        status: 'foreign' as const,
+      runWithInactiveExecutionLease: vi.fn(async () => ({
+        status: 'active' as const,
         heartbeatAt: 123,
       })),
     });

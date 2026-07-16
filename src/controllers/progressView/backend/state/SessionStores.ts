@@ -12,7 +12,11 @@ import {
 import * as logger from '@logger/logUtils';
 
 // Local imports - shared
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  ExecutionIdSchema,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 
 // Local imports - utils
 import { unique } from '@utils/core';
@@ -21,6 +25,13 @@ import { unique } from '@utils/core';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
 const CHANNEL = 'SessionStores';
+
+function executionIdFromStream(stream: StreamTabId): ExecutionId | undefined {
+  const separator = stream.lastIndexOf('#');
+  const candidate = separator >= 0 ? stream.slice(separator + 1) : stream;
+  const parsed = ExecutionIdSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : undefined;
+}
 
 export interface SessionStoresOptions {
   streamLogs: StreamLogStore;
@@ -68,7 +79,8 @@ export class SessionStores {
 
     const executionId =
       this.snapshots.getExecutionId(stream) ??
-      (await this.snapshots.readPersistedExecutionId(stream));
+      (await this.snapshots.readPersistedExecutionId(stream)) ??
+      executionIdFromStream(stream);
 
     if (!executionId) {
       await this.deleteAdjacentStreamState(stream);
@@ -86,6 +98,10 @@ export class SessionStores {
     for (const stream of persistedStreams) {
       const executionId = await this.snapshots.readPersistedExecutionId(stream);
       if (executionId) executionIdsByStream.set(stream, executionId);
+      else {
+        const derived = executionIdFromStream(stream);
+        if (derived) executionIdsByStream.set(stream, derived);
+      }
     }
 
     const streamsByExecution = new Map<ExecutionId, StreamTabId[]>();
@@ -124,7 +140,8 @@ export class SessionStores {
       orphanedStreams.map(async (stream) => {
         try {
           const executionId =
-            await this.snapshots.readPersistedExecutionId(stream);
+            (await this.snapshots.readPersistedExecutionId(stream)) ??
+            executionIdFromStream(stream);
           if (executionId) {
             let adjacentCleanupFailed = false;
             let result: DeleteExecutionResult;

@@ -9,6 +9,7 @@ import {
   finalizeExecution,
   getExecutionStore,
   registerExecution,
+  releaseOwnedExecutionLease,
 } from '@agent/storage';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
@@ -265,15 +266,21 @@ export class BashTool extends defineTool({
       'process',
     );
 
-    const childStream = createChildStream(executionId, parentStreamId, {
-      streamPrefix: 'bash@tool',
-      streamCategory: AgentCategory.ToolUse,
-      agentName: 'bash',
-      description: command,
-      config: syntheticConfig,
-      toolName: 'bash',
-      runtimeHost,
-    });
+    let childStream: ReturnType<typeof createChildStream>;
+    try {
+      childStream = createChildStream(executionId, parentStreamId, {
+        streamPrefix: 'bash@tool',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'bash',
+        description: command,
+        config: syntheticConfig,
+        toolName: 'bash',
+        runtimeHost,
+      });
+    } catch (error) {
+      await releaseOwnedExecutionLease(executionId);
+      throw error;
+    }
     const { childStreamId, logger } = childStream;
     let stdoutTail = '';
     let stderrTail = '';

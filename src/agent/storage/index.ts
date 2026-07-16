@@ -54,3 +54,4 @@ export {
   type ResumabilityDecision,
 } from './resumability';
 export { resolveChildRunOutput } from './childRunOutput';
+export { releaseOwnedExecutionLease } from './executionLease';

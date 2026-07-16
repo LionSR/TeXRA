@@ -21,7 +21,7 @@ vi.mock('@agent/storage/ExecutionKVStore', () => ({
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  runWithExecutionDeletionGuard: vi.fn(
+  runWithInactiveExecutionLease: vi.fn(
     async (_executionId: ExecutionId, operation: () => Promise<unknown>) => ({
       status: 'performed',
       value: await operation(),

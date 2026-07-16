@@ -1893,6 +1893,37 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('derives an active execution from the stream id when snapshot mapping is absent', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const stream = 'tool@deepseek#a6966c' as StreamTabId;
+    const executionId = 'a6966c' as ExecutionId;
+
+    try {
+      await backend.state.snapshots.load([stream]);
+      backend.state.streamLogs.ensureStream(stream);
+      await writeExecutionConfig(executionId);
+      await backend.state.flush();
+      await StorageFS.ensureDir(streamDataDir(stream));
+      await GoalStore.start(stream, 'preserve the unmapped active execution');
+      await writeForeignExecutionLease(executionId);
+
+      await backend.state.clearStream(stream);
+
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+      expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
+      expect(GoalStore.getForStream(stream)).not.toBeNull();
+    } finally {
+      await StorageFS.delete(`executionLeases/${executionId}.json`).catch(
+        () => {},
+      );
+      await GoalStore.forget(stream);
+      await getExecutionStore(executionId).clear();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('forgets goal entries when clearing never-registered streams', async () => {
     const stream = 'tool@deepseek#missing' as StreamTabId;
     const { backend, session } = createIsolatedRecordingBackend();

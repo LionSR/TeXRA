@@ -1,7 +1,7 @@
 // Shared helpers for the agent-CLI tool modules (codex.ts, claudeAgent.ts).
 // Host-agnostic, VS Code-free.
 
-import { registerExecution } from '@agent/storage';
+import { registerExecution, releaseOwnedExecutionLease } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -185,17 +185,22 @@ export async function launchAgentCliSession(
     throw new ToolError(params.registerFailedMessage);
   }
 
-  const childStream = createChildStream(executionId, params.parentStreamId, {
-    streamPrefix: params.streamPrefix,
-    streamCategory: AgentCategory.ToolUse,
-    agentName: params.agentName,
-    description: params.description,
-    config: params.config,
-    toolName: params.agentName,
-    runtimeHost: params.runtimeHost,
-  });
-
-  await params.startLoop({ childStream, executionId });
+  let childStream: ChildStream;
+  try {
+    childStream = createChildStream(executionId, params.parentStreamId, {
+      streamPrefix: params.streamPrefix,
+      streamCategory: AgentCategory.ToolUse,
+      agentName: params.agentName,
+      description: params.description,
+      config: params.config,
+      toolName: params.agentName,
+      runtimeHost: params.runtimeHost,
+    });
+    await params.startLoop({ childStream, executionId });
+  } catch (error) {
+    await releaseOwnedExecutionLease(executionId);
+    throw error;
+  }
 
   return {
     status: 'executed',

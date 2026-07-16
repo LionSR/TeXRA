@@ -1,9 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 
-import { lock } from 'proper-lockfile';
 import { z } from 'zod';
 
 import { platform } from '@platform/platform';
@@ -15,15 +12,6 @@ import { StorageFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ExecutionLease';
-const LOCK_STALE_MS = 10_000;
-const LOCK_RETRIES = {
-  retries: 8,
-  factor: 1.5,
-  minTimeout: 25,
-  maxTimeout: 250,
-  randomize: true,
-} as const;
-
 /** A host that misses eight heartbeats is no longer considered live. */
 export const EXECUTION_LEASE_STALE_MS = 120_000;
 const EXECUTION_LEASE_HEARTBEAT_MS = 15_000;
@@ -92,16 +80,7 @@ function leasePath(root: string, executionId: ExecutionId): string {
 
 function coordinationPath(root: string, executionId: ExecutionId): string {
   const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
-  const storageKey = createHash('sha256')
-    .update(root)
-    .digest('hex')
-    .slice(0, 24);
-  return path.join(
-    tmpdir(),
-    'texra-execution-lease-locks',
-    storageKey,
-    safeExecutionId,
-  );
+  return path.join(root, 'execution-locks', safeExecutionId);
 }
 
 async function readLease(
@@ -144,18 +123,10 @@ async function withLeaseLock<T>(
   await StorageFS.ensureDir(
     path.join(root, WORKSPACE_STORAGE_LAYOUT.executionLeases),
   );
-  const coordinationFile = coordinationPath(root, executionId);
-  await mkdir(path.dirname(coordinationFile), { recursive: true });
-  const release = await lock(coordinationFile, {
-    realpath: false,
-    stale: LOCK_STALE_MS,
-    retries: LOCK_RETRIES,
-  });
-  try {
-    return await operation();
-  } finally {
-    await release();
-  }
+  return platform().fileLocks.runExclusive(
+    coordinationPath(root, executionId),
+    operation,
+  );
 }
 
 function isFresh(record: ExecutionLeaseRecord, now: number): boolean {
@@ -318,10 +289,10 @@ export async function inspectExecutionLease(
 }
 
 /**
- * Serialize a destructive operation with lease acquisition. Fresh leases are
- * authoritative; stale records are removed only after the operation succeeds.
+ * Run maintenance only while no fresh owner exists. Inspection and mutation
+ * share the same cross-process lock, so a host cannot acquire between them.
  */
-export async function runWithExecutionDeletionGuard<T>(
+export async function runWithInactiveExecutionLease<T>(
   executionId: ExecutionId,
   operation: () => Promise<T>,
 ): Promise<

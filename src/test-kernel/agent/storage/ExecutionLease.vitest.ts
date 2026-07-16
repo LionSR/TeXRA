@@ -15,7 +15,7 @@ import {
   acquireResumedExecutionLease,
   inspectExecutionLease,
   releaseOwnedExecutionLease,
-  runWithExecutionDeletionGuard,
+  runWithInactiveExecutionLease,
 } from '@agent/storage/executionLease';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
@@ -162,7 +162,7 @@ describe('cross-process execution leases', () => {
     const started = new Promise<void>((resolve) => {
       deletionStarted = resolve;
     });
-    const deletion = runWithExecutionDeletionGuard(executionId, async () => {
+    const deletion = runWithInactiveExecutionLease(executionId, async () => {
       deletionStarted?.();
       await deletionPaused;
       return 'removed';
@@ -196,5 +196,18 @@ describe('cross-process execution leases', () => {
       notFound: [],
       active: [activeId],
     });
+  });
+
+  it('preflights every lease before bulk deletion mutates storage', async () => {
+    const validId = 'a86442' as ExecutionId;
+    const malformedId = 'a86443' as ExecutionId;
+    await writeExecution(validId);
+    await writeExecution(malformedId);
+    await StorageFS.ensureDir('executionLeases');
+    await StorageFS.writeAtomic(leasePath(malformedId), '{"version":1}');
+
+    await expect(deleteAllExecutions()).rejects.toThrow('Failed to parse JSON');
+    expect(await StorageFS.exists(`executions/${validId}`)).toBe(true);
+    expect(await StorageFS.exists(`executions/${malformedId}`)).toBe(true);
   });
 });
