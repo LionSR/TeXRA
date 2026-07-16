@@ -985,9 +985,13 @@ export class DesktopProgressBridge {
     if (ownedLocally) {
       await this.state.waitForOwnedExecutionRelease(streamId);
     }
-    const deleted = await this.state.clearStream(streamId);
-    if (!deleted) {
-      await this.options.host.showInfoMessage(formatActiveStreamRetention(1));
+    const deletion = await this.state.clearStream(streamId);
+    if (deletion !== 'deleted') {
+      await this.options.host.showInfoMessage(
+        deletion === 'active'
+          ? formatActiveStreamRetention(1)
+          : formatStreamDeletionRetention(0, 1),
+      );
       return;
     }
     this.deletedStreams.add(streamId);

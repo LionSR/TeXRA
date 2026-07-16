@@ -34,7 +34,11 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { GoalStore } from '@tools/goal';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { SessionStores, type DeleteAllStreamsResult } from './SessionStores';
+import {
+  SessionStores,
+  type DeleteAllStreamsResult,
+  type DeleteStreamResult,
+} from './SessionStores';
 import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 /** Bounded fan-out for the one-time legacy-instruction backfill at load(),
@@ -403,9 +407,9 @@ export class ProgressViewState {
     return this.stores.waitForOwnedExecutionRelease(stream);
   }
 
-  async clearStream(stream: StreamTabId): Promise<boolean> {
+  async clearStream(stream: StreamTabId): Promise<DeleteStreamResult> {
     const deletion = await this.stores.deleteStream(stream);
-    if (deletion === 'active') return false;
+    if (deletion !== 'deleted') return deletion;
 
     this.streamStatus.clearStream(stream);
     this._sessionState.delete(stream);
@@ -415,7 +419,7 @@ export class ProgressViewState {
     if (this._prefs.get('activeStream') === stream) {
       this._prefs.update({ activeStream: this.topmostStreamTab() });
     }
-    return true;
+    return 'deleted';
   }
 
   async clearAll(): Promise<DeleteAllStreamsResult> {

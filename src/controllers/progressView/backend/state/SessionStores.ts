@@ -56,6 +56,8 @@ export interface DeleteAllStreamsResult {
   readonly failed: ReadonlySet<StreamTabId>;
 }
 
+export type DeleteStreamResult = 'deleted' | 'active' | 'failed';
+
 /**
  * Owns the durable footprint for a progress stream.
  *
@@ -89,7 +91,7 @@ export class SessionStores {
     if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
   }
 
-  async deleteStream(stream: StreamTabId): Promise<'deleted' | 'active'> {
+  async deleteStream(stream: StreamTabId): Promise<DeleteStreamResult> {
     if (!canUseStreamDataDir(stream)) return 'deleted';
 
     const executionId = await this.executionIdForStream(stream);
@@ -100,9 +102,10 @@ export class SessionStores {
       } catch (error) {
         logger.warn(
           CHANNEL,
-          `Stream ${stream} was removed, but adjacent cleanup was incomplete: ${toErrorMessage(error)}`,
+          `Stream ${stream} was retained because cleanup was incomplete: ${toErrorMessage(error)}`,
           { data: error },
         );
+        return 'failed';
       }
       return 'deleted';
     }
@@ -114,6 +117,7 @@ export class SessionStores {
         CHANNEL,
         `Execution ${executionId} was deleted, but adjacent stream cleanup was incomplete: ${result.adjacentCleanupFailure}`,
       );
+      return 'failed';
     }
     return result.status === 'active' ? 'active' : 'deleted';
   }
@@ -170,6 +174,7 @@ export class SessionStores {
             `Failed to delete stream ${stream}: ${toErrorMessage(error)}`,
             { data: error },
           );
+          failed.add(stream);
         }
       }),
     );
@@ -186,6 +191,7 @@ export class SessionStores {
               CHANNEL,
               `Execution ${executionId} was deleted, but adjacent stream cleanup was incomplete: ${result.adjacentCleanupFailure}`,
             );
+            for (const stream of streams) failed.add(stream);
           }
         } catch (error) {
           logger.warn(
