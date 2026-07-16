@@ -118,6 +118,41 @@ describe('child subagent stream approval inheritance', () => {
     expect(isApprovalBypassedForStream(child)).toBe(false);
   });
 
+  it('announces inherited edit-bypass changes for visible descendants', () => {
+    const { events, host } = createRecordingHost();
+    const parent = 'stream:visible-parent' as StreamTabId;
+    const child = 'stream:visible-child' as StreamTabId;
+    const grandchild = 'stream:visible-grandchild' as StreamTabId;
+    const pinnedChild = 'stream:pinned-child' as StreamTabId;
+    setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
+    inheritApprovalBypassesOnChildStream(child, parent);
+    inheritApprovalBypassesOnChildStream(grandchild, child);
+    inheritApprovalBypassesOnChildStream(pinnedChild, parent);
+    setToolEditApprovalSessionBypass(pinnedChild, true, host, { silent: true });
+
+    setToolEditApprovalSessionBypass(parent, false, host);
+
+    expect(
+      events.filter(
+        ({ event }) => event === 'updateToolEditApprovalBypassState',
+      ),
+    ).toEqual([
+      {
+        event: 'updateToolEditApprovalBypassState',
+        payload: { streamId: parent, bypassActive: false },
+      },
+      {
+        event: 'updateToolEditApprovalBypassState',
+        payload: { streamId: child, bypassActive: false },
+      },
+      {
+        event: 'updateToolEditApprovalBypassState',
+        payload: { streamId: grandchild, bypassActive: false },
+      },
+    ]);
+    expect(isApprovalBypassedForStream(pinnedChild)).toBe(true);
+  });
+
   it('lets a conversation round inherit bypass from the previous round via the session-level ancestry link', () => {
     // Mirrors the CLI: every chat round mints a brand-new root StreamTabId,
     // so bypass must be carried forward explicitly (see

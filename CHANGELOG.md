@@ -21,6 +21,9 @@ All notable changes to this project will be documented in this file.
   session no longer suppresses dependency guidance for another session.
 - **Follow-ups to waiting subagents resume once without a false failure** — a
   completed follow-up is no longer reported as failed or repeated later.
+- **Delegated agents follow live auto-approval changes** — enabling or
+  disabling file and command auto-approval on a parent now updates its running
+  delegated agents and their visible status.
 
 ### CLI
 

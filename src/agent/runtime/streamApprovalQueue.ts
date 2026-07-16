@@ -73,6 +73,7 @@ export interface StreamApprovalBypass {
 function createStreamApprovalBypass(
   event: ApprovalBypassEvent,
   resolveParent: (streamId: StreamTabId) => StreamTabId | undefined,
+  resolveDescendants: (streamId: StreamTabId) => readonly StreamTabId[],
 ): StreamApprovalBypass {
   const byStream = new Map<StreamTabId, boolean>();
 
@@ -94,9 +95,23 @@ function createStreamApprovalBypass(
     runtimeHost,
     options,
   ) => {
+    const descendants =
+      runtimeHost && !options?.silent ? resolveDescendants(streamId) : [];
+    const previousDescendantStates = new Map(
+      descendants.map((descendant) => [descendant, resolve(descendant)]),
+    );
     byStream.set(streamId, enabled);
     if (runtimeHost && !options?.silent) {
       runtimeHost.emit(event, { streamId, bypassActive: enabled });
+      for (const descendant of descendants) {
+        const bypassActive = resolve(descendant);
+        if (previousDescendantStates.get(descendant) !== bypassActive) {
+          runtimeHost.emit(event, {
+            streamId: descendant,
+            bypassActive,
+          });
+        }
+      }
     }
   };
 
@@ -149,6 +164,7 @@ interface StreamApprovalControllerOptions<R extends { accepted: boolean }> {
   rejectionResult: () => R;
   bypassEvent: ApprovalBypassEvent;
   resolveParent: (streamId: StreamTabId) => StreamTabId | undefined;
+  resolveDescendants: (streamId: StreamTabId) => readonly StreamTabId[];
 }
 
 function createStreamApprovalController<R extends { accepted: boolean }>(
@@ -177,6 +193,7 @@ function createStreamApprovalController<R extends { accepted: boolean }>(
     bypass: createStreamApprovalBypass(
       options.bypassEvent,
       options.resolveParent,
+      options.resolveDescendants,
     ),
     enqueue<T>(
       streamId: StreamTabId | undefined,
@@ -281,20 +298,41 @@ export function createSessionApprovals(): SessionApprovals {
     (kind: BypassAncestryKind) =>
     (streamId: StreamTabId): StreamTabId | undefined =>
       parentOf[kind].get(streamId);
+  const resolveDescendantsFor =
+    (kind: BypassAncestryKind) =>
+    (streamId: StreamTabId): readonly StreamTabId[] => {
+      const graph = parentOf[kind];
+      const descendants: StreamTabId[] = [];
+      const pending = [streamId];
+      const seen = new Set(pending);
+      for (let index = 0; index < pending.length; index += 1) {
+        const parent = pending[index];
+        for (const [child, directParent] of graph) {
+          if (directParent !== parent || seen.has(child)) continue;
+          seen.add(child);
+          descendants.push(child);
+          pending.push(child);
+        }
+      }
+      return descendants;
+    };
 
   const toolEdit = createStreamApprovalController<ToolEditApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
     bypassEvent: 'updateToolEditApprovalBypassState',
     resolveParent: resolveParentFor('toolEdit'),
+    resolveDescendants: resolveDescendantsFor('toolEdit'),
   });
   const bash = createStreamApprovalController<HostBashApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
     bypassEvent: 'updateBashApprovalBypassState',
     resolveParent: resolveParentFor('bash'),
+    resolveDescendants: resolveDescendantsFor('bash'),
   });
   const proposal = createStreamApprovalBypass(
     'updateSuperYoloBypassState',
     resolveParentFor('proposal'),
+    resolveDescendantsFor('proposal'),
   );
   return {
     toolEdit,
