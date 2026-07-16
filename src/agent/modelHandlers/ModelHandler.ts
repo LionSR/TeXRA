@@ -91,6 +91,8 @@ import {
   TOOL_USE_SAFETY_BUFFER,
   TOOL_USE_MAX_OUTPUT_FACTOR,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  COMPACTION_SUMMARY_PREFIX,
+  COMPACTION_SYSTEM_PROMPT,
 } from './contextManagementConstants';
 import { computeUtilizationPercent } from './support/contextUtilization';
 import { logCompactionEvent } from './support/compactionLogging';
@@ -117,6 +119,11 @@ import { prepareExistingOutputContent } from './utils/fileContentUtils';
  * handler code without pulling OpenAI/Anthropic/Google clients into the eager graph.
  */
 export type SdkErrorTagger = (err: unknown, provider: string) => void;
+
+interface ClientCompactionResult<M> {
+  compactedMessages: M[];
+  didCompact: boolean;
+}
 
 /**
  * Wraps a promise so that any rejection is tagged via the supplied tagger
@@ -1110,9 +1117,54 @@ export abstract class ModelHandler<
     if (thresholdPercent <= 0) return false;
 
     const threshold = Math.floor(
-      (thresholdPercent / 100) * this.config.contextWindow,
+      (thresholdPercent / 100) * this.getEffectiveContextWindow(),
     );
     return inputTokens > threshold;
+  }
+
+  /**
+   * Runs input-token-driven compaction when the shared threshold policy selects
+   * the current conversation. The trigger, request consumption, and diagnostic
+   * context stay uniform while each provider retains its SDK-specific summary
+   * request and message representation.
+   */
+  protected async maybeCompactByInputTokens(
+    messages: M[],
+    inputTokens: number,
+    compact: () => Promise<ClientCompactionResult<M>>,
+  ): Promise<ClientCompactionResult<M>> {
+    if (!this.shouldCompactByInputTokens(inputTokens)) {
+      return { compactedMessages: messages, didCompact: false };
+    }
+
+    const manuallyRequested = this.compactionRequested;
+    this.compactionRequested = false;
+
+    const thresholdPercent = this.getCompactionThresholdPercent();
+    const contextWindow = this.getEffectiveContextWindow();
+    this.logger.debug(
+      manuallyRequested
+        ? 'Compacting conversation (manually requested)'
+        : 'Compacting conversation (token threshold exceeded)',
+      {
+        data: {
+          inputTokens,
+          utilizationPercent: computeUtilizationPercent(
+            inputTokens,
+            contextWindow,
+          ),
+          contextWindow,
+          ...(!manuallyRequested && {
+            thresholdPercent,
+            thresholdTokens: Math.floor(
+              (thresholdPercent / 100) * contextWindow,
+            ),
+          }),
+        },
+      },
+    );
+
+    return compact();
   }
 
   /**
@@ -1121,9 +1173,10 @@ export abstract class ModelHandler<
    * system/developer messages, the too-short guard, assembling the compacted
    * history, success/failure logging, and the error fallback.
    *
-   * The provider supplies {@link summarize} (build the request, call the SDK,
-   * and return the summary text plus output-token count) and
-   * {@link buildSummaryMessage} (wrap the summary into a provider message).
+   * The provider supplies {@link summarize} (encode the supplied compaction
+   * prompt, call the SDK, and return the summary text plus output-token count)
+   * and {@link buildSummaryMessage} (encode the already-prefixed summary as a
+   * provider message).
    *
    * Callers that keep their own post-compaction token bookkeeping (like
    * `ModelHandlerOpenAIResponse`'s client-side path) derive it from the returned
@@ -1135,12 +1188,10 @@ export abstract class ModelHandler<
     tokensBefore: number,
     summarize: (
       conversationMessages: M[],
+      systemPrompt: string,
     ) => Promise<{ summaryText: string; outputTokens: number }>,
     buildSummaryMessage: (summary: string) => M,
-  ): Promise<{
-    compactedMessages: M[];
-    didCompact: boolean;
-  }> {
+  ): Promise<ClientCompactionResult<M>> {
     const contextWindow = this.getEffectiveContextWindow();
 
     // Separate leading system/developer messages from the conversation body.
@@ -1165,8 +1216,10 @@ export abstract class ModelHandler<
     }
 
     try {
-      const { summaryText, outputTokens } =
-        await summarize(conversationMessages);
+      const { summaryText, outputTokens } = await summarize(
+        conversationMessages,
+        COMPACTION_SYSTEM_PROMPT,
+      );
       if (!summaryText) {
         this.logger.warn('Compaction returned empty summary, skipping');
         return { compactedMessages: messages, didCompact: false };
@@ -1174,7 +1227,7 @@ export abstract class ModelHandler<
 
       const compactedMessages: M[] = [
         ...systemMessages,
-        buildSummaryMessage(summaryText),
+        buildSummaryMessage(`${COMPACTION_SUMMARY_PREFIX}${summaryText}`),
       ];
 
       logCompactionEvent({

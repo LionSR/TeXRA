@@ -80,8 +80,6 @@ import {
   CHAINED_RESPONSE_MAX_OUTPUT_FACTOR,
   CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT,
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-  COMPACTION_SUMMARY_PREFIX,
-  COMPACTION_SYSTEM_PROMPT,
   COMPACTION_USER_PROMPT,
   estimateTokensFromText,
   TOKEN_SAFETY_BUFFER,
@@ -979,11 +977,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const { compactedMessages, didCompact } = await this.runClientCompaction(
       messages,
       tokensBefore,
-      async (conversationMessages) => {
+      async (conversationMessages, compactionSystemPrompt) => {
         const stream = await client.responses.stream(
           {
             model: this.config.fullName,
-            instructions: COMPACTION_SYSTEM_PROMPT,
+            instructions: compactionSystemPrompt,
             input: [
               ...conversationMessages,
               {
@@ -1046,7 +1044,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       (summary): ResponseInputItem => ({
         type: 'message',
         role: 'user',
-        content: [createInputText(`${COMPACTION_SUMMARY_PREFIX}${summary}`)],
+        content: [createInputText(summary)],
       }),
     );
 
