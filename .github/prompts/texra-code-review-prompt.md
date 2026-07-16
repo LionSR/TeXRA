@@ -59,8 +59,8 @@ not pre-existing code, and respect the documented exceptions (variable-stride
 token consumers, queues appended mid-iteration, `charCodeAt` hash loops).
 
 A second convention worth enforcing on changed lines is the repository's
-anti-indirection rules in `CLAUDE.md` ("Flattening Abstraction Layers",
-"Discouraged Factory Patterns"). Flag pass-through layers this pull request
+anti-indirection rules in `AGENTS.md` ("Flattening abstraction layers",
+"Discouraged factory patterns"). Flag pass-through layers this pull request
 newly introduces — wrapper functions that only forward to a single callee,
 two-layer factories called from one place, trivial identity factories that just
 spread an object, and re-export shims — and recommend inlining them at the call
