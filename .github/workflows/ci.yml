@@ -375,6 +375,14 @@ jobs:
           # docs-only PRs they are skipped and the lightweight docs build gates
           # instead; on the nightly schedule only runtime-validation runs.
           # Require whichever ran.
+          #
+          # `changes` must itself succeed (never skip): if it fails, every
+          # dependent job skips and the gate would otherwise go green with
+          # nothing validated.
+          if [ '${{ needs.changes.result }}' != 'success' ]; then
+            echo 'Change detection result: ${{ needs.changes.result }}'
+            exit 1
+          fi
           for result in \
             'checks:${{ needs.checks.result }}' \
             'test:${{ needs.test.result }}' \
