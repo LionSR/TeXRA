@@ -15,18 +15,18 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - main view
 import type { LatexDiffsActionDetail } from '@shared/schemas';
-import { designTokens } from '@shared/styles';
+import {
+  compactFormControlStyles,
+  compactIconActionButtonStyles,
+  designTokens,
+} from '@shared/styles';
 import {
   renderIconActionButton,
   renderLabeledActionButtonParts,
 } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
-import {
-  compactActionButtonStyles,
-  compactFormControlStyles,
-  fileSelectLayoutStyles,
-} from '../styles/fileSelectStyles';
+import { fileSelectLayoutStyles } from '../styles/fileSelectStyles';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 type LatexDiffsAction = LatexDiffsActionDetail['action'];
@@ -113,7 +113,7 @@ const COMMIT_MANAGE_ACTIONS: readonly DiffActionSpec[] = [
 export class LatexDiffsSection extends LitElement {
   static override styles = [
     designTokens,
-    compactActionButtonStyles,
+    compactIconActionButtonStyles,
     compactFormControlStyles,
     fileSelectLayoutStyles,
     css`
