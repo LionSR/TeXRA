@@ -3,6 +3,8 @@ import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import { KEY_HINT_SEPARATOR, keyHintText } from '../ui/KeyHints';
 import { isEscapeInput } from '../input/inputKeys';
 import { textDisplayWidth } from '../render/terminalText';
+import { loadingFrameAt } from '../ui/LoadingIndicator';
+import { APPROVAL_PULSE_FRAMES } from '../ui/glyphs';
 
 export type ConfirmCardKeyAction =
   'approve' | 'reject' | 'approveAlways' | 'feedback' | 'ignore';
@@ -45,6 +47,16 @@ export interface ConfirmCardCompactHintLayout {
   readonly inlineHints: readonly ConfirmCardHintAction[];
   readonly stackedHints: readonly ConfirmCardHintAction[];
   readonly stack: boolean;
+}
+
+/**
+ * A pending approval always needs the user's eyes on it — prefix the title
+ * with a 1 Hz solid/hollow blink (see `ui/glyphs.APPROVAL_PULSE_FRAMES`) off
+ * the shared clock, same pattern as `LoadingIndicator`/`LivenessRow`, so the
+ * card is harder to miss than a static line.
+ */
+export function confirmCardPulsedTitle(nowMs: number, title: string): string {
+  return `${loadingFrameAt(nowMs, APPROVAL_PULSE_FRAMES)} ${title}`;
 }
 
 export function confirmCardKeyAction(
