@@ -432,7 +432,7 @@ describe('createExtensionHostInteractions', () => {
     expect(handlers.transport.planApproval.dismiss).not.toHaveBeenCalled();
   });
 
-  it('surfaces retry requests without stealing active-stream focus (#8246)', async () => {
+  it('surfaces retry requests without stealing active-stream focus (#8246)', () => {
     const handlers = createHandlers();
     const session = createTestSession();
     const sessionEvents = recordSessionEvents(session);

@@ -6,7 +6,7 @@
  * and must still render legitimate links normally.
  */
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - shared schemas
 import { LOG_LEVELS, type LogMessageData } from '@shared/schemas';
@@ -14,10 +14,25 @@ import { LOG_LEVELS, type LogMessageData } from '@shared/schemas';
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
+type WebFormatters =
+  typeof import('@progressView/frontend/formatters/logFormatters/toolFormatters/webFormatters');
+
 useLitComponentTestDom(
   () =>
     import('@progressView/frontend/formatters/logFormatters/toolFormatters/webFormatters'),
 );
+
+// Loaded after useLitComponentTestDom's beforeAll installs the jsdom globals
+// these modules touch at import time.
+let formatWebSearchTemplate: WebFormatters['formatWebSearchTemplate'];
+let formatWebFetchTemplate: WebFormatters['formatWebFetchTemplate'];
+let render: typeof import('lit').render;
+
+beforeAll(async () => {
+  ({ formatWebSearchTemplate, formatWebFetchTemplate } =
+    await import('@progressView/frontend/formatters/logFormatters/toolFormatters/webFormatters'));
+  ({ render } = await import('lit'));
+});
 
 function webSearchMessage(url: string): LogMessageData {
   return {
@@ -59,29 +74,19 @@ const DANGEROUS_URLS = [
 
 describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
   describe('web_search results', () => {
-    it.each(DANGEROUS_URLS)(
-      'never renders %s as a clickable href',
-      async (url) => {
-        const { formatWebSearchTemplate } =
-          await import('@progressView/frontend/formatters/logFormatters/toolFormatters/webFormatters');
-        const { render } = await import('lit');
+    it.each(DANGEROUS_URLS)('never renders %s as a clickable href', (url) => {
+      const container = document.createElement('div');
+      render(formatWebSearchTemplate(webSearchMessage(url)), container);
 
-        const container = document.createElement('div');
-        render(formatWebSearchTemplate(webSearchMessage(url)), container);
+      // The single result carries only a dangerous URL, so it must render
+      // as inert text — no anchor at all, not merely an anchor with a
+      // neutralized href.
+      expect(container.querySelectorAll('a').length).toBe(0);
+      // The result should still be visible (as inert text), just not linked.
+      expect(container.textContent).toContain('Click me');
+    });
 
-        // The single result carries only a dangerous URL, so it must render
-        // as inert text — no anchor at all, not merely an anchor with a
-        // neutralized href.
-        expect(container.querySelectorAll('a').length).toBe(0);
-        // The result should still be visible (as inert text), just not linked.
-        expect(container.textContent).toContain('Click me');
-      },
-    );
-
-    it('renders a legitimate https URL as a real clickable href', async () => {
-      const { formatWebSearchTemplate } =
-        await import('@progressView/frontend/formatters/logFormatters/toolFormatters/webFormatters');
-      const { render } = await import('lit');
+    it('renders a legitimate https URL as a real clickable href', () => {
       const url = 'https://example.com/article?id=42';
 
       const container = document.createElement('div');
@@ -101,10 +106,7 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
       expect(container.querySelector('details')).toBeNull();
     });
 
-    it('renders a mailto URL as a real clickable href', async () => {
-      const { formatWebSearchTemplate } =
-        await import('@progressView/frontend/formatters/logFormatters/toolFormatters/webFormatters');
-      const { render } = await import('lit');
+    it('renders a mailto URL as a real clickable href', () => {
       const url = 'mailto:someone@example.com';
 
       const container = document.createElement('div');
@@ -116,26 +118,16 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
   });
 
   describe('web_fetch payloads', () => {
-    it.each(DANGEROUS_URLS)(
-      'never renders %s as a clickable href',
-      async (url) => {
-        const { formatWebFetchTemplate } =
-          await import('@progressView/frontend/formatters/logFormatters/toolFormatters/webFormatters');
-        const { render } = await import('lit');
+    it.each(DANGEROUS_URLS)('never renders %s as a clickable href', (url) => {
+      const container = document.createElement('div');
+      render(formatWebFetchTemplate(webFetchMessage(url)), container);
 
-        const container = document.createElement('div');
-        render(formatWebFetchTemplate(webFetchMessage(url)), container);
+      // The "URL:" section is only rendered when a safe URL survives
+      // sanitization, so a dangerous URL must produce no anchor at all.
+      expect(container.querySelectorAll('a').length).toBe(0);
+    });
 
-        // The "URL:" section is only rendered when a safe URL survives
-        // sanitization, so a dangerous URL must produce no anchor at all.
-        expect(container.querySelectorAll('a').length).toBe(0);
-      },
-    );
-
-    it('renders a legitimate https URL as a real clickable href', async () => {
-      const { formatWebFetchTemplate } =
-        await import('@progressView/frontend/formatters/logFormatters/toolFormatters/webFormatters');
-      const { render } = await import('lit');
+    it('renders a legitimate https URL as a real clickable href', () => {
       const url = 'https://example.com/doc.pdf';
 
       const container = document.createElement('div');

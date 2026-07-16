@@ -323,7 +323,7 @@ describe('AgentRosterController', () => {
     });
   });
 
-  it('matches source-qualified custom selections by exact identity', async () => {
+  it('matches source-qualified custom selections by exact identity', () => {
     const duplicateAgents: Record<AgentCategory, AgentRosterEntry[]> = {
       workflow: [],
       toolUse: [
