@@ -35,7 +35,7 @@ export type ProviderMessage =
  * instead of being silently trusted and surfacing as a confusing error deep
  * inside a model handler.
  */
-export const ProviderMessageSchema = z.custom<ProviderMessage>(
+const ProviderMessageSchema = z.custom<ProviderMessage>(
   (value): value is ProviderMessage =>
     typeof value === 'object' &&
     value !== null &&
