@@ -37,6 +37,7 @@ import {
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(async () => ({ ok: true })),
   hasLatexCompiler: vi.fn(async () => true),
+  publishCompiledPdfArtifact: vi.fn(async () => null),
 }));
 
 vi.mock('@latex/texTools', () => ({
@@ -45,6 +46,10 @@ vi.mock('@latex/texTools', () => ({
 
 vi.mock('@latex/latexToolchain', () => ({
   hasLatexCompiler: mocks.hasLatexCompiler,
+}));
+
+vi.mock('@agent/output/compiledPdfArtifacts', () => ({
+  publishCompiledPdfArtifact: mocks.publishCompiledPdfArtifact,
 }));
 
 const storagePath = '/storage';
@@ -122,6 +127,7 @@ describe('workflow LaTeX compile input directories', () => {
   beforeEach(() => {
     mocks.compileLatex2Pdf.mockClear();
     mocks.hasLatexCompiler.mockClear();
+    mocks.publishCompiledPdfArtifact.mockReset().mockResolvedValue(null);
   });
 
   it('derives compile-check input dirs from outputFile.source', async () => {
@@ -344,6 +350,45 @@ describe('workflow LaTeX compile input directories', () => {
       expect.anything(),
       expect.objectContaining({
         extraInputDirs: ['/external/project'],
+      }),
+    );
+  });
+
+  it('keeps a successful diff when publishing its PDF fails', async () => {
+    const executionId = 'latexdiff-publish-failure';
+    await initLatexPlatform({});
+    const trace = logger();
+    const manager = new LatexDiffManager(
+      AgentWorkflowSettingSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+      }),
+      () => ({}),
+      [],
+      trace,
+      'diff-stream',
+      new TaskRunFileService(executionId),
+    );
+    const publishError = new Error('artifact storage unavailable');
+    mocks.publishCompiledPdfArtifact.mockRejectedValueOnce(publishError);
+
+    const result = await diffCompiler(manager).compileDiffIfSuccessful(
+      { success: true, diffFileName: 'main-diff.tex' },
+      runStorageFile(executionId, path.join('r1', 'main.tex')),
+      {
+        absolutePath: path.join(runDir(executionId), 'diff', 'r2'),
+        relativePath: path.join('diff', 'r2'),
+        executionId,
+      },
+      2,
+      runStorageFile(executionId, path.join('r2', 'main.tex')),
+      '-diff',
+    );
+
+    expect(result).toEqual(expect.objectContaining({ artifact: null }));
+    expect(trace.warn).toHaveBeenCalledWith(
+      'Failed to publish latexdiff PDF: artifact storage unavailable',
+      expect.objectContaining({
+        data: expect.objectContaining({ error: publishError }),
       }),
     );
   });

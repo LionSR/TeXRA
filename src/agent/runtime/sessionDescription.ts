@@ -26,6 +26,14 @@ const CHANNEL = 'SessionDescription';
 const MAX_DESCRIPTION_LENGTH = 80;
 const MAX_DESCRIPTION_WORDS = 12;
 
+function warnWithoutRejecting(message: string): void {
+  try {
+    logger.warn(CHANNEL, message);
+  } catch {
+    // Best-effort diagnostics must not make description generation reject.
+  }
+}
+
 /**
  * Normalize a model-generated session description: collapse newlines,
  * strip surrounding quotes/backticks, drop trailing sentence punctuation,
@@ -95,7 +103,7 @@ export async function generateSessionDescription(
 
     const helperResult = await createHelperModelKit();
     if (!helperResult.kit) {
-      logger.warn(CHANNEL, helperResult.reason);
+      warnWithoutRejecting(helperResult.reason);
       return;
     }
 
@@ -123,8 +131,7 @@ export async function generateSessionDescription(
       logger.info(CHANNEL, `Generated session description for ${executionId}`);
     }
   } catch (err) {
-    logger.warn(
-      CHANNEL,
+    warnWithoutRejecting(
       `Failed to generate session description: ${getSdkErrorMessage(err)}`,
     );
   }
