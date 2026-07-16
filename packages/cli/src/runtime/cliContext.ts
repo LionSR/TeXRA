@@ -1,6 +1,7 @@
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
@@ -385,7 +386,7 @@ export async function resolveCliCwd(
   // should fail loudly instead of silently falling back to the resolved-but-
   // nonexistent string and running the agent against the wrong workspace.
   if (!isNonEmptyString(cwdFlag)) {
-    return await realpath(process.cwd()).catch(() => process.cwd());
+    return canonicalizeWorkspacePath(process.cwd());
   }
   const requested = path.resolve(cwdFlag.trim());
   let info: Awaited<ReturnType<typeof stat>>;
@@ -402,7 +403,7 @@ export async function resolveCliCwd(
   if (!info.isDirectory()) {
     throw new CliUsageError(`--cwd: not a directory: ${requested}`);
   }
-  return await realpath(requested).catch(() => requested);
+  return canonicalizeWorkspacePath(requested);
 }
 
 export async function buildCliContext(

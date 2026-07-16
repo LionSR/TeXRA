@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { platform } from '@platform/platform';
 import {
   clearStoreCache,
   getExecutionStore,
@@ -9,7 +10,6 @@ import {
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { invalidateListingCache } from '@agent/storage/executionListing';
 import type { ExecutionId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
@@ -49,7 +49,82 @@ describe('execution listing normalization', () => {
 
   beforeEach(() => {
     clearStoreCache();
-    invalidateListingCache();
+  });
+
+  it('sees executions written by another host after an earlier listing', async () => {
+    expect(await listExecutions()).toEqual([]);
+
+    const id = 'eee555' as ExecutionId;
+    await writeExecution(
+      id,
+      '2026-07-15T11:00:00.000Z',
+      config('assistant'),
+      AgentCategory.ToolUse,
+    );
+
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({ id, kind: 'agent' }),
+    ]);
+  });
+
+  it('sees metadata replaced by another host after an earlier listing', async () => {
+    const id = 'fff666' as ExecutionId;
+    await writeExecution(
+      id,
+      '2026-07-15T12:00:00.000Z',
+      config('assistant'),
+      AgentCategory.ToolUse,
+    );
+    expect(await listExecutions()).toEqual([
+      expect.not.objectContaining({ description: expect.any(String) }),
+    ]);
+
+    await getExecutionStore(id).writeMeta({
+      timestamp: '2026-07-15T12:00:00.000Z',
+      category: AgentCategory.ToolUse,
+      description: 'Updated by another host',
+      terminalStatus: 'completed',
+    });
+
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({
+        id,
+        description: 'Updated by another host',
+        terminalStatus: 'completed',
+      }),
+    ]);
+  });
+
+  it('migrates history stored under a legacy workspace spelling', async () => {
+    const id = 'abc777' as ExecutionId;
+    const legacyKey = 'texra.agentHistory./workspace/symlink';
+    await installPlatform(
+      {
+        workspacePath: '/workspace/physical',
+        workspaceState: {
+          [legacyKey]: [
+            {
+              id,
+              timestamp: '2026-07-15T13:00:00.000Z',
+              agentConfig: config('assistant'),
+            },
+          ],
+        },
+      },
+      {
+        workspace: {
+          getWorkspacePath: () => '/workspace/physical',
+          getLegacyWorkspacePaths: () => ['/workspace/symlink'],
+          asRelativePath: (filePath) => filePath,
+        },
+      },
+    );
+    clearStoreCache();
+
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({ id, kind: 'agent' }),
+    ]);
+    expect(platform().workspaceState.get(legacyKey, [])).toEqual([]);
   });
 
   it('uses the config as the canonical source for visible agent fields', async () => {

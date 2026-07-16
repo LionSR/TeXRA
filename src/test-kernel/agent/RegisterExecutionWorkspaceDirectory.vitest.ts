@@ -25,10 +25,6 @@ vi.mock('@agent/storage/ExecutionKVStore', () => ({
   getExecutionStore: mocks.getExecutionStore,
 }));
 
-vi.mock('@agent/storage/executionListing', () => ({
-  invalidateListingCache: vi.fn(),
-}));
-
 import {
   finalizeExecution,
   registerExecution,

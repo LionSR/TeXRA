@@ -3,7 +3,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join, normalize, relative } from 'node:path';
 
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import * as logger from '@logger/logUtils';
 import { isPathWithin } from '@utils/core/pathCore';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 // Local imports - platform
@@ -12,15 +15,18 @@ import type { StorageProvider } from '../interfaces';
 const STORAGE_LAYOUT = {
   global: 'global-storage',
   workspace: 'workspace-storage',
-  memory: 'memories',
-  runs: 'executions',
-  legacyRuns: 'taskRuns',
-  original: 'original',
 } as const;
 
-export const MEMORY_STORAGE_DIR = STORAGE_LAYOUT.memory;
-export const RUNS_STORAGE_DIR = STORAGE_LAYOUT.runs;
-export const LEGACY_RUNS_STORAGE_DIR = STORAGE_LAYOUT.legacyRuns;
+export const MEMORY_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.memory;
+export const RUNS_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.runs;
+export const LEGACY_RUNS_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.legacyRuns;
+export const WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD = [
+  RUNS_STORAGE_DIR,
+  LEGACY_RUNS_STORAGE_DIR,
+  WORKSPACE_STORAGE_LAYOUT.streamData,
+  WORKSPACE_STORAGE_LAYOUT.streamLogs,
+  MEMORY_STORAGE_DIR,
+] as const;
 
 type WorkspacePathSource = string | undefined | (() => string | undefined);
 
@@ -98,7 +104,7 @@ export function resolveRunOriginalSnapshotPath(
 ): string {
   return resolveRunStoragePath(
     executionId,
-    STORAGE_LAYOUT.original,
+    WORKSPACE_STORAGE_LAYOUT.original,
     workspaceRelativePath,
   );
 }
@@ -170,7 +176,14 @@ function migrateLegacyWorkspaceStorage(
 
   if (currentPath === legacyPath) return;
   if (!existsSync(legacyPath) || existsSync(currentPath)) return;
-  renameSync(legacyPath, currentPath);
+  try {
+    renameSync(legacyPath, currentPath);
+  } catch (error) {
+    logger.warn(
+      'WorkspaceStorage',
+      `Could not migrate legacy workspace storage; continuing with the current storage directory. Cause: ${toErrorMessage(error)}`,
+    );
+  }
 }
 
 export class WorkspaceStorageProvider implements StorageProvider {
