@@ -35,7 +35,8 @@ import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
-import type { ChildControlStreamTarget } from '../state/childControls';
+import type { ChildListTarget } from '../state/childControls';
+import type { ChildListValue } from '../state/childListSelection';
 import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
@@ -50,11 +51,12 @@ interface ConversationRegionSnapshot {
   readonly reverseSearchOpen: boolean;
   readonly rootStreamId: StreamTabId | undefined;
   readonly slashPaletteOpen: boolean;
-  readonly selectedSessionId: StreamTabId | undefined;
-  readonly sessionListFocused: boolean;
+  readonly selectedChildValue: ChildListValue | undefined;
+  readonly childListFocused: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-  readonly childExecutionPanelTarget: ChildControlStreamTarget;
+  readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
+  readonly childListTarget: ChildListTarget;
   readonly transcriptViewerStreamId: StreamTabId | undefined;
 }
 
@@ -71,17 +73,23 @@ interface ConversationRegionProps {
   readonly renderFooterChrome: () => ReactNode;
   readonly rows: number;
   readonly snapshot: ConversationRegionSnapshot;
-  readonly onCancelSessionList: () => void;
+  readonly onCancelChildList: () => void;
+  readonly onChildSelectionChange: (value: ChildListValue) => void;
   readonly onFocusSession: (streamId: StreamTabId) => void;
-  readonly onSessionSelectionChange: (streamId: StreamTabId) => void;
+  readonly onKillExecution: (executionId: string) => void;
+  readonly onOpenProcessDetail: (executionId: string) => void;
+  readonly onViewStream: (streamId: StreamTabId) => void;
 }
 
 export function ConversationRegion({
   colorEnabled,
   columns,
-  onCancelSessionList,
+  onCancelChildList,
+  onChildSelectionChange,
   onFocusSession,
-  onSessionSelectionChange,
+  onKillExecution,
+  onOpenProcessDetail,
+  onViewStream,
   onTranscriptViewportChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -138,9 +146,7 @@ export function ConversationRegion({
         queuedFollowUpPanelRows,
         rows,
       });
-  const childExecutionPanelTarget = snapshot.childExecutionPanelTarget;
-  const activeProcesses =
-    childExecutionPanelTarget.slice?.activeProcesses ?? [];
+  const activeProcesses = snapshot.childListTarget.slice?.activeProcesses ?? [];
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
     hasPlan: activeSlice?.plan != null,
@@ -162,7 +168,7 @@ export function ConversationRegion({
   // The subagent/todos panels live at the bottom of the same vertical column.
   // Reserve only as many rows as the panels actually need. Unfocused panels
   // use at most half the transcript, except for the one row needed to keep a
-  // multi-session list visible in a short terminal.
+  // multi-child list visible in a short terminal.
   const todosPlanContentRows =
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
@@ -175,18 +181,24 @@ export function ConversationRegion({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
     processCount: foregroundOpen ? 0 : activeProcesses.length,
     sessionCount: foregroundOpen ? 0 : snapshot.sessionViews.length,
-    sessionListFocused: snapshot.sessionListFocused,
+    childListFocused: snapshot.childListFocused,
     todosPlanContentRows,
     transcriptRows,
   });
   const conversationRows = transcriptRows - bottomPanelBudget;
-  const sessionListVisible =
-    snapshot.sessionViews.length > 0 && subagentRows > 0;
+  const childListHasRows =
+    snapshot.sessionViews.length > 0 || activeProcesses.length > 0;
+  const childListVisible = childListHasRows && subagentRows > 1;
   useLayoutEffect(() => {
-    if (snapshot.sessionListFocused && !sessionListVisible) {
-      onCancelSessionList();
+    if (snapshot.childListFocused && !foregroundOpen && !childListVisible) {
+      onCancelChildList();
     }
-  }, [onCancelSessionList, sessionListVisible, snapshot.sessionListFocused]);
+  }, [
+    childListVisible,
+    foregroundOpen,
+    onCancelChildList,
+    snapshot.childListFocused,
+  ]);
   const foregroundSurface = renderForegroundSurface(
     foregroundRows,
     transcriptWidth,
@@ -237,15 +249,19 @@ export function ConversationRegion({
         {bottomPanelBudget > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
-              keyboardActive={snapshot.sessionListFocused && sessionListVisible}
+              keyboardActive={snapshot.childListFocused && childListVisible}
               maxRows={subagentRows}
-              onCancel={onCancelSessionList}
+              onCancel={onCancelChildList}
               onFocusStream={onFocusSession}
-              onSelectionChange={onSessionSelectionChange}
-              selectedStreamId={snapshot.selectedSessionId}
+              onKillExecution={onKillExecution}
+              onOpenProcessDetail={onOpenProcessDetail}
+              onSelectionChange={onChildSelectionChange}
+              onViewStream={onViewStream}
+              selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
               activeProcesses={activeProcesses}
-              processOutput={childExecutionPanelTarget.slice?.processOutput}
+              activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
+              processOutput={snapshot.childListTarget.slice?.processOutput}
             />
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>

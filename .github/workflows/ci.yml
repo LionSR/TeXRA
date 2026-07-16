@@ -203,7 +203,7 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
           pnpm --filter @texra-ai/cli validate:tui -- \
             --snapshot-dir "$GITHUB_WORKSPACE/artifacts/tui-frames" \
-            edit-approval subagent-picker hidden-root-approval-tab-return \
+            edit-approval subagent-list-focus-full-frame hidden-root-approval-tab-return \
             orchestrate-launcher orchestrate-agent-submenu \
             orchestrate-delegated-history orchestrate-resume-submenu \
             compact-orchestrate-launcher run-liveness-row
