@@ -16,6 +16,29 @@ import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { withTestRunContext } from '../progressTestUtils';
 
+/**
+ * Fields identical across every `ToolUseRoundServices` fixture below --
+ * only `modelHandler`, `session`, `setting`, and `toolRegistry` vary per
+ * scenario, so those stay inline at each call site.
+ */
+function baseRoundServices(traceLabel: string) {
+  return {
+    checkInterruption: () => false,
+    client: {},
+    config: { agent: 'test-agent', model: 'test-model' },
+    fileService: {
+      createLocation: (filePath: string) => ({ absolutePath: filePath }),
+    },
+    logger: createRunTrace(traceLabel, StreamLogStore.ephemeral('test')).trace,
+    prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
+    run: AgentRunStateSnapshotSchema.parse({}),
+    setAbortController: () => {},
+    streamStatus: new StreamStatusMachine(),
+    userVarChannels: { input: {}, transient: {} },
+    workspace: AgentWorkspaceState.create(),
+  };
+}
+
 describe('ToolUseRoundFlow queued follow-ups', () => {
   it('attaches media from follow-ups queued at round start', async () => {
     const createUserFollowUpMessages = vi.fn(
@@ -28,16 +51,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     const addMediaToUserMessage = vi.fn(async () => []);
 
     const services = {
-      checkInterruption: () => false,
-      client: {},
-      config: { agent: 'test-agent', model: 'test-model' },
-      fileService: {
-        createLocation: (filePath: string) => ({ absolutePath: filePath }),
-      },
-      logger: createRunTrace(
-        'ToolUseRoundFollowUpMedia',
-        StreamLogStore.ephemeral('test'),
-      ).trace,
+      ...baseRoundServices('ToolUseRoundFollowUpMedia'),
       modelHandler: {
         addMediaToUserMessage,
         capabilities: { supportsVision: true },
@@ -45,8 +59,6 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
         createUserFollowUpMessages,
         setOutputStreaming: vi.fn(),
       },
-      prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
-      run: AgentRunStateSnapshotSchema.parse({}),
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp: async () => ({
@@ -60,12 +72,8 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
           synthetic: false,
         }),
       },
-      setAbortController: () => {},
       setting: { temperature: 0, tools: [] },
-      streamStatus: new StreamStatusMachine(),
       toolRegistry: new MapToolRegistry({}),
-      userVarChannels: { input: {}, transient: {} },
-      workspace: AgentWorkspaceState.create(),
     } as unknown as ToolUseRoundServices;
 
     const shared = createShared([]);
@@ -165,16 +173,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     );
 
     const services = {
-      checkInterruption: () => false,
-      client: {},
-      config: { agent: 'test-agent', model: 'test-model' },
-      fileService: {
-        createLocation: (filePath: string) => ({ absolutePath: filePath }),
-      },
-      logger: createRunTrace(
-        'ToolUseRoundBlankToolResult',
-        StreamLogStore.ephemeral('test'),
-      ).trace,
+      ...baseRoundServices('ToolUseRoundBlankToolResult'),
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
@@ -213,14 +212,10 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
         processThinkingBlock: () => null,
         setOutputStreaming: vi.fn(),
       },
-      prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
-      run: AgentRunStateSnapshotSchema.parse({}),
       session: {
         hasQueuedFollowUp: () => false,
       },
-      setAbortController: () => {},
       setting: { temperature: 0, tools: [{ name: 'again' }] },
-      streamStatus: new StreamStatusMachine(),
       toolRegistry: new MapToolRegistry({
         again: {
           call: vi.fn(async () => ({
@@ -230,8 +225,6 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
           definition: { name: 'again' },
         } as never,
       }),
-      userVarChannels: { input: {}, transient: {} },
-      workspace: AgentWorkspaceState.create(),
     } as unknown as ToolUseRoundServices;
 
     return { createResponse, createUserFollowUpMessages, services };
@@ -378,16 +371,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     }));
 
     const services = {
-      checkInterruption: () => false,
-      client: {},
-      config: { agent: 'test-agent', model: 'test-model' },
-      fileService: {
-        createLocation: (filePath: string) => ({ absolutePath: filePath }),
-      },
-      logger: createRunTrace(
-        'ToolUseRoundSystemPrompt',
-        StreamLogStore.ephemeral('test'),
-      ).trace,
+      ...baseRoundServices('ToolUseRoundSystemPrompt'),
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
@@ -414,15 +398,9 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
         requiresPerCallSystemPrompt,
         setOutputStreaming: vi.fn(),
       },
-      prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
-      run: AgentRunStateSnapshotSchema.parse({}),
       session: { hasQueuedFollowUp: () => false },
-      setAbortController: () => {},
       setting: { temperature: 0, tools: [] },
-      streamStatus: new StreamStatusMachine(),
       toolRegistry: new MapToolRegistry({}),
-      userVarChannels: { input: {}, transient: {} },
-      workspace: AgentWorkspaceState.create(),
     } as unknown as ToolUseRoundServices;
 
     return { createResponse, services };
