@@ -4,7 +4,6 @@ import {
   mkdtemp,
   readFile,
   readlink,
-  rm,
   stat,
   unlink,
   writeFile,
@@ -19,6 +18,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 import {
   AbsoluteFS,
   createWorkspaceLocation,
@@ -53,11 +53,7 @@ function installPlatform(
 
 describe('round-dir ownership and editable .tex inheritance', () => {
   afterEach(async () => {
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('snapshots editable .tex on mirror, points r<N>/ symlinks at the snapshot, and the round-output write replaces the symlink with a real file leaving snapshot and workspace untouched', async () => {

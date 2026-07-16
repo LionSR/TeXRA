@@ -1,5 +1,5 @@
 // Node imports
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -12,6 +12,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 
 // Local imports - shared schemas and tools
 import { RUN_OUTCOME, type StreamTabId } from '@shared/schemas';
@@ -272,11 +273,7 @@ describe('createDesktopAgentExecution', () => {
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
     vi.doUnmock('write-file-atomic');
     vi.restoreAllMocks();
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('durably registers a sidecar-only legacy claim before removing its source', async () => {

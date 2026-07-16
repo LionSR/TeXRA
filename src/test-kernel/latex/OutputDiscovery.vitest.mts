@@ -1,10 +1,12 @@
 // Standard library imports
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 
 // `discoverLatestExecutionOutputs` matches a run by agent/model/input and then
 // reads its per-round outputs. Headless `texra run` executions persist those
@@ -78,11 +80,7 @@ describe('discoverLatestExecutionOutputs', () => {
   });
 
   afterEach(async () => {
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('falls back to an on-disk run-dir scan when the stream-tab snapshot is empty', async () => {

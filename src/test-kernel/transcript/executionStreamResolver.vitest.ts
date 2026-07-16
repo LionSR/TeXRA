@@ -1,15 +1,10 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import * as os from 'node:os';
-import * as path from 'node:path';
-
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
 import {
   resolvePersistedStreamIdForExecution,
   StreamLogStore,
@@ -60,21 +55,8 @@ async function waitForCachedStreamId(
 
 const tempDirs: string[] = [];
 
-async function buildResolverPlatform(): Promise<Platform> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-resolver-'));
-  tempDirs.push(tempDir);
-  const workspaceDir = path.join(tempDir, 'workspace');
-  const storageRoot = path.join(tempDir, 'storage');
-  return createFakePlatform(
-    { workspacePath: workspaceDir },
-    {
-      fs: nodeFilesystem,
-      workspace: createNodeWorkspace(() => workspaceDir),
-      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-      globalState: new MemoryStateStore(),
-      workspaceState: new MemoryStateStore(),
-    },
-  );
+function buildResolverPlatform(): Promise<Platform> {
+  return createTempDirPlatform('texra-resolver-', tempDirs);
 }
 
 function taskState(agent: string, model = 'deepseekproT'): TaskState {
@@ -94,11 +76,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('resolves the sole meta-matched stream without needing a data-presence check', async () => {
