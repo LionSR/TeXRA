@@ -7,6 +7,7 @@ import {
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@shared/schemas';
+import { configureDelegatedChildApprovals } from '@tools/approval';
 import { filterNotNullish } from '@utils/core';
 import { deriveExecutionId } from '@utils/core/idHash';
 import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/taskRunStorage';
@@ -59,6 +60,10 @@ export function createWorkflowScriptAgentRunner(
   parent: LaunchRunContext,
   defaultAgentName: string,
   checkpointId: string,
+  hooks?: {
+    /** Fires per live child on success and failure with its total cost. */
+    readonly onCost?: (totalCostUsd: number | undefined) => void;
+  },
 ): WorkflowAgentRunner {
   const { runScope } = parent;
 
@@ -114,6 +119,18 @@ export function createWorkflowScriptAgentRunner(
             signal: invocation.signal,
             approvalPromptsUnavailable: parent.approvalPromptsUnavailable,
             runtimeUnavailableTools: parent.runtimeUnavailableTools,
+            // Live per-kind ancestry, matching LLM delegation: bash and
+            // tool-edit each follow the parent's own bypass; proposal stays
+            // unlinked so a child's own delegations still prompt.
+            onStreamResolved: (resolvedStreamId) => {
+              configureDelegatedChildApprovals(
+                resolvedStreamId,
+                runScope.streamId,
+                'inherit',
+                runScope.session,
+              );
+            },
+            onCost: hooks?.onCost,
           };
         },
       });

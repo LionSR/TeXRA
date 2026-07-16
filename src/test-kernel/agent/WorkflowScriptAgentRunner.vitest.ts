@@ -18,6 +18,11 @@ const mocks = vi.hoisted(() => ({
   resolveChildRunOutput: vi.fn(),
   runStorageLocationFromAnyAbsolutePath: vi.fn(),
   assertWorkflowFilesExist: vi.fn(),
+  configureDelegatedChildApprovals: vi.fn(),
+}));
+
+vi.mock('@tools/approval', () => ({
+  configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
 }));
 
 vi.mock('@tools/delegation/inBandSubagentExecution', () => {
@@ -234,6 +239,40 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect.objectContaining({
         configPayload: expect.objectContaining({ inputFiles: [] }),
       }),
+    );
+  });
+
+  it('links child approval ancestry to the parent stream on resolve', async () => {
+    const runner = defaultRunner();
+
+    await runner(invocation());
+
+    const prepared = mocks.preparedOptions[0] as {
+      onStreamResolved?: (streamId: StreamTabId) => void;
+    };
+    expect(prepared.onStreamResolved).toEqual(expect.any(Function));
+    prepared.onStreamResolved?.('stream:child' as StreamTabId);
+    expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
+      'stream:child',
+      parentStreamId,
+      'inherit',
+      expect.objectContaining({ id: 'session' }),
+    );
+  });
+
+  it('threads onCost through to the child execution', async () => {
+    const onCost = vi.fn();
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      'correct',
+      'tool-call-7',
+      { onCost },
+    );
+
+    await runner(invocation());
+
+    expect(mocks.preparedOptions[0]).toEqual(
+      expect.objectContaining({ onCost }),
     );
   });
 
