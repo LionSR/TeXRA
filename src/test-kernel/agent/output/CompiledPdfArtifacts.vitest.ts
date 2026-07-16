@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent output
 
@@ -40,11 +40,90 @@ describe('compiled PDF artifacts', () => {
   }
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await Promise.all(
       tempDirs
         .splice(0)
         .map((dir) => rm(dir, { recursive: true, force: true })),
     );
+  });
+
+  it('treats a missing compiled PDF as no artifact', async () => {
+    const runDirectory = await makeTempDir();
+
+    await expect(
+      publishCompiledPdfArtifact({
+        runDirectory,
+        executionId: 'missing123',
+        round: 1,
+        displayName: 'missing.tex',
+        source: createExternalLocation(path.join(runDirectory, 'missing.tex')),
+        compiledPdfPath: path.join(runDirectory, 'missing.pdf'),
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('propagates unexpected compiled PDF stat failures', async () => {
+    const runDirectory = await makeTempDir();
+    const statError = Object.assign(new Error('stat denied'), {
+      code: 'EACCES',
+    });
+    vi.spyOn(nodeFilesystem, 'stat').mockRejectedValueOnce(statError);
+
+    await expect(
+      publishCompiledPdfArtifact({
+        runDirectory,
+        executionId: 'stat123',
+        round: 1,
+        displayName: 'paper.tex',
+        source: createExternalLocation(path.join(runDirectory, 'paper.tex')),
+        compiledPdfPath: path.join(runDirectory, 'paper.pdf'),
+      }),
+    ).rejects.toBe(statError);
+  });
+
+  it('continues when destination cleanup reports file not found', async () => {
+    const runDirectory = await makeTempDir();
+    const compiledPdfPath = path.join(runDirectory, 'build', 'paper.pdf');
+    await writePdf(compiledPdfPath, 'pdf bytes');
+    vi.spyOn(nodeFilesystem, 'delete').mockRejectedValue(
+      Object.assign(new Error('destination absent'), { code: 'ENOENT' }),
+    );
+
+    const artifact = await publishCompiledPdfArtifact({
+      runDirectory,
+      executionId: 'delete-missing123',
+      round: 1,
+      displayName: 'paper.tex',
+      source: createExternalLocation(path.join(runDirectory, 'paper.tex')),
+      compiledPdfPath,
+    });
+
+    expect(artifact).not.toBeNull();
+    await expect(readOutput(runDirectory, 'r1', 'paper.pdf')).resolves.toBe(
+      'pdf bytes',
+    );
+  });
+
+  it('propagates unexpected destination cleanup failures', async () => {
+    const runDirectory = await makeTempDir();
+    const compiledPdfPath = path.join(runDirectory, 'build', 'paper.pdf');
+    const deleteError = Object.assign(new Error('delete denied'), {
+      code: 'EACCES',
+    });
+    await writePdf(compiledPdfPath, 'pdf bytes');
+    vi.spyOn(nodeFilesystem, 'delete').mockRejectedValueOnce(deleteError);
+
+    await expect(
+      publishCompiledPdfArtifact({
+        runDirectory,
+        executionId: 'delete123',
+        round: 1,
+        displayName: 'paper.tex',
+        source: createExternalLocation(path.join(runDirectory, 'paper.tex')),
+        compiledPdfPath,
+      }),
+    ).rejects.toBe(deleteError);
   });
 
   it('publishes per-round and latest stable PDF paths', async () => {

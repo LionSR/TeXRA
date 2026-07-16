@@ -9,6 +9,97 @@ import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import { createRecordingHost } from '../agent/progressTestUtils';
 
 describe('AgentCliSessionRegistry', () => {
+  it('logs a rejected session mapping write once without awaiting registration', async () => {
+    const executionId = 'execution-write-failure' as ExecutionId;
+    const writeError = new Error('storage unavailable');
+    const persistSessionId = vi.fn().mockRejectedValueOnce(writeError);
+    const reportPersistenceFailure = vi.fn();
+    const registry = new AgentCliSessionRegistry('test_session_id', {
+      persistSessionId,
+      reportPersistenceFailure,
+    });
+    const executions = new ExecutionRegistry();
+
+    try {
+      expect(
+        registry.register('session-write-failure', {
+          childStreamId: 'child-write-failure' as StreamTabId,
+          executionId,
+          executions,
+        }),
+      ).toBeUndefined();
+
+      await vi.waitFor(() => {
+        expect(reportPersistenceFailure).toHaveBeenCalledOnce();
+      });
+      expect(reportPersistenceFailure).toHaveBeenCalledWith(
+        executionId,
+        writeError,
+      );
+      expect(persistSessionId).toHaveBeenCalledOnce();
+    } finally {
+      registry.release('session-write-failure');
+      executions.dispose();
+    }
+  });
+
+  it('contains a synchronous session mapping write failure', async () => {
+    const executionId = 'execution-sync-write-failure' as ExecutionId;
+    const writeError = new Error('storage unavailable');
+    const persistSessionId = vi.fn(() => {
+      throw writeError;
+    });
+    const reportPersistenceFailure = vi.fn();
+    const registry = new AgentCliSessionRegistry('test_session_id', {
+      persistSessionId,
+      reportPersistenceFailure,
+    });
+    const executions = new ExecutionRegistry();
+
+    expect(
+      registry.register('session-sync-write-failure', {
+        childStreamId: 'child-sync-write-failure' as StreamTabId,
+        executionId,
+        executions,
+      }),
+    ).toBeUndefined();
+
+    await vi.waitFor(() => {
+      expect(reportPersistenceFailure).toHaveBeenCalledWith(
+        executionId,
+        writeError,
+      );
+    });
+    expect(registry.lookup('session-sync-write-failure')).toBeDefined();
+    registry.release('session-sync-write-failure');
+    executions.dispose();
+  });
+
+  it('contains diagnostic failures after a rejected mapping write', async () => {
+    const persistSessionId = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('storage unavailable'));
+    const registry = new AgentCliSessionRegistry('test_session_id', {
+      persistSessionId,
+      reportPersistenceFailure: () => {
+        throw new Error('log sink unavailable');
+      },
+    });
+    const executions = new ExecutionRegistry();
+
+    registry.register('session-log-failure', {
+      childStreamId: 'child-log-failure' as StreamTabId,
+      executionId: 'execution-log-failure' as ExecutionId,
+      executions,
+    });
+
+    await vi.waitFor(() => expect(persistSessionId).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(registry.lookup('session-log-failure')).toBeDefined();
+    registry.release('session-log-failure');
+    executions.dispose();
+  });
+
   it('atomically claims a session id and wakes waiters when it becomes active', async () => {
     const registry = new AgentCliSessionRegistry('test_session_id');
     const executions = new ExecutionRegistry();

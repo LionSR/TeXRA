@@ -26,6 +26,7 @@ import {
 import { checkToolInstalled } from '@utils/system';
 import { getComparablePath } from '@utils/files/taskRunStorage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   publishCompiledPdfArtifact,
@@ -425,18 +426,31 @@ export class LatexDiffManager {
       buildDir,
       `${path.basename(diffLocation.absolutePath).replace(/\.tex$/i, '')}.pdf`,
     );
-    const artifact =
-      executionId && runDirectory
-        ? await publishCompiledPdfArtifact({
-            runDirectory,
-            executionId,
-            round,
-            displayName: path.basename(diffLocation.absolutePath),
-            source: sourceLocation,
-            compiledPdfPath,
-            pdfStemSuffix,
-          })
-        : null;
+    let artifact: CompiledPdfArtifact | null = null;
+    if (executionId && runDirectory) {
+      try {
+        artifact = await publishCompiledPdfArtifact({
+          runDirectory,
+          executionId,
+          round,
+          displayName: path.basename(diffLocation.absolutePath),
+          source: sourceLocation,
+          compiledPdfPath,
+          pdfStemSuffix,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Failed to publish latexdiff PDF: ${toErrorMessage(error)}`,
+          {
+            data: {
+              diffFile: diffLocation.absolutePath,
+              compiledPdfPath,
+              error,
+            },
+          },
+        );
+      }
+    }
 
     return { diffLocation, artifact };
   }
