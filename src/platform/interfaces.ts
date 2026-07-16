@@ -139,8 +139,11 @@ export interface FileSystemProvider {
  * Platform workspace provider interface.
  */
 export interface WorkspaceProvider {
-  /** The workspace root path, or undefined if none is open. */
+  /** The canonical physical workspace root, or undefined if none is open. */
   getWorkspacePath(): string | undefined;
+
+  /** Previous host-specific spellings used only for one-time state migration. */
+  getLegacyWorkspacePaths?(): readonly string[];
 
   /**
    * Convert an absolute path to a workspace-relative path.

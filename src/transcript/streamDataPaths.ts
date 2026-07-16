@@ -21,8 +21,10 @@
 
 import * as path from 'node:path';
 
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+
 /** Root directory (relative to the platform storage root) for per-stream sidecar data. */
-export const STREAM_DATA_DIR = 'streamData';
+export const STREAM_DATA_DIR = WORKSPACE_STORAGE_LAYOUT.streamData;
 
 /**
  * Per-category file keys within a stream's `streamData/{id}/` directory.

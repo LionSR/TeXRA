@@ -14,7 +14,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import {
+  resolveWorkspaceStoragePath,
+  WorkspaceStorageProvider,
+} from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
 import {
@@ -59,6 +62,12 @@ interface DataRootMigrationModule {
   migrateLegacyDesktopDataRoot(
     legacyRoot: string,
     targetRoot: string,
+    logger?: DataRootMigrationLogger,
+  ): Promise<void>;
+  migrateLegacyDesktopWorkspaceBucket(
+    dataRoot: string,
+    legacyWorkspacePath: string | undefined,
+    workspacePath: string | undefined,
     logger?: DataRootMigrationLogger,
   ): Promise<void>;
 }
@@ -399,6 +408,44 @@ describe('desktop platform adapters', () => {
       await expect(pathExists(join(root, 'global-storage'))).resolves.toBe(
         true,
       );
+    });
+
+    it('merges a pre-canonical workspace bucket into the physical-path bucket', async () => {
+      const { migrateLegacyDesktopWorkspaceBucket } =
+        await loadDesktopPlatformModule<DataRootMigrationModule>(
+          'dataRootMigration.ts',
+        );
+      const dataRoot = await makeTempDir('texra-workspace-alias-');
+      const legacyPath = '/workspace/symlink-spelling';
+      const canonicalPath = '/physical/workspace';
+      const legacyBucket = resolveWorkspaceStoragePath(dataRoot, legacyPath);
+      const targetBucket = resolveWorkspaceStoragePath(dataRoot, canonicalPath);
+      const logger = fakeMigrationLogger();
+      await mkdir(join(legacyBucket, 'executions', 'legacy-run'), {
+        recursive: true,
+      });
+      await writeFile(
+        join(legacyBucket, 'executions', 'legacy-run', 'meta.json'),
+        '{}',
+      );
+      await mkdir(join(targetBucket, 'executions', 'current-run'), {
+        recursive: true,
+      });
+
+      await migrateLegacyDesktopWorkspaceBucket(
+        dataRoot,
+        legacyPath,
+        canonicalPath,
+        logger,
+      );
+
+      await expect(
+        pathExists(join(targetBucket, 'executions', 'legacy-run', 'meta.json')),
+      ).resolves.toBe(true);
+      await expect(
+        pathExists(join(targetBucket, 'executions', 'current-run')),
+      ).resolves.toBe(true);
+      expect(logger.warnMessages).toEqual([]);
     });
   });
 

@@ -80,16 +80,11 @@ export function isUserVisibleExecution(
 }
 
 // ============================================================================
-// Cache
+// Legacy migration state
 // ============================================================================
 
-let cache: ExecutionListingEntry[] | null = null;
 let migrated = false;
-let cachedWorkspacePath: string | undefined;
-
-export function invalidateListingCache(): void {
-  cache = null;
-}
+let migratedWorkspacePath: string | undefined;
 
 /**
  * Read a storage directory, returning an empty array if it doesn't exist.
@@ -128,18 +123,17 @@ function listExecutionDirs(
 
 /**
  * List all executions by scanning the executions/ directory.
- * Results are cached until invalidated.
+ *
+ * The storage root is shared by independent CLI, desktop, and extension
+ * processes, so every call scans current disk state. A process-local cache
+ * cannot observe another host's writes or metadata updates reliably.
  */
 export async function listExecutions(): Promise<ExecutionListingEntry[]> {
-  // Invalidate if workspace changed since last cache build
   const currentPath = WorkspaceFS.getPath();
-  if (currentPath !== cachedWorkspacePath) {
-    cache = null;
+  if (currentPath !== migratedWorkspacePath) {
     migrated = false;
-    cachedWorkspacePath = currentPath;
+    migratedWorkspacePath = currentPath;
   }
-
-  if (cache) return cache;
 
   if (!migrated) {
     await migrateIfNeeded();
@@ -204,7 +198,6 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     (item) => item.timestamp,
   );
 
-  cache = listing;
   return listing;
 }
 
@@ -222,7 +215,6 @@ export async function deleteExecution(
   if (!existed) return false;
   try {
     await getExecutionStore(executionId).clear();
-    invalidateListingCache();
     return true;
   } catch (error) {
     if (isFileNotFoundError(error)) return false;
@@ -241,14 +233,10 @@ export async function deleteAllExecutions(
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries, exclude);
 
-  try {
-    await pMap(executionDirs, (id) => getExecutionStore(id).clear(), {
-      concurrency: EXECUTION_STORAGE_CONCURRENCY,
-      stopOnError: false,
-    });
-  } finally {
-    invalidateListingCache();
-  }
+  await pMap(executionDirs, (id) => getExecutionStore(id).clear(), {
+    concurrency: EXECUTION_STORAGE_CONCURRENCY,
+    stopOnError: false,
+  });
   return executionDirs;
 }
 
@@ -286,24 +274,33 @@ async function migrateIndexJson(): Promise<void> {
 
 /** Migrate entries from workspace state into per-execution KV. */
 async function migrateWorkspaceState(): Promise<void> {
-  const storageKey = getWorkspaceStorageKey();
-  const legacy = platform().workspaceState.get<unknown[]>(storageKey, []);
-  if (!Array.isArray(legacy) || legacy.length === 0) return;
+  const workspace = platform().workspace;
+  const paths = [
+    workspace.getWorkspacePath(),
+    ...(workspace.getLegacyWorkspacePaths?.() ?? []),
+  ];
+  const storageKeys = [
+    ...new Set(paths.map((path) => getWorkspaceStorageKey(path))),
+  ];
 
-  await backfillEntries(legacy);
+  for (const storageKey of storageKeys) {
+    const legacy = platform().workspaceState.get<unknown[]>(storageKey, []);
+    if (!Array.isArray(legacy) || legacy.length === 0) continue;
 
-  try {
-    await platform().workspaceState.update(storageKey, []);
-  } catch (error) {
-    logger.warn(
-      CHANNEL,
-      `Failed to clear workspace state key: ${toErrorMessage(error)}`,
-    );
+    await backfillEntries(legacy);
+
+    try {
+      await platform().workspaceState.update(storageKey, []);
+    } catch (error) {
+      logger.warn(
+        CHANNEL,
+        `Failed to clear workspace state key: ${toErrorMessage(error)}`,
+      );
+    }
   }
 }
 
-function getWorkspaceStorageKey(): string {
-  const workspacePath = WorkspaceFS.getPath();
+function getWorkspaceStorageKey(workspacePath: string | undefined): string {
   return workspacePath
     ? `${LEGACY_HISTORY_KEY}.${workspacePath}`
     : LEGACY_HISTORY_KEY;
