@@ -455,7 +455,12 @@ describe('CLI child execution controls', () => {
       ]),
     });
 
-    const [item] = buildChildControlItems('root', entries, streams, 'subagents');
+    const [item] = buildChildControlItems(
+      'root',
+      entries,
+      streams,
+      'subagents',
+    );
     expect(item?.description).toBe(
       `running · 3s · Review the introduction for clarity and tone. ${'x'.repeat(53)}…`,
     );
