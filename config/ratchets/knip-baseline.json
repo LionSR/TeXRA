@@ -1,6 +1,1175 @@
 {
-  "unusedFiles": 2,
-  "unusedExports": 385,
-  "unusedTypes": 299,
-  "duplicateExports": 3
+  "semantics": "Per-symbol baseline of knip dead-code findings (files/exports/types/duplicate-export groups), each identified by (file, category, name) -- never by line number, so unrelated edits that shift lines never spuriously mark a baseline entry as fixed. The ratchet (scripts/check-dead-code-ratchet.mjs) fails only when the current knip run contains a finding not in this list. Removing entries here is always welcome (it means the dead code was cleaned up); a genuinely new unused file/export/type must either be deleted or, if intentionally kept, added here in the same PR. Regenerate by piping `knip --reporter json` through extractFindings() and sorting with compareFindings(); do not hand-edit into disorder.",
+  "findings": [
+    {
+      "file": "packages/cli/src/chat/tui/panes/transcriptEntries.ts",
+      "category": "exports",
+      "name": "nextRenderableTranscriptEntry"
+    },
+    {
+      "file": "packages/cli/src/commands/_helpers/globalArgs.ts",
+      "category": "duplicates",
+      "name": "AGENT_RUN_GLOBAL_ARGS,ROOT_ROUTING_ARGS"
+    },
+    {
+      "file": "packages/desktop/src/desktopCommandSurface.ts",
+      "category": "exports",
+      "name": "DESKTOP_COMMAND_IDS"
+    },
+    {
+      "file": "packages/desktop/src/desktopDiffMessages.ts",
+      "category": "exports",
+      "name": "DESKTOP_DIFF_COMMANDS"
+    },
+    {
+      "file": "packages/desktop/src/desktopLogMessages.ts",
+      "category": "exports",
+      "name": "DesktopLogSnapshotSchema"
+    },
+    {
+      "file": "packages/desktop/src/desktopPdfMessages.ts",
+      "category": "exports",
+      "name": "DESKTOP_PDF_COMMANDS"
+    },
+    {
+      "file": "packages/desktop/src/desktopPromptMessages.ts",
+      "category": "exports",
+      "name": "DESKTOP_PROMPT_COMMANDS"
+    },
+    {
+      "file": "packages/desktop/src/desktopShellMessages.ts",
+      "category": "exports",
+      "name": "DesktopRouteSchema"
+    },
+    {
+      "file": "packages/desktop/src/main/desktopAppLog.ts",
+      "category": "exports",
+      "name": "getDesktopLogFilePath"
+    },
+    {
+      "file": "packages/desktop/src/main/desktopCrashReporting.ts",
+      "category": "exports",
+      "name": "createDesktopCrashEventScrubber"
+    },
+    {
+      "file": "packages/desktop/src/main/desktopCrashReporting.ts",
+      "category": "exports",
+      "name": "scrubDesktopCrashEvent"
+    },
+    {
+      "file": "packages/desktop/src/main/desktopNavigationPolicy.ts",
+      "category": "exports",
+      "name": "isAllowedExternalUrl"
+    },
+    {
+      "file": "packages/desktop/src/main/desktopSetupTerminal.ts",
+      "category": "exports",
+      "name": "buildMacTerminalCommand"
+    },
+    {
+      "file": "packages/desktop/src/main/desktopUpdateChecker.ts",
+      "category": "exports",
+      "name": "fetchLatestDesktopRelease"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
+      "category": "exports",
+      "name": "__resetKeychainStateForTests"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
+      "category": "exports",
+      "name": "getSecretStorageMode"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
+      "category": "exports",
+      "name": "KEYCHAIN_DENIED_WARNING_MESSAGE"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
+      "category": "exports",
+      "name": "LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/secretStorageWarningDialog.ts",
+      "category": "exports",
+      "name": "getSecretStorageWarningParentWindow"
+    },
+    {
+      "file": "packages/desktop/src/preload/hostBridge.ts",
+      "category": "exports",
+      "name": "createElectronHostBridge"
+    },
+    {
+      "file": "packages/desktop/src/preload/hostBridge.ts",
+      "category": "exports",
+      "name": "ELECTRON_WEBVIEW_MESSAGE_CHANNEL"
+    },
+    {
+      "file": "packages/desktop/src/preload/hostBridge.ts",
+      "category": "exports",
+      "name": "ELECTRON_WEBVIEW_PUSH_CHANNEL"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "executeFileCommand"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "executeProjectCommand"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "fetchDiagnosticsForFile"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "getGoalState"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "getHoverInfo"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "getTermGoal"
+    },
+    {
+      "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
+      "category": "exports",
+      "name": "navigateToFirstError"
+    },
+    {
+      "file": "packages/extension/src/frontend/ui/errorHandlingUtils.ts",
+      "category": "exports",
+      "name": "isFileNotFoundError"
+    },
+    {
+      "file": "packages/trace-viewer/vite.standalone.config.ts",
+      "category": "files",
+      "name": "packages/trace-viewer/vite.standalone.config.ts"
+    },
+    {
+      "file": "src/agent/core/definition/AgentConfig.ts",
+      "category": "types",
+      "name": "ToolUseAgentConfig"
+    },
+    {
+      "file": "src/agent/core/definition/AgentConfig.ts",
+      "category": "types",
+      "name": "WorkflowAgentConfig"
+    },
+    {
+      "file": "src/agent/runtime/modelHandlerCompatibilityKey.ts",
+      "category": "exports",
+      "name": "MODEL_HANDLER_COMPATIBILITY_KEYS"
+    },
+    {
+      "file": "src/agent/runtime/streamApprovalQueue.ts",
+      "category": "types",
+      "name": "BypassAncestryKind"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "ChildActivityEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "ContextStateEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "ConversationProgressEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "DomainEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "ProcessOutputEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "RunConfigEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "RunFactEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "RunStartEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "StageEndEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "StageStamp"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "StreamChunkEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "StreamEndEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "StreamStartEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "ToolEndEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "ToolStartEvent"
+    },
+    {
+      "file": "src/agent/trace/events.ts",
+      "category": "types",
+      "name": "UsageEvent"
+    },
+    {
+      "file": "src/agent/trace/index.ts",
+      "category": "types",
+      "name": "ChannelSubscriberOptions"
+    },
+    {
+      "file": "src/agent/trace/index.ts",
+      "category": "types",
+      "name": "LogEvent"
+    },
+    {
+      "file": "src/controllers/progressView/backend/restartRepair.ts",
+      "category": "exports",
+      "name": "RESTART_REPAIR_PHASES"
+    },
+    {
+      "file": "src/controllers/progressView/ProgressViewHost.ts",
+      "category": "types",
+      "name": "ProgressViewHostCommandOptions"
+    },
+    {
+      "file": "src/controllers/settingsView/LatexToolingController.ts",
+      "category": "exports",
+      "name": "isAllowedLatexInstallCommand"
+    },
+    {
+      "file": "src/controllers/settingsView/SettingsAgentCatalogController.ts",
+      "category": "exports",
+      "name": "enabledKeysIncludeAgent"
+    },
+    {
+      "file": "src/platform/languageModel.ts",
+      "category": "types",
+      "name": "LanguageModelSelector"
+    },
+    {
+      "file": "src/shared/constants/agents.ts",
+      "category": "exports",
+      "name": "REMOTE_ORCHESTRATOR_AGENT_NAMES"
+    },
+    {
+      "file": "src/shared/schemas/agent.ts",
+      "category": "duplicates",
+      "name": "AgentSource,AgentSourceSchema"
+    },
+    {
+      "file": "src/shared/schemas/agentRoster.ts",
+      "category": "exports",
+      "name": "AgentRosterCategorySelectionSchema"
+    },
+    {
+      "file": "src/shared/schemas/commonViewMessages.ts",
+      "category": "exports",
+      "name": "ErrorMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/commonViewMessages.ts",
+      "category": "exports",
+      "name": "SetDebugModeMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/commonViewMessages.ts",
+      "category": "exports",
+      "name": "StateRestoreMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/commonViewMessages.ts",
+      "category": "exports",
+      "name": "SwitchViewTargetSchema"
+    },
+    {
+      "file": "src/shared/schemas/contextManagement.ts",
+      "category": "exports",
+      "name": "ContextManagementAction"
+    },
+    {
+      "file": "src/shared/schemas/coreSettings.ts",
+      "category": "exports",
+      "name": "CoreSettingsSchema"
+    },
+    {
+      "file": "src/shared/schemas/coreSettings.ts",
+      "category": "exports",
+      "name": "NON_REGEX_REPLACEMENT_CATEGORIES"
+    },
+    {
+      "file": "src/shared/schemas/coreSettings.ts",
+      "category": "exports",
+      "name": "REGEX_REPLACEMENT_CATEGORIES"
+    },
+    {
+      "file": "src/shared/schemas/coreSettings.ts",
+      "category": "types",
+      "name": "CoreSettingPath"
+    },
+    {
+      "file": "src/shared/schemas/diffResult.ts",
+      "category": "exports",
+      "name": "DiffResultSchema"
+    },
+    {
+      "file": "src/shared/schemas/diffResult.ts",
+      "category": "exports",
+      "name": "DiffStatusSchema"
+    },
+    {
+      "file": "src/shared/schemas/errors.ts",
+      "category": "exports",
+      "name": "ErrorContextSchema"
+    },
+    {
+      "file": "src/shared/schemas/errors.ts",
+      "category": "exports",
+      "name": "StreamDiagnosticsSchema"
+    },
+    {
+      "file": "src/shared/schemas/goal.ts",
+      "category": "duplicates",
+      "name": "goalDurationMs,goalElapsedMs"
+    },
+    {
+      "file": "src/shared/schemas/historyViewMessages.ts",
+      "category": "exports",
+      "name": "HistoryIdMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/historyViewMessages.ts",
+      "category": "exports",
+      "name": "HistoryItemSchema"
+    },
+    {
+      "file": "src/shared/schemas/log.ts",
+      "category": "exports",
+      "name": "LogLevelSchema"
+    },
+    {
+      "file": "src/shared/schemas/log.ts",
+      "category": "exports",
+      "name": "MessageTypeSchema"
+    },
+    {
+      "file": "src/shared/schemas/log.ts",
+      "category": "exports",
+      "name": "StreamLogEntryTypeSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/executeMessage.ts",
+      "category": "exports",
+      "name": "MainViewExecuteSessionSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/executeMessage.ts",
+      "category": "types",
+      "name": "MainViewExecuteSession"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "exports",
+      "name": "AcceptEditedMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "exports",
+      "name": "CompareMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "exports",
+      "name": "LatexdiffMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "exports",
+      "name": "LatexdiffvcMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "exports",
+      "name": "MergeMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "exports",
+      "name": "OpenAgentDirectoryMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "exports",
+      "name": "OpenAgentSettingsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "exports",
+      "name": "PackLatexdiffvcMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "exports",
+      "name": "PackMultipleMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "exports",
+      "name": "RequestRecentCommitsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/inbound.ts",
+      "category": "types",
+      "name": "AcceptEditedMessage"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "AddMediaFileMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "EditedFileSelectedMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "InstructionTextPolishedMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "InstructionTextPolishErrorMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "InstructionTextTranscribedMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetAgentOptionsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetBaseFileMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetContextFilesMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetCurrentFileMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetEditedFileMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetInputFilesMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetMediaFilesMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetModelOptionsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetOnboardingFunnelMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetOpenedFilesMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetOutputFilesMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetRecentCommitsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetSelectedAgentMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "SetSelectedCommitMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "ShowAgentConfigBannerMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "ShowApiKeyBannerMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "ShowDependencyBannerMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "ShowGettingStartedBannerMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "ShowLoginBannerMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/outbound.ts",
+      "category": "exports",
+      "name": "ShowOrchestratorBannerMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/mainView/state.ts",
+      "category": "types",
+      "name": "StringValueDetail"
+    },
+    {
+      "file": "src/shared/schemas/memoryViewMessages.ts",
+      "category": "exports",
+      "name": "MemoryDeleteMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/memoryViewMessages.ts",
+      "category": "exports",
+      "name": "MemoryEnabledMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/memoryViewMessages.ts",
+      "category": "exports",
+      "name": "MemoryPathMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/output.ts",
+      "category": "exports",
+      "name": "ExternalFileLocationSchema"
+    },
+    {
+      "file": "src/shared/schemas/output.ts",
+      "category": "exports",
+      "name": "FileLineageSchema"
+    },
+    {
+      "file": "src/shared/schemas/output.ts",
+      "category": "exports",
+      "name": "OutputFileSchema"
+    },
+    {
+      "file": "src/shared/schemas/output.ts",
+      "category": "exports",
+      "name": "RunStorageFileLocationSchema"
+    },
+    {
+      "file": "src/shared/schemas/output.ts",
+      "category": "exports",
+      "name": "WorkspaceFileLocationSchema"
+    },
+    {
+      "file": "src/shared/schemas/plan.ts",
+      "category": "exports",
+      "name": "UpdatePlanPayloadSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "LogDeltaMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "ProgressDeleteAllMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "ProgressDeleteStreamMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "ProgressSetThemeMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "SetActiveStreamMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "SetFollowupOptionsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "SetPlacementMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "SyncInquiryThreadsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateBypassMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateCompileFailuresMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateConversationProgressMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateFilesMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateFollowUpTextMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateInquiryThreadMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateMissingOutputsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateParentStreamMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdatePermissionMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdatePlanMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateProcessOutputMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateQueuedFollowUpsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateRecordingMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateRoundStageMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateRunUsageMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateStreamBadgesMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateStreamDescriptionMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateStreamMetadataMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateStreamsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateStreamStatusMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/progressView/outbound.ts",
+      "category": "exports",
+      "name": "UpdateTodosMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/runDescriptor.ts",
+      "category": "exports",
+      "name": "RunConfigReferenceSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "AgentSelectionItemSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "ChatGptAuthStatusSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "LatexdiffMathMarkupSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "LatexFormatterSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "LatexSettingsStatusSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "ModelSelectionItemSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "PRSubscriptionEntrySchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "PRSubscriptionOwnerSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "SetTabMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "SettingsViewOutboundMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "SetUnsupportedCommandsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "ToolCategorySchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "ToolDashboardItemSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "ToolInfoSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "ToolStatusSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateAgentModePresetsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateAgentSelectionMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateApprovalSettingsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateChatGptAuthStatusMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateCustomAgentDirMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateDesktopCrashReportingMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateGitAuthorSettingsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateGitHubTokenStatusMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateGoalListMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateInlineCriticismEnabledMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateLatexConfigValuesMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateLatexSettingsStatusMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateModelSelectionMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdatePRSubscriptionsMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateSuperYoloEnabledMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "UpdateToolDashboardMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "types",
+      "name": "SettingsViewOutboundMessage"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "types",
+      "name": "SetUnsupportedCommandsMessage"
+    },
+    {
+      "file": "src/shared/schemas/stream.ts",
+      "category": "exports",
+      "name": "StreamTabInfoBaseSchema"
+    },
+    {
+      "file": "src/shared/schemas/stream.ts",
+      "category": "exports",
+      "name": "WorktreeCIStateSchema"
+    },
+    {
+      "file": "src/shared/schemas/stream.ts",
+      "category": "exports",
+      "name": "WorktreeInfoSchema"
+    },
+    {
+      "file": "src/shared/schemas/stream.ts",
+      "category": "exports",
+      "name": "WorktreePRInfoSchema"
+    },
+    {
+      "file": "src/shared/schemas/stream.ts",
+      "category": "exports",
+      "name": "WorktreePRStateSchema"
+    },
+    {
+      "file": "src/shared/schemas/subagentProgress.ts",
+      "category": "types",
+      "name": "OverviewProgressUpdate"
+    },
+    {
+      "file": "src/shared/schemas/subagentProgress.ts",
+      "category": "types",
+      "name": "PlanProgressUpdate"
+    },
+    {
+      "file": "src/shared/schemas/subagentProgress.ts",
+      "category": "types",
+      "name": "StartedProgressUpdate"
+    },
+    {
+      "file": "src/shared/schemas/subagentProgress.ts",
+      "category": "types",
+      "name": "TodoProgressUpdate"
+    },
+    {
+      "file": "src/shared/schemas/taskGroup.ts",
+      "category": "exports",
+      "name": "StageKindSchema"
+    },
+    {
+      "file": "src/shared/schemas/taskGroup.ts",
+      "category": "types",
+      "name": "GroupLogPayload"
+    },
+    {
+      "file": "src/shared/schemas/taskGroup.ts",
+      "category": "types",
+      "name": "StageKind"
+    },
+    {
+      "file": "src/shared/schemas/todo.ts",
+      "category": "exports",
+      "name": "TodoStatusSchema"
+    },
+    {
+      "file": "src/shared/schemas/todo.ts",
+      "category": "exports",
+      "name": "UpdateTodosPayloadSchema"
+    },
+    {
+      "file": "src/shared/schemas/toolResult.ts",
+      "category": "exports",
+      "name": "EditedFileRecordSchema"
+    },
+    {
+      "file": "src/shared/schemas/toolResult.ts",
+      "category": "exports",
+      "name": "EditRecordSchema"
+    },
+    {
+      "file": "src/shared/schemas/toolResult.ts",
+      "category": "exports",
+      "name": "ErrorToolResultSchema"
+    },
+    {
+      "file": "src/shared/schemas/toolResult.ts",
+      "category": "exports",
+      "name": "ExecutedToolResultSchema"
+    },
+    {
+      "file": "src/shared/schemas/toolResult.ts",
+      "category": "exports",
+      "name": "FileReferenceSchema"
+    },
+    {
+      "file": "src/shared/tools/toolKind.ts",
+      "category": "exports",
+      "name": "TOOL_DISPLAY_KIND"
+    },
+    {
+      "file": "src/telemetry/UsageLogService.ts",
+      "category": "types",
+      "name": "UsageLogFlushOutcome"
+    },
+    {
+      "file": "src/test-kernel/support/setupFakePlatform.ts",
+      "category": "files",
+      "name": "src/test-kernel/support/setupFakePlatform.ts"
+    },
+    {
+      "file": "src/tools/approval/index.ts",
+      "category": "types",
+      "name": "BashApprovalRequest"
+    },
+    {
+      "file": "src/tools/approval/index.ts",
+      "category": "types",
+      "name": "BashApprovalResult"
+    },
+    {
+      "file": "src/tools/approval/index.ts",
+      "category": "types",
+      "name": "WriteApprovedContentResult"
+    },
+    {
+      "file": "src/tools/approval/toolEditApproval.ts",
+      "category": "types",
+      "name": "ApprovedEditContent"
+    },
+    {
+      "file": "src/tools/github/checkRunsClient.ts",
+      "category": "types",
+      "name": "CheckRunsCachePage"
+    },
+    {
+      "file": "src/tools/goal/goalStore.ts",
+      "category": "types",
+      "name": "GoalStateChange"
+    },
+    {
+      "file": "src/tools/goal/index.ts",
+      "category": "types",
+      "name": "GoalStateChange"
+    },
+    {
+      "file": "src/tools/goal/index.ts",
+      "category": "types",
+      "name": "GoalStateChangeListener"
+    },
+    {
+      "file": "src/tools/lean/lspTypes.ts",
+      "category": "types",
+      "name": "LspMarkedString"
+    },
+    {
+      "file": "src/tools/lean/lspTypes.ts",
+      "category": "types",
+      "name": "LspMarkupContent"
+    },
+    {
+      "file": "src/tools/lean/lspTypes.ts",
+      "category": "types",
+      "name": "LspPosition"
+    },
+    {
+      "file": "src/tools/lean/lspTypes.ts",
+      "category": "types",
+      "name": "LspRange"
+    },
+    {
+      "file": "src/tools/setup/platform.ts",
+      "category": "types",
+      "name": "SetupAuthAdapter"
+    },
+    {
+      "file": "src/tools/setup/platform.ts",
+      "category": "types",
+      "name": "SetupCommandAdapter"
+    },
+    {
+      "file": "src/tools/setup/platform.ts",
+      "category": "types",
+      "name": "SetupConfigAdapter"
+    },
+    {
+      "file": "src/tools/setup/platform.ts",
+      "category": "types",
+      "name": "SetupExtensionAdapter"
+    },
+    {
+      "file": "src/tools/setup/platform.ts",
+      "category": "types",
+      "name": "SetupSecretsAdapter"
+    },
+    {
+      "file": "src/tools/setup/platform.ts",
+      "category": "types",
+      "name": "SetupTerminalAdapter"
+    },
+    {
+      "file": "src/transcript/index.ts",
+      "category": "exports",
+      "name": "unregisterFlushers"
+    },
+    {
+      "file": "src/transcript/index.ts",
+      "category": "types",
+      "name": "StreamLogStoreMode"
+    },
+    {
+      "file": "src/utils/files/taskRunStorage.ts",
+      "category": "types",
+      "name": "RunStorageEntryInspection"
+    }
+  ]
 }

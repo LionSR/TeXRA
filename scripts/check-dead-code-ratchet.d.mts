@@ -1,14 +1,14 @@
-export interface KnipCounts {
-  unusedFiles: number;
-  unusedExports: number;
-  unusedTypes: number;
-  duplicateExports: number;
+export type FindingCategory = 'files' | 'exports' | 'types' | 'duplicates';
+
+export interface KnipFinding {
+  file: string;
+  category: FindingCategory;
+  name: string;
 }
 
-export interface RatchetViolation {
-  metric: keyof KnipCounts;
-  currentCount: number;
-  baselineCount: number;
+export interface FindingsDiff {
+  newFindings: KnipFinding[];
+  resolvedFindings: KnipFinding[];
 }
 
 export interface KnipIssue {
@@ -19,11 +19,21 @@ export interface KnipIssue {
   duplicates?: readonly unknown[];
 }
 
-export function summarizeKnipIssues(issues: readonly KnipIssue[]): KnipCounts;
+export function extractFindings(issues: readonly KnipIssue[]): KnipFinding[];
 
-export function findRatchetViolations(
-  current: KnipCounts,
-  baseline: KnipCounts,
-): RatchetViolation[];
+export function findingKey(finding: KnipFinding): string;
+
+export function compareFindings(a: KnipFinding, b: KnipFinding): number;
+
+export function diffFindings(
+  current: readonly KnipFinding[],
+  baseline: readonly KnipFinding[],
+): FindingsDiff;
+
+export function countByCategory(
+  findings: readonly KnipFinding[],
+): Record<FindingCategory, number>;
 
 export function parseKnipIssues(stdout: string, stderr: string): KnipIssue[];
+
+export function readBaseline(rawJson: string): KnipFinding[];
