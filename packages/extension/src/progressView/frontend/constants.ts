@@ -6,7 +6,6 @@ import type { AgentCategoryFilter } from '@shared/schemas';
  */
 export const ELEMENT_IDS = {
   LOG_CONTENT: 'logContent',
-  LOG_PLACEHOLDER: 'logPlaceholder',
   GENERATED_FILES: 'generatedFiles',
   GENERATED_FILES_COLLAPSIBLE: 'generatedFilesCollapsible',
   STREAM_TABS: 'streamTabs',
