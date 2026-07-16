@@ -52,3 +52,13 @@ export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
       return route satisfies never;
   }
 }
+
+/** Sentence-fragment form derived from the canonical access label. */
+export function formatCliModelAccessRouteInline(
+  route: CliModelAccessRoute,
+): string {
+  const label = formatCliModelAccessRoute(route);
+  return route === 'chatgpt'
+    ? label
+    : label.charAt(0).toLowerCase() + label.slice(1);
+}

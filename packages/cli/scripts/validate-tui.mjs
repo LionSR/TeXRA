@@ -485,7 +485,7 @@ const SCENARIOS = [
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
-      'Model · included TeXRA access',
+      'Model · Included TeXRA access',
       'Model for the first message.',
       'Sonnet 4.6 (Thinking) — included: available',
       'GPT-5.4 — included: available',
@@ -507,7 +507,7 @@ const SCENARIOS = [
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
-      'Model · personal API keys',
+      'Model · Personal API keys',
       'Model for the first message.',
       'DeepSeek V4 Flash — api: api key set',
       'Esc back',
@@ -532,7 +532,7 @@ const SCENARIOS = [
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
-      'Model · personal API keys',
+      'Model · Personal API keys',
       'Model for the first message.',
       'DeepSeek V4 Flash — api: api key set',
       'Esc back',
@@ -560,7 +560,7 @@ const SCENARIOS = [
       'Help',
       'Esc exit',
     ],
-    unexpect: ['Model · personal API keys', 'DeepSeek V4 Flash'],
+    unexpect: ['Model · Personal API keys', 'DeepSeek V4 Flash'],
   },
   {
     name: 'slash-palette',
@@ -720,7 +720,7 @@ const SCENARIOS = [
     },
     keys: ['/', `${NAK}/model\r`],
     frame: 'viewport',
-    expect: ['/model · personal API keys', 'Available models'],
+    expect: ['/model · Personal API keys', 'Available models'],
     unexpect: ['/\u0015/model', '/model - error'],
   },
   {
@@ -868,7 +868,7 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · personal API keys',
+      '/model · Personal API keys',
       'Available models. Finish the active response before switching models.',
       'Enter close',
     ],
@@ -889,7 +889,7 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · personal API keys',
+      '/model · Personal API keys',
       'Available models. Finish the active response before switching models.',
       'Enter close',
     ],
@@ -907,7 +907,7 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · personal API keys',
+      '/model · Personal API keys',
       'Choose the model for future turns.',
       '1-9/a-z',
       'select',
@@ -933,7 +933,7 @@ const SCENARIOS = [
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
-      '/model · personal API keys',
+      '/model · Personal API keys',
       'Choose the model for future turns.',
       'Sonnet 4.6',
       'different conversation format',
@@ -991,7 +991,7 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · included TeXRA access',
+      '/model · Included TeXRA access',
       'No model choices in this API mode.',
       'No included TeXRA models are runnable.',
       'Switch with /api personal or try',
@@ -1194,7 +1194,7 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      '/model · personal API keys',
+      '/model · Personal API keys',
       'Available models',
       '+1 more',
       '↑/↓ navigate',

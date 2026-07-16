@@ -8,6 +8,7 @@ import {
 } from '@cli/runtime/modelAccessSelection';
 import {
   formatCliModelAccessRoute,
+  formatCliModelAccessRouteInline,
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
@@ -91,6 +92,15 @@ describe('CLI model access routes', () => {
     expect(formatCliModelAccessRoute('chatgpt')).toBe('ChatGPT subscription');
     expect(formatCliModelAccessRoute('included')).toBe('Included TeXRA access');
     expect(formatCliModelAccessRoute('personal')).toBe('Personal API keys');
+    expect(formatCliModelAccessRouteInline('chatgpt')).toBe(
+      'ChatGPT subscription',
+    );
+    expect(formatCliModelAccessRouteInline('included')).toBe(
+      'included TeXRA access',
+    );
+    expect(formatCliModelAccessRouteInline('personal')).toBe(
+      'personal API keys',
+    );
     expect(shortCliModelAccessRoute('chatgpt')).toBe('subscription');
   });
 

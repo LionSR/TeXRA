@@ -7,7 +7,6 @@ import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { wrapAnsiToWidth } from '../chat/tui/render/ansiWrap';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { computeSelectWindowSize } from '../chat/tui/forms/_shared/selectWindow';
-import { formatCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import {
   buildModelAccessItems,
   isCliOrchestrationModelPickAction,
@@ -16,10 +15,12 @@ import {
   type CliOrchestrationItem,
   type CliOrchestrationModelPickAction,
 } from '../runtime/orchestration';
-import type {
-  CliModelAccessRoute,
-  CliModelAccessStatus,
+import {
+  formatCliModelAccessRoute,
+  type CliModelAccessRoute,
+  type CliModelAccessStatus,
 } from '../runtime/modelAccessRoute';
+import type { CliApiMode } from '../runtime/apiAccessMode';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
 export interface OrchestrationAppProps {
@@ -288,7 +289,7 @@ export function OrchestrationApp(
             ? ['Account', 'Sign in, change account, or sign out.']
             : pending
               ? [
-                  `${modelStepTitle} · ${formatCliApiMode(props.apiMode)}`,
+                  `${modelStepTitle} · ${formatCliModelAccessRoute(props.apiMode)}`,
                   modelStepSubtitle,
                 ]
               : [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
@@ -476,7 +477,7 @@ export function OrchestrationApp(
         <Text bold color="cyan">
           {modelStepTitle}
           {' · '}
-          <Text dimColor>{formatCliApiMode(props.apiMode)}</Text>
+          <Text dimColor>{formatCliModelAccessRoute(props.apiMode)}</Text>
         </Text>
         <Text dimColor>{modelStepSubtitle}</Text>
         <Box marginTop={1}>

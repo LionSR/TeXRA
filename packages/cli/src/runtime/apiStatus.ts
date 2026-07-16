@@ -4,11 +4,8 @@ import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatPercent } from '@utils/text/stringUtils';
 
-import {
-  formatCliApiMode,
-  getCliApiMode,
-  type CliApiMode,
-} from './apiAccessMode';
+import { getCliApiMode, type CliApiMode } from './apiAccessMode';
+import { formatCliModelAccessRouteInline } from './modelAccessRoute';
 import { fetchRelayUsageSummary, type RelayUsageSummary } from './relayUsage';
 import {
   getCliAuthProfile,
@@ -97,7 +94,7 @@ export async function loadCliApiStatusLines(
   const mode = options.apiMode ?? getCliApiMode();
   const profile = await getCliAuthProfile();
   const lines = [
-    `api: ${formatCliApiMode(mode)}`,
+    `api: ${formatCliModelAccessRouteInline(mode)}`,
     formatCliAuthStatusLine(profile),
   ];
   const configuredPersonalKeyProviders =
