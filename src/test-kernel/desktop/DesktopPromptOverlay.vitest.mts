@@ -16,7 +16,6 @@ interface DesktopPromptOverlay {
     prompt: string;
     password: boolean;
   }): void;
-  cancel(): void;
 }
 
 interface DesktopPromptOverlayModule {
@@ -102,8 +101,11 @@ describe('desktop prompt overlay', () => {
       prompt: 'Second value',
       password: false,
     });
-    overlay.cancel();
-    overlay.cancel();
+    const cancelButton = appRoot.querySelector<HTMLButtonElement>(
+      'wa-button.desktop-prompt-cancel',
+    )!;
+    cancelButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    cancelButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushDialogTicks();
 
     expect(send.mock.calls).toEqual([

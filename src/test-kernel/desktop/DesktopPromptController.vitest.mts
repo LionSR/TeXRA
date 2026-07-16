@@ -82,7 +82,7 @@ describe('DesktopPromptController', () => {
       value: null,
     };
     expect(controller.handleMessage(cancellation)).toBe(true);
-    expect(controller.handleMessage(cancellation)).toBe(true);
+    expect(controller.handleMessage(cancellation)).toBe(false);
     await Promise.resolve();
 
     expect(resolution).toHaveBeenCalledOnce();

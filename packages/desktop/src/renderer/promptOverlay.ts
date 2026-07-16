@@ -17,7 +17,6 @@ import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js'
 
 export interface DesktopPromptOverlay {
   open(message: DesktopShowPromptMessage): void;
-  cancel(): void;
 }
 
 /** Renders correlated text and password prompts in the desktop renderer. */
@@ -85,7 +84,7 @@ export function createDesktopPromptOverlay(
   input.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' || event.isComposing) return;
     event.preventDefault();
-    settle(input.value ?? '');
+    form.requestSubmit();
   });
   cancelButton.addEventListener('click', () => settle(null));
   dialog.addEventListener('wa-hide', () => settle(null));
@@ -105,9 +104,5 @@ export function createDesktopPromptOverlay(
     });
   }
 
-  function cancel(): void {
-    settle(null);
-  }
-
-  return { open, cancel };
+  return { open };
 }

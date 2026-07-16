@@ -53,8 +53,7 @@ export class DesktopPromptController implements DesktopPromptIpc {
   handleMessage(message: DesktopCommandMessage): boolean {
     const parsed = DesktopSettlePromptMessageSchema.safeParse(message);
     if (!parsed.success) return false;
-    this.settle(parsed.data.requestId, parsed.data.value ?? undefined);
-    return true;
+    return this.settle(parsed.data.requestId, parsed.data.value ?? undefined);
   }
 
   dispose(): void {
@@ -63,10 +62,11 @@ export class DesktopPromptController implements DesktopPromptIpc {
     }
   }
 
-  private settle(requestId: string, value: string | undefined): void {
+  private settle(requestId: string, value: string | undefined): boolean {
     const pending = this.pending.get(requestId);
-    if (!pending) return;
+    if (!pending) return false;
     this.pending.delete(requestId);
     pending.resolve(value);
+    return true;
   }
 }
