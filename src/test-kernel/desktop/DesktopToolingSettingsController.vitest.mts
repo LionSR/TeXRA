@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - settings controllers
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import { FakeStateStore } from '@test/support/FakePlatform';
+import { isStored } from '@test/support/settingsStoresFake';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 
 // Local imports - shared settings
@@ -18,25 +20,22 @@ import { assertSupported } from '@shared/utils/dispatcher';
 // Local imports - supporting types
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
-import type { StateStore } from '@platform/interfaces';
 
-class MemoryStateStore implements StateStore {
-  readonly values = new Map<string, unknown>();
-
-  constructor(private readonly onUpdate?: (key: string) => void) {}
-
-  get<T>(key: string, defaultValue?: T): T {
-    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    this.onUpdate?.(key);
-    if (value === undefined) {
-      this.values.delete(key);
-    } else {
-      this.values.set(key, value);
-    }
-  }
+/**
+ * Wraps `store.update` with a synchronous hook fired before the write, so a
+ * test can interleave state persistence with other async event sources in a
+ * single ordered `events` log without reaching into the fake's internals.
+ */
+function spyOnUpdate(
+  store: FakeStateStore,
+  onUpdate: (key: string) => void,
+): FakeStateStore {
+  const originalUpdate = store.update.bind(store);
+  vi.spyOn(store, 'update').mockImplementation((key, value) => {
+    onUpdate(key);
+    return originalUpdate(key, value);
+  });
+  return store;
 }
 
 const DASHBOARD_ITEM: ToolDashboardItem = {
@@ -60,8 +59,8 @@ function createFixture(overrides: Partial<ControllerOptions> = {}) {
   const commands: string[] = [];
   const openedUrls: string[] = [];
   const presentedExtensions: string[] = [];
-  const globalState = overrides.globalState ?? new MemoryStateStore();
-  const workspaceState = overrides.workspaceState ?? new MemoryStateStore();
+  const globalState = overrides.globalState ?? new FakeStateStore();
+  const workspaceState = overrides.workspaceState ?? new FakeStateStore();
   const dashboard: ControllerOptions['dashboard'] = {
     buildItems: async () => [DASHBOARD_ITEM],
     getCachedCheckResults: async () => [],
@@ -137,7 +136,9 @@ describe('DefaultDesktopToolingSettingsController', () => {
   it('persists a toggle before refreshing caches and posting cached data', async () => {
     const events: string[] = [];
     const cachedResults: ExternalToolCheckResult[] = [];
-    const globalState = new MemoryStateStore(() => events.push('state:update'));
+    const globalState = spyOnUpdate(new FakeStateStore(), () =>
+      events.push('state:update'),
+    );
     const { controller } = createFixture({
       globalState,
       renderer: {
@@ -163,9 +164,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
 
     await assertSupported(controller.toolsActions.toggle)('zotero', false);
 
-    expect(globalState.values.get(GlobalStateKey.DISABLED_TOOLS)).toEqual([
-      'zotero',
-    ]);
+    expect(globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(['zotero']);
     expect(events).toEqual([
       'state:update',
       'dashboard:disabled',
@@ -239,7 +238,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
 
   it('validates LaTeX writes before persistence and reposts after the write', async () => {
     const events: string[] = [];
-    const workspaceState = new MemoryStateStore(() =>
+    const workspaceState = spyOnUpdate(new FakeStateStore(), () =>
       events.push('state:update'),
     );
     const { controller, posted } = createFixture({
@@ -257,9 +256,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
       value: 'none',
     });
 
-    expect(workspaceState.values.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
-      'none',
-    );
+    expect(workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe('none');
     expect(events).toEqual(['state:update', 'renderer:post']);
     expect(posted.at(-1)).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
@@ -273,7 +270,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
       }),
     ).rejects.toThrow('Invalid LaTeX config value for latexdiffTimeoutMs');
     expect(
-      workspaceState.values.has(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS),
+      isStored(workspaceState, WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS),
     ).toBe(false);
     expect(events).toEqual(['state:update', 'renderer:post']);
   });

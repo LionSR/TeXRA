@@ -1,53 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
-class MemoryStateStore {
-  readonly values = new Map<string, unknown>();
-
-  get<T>(key: string, defaultValue?: T): T {
-    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-    } else {
-      this.values.set(key, value);
-    }
-  }
-}
-
-class MemorySecrets {
-  readonly values = new Map<string, string>();
-
-  async get(key: string): Promise<string | undefined> {
-    return this.values.get(key);
-  }
-
-  async set(key: string, value: string): Promise<void> {
-    this.values.set(key, value);
-  }
-
-  async delete(key: string): Promise<void> {
-    this.values.delete(key);
-  }
-}
-
 interface DesktopCrashReportingModule {
   DESKTOP_CRASH_REPORTING_DSN_SECRET: string;
   getDesktopCrashReportingStatus(
-    globalState: MemoryStateStore,
-    secrets: MemorySecrets,
+    globalState: FakeStateStore,
+    secrets: FakeSecrets,
   ): Promise<{ enabled: boolean; configured: boolean }>;
   setDesktopCrashReportingDsn(
-    secrets: MemorySecrets,
+    secrets: FakeSecrets,
     dsn: string | undefined,
   ): Promise<void>;
   setDesktopCrashReportingEnabled(
-    globalState: MemoryStateStore,
+    globalState: FakeStateStore,
     enabled: boolean,
   ): Promise<void>;
   scrubDesktopCrashEvent(
@@ -68,10 +37,7 @@ describe('desktop crash reporting', () => {
       await loadDesktopCrashReporting();
 
     await expect(
-      getDesktopCrashReportingStatus(
-        new MemoryStateStore(),
-        new MemorySecrets(),
-      ),
+      getDesktopCrashReportingStatus(new FakeStateStore(), new FakeSecrets()),
     ).resolves.toEqual({ enabled: false, configured: false });
   });
 
@@ -82,16 +48,16 @@ describe('desktop crash reporting', () => {
       setDesktopCrashReportingDsn,
       setDesktopCrashReportingEnabled,
     } = await loadDesktopCrashReporting();
-    const globalState = new MemoryStateStore();
-    const secrets = new MemorySecrets();
+    const globalState = new FakeStateStore();
+    const secrets = new FakeSecrets();
 
     await setDesktopCrashReportingEnabled(globalState, true);
     await setDesktopCrashReportingDsn(secrets, ' https://example.invalid/1 ');
 
     expect(
-      globalState.values.get(GlobalStateKey.DESKTOP_CRASH_REPORTING_ENABLED),
+      globalState.get(GlobalStateKey.DESKTOP_CRASH_REPORTING_ENABLED),
     ).toBe(true);
-    expect(secrets.values.get(DESKTOP_CRASH_REPORTING_DSN_SECRET)).toBe(
+    expect(await secrets.get(DESKTOP_CRASH_REPORTING_DSN_SECRET)).toBe(
       'https://example.invalid/1',
     );
     await expect(
