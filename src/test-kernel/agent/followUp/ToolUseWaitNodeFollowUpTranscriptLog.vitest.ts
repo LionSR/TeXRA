@@ -8,7 +8,7 @@ import type {
   WaitExecResult,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import { withTestRunContext } from '../progressTestUtils';
+import { toolUseRunShared, withTestRunContext } from '../progressTestUtils';
 
 function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},
@@ -46,11 +46,7 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
       >
     ).mockRejectedValue(new Error('follow-up append failed'));
     const node = new ToolUseWaitNode().setServices(services);
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const runtimeHost = { emit: vi.fn() };
     const execRes: WaitExecResult = {
       kind: 'continue',
@@ -72,11 +68,7 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
   it('still logs exactly once per follow-up on the success path', async () => {
     const services = buildServices();
     const node = new ToolUseWaitNode().setServices(services);
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const runtimeHost = { emit: vi.fn() };
     const execRes: WaitExecResult = {
       kind: 'continue',
@@ -98,11 +90,7 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
       >
     ).mockRejectedValue(new Error('boom'));
     const node = new ToolUseWaitNode().setServices(services);
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const runtimeHost = { emit: vi.fn() };
     const execRes: WaitExecResult = {
       kind: 'continue',
