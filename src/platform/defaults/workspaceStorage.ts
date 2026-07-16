@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join, normalize, relative } from 'node:path';
 
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import * as logger from '@logger/logUtils';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -14,24 +15,16 @@ import type { StorageProvider } from '../interfaces';
 const STORAGE_LAYOUT = {
   global: 'global-storage',
   workspace: 'workspace-storage',
-  memory: 'memories',
-  runs: 'executions',
-  legacyRuns: 'taskRuns',
-  streamData: 'streamData',
-  streamLogs: 'streamLogs',
-  original: 'original',
 } as const;
 
-export const MEMORY_STORAGE_DIR = STORAGE_LAYOUT.memory;
-export const RUNS_STORAGE_DIR = STORAGE_LAYOUT.runs;
-export const LEGACY_RUNS_STORAGE_DIR = STORAGE_LAYOUT.legacyRuns;
-export const STREAM_DATA_STORAGE_DIR = STORAGE_LAYOUT.streamData;
-export const STREAM_LOGS_STORAGE_DIR = STORAGE_LAYOUT.streamLogs;
+export const MEMORY_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.memory;
+export const RUNS_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.runs;
+export const LEGACY_RUNS_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.legacyRuns;
 export const WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD = [
   RUNS_STORAGE_DIR,
   LEGACY_RUNS_STORAGE_DIR,
-  STREAM_DATA_STORAGE_DIR,
-  STREAM_LOGS_STORAGE_DIR,
+  WORKSPACE_STORAGE_LAYOUT.streamData,
+  WORKSPACE_STORAGE_LAYOUT.streamLogs,
   MEMORY_STORAGE_DIR,
 ] as const;
 
@@ -111,7 +104,7 @@ export function resolveRunOriginalSnapshotPath(
 ): string {
   return resolveRunStoragePath(
     executionId,
-    STORAGE_LAYOUT.original,
+    WORKSPACE_STORAGE_LAYOUT.original,
     workspaceRelativePath,
   );
 }

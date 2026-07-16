@@ -1,8 +1,8 @@
 import pMap from 'p-map';
 import { z } from 'zod';
 
-import { STREAM_LOGS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { KVStore } from '@common/storage/KVStore';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import * as log from '@logger/logUtils';
 import {
   END_GROUP_STATUS,
@@ -28,7 +28,7 @@ import {
 } from './StreamLog';
 
 const SAVE_DEBOUNCE_MS = 300;
-export const STREAM_LOGS_DIR = STREAM_LOGS_STORAGE_DIR;
+export const STREAM_LOGS_DIR = WORKSPACE_STORAGE_LAYOUT.streamLogs;
 export const STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
