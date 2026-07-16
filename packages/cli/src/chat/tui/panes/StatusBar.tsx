@@ -81,7 +81,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     streams,
   });
   const statusSlice = target.displaySlice;
-  const accessTarget = streamAccessTarget(statusSlice, sessionMeta.model);
+  const accessTarget = streamAccessTarget(statusSlice, sessionMeta);
 
   // Whether the selected stream's model/category would currently route through
   // the ChatGPT subscription (preference + eligibility + signed in). The

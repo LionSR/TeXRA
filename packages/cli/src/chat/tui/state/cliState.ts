@@ -8,8 +8,8 @@ import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
+  AgentCategory,
   type ActiveChildInfo,
-  type AgentCategory,
   type ConversationProgress,
   type MessageType,
   type NormalizedToolUse,
@@ -91,6 +91,7 @@ export interface CompletedProcessTranscript {
 
 export interface SessionMeta {
   readonly agent: string;
+  readonly category: AgentCategory;
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
@@ -158,14 +159,18 @@ export interface StreamAccessTarget {
   readonly category: AgentCategory | undefined;
 }
 
-/** Preserve stream category constraints while its model is still pending. */
+/**
+ * Use root-session access facts only before any stream exists. Once a stream
+ * exists, preserve an unknown category rather than guessing across the
+ * tool-use-only subscription boundary.
+ */
 export function streamAccessTarget(
   stream: Pick<StreamSlice, 'model' | 'category'> | undefined,
-  sessionModel: string,
+  session: Pick<SessionMeta, 'model' | 'category'>,
 ): StreamAccessTarget {
   return {
-    model: stream?.model ?? sessionModel,
-    category: stream?.category,
+    model: stream?.model ?? session.model,
+    category: stream === undefined ? session.category : stream.category,
   };
 }
 
@@ -309,6 +314,7 @@ export function setStreamStatusInCliState({
 
 const EMPTY_SESSION_META: SessionMeta = {
   agent: '',
+  category: AgentCategory.ToolUse,
   model: '',
   modelSource: 'builtin-default',
   cwd: '',

@@ -151,10 +151,10 @@ export async function handleTuiSlashCommand(
       const slice = activeStreamId
         ? streams.get().get(activeStreamId)
         : undefined;
-      const accessTarget = streamAccessTarget(
-        slice,
-        meta.model || context.initialModel,
-      );
+      const accessTarget = streamAccessTarget(slice, {
+        model: meta.model || context.initialModel,
+        category: meta.category,
+      });
       const subscriptionActive =
         accessTarget.category === undefined
           ? false

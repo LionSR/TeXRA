@@ -17,7 +17,7 @@ import {
   streamAccessTarget,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
-import { STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
+import { AgentCategory, STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
 const COMPLETED_REVIEW_FOLLOWUP =
@@ -51,15 +51,20 @@ function statusInput(
 
 describe('CLI StatusBar display model', () => {
   it('keeps a stream model and category paired for access resolution', () => {
+    const session = {
+      model: 'deepseekT',
+      category: AgentCategory.ToolUse,
+    };
     expect(
-      streamAccessTarget({ model: 'gpt55', category: 'workflow' }, 'deepseekT'),
+      streamAccessTarget({ model: 'gpt55', category: 'workflow' }, session),
     ).toEqual({ model: 'gpt55', category: 'workflow' });
     expect(
-      streamAccessTarget(
-        { model: undefined, category: 'workflow' },
-        'deepseekT',
-      ),
+      streamAccessTarget({ model: undefined, category: 'workflow' }, session),
     ).toEqual({ model: 'deepseekT', category: 'workflow' });
+    expect(streamAccessTarget(undefined, session)).toEqual(session);
+    expect(
+      streamAccessTarget({ model: undefined, category: undefined }, session),
+    ).toEqual({ model: 'deepseekT', category: undefined });
   });
 
   it('previews queued follow-up messages without duplicating the count', () => {
