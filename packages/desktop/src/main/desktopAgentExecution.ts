@@ -77,6 +77,8 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { formatActiveStreamRetention } from '@shared/copy/executionHistory';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   cleanupUnscopedApprovals,
@@ -962,8 +964,19 @@ export class DesktopProgressBridge {
   async deleteStream(streamId: StreamTabId): Promise<void> {
     if (!this.streamLogs.has(streamId)) return;
     const ownerSession = this.sessionForStream(streamId);
+    const ownedLocally =
+      ownerSession.executions.getAgentHandleByStream(streamId) !== undefined;
+    if (ownedLocally && isInFlightPhase(ownerSession.status.get(streamId))) {
+      this.stopStream(streamId);
+    }
+    if (ownedLocally) {
+      await this.state.waitForOwnedExecutionRelease(streamId);
+    }
     const deleted = await this.state.clearStream(streamId);
-    if (!deleted) return;
+    if (!deleted) {
+      await this.options.host.showInfoMessage(formatActiveStreamRetention(1));
+      return;
+    }
     this.deletedStreams.add(streamId);
 
     // Releases approval state (pending approvals, bypass flags, pending
@@ -981,6 +994,20 @@ export class DesktopProgressBridge {
 
   async deleteAllStreams(): Promise<void> {
     const streamIds = new Set(this.streamLogs.keys());
+    const locallyOwnedStreams: StreamTabId[] = [];
+    for (const streamId of streamIds) {
+      const ownerSession = this.sessionForStream(streamId);
+      if (!ownerSession.executions.getAgentHandleByStream(streamId)) continue;
+      locallyOwnedStreams.push(streamId);
+      if (isInFlightPhase(ownerSession.status.get(streamId))) {
+        this.stopStream(streamId);
+      }
+    }
+    await Promise.all(
+      locallyOwnedStreams.map((streamId) =>
+        this.state.waitForOwnedExecutionRelease(streamId),
+      ),
+    );
     const retained = await this.state.clearAll();
     // Approval cleanup (incl. retry/proposal/plan pending state) is scoped
     // to THIS window's streams via the per-stream helper. Approval state is
@@ -1017,6 +1044,11 @@ export class DesktopProgressBridge {
       }
     }
     this.updateStreamMetadata();
+    if (retained.size > 0) {
+      await this.options.host.showInfoMessage(
+        formatActiveStreamRetention(retained.size),
+      );
+    }
   }
 
   private syncStreamContent(streamId: StreamTabId | ''): void {

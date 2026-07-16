@@ -57,4 +57,5 @@ export { resolveChildRunOutput } from './childRunOutput';
 export {
   releaseOwnedExecutionLease,
   releaseOwnedExecutionLeaseBestEffort,
+  waitForOwnedExecutionLeaseRelease,
 } from './executionLease';

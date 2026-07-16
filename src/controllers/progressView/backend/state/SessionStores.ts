@@ -8,6 +8,7 @@ import {
   type DeleteExecutionResult,
 } from '@agent/storage/executionListing';
 import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
+import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -64,13 +65,15 @@ export class SessionStores {
     this.goalEntries = options.goalEntries;
   }
 
+  async waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
+    const executionId = await this.executionIdForStream(stream);
+    if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
+  }
+
   async deleteStream(stream: StreamTabId): Promise<'deleted' | 'active'> {
     if (!canUseStreamDataDir(stream)) return 'deleted';
 
-    const executionId =
-      this.snapshots.getExecutionId(stream) ??
-      (await this.snapshots.readPersistedExecutionId(stream)) ??
-      executionIdFromStream(stream);
+    const executionId = await this.executionIdForStream(stream);
 
     if (!executionId) {
       await this.deleteAdjacentStreamState(stream);
@@ -80,6 +83,16 @@ export class SessionStores {
       beforeDelete: () => this.deleteAdjacentStreamState(stream),
     });
     return result.status === 'active' ? 'active' : 'deleted';
+  }
+
+  private async executionIdForStream(
+    stream: StreamTabId,
+  ): Promise<ExecutionId | undefined> {
+    return (
+      this.snapshots.getExecutionId(stream) ??
+      (await this.snapshots.readPersistedExecutionId(stream)) ??
+      executionIdFromStream(stream)
+    );
   }
 
   async deleteAll(): Promise<ReadonlySet<StreamTabId>> {

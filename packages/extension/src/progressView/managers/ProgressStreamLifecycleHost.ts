@@ -5,14 +5,14 @@ import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-import { cleanupAllApprovals, releaseStreamResources } from '@tools/approval';
+import { formatActiveStreamRetention } from '@shared/copy/executionHistory';
+import { releaseStreamResources } from '@tools/approval';
 
 import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '@controllers/progressView/ProgressStreamLifecycleController';
 import type { ProgressViewProvider } from '../ProgressViewProvider';
 
 interface ModelOutputBackupCleaner {
   clearStreamBackups(stream: StreamTabId): void;
-  clearAllBackups(): void;
 }
 
 export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostPort {
@@ -31,6 +31,12 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
 
   isStreamInFlight(stream: StreamTabId): boolean {
     return isInFlightPhase(defaultSession().status.get(stream));
+  }
+
+  isStreamOwnedLocally(stream: StreamTabId): boolean {
+    return (
+      defaultSession().executions.getAgentHandleByStream(stream) !== undefined
+    );
   }
 
   async stopStream(
@@ -57,15 +63,11 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   }
 
   cleanupDeletedStreams(streams: StreamTabId[]): void {
-    // Default-session approval reset for the single-session extension host.
-    // Follow-up queues are released per stream after the approval sweep
-    // through the same helper used by single-stream deletes.
-    cleanupAllApprovals();
     for (const stream of streams) {
       releaseStreamResources(stream);
+      this.backupCleaner.clearStreamBackups(stream);
+      this.provider.webviewBridge.clearStream(stream);
     }
-    this.backupCleaner.clearAllBackups();
-    this.provider.webviewBridge.clearAll();
   }
 
   deleteRenderedStream(stream: StreamTabId): void {
@@ -78,5 +80,11 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
 
   async activateStream(stream: StreamTabId): Promise<void> {
     await this.provider.setActiveStream(stream);
+  }
+
+  async notifyDeletionRetained(count: number): Promise<void> {
+    await vscode.window.showInformationMessage(
+      formatActiveStreamRetention(count),
+    );
   }
 }

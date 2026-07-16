@@ -11,6 +11,7 @@ export interface ProgressStreamLifecycleState {
   hasTaskState(stream: StreamTabId): boolean;
   getStreamIds(): StreamTabId[];
   pickValidActiveStream(availableStreams: StreamTabId[]): StreamTabId | '';
+  waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void>;
   clearStream(stream: StreamTabId): Promise<boolean>;
   clearAll(): Promise<ReadonlySet<StreamTabId>>;
 }
@@ -23,6 +24,7 @@ export interface ProgressStreamLifecycleControllerDeps {
 export interface ProgressStreamLifecycleHost {
   getVisibleStreamIds(): StreamTabId[];
   isStreamInFlight(stream: StreamTabId): boolean;
+  isStreamOwnedLocally(stream: StreamTabId): boolean;
   stopStream(
     stream: StreamTabId,
     options?: { clearRetryRequest?: boolean },
@@ -32,6 +34,7 @@ export interface ProgressStreamLifecycleHost {
   deleteRenderedStream(stream: StreamTabId): void;
   rebuildRenderedStreams(options: { forceRebuild: boolean }): void;
   activateStream(stream: StreamTabId): Promise<void>;
+  notifyDeletionRetained(count: number): Promise<void>;
 }
 
 export class ProgressStreamLifecycleController {
@@ -47,22 +50,28 @@ export class ProgressStreamLifecycleController {
     const hasStream =
       this.deps.state.hasStream(stream) || this.deps.state.hasTaskState(stream);
     if (!hasStream) {
-      await this.deps.state.clearStream(stream);
+      const deleted = await this.deps.state.clearStream(stream);
+      if (!deleted) await this.deps.host.notifyDeletionRetained(1);
       return;
     }
 
-    if (this.deps.host.isStreamInFlight(stream)) {
+    // Capture before any await: a synchronous caller-side stream switch after
+    // invoking deleteStream belongs to the post-deletion state.
+    const wasActive = this.deps.state.getActiveStream() === stream;
+    const ownedLocally = this.deps.host.isStreamOwnedLocally(stream);
+    if (ownedLocally && this.deps.host.isStreamInFlight(stream)) {
       // Finished streams should not get synthetic STOPPED transitions or child
       // interrupts after they completed naturally.
       await this.deps.host.stopStream(stream);
     }
+    if (ownedLocally)
+      await this.deps.state.waitForOwnedExecutionRelease(stream);
 
-    // The wasActive snapshot must happen before the first await: callers may
-    // switch streams synchronously after invoking deleteStream, and that
-    // switch belongs to the post-deletion state, not this snapshot.
-    const wasActive = this.deps.state.getActiveStream() === stream;
     const deleted = await this.deps.state.clearStream(stream);
-    if (!deleted) return;
+    if (!deleted) {
+      await this.deps.host.notifyDeletionRetained(1);
+      return;
+    }
     this.deps.host.cleanupDeletedStream(stream);
 
     let shouldActivateStream = false;
@@ -92,13 +101,28 @@ export class ProgressStreamLifecycleController {
   async deleteAllStreams(): Promise<void> {
     const streamIds = this.deps.state.getStreamIds();
 
+    const locallyOwnedStreams = streamIds.filter((stream) =>
+      this.deps.host.isStreamOwnedLocally(stream),
+    );
     await Promise.allSettled(
-      streamIds.map((stream) => this.deps.host.stopStream(stream)),
+      locallyOwnedStreams.map((stream) =>
+        this.deps.host.isStreamInFlight(stream)
+          ? this.deps.host.stopStream(stream)
+          : Promise.resolve(),
+      ),
+    );
+    await Promise.all(
+      locallyOwnedStreams.map((stream) =>
+        this.deps.state.waitForOwnedExecutionRelease(stream),
+      ),
     );
 
     const retained = await this.deps.state.clearAll();
     const deleted = streamIds.filter((stream) => !retained.has(stream));
     this.deps.host.cleanupDeletedStreams(deleted);
     this.deps.host.rebuildRenderedStreams({ forceRebuild: true });
+    if (retained.size > 0) {
+      await this.deps.host.notifyDeletionRetained(retained.size);
+    }
   }
 }

@@ -399,6 +399,10 @@ export class ProgressViewState {
 
   // -- Lifecycle --------------------------------------------------------------
 
+  waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
+    return this.stores.waitForOwnedExecutionRelease(stream);
+  }
+
   async clearStream(stream: StreamTabId): Promise<boolean> {
     const deletion = await this.stores.deleteStream(stream);
     if (deletion === 'active') return false;

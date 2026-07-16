@@ -40,6 +40,8 @@ interface OwnedExecutionLease {
   readonly executionId: ExecutionId;
   readonly ownerToken: string;
   readonly storageRoot: string;
+  readonly released: Promise<void>;
+  readonly resolveReleased: () => void;
 }
 
 export type ExecutionLeasePresence =
@@ -135,7 +137,10 @@ function isFresh(record: ExecutionLeaseRecord, now: number): boolean {
 
 function forgetOwnedLease(lease: OwnedExecutionLease): void {
   const key = ownershipKey(lease.storageRoot, lease.executionId);
-  if (ownedLeases.get(key) === lease) ownedLeases.delete(key);
+  if (ownedLeases.get(key) === lease) {
+    ownedLeases.delete(key);
+    lease.resolveReleased();
+  }
   if (ownedLeases.size === 0 && heartbeatTimer) {
     clearInterval(heartbeatTimer);
     heartbeatTimer = undefined;
@@ -165,10 +170,16 @@ function rememberOwnership(
   ownerToken: string,
   root: string,
 ): void {
+  let resolveReleased: () => void = () => undefined;
+  const released = new Promise<void>((resolve) => {
+    resolveReleased = resolve;
+  });
   const lease: OwnedExecutionLease = {
     executionId,
     ownerToken,
     storageRoot: root,
+    released,
+    resolveReleased,
   };
   ownedLeases.set(ownershipKey(root, executionId), lease);
   if (!heartbeatTimer) {
@@ -248,6 +259,19 @@ export async function releaseOwnedExecutionLease(
     (lease) => lease.executionId === executionId,
   );
   await Promise.all(ownerships.map(releaseOwnership));
+}
+
+/**
+ * Wait until this process has released every lease it owns for an execution.
+ * Foreign ownership never blocks this local lifecycle boundary.
+ */
+export async function waitForOwnedExecutionLeaseRelease(
+  executionId: ExecutionId,
+): Promise<void> {
+  const releases = [...ownedLeases.values()]
+    .filter((lease) => lease.executionId === executionId)
+    .map((lease) => lease.released);
+  await Promise.all(releases);
 }
 
 /** Release at a completed owner boundary without replacing its primary result. */

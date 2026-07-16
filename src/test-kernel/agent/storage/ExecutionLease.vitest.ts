@@ -18,6 +18,7 @@ import {
   inspectExecutionLease,
   releaseOwnedExecutionLease,
   runWithInactiveExecutionLease,
+  waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
@@ -136,6 +137,23 @@ describe('cross-process execution leases', () => {
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
       status: 'missing',
     });
+  });
+
+  it('settles local release waiters when the matching owner releases', async () => {
+    const executionId = 'd86441' as ExecutionId;
+    await acquire(executionId);
+    let settled = false;
+    const waiting = waitForOwnedExecutionLeaseRelease(executionId).then(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    await releaseOwnedExecutionLease(executionId);
+    ownedExecutionIds.delete(executionId);
+
+    await waiting;
+    expect(settled).toBe(true);
   });
 
   it('releases only when the persisted owner still matches', async () => {
