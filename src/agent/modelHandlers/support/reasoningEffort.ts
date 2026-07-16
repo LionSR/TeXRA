@@ -1,4 +1,6 @@
-import { ReasoningEffort } from 'llm-zoo';
+import { ReasoningEffort, type ModelCapabilities } from 'llm-zoo';
+
+import type { ReasoningEffort as OpenAIReasoningEffort } from 'openai/resources/shared';
 
 /**
  * Single source of truth: user-facing reasoning level strings -> ReasoningEffort enum.
@@ -13,19 +15,39 @@ export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
   max: ReasoningEffort.MAX,
 };
 
-/** The reasoning-effort values this clamp can emit for the OpenAI APIs. */
-type OpenAIReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+type NonNullOpenAIReasoningEffort = Exclude<OpenAIReasoningEffort, null>;
+
+/** Whether the model exposes a genuine user-selectable effort range. */
+export function hasConfigurableReasoningEffort(
+  capabilities: ModelCapabilities,
+): boolean {
+  return (
+    capabilities.supportsReasoningEffort &&
+    !(
+      capabilities.reasoningEffort === ReasoningEffort.MAX &&
+      capabilities.maxReasoningEffort === undefined
+    )
+  );
+}
+
+/** Read llm-zoo's declared effort ceiling using its documented fallback. */
+export function getDeclaredMaxReasoningEffort(
+  capabilities: ModelCapabilities,
+): ReasoningEffort {
+  return capabilities.maxReasoningEffort ?? capabilities.reasoningEffort;
+}
 
 /**
  * Clamp the internal reasoning-effort enum to a value the OpenAI Chat and
- * Responses APIs accept. Their vocabulary is minimal|low|medium|high|xhigh; our
- * enum additionally has 'none' (which they reject — clamp to the 'low' floor)
- * and 'max' (above their 'xhigh' ceiling — clamp to 'xhigh'). Every other tier
- * passes through unchanged since the enum's string values match the API's.
+ * Responses APIs accept. The internal 'none' tier is rejected by the relevant
+ * reasoning models, so clamp it to the 'low' floor. Preserve 'max' only when
+ * llm-zoo explicitly declares that native ceiling for the model; otherwise
+ * retain the historical 'xhigh' cap.
  */
 export function toOpenAIReasoningEffort(
   effort: ReasoningEffort,
-): OpenAIReasoningEffort {
+  maxReasoningEffort?: ReasoningEffort,
+): NonNullOpenAIReasoningEffort {
   switch (effort) {
     case ReasoningEffort.NONE:
     case ReasoningEffort.LOW:
@@ -35,7 +57,8 @@ export function toOpenAIReasoningEffort(
     case ReasoningEffort.HIGH:
       return 'high';
     case ReasoningEffort.XHIGH:
-    case ReasoningEffort.MAX:
       return 'xhigh';
+    case ReasoningEffort.MAX:
+      return maxReasoningEffort === ReasoningEffort.MAX ? 'max' : 'xhigh';
   }
 }

@@ -12,8 +12,8 @@ import type {
   ReasoningDetailUnion,
 } from '@openrouter/sdk/models';
 
-// OpenRouter's reasoning tiers passed through unchanged. It has no 'max' tier,
-// so 'max' maps to the top tier 'xhigh' and anything unknown falls back to 'low'.
+// OpenRouter reasoning tiers pass through when the selected model declares
+// them. Unknown values fall back to 'low'.
 const OPENROUTER_REASONING_EFFORTS: ReadonlySet<string> = new Set([
   'xhigh',
   'high',
@@ -23,8 +23,11 @@ const OPENROUTER_REASONING_EFFORTS: ReadonlySet<string> = new Set([
   'none',
 ]);
 
-export function toOpenRouterReasoningEffort(effort: string): ChatRequestEffort {
-  if (effort === 'max') return 'xhigh';
+export function toOpenRouterReasoningEffort(
+  effort: string,
+  supportsMax: boolean,
+): ChatRequestEffort {
+  if (effort === 'max') return supportsMax ? 'max' : 'xhigh';
   return OPENROUTER_REASONING_EFFORTS.has(effort)
     ? (effort as ChatRequestEffort)
     : 'low';

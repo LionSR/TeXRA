@@ -9,13 +9,18 @@ import { toOpenAIReasoningEffort } from '@agent/modelHandlers/support/reasoningE
 // Regression coverage for the SDK-vocabulary mismatch that produced
 // `400 reasoning_effort: Invalid option: expected one of
 // "xhigh"|"high"|"medium"|"low"|"minimal"|"none"`. TeXRA's internal tier enum
-// (llm-zoo) carries a `max` value that neither the OpenAI nor the OpenRouter
-// SDK accepts, so it must be remapped to their top tier (`xhigh`) before send.
+// (llm-zoo) carries provider-specific tiers, so conversion must obey the
+// receiving SDK vocabulary and the model's declared native ceiling.
 describe('toOpenAIReasoningEffort', () => {
-  it('maps internal-only tiers to the OpenAI ceiling/floor', () => {
-    // OpenAI's vocabulary has no 'max'; 'none' is rejected by thinking models.
+  it('uses the historical OpenAI ceiling/floor without a max declaration', () => {
     expect(toOpenAIReasoningEffort(ReasoningEffort.MAX)).toBe('xhigh');
     expect(toOpenAIReasoningEffort(ReasoningEffort.NONE)).toBe('low');
+  });
+
+  it('preserves max when llm-zoo declares it as the model ceiling', () => {
+    expect(
+      toOpenAIReasoningEffort(ReasoningEffort.MAX, ReasoningEffort.MAX),
+    ).toBe('max');
   });
 
   it('passes through values OpenAI natively accepts', () => {
@@ -27,10 +32,11 @@ describe('toOpenAIReasoningEffort', () => {
 });
 
 describe('toOpenRouterReasoningEffort', () => {
-  it('maps the internal "max" tier to OpenRouter\'s top tier "xhigh"', () => {
-    // OpenRouter (and OpenAI) reject "max"; previously this fell through to the
-    // default branch and silently downgraded the user's maximum to "low".
-    expect(toOpenRouterReasoningEffort(ReasoningEffort.MAX)).toBe('xhigh');
+  it('preserves max only when the model declares native support', () => {
+    expect(toOpenRouterReasoningEffort(ReasoningEffort.MAX, true)).toBe('max');
+    expect(toOpenRouterReasoningEffort(ReasoningEffort.MAX, false)).toBe(
+      'xhigh',
+    );
   });
 
   it('passes through every value OpenRouter natively accepts', () => {
@@ -42,11 +48,11 @@ describe('toOpenRouterReasoningEffort', () => {
       'minimal',
       'none',
     ]) {
-      expect(toOpenRouterReasoningEffort(effort)).toBe(effort);
+      expect(toOpenRouterReasoningEffort(effort, false)).toBe(effort);
     }
   });
 
   it('falls back to "low" for unrecognized values', () => {
-    expect(toOpenRouterReasoningEffort('bogus')).toBe('low');
+    expect(toOpenRouterReasoningEffort('bogus', false)).toBe('low');
   });
 });
