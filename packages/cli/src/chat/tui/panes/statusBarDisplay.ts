@@ -120,6 +120,8 @@ export interface StatusBarDisplayInput {
   /** Label for the foreground surface's Escape action while shortcutsActive is
    *  false. */
   readonly foregroundEscapeAction?: string;
+  /** True while a modal, form, palette, or search surface owns input. */
+  readonly foregroundInputActive?: boolean;
   /** True while the persistent child list, rather than the input, owns keys. */
   readonly childListFocused?: boolean;
   readonly childListSelectionKind?: 'stream' | 'process';
@@ -666,8 +668,8 @@ const BYPASS_BADGES: ReadonlyArray<{
 ];
 
 // Which text occupies the bindings row is a priority order, not a single
-// condition: an active pending-exit prompt always wins, then a foreground
-// surface, then the child list, and only then the normal chat shortcuts.
+// condition: an active pending-exit prompt always wins, then an actual
+// foreground surface, then the child list, and only then normal chat shortcuts.
 function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   if (input.pendingExitHint && input.pendingExitResumeId) {
     return `Resume this session with: ${formatResumeCommand(
@@ -678,7 +680,7 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   }
 
   const maxColumns = statusBarInnerWidth(input.width);
-  if (input.shortcutsActive === false) {
+  if (input.foregroundInputActive) {
     return foregroundBindingsText(
       input.ctrlCAction ?? 'exit',
       maxColumns,
@@ -691,6 +693,13 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
       input.childListSelectionKind,
       input.childListSelectionKillable ?? false,
       maxColumns,
+    );
+  }
+  if (input.shortcutsActive === false) {
+    return foregroundBindingsText(
+      input.ctrlCAction ?? 'exit',
+      maxColumns,
+      input.foregroundEscapeAction,
     );
   }
   return statusBarBindingsText(

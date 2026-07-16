@@ -226,9 +226,16 @@ export function App(props: AppProps): React.JSX.Element {
         activeStreamId,
         childStreamEntries,
         parentStream,
+        rootStreamId: childListTarget.streamId,
         streams,
       }),
-    [activeStreamId, childStreamEntries, parentStream, streams],
+    [
+      activeStreamId,
+      childListTarget.streamId,
+      childStreamEntries,
+      parentStream,
+      streams,
+    ],
   );
   const activeSubagentExecutionIds = useMemo(() => {
     const executionIds = new Map<StreamTabId, string>();
@@ -493,7 +500,10 @@ export function App(props: AppProps): React.JSX.Element {
     // Tab transfers keyboard ownership from the input to the child list.
     if (key.tab) {
       if (childListAvailable) {
-        dispatchChildListSelection({ kind: 'focus' });
+        dispatchChildListSelection({
+          kind: 'focus',
+          fallbackValue: childListValues[0],
+        });
       }
       return;
     }
@@ -556,6 +566,9 @@ export function App(props: AppProps): React.JSX.Element {
                 approvalKind,
                 foregroundKind,
               })}
+              foregroundInputActive={
+                foregroundOpen || reverseSearchOpen || slashPaletteOpen
+              }
               childListFocused={childListFocused}
               childListSelectionKind={selectedChildKind}
               childListSelectionKillable={selectedChildKillable}

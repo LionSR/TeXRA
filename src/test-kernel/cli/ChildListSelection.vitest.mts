@@ -85,7 +85,7 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({ focused: true, selectedValue: mainValue });
   });
 
-  it('falls back to the active stream and then the first row', () => {
+  it('falls back to a stream without preselecting a process-only list', () => {
     let state = reconcileSelection(
       { focused: true, selectedValue: childProcessListValue('gone') },
       [processValue, mainValue],
@@ -94,7 +94,20 @@ describe('CLI child list selection', () => {
     expect(state.selectedValue).toBe(mainValue);
 
     state = reconcileSelection(state, [processValue, strategyValue], undefined);
-    expect(state.selectedValue).toBe(processValue);
+    expect(state.selectedValue).toBe(strategyValue);
+
+    state = reconcileSelection(
+      INITIAL_CHILD_LIST_SELECTION,
+      [processValue],
+      main,
+    );
+    expect(state.selectedValue).toBeUndefined();
+
+    state = reduceChildListSelection(state, {
+      kind: 'focus',
+      fallbackValue: processValue,
+    });
+    expect(state).toEqual({ focused: true, selectedValue: processValue });
   });
 
   it('returns input after a stream is focused', () => {

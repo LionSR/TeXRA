@@ -34,7 +34,7 @@ export interface ChildListSelectionState {
 
 type ChildListSelectionAction =
   | { readonly kind: 'blur' }
-  | { readonly kind: 'focus' }
+  | { readonly kind: 'focus'; readonly fallbackValue?: ChildListValue }
   | { readonly kind: 'focusStream'; readonly streamId: StreamTabId }
   | { readonly kind: 'highlight'; readonly value: ChildListValue }
   | { readonly kind: 'syncActiveStream'; readonly streamId: StreamTabId }
@@ -59,7 +59,7 @@ function resolveChildSelectionValue(
     const activeValue = childStreamListValue(activeStreamId);
     if (values.includes(activeValue)) return activeValue;
   }
-  return values[0];
+  return values.find((value) => childListStreamId(value) !== undefined);
 }
 
 /** Apply one keyboard or child-lifecycle transition to child-list state. */
@@ -71,7 +71,11 @@ export function reduceChildListSelection(
     case 'blur':
       return { ...state, focused: false };
     case 'focus':
-      return { ...state, focused: true };
+      return {
+        ...state,
+        focused: true,
+        selectedValue: state.selectedValue ?? action.fallbackValue,
+      };
     case 'focusStream':
       return {
         focused: false,

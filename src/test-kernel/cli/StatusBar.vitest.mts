@@ -196,6 +196,7 @@ describe('CLI StatusBar display model', () => {
         childListFocused: true,
         childListSelectionKind: 'stream',
         childListSelectionKillable: true,
+        shortcutsActive: false,
         width: 140,
       }),
     );
@@ -232,6 +233,7 @@ describe('CLI StatusBar display model', () => {
         childListSelectionKind: 'stream',
         childListSelectionKillable: true,
         foregroundEscapeAction: 'close',
+        foregroundInputActive: true,
         shortcutsActive: false,
         width: 120,
       }),

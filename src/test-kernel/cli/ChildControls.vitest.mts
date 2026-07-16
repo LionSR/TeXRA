@@ -23,6 +23,7 @@ import {
   type ProcessOutputTail,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
+import { activeStreamTreeViews } from '@cli/chat/tui/state/streamViews';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 
 const root = 'root' as StreamTabId;
@@ -133,6 +134,61 @@ describe('CLI child controls', () => {
       streamId: root,
       slice: streams.get(root),
     });
+  });
+
+  it('roots nested child-list rows at the resolved target stream', () => {
+    const entries = new Map([
+      ...buildChildStreamEntries({
+        parentStreamId: root,
+        retained: [
+          {
+            kind: 'subagent' as const,
+            executionId: 'child-exec',
+            agentName: 'child',
+            childStreamId: child,
+            status: STREAM_PHASE.RUNNING,
+          },
+        ],
+      }),
+      ...buildChildStreamEntries({
+        parentStreamId: child,
+        retained: [
+          {
+            kind: 'subagent' as const,
+            executionId: 'leaf-exec',
+            agentName: 'leaf',
+            childStreamId: leaf,
+            status: STREAM_PHASE.RUNNING,
+          },
+        ],
+      }),
+    ]);
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [root, slice({ streamId: root })],
+      [child, slice({ streamId: child, status: STREAM_PHASE.RUNNING })],
+      [leaf, slice({ streamId: leaf, status: STREAM_PHASE.RUNNING })],
+    ]);
+    const parentStream = new Map<StreamTabId, StreamTabId>([
+      [child, root],
+      [leaf, child],
+    ]);
+    const target = resolveChildListTarget({
+      activeStreamId: child,
+      childStreamEntries: entries,
+      parentStream,
+      streams,
+    });
+
+    expect(target.streamId).toBe(child);
+    expect(
+      activeStreamTreeViews({
+        activeStreamId: child,
+        childStreamEntries: entries,
+        parentStream,
+        rootStreamId: target.streamId,
+        streams,
+      }).map((view) => view.id),
+    ).toEqual([child, leaf]);
   });
 
   it('preserves Alt/Esc-number stream focus order', () => {

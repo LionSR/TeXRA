@@ -158,11 +158,16 @@ interface OrderedStreamViewInput {
   readonly activeStreamId: StreamTabId | undefined;
   readonly childStreamEntries: ChildStreamEntries;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly rootStreamId?: StreamTabId;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
 
 function activeTreeRoot(init: OrderedStreamViewInput): StreamTabId | undefined {
-  return activeStreamParentOrSelfId(init) ?? init.streams.keys().next().value;
+  return (
+    init.rootStreamId ??
+    activeStreamParentOrSelfId(init) ??
+    init.streams.keys().next().value
+  );
 }
 
 export function activeStreamTreeEntries(
