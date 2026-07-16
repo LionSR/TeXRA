@@ -195,13 +195,6 @@ export function runtimeModelAccess(
   return runtimeModels.get(model)?.access;
 }
 
-/** Native reference for a discovered model; absent for static model ids. */
-export function getRuntimeModelReference(
-  model: string,
-): LanguageModelReference | undefined {
-  return runtimeModels.get(model)?.reference;
-}
-
 /** Direct-key model represented by an editor-supplied subscription model. */
 export function getRuntimeModelDirectFallback(
   model: string,

@@ -9,7 +9,6 @@
  * request time in the handler and in the async availability context, so the
  * conversation-compatibility key can stay sync.
  */
-import type { ModelConfig } from 'llm-zoo';
 
 import {
   isCodexSubscriptionToolUseOnly,
@@ -21,6 +20,7 @@ import {
   resolveProviderCapabilities,
   type ProviderCapabilityProfile,
 } from './providerCapabilities';
+import type { ModelConfig } from 'llm-zoo';
 
 export function resolveCodexSubscriptionCapabilities(
   config: ModelConfig,
