@@ -157,13 +157,11 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   width,
   colorEnabled,
   fillWidth,
-  userBottomMarginRows,
 }: {
   readonly entry: ConversationEntry;
   readonly width?: number;
   readonly colorEnabled?: boolean;
   readonly fillWidth?: boolean;
-  readonly userBottomMarginRows?: number;
 }): React.JSX.Element {
   if (entry.role === 'tool') {
     return (
@@ -174,7 +172,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   const layout = transcriptEntryLayout(entry, {
     colorEnabled,
     mode: 'scrollback',
-    userBottomMarginRows,
     width,
   });
 

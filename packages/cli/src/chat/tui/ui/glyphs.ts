@@ -38,5 +38,5 @@ export const ERROR_ENTRY_PREFIX = '! ';
 /** Corner glyph that opens each tool-output block. */
 export const TOOL_OUTPUT_CORNER = '⎿';
 
-/** Thinking-phase marker shown in the liveness row while the model reasons. */
+/** Marker for the liveness row shown while a run is active. */
 export const THINKING_MARKER = '✻';

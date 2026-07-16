@@ -1095,6 +1095,15 @@ const SCENARIOS = [
     unexpect: ['Ctrl-C stop'],
   },
   {
+    // The liveness row shows for the whole active run (not just hidden
+    // reasoning) with a ticking elapsed time; the harness pins the run's
+    // start 42s in the past so the elapsed suffix is deterministic.
+    name: 'run-liveness-row',
+    env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
+    frame: 'viewport',
+    expect: ['✻ Working', '42s', '◆ running'],
+  },
+  {
     name: 'tools-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/tools', '\r'],
