@@ -14,11 +14,11 @@ export interface DesktopProtocolCallback {
   fragment: string;
 }
 
-export interface DesktopProtocolCallbackSubscription {
+interface DesktopProtocolCallbackSubscription {
   dispose(): void;
 }
 
-export type DesktopProtocolCallbackListener = (
+type DesktopProtocolCallbackListener = (
   callback: DesktopProtocolCallback,
 ) => void;
 
