@@ -38,7 +38,7 @@ export {
 const CODEX_COMMAND_SUMMARY_MAX_LENGTH = 60;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
-export type CodexFileChange = FileChangeItem['changes'][number];
+type CodexFileChange = FileChangeItem['changes'][number];
 export type CodexCommandToolLogOptions = Pick<
   CommandExecutionItem,
   'command' | 'aggregated_output' | 'exit_code' | 'status'

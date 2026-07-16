@@ -10,14 +10,14 @@
  */
 import { z } from 'zod';
 
-export const GhUserSchema = z.looseObject({
+const GhUserSchema = z.looseObject({
   login: z.string(),
   /** 'User' | 'Bot' | 'Organization' — used by the bot filter to drop CI noise. */
   type: z.string().nullish(),
 });
 export type GhUser = z.infer<typeof GhUserSchema>;
 
-export const GhIssueCommentSchema = z.looseObject({
+const GhIssueCommentSchema = z.looseObject({
   id: z.number(),
   body: z.string().nullable(),
   user: GhUserSchema.nullable(),
@@ -35,7 +35,7 @@ export const GhIssueCommentSchema = z.looseObject({
 });
 export type GhIssueComment = z.infer<typeof GhIssueCommentSchema>;
 
-export const GhReviewCommentSchema = z.looseObject({
+const GhReviewCommentSchema = z.looseObject({
   id: z.number(),
   body: z.string().nullable(),
   user: GhUserSchema.nullable(),
@@ -155,7 +155,7 @@ export type GhIssue = z.infer<typeof GhIssueSchema>;
  * does NOT return `merged` (that's only on the single-PR endpoint), so we
  * rely on `merged_at` to distinguish merged-closed from plain closed.
  */
-export const GhPullsListEntrySchema = z.looseObject({
+const GhPullsListEntrySchema = z.looseObject({
   number: z.number(),
   state: OpenClosedStateSchema,
   title: z.string(),

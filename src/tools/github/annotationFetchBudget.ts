@@ -24,8 +24,8 @@
 // rest of the PR polling endpoints under GitHub's primary 5,000/hour limit.
 // Keep it independent of the poll interval so tuning PR_POLL_INTERVAL_MS does
 // not silently raise the hourly ceiling.
-export const MAX_PROCESS_ANNOTATION_REQUESTS_PER_WINDOW = 50;
-export const ANNOTATION_FETCH_BUDGET_WINDOW_MS = 60_000;
+const MAX_PROCESS_ANNOTATION_REQUESTS_PER_WINDOW = 50;
+const ANNOTATION_FETCH_BUDGET_WINDOW_MS = 60_000;
 
 export class AnnotationFetchBudgetExhaustedError extends Error {
   constructor() {
