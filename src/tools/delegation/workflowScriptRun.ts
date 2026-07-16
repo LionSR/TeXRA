@@ -9,11 +9,15 @@ import {
 } from '@agent/workflowScript';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 type WorkflowScriptRunWithProgressOptions = Omit<
   PersistedWorkflowScriptRunOptions,
   'onEvent'
->;
+> & {
+  /** Cumulative live spend across this run's children, for progress lines. */
+  readonly getLiveCostUsd?: () => number;
+};
 
 interface PhaseStage {
   readonly handle: StageHandle;
@@ -52,6 +56,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   trace: AgentTrace,
   options: WorkflowScriptRunWithProgressOptions,
 ): Promise<WorkflowScriptRunResult> {
+  const { getLiveCostUsd, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
   const callPhases = new Map<number, string | undefined>();
@@ -102,13 +107,20 @@ export async function runPersistedWorkflowScriptWithProgress(
           : (event.phase ?? currentPhase);
         callPhases.delete(event.index);
         const stageId = stageIdFor(phaseTitle);
+        // Cached replays spend nothing, so their lines stay cost-free; live
+        // onCost settles before agent:end, so the total here is current.
+        const spent = event.cached ? undefined : getLiveCostUsd?.();
+        const total =
+          spent === undefined ? '' : ` (${formatCostUsd(spent)} total)`;
         if (event.error) {
           if (phaseTitle) phaseFor(phaseTitle).failed = true;
-          trace.error(`Failed: ${event.label} - ${event.error}`, { stageId });
+          trace.error(`Failed: ${event.label} - ${event.error}${total}`, {
+            stageId,
+          });
         } else if (event.cached) {
           trace.info(`Using saved result: ${event.label}`, { stageId });
         } else {
-          trace.info(`Finished: ${event.label}`, { stageId });
+          trace.info(`Finished: ${event.label}${total}`, { stageId });
         }
         break;
       }
@@ -117,7 +129,7 @@ export async function runPersistedWorkflowScriptWithProgress(
 
   try {
     const result = await runPersistedWorkflowScript({
-      ...options,
+      ...runOptions,
       onEvent: project,
     });
     runOutcome = RUN_OUTCOME.COMPLETED;

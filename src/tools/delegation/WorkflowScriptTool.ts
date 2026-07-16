@@ -91,6 +91,10 @@ The agent field is the default for agent() calls; a call may select another visi
       callContext.hooks?.recordSubagentCost?.(cost);
     };
 
+    // Live display accumulator only: covers success and failure of this run's
+    // live children (cached replays spend nothing). Boundary settlement below
+    // stays journal-based so resumed runs still roll up replayed spend.
+    let liveCostUsd = 0;
     let run: WorkflowScriptRunResult;
     try {
       run = await runPersistedWorkflowScriptWithProgress(callContext.trace, {
@@ -103,7 +107,13 @@ The agent field is the default for agent() calls; a call may select another visi
           parent,
           input.agent,
           checkpointId,
+          {
+            onCost: (totalCostUsd) => {
+              liveCostUsd += totalCostUsd ?? 0;
+            },
+          },
         ),
+        getLiveCostUsd: () => liveCostUsd,
       });
     } catch (runError) {
       try {
