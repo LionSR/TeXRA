@@ -231,6 +231,7 @@ export async function runWorkflowScript(
   const recordJournalEntry = async (
     entry: WorkflowJournalEntry,
     label: string,
+    phase: string | undefined,
   ): Promise<void> => {
     journal.set(entry.index, entry);
     try {
@@ -242,6 +243,7 @@ export async function runWorkflowScript(
         type: 'agent:end',
         index: entry.index,
         label,
+        phase,
         cached: false,
         error: message,
       });
@@ -295,13 +297,20 @@ export async function runWorkflowScript(
           type: 'agent:end',
           index,
           label,
+          phase: callOptions.phase,
           cached: true,
           error: toErrorMessage(error),
         });
         throw error;
       }
       journal.set(index, { ...prior, result: normalizedResult });
-      emit({ type: 'agent:end', index, label, cached: true });
+      emit({
+        type: 'agent:end',
+        index,
+        label,
+        phase: callOptions.phase,
+        cached: true,
+      });
       return payload;
     }
 
@@ -348,6 +357,7 @@ export async function runWorkflowScript(
         type: 'agent:end',
         index,
         label,
+        phase: callOptions.phase,
         cached: false,
         error: toErrorMessage(error),
       });
@@ -366,13 +376,24 @@ export async function runWorkflowScript(
         type: 'agent:end',
         index,
         label,
+        phase: callOptions.phase,
         cached: false,
         error: toErrorMessage(error),
       });
       throw error;
     }
-    await recordJournalEntry({ index, key, result: normalizedResult }, label);
-    emit({ type: 'agent:end', index, label, cached: false });
+    await recordJournalEntry(
+      { index, key, result: normalizedResult },
+      label,
+      callOptions.phase,
+    );
+    emit({
+      type: 'agent:end',
+      index,
+      label,
+      phase: callOptions.phase,
+      cached: false,
+    });
     return payload;
   }
 
