@@ -590,6 +590,20 @@ describe('TUI retry approvals', () => {
     expect(hasCliApprovalDenied(cliContext)).toBe(false);
   });
 
+  it('times out while a retry is still waiting on the keychain', async () => {
+    mocks.lookupApiKey.mockImplementation(() => new Promise(() => undefined));
+
+    const { cliContext, interactions } = tui();
+    const result = interactions.requestRetry?.(
+      relayRetry({ streamId: 'lookup-timeout', provider: 'openai' }),
+      { timeoutMs: 10 },
+    );
+
+    await expect(result).resolves.toEqual({ action: 'timeout' });
+    expect(currentApproval.get()).toBeUndefined();
+    expect(hasCliApprovalDenied(cliContext)).toBe(false);
+  });
+
   it('ignores stale auto-switch lookups after a newer retry replaces them', async () => {
     let resolveFirstLookup: ((value: string | undefined) => void) | undefined;
     mocks.lookupApiKey

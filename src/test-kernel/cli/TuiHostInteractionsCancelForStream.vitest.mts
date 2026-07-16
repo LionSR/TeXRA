@@ -239,6 +239,26 @@ describe('createTuiHostInteractions().cancel', () => {
 });
 
 describe('HostInteractionOptions.timeoutMs threading', () => {
+  it('accepts a positive fractional timeout', async () => {
+    const interactions = createTuiHostInteractions(host(), context());
+    try {
+      const result = interactions.requestPlanApproval?.(
+        {
+          approvalId: 'approval-fractional-timeout',
+          streamId: 'stream-a',
+          plan,
+          goalEnabled: false,
+        },
+        { timeoutMs: 0.5 },
+      );
+
+      await expect(result).resolves.toEqual({ action: 'timeout' });
+      expect(currentApproval.get()).toBeUndefined();
+    } finally {
+      interactions.dispose?.();
+    }
+  });
+
   it('times out a plan approval that outlives timeoutMs without user input', async () => {
     const interactions = createTuiHostInteractions(host(), context());
     try {
