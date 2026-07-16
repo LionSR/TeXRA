@@ -54,11 +54,21 @@ export function toolHeaderPreviewBudget(
 const OUTPUT_HEAD_LINES = 6;
 const OUTPUT_TAIL_LINES = 3;
 const OUTPUT_MARKER_LINES = 1;
+// The head/tail budget above only bounds line *count*. A tool's stdout can
+// also be a single, arbitrarily long "line" with no newlines to elide
+// against (e.g. a `rg` match inside a minified bundle) — cap each line's
+// rendered width too, so one pathological line can't blow past the budget
+// it was supposed to be bounded by.
+const OUTPUT_LINE_MAX_CHARS = 2000;
 
 interface ElidedOutput {
   readonly head: readonly string[];
   readonly tail: readonly string[];
   readonly hiddenCount: number;
+}
+
+function capLine(line: string): string {
+  return truncateWithEllipsis(line, OUTPUT_LINE_MAX_CHARS);
 }
 
 function elideOutputLines(lines: readonly string[]): ElidedOutput {
@@ -67,11 +77,14 @@ function elideOutputLines(lines: readonly string[]): ElidedOutput {
     lines.length <=
     OUTPUT_HEAD_LINES + OUTPUT_TAIL_LINES + OUTPUT_MARKER_LINES
   ) {
-    return { head: lines, tail: [], hiddenCount: 0 };
+    return { head: lines.map(capLine), tail: [], hiddenCount: 0 };
   }
+  // Cap only the head/tail lines actually rendered, not every discarded line
+  // in between — this runs on every OutputBlock redraw while a tool streams,
+  // so truncating lines nobody sees would be wasted grapheme-segmentation work.
   return {
-    head: lines.slice(0, OUTPUT_HEAD_LINES),
-    tail: lines.slice(lines.length - OUTPUT_TAIL_LINES),
+    head: lines.slice(0, OUTPUT_HEAD_LINES).map(capLine),
+    tail: lines.slice(lines.length - OUTPUT_TAIL_LINES).map(capLine),
     hiddenCount: lines.length - OUTPUT_HEAD_LINES - OUTPUT_TAIL_LINES,
   };
 }
