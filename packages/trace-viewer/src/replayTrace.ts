@@ -1,6 +1,7 @@
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
 import {
+  AgentCategory,
   executionStatusToRunOutcome,
   STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
@@ -11,6 +12,7 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
+import { buildStreamContentSync } from '@shared/streams/streamContentSync';
 import { isProcessAgent } from '@shared/streams/agentKind';
 import { isObject } from '@utils/core';
 import type { TraceDocument } from '@transcript';
@@ -197,19 +199,32 @@ export function replayTrace(
   };
   dispatchMessage(logDelta, ctx);
 
-  const syncContent: SyncStreamContentMessage = {
-    command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+  const syncSnapshot = {
     stream: trace.streamId,
     runUsage: snapshot.runUsage,
-    todos: snapshot.todos,
-    plan: snapshot.plan,
-    queuedFollowUps: [],
-    // Workflow-only display fields (empty records/arrays for tool-use
-    // traces) — the same rename the desktop ghost-stream restore path uses
-    // (packages/desktop/src/main/desktopSessionProgressBridge.ts).
-    workflowFiles: snapshot.outputFilesByRound,
-    workflowMissingOutputs: snapshot.missingOutputsByRound,
-    workflowCompileFailures: snapshot.compileFailuresByRound,
+  };
+  const syncPayload =
+    trace.config.agentCategory === AgentCategory.Workflow
+      ? buildStreamContentSync({
+          ...syncSnapshot,
+          kind: AgentCategory.Workflow,
+          files: snapshot.outputFilesByRound,
+          missingOutputs: snapshot.missingOutputsByRound,
+          compileFailures: snapshot.compileFailuresByRound,
+        })
+      : buildStreamContentSync({
+          ...syncSnapshot,
+          kind: AgentCategory.ToolUse,
+          todos: snapshot.todos,
+          plan: snapshot.plan,
+          queuedFollowUps: [],
+          toolEditBypass: false,
+          superYoloBypass: false,
+          goal: { active: false },
+        });
+  const syncContent: SyncStreamContentMessage = {
+    command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+    ...syncPayload,
   };
   dispatchMessage(syncContent, ctx);
 }

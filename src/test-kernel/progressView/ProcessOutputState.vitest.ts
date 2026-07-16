@@ -419,10 +419,20 @@ describe('process output frontend state', () => {
         command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
         stream: streamId,
         action: 'render',
-        todos: [],
-        plan: null,
-        queuedFollowUps: [],
-        roundStage: null,
+        kind: AgentCategory.Workflow,
+        runUsage: {},
+        outputs: { files: {}, missing: {}, compileFailures: {} },
+        activeState: {
+          conversationProgress: { toolCallCount: 0 },
+          roundStage: null,
+          badges: {
+            activeSubagents: [],
+            finishedSubagentCount: 0,
+            activeProcesses: [],
+            finishedProcessCount: 0,
+          },
+          parentStreamId: null,
+        },
       } satisfies ProgressViewOutboundMessage),
     ) as ProgressViewOutboundMessage;
 
