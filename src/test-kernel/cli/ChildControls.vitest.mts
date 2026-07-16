@@ -57,6 +57,7 @@ import {
 
 // Local imports - shared schemas
 import {
+  MESSAGE_TYPES,
   STREAM_PHASE,
   TOOL_USE_STATUS,
   type NormalizedToolUse,
@@ -404,6 +405,7 @@ describe('CLI child execution controls', () => {
               {
                 id: 'entry-2',
                 role: 'assistant',
+                messageType: MESSAGE_TYPES.MODEL_RESPONSE,
                 text: 'Tightened the opening paragraph and fixed two typos.',
                 finalized: true,
               },
@@ -452,6 +454,7 @@ describe('CLI child execution controls', () => {
               {
                 id: 'entry-2',
                 role: 'assistant',
+                messageType: MESSAGE_TYPES.MODEL_RESPONSE,
                 text: 'Still drafting a response',
                 finalized: false,
               },
@@ -470,6 +473,143 @@ describe('CLI child execution controls', () => {
     expect(item?.description).toBe(
       `running · 3s · Review the introduction for clarity and tone. ${'x'.repeat(53)}…`,
     );
+  });
+
+  it('uses the latest instruction while a resumed turn is still running', () => {
+    const { entries, streams } = childFixture('root', {
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'reviewer',
+          childStreamId: 'child-a',
+          status: STREAM_PHASE.RUNNING,
+        },
+      ],
+      extraStreams: new Map([
+        [
+          'child-a',
+          slice({
+            streamId: 'child-a',
+            status: STREAM_PHASE.RUNNING,
+            entries: [
+              {
+                id: 'turn-1-user',
+                role: 'user',
+                messageType: MESSAGE_TYPES.USER_MESSAGE,
+                text: 'Review the introduction.',
+                finalized: true,
+              },
+              {
+                id: 'turn-1-response',
+                role: 'assistant',
+                messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+                text: 'The introduction is clear.',
+                finalized: true,
+              },
+              {
+                id: 'turn-1-tokens',
+                role: 'assistant',
+                messageType: MESSAGE_TYPES.DEFAULT,
+                text: 'Tokens',
+                finalized: true,
+              },
+              {
+                id: 'turn-2-user',
+                role: 'user',
+                messageType: MESSAGE_TYPES.USER_MESSAGE,
+                text: 'Now check the conclusion.',
+                finalized: true,
+              },
+              {
+                id: 'turn-2-response',
+                role: 'assistant',
+                messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+                text: 'Still checking the conclusion.',
+                finalized: false,
+              },
+              {
+                id: 'turn-2-duration',
+                role: 'assistant',
+                messageType: MESSAGE_TYPES.DEFAULT,
+                text: 'Turn completed in 2s',
+                finalized: false,
+              },
+            ],
+          }),
+        ],
+      ]),
+    });
+
+    expect(
+      buildChildControlItems('root', entries, streams, 'subagents'),
+    ).toMatchObject([
+      {
+        description: 'running · Now check the conclusion.',
+      },
+    ]);
+  });
+
+  it('ignores bookkeeping rows after the latest finalized model response', () => {
+    const { entries, streams } = childFixture('root', {
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'reviewer',
+          childStreamId: 'child-a',
+          status: STREAM_PHASE.WAITING,
+        },
+      ],
+      extraStreams: new Map([
+        [
+          'child-a',
+          slice({
+            streamId: 'child-a',
+            status: STREAM_PHASE.WAITING,
+            entries: [
+              {
+                id: 'turn-user',
+                role: 'user',
+                messageType: MESSAGE_TYPES.USER_MESSAGE,
+                text: 'Check the conclusion.',
+                finalized: true,
+              },
+              {
+                id: 'turn-response',
+                role: 'assistant',
+                messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+                text: 'The conclusion follows from the stated assumptions.',
+                finalized: true,
+              },
+              {
+                id: 'turn-tokens',
+                role: 'assistant',
+                messageType: MESSAGE_TYPES.DEFAULT,
+                text: 'Tokens',
+                finalized: true,
+              },
+              {
+                id: 'turn-duration',
+                role: 'assistant',
+                messageType: MESSAGE_TYPES.DEFAULT,
+                text: 'Turn completed in 2s',
+                finalized: true,
+              },
+            ],
+          }),
+        ],
+      ]),
+    });
+
+    expect(
+      buildChildControlItems('root', entries, streams, 'subagents'),
+    ).toMatchObject([
+      {
+        description:
+          'waiting for you · The conclusion follows from the stated assumptions.',
+      },
+    ]);
   });
 
   it('derives live elapsed text for running child executions', () => {
