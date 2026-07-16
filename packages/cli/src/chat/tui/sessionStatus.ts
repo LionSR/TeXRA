@@ -1,4 +1,8 @@
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import {
+  formatCliModelAccessRoute,
+  type CliModelAccessRoute,
+} from '@cli/runtime/modelAccessRoute';
 import type { StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
@@ -19,10 +23,7 @@ export interface CliSessionStatusInput {
   readonly agent: string;
   readonly model: string;
   readonly teamName?: string;
-  readonly api: string;
-  /** True when the active model routes through the ChatGPT subscription, so the
-   *  text command agrees with the status bar's `subscription` badge. */
-  readonly subscription?: boolean;
+  readonly modelAccess: CliModelAccessRoute;
   readonly approval: string;
   readonly approvalBypasses?: Partial<BypassState>;
   readonly status: string;
@@ -83,10 +84,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     ...(input.teamName ? [`team: ${input.teamName}`] : []),
     `agent: ${input.agent}`,
     `model: ${input.model}`,
-    `api: ${input.api}`,
-    ...(input.subscription
-      ? ['subscription: on (Codex models use your ChatGPT plan)']
-      : []),
+    `model access: ${formatCliModelAccessRoute(input.modelAccess)}`,
     `approval: ${input.approval}`,
     ...(bypassLabels.length > 0
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]

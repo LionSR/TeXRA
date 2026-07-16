@@ -10,6 +10,7 @@ import {
 } from '@cli/chat/tui/panes/statusBarDisplay';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
+import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/chat/tui/ui/KeyHints';
 import {
   NO_BYPASS,
@@ -42,7 +43,7 @@ function statusInput(
     subagentControlsAvailable: false,
     sessionNavigationAvailable: false,
     model: 'deepseekT',
-    apiMode: PERSONAL_API_MODE_LABEL,
+    modelAccess: 'personal',
     shortcutModifierLabel: 'Alt',
     ...overrides,
   };
@@ -58,7 +59,7 @@ describe('CLI StatusBar display model', () => {
         { model: undefined, category: 'workflow' },
         'deepseekT',
       ),
-    ).toEqual({ model: 'deepseekT', category: undefined });
+    ).toEqual({ model: 'deepseekT', category: 'workflow' });
   });
 
   it('previews queued follow-up messages without duplicating the count', () => {
@@ -376,7 +377,7 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 12_000,
         taskControlsAvailable: false,
-        apiMode: 'relay',
+        modelAccess: 'included',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
       }),
@@ -396,7 +397,7 @@ describe('CLI StatusBar display model', () => {
         taskControlsAvailable: false,
         subagentControlsAvailable: true,
         sessionNavigationAvailable: true,
-        apiMode: 'relay',
+        modelAccess: 'included',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
       }),
@@ -420,7 +421,7 @@ describe('CLI StatusBar display model', () => {
         taskControlsAvailable: false,
         subagentControlsAvailable: true,
         sessionNavigationAvailable: true,
-        apiMode: 'relay',
+        modelAccess: 'included',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop root',
         width: 100,
@@ -457,7 +458,7 @@ describe('CLI StatusBar display model', () => {
         approvalDepth: 3,
         subagentControlsAvailable: true,
         sessionNavigationAvailable: true,
-        apiMode: 'relay',
+        modelAccess: 'included',
         ctrlCAction: 'stop',
       }),
     );
@@ -465,7 +466,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      'relay',
+      'included',
       'r2',
       '80k/1.0M (8%)',
       'queued 2',
@@ -566,8 +567,11 @@ describe('CLI StatusBar display model', () => {
     ): string[] =>
       buildStatusBarDisplay(
         statusInput({
-          apiMode: 'personal',
-          subscriptionActive: true,
+          modelAccess: resolveCliModelAccessRoute({
+            apiMode: 'personal',
+            subscriptionActive: true,
+            usageRoute,
+          }),
           usage: {
             inputTokens: 1_000,
             outputTokens: 100,

@@ -15,9 +15,11 @@ import {
   type CliOrchestrationAction,
   type CliOrchestrationItem,
   type CliOrchestrationModelPickAction,
-  type CliModelAccessRoute,
-  type CliModelAccessStatus,
 } from '../runtime/orchestration';
+import type {
+  CliModelAccessRoute,
+  CliModelAccessStatus,
+} from '../runtime/modelAccessRoute';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
 export interface OrchestrationAppProps {

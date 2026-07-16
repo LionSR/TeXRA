@@ -21,7 +21,7 @@ import type { CliContext } from './cliContext';
 import type {
   CliModelAccessRoute,
   CliModelAccessStatus,
-} from './orchestration';
+} from './modelAccessRoute';
 
 export interface CliModelAccessSelectionResult {
   /** API fallback retained beneath subscription-based access. */

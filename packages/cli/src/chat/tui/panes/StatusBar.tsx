@@ -2,7 +2,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
-import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
+import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
@@ -101,6 +101,11 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     subscriptionResolution.preferenceVersion === codexPreferenceVersion
       ? subscriptionResolution.active
       : false;
+  const modelAccess = resolveCliModelAccessRoute({
+    apiMode: sessionMeta.apiMode,
+    subscriptionActive,
+    usageRoute: statusSlice?.usage?.usageRoute,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -174,9 +179,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     subagentControlsAvailable: props.subagentControlsAvailable,
     sessionNavigationAvailable: props.sessionNavigationAvailable,
     model: accessTarget.model,
-    apiMode: shortCliApiMode(sessionMeta.apiMode),
+    modelAccess,
     transcriptMode: sessionMeta.transcriptMode,
-    subscriptionActive,
     approvalPolicy: sessionMeta.approvalPolicy,
     shiftEnterNewline: caps.kittyKeyboard,
     transcriptAvailable: props.transcriptAvailable,

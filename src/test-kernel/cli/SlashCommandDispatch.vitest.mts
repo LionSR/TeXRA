@@ -264,6 +264,31 @@ describe('handleTuiSlashCommand', () => {
     expect(statusText).not.toContain('--cwd');
   });
 
+  it('reports the access route that produced the focused stream usage', async () => {
+    registerBuiltinSlashCommands();
+    const session = createSession();
+    const streamId = 'stream-access' as StreamTabId;
+    activeStreamId.set(streamId);
+    patchSessionMeta({ apiMode: 'personal', model: 'gpt55' });
+    patchStream(streamId, (slice) => ({
+      ...slice,
+      model: 'gpt55',
+      status: STREAM_PHASE.WAITING,
+      usage: {
+        inputTokens: 1_000,
+        outputTokens: 100,
+        cost: 0,
+        usageRoute: 'relay',
+      },
+    }));
+
+    await handleTuiSlashCommand('/status', createContext(session));
+
+    const statusText = lastEntryText(streamId);
+    expect(statusText).toContain('model access: Included TeXRA access');
+    expect(statusText).not.toContain('model access: ChatGPT subscription');
+  });
+
   it('does not advertise the current ephemeral session as resumable', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();

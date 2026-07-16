@@ -158,14 +158,15 @@ export interface StreamAccessTarget {
   readonly category: AgentCategory | undefined;
 }
 
-/** Resolve the model and category from the same stream snapshot. */
+/** Preserve stream category constraints while its model is still pending. */
 export function streamAccessTarget(
   stream: Pick<StreamSlice, 'model' | 'category'> | undefined,
   sessionModel: string,
 ): StreamAccessTarget {
-  return stream?.model
-    ? { model: stream.model, category: stream.category }
-    : { model: sessionModel, category: undefined };
+  return {
+    model: stream?.model ?? sessionModel,
+    category: stream?.category,
+  };
 }
 
 /**

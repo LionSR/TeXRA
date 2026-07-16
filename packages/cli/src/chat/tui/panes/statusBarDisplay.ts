@@ -5,6 +5,10 @@ import {
   defaultShortcutModifierLabel,
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
+import {
+  shortCliModelAccessRoute,
+  type CliModelAccessRoute,
+} from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { resolveProviderCapabilities } from '@model/providerCapabilities';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -14,7 +18,6 @@ import {
   type StreamSubstate,
   type StreamTabId,
   type TokenUsageStats,
-  type UsageRoute,
 } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { isActivePhase } from '@shared/streams/streamStatus';
@@ -96,12 +99,9 @@ export interface StatusBarDisplayInput {
   /** True when the current stream tree has selectable session rows. */
   readonly sessionNavigationAvailable: boolean;
   readonly model: string;
-  readonly apiMode: string;
+  readonly modelAccess: CliModelAccessRoute;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
   readonly transcriptMode?: 'persistent' | 'ephemeral';
-  /** True when the active model routes through the ChatGPT subscription; the
-   *  mode segment then reads "subscription" instead of the api-mode. */
-  readonly subscriptionActive?: boolean;
   readonly approvalPolicy?: CliApprovalPolicy;
   readonly shortcutModifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
@@ -154,31 +154,8 @@ function effectiveContextWindow(
   return MODEL_CONFIGS[model]?.contextWindow;
 }
 
-function accessModeSegment({
-  apiMode,
-  subscriptionActive,
-  usageRoute,
-}: {
-  readonly apiMode: string;
-  readonly subscriptionActive?: boolean;
-  readonly usageRoute?: UsageRoute;
-}): StatusBarSegment {
-  let label = subscriptionActive ? 'subscription' : apiMode;
-  if (usageRoute !== undefined) {
-    switch (usageRoute) {
-      case 'chatgpt-subscription':
-        label = 'subscription';
-        break;
-      case 'relay':
-        label = 'included';
-        break;
-      case 'api-key':
-        label = 'personal';
-        break;
-      default:
-        usageRoute satisfies never;
-    }
-  }
+function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
+  const label = shortCliModelAccessRoute(access);
   return label === 'subscription'
     ? { text: label, color: COLOR_HINT, compactText: 'sub' }
     : { text: label, color: 'dim' };
@@ -867,13 +844,7 @@ export function buildStatusBarDisplay(
   const rootActive = rootActiveSegment(input);
   if (rootActive) left.push(rootActive);
 
-  left.push(
-    accessModeSegment({
-      apiMode: input.apiMode,
-      subscriptionActive: input.subscriptionActive,
-      usageRoute: input.usage?.usageRoute,
-    }),
-  );
+  left.push(accessModeSegment(input.modelAccess));
   const policy = approvalPolicySegment(input.approvalPolicy);
   if (policy) left.push(policy);
 

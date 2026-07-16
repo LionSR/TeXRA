@@ -3,9 +3,8 @@
  * check: the synchronous capability resolver and a current ChatGPT sign-in.
  * Async because it reads the stored session.
  *
- * Shared by the CLI status bar badge and the `/status` text command so the two
- * never disagree, and the single place that pairs the routing predicate with
- * `getUseOpenRouter()` - keeping that config read out of the CLI render path.
+ * Single place that pairs the prospective routing predicate with
+ * `getUseOpenRouter()`, keeping that config read out of CLI render paths.
  */
 import { isCodexSignedIn } from '@auth/codex';
 import type { AgentCategory } from '@shared/schemas/agent';

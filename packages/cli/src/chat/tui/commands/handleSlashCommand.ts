@@ -1,9 +1,9 @@
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { formatCliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
+import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { GoalStore } from '@tools/goal';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -164,10 +164,11 @@ export async function handleTuiSlashCommand(
           agent: meta.agent || context.initialAgent,
           model: accessTarget.model,
           teamName: meta.teamName,
-          // Read the session's own mode (which honors a --api-mode/env override)
-          // so /status agrees with the header instead of re-reading the global.
-          api: formatCliApiMode(meta.apiMode),
-          subscription: subscriptionActive,
+          modelAccess: resolveCliModelAccessRoute({
+            apiMode: meta.apiMode,
+            subscriptionActive,
+            usageRoute: slice?.usage?.usageRoute,
+          }),
           approval: formatCliApprovalPolicy(context.getApprovalPolicy()),
           approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',
