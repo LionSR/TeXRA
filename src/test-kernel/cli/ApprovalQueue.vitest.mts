@@ -17,9 +17,13 @@ import {
   clearApprovalsWhere,
   currentApproval,
   enqueueApproval,
+  pendingApprovalSummaries,
+  promoteApprovalsForStream,
+  ROOT_APPROVAL_STREAM_KEY,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import { enqueueTuiApproval } from '@cli/chat/tui/state/subscribeApprovals';
+import type { StreamTabId } from '@shared/schemas';
 
 function bashPayload(streamId: string): ApprovalPayload {
   return {
@@ -291,5 +295,125 @@ describe('CLI approval queue', () => {
     expect(presented).toEqual(['plan', 'untouched']);
     currentApproval.get()?.decide({ accepted: true });
     await expect(untouchedResult).resolves.toEqual({ accepted: true });
+  });
+
+  it('summarizes pending items in global FIFO order, keying stream-less payloads to the root', async () => {
+    enqueueApproval(bashPayload('child-1'));
+    // Empty streamId is normalized to undefined by approvalPayloadStreamId,
+    // so session-wide payloads carry the root stream key — interleaved here
+    // to pin that consumers folding buckets still see first-to-present order.
+    enqueueApproval(bashPayload(''));
+    enqueueApproval(externalInquiryPayload('child-1'));
+    enqueueApproval(bashPayload('child-2'));
+
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: 'child-1', kind: 'bash' },
+      { streamKey: ROOT_APPROVAL_STREAM_KEY, kind: 'bash' },
+      { streamKey: 'child-1', kind: 'externalInquiry' },
+      { streamKey: 'child-2', kind: 'bash' },
+    ]);
+
+    clearApprovals();
+    expect(pendingApprovalSummaries.get()).toEqual([]);
+  });
+
+  it('promotes a stream to the head without settling, resolving, or re-presenting', async () => {
+    const presented: string[] = [];
+    const first = bashPayload('child-1');
+    const second = bashPayload('child-2');
+    const firstResult = enqueueApproval(first, {
+      onPresent: () => presented.push('child-1'),
+    });
+    const secondResult = enqueueApproval(second, {
+      onPresent: () => presented.push('child-2'),
+    });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(first);
+    });
+
+    promoteApprovalsForStream('child-2' as StreamTabId);
+
+    // The promoted item is foregrounded; nothing was settled or resolved.
+    expect(currentApproval.get()?.payload).toBe(second);
+    expect(approvalQueueStatus.get().depth).toBe(2);
+    expect(presented).toEqual(['child-1', 'child-2']);
+
+    // The summaries reflect the promoted order, so per-row suffixes agree
+    // with what will present next.
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: 'child-2', kind: 'bash' },
+      { streamKey: 'child-1', kind: 'bash' },
+    ]);
+
+    // Promoting an absent stream is a no-op.
+    promoteApprovalsForStream('missing' as StreamTabId);
+    expect(currentApproval.get()?.payload).toBe(second);
+
+    // A matching head does not short-circuit gathering the stream's later
+    // items: with [child-2, child-1, child-2'] promoting child-2 pulls the
+    // trailing item up behind the head without re-projecting the foreground.
+    const third = bashPayload('child-2');
+    const thirdResult = enqueueApproval(third);
+    promoteApprovalsForStream('child-2' as StreamTabId);
+    expect(currentApproval.get()?.payload).toBe(second);
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: 'child-2', kind: 'bash' },
+      { streamKey: 'child-2', kind: 'bash' },
+      { streamKey: 'child-1', kind: 'bash' },
+    ]);
+    // Settling the promoted head presents the pulled-up item next; the
+    // demoted item re-presents last, but its presentation side effects do
+    // not fire a second time.
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(secondResult).resolves.toEqual({ accepted: true });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(third);
+    });
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(thirdResult).resolves.toEqual({ accepted: true });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(first);
+    });
+    expect(presented).toEqual(['child-1', 'child-2']);
+
+    currentApproval.get()?.decide({ accepted: false });
+    await expect(firstResult).resolves.toEqual({ accepted: false });
+  });
+
+  it('promotes session-wide items together with the root stream when asked', async () => {
+    const childItem = bashPayload('child-1');
+    const sessionWide = bashPayload('');
+    const rootItem = bashPayload('root');
+    const childResult = enqueueApproval(childItem);
+    const sessionWideResult = enqueueApproval(sessionWide);
+    const rootResult = enqueueApproval(rootItem);
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(childItem);
+    });
+
+    promoteApprovalsForStream('root' as StreamTabId, {
+      includeSessionWide: true,
+    });
+
+    // Session-wide and root items lead, preserving their relative order.
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: ROOT_APPROVAL_STREAM_KEY, kind: 'bash' },
+      { streamKey: 'root', kind: 'bash' },
+      { streamKey: 'child-1', kind: 'bash' },
+    ]);
+    expect(currentApproval.get()?.payload).toBe(sessionWide);
+
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(sessionWideResult).resolves.toEqual({ accepted: true });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(rootItem);
+    });
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(rootResult).resolves.toEqual({ accepted: true });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(childItem);
+    });
+    currentApproval.get()?.decide({ accepted: false });
+    await expect(childResult).resolves.toEqual({ accepted: false });
   });
 });

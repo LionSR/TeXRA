@@ -69,13 +69,35 @@ export interface EnqueueApprovalOptions {
   readonly onPresent?: () => void;
 }
 
+export type PendingApprovalKind = ApprovalPayload['kind'];
+
+/** Stream key for payloads that carry no stream id — they are session-wide
+ *  and belong to the root/main row, never a child row. */
+export const ROOT_APPROVAL_STREAM_KEY = '';
+
+/** One queued approval as seen by list surfaces: its owning stream key and
+ *  payload kind, in global FIFO position. */
+export interface PendingApprovalSummary {
+  readonly streamKey: string;
+  readonly kind: PendingApprovalKind;
+}
+
 const CURRENT = signal<PendingApproval | undefined>(undefined);
 const STATUS = signal<ApprovalQueueStatus>({ depth: 0, kind: 'approval' });
+const PENDING_SUMMARIES = signal<readonly PendingApprovalSummary[]>([]);
 
 export const currentApproval = CURRENT as Signal.State<
   PendingApproval | undefined
 >;
 export const approvalQueueStatus = STATUS as Signal.State<ApprovalQueueStatus>;
+/** Every pending approval's stream key and kind, in global FIFO order;
+ *  stream-less payloads carry {@link ROOT_APPROVAL_STREAM_KEY}. Kept flat so
+ *  callers that fold buckets together (e.g. root row + session-wide) can
+ *  still order by first-to-present. Powers the session list's per-row
+ *  "waiting on what" suffix. */
+export const pendingApprovalSummaries = PENDING_SUMMARIES as Signal.State<
+  readonly PendingApprovalSummary[]
+>;
 
 const clearListeners = new Set<() => void>();
 
@@ -83,6 +105,9 @@ interface ApprovalQueueItem {
   readonly payload: ApprovalPayload;
   readonly resolve: (decision: ApprovalDecision) => void;
   readonly onPresent?: () => void;
+  /** Set once the item has been foregrounded, so re-presentations after a
+   *  queue reorder cannot re-fire focus/notification side effects. */
+  presented?: boolean;
 }
 
 const pendingItems: ApprovalQueueItem[] = [];
@@ -96,11 +121,14 @@ function presentForeground(): void {
   const item = pendingItems[0];
   if (!item || CURRENT.get()) return;
 
-  try {
-    item.onPresent?.();
-  } catch {
-    // Presentation hooks update surrounding TUI state only; approval
-    // resolution must remain available even if focus activation fails.
+  if (!item.presented) {
+    item.presented = true;
+    try {
+      item.onPresent?.();
+    } catch {
+      // Presentation hooks update surrounding TUI state only; approval
+      // resolution must remain available even if focus activation fails.
+    }
   }
   if (pendingItems[0] !== item) return;
 
@@ -207,6 +235,55 @@ function syncApprovalStatus(): void {
         ? 'approval'
         : approvalQueueStatusKind(pendingApprovalPayloads()),
   });
+  PENDING_SUMMARIES.set(
+    pendingItems.map((item) => ({
+      streamKey:
+        approvalPayloadStreamId(item.payload) ?? ROOT_APPROVAL_STREAM_KEY,
+      kind: item.payload.kind,
+    })),
+  );
+}
+
+/**
+ * Stable-partition the queue so `streamId`'s pending items lead, then
+ * re-project the head. Settling matches by item identity, so a decision made
+ * against the previous projection still resolves the right item; nothing is
+ * settled, resolved, or (re-)notified by a promotion. Used by jump-to-waiting:
+ * focusing a session surfaces that session's approval immediately.
+ * `includeSessionWide` also promotes stream-less (session-wide) items — pass
+ * it when promoting the root stream, whose row those items fold onto.
+ */
+export function promoteApprovalsForStream(
+  streamId: StreamTabId,
+  options: { readonly includeSessionWide?: boolean } = {},
+): void {
+  if (pendingItems.length < 2) return;
+  const matches = (item: ApprovalQueueItem): boolean => {
+    const itemStreamId = approvalPayloadStreamId(item.payload);
+    return (
+      itemStreamId === streamId ||
+      (options.includeSessionWide === true && itemStreamId === undefined)
+    );
+  };
+  const promoted: ApprovalQueueItem[] = [];
+  const rest: ApprovalQueueItem[] = [];
+  for (const item of pendingItems) {
+    (matches(item) ? promoted : rest).push(item);
+  }
+  if (promoted.length === 0) return;
+  const next = [...promoted, ...rest];
+  // Already a contiguous prefix (a head-only check would miss matching items
+  // still parked behind other streams) — nothing to reorder.
+  if (next.every((item, index) => item === pendingItems[index])) return;
+  const headChanged = pendingItems[0] !== next[0];
+  pendingItems.splice(0, pendingItems.length, ...next);
+  // Only re-project when the head actually moved; the current projection's
+  // decide closure settles by item identity, so it stays valid either way.
+  if (headChanged) {
+    CURRENT.set(undefined);
+    presentForeground();
+  }
+  syncApprovalStatus();
 }
 
 export function enqueueApproval(
