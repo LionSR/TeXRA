@@ -27,10 +27,12 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import { AgentCategory } from '@shared/schemas/agent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const INCLUDED_CHAT_SESSION: SessionMeta = {
   agent: 'chat',
+  category: AgentCategory.ToolUse,
   model: 'deepseekT',
   modelSource: 'builtin-default',
   cwd: '/tmp/workspace',
@@ -294,6 +296,7 @@ describe('slashRegistry', () => {
   it('passes live model-switch disabled reasons into the model picker', () => {
     resetCliState({
       agent: 'chat',
+      category: AgentCategory.ToolUse,
       model: 'gpt54',
       modelSource: 'explicit-override',
       cwd: '/tmp/workspace',

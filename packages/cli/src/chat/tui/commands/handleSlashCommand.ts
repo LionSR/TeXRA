@@ -1,9 +1,9 @@
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { formatCliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
+import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { GoalStore } from '@tools/goal';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -13,6 +13,7 @@ import { requestCliCompaction } from '../state/compactionRequest';
 import {
   activeStreamId as activeStreamIdSignal,
   sessionMeta,
+  streamAccessTarget,
   streams,
 } from '../state/cliState';
 import { chatTuiCanStartRootRun } from '../state/sessionRunState';
@@ -144,50 +145,59 @@ export async function handleTuiSlashCommand(
     case 'yolo':
       applyCliApprovalPolicySelection(rest || 'yolo', context);
       return true;
-    case 'status': {
-      const meta = sessionMeta.get();
-      const activeStreamId = activeStreamIdSignal.get();
-      const slice = activeStreamId
-        ? streams.get().get(activeStreamId)
-        : undefined;
-      // Mirror the status bar's `subscription` badge so the two never disagree.
-      const subscriptionActive = await isCodexSubscriptionActive(
-        meta.model || context.initialModel,
-      );
-      appendLocalAssistantTranscript(
-        formatCliSessionStatus({
-          agent: meta.agent || context.initialAgent,
+    case 'status':
+      await runGuardedSlashCommand(async () => {
+        const meta = sessionMeta.get();
+        const activeStreamId = activeStreamIdSignal.get();
+        const slice = activeStreamId
+          ? streams.get().get(activeStreamId)
+          : undefined;
+        const accessTarget = streamAccessTarget(slice, {
           model: meta.model || context.initialModel,
-          teamName: meta.teamName,
-          // Read the session's own mode (which honors a --api-mode/env override)
-          // so /status agrees with the header instead of re-reading the global.
-          api: formatCliApiMode(meta.apiMode),
-          subscription: subscriptionActive,
-          approval: formatCliApprovalPolicy(context.getApprovalPolicy()),
-          approvalBypasses: slice?.bypass,
-          status: slice?.status ?? 'not started',
-          substate: slice?.substate,
-          goal: activeStreamId
-            ? GoalStore.getForStream(activeStreamId)
-            : undefined,
-          // Only surface the resume id once a stream exists — never next to
-          // a "not started" status.
-          sessionId:
-            slice && meta.transcriptMode === 'persistent'
-              ? context.session.executionId
+          category: meta.category,
+        });
+        const subscriptionActive =
+          accessTarget.category === undefined
+            ? false
+            : await isCodexSubscriptionActive(
+                accessTarget.model,
+                accessTarget.category,
+              );
+        appendLocalAssistantTranscript(
+          formatCliSessionStatus({
+            agent: meta.agent || context.initialAgent,
+            model: accessTarget.model,
+            teamName: meta.teamName,
+            modelAccess: resolveCliModelAccessRoute({
+              apiMode: meta.apiMode,
+              subscriptionActive,
+              usageRoute: slice?.usage?.usageRoute,
+            }),
+            approval: formatCliApprovalPolicy(context.getApprovalPolicy()),
+            approvalBypasses: slice?.bypass,
+            status: slice?.status ?? 'not started',
+            substate: slice?.substate,
+            goal: activeStreamId
+              ? GoalStore.getForStream(activeStreamId)
               : undefined,
-          commandName: context.commandName,
-          cwd: context.cwd,
-          processCwd: context.processCwd,
-          approvalPolicy: context.getApprovalPolicy(),
-          queuedFollowUpMessages:
-            activeStreamId === undefined
-              ? []
-              : defaultSession().followUps.getAll(activeStreamId),
-        }),
-      );
+            // Only surface the resume id once a stream exists — never next to
+            // a "not started" status.
+            sessionId:
+              slice && meta.transcriptMode === 'persistent'
+                ? context.session.executionId
+                : undefined,
+            commandName: context.commandName,
+            cwd: context.cwd,
+            processCwd: context.processCwd,
+            approvalPolicy: context.getApprovalPolicy(),
+            queuedFollowUpMessages:
+              activeStreamId === undefined
+                ? []
+                : defaultSession().followUps.getAll(activeStreamId),
+          }),
+        );
+      });
       return true;
-    }
     case 'goal':
       appendLocalAssistantTranscript(GOAL_MODE_HELP);
       return true;

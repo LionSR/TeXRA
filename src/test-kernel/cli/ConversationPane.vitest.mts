@@ -54,6 +54,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import {
+  AgentCategory,
   RUN_OUTCOME,
   STREAM_PHASE,
   TOOL_USE_STATUS,
@@ -68,6 +69,7 @@ const cliRequire = createRequire(
 );
 const SESSION_META = {
   agent: 'research',
+  category: AgentCategory.ToolUse,
   model: 'deepseekT',
   modelSource: 'builtin-default',
   cwd: '/tmp/project',

@@ -5,6 +5,10 @@ import {
   defaultShortcutModifierLabel,
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
+import {
+  shortCliModelAccessRoute,
+  type CliModelAccessRoute,
+} from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { resolveProviderCapabilities } from '@model/providerCapabilities';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -95,12 +99,9 @@ export interface StatusBarDisplayInput {
   /** True when the current stream tree has selectable session rows. */
   readonly sessionNavigationAvailable: boolean;
   readonly model: string;
-  readonly apiMode: string;
+  readonly modelAccess: CliModelAccessRoute;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
   readonly transcriptMode?: 'persistent' | 'ephemeral';
-  /** True when the active model routes through the ChatGPT subscription; the
-   *  mode segment then reads "subscription" instead of the api-mode. */
-  readonly subscriptionActive?: boolean;
   readonly approvalPolicy?: CliApprovalPolicy;
   readonly shortcutModifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
@@ -145,13 +146,19 @@ function effectiveContextWindow(
 ): number | undefined {
   if (usage.usageRoute === 'chatgpt-subscription') {
     const config = getRuntimeModelConfig(model);
-    const capped = config
+    return config
       ? resolveProviderCapabilities({ model: config, useOpenRouter: false })
           ?.contextWindow
       : undefined;
-    if (capped) return capped;
   }
   return MODEL_CONFIGS[model]?.contextWindow;
+}
+
+function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
+  const label = shortCliModelAccessRoute(access);
+  return label === 'subscription'
+    ? { text: label, color: COLOR_HINT, compactText: 'sub' }
+    : { text: label, color: 'dim' };
 }
 
 function formatUsage(
@@ -837,11 +844,7 @@ export function buildStatusBarDisplay(
   const rootActive = rootActiveSegment(input);
   if (rootActive) left.push(rootActive);
 
-  left.push(
-    input.subscriptionActive
-      ? { text: 'subscription', color: COLOR_HINT, compactText: 'sub' }
-      : { text: input.apiMode, color: 'dim' },
-  );
+  left.push(accessModeSegment(input.modelAccess));
   const policy = approvalPolicySegment(input.approvalPolicy);
   if (policy) left.push(policy);
 

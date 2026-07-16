@@ -10,9 +10,14 @@ import {
 } from '@cli/chat/tui/panes/statusBarDisplay';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
+import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/chat/tui/ui/KeyHints';
-import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
-import { STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
+import {
+  NO_BYPASS,
+  streamAccessTarget,
+  type StreamSlice,
+} from '@cli/chat/tui/state/cliState';
+import { AgentCategory, STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
 const COMPLETED_REVIEW_FOLLOWUP =
@@ -38,13 +43,30 @@ function statusInput(
     subagentControlsAvailable: false,
     sessionNavigationAvailable: false,
     model: 'deepseekT',
-    apiMode: PERSONAL_API_MODE_LABEL,
+    modelAccess: 'personal',
     shortcutModifierLabel: 'Alt',
     ...overrides,
   };
 }
 
 describe('CLI StatusBar display model', () => {
+  it('keeps a stream model and category paired for access resolution', () => {
+    const session = {
+      model: 'deepseekT',
+      category: AgentCategory.ToolUse,
+    };
+    expect(
+      streamAccessTarget({ model: 'gpt55', category: 'workflow' }, session),
+    ).toEqual({ model: 'gpt55', category: 'workflow' });
+    expect(
+      streamAccessTarget({ model: undefined, category: 'workflow' }, session),
+    ).toEqual({ model: 'deepseekT', category: 'workflow' });
+    expect(streamAccessTarget(undefined, session)).toEqual(session);
+    expect(
+      streamAccessTarget({ model: undefined, category: undefined }, session),
+    ).toEqual({ model: 'deepseekT', category: undefined });
+  });
+
   it('previews queued follow-up messages without duplicating the count', () => {
     expect(queuedFollowUpsSummary([])).toBeUndefined();
     expect(queuedFollowUpsSummary(['Keep the proof under one page.'])).toBe(
@@ -360,7 +382,7 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 12_000,
         taskControlsAvailable: false,
-        apiMode: 'relay',
+        modelAccess: 'included',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
       }),
@@ -380,7 +402,7 @@ describe('CLI StatusBar display model', () => {
         taskControlsAvailable: false,
         subagentControlsAvailable: true,
         sessionNavigationAvailable: true,
-        apiMode: 'relay',
+        modelAccess: 'included',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
       }),
@@ -404,7 +426,7 @@ describe('CLI StatusBar display model', () => {
         taskControlsAvailable: false,
         subagentControlsAvailable: true,
         sessionNavigationAvailable: true,
-        apiMode: 'relay',
+        modelAccess: 'included',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop root',
         width: 100,
@@ -441,7 +463,7 @@ describe('CLI StatusBar display model', () => {
         approvalDepth: 3,
         subagentControlsAvailable: true,
         sessionNavigationAvailable: true,
-        apiMode: 'relay',
+        modelAccess: 'included',
         ctrlCAction: 'stop',
       }),
     );
@@ -449,7 +471,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      'relay',
+      'included',
       'r2',
       '80k/1.0M (8%)',
       'queued 2',
@@ -467,17 +489,27 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
-  it('shows the raw registry context window for non-subscription usage', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        status: STREAM_PHASE.RUNNING,
-        model: 'gpt56',
-        usage: { inputTokens: 187_000, outputTokens: 4_000, cost: 0 },
-      }),
-    );
+  it.each(['relay', 'api-key'] as const)(
+    'shows the raw registry context window for %s usage',
+    (usageRoute) => {
+      const display = buildStatusBarDisplay(
+        statusInput({
+          status: STREAM_PHASE.RUNNING,
+          model: 'gpt56',
+          usage: {
+            inputTokens: 187_000,
+            outputTokens: 4_000,
+            cost: 0,
+            usageRoute,
+          },
+        }),
+      );
 
-    expect(display.left.map(statusBarSegmentText)).toContain('187k/1.1M (18%)');
-  });
+      expect(display.left.map(statusBarSegmentText)).toContain(
+        '187k/1.1M (18%)',
+      );
+    },
+  );
 
   it('caps the context window to the subscription budget for chatgpt-subscription usage', () => {
     const display = buildStatusBarDisplay(
@@ -496,6 +528,69 @@ describe('CLI StatusBar display model', () => {
     // gpt-5.6's Codex subscription budget caps to 500k
     // (CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW), not the raw 1.05M API window.
     expect(display.left.map(statusBarSegmentText)).toContain('187k/500k (37%)');
+  });
+
+  it('uses the default 400k subscription budget for earlier Codex models', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        model: 'gpt55',
+        usage: {
+          inputTokens: 187_000,
+          outputTokens: 4_000,
+          cost: 0,
+          usageRoute: 'chatgpt-subscription',
+        },
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toContain('187k/400k (47%)');
+  });
+
+  it('does not substitute a raw context window for unknown subscription models', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        model: 'unknown-subscription-model',
+        usage: {
+          inputTokens: 187_000,
+          outputTokens: 4_000,
+          cost: 0,
+          usageRoute: 'chatgpt-subscription',
+        },
+      }),
+    );
+
+    const labels = display.left.map(statusBarSegmentText);
+    expect(labels).toContain('187k');
+    expect(labels.some((label) => label.startsWith('187k/'))).toBe(false);
+  });
+
+  it('shows the route that produced usage instead of a stale access preference', () => {
+    const accessLabel = (
+      usageRoute: 'chatgpt-subscription' | 'relay' | 'api-key',
+    ): string[] =>
+      buildStatusBarDisplay(
+        statusInput({
+          modelAccess: resolveCliModelAccessRoute({
+            apiMode: 'personal',
+            subscriptionActive: true,
+            usageRoute,
+          }),
+          usage: {
+            inputTokens: 1_000,
+            outputTokens: 100,
+            cost: 0,
+            usageRoute,
+          },
+        }),
+      ).left.map(statusBarSegmentText);
+
+    expect(accessLabel('chatgpt-subscription')).toContain('subscription');
+    expect(accessLabel('relay')).toContain('included');
+    expect(accessLabel('relay')).not.toContain('subscription');
+    expect(accessLabel('api-key')).toContain('personal');
+    expect(accessLabel('api-key')).not.toContain('subscription');
   });
 
   it('keeps critical controls visible in narrow subagent sessions', () => {
