@@ -62,11 +62,15 @@ export function modalTextDisplayLines({
   continuationPrefix = '',
   firstLinePrefix = '',
   text,
+  trimWrappedLeadingWhitespace = false,
   width,
 }: {
   readonly continuationPrefix?: string;
   readonly firstLinePrefix?: string;
   readonly text: string;
+  /** Strip leading whitespace on wrap continuations (prose bodies only —
+   *  never commands, where quoted whitespace is semantic). */
+  readonly trimWrappedLeadingWhitespace?: boolean;
   readonly width: number;
 }): ModalTextDisplayLine[] {
   const contentWidth = clampModalWidth(width);
@@ -77,10 +81,10 @@ export function modalTextDisplayLines({
         ? ['']
         : wrapAnsiToWidth(prefixed, contentWidth)
             .split('\n')
-            // Leading whitespace on wrap continuations is a break artifact
-            // (e.g. the space after a sentence), not content indentation.
             .map((part, partIndex) =>
-              partIndex === 0 ? part : part.trimStart(),
+              trimWrappedLeadingWhitespace && partIndex !== 0
+                ? part.trimStart()
+                : part,
             );
     return wrapped.map((part): ModalTextDisplayLine => ({
       kind: 'text',
@@ -136,9 +140,12 @@ interface ScrollableModalTextProps {
   readonly maxRows: number;
   /** Suppress the spacious blank margin (e.g. a metadata row sits above). */
   readonly marginWhenSpacious?: boolean;
+  /** Release ↑/↓ while another surface owns them (feedback input). */
+  readonly scrollActive?: boolean;
   /** ↑/↓ hint verb, e.g. `scroll command`. */
   readonly scrollHint: string;
   readonly text: string;
+  readonly trimWrappedLeadingWhitespace?: boolean;
   /** Content width in columns (already inside the card decoration). */
   readonly width: number;
 }
@@ -153,15 +160,23 @@ export function ScrollableModalText(
         continuationPrefix: props.continuationPrefix,
         firstLinePrefix: props.firstLinePrefix,
         text,
+        trimWrappedLeadingWhitespace: props.trimWrappedLeadingWhitespace,
         width,
       }),
-    [props.continuationPrefix, props.firstLinePrefix, text, width],
+    [
+      props.continuationPrefix,
+      props.firstLinePrefix,
+      props.trimWrappedLeadingWhitespace,
+      text,
+      width,
+    ],
   );
   const maxScrollOffset = modalTextMaxScrollOffset({
     maxRows,
     totalLines: lines.length,
   });
   const { scrollOffset, scrollable } = useScrollableOffset({
+    active: props.scrollActive !== false,
     maxScrollOffset,
     pageRows: scrollPageRows({
       compactRows: COMPACT_MODAL_TEXT_ROWS,

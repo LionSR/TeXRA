@@ -192,9 +192,10 @@ describe('CLI scrollable modal text section', () => {
     expect(lines.map((line) => line.text)).toEqual(['first', '', 'third']);
   });
 
-  it('strips wrap-artifact leading whitespace from continuations', () => {
+  it('strips wrap-artifact leading whitespace only when asked', () => {
     const lines = modalTextDisplayLines({
       text: '**Approach:** Keep a running mental log of friction points as tasks progress. At natural stopping points, call `todo_write` to record specific observations. Do not edit any files — only observe and report.',
+      trimWrappedLeadingWhitespace: true,
       width: 77,
     });
 
@@ -204,5 +205,18 @@ describe('CLI scrollable modal text section', () => {
     expect(
       lines.some((line) => line.text.includes('observations. Do not edit')),
     ).toBe(true);
+  });
+
+  it('preserves continuation whitespace for commands by default', () => {
+    const quoted = `echo "${'x'.repeat(30)}    spaced argument"`;
+    const lines = modalTextDisplayLines({
+      ...BASH_PREFIXES,
+      text: quoted,
+      width: 36,
+    });
+
+    expect(lines.map((line) => line.text).join('')).toContain(
+      '    spaced argument',
+    );
   });
 });

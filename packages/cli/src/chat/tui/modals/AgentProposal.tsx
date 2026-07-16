@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import {
@@ -85,6 +86,7 @@ function FileGroup(props: {
 
 export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const { columns } = useWindowSize();
+  const [feedbackMode, setFeedbackMode] = useState(false);
   const fileGroups = getProposalFileGroups(props.payload);
   const title = `Spawn ${props.payload.agent}?`;
   const instructionWidth = clampModalWidth(
@@ -112,6 +114,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         kind: 'superYolo',
         label: DELEGATION_APPROVAL_COPY.cliAction,
       }}
+      onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >
       <Box marginTop={1} flexDirection="column">
@@ -144,6 +147,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       <ScrollableModalText
         hiddenNoun={AGENT_PROPOSAL_HIDDEN_NOUN}
         maxRows={maxInstructionRows}
+        scrollActive={!feedbackMode}
         scrollHint="scroll prompt"
         text={props.payload.instruction}
         width={instructionWidth}

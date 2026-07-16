@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Text, useWindowSize } from 'ink';
 
 import type { BashPermission } from '@shared/schemas';
@@ -39,6 +39,7 @@ export function bashCwdDisplayLine({
 
 export function BashApproval(props: BashApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
+  const [feedbackMode, setFeedbackMode] = useState(false);
   const commandWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
@@ -60,6 +61,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       title={COMMAND_APPROVAL_TITLE}
       rejectionMode="feedback"
       alwaysAllow={{ kind: 'bash', label: 'approve all' }}
+      onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >
       {cwdLine ? <Text dimColor>{cwdLine}</Text> : null}
@@ -68,6 +70,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
         continuationPrefix="  "
         marginWhenSpacious={!cwdLine}
         maxRows={maxCommandRows}
+        scrollActive={!feedbackMode}
         scrollHint="scroll command"
         text={props.payload.command}
         width={commandWidth}
