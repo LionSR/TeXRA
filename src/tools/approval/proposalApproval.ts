@@ -39,8 +39,10 @@ export function setDelegatedWorkApprovalBypasses(
   const { proposal, toolEdit, bash } = session.approvals;
 
   proposal.setBypass(streamId, enabled, runtimeHost);
-  if (!enabled || !toolEdit.bypass.isBypassed(streamId)) {
-    toolEdit.bypass.setBypass(streamId, enabled, runtimeHost);
-  }
+  // Unconditional: write the stream's own explicit tool-edit entry even when
+  // `isBypassed` already reports true, because that can be an
+  // ancestry-resolved inheritance from the parent — super-YOLO granted here
+  // must survive the parent later re-gating its own edits.
+  toolEdit.bypass.setBypass(streamId, enabled, runtimeHost);
   bash.bypass.setBypass(streamId, enabled, runtimeHost, { silent: true });
 }

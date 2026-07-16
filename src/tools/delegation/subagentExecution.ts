@@ -33,10 +33,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import {
-  enableYoloOnChildStream,
-  inheritBashBypassOnChildStream,
-} from '@tools/approval';
+import { configureDelegatedChildApprovals } from '@tools/approval';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -78,7 +75,7 @@ export async function executeSubagent(
   configPayload: AgentConfigPayload,
   agentName: string,
   orchestratorStreamId: StreamTabId,
-  options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
+  options?: { approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
   const parentContext = tryUseRunContext();
   const runtimeHost = getRunContextRuntimeHost(parentContext);
@@ -120,12 +117,17 @@ export async function executeSubagent(
   const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
 
   const inheritChildStreamApprovals = (resolvedStreamId: StreamTabId): void => {
-    // Bash bypass follows the parent regardless of edit-YOLO, so a bash-only
-    // parent (CLI AUTO-BASH without AUTO-APPROVE) still propagates to the child.
-    inheritBashBypassOnChildStream(resolvedStreamId, orchestratorStreamId);
-    if (options?.enableYoloOnChild) {
-      enableYoloOnChildStream(resolvedStreamId);
-    }
+    // Live per-kind ancestry: bash and tool-edit each follow the parent's own
+    // bypass, so a bash-only parent (CLI AUTO-BASH without AUTO-APPROVE) still
+    // propagates only bash, and a YOLO toggle on the parent mid-run reaches
+    // already-launched children.
+    configureDelegatedChildApprovals(
+      resolvedStreamId,
+      orchestratorStreamId,
+      options?.approvalMeta?.autoApproved === true
+        ? 'auto-approved'
+        : 'inherit',
+    );
   };
 
   if (parentContext.stopAfterCycle) {
