@@ -29,6 +29,15 @@ export type ApprovalBypassEvent =
   | 'updateBashApprovalBypassState'
   | 'updateSuperYoloBypassState';
 
+/** The three independently-tracked bypass kinds `SessionApprovals` owns. */
+export type BypassAncestryKind = 'toolEdit' | 'bash' | 'proposal';
+
+const ALL_BYPASS_ANCESTRY_KINDS: readonly BypassAncestryKind[] = [
+  'toolEdit',
+  'bash',
+  'proposal',
+];
+
 /**
  * Per-stream bypass state bound to the progress event that announces it.
  *
@@ -223,24 +232,33 @@ export interface SessionApprovals {
   readonly proposal: StreamApprovalBypass;
   /**
    * Record that `childStreamId` descends from `parentStreamId` for bypass
-   * resolution purposes: `toolEdit`/`bash`/`proposal.isBypassed(childStreamId)`
-   * will defer to the parent's bypass state whenever the child has no
-   * explicit value of its own. Used for delegated subagent streams (parent =
-   * the orchestrator stream) and, in the CLI, successive conversation rounds
-   * (parent = the previous round's root stream) — both mint a fresh
-   * `StreamTabId` that would otherwise start every bypass kind ungated.
+   * resolution purposes: each bypass kind named in `kinds` will defer to the
+   * parent's bypass state whenever the child has no explicit value of its
+   * own. Ancestry is tracked separately per kind — linking `bash` does NOT
+   * also let the child inherit `toolEdit` or `proposal` bypass — so a
+   * delegation that only wants bash to follow the parent can't accidentally
+   * grant tool-edit or super-YOLO auto-approval too.
+   *
+   * Used for delegated subagent streams (parent = the orchestrator stream,
+   * `kinds: ['bash']` — tool-edit YOLO is granted separately and explicitly
+   * via `enableYoloOnChildStream` when a delegation asks for it) and, in the
+   * CLI, successive conversation rounds (parent = the previous round's root
+   * stream, all kinds — a CLI round should carry forward whichever bypasses
+   * were on) — both mint a fresh `StreamTabId` that would otherwise start
+   * every bypass kind ungated.
    */
   registerStreamParent(
     childStreamId: StreamTabId,
     parentStreamId: StreamTabId,
+    kinds?: readonly BypassAncestryKind[],
   ): void;
   /**
-   * Drop `streamId` from the ancestry graph: both its own parent link and
-   * any child that named it as parent. Called on per-stream teardown
-   * (`cleanupApprovalsForStream`) so a torn-down stream can't linger as a
-   * live ancestor — without this, a still-running child would keep
-   * resolving its bypass through a parent whose own bypass state was just
-   * cleared, silently changing the child's effective bypass.
+   * Drop `streamId` from the ancestry graph (all kinds): both its own parent
+   * links and any child that named it as parent. Called on per-stream
+   * teardown (`cleanupApprovalsForStream`) so a torn-down stream can't
+   * linger as a live ancestor — without this, a still-running child would
+   * keep resolving its bypass through a parent whose own bypass state was
+   * just cleared, silently changing the child's effective bypass.
    */
   forgetStreamAncestry(streamId: StreamTabId): void;
   /**
@@ -252,37 +270,55 @@ export interface SessionApprovals {
 }
 
 export function createSessionApprovals(): SessionApprovals {
-  const parentOf = new Map<StreamTabId, StreamTabId>();
-  const resolveParent = (streamId: StreamTabId): StreamTabId | undefined =>
-    parentOf.get(streamId);
+  // One ancestry graph per bypass kind — deliberately NOT shared — so that
+  // e.g. linking `bash` ancestry for a delegated subagent can never let it
+  // also inherit `toolEdit` or `proposal` bypass from the same parent.
+  const parentOf: Record<BypassAncestryKind, Map<StreamTabId, StreamTabId>> = {
+    toolEdit: new Map(),
+    bash: new Map(),
+    proposal: new Map(),
+  };
+  const resolveParentFor =
+    (kind: BypassAncestryKind) =>
+    (streamId: StreamTabId): StreamTabId | undefined =>
+      parentOf[kind].get(streamId);
 
   const toolEdit = createStreamApprovalController<ToolEditApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
     bypassEvent: 'updateToolEditApprovalBypassState',
-    resolveParent,
+    resolveParent: resolveParentFor('toolEdit'),
   });
   const bash = createStreamApprovalController<HostBashApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
     bypassEvent: 'updateBashApprovalBypassState',
-    resolveParent,
+    resolveParent: resolveParentFor('bash'),
   });
   const proposal = createStreamApprovalBypass(
     'updateSuperYoloBypassState',
-    resolveParent,
+    resolveParentFor('proposal'),
   );
   return {
     toolEdit,
     bash,
     proposal,
-    registerStreamParent(childStreamId, parentStreamId) {
-      parentOf.set(childStreamId, parentStreamId);
+    registerStreamParent(
+      childStreamId,
+      parentStreamId,
+      kinds = ALL_BYPASS_ANCESTRY_KINDS,
+    ) {
+      for (const kind of kinds) {
+        parentOf[kind].set(childStreamId, parentStreamId);
+      }
     },
     forgetStreamAncestry(streamId) {
-      parentOf.delete(streamId);
-      const orphaned = [...parentOf]
-        .filter(([, parent]) => parent === streamId)
-        .map(([child]) => child);
-      for (const child of orphaned) parentOf.delete(child);
+      for (const kind of ALL_BYPASS_ANCESTRY_KINDS) {
+        const graph = parentOf[kind];
+        graph.delete(streamId);
+        const orphaned = [...graph]
+          .filter(([, parent]) => parent === streamId)
+          .map(([child]) => child);
+        for (const child of orphaned) graph.delete(child);
+      }
     },
     rejectAndClearAll() {
       toolEdit.rejectAllPending();
@@ -290,7 +326,7 @@ export function createSessionApprovals(): SessionApprovals {
       toolEdit.bypass.clearAll();
       bash.bypass.clearAll();
       proposal.clearAll();
-      parentOf.clear();
+      for (const kind of ALL_BYPASS_ANCESTRY_KINDS) parentOf[kind].clear();
     },
   };
 }

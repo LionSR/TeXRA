@@ -524,7 +524,13 @@ export function inheritBashBypassOnChildStream(
   session: SessionHandle = currentSession(),
 ): void {
   if (parentStreamId) {
-    session.approvals.registerStreamParent(childStreamId, parentStreamId);
+    // Scoped to 'bash' only — ancestry is tracked per bypass kind, so this
+    // cannot also let the child inherit tool-edit or super-YOLO bypass from
+    // the parent. Those are granted separately and explicitly (see
+    // `enableYoloOnChildStream`) when a delegation asks for them.
+    session.approvals.registerStreamParent(childStreamId, parentStreamId, [
+      'bash',
+    ]);
   }
 }
 

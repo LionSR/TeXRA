@@ -14,6 +14,7 @@ import {
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   setBashApprovalSessionBypass,
+  setToolEditApprovalSessionBypass,
   toggleBashApprovalSessionBypass,
 } from '@tools/approval';
 import { currentSession } from '@agent/runtime/SessionHandle';
@@ -141,5 +142,25 @@ describe('child subagent stream approval inheritance', () => {
     cleanupApprovalsForStream(parent);
 
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
+  });
+
+  it('does not let bash ancestry also grant tool-edit or proposal bypass', () => {
+    // Bugbot #3e336d8a (high severity): ancestry used to be one shared graph
+    // for all three bypass kinds, so linking a child for bash inheritance
+    // silently let it inherit tool-edit YOLO too whenever the parent had it
+    // on — even without `enableYoloOnChild`. Each kind must have its own
+    // independent ancestry graph.
+    const { host } = createRecordingHost();
+    const parent = 'stream:parent-toolEdit-on' as StreamTabId;
+    const child = 'stream:child-bash-only-ancestry' as StreamTabId;
+    setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
+    setBashApprovalSessionBypass(parent, true, host, { silent: true });
+
+    inheritBashBypassOnChildStream(child, parent);
+
+    expect(isBashApprovalBypassedForStream(child)).toBe(true);
+    // No ancestry link was registered for 'toolEdit', so the child stays
+    // gated even though the parent has tool-edit YOLO on.
+    expect(isApprovalBypassedForStream(child)).toBe(false);
   });
 });
