@@ -9,6 +9,10 @@ import {
 } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { formatCompactDuration } from '@utils/core';
+import {
+  collapseWhitespace,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
@@ -146,6 +150,51 @@ function streamDescription(
   return streamsById.get(child.childStreamId)?.description;
 }
 
+const SUBAGENT_SUMMARY_MAX_CHARS = 100;
+
+/** The subagent's own final reply, already recorded on its stream's
+ *  transcript — reused as-is rather than generated fresh for the picker. */
+function streamFinalResponse(
+  child: SubagentChildInfo,
+  streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'entries'>>,
+): string | undefined {
+  const entries = streamsById.get(child.childStreamId)?.entries;
+  if (!entries) return undefined;
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entry = entries[i];
+    if (entry.role === 'assistant' && entry.text.trim()) return entry.text;
+  }
+  return undefined;
+}
+
+/** The first user-role entry on the subagent's own stream — its initiating
+ *  instruction, already recorded there regardless of whether the run has
+ *  produced a final reply yet. */
+function streamFirstInstruction(
+  child: SubagentChildInfo,
+  streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'entries'>>,
+): string | undefined {
+  const entries = streamsById.get(child.childStreamId)?.entries;
+  return entries?.find((entry) => entry.role === 'user' && entry.text.trim())
+    ?.text;
+}
+
+/** One-line picker summary: the subagent's own final response when it has
+ *  one, else the first N characters of its initiating instruction. */
+function streamSummary(
+  child: SubagentChildInfo,
+  streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'entries'>>,
+): string | undefined {
+  const text =
+    streamFinalResponse(child, streamsById) ??
+    streamFirstInstruction(child, streamsById);
+  if (!text) return undefined;
+  return truncateWithEllipsis(
+    collapseWhitespace(text),
+    SUBAGENT_SUMMARY_MAX_CHARS,
+  );
+}
+
 const TASK_DETAIL_TRANSCRIPT_COLUMNS = 120;
 
 function streamEntryTailLines(entry: ConversationEntry): readonly string[] {
@@ -202,7 +251,11 @@ function buildChildControlItem(
       kind: 'subagent',
       label,
       command: streamDescription(child, ctx.streamsById) ?? label,
-      description: compactParts([statusLabel, elapsed ?? undefined]),
+      description: compactParts([
+        statusLabel,
+        elapsed ?? undefined,
+        streamSummary(child, ctx.streamsById),
+      ]),
       statusLabel,
       elapsed,
       killable: ctx.killable,
