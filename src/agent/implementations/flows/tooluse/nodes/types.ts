@@ -23,7 +23,7 @@ import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerC
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { RetryErrorInfoSchema } from '@shared/schemas';
 
-export const StateSlicesSchema = z.object({
+const StateSlicesSchema = z.object({
   runStateSnapshot: AgentRunStateSnapshotSchema,
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
   userChannels: UserVariableChannelsSchema,

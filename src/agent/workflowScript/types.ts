@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const WorkflowScriptPhaseSchema = z.object({
+const WorkflowScriptPhaseSchema = z.object({
   title: z.string().min(1),
   detail: z.string().optional(),
 });

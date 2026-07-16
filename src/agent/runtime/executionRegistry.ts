@@ -57,7 +57,7 @@ export interface StopAgentStreamOptions {
   readonly runtimeHost?: AgentRuntimeHost;
 }
 
-export type StopAgentChildPolicy = 'cascade' | 'detach';
+type StopAgentChildPolicy = 'cascade' | 'detach';
 
 export type StopAgentStreamResult =
   | {
