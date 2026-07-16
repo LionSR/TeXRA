@@ -51,6 +51,42 @@ describe('CLI plan approval layout', () => {
     ).toBe(1);
   });
 
+  it('includes the pulse prefix at compact chrome boundaries', () => {
+    for (const columns of [49, 50]) {
+      expect(
+        planApprovalCompactBodyRowsBudget({
+          availableRows: 9,
+          columns,
+          goalEnabled: false,
+        }),
+      ).toBe(7);
+    }
+    expect(
+      planApprovalCompactBodyRowsBudget({
+        availableRows: 9,
+        columns: 51,
+        goalEnabled: false,
+      }),
+    ).toBe(8);
+
+    for (const columns of [67, 68]) {
+      expect(
+        planApprovalCompactBodyRowsBudget({
+          availableRows: 9,
+          columns,
+          goalEnabled: true,
+        }),
+      ).toBe(7);
+    }
+    expect(
+      planApprovalCompactBodyRowsBudget({
+        availableRows: 9,
+        columns: 69,
+        goalEnabled: true,
+      }),
+    ).toBe(8);
+  });
+
   it('hides approve-and-run when compact mode cannot show its scope notice', () => {
     expect(
       isPlanApprovalGoalActionVisible({

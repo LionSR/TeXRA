@@ -55,6 +55,7 @@ const UP = ESC + '[A';
 const DOWN = ESC + '[B';
 const PAGE_DOWN = ESC + '[6~';
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
+const RUNNING_STATUS_PATTERN = /◆ [-|\/\\] running/;
 const shortcutModifierLabel = process.platform === 'darwin' ? 'Esc' : 'Alt';
 const metaChordLabel = (key) =>
   `${shortcutModifierLabel}${shortcutModifierLabel === 'Esc' ? ' ' : '-'}${key}`;
@@ -1095,7 +1096,8 @@ const SCENARIOS = [
     name: 'uninterruptible-running-status-bar',
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     frame: 'viewport',
-    expect: ['◆ running', 'Ctrl-C exit'],
+    expect: ['Ctrl-C exit'],
+    expectPatterns: [RUNNING_STATUS_PATTERN],
     unexpect: ['Ctrl-C stop'],
   },
   {
@@ -1105,8 +1107,9 @@ const SCENARIOS = [
     name: 'run-liveness-row',
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     frame: 'viewport',
-    expect: ['✻ Working', '◆ running'],
+    expect: ['✻ Working'],
     expectPatterns: [
+      RUNNING_STATUS_PATTERN,
       /✻ Working\.{1,3}[ \t]+(?:4[2-9]s|5\ds|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
     ],
   },
@@ -2594,10 +2597,8 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, '\r', '/status', '\r'],
     frame: 'viewport',
-    expect: [
-      'strategy is checking the harness-child-strategy details',
-      '◆ running',
-    ],
+    expect: ['strategy is checking the harness-child-strategy details'],
+    expectPatterns: [RUNNING_STATUS_PATTERN],
     unexpect: [
       'agent: harness-agent',
       'api: relay',
@@ -3039,7 +3040,8 @@ const SCENARIOS = [
     bootExpect: 'TeXRA',
     keys: [ESC + 's'], // Esc/Alt-s
     frame: 'viewport',
-    expect: ['◆ running 1m', 'personal'],
+    expect: ['personal'],
+    expectPatterns: [/◆ [-|\/\\] running 1m/],
     unexpect: ['◆running', 'personal3', '3 sub 1 proc'],
   },
   {
@@ -3218,7 +3220,8 @@ const SCENARIOS = [
       'Ctrl-C stop root',
     ],
     expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
-    unexpect: ['◆ running', '2 sub 1 proc'],
+    unexpect: ['2 sub 1 proc'],
+    unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
   {
     name: 'focused-stopped-subagent-esc-s-picker',
@@ -3232,7 +3235,8 @@ const SCENARIOS = [
     keys: [ESC + 'p', 'k', ESC + 's', 'f', { input: ESC, delayMs: 40 }, 's'],
     frame: 'viewport',
     expect: ['Subagents', 'strategy', '1. strategy — stopped', 'root active'],
-    unexpect: ['Tasks and sub-workflows', '◆ running', '2 sub 1 proc'],
+    unexpect: ['Tasks and sub-workflows', '2 sub 1 proc'],
+    unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
   {
     name: 'focused-stopped-subagent-esc-tab-focus',
@@ -3286,9 +3290,9 @@ const SCENARIOS = [
     unexpect: [
       'The selected subagent is no longer accepting follow-ups.',
       'Harness received: can you still receive this?',
-      '◆ running',
       '2 sub 1 proc',
     ],
+    unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
   {
     name: 'empty-task-shortcut-hidden',
@@ -3343,7 +3347,7 @@ const SCENARIOS = [
       HARNESS_TODOS_COMPLETED: '1',
     },
     frame: 'viewport',
-    expect: ['◆ running'],
+    expectPatterns: [RUNNING_STATUS_PATTERN],
     unexpect: [
       'Split theorem into algebraic and analytic checks',
       'Coordinate a small math proof through nested CLI work.',
@@ -4289,6 +4293,9 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     (pattern) => !pattern.test(frame),
   );
   const present = (scenario.unexpect ?? []).filter((t) => frame.includes(t));
+  const presentPatterns = (scenario.unexpectPatterns ?? []).filter((pattern) =>
+    pattern.test(frame),
+  );
   const failures = [...checkpointFailures];
   if (!booted) failures.push('input prompt never rendered (boot timeout)');
   for (const t of missing)
@@ -4299,6 +4306,8 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     failures.push(`expected pattern missing: ${pattern.toString()}`);
   for (const t of present)
     failures.push(`unexpected text present: ${JSON.stringify(t)}`);
+  for (const pattern of presentPatterns)
+    failures.push(`unexpected pattern present: ${pattern.toString()}`);
   for (const check of scenario.maxOccurrences ?? []) {
     const actual = countOccurrences(frame, check.text);
     if (actual > check.max) {

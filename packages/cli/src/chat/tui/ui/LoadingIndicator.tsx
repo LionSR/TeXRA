@@ -13,7 +13,19 @@ import { useLiveNowMs } from '../state/useLiveNowMs';
 // Plain ASCII spin cycle (not a braille cli-spinners frame set) — ticking at
 // 1 Hz off the shared clock reads as a slow rotation, not a smooth spin, so a
 // simple, always-safe frame set fits better than porting the 80ms glyph set.
+// Other 1 Hz "this is live" indicators share this frame set through
+// `loadingFrameAt` instead of each declaring its own.
 const LOADING_FRAMES = ['|', '/', '-', '\\'] as const;
+
+/** Current frame for a 1 Hz shared-clock rotation through `frames`, keyed off
+ *  epoch ms from `useLiveNowMs` — the same computation `LoadingIndicator` and
+ *  `ConversationPane`'s `LivenessRow` each do inline. */
+export function loadingFrameAt(
+  nowMs: number,
+  frames: readonly string[] = LOADING_FRAMES,
+): string {
+  return frames[Math.floor(nowMs / 1000) % frames.length];
+}
 
 export interface LoadingIndicatorProps {
   readonly label: string;
@@ -23,7 +35,7 @@ export function LoadingIndicator(
   props: LoadingIndicatorProps,
 ): React.JSX.Element {
   const now = useLiveNowMs(true);
-  const frame = LOADING_FRAMES[Math.floor(now / 1000) % LOADING_FRAMES.length];
+  const frame = loadingFrameAt(now);
   return (
     <Box gap={1}>
       <Text dimColor>{frame}</Text>

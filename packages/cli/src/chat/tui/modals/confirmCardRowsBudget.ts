@@ -5,6 +5,7 @@ import {
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '../ui/theme';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
+import { confirmCardPulsedTitle } from './ConfirmCardState';
 
 /**
  * Rows budget for the scrollable content region of a ConfirmCard modal
@@ -51,7 +52,10 @@ export function confirmCardContentRowsBudget({
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
     minContentWidth,
   );
-  const titleRows = wrapAnsiToWidth(title, titleWidth).split('\n').length;
+  const titleRows = wrapAnsiToWidth(
+    confirmCardPulsedTitle(0, title),
+    titleWidth,
+  ).split('\n').length;
   const fixedRows = titleRows + extraFixedRows;
 
   const spaciousRows = availableRows - spaciousFixedRows - fixedRows;

@@ -28,6 +28,7 @@ import {
 } from '../state/childExecutions';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { COLOR_ERROR } from '../ui/colors';
+import { loadingFrameAt } from '../ui/LoadingIndicator';
 import { useSignal } from '../state/useSignal';
 import {
   buildStatusBarDisplay,
@@ -162,6 +163,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     status: statusSlice?.status,
     substate: statusSlice?.substate,
     elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
+    runningFrame: runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
     pendingExitHint,
     pendingExitResumeId,
     commandName: props.commandName,
