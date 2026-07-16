@@ -1,8 +1,3 @@
-/** True for an AbortController-style cancellation error. */
-export function isAbortError(err: unknown): boolean {
-  return err instanceof Error && err.name === 'AbortError';
-}
-
 /** Check if an error represents a file-not-found condition. */
 export function isFileNotFoundError(err: unknown): boolean {
   const code = (err as { code?: string })?.code;

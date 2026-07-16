@@ -1,6 +1,8 @@
 import { StatusCodes } from 'http-status-codes';
 import { isObject, isString } from '@utils/core';
 
+import { pickStringField } from './errorInspection';
+
 /**
  * Maps Anthropic error type strings to their corresponding HTTP status codes.
  * Used to recover the status code when SDK error objects lose it
@@ -79,12 +81,6 @@ export function isRelayMonthlyLimitMessage(
   return (
     message?.toLowerCase().includes('monthly spending limit reached') ?? false
   );
-}
-
-function pickStringField(v: unknown, key: string): string | undefined {
-  if (!isObject(v)) return undefined;
-  const value = (v as Record<string, unknown>)[key];
-  return isString(value) ? value : undefined;
 }
 
 /** True when the upstream provider returned a credit/quota exhaustion body.

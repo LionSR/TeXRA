@@ -76,6 +76,7 @@
     "@types/nunjucks": "^3.2.6",
     "@types/pluralize": "^0.0.33",
     "@types/proper-lockfile": "^4.1.4",
+    "@types/semver": "^7.7.1",
     "@types/shell-quote": "^1.7.5",
     "@types/sortablejs": "^1.15.9",
     "@types/turndown": "^5.0.6",

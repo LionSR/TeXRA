@@ -1,7 +1,9 @@
 import prettyMilliseconds from 'pretty-ms';
 
-import { isObject, isString } from '@utils/core';
+import { isObject } from '@utils/core';
 import { capitalize } from '@utils/text/stringUtils';
+
+import { pickNumberField, pickStringField } from './errorInspection';
 
 /**
  * Detection + formatting for the ChatGPT-subscription (Codex backend) usage
@@ -22,20 +24,6 @@ import { capitalize } from '@utils/text/stringUtils';
 export interface ChatGptSubscriptionLimit {
   readonly planType?: string;
   readonly resetsInSeconds?: number;
-}
-
-function pickStringField(value: unknown, key: string): string | undefined {
-  if (!isObject(value)) return undefined;
-  const field = value[key];
-  return isString(field) && field.trim().length > 0 ? field : undefined;
-}
-
-function pickNumberField(value: unknown, key: string): number | undefined {
-  if (!isObject(value)) return undefined;
-  const field = value[key];
-  return typeof field === 'number' && Number.isFinite(field)
-    ? field
-    : undefined;
 }
 
 /**

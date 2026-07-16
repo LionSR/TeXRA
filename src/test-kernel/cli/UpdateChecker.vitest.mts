@@ -7,7 +7,6 @@ import {
   fetchLatestCliVersion,
   fetchLatestHomebrewFormulaVersion,
   formatUpdateCommand,
-  isNewerVersion,
   isPackageManagerInstall,
 } from '@cli/runtime/updateChecker';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -27,27 +26,6 @@ class MemoryStateStore {
     }
   }
 }
-
-describe('isNewerVersion', () => {
-  it('compares numerically across all components', () => {
-    expect(isNewerVersion('1.0.0', '0.9.9')).toBe(true);
-    expect(isNewerVersion('0.39.0', '0.38.2')).toBe(true);
-    expect(isNewerVersion('0.38.3', '0.38.2')).toBe(true);
-    expect(isNewerVersion('0.38.2', '0.38.2')).toBe(false);
-    expect(isNewerVersion('0.38.1', '0.38.2')).toBe(false);
-  });
-
-  it('ranks a release above its prerelease but not vice versa', () => {
-    expect(isNewerVersion('1.2.0', '1.2.0-rc.1')).toBe(true);
-    expect(isNewerVersion('1.2.0-rc.1', '1.2.0')).toBe(false);
-    expect(isNewerVersion('1.2.0-rc.2', '1.2.0-rc.1')).toBe(true);
-  });
-
-  it('returns false when either version is unparseable', () => {
-    expect(isNewerVersion('1.0.0', 'unknown')).toBe(false);
-    expect(isNewerVersion('latest', '1.0.0')).toBe(false);
-  });
-});
 
 describe('detectInstallMethod', () => {
   it('recognizes pnpm, yarn, and bun global layouts', () => {
