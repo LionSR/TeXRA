@@ -2,11 +2,11 @@
 import { toJSONSchema, z } from 'zod';
 
 // Internal imports
-import { platform } from '@platform/platform';
 import {
   getRunContextWorkingDirectory,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
@@ -129,10 +129,10 @@ export class DiagnosticsTool extends defineTool({
   ): Promise<ToolResult> {
     const { command, path } = input;
     const diagnosticsPath = this.resolveAbsolutePath(path);
-    const linter = platform().linter;
+    const linter = currentSession().interactions.readDiagnostics;
     if (!linter) {
       throw new ToolError(
-        'Diagnostics capability unavailable: this host did not configure Platform.linter.',
+        'Diagnostics capability unavailable: this session has no diagnostics provider.',
       );
     }
 
@@ -179,10 +179,10 @@ export class DiagnosticsTool extends defineTool({
     input: Extract<DiagnosticsInput, { command: 'add' }>,
   ): Promise<ToolResult> {
     const { path, line, message, severity, confidence } = input;
-    const addCriticismSink = platform().addCriticismSink;
+    const addCriticismSink = currentSession().interactions.addCriticism;
     if (!addCriticismSink) {
       throw new ToolError(
-        'Diagnostics add capability unavailable: this host did not configure Platform.addCriticismSink.',
+        'Diagnostics add capability unavailable: this session has no criticism sink.',
       );
     }
 

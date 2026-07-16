@@ -537,10 +537,7 @@ export function createFakePlatform(
     agentDirectories: FAKE_AGENT_DIRECTORIES,
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     toolAvailability: NO_TOOL_AVAILABILITY_HOST,
-    linter: async () => [],
-    addCriticismSink: () => ({ accepted: false, resolvedPath: '' }),
     toolMissingHandler: () => {},
-    toolNotificationHandler: () => {},
     ...overrides,
   };
 }

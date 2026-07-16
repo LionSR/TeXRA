@@ -19,6 +19,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import type { ManualCriticismEntry } from '@agent/runtime/HostInteractions';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { globalSM, GlobalStateKey } from '@common/state';
@@ -30,7 +31,6 @@ import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
-import type { ManualCriticismEntry } from '@platform/interfaces';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';
