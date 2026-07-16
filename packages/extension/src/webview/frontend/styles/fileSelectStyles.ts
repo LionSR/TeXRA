@@ -14,15 +14,6 @@ import {
   compactIconActionButtonStyles,
 } from '@shared/styles';
 
-/**
- * Re-exported under the legacy names so existing imports keep working. The
- * canonical definitions live in `@shared/styles/selectStyles` and
- * `@shared/styles/commonViewStyles`; importing from here keeps file-select
- * components from having to pull the full common view / select sheets.
- */
-export const compactActionButtonStyles = compactIconActionButtonStyles;
-export { compactFormControlStyles };
-
 /** Core file-select layout styles. */
 export const fileSelectLayoutStyles = css`
   .file-select {
@@ -191,7 +182,7 @@ const multiFilesStyles = css`
   }
 
   /* .remove-button is a wa-button.action-icon-button now; sizing comes from
-     compactActionButtonStyles. Only the per-row layout shrink survives here. */
+     compactIconActionButtonStyles. Only the per-row layout shrink survives here. */
   .remove-button {
     flex-shrink: 0;
   }
@@ -215,7 +206,7 @@ const dropdownStyles = css`
 
 /** Combined file-select styles for components that need all of them. */
 export const fileSelectStyles = [
-  compactActionButtonStyles,
+  compactIconActionButtonStyles,
   compactFormControlStyles,
   fileSelectLayoutStyles,
   multiFilesStyles,
