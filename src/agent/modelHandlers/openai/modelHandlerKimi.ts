@@ -75,16 +75,6 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
   // only stringify content for non-vision variants so image parts survive.
   protected override readonly convertContentToStringUnlessVision = true;
 
-  /**
-   * Kimi K3 is the only Moonshot model with `supportsReasoningEffort` (K2.x
-   * use the `thinking` parameter instead), and its `reasoning_effort` field
-   * currently accepts only `'max'` — which the shared OpenAI clamp lowers to
-   * `'xhigh'`, a value Moonshot rejects. Send Moonshot's own vocabulary.
-   */
-  protected override validateReasoningEffort(_effort: string): string {
-    return 'max';
-  }
-
   protected override getThinkingParameter():
     { type: 'enabled' | 'disabled' } | undefined {
     // See AMBIGUOUS_THINKING_DEFAULT_FULLNAMES: these wire names default to
