@@ -28,6 +28,15 @@ interface ProgressApiRoutingSnapshot {
   readonly preferChatGptSubscription: boolean;
 }
 
+function noRetryResult(): ProgressApiKeyRetryResult {
+  return {
+    proceeded: false,
+    retried: false,
+    disabledIncludedModelAccess: false,
+    disabledChatGptSubscription: false,
+  };
+}
+
 export interface ProgressApiKeyRetryControllerDeps {
   providers: readonly ApiProvider[];
   readKey(provider: ApiProvider): Promise<string | undefined>;
@@ -59,12 +68,7 @@ export class ProgressApiKeyRetryController {
       !proceeded ||
       !this.deps.isRetryPending(request.stream, request.requestId)
     ) {
-      return {
-        proceeded: false,
-        retried: false,
-        disabledIncludedModelAccess: false,
-        disabledChatGptSubscription: false,
-      };
+      return noRetryResult();
     }
 
     const before = this.routingSnapshot();
@@ -72,12 +76,7 @@ export class ProgressApiKeyRetryController {
     const retried = this.deps.triggerRetry(request.stream, request.requestId);
     if (!retried) {
       await this.restoreOwnApiKeyRouting(before, prepared);
-      return {
-        proceeded: false,
-        retried: false,
-        disabledIncludedModelAccess: false,
-        disabledChatGptSubscription: false,
-      };
+      return noRetryResult();
     }
     return {
       ...prepared,

@@ -1,7 +1,6 @@
 // Local imports - agent
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
-  AgentConfigSchema,
   ToolUseAgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
