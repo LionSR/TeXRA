@@ -644,11 +644,13 @@ const SCENARIOS = [
     expect: [
       'agent: chat',
       'model: harness-model',
+      'model access: Personal API keys',
       'status: not started',
       'queued follow-ups: 0',
     ],
     unexpect: [
       '/clear is registered but has no harness action.',
+      'model access: undefined',
       'entry-1 chat history line',
       'queued before clear',
     ],

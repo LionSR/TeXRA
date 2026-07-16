@@ -106,7 +106,10 @@ import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
 import { parseCliApiMode, type CliApiMode } from '../src/runtime/apiAccessMode';
-import { formatCliModelAccessRouteInline } from '../src/runtime/modelAccessRoute';
+import {
+  formatCliModelAccessRouteInline,
+  resolveCliModelAccessRoute,
+} from '../src/runtime/modelAccessRoute';
 import {
   formatCliApiStatusActionHint,
   formatCliAuthStatusLine,
@@ -1840,7 +1843,11 @@ function appendHarnessStatus(): void {
       agent: meta.agent,
       model: meta.model,
       teamName: meta.teamName,
-      api: meta.apiMode,
+      modelAccess: resolveCliModelAccessRoute({
+        apiMode: meta.apiMode,
+        subscriptionActive: false,
+        usageRoute: slice?.usage?.usageRoute,
+      }),
       approval: formatCliApprovalPolicy(harnessApprovalPolicy),
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
