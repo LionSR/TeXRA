@@ -20,7 +20,12 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { DelegateAgentTool } from '@tools/DelegationTools';
-import { executeSubagentInBand } from '@tools/delegation/inBandSubagentExecution';
+import {
+  executeSubagentInBand,
+  executeStableSubagentInBand,
+  SubagentDurabilityError,
+  SubagentReconciliationError,
+} from '@tools/delegation/inBandSubagentExecution';
 
 const mocks = vi.hoisted(() => ({
   enableYoloOnChildStream: vi.fn(),
@@ -109,6 +114,38 @@ function mockExecuteAgentErrorOnce(totalCostUsd: number): void {
     await options.onRunError?.(new Error('review model failed'), failed);
     return failed;
   });
+}
+
+const STABLE_PARENT_EXECUTION_ID = 'abcdef123456' as ExecutionId;
+
+function stableAttempt(
+  logicalExecutionId: ExecutionId,
+  phase: 'reserved' | 'launched' | 'retryable' = 'launched',
+) {
+  return {
+    schemaVersion: 1,
+    logicalExecutionId,
+    parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+    phase,
+  } as const;
+}
+
+function stableSequenceStore(logicalExecutionId: ExecutionId, nextAttempt = 0) {
+  let sequence =
+    nextAttempt === 0
+      ? undefined
+      : {
+          schemaVersion: 1 as const,
+          logicalExecutionId,
+          parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+          nextAttempt,
+        };
+  return {
+    read: vi.fn(async () => sequence),
+    write: vi.fn(async (_key: string, value: typeof sequence) => {
+      sequence = value;
+    }),
+  };
 }
 
 describe('headless delegation', () => {
@@ -227,9 +264,334 @@ describe('headless delegation', () => {
     expect(mocks.writeResultMeta).toHaveBeenCalledWith({
       producer: 'subagent',
       agentName: 'review',
+      parentExecutionId: 'parent-exec',
       wallTimeMs: expect.any(Number),
       result: result.result,
     });
+  });
+
+  it('recovers a completed stable child before resolving launch prerequisites', async () => {
+    const stableExecutionId = 'cccccc333333' as ExecutionId;
+    const persistedResult = {
+      category: 'toolUse' as const,
+      outcome: 'completed' as const,
+      response: 'Recovered review.',
+      files: [],
+      cost: 0,
+    };
+    const sequenceStore = stableSequenceStore(stableExecutionId, 1);
+    const childStore = {
+      listKeys: vi
+        .fn()
+        .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
+      read: vi.fn().mockResolvedValue(stableAttempt(stableExecutionId)),
+      readResultMeta: vi.fn().mockResolvedValue({
+        producer: 'subagent',
+        agentName: 'review',
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        wallTimeMs: 100,
+        result: persistedResult,
+      }),
+    };
+    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
+      executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
+    );
+    const prepare = vi.fn(() =>
+      Promise.reject(new Error('current agent is unavailable')),
+    );
+
+    await expect(
+      executeStableSubagentInBand({
+        executionId: stableExecutionId,
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        prepare,
+      }),
+    ).resolves.toEqual({
+      executionId: stableExecutionId,
+      result: persistedResult,
+    });
+    expect(prepare).not.toHaveBeenCalled();
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+    expect(mocks.writeResultMeta).not.toHaveBeenCalled();
+  });
+
+  it('recovers a later completed attempt when an earlier child was deleted', async () => {
+    const logicalExecutionId = 'cccccc444444' as ExecutionId;
+    const persistedResult = {
+      category: 'toolUse' as const,
+      outcome: 'completed' as const,
+      response: 'Recovered later attempt.',
+      files: [],
+      cost: 0,
+    };
+    const sequenceStore = stableSequenceStore(logicalExecutionId, 2);
+    const missingStore = {
+      listKeys: vi.fn().mockResolvedValue([]),
+      read: vi.fn().mockResolvedValue(undefined),
+      readResultMeta: vi.fn().mockResolvedValue(null),
+    };
+    const completedStore = {
+      listKeys: vi
+        .fn()
+        .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
+      read: vi.fn().mockResolvedValue(stableAttempt(logicalExecutionId)),
+      readResultMeta: vi.fn().mockResolvedValue({
+        producer: 'subagent',
+        agentName: 'review',
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        wallTimeMs: 100,
+        result: persistedResult,
+      }),
+    };
+    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) => {
+      if (executionId === STABLE_PARENT_EXECUTION_ID) return sequenceStore;
+      return executionId === logicalExecutionId ? missingStore : completedStore;
+    });
+    const prepare = vi.fn();
+
+    const recovered = await executeStableSubagentInBand({
+      executionId: logicalExecutionId,
+      parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+      prepare,
+    });
+
+    expect(recovered.result).toBe(persistedResult);
+    expect(recovered.executionId).not.toBe(logicalExecutionId);
+    expect(prepare).not.toHaveBeenCalled();
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+  });
+
+  it('rejects a result manifest with different parent lineage', async () => {
+    const stableExecutionId = 'cccccc555555' as ExecutionId;
+    const sequenceStore = stableSequenceStore(stableExecutionId, 1);
+    const childStore = {
+      listKeys: vi
+        .fn()
+        .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
+      read: vi.fn().mockResolvedValue(stableAttempt(stableExecutionId)),
+      readResultMeta: vi.fn().mockResolvedValue({
+        producer: 'subagent',
+        agentName: 'review',
+        parentExecutionId: 'deadbeef',
+        wallTimeMs: 100,
+        result: {
+          category: 'toolUse',
+          outcome: 'completed',
+          response: 'Wrong workflow.',
+          files: [],
+          cost: 0,
+        },
+      }),
+    };
+    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
+      executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
+    );
+
+    await expect(
+      executeStableSubagentInBand({
+        executionId: stableExecutionId,
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        prepare: vi.fn(),
+      }),
+    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+  });
+
+  it('refuses to repeat an incomplete stable child', async () => {
+    const logicalExecutionId = 'dddddd444444' as ExecutionId;
+    const sequenceStore = stableSequenceStore(logicalExecutionId, 1);
+    const childStore = {
+      listKeys: vi.fn().mockResolvedValue(['meta']),
+      read: vi.fn().mockResolvedValue(undefined),
+      readResultMeta: vi.fn().mockResolvedValue(null),
+    };
+    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
+      executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
+    );
+
+    await expect(
+      executeSubagentInBand({
+        executionId: logicalExecutionId,
+        configPayload: {
+          agent: 'review',
+          agentCategory: AgentCategory.ToolUse,
+          model: 'deepseekT',
+        },
+        agentName: 'review',
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        parentStreamId: 'parent-stream' as StreamTabId,
+        runtimeHost: runtimeHost(),
+        session: defaultSession(),
+      }),
+    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+  });
+
+  it.each(['reserved', 'retryable'] as const)(
+    'retries a %s child without a result manifest',
+    async (phase) => {
+      const logicalExecutionId = 'dddddd555555' as ExecutionId;
+      const stores = new Map<ExecutionId, Record<string, unknown>>();
+      const sequenceStore = stableSequenceStore(logicalExecutionId, 1);
+      mocks.getExecutionStore.mockImplementation((id: ExecutionId) => {
+        if (id === STABLE_PARENT_EXECUTION_ID) return sequenceStore;
+        let store = stores.get(id);
+        if (store) return store;
+        store =
+          id === logicalExecutionId
+            ? {
+                listKeys: vi
+                  .fn()
+                  .mockResolvedValue(['stable-subagent-attempt', 'config']),
+                read: vi
+                  .fn()
+                  .mockResolvedValue(stableAttempt(logicalExecutionId, phase)),
+                readResultMeta: vi.fn().mockResolvedValue(null),
+              }
+            : {
+                listKeys: vi.fn().mockResolvedValue([]),
+                read: vi.fn().mockResolvedValue(undefined),
+                readResultMeta: vi.fn().mockResolvedValue(null),
+                write: vi.fn().mockResolvedValue(undefined),
+                writeResultMeta: mocks.writeResultMeta,
+              };
+        stores.set(id, store);
+        return store;
+      });
+
+      const completed = await executeSubagentInBand({
+        executionId: logicalExecutionId,
+        configPayload: {
+          agent: 'review',
+          agentCategory: AgentCategory.ToolUse,
+          model: 'deepseekT',
+        },
+        agentName: 'review',
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        parentStreamId: 'parent-stream' as StreamTabId,
+        runtimeHost: runtimeHost(),
+        session: defaultSession(),
+      });
+
+      expect(completed.executionId).not.toBe(logicalExecutionId);
+      expect(mocks.executeAgent).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('refuses to repeat a completed stable child when its manifest cannot be written', async () => {
+    const logicalExecutionId = 'dddddd666666' as ExecutionId;
+    const sequenceStore = stableSequenceStore(logicalExecutionId);
+    let marker: ReturnType<typeof stableAttempt> | undefined;
+    const write = vi.fn(async (key: string, value: typeof marker) => {
+      if (key === 'stable-subagent-attempt') marker = value;
+    });
+    mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
+    const childStore = {
+      listKeys: vi.fn(async () => (marker ? ['stable-subagent-attempt'] : [])),
+      read: vi.fn(async () => marker),
+      readResultMeta: vi.fn().mockResolvedValue(null),
+      write,
+      writeResultMeta: mocks.writeResultMeta,
+    };
+    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
+      executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
+    );
+    const options = {
+      executionId: logicalExecutionId,
+      configPayload: {
+        agent: 'review',
+        agentCategory: AgentCategory.ToolUse,
+        model: 'deepseekT',
+      },
+      agentName: 'review',
+      parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+      parentStreamId: 'parent-stream' as StreamTabId,
+      runtimeHost: runtimeHost(),
+      session: defaultSession(),
+    } as const;
+
+    await expect(executeSubagentInBand(options)).rejects.toBeInstanceOf(
+      SubagentDurabilityError,
+    );
+
+    expect(write).toHaveBeenLastCalledWith(
+      'stable-subagent-attempt',
+      expect.objectContaining({ phase: 'launched' }),
+    );
+    await expect(executeSubagentInBand(options)).rejects.toBeInstanceOf(
+      SubagentReconciliationError,
+    );
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
+  });
+
+  it('uses a new durable attempt after failed and cancelled children', async () => {
+    const logicalExecutionId = 'eeeeee555555' as ExecutionId;
+    const configPayload = {
+      agent: 'review',
+      agentCategory: AgentCategory.ToolUse,
+      model: 'deepseekT',
+    };
+    const stores = new Map<ExecutionId, Record<string, unknown>>();
+    const sequenceStore = stableSequenceStore(logicalExecutionId);
+    const priorOutcomes = ['failed', 'cancelled'] as const;
+    mocks.getExecutionStore.mockImplementation((id: ExecutionId) => {
+      if (id === STABLE_PARENT_EXECUTION_ID) return sequenceStore;
+      let store = stores.get(id);
+      if (store) return store;
+      const priorOutcome = priorOutcomes[stores.size];
+      store = priorOutcome
+        ? {
+            listKeys: vi
+              .fn()
+              .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
+            read: vi.fn().mockResolvedValue(stableAttempt(logicalExecutionId)),
+            readResultMeta: vi.fn().mockResolvedValue({
+              producer: 'subagent',
+              agentName: 'review',
+              parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+              wallTimeMs: 100,
+              result: {
+                category: 'toolUse',
+                outcome: priorOutcome,
+                response: '',
+                files: [],
+                cost: 0,
+              },
+            }),
+          }
+        : {
+            listKeys: vi.fn().mockResolvedValue([]),
+            read: vi.fn().mockResolvedValue(undefined),
+            readResultMeta: vi.fn().mockResolvedValue(null),
+            write: vi.fn().mockResolvedValue(undefined),
+            writeResultMeta: mocks.writeResultMeta,
+          };
+      stores.set(id, store);
+      return store;
+    });
+
+    const completed = await executeSubagentInBand({
+      executionId: logicalExecutionId,
+      configPayload,
+      agentName: 'review',
+      parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+      parentStreamId: 'parent-stream' as StreamTabId,
+      runtimeHost: runtimeHost(),
+      session: defaultSession(),
+    });
+
+    expect(completed.executionId).not.toBe(logicalExecutionId);
+    expect(stores.size).toBe(3);
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      completed.executionId,
+      expect.anything(),
+      'review',
+      STABLE_PARENT_EXECUTION_ID,
+    );
   });
 
   it('does not return a typed result when its durable manifest cannot be written', async () => {
@@ -248,8 +610,64 @@ describe('headless delegation', () => {
         runtimeHost: runtimeHost(),
         session: defaultSession(),
       }),
-    ).rejects.toThrow('Failed to persist result for subagent');
+    ).rejects.toBeInstanceOf(SubagentDurabilityError);
     expect(mocks.writeReport).not.toHaveBeenCalled();
+  });
+
+  it('preserves the child failure when its failure manifest cannot be written', async () => {
+    mocks.executeAgent.mockRejectedValueOnce(new Error('review model failed'));
+    mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
+
+    const run = executeSubagentInBand({
+      configPayload: {
+        agent: 'review',
+        agentCategory: AgentCategory.ToolUse,
+        model: 'deepseekT',
+      },
+      agentName: 'review',
+      parentExecutionId: 'parent-exec' as ExecutionId,
+      parentStreamId: 'parent-stream' as StreamTabId,
+      runtimeHost: runtimeHost(),
+      session: defaultSession(),
+    });
+
+    await expect(run).rejects.toMatchObject({
+      name: 'SubagentDurabilityError',
+      message: expect.stringContaining('review model failed'),
+      cause: expect.objectContaining({ name: 'AggregateError' }),
+    });
+  });
+
+  it('preserves the child failure when its failure result cannot be constructed', async () => {
+    mocks.executeAgent.mockRejectedValueOnce(
+      new AgentFlowError('review model failed', {
+        category: 'toolUse',
+        outcome: 'failed',
+        executionId: 'child-exec',
+        streamId: 'child-stream',
+        touchedFiles: [42],
+      } as never),
+    );
+
+    const run = executeSubagentInBand({
+      configPayload: {
+        agent: 'review',
+        agentCategory: AgentCategory.ToolUse,
+        model: 'deepseekT',
+      },
+      agentName: 'review',
+      parentExecutionId: 'parent-exec' as ExecutionId,
+      parentStreamId: 'parent-stream' as StreamTabId,
+      runtimeHost: runtimeHost(),
+      session: defaultSession(),
+    });
+
+    await expect(run).rejects.toMatchObject({
+      name: 'SubagentDurabilityError',
+      message: expect.stringContaining('review model failed'),
+      cause: expect.objectContaining({ name: 'AggregateError' }),
+    });
+    expect(mocks.writeResultMeta).not.toHaveBeenCalled();
   });
 
   it('does not rewrite a completed child when typed result construction fails', async () => {

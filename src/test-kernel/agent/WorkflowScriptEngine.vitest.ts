@@ -95,6 +95,48 @@ return [a, b]`,
     expect(run.meta.name).toBe('test-flow');
   });
 
+  it('requires explicit identities for otherwise-repeated calls', async () => {
+    const invocations: WorkflowAgentInvocation[] = [];
+    await runWorkflowScript({
+      script: `${META}
+return await parallel([
+  () => agent('same', { id: ' first ' }),
+  () => agent('different'),
+  () => agent('same', { id: 'second' }),
+])`,
+      runAgent: (invocation) => {
+        invocations.push(invocation);
+        return echoRunner(invocation);
+      },
+    });
+
+    expect(invocations.map(({ options }) => options.id)).toEqual([
+      'first',
+      undefined,
+      'second',
+    ]);
+
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await parallel([
+  () => agent('same'),
+  () => agent('same'),
+])`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/require distinct non-empty "id" options/i);
+
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await parallel([
+  () => agent('same', { id: 'same-id' }),
+  () => agent('same', { id: ' same-id ' }),
+])`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/require distinct non-empty "id" options/i);
+  });
+
   it('passes typed workflow outputs into the next stage input files', async () => {
     const outputPath =
       '/storage/executions/bbbbbb222222/r1/drafted-section.tex';
@@ -164,6 +206,65 @@ return await parallel([
     expect(run.result).toEqual([null, 'result:fine']);
     // Only the successful call is journaled, so a resume retries the failure.
     expect(run.journal.map((entry) => entry.index)).toEqual([1]);
+  });
+
+  it('awaits durable journal hooks and excludes failed calls from them', async () => {
+    const order: string[] = [];
+    const run = await runWorkflowScript({
+      script: `${META}return [await agent('boom'), await agent('saved')]`,
+      runAgent: async ({ prompt }) => {
+        if (prompt === 'boom') throw new Error('runner failed');
+        order.push('runner');
+        return 'saved result';
+      },
+      onJournalEntry: async (entry) => {
+        await delay(5);
+        order.push(`checkpoint:${entry.index}`);
+      },
+      onEvent: (event) => {
+        if (event.type === 'agent:end' && !event.error) {
+          order.push(`end:${event.index}`);
+        }
+      },
+    });
+
+    expect(run.result).toEqual([null, 'saved result']);
+    expect(order).toEqual(['runner', 'checkpoint:1', 'end:1']);
+  });
+
+  it('surfaces a late checkpoint failure from an abandoned agent call', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}agent('abandoned'); return 'guest success'`,
+        runAgent: async () => {
+          await delay(5);
+          return 'completed child';
+        },
+        onJournalEntry: async () => {
+          await delay(5);
+          throw new Error('checkpoint offline');
+        },
+      }),
+    ).rejects.toMatchObject({ name: 'WorkflowRunAbortError' });
+  });
+
+  it('does not let a guest error mask a late checkpoint failure', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}agent('abandoned'); throw new Error('guest failed')`,
+        runAgent: async () => {
+          await delay(5);
+          return 'completed child';
+        },
+        onJournalEntry: async () => {
+          await delay(5);
+          throw new Error('checkpoint offline');
+        },
+      }),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining('checkpoint offline'),
+    });
   });
 
   it('pipeline(): no barrier between stages', async () => {
@@ -970,6 +1071,28 @@ return await parallel([() => agent('x')])`,
         runAgent: runner,
       }),
     ).rejects.toThrow(/runner observed abort/);
+  });
+
+  it('does not let script code suppress a fatal runner abort', async () => {
+    const runner = () => {
+      const abortError = new Error('durable manifest unavailable');
+      abortError.name = 'WorkflowRunAbortError';
+      return Promise.reject(abortError);
+    };
+
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+try {
+  await agent('x')
+} catch {}
+return 'incorrect success'`,
+        runAgent: runner,
+      }),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: 'durable manifest unavailable',
+    });
   });
 
   it('removes Intl so scripts cannot read the wall clock implicitly', async () => {

@@ -559,6 +559,9 @@ describe('ExecutionsTool', () => {
         'workspace-files.json',
         'result-meta.json',
         'child-def456.json',
+        'stable-subagent-attempt.json',
+        'stable-subagent-sequence-abc123.json',
+        'workflow-script-call-1.json',
         `${flowKey(executionId)}.json`,
       ];
       for (const name of kvFiles) {
