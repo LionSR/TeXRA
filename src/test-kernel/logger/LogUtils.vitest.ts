@@ -107,12 +107,20 @@ describe('logUtils', () => {
     }));
 
     logger.debug('test', 'request metadata', {
-      data: { authorization: `Bearer ${SECRET}` },
+      data: {
+        authorization: `Bearer ${SECRET}`,
+        password: 'correct horse battery staple',
+        refreshToken: 'opaque-refresh-credential',
+      },
     });
 
     expect(lines).toHaveLength(2);
     expect(lines.join('\n')).not.toContain(SECRET);
+    expect(lines.join('\n')).not.toContain('correct horse battery staple');
+    expect(lines.join('\n')).not.toContain('opaque-refresh-credential');
     expect(lines[1]).toContain('"authorization": "Bearer [redacted]"');
+    expect(lines[1]).toContain('"password": "[redacted]"');
+    expect(lines[1]).toContain('"refreshToken": "[redacted]"');
   });
 
   it('disposes a shared underlying sink exactly once', () => {
