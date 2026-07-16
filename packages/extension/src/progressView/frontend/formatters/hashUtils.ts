@@ -1,6 +1,6 @@
 /**
  * Simple string hash for generating stable content-based IDs.
- * Shared by copyContentStore and proposalInputStore.
+ * Used by createContentStore for content-addressable registries.
  */
 export function hashString(input: string): string {
   let hash = 0;

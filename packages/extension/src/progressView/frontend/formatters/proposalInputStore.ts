@@ -6,17 +6,18 @@
  *
  * Parsing the raw tool input into a typed proposal is domain logic and lives in
  * the schema layer (`parseDelegationToolInput`); this module is a thin registry
- * over it. Uses content-based hashing (like copyContentStore) so re-rendering
- * the same message produces the same ID — no memory leak on stream switches.
+ * over `createContentStore`.
  */
-
-import { LRUCache } from 'lru-cache';
 
 import { parseDelegationToolInput, type AgentProposal } from '@shared/schemas';
 
-import { hashString } from './hashUtils';
+import { createContentStore } from './contentStore';
 
-const proposalInputStore = new LRUCache<string, AgentProposal>({ max: 500 });
+const proposalInputStore = createContentStore<AgentProposal>({
+  max: 500,
+  prefix: 'proposal',
+  serialize: (proposal) => JSON.stringify(proposal),
+});
 
 /**
  * Register proposal input and return a stable ID for lookup.
@@ -27,13 +28,7 @@ export function registerProposalInput(
 ): string | null {
   const proposal = parseDelegationToolInput(input, toolName);
   if (!proposal) return null;
-
-  const serialized = JSON.stringify(proposal);
-  const id = `proposal:${serialized.length}:${hashString(serialized)}`;
-  if (!proposalInputStore.has(id)) {
-    proposalInputStore.set(id, proposal);
-  }
-  return id;
+  return proposalInputStore.register(proposal);
 }
 
 /**
