@@ -7,6 +7,8 @@ import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBui
 import {
   deleteAllExecutions,
   deleteExecution,
+  describeHeartbeatOwner,
+  getExecutionLiveness,
   getExecutionStore,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -87,6 +89,15 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
       );
       return;
     }
+    // The shared ~/.texra root means the run may be live in another host
+    // (CLI or extension) this process's registry cannot see (#8625).
+    const liveness = await getExecutionLiveness(historyId as ExecutionId);
+    if (liveness.live) {
+      await this.dependencies.showInfoMessage(
+        `Cannot delete: this execution is running in ${describeHeartbeatOwner(liveness.ownerHost)}`,
+      );
+      return;
+    }
 
     const deleted = await deleteExecution(historyId as ExecutionId);
     if (!deleted) {
@@ -99,6 +110,8 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   }
 
   private async clear(): Promise<void> {
+    // deleteAllExecutions itself skips runs live in any host (#8625);
+    // this process's active ids are excluded up front as a cheap fast path.
     await deleteAllExecutions(
       new Set(this.dependencies.getActiveExecutionIds()),
     );

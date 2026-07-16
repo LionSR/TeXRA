@@ -21,7 +21,8 @@ import { initPlatform, platform, tryPlatform } from '@platform/platform';
 // Local imports - telemetry
 import { UsageLogService } from '@telemetry/UsageLogService';
 
-// Local imports - agent index
+// Local imports - agent
+import { setHeartbeatOwnerHost } from '@agent/storage';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - auth
@@ -300,6 +301,7 @@ export async function initCliPlatform(
       channel: 'cli',
       customDirectoryStore: { get: () => undefined },
     });
+    setHeartbeatOwnerHost('cli');
     initPlatform(
       createNodePlatform({
         configStores: { workspace: configStore, global: globalConfigStore },

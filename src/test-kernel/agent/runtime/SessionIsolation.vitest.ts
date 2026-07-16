@@ -49,6 +49,8 @@ const storageMocks = vi.hoisted(() => ({
 
 vi.mock('@agent/storage', () => ({
   finalizeExecution: storageMocks.finalizeExecution,
+  HEARTBEAT_INTERVAL_MS: 10_000,
+  touchExecutionHeartbeat: () => Promise.resolve(),
 }));
 
 function initTestPlatform(): Promise<void> {
