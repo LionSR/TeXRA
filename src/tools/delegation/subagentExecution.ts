@@ -33,7 +33,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import { inheritApprovalBypassesOnChildStream } from '@tools/approval';
+import { configureDelegatedChildApprovals } from '@tools/approval';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -121,9 +121,12 @@ export async function executeSubagent(
     // bypass, so a bash-only parent (CLI AUTO-BASH without AUTO-APPROVE) still
     // propagates only bash, and a YOLO toggle on the parent mid-run reaches
     // already-launched children.
-    inheritApprovalBypassesOnChildStream(
+    configureDelegatedChildApprovals(
       resolvedStreamId,
       orchestratorStreamId,
+      options?.approvalMeta?.autoApproved === true
+        ? 'auto-approved'
+        : 'inherit',
     );
   };
 

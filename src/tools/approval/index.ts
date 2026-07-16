@@ -31,9 +31,12 @@ import type { StreamTabId } from '@shared/schemas';
  * `setDelegatedWorkApprovalBypasses` pins the child's own explicit entries,
  * so that grant survives the parent later re-gating).
  */
-export function inheritApprovalBypassesOnChildStream(
+export type DelegatedChildApprovalPolicy = 'inherit' | 'auto-approved';
+
+export function configureDelegatedChildApprovals(
   childStreamId: StreamTabId,
   parentStreamId?: StreamTabId,
+  policy: DelegatedChildApprovalPolicy = 'inherit',
   session: SessionHandle = currentSession(),
 ): void {
   if (parentStreamId) {
@@ -41,6 +44,16 @@ export function inheritApprovalBypassesOnChildStream(
       'bash',
       'toolEdit',
     ]);
+  }
+  if (policy === 'auto-approved') {
+    session.approvals.toolEdit.bypass.setBypass(
+      childStreamId,
+      true,
+      undefined,
+      {
+        silent: true,
+      },
+    );
   }
 }
 
@@ -55,10 +68,10 @@ export function cleanupApprovalsForStream(
   const { toolEdit, bash, proposal } = session.approvals;
   toolEdit.rejectPendingForStream(streamId);
   bash.rejectPendingForStream(streamId);
+  session.approvals.forgetStreamAncestry(streamId);
   toolEdit.bypass.clearForStream(streamId);
   bash.bypass.clearForStream(streamId);
   proposal.clearForStream(streamId);
-  session.approvals.forgetStreamAncestry(streamId);
   session.interactions.cancel({
     streamId,
     cause: 'Stream resources released.',

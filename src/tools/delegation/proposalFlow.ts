@@ -155,9 +155,8 @@ export async function proposeAndExecute(
   streamId: StreamTabId,
 ): Promise<ToolResult> {
   if (proposalApprovals().isBypassed(streamId)) {
-    // No explicit edit grant for the child: super-YOLO always couples the
-    // parent's tool-edit + bash bypass on (setDelegatedWorkApprovalBypasses),
-    // so the child's live ancestry links already resolve to auto-approve.
+    // Preserve the approved delegation's edit grant explicitly on the child.
+    // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
     return executeSubagent(proposal, agentName, streamId, {
       approvalMeta: { autoApproved: true },
     });

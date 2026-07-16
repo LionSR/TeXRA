@@ -33,7 +33,7 @@ import {
 } from '@tools/delegation/inBandSubagentExecution';
 
 const mocks = vi.hoisted(() => ({
-  inheritApprovalBypassesOnChildStream: vi.fn(),
+  configureDelegatedChildApprovals: vi.fn(),
   executeAgent: vi.fn(),
   getExecutionStore: vi.fn(),
   getVisibleAgent: vi.fn(),
@@ -65,8 +65,7 @@ vi.mock('@model/computeModelOptions', () => ({
 }));
 
 vi.mock('@tools/approval', () => ({
-  inheritApprovalBypassesOnChildStream:
-    mocks.inheritApprovalBypassesOnChildStream,
+  configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
   isApprovalBypassedForStream: mocks.isApprovalBypassedForStream,
   proposalApprovals: () => ({
     isBypassed: mocks.isProposalBypassed,

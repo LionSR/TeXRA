@@ -257,7 +257,7 @@ export interface SessionApprovals {
    * Used for delegated subagent streams (parent = the orchestrator stream,
    * `kinds: ['bash', 'toolEdit']` — each kind follows the parent's own bypass
    * live, while `proposal` stays unlinked so a child's own delegations still
-   * prompt; see `inheritApprovalBypassesOnChildStream`) and, in the CLI,
+   * prompt; see `configureDelegatedChildApprovals`) and, in the CLI,
    * successive conversation rounds (parent = the previous round's root
    * stream, all kinds — a CLI round should carry forward whichever bypasses
    * were on) — both mint a fresh `StreamTabId` that would otherwise start
@@ -269,12 +269,14 @@ export interface SessionApprovals {
     kinds?: readonly BypassAncestryKind[],
   ): void;
   /**
-   * Drop `streamId` from the ancestry graph (all kinds): both its own parent
-   * links and any child that named it as parent. Called on per-stream
-   * teardown (`cleanupApprovalsForStream`) so a torn-down stream can't
-   * linger as a live ancestor — without this, a still-running child would
-   * keep resolving its bypass through a parent whose own bypass state was
-   * just cleared, silently changing the child's effective bypass.
+   * Promote a stream out of its approval ancestry while preserving each
+   * effective bypass value as an explicit value on the stream.
+   */
+  detachStreamFromParent(streamId: StreamTabId): void;
+  /**
+   * Drop `streamId` from the ancestry graph (all kinds). Direct children are
+   * first promoted through {@link detachStreamFromParent}, preserving their
+   * effective values before the torn-down parent's own values are cleared.
    */
   forgetStreamAncestry(streamId: StreamTabId): void;
   /**
@@ -334,6 +336,30 @@ export function createSessionApprovals(): SessionApprovals {
     resolveParentFor('proposal'),
     resolveDescendantsFor('proposal'),
   );
+  const bypassByKind: Record<BypassAncestryKind, StreamApprovalBypass> = {
+    toolEdit: toolEdit.bypass,
+    bash: bash.bypass,
+    proposal,
+  };
+
+  function detachKindFromParent(
+    kind: BypassAncestryKind,
+    streamId: StreamTabId,
+  ): void {
+    const graph = parentOf[kind];
+    if (!graph.has(streamId)) return;
+    const bypass = bypassByKind[kind];
+    const effectiveValue = bypass.isBypassed(streamId);
+    graph.delete(streamId);
+    bypass.setBypass(streamId, effectiveValue, undefined, { silent: true });
+  }
+
+  function detachStreamFromParent(streamId: StreamTabId): void {
+    for (const kind of ALL_BYPASS_ANCESTRY_KINDS) {
+      detachKindFromParent(kind, streamId);
+    }
+  }
+
   return {
     toolEdit,
     bash,
@@ -347,14 +373,15 @@ export function createSessionApprovals(): SessionApprovals {
         parentOf[kind].set(childStreamId, parentStreamId);
       }
     },
+    detachStreamFromParent,
     forgetStreamAncestry(streamId) {
       for (const kind of ALL_BYPASS_ANCESTRY_KINDS) {
         const graph = parentOf[kind];
-        graph.delete(streamId);
-        const orphaned = [...graph]
+        const directChildren = [...graph]
           .filter(([, parent]) => parent === streamId)
           .map(([child]) => child);
-        for (const child of orphaned) graph.delete(child);
+        for (const child of directChildren) detachKindFromParent(kind, child);
+        graph.delete(streamId);
       }
     },
     rejectAndClearAll() {

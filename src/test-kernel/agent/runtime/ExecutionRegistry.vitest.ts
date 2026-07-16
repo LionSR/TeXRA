@@ -21,6 +21,7 @@ import {
 } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -1411,6 +1412,37 @@ describe('executionRegistry', () => {
     } finally {
       registry.dispose();
       recorded.detach();
+    }
+  });
+
+  it('preserves child approvals when detaching it from its parent', () => {
+    const explicit = createRecordingHost();
+    const registry = new ExecutionRegistry();
+    const approvals = createSessionApprovals();
+    const parentStreamId = 'parent-detach-approvals' as StreamTabId;
+    const childStreamId = 'child-detach-approvals' as StreamTabId;
+    const handle = createHandle(
+      'exec-detach-approvals',
+      parentStreamId,
+      childStreamId,
+      explicit.host,
+    );
+
+    try {
+      registry.attachSessionApprovals(approvals);
+      approvals.toolEdit.bypass.setBypass(parentStreamId, true);
+      approvals.registerStreamParent(childStreamId, parentStreamId, [
+        'toolEdit',
+      ]);
+      registry.track(handle);
+
+      registry.detachActiveChildren(parentStreamId, explicit.host);
+      approvals.toolEdit.bypass.setBypass(parentStreamId, false);
+
+      expect(approvals.toolEdit.bypass.isBypassed(childStreamId)).toBe(true);
+      expect(handle.deliveryTargetStreamId).toBeUndefined();
+    } finally {
+      registry.dispose();
     }
   });
 

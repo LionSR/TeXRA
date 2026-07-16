@@ -12,7 +12,7 @@ import type { StreamTabId } from '@shared/schemas/identifiers';
  * it pauses or ends so manual follow-up turns prompt normally again.
  *
  * Subagents inherit the parent stream's bypass through the existing
- * delegation wiring (`inheritApprovalBypassesOnChildStream`), so no
+ * delegation wiring (`configureDelegatedChildApprovals`), so no
  * child-stream handling is needed here — per-kind ancestry means a goal
  * parent with bash bypassed but edits gated propagates exactly that split.
  *
