@@ -36,6 +36,7 @@ import { GoalStore } from '@tools/goal';
 import {
   recordSessionEvents,
   runEventsOfType,
+  toolUseRunShared,
   withTestRunContext,
 } from '../progressTestUtils';
 
@@ -95,11 +96,7 @@ function createWaitNodeServices(
 
 describe('ToolUseWaitNode', () => {
   it('always suspends a subagent cycle at WAITING, carrying its turn facts', async () => {
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const runtimeHost = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
 
@@ -140,11 +137,7 @@ describe('ToolUseWaitNode', () => {
     // and symmetrically. A follow-up already queued is the child-run loop's
     // concern (it resumes immediately instead of genuinely waiting) — not
     // something the flow itself should special-case.
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const runtimeHost = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
 
@@ -167,11 +160,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('advances a drained child-loop batch once without reading the session queue', async () => {
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const runtimeHost = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
     const createUserFollowUpMessages = vi.fn(
@@ -236,11 +225,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('stops instead of suspending when stopAfterCycle is set (headless in-band subagent)', async () => {
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const runtimeHost = { emit: vi.fn() };
 
     const services = createWaitNodeServices({
@@ -264,11 +249,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('stops immediately on interruption instead of suspending a subagent', async () => {
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const runtimeHost = { emit: vi.fn() };
 
     const services = createWaitNodeServices({
@@ -292,11 +273,9 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('fires the root-only onIdle notification every cycle without suspending', async () => {
-    const shared: ToolUseRunShared = {
+    const shared: ToolUseRunShared = toolUseRunShared({
       messages: [{ role: 'assistant', content: 'partial response' } as never],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    });
     const onIdle = vi.fn();
     const runtimeHost = { emit: vi.fn() };
     let waitCalls = 0;
@@ -323,11 +302,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('warns when follow-up media cannot be attached to a non-vision model', async () => {
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const info = vi.fn();
     const warn = vi.fn();
     const addMediaToUserMessage = vi.fn(async () => []);
@@ -385,11 +360,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('logs follow-up markers reported by provider insertion', async () => {
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const info = vi.fn();
     const runtimeHost = { emit: vi.fn() };
     const logger = Object.assign(new TraceEmitter(), {
@@ -443,12 +414,9 @@ describe('ToolUseWaitNode', () => {
 
     await GoalStore.start(streamId, 'finish the refactor');
 
-    const shared: ToolUseRunShared = {
+    const shared: ToolUseRunShared = toolUseRunShared({
       lastError: { message: 'cycle failed', userRetryable: false },
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    });
     const runtimeHost = { emit: vi.fn() };
     const logger = new TraceEmitter();
     const hub = new SessionEventHub();
@@ -510,11 +478,7 @@ describe('ToolUseWaitNode', () => {
 
     await GoalStore.start(streamId, 'Finish the autonomous proof audit.');
 
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const createUserFollowUpMessages = vi.fn(
       async (
         messages: ProviderMessage[],
@@ -594,11 +558,7 @@ describe('ToolUseWaitNode', () => {
       'Keep solving the hard problem until verification is complete.',
     );
 
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const createUserFollowUpMessages = vi.fn(
       async (
         messages: ProviderMessage[],
@@ -744,11 +704,7 @@ describe('ToolUseWaitNode', () => {
   it('updates the injected stream status owner while waiting and resuming', async () => {
     const streamId = 'wait-node-owner' as StreamTabId;
     const streamStatus = new StreamStatusMachine();
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-    };
+    const shared: ToolUseRunShared = toolUseRunShared();
     const createUserFollowUpMessages = vi.fn(async () => []);
     const runtimeHost = { emit: vi.fn() };
     const services = createWaitNodeServices({
