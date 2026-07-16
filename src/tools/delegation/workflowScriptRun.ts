@@ -3,9 +3,11 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   runPersistedWorkflowScript,
   type PersistedWorkflowScriptRunOptions,
+  type WorkflowJournalEntry,
   type WorkflowScriptEvent,
   type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
+import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 
 type WorkflowScriptRunWithProgressOptions = Omit<
@@ -16,6 +18,33 @@ type WorkflowScriptRunWithProgressOptions = Omit<
 interface PhaseStage {
   readonly handle: StageHandle;
   failed: boolean;
+}
+
+export class WorkflowJournalCostError extends Error {
+  constructor(index: number, options?: ErrorOptions) {
+    super(
+      `Workflow journal entry ${index} is not an agent final result.`,
+      options,
+    );
+    this.name = 'WorkflowJournalCostError';
+  }
+}
+
+/** Sum completed logical-call cost; failed and cancelled attempts are not journaled. */
+export function sumCompletedWorkflowJournalCost(
+  journal: readonly WorkflowJournalEntry[],
+): number {
+  let total = 0;
+  for (const entry of journal) {
+    const result = AgentFinalResultSchema.safeParse(entry.result);
+    if (!result.success) {
+      throw new WorkflowJournalCostError(entry.index, {
+        cause: result.error,
+      });
+    }
+    total += result.data.cost;
+  }
+  return total;
 }
 
 /** Run a durable workflow script and project its progress onto the parent trace. */
