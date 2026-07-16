@@ -196,12 +196,11 @@ flowchart TB
         G1 --> T1["DiagnosticsTool\nsilently returns [] in CLI"]
     end
 
-    subgraph TARGET["✅ Target — frozen Platform port, typed & visible"]
+    subgraph TARGET["✅ Target — session-owned host interaction, typed & visible"]
         direction TB
-        E2["extension.ts"] --> IP["initPlatform({ linter, opener, … })"]
-        C2["CLI host"] --> IP
-        IP --> FZ["Object.freeze(Platform)"]
-        FZ --> T2["DiagnosticsTool\nplatform().linter\n(missing wiring = type error)"]
+        E2["extension interaction adapter"] --> SH["SessionHandle.interactions"]
+        C2["headless session"] -.->|"capability absent"| SH
+        SH --> T2["DiagnosticsTool\nreadDiagnostics\n(missing wiring = explicit error)"]
     end
 
     style NOW fill:#fee,stroke:#c33

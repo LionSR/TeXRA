@@ -1,65 +1,58 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
-import { installPlatform } from '../support/setupPlatform';
-import type { AddCriticismSink } from '@platform/interfaces';
 
-afterEach(async () => {
-  await installPlatform();
-});
-
-function installLinter(
-  linter: (path: string) => Promise<GenericDiagnostic[]>,
-): Promise<void> {
-  return installPlatform({}, { linter });
-}
-
-function installAddCriticismSink(
-  addCriticismSink: AddCriticismSink,
-): Promise<void> {
-  return installPlatform({}, { addCriticismSink });
-}
-
-function worktreeContext() {
+function worktreeContext(session: SessionHandle) {
   return createRunContext({
     runtimeHost: { emit: vi.fn() },
     workingDirectory: '/worktree',
+    session,
   });
 }
 
 describe('DiagnosticsTool', () => {
-  it('reports a capability error when the host has no linter', async () => {
-    await installPlatform({}, { linter: undefined });
+  it('reports a capability error when the session has no diagnostics reader', async () => {
+    const session = createTestSession();
 
-    const result = await withRunContext(worktreeContext(), () =>
-      new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
-    );
+    try {
+      const result = await withRunContext(worktreeContext(session), () =>
+        new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
+      );
 
-    expect(result).toMatchObject({
-      status: 'error',
-      error:
-        'Diagnostics capability unavailable: this host did not configure Platform.linter.',
-      diagnostics: { name: 'ToolError' },
-    });
+      expect(result).toMatchObject({
+        status: 'error',
+        diagnostics: { name: 'ToolError' },
+      });
+      expect(result.error).toContain('Diagnostics capability unavailable');
+    } finally {
+      session.dispose();
+    }
   });
 
-  it('reads diagnostics from the active working directory root', async () => {
-    const paths: string[] = [];
-    await installLinter(async (path) => {
-      paths.push(path);
-      return [];
+  it('reads diagnostics through the run context session', async () => {
+    const session = createTestSession();
+    const readDiagnostics = vi.fn(async (_path: string) => {
+      return [] as GenericDiagnostic[];
     });
-    const result = await withRunContext(worktreeContext(), () =>
-      new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
-    );
+    session.useHostInteractions({ readDiagnostics, cancel: vi.fn() });
 
-    expect(paths).toEqual(['/worktree/paper.tex']);
-    expect(result.diagnostics).toMatchObject({
-      path: '/worktree/paper.tex',
-      command: 'list',
-    });
+    try {
+      const result = await withRunContext(worktreeContext(session), () =>
+        new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
+      );
+
+      expect(readDiagnostics).toHaveBeenCalledWith('/worktree/paper.tex');
+      expect(result.diagnostics).toMatchObject({
+        path: '/worktree/paper.tex',
+        command: 'list',
+      });
+    } finally {
+      session.dispose();
+    }
   });
 
   it('rejects an add command missing required fields', async () => {
@@ -78,77 +71,93 @@ describe('DiagnosticsTool', () => {
     expect(result.error).toContain('at confidence');
   });
 
-  it('reports a capability error when the host has no criticism sink', async () => {
-    await installPlatform({}, { addCriticismSink: undefined });
+  it('reports a capability error when the session has no criticism sink', async () => {
+    const session = createTestSession();
 
-    const result = await withRunContext(worktreeContext(), () =>
-      new DiagnosticsTool().call({
-        command: 'add',
-        path: 'paper.tex',
-        line: 3,
-        message: 'tighten this claim',
-        severity: 4,
-        confidence: 5,
-      }),
-    );
+    try {
+      const result = await withRunContext(worktreeContext(session), () =>
+        new DiagnosticsTool().call({
+          command: 'add',
+          path: 'paper.tex',
+          line: 3,
+          message: 'tighten this claim',
+          severity: 4,
+          confidence: 5,
+        }),
+      );
 
-    expect(result).toMatchObject({
-      status: 'error',
-      error:
-        'Diagnostics add capability unavailable: this host did not configure Platform.addCriticismSink.',
-      diagnostics: { name: 'ToolError' },
-    });
+      expect(result).toMatchObject({
+        status: 'error',
+        diagnostics: { name: 'ToolError' },
+      });
+      expect(result.error).toContain('Diagnostics add capability unavailable');
+    } finally {
+      session.dispose();
+    }
   });
 
   it('reports when the criticism sink does not accept (feature disabled)', async () => {
-    await installAddCriticismSink(() => ({
-      accepted: false,
-      resolvedPath: '',
-    }));
+    const session = createTestSession();
+    session.useHostInteractions({
+      addCriticism: () => ({ accepted: false, resolvedPath: '' }),
+      cancel: vi.fn(),
+    });
 
-    const result = await withRunContext(worktreeContext(), () =>
-      new DiagnosticsTool().call({
-        command: 'add',
-        path: 'paper.tex',
-        line: 3,
-        message: 'tighten this claim',
-        severity: 4,
-        confidence: 5,
-      }),
-    );
+    try {
+      const result = await withRunContext(worktreeContext(session), () =>
+        new DiagnosticsTool().call({
+          command: 'add',
+          path: 'paper.tex',
+          line: 3,
+          message: 'tighten this claim',
+          severity: 4,
+          confidence: 5,
+        }),
+      );
 
-    expect(result.summary).toBe('Criticism not accepted');
+      expect(result.summary).toBe('Criticism not accepted');
+    } finally {
+      session.dispose();
+    }
   });
 
   it('resolves the path and summarizes an accepted criticism', async () => {
+    const session = createTestSession();
     const entries: unknown[] = [];
-    await installAddCriticismSink((entry) => {
-      entries.push(entry);
-      return { accepted: true, resolvedPath: entry.absolutePath };
+    session.useHostInteractions({
+      addCriticism: (entry) => {
+        entries.push(entry);
+        return { accepted: true, resolvedPath: entry.absolutePath };
+      },
+      cancel: vi.fn(),
     });
 
-    const result = await withRunContext(worktreeContext(), () =>
-      new DiagnosticsTool().call({
-        command: 'add',
-        path: 'paper.tex',
-        line: 3,
-        message: 'tighten this claim',
-        severity: 4,
-        confidence: 5,
-      }),
-    );
+    try {
+      const result = await withRunContext(worktreeContext(session), () =>
+        new DiagnosticsTool().call({
+          command: 'add',
+          path: 'paper.tex',
+          line: 3,
+          message: 'tighten this claim',
+          severity: 4,
+          confidence: 5,
+        }),
+      );
 
-    expect(entries).toEqual([
-      {
-        absolutePath: '/worktree/paper.tex',
-        line: 3,
-        message: 'tighten this claim',
-        severity: 4,
-        confidence: 5,
-      },
-    ]);
-    expect(result.summary).toBe(
-      'Added criticism for /worktree/paper.tex:3 (S4/C5)',
-    );
+      expect(entries).toEqual([
+        {
+          absolutePath: '/worktree/paper.tex',
+          line: 3,
+          message: 'tighten this claim',
+          severity: 4,
+          confidence: 5,
+        },
+      ]);
+      expect(result.summary).toBe(
+        'Added criticism for /worktree/paper.tex:3 (S4/C5)',
+      );
+    } finally {
+      session.dispose();
+    }
   });
 });

@@ -67,14 +67,15 @@ into a `ModelHandlerXAI.validateReasoningEffort` override; base default becomes
 `return effort`. (Sibling `getEffectiveReasoningEffort` at `:774` embeds a GPT-5
 rule but is called by 4 handlers and is inert off GPT-5 — leave it.)
 
-**2.2 Move 4 single-caller host-UI ports off the `Platform` interface.**
-`src/platform/interfaces.ts:249-307` carries `linter?`, `addCriticismSink?`,
-`toolMissingHandler?`, `toolNotificationHandler?` — each **one caller**, all
-VS-Code-only inline-UI concerns (`DiagnosticsTool.ts:132,182`, `toolUtils.ts:49`,
-`toolUnavailableNotification.ts:47,68`). A headless SDK consumer has no analog.
-_Fix:_ move them onto `SessionHandle.interactions` — the exact precedent already
-set when tool-edit approval was moved off `Platform` (`interfaces.ts:216-239`).
-Drops the Platform interface from 16 to 12 members.
+**2.2 Move 3 session-bound host-UI ports off the `Platform` interface.**
+`linter?`, `addCriticismSink?`, and `toolNotificationHandler?` are used only by
+agent tools and belong to the active session's host interaction adapter. Move
+them onto `SessionHandle.interactions`, following the tool-edit approval
+precedent. `toolMissingHandler?` remains process-host scoped: its direct caller
+in `toolUtils.ts` serves non-agent commands, formatters, media, and LaTeX code,
+so routing it through `SessionHandle` would create a lower-layer dependency on
+the agent runtime. Drops the Platform interface from 16 to 13 members without
+introducing a subsystem cycle.
 
 ### P3 — Redundant type-layer indirection
 
@@ -177,8 +178,8 @@ expose the log factory as an explicit field of the SDK context.
 workspaceState, fs, workspace, storage, secrets, lifecycle`.
 `languageModel/toolAvailability/agentResume/agentDirectories` are host-capability
 ports (keep, but optional/defaulted — the repo already models this well with
-`UNAVAILABLE_LANGUAGE_MODEL_PORT` / `NO_TOOL_AVAILABILITY_HOST`). The four
-host-UI ports (§2.2 above) should leave the core port entirely.
+`UNAVAILABLE_LANGUAGE_MODEL_PORT` / `NO_TOOL_AVAILABILITY_HOST`). The three
+session-bound host-UI ports (§2.2 above) should leave the core port entirely.
 
 ### 2.3 Provider surface: reduce the cost of adding a handler
 
@@ -271,7 +272,7 @@ SDK boundary would bypass, not an independent task.)_
 
 1. **Now (mechanical, no behavior change):** 1.1 delete `IModelHandler` shim,
    1.2/1.3 inline the two single-caller helpers. One small PR.
-2. **Next (leak cleanup):** 2.1 xAI clamp override and 2.2 move 4 host-UI ports
+2. **Next (leak cleanup):** 2.1 xAI clamp override and 2.2 move 3 host-UI ports
    off `Platform`. Each independently landable.
 3. **Structural (the actual SDK enablers):** §2.1 curated boundary + §2.2 accept
    `Platform` as an explicit argument to the SDK entrypoint (dissolve the global

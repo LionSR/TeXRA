@@ -11,13 +11,10 @@
 import type {
   AgentResumePort,
   AgentDirectoriesPort,
-  AddCriticismSink,
   ConfigProvider,
   StateStore,
   FileSystemProvider,
-  LinterProvider,
   ToolMissingHandler,
-  ToolNotificationHandler,
   WorkspaceProvider,
   StorageProvider,
   LifecycleHost,
@@ -50,29 +47,11 @@ export interface Platform {
   /** Subscription-backed models exposed by the active editor host. */
   readonly languageModel: LanguageModelPort;
   /**
-   * Linter diagnostics provider for the diagnostics tool's `list`/`count`
-   * commands. Single-implementer (VS Code) — hosts without a linter
-   * integration omit it; callers treat an absent port as "no diagnostics".
-   */
-  readonly linter?: LinterProvider;
-  /**
-   * Sink for the diagnostics tool's `add` (manual criticism) command.
-   * Single-implementer (VS Code) — hosts without an inline-criticism surface
-   * omit it; callers treat an absent port as "not accepted".
-   */
-  readonly addCriticismSink?: AddCriticismSink;
-  /**
    * Surfaces a tool-missing error to the user. Single-implementer (VS Code) —
    * hosts without a UI for this omit it; callers treat an absent port as a
    * no-op.
    */
   readonly toolMissingHandler?: ToolMissingHandler;
-  /**
-   * Surfaces a tool-group-unavailable notification to the user.
-   * Single-implementer (VS Code) — hosts without a UI for this omit it;
-   * callers treat an absent port as a no-op.
-   */
-  readonly toolNotificationHandler?: ToolNotificationHandler;
 }
 
 let _platform: Readonly<Platform> | null = null;
