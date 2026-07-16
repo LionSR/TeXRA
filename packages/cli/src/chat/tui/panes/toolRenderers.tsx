@@ -67,21 +67,25 @@ interface ElidedOutput {
   readonly hiddenCount: number;
 }
 
+function capLine(line: string): string {
+  return truncateWithEllipsis(line, OUTPUT_LINE_MAX_CHARS);
+}
+
 function elideOutputLines(lines: readonly string[]): ElidedOutput {
-  const capped = lines.map((line) =>
-    truncateWithEllipsis(line, OUTPUT_LINE_MAX_CHARS),
-  );
   // Only elide when the head + marker + tail form is shorter than the original.
   if (
-    capped.length <=
+    lines.length <=
     OUTPUT_HEAD_LINES + OUTPUT_TAIL_LINES + OUTPUT_MARKER_LINES
   ) {
-    return { head: capped, tail: [], hiddenCount: 0 };
+    return { head: lines.map(capLine), tail: [], hiddenCount: 0 };
   }
+  // Cap only the head/tail lines actually rendered, not every discarded line
+  // in between — this runs on every OutputBlock redraw while a tool streams,
+  // so truncating lines nobody sees would be wasted grapheme-segmentation work.
   return {
-    head: capped.slice(0, OUTPUT_HEAD_LINES),
-    tail: capped.slice(capped.length - OUTPUT_TAIL_LINES),
-    hiddenCount: capped.length - OUTPUT_HEAD_LINES - OUTPUT_TAIL_LINES,
+    head: lines.slice(0, OUTPUT_HEAD_LINES).map(capLine),
+    tail: lines.slice(lines.length - OUTPUT_TAIL_LINES).map(capLine),
+    hiddenCount: lines.length - OUTPUT_HEAD_LINES - OUTPUT_TAIL_LINES,
   };
 }
 
