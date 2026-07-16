@@ -66,7 +66,7 @@ const API_TYPE_TO_NAME = {
 
 type TextEditorApiType = keyof typeof API_TYPE_TO_NAME;
 
-export const TextEditorInputSchema = z.strictObject({
+const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
   path: z.string(),
   file_text: z.string().nullish(),
