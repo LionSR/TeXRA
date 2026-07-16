@@ -260,8 +260,34 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
   });
 
-  it('threads onCost through to the child execution', async () => {
+  it('reports live child cost with its workflow invocation identity', async () => {
     const onCost = vi.fn();
+    mocks.executeStableSubagentInBand.mockImplementationOnce(
+      async (options) => {
+        const prepared = await options.prepare();
+        await prepared.onCost?.(0.25);
+        return { executionId: 'bbbbbb222222', result };
+      },
+    );
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      'correct',
+      'tool-call-7',
+      { onCost },
+    );
+    const call = invocation();
+
+    await runner(call);
+
+    expect(onCost).toHaveBeenCalledWith(call, 0.25);
+  });
+
+  it('does not report recovered stable child cost as live execution', async () => {
+    const onCost = vi.fn();
+    mocks.executeStableSubagentInBand.mockResolvedValueOnce({
+      executionId: 'bbbbbb222222',
+      result: { ...result, cost: 0.25 },
+    });
     const runner = createWorkflowScriptAgentRunner(
       parentContext(),
       'correct',
@@ -269,11 +295,9 @@ describe('createWorkflowScriptAgentRunner', () => {
       { onCost },
     );
 
-    await runner(invocation());
+    await runner({ ...invocation(), index: 3 });
 
-    expect(mocks.preparedOptions[0]).toEqual(
-      expect.objectContaining({ onCost }),
-    );
+    expect(onCost).not.toHaveBeenCalled();
   });
 
   it('uses one stable child id per workflow call identity', async () => {
