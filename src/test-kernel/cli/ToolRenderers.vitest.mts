@@ -53,6 +53,11 @@ describe('CLI tool display lines', () => {
         spans: [{ dim: true, text: '⎿ ' }, { text: 'passed' }],
       },
     ]);
+    expect(Object.isFrozen(toolUseStyledLines(entry)[0])).toBe(true);
+    const firstLine = toolUseStyledLines(entry)[0];
+    if (firstLine?.kind !== 'row') throw new Error('expected a row');
+    expect(Object.isFrozen(firstLine.spans)).toBe(true);
+    expect(firstLine.spans.every(Object.isFrozen)).toBe(true);
   });
 
   it('counts wrapped patch rows at the rich terminal width', () => {
@@ -83,6 +88,27 @@ describe('CLI tool display lines', () => {
         "  +We use a transformer.",
       ]
     `);
+  });
+
+  it('keeps bash semantics ahead of generic MCP presentation', () => {
+    const entry = toolUse(
+      'mcp:terminal:bash',
+      { command: 'false' },
+      {
+        errorText: 'Command failed (exit 7)',
+        isError: true,
+        parsed: { exitCode: 7 },
+      },
+    );
+
+    expect(toolUseDisplayLines(entry)).toEqual([
+      '● terminal/bash (false)',
+      '⎿ exit 7',
+      '⎿ Command failed (exit 7)',
+    ]);
+    const header = toolUseStyledLines(entry)[0];
+    if (header?.kind !== 'row') throw new Error('expected a header row');
+    expect(header.spans.at(-1)).toMatchObject({ color: 'cyan' });
   });
 
   it('renders TeXRA edit_file calls through the native diff row', () => {

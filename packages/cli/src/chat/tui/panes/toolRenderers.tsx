@@ -139,7 +139,10 @@ export type ToolDisplayLine =
     };
 
 function row(spans: readonly ToolDisplaySpan[]): ToolDisplayLine {
-  return { kind: 'row', spans };
+  return Object.freeze({
+    kind: 'row',
+    spans: Object.freeze(spans.map((span) => Object.freeze(span))),
+  });
 }
 
 function lastSegmentToolName(toolName: string): string {
@@ -299,11 +302,14 @@ function extractExitCode(toolUse: NormalizedToolUse): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-const CORNER_PREFIX_SPAN: ToolDisplaySpan = {
+const CORNER_PREFIX_SPAN: ToolDisplaySpan = Object.freeze({
   text: `${TOOL_OUTPUT_CORNER} `,
   dim: true,
-};
-const CONTINUATION_PREFIX_SPAN: ToolDisplaySpan = { text: '  ', dim: true };
+});
+const CONTINUATION_PREFIX_SPAN: ToolDisplaySpan = Object.freeze({
+  text: '  ',
+  dim: true,
+});
 
 function outputRows(
   toolUse: NormalizedToolUse,
@@ -355,9 +361,6 @@ function toolRowOptions(
   };
   // Edit-like tools show their patch preview instead of raw output.
   if (hasPatch) return plain;
-  if (displayMcpToolName(toolUse.toolName) !== undefined) {
-    return { ...plain, showOutput: true };
-  }
   const isBash =
     toolDisplayKind(lastSegmentToolName(toolUse.toolName).toLowerCase()) ===
     'bash';
@@ -369,6 +372,9 @@ function toolRowOptions(
       showExitCode: true,
       showOutput: true,
     };
+  }
+  if (displayMcpToolName(toolUse.toolName) !== undefined) {
+    return { ...plain, showOutput: true };
   }
   // Every other tool keeps the compact header-only row (plus error and
   // no-output corners) so e.g. a read_file result never dumps file contents.
