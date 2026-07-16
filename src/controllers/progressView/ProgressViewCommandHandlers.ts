@@ -94,12 +94,7 @@ export interface ProgressViewApprovalCommandActions {
     message: ProgressViewMessage<
       typeof PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
     >,
-  ): boolean | Promise<boolean>;
-  onUnsupportedToolEditApproval?(
-    message: ProgressViewMessage<
-      typeof PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
-    >,
-  ): void;
+  ): void | Promise<void>;
   handleBashApprovalAction(
     message: ProgressViewMessage<
       typeof PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION
@@ -284,19 +279,8 @@ export function createProgressViewCommandHandlers(
       await reportDelegatedWorkApproval(true);
     },
 
-    [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) => {
-      const handled = approval.handleToolEditApprovalAction(data);
-      if (handled instanceof Promise) {
-        return handled.then((result) => {
-          if (result === false) {
-            approval.onUnsupportedToolEditApproval?.(data);
-          }
-        });
-      }
-      if (handled === false) {
-        approval.onUnsupportedToolEditApproval?.(data);
-      }
-    },
+    [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) =>
+      approval.handleToolEditApprovalAction(data),
     [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: async (data) => {
       await approval.handleBashApprovalAction(data);
     },
