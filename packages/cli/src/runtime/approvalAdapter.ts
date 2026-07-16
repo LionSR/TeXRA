@@ -7,6 +7,7 @@ import type {
   HostBashApprovalResult,
   HostInteractions,
   HostRetryRequest,
+  HostUserQuestionRequest,
   HostUserQuestionResult,
   PlanApprovalResult,
   ProposalResult,
@@ -42,10 +43,7 @@ import {
   formatToolEditApprovalSummary,
 } from './approval/approvalSummaries';
 import { summarizeApprovalEvent } from './approval/eventDispatch';
-import {
-  handleExternalInquiry,
-  handleUserQuestion,
-} from './approval/humanInputHandlers';
+import { handleExternalInquiry } from './approval/humanInputHandlers';
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
 
 export {
@@ -155,7 +153,7 @@ function toRetryResult(
 }
 
 async function askHeadlessUserQuestion(
-  payload: RuntimeInteractionEventPayloads['showUserQuestion'],
+  payload: HostUserQuestionRequest,
   context: CliContext,
   hooks: CliApprovalPromptHooks,
 ): Promise<HostUserQuestionResult> {
@@ -272,7 +270,6 @@ export function createHeadlessCliHostInteractions(
       });
       return { threadId: request.threadId };
     },
-    resolve: () => false,
     // Headless requests decide inline (policy or prompt hooks) — there is no
     // pending registry to cancel into.
     cancel: () => {},
@@ -290,15 +287,6 @@ export function handleCliApprovalEvent<
   if (event === 'showExternalInquiry') {
     handleExternalInquiry(
       payload as RuntimeInteractionEventPayloads['showExternalInquiry'],
-      context,
-      hooks,
-    );
-    return true;
-  }
-
-  if (event === 'showUserQuestion') {
-    handleUserQuestion(
-      payload as RuntimeInteractionEventPayloads['showUserQuestion'],
       context,
       hooks,
     );

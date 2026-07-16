@@ -17,7 +17,6 @@ describe('CLI approval event taxonomy', () => {
       'showAgentProposal',
       'showRetryRequest',
       'showExternalInquiry',
-      'showUserQuestion',
     ]);
 
     const decisionEvents: ReadonlySet<string> = new Set(
@@ -33,7 +32,7 @@ describe('CLI approval event taxonomy', () => {
     expect(isCliDecisionApprovalEvent('showExternalInquiry')).toBe(false);
 
     expect(isCliApprovalEvent('showExternalInquiry')).toBe(true);
-    expect(isCliApprovalEvent('showUserQuestion')).toBe(true);
+    expect(isCliApprovalEvent('showUserQuestion')).toBe(false);
     expect(isCliApprovalEvent('updateStreamStatus')).toBe(false);
   });
 
@@ -43,6 +42,5 @@ describe('CLI approval event taxonomy', () => {
     expect(cliApprovalEventKind('showAgentProposal')).toBe('proposal');
     expect(cliApprovalEventKind('showRetryRequest')).toBe('retry');
     expect(cliApprovalEventKind('showExternalInquiry')).toBe('externalInquiry');
-    expect(cliApprovalEventKind('showUserQuestion')).toBe('userQuestion');
   });
 });

@@ -28,6 +28,12 @@ import {
 } from '@tools/approval';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 
+const externalInquiryMocks = vi.hoisted(() => ({
+  continueExternalInquiryAction: vi.fn(),
+  persistExternalInquiryAction: vi.fn(),
+}));
+
+vi.mock('@tools/inquiry', () => externalInquiryMocks);
 vi.mock('@utils/files/pastedImageUtils', () => ({
   savePastedImageBase64: vi.fn(),
 }));
@@ -96,7 +102,9 @@ function createActions(
       handleUserQuestionAction: vi.fn(),
       handleAgentProposalAction: vi.fn(),
     },
-    externalInquiry: {},
+    externalInquiry: {
+      dismiss: vi.fn(),
+    },
     ...overrides,
   };
 }
@@ -786,6 +794,11 @@ describe('external inquiry action schema', () => {
   const command = PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION;
   const threadId = 'ei_123456789abc';
 
+  beforeEach(() => {
+    externalInquiryMocks.continueExternalInquiryAction.mockReset();
+    externalInquiryMocks.persistExternalInquiryAction.mockReset();
+  });
+
   it("requires each action variant's own fields", () => {
     const results = [
       { command, action: 'submit', threadId, answer: 'Confirmed' },
@@ -799,6 +812,50 @@ describe('external inquiry action schema', () => {
 
     expect(results).toEqual([true, true, true, false, false]);
   });
+
+  it.each([
+    {
+      name: 'submit',
+      message: { command, action: 'submit' as const, threadId, answer: 'Yes' },
+    },
+    {
+      name: 'drop',
+      message: { command, action: 'drop' as const, threadId },
+    },
+  ])(
+    'persists, dismisses, then continues a $name action',
+    async ({ message }) => {
+      const order: string[] = [];
+      const transition = { kind: 'stale' as const, threadId };
+      externalInquiryMocks.persistExternalInquiryAction.mockImplementation(
+        async () => {
+          order.push('persist');
+          return transition;
+        },
+      );
+      const dismiss = vi.fn(() => {
+        order.push('dismiss');
+      });
+      externalInquiryMocks.continueExternalInquiryAction.mockImplementation(
+        async () => {
+          order.push('continue');
+        },
+      );
+      const actions = createActions({ externalInquiry: { dismiss } });
+      const handlers = createProgressViewCommandHandlers(actions);
+
+      await assertSupported(handlers[command])(message);
+
+      expect(order).toEqual(['persist', 'dismiss', 'continue']);
+      expect(
+        externalInquiryMocks.persistExternalInquiryAction,
+      ).toHaveBeenCalledWith(message);
+      expect(dismiss).toHaveBeenCalledWith(threadId);
+      expect(
+        externalInquiryMocks.continueExternalInquiryAction,
+      ).toHaveBeenCalledWith(transition, actions.externalInquiry);
+    },
+  );
 });
 
 describe('user question action schema', () => {

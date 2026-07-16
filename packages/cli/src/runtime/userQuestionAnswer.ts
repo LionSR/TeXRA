@@ -1,8 +1,8 @@
-import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
+import type { UserQuestionPrompt } from '@shared/schemas';
 
 export function parseUserQuestionAnswer(
   raw: string,
-  question: RuntimeInteractionEventPayloads['showUserQuestion']['questions'][number],
+  question: UserQuestionPrompt,
 ): string | string[] | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;

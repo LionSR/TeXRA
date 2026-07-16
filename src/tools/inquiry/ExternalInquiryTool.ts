@@ -152,40 +152,43 @@ export type InquiryInput = z.infer<typeof InquiryInputSchema>;
 // Action handler (called by the host when the panel submits/drops)
 // ============================================================================
 
-export async function handleExternalInquiryAction(
+export type ExternalInquiryTransition =
+  | {
+      readonly kind: 'answered';
+      readonly threadId: InquiryActionMessage['threadId'];
+      readonly manifest: ExternalInquiryThreadManifest;
+    }
+  | {
+      readonly kind: 'dropped';
+      readonly threadId: InquiryActionMessage['threadId'];
+      readonly manifest: ExternalInquiryThreadManifest;
+    }
+  | {
+      readonly kind: 'stale';
+      readonly threadId: InquiryActionMessage['threadId'];
+    };
+
+/** Persist one terminal inquiry action without reaching into host presentation. */
+export async function persistExternalInquiryAction(
   payload: InquiryActionMessage,
-  options: { session?: SessionHandle } = {},
-): Promise<void> {
-  const session = options.session ?? defaultSession();
+): Promise<ExternalInquiryTransition> {
   if (payload.action === 'submit') {
     const persisted = await recordAnswerForOpenTurn({
       threadId: payload.threadId,
       answer: payload.answer,
       sessionLinks: payload.sessionLinks ?? undefined,
     });
-    // Removes the inquiry card from `ApprovalRequestHandler.pending`; without
-    // this the request would replay on next webview load and the stream would
-    // be reported as having pending permissions forever. Emit even for stale
-    // submits so duplicate/delayed UI actions do not leave a leaked permission.
-    session.interactions.resolve(payload.threadId, {
-      kind: 'externalInquiry',
-    });
     if (!persisted) {
       logger.warn(
         `Inquiry submit ignored: thread ${payload.threadId} has no open turn.`,
       );
-      return;
+      return { kind: 'stale', threadId: payload.threadId };
     }
-    // Pass the manifest we just wrote so the injector doesn't re-read from
-    // disk — a concurrent follow-up `ask` from another stream could flip
-    // the status back to `open` between writes and would otherwise cause
-    // the continuation to silently drop.
-    await injectContinuationForAnsweredThread(
-      payload.threadId,
-      persisted.manifest,
-      options.session,
-    );
-    return;
+    return {
+      kind: 'answered',
+      threadId: payload.threadId,
+      manifest: persisted.manifest,
+    };
   }
 
   // drop — only flips status if the thread is still open; see markDropped.
@@ -195,21 +198,54 @@ export async function handleExternalInquiryAction(
     });
   }
   const droppedManifest = await markDropped({ threadId: payload.threadId });
-  session.interactions.resolve(payload.threadId, {
-    kind: 'externalInquiry',
-  });
   if (droppedManifest) {
-    await injectContinuationForDroppedThread(
-      payload.threadId,
-      droppedManifest,
-      options.session,
-    );
-  } else {
-    logger.warn(
-      `Inquiry drop ignored: thread ${payload.threadId} is no longer open ` +
-        `(stale/duplicate drop after submit?). Skipping continuation.`,
-    );
+    return {
+      kind: 'dropped',
+      threadId: payload.threadId,
+      manifest: droppedManifest,
+    };
   }
+  logger.warn(
+    `Inquiry drop ignored: thread ${payload.threadId} is no longer open ` +
+      `(stale/duplicate drop after submit?). Skipping continuation.`,
+  );
+  return { kind: 'stale', threadId: payload.threadId };
+}
+
+/** Deliver the continuation represented by a completed durable transition. */
+export async function continueExternalInquiryAction(
+  transition: ExternalInquiryTransition,
+  options: { session?: SessionHandle } = {},
+): Promise<void> {
+  switch (transition.kind) {
+    case 'answered':
+      // Use the manifest just written so a concurrent follow-up cannot flip
+      // storage back to `open` before this continuation observes the answer.
+      await injectContinuationForAnsweredThread(
+        transition.threadId,
+        transition.manifest,
+        options.session,
+      );
+      return;
+    case 'dropped':
+      await injectContinuationForDroppedThread(
+        transition.threadId,
+        transition.manifest,
+        options.session,
+      );
+      return;
+    case 'stale':
+      return;
+  }
+}
+
+/** Persist and continue an inquiry action for hosts without progress UI. */
+export async function handleExternalInquiryAction(
+  payload: InquiryActionMessage,
+  options: { session?: SessionHandle } = {},
+): Promise<void> {
+  const transition = await persistExternalInquiryAction(payload);
+  await continueExternalInquiryAction(transition, options);
 }
 
 // ============================================================================

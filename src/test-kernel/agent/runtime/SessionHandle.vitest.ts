@@ -164,15 +164,12 @@ describe('SessionHandle', () => {
 
       // ...while B's remain live and resolvable through B's own port.
       expect(
-        b.interactions.resolve('approval:b', {
-          kind: 'plan',
-          decision: { action: 'approve' },
-        }),
+        hostB.decisions.submitPlan('approval:b', { action: 'approve' }),
       ).toBe(true);
       expect(
-        b.interactions.resolve(streamId, {
-          kind: 'retry',
-          decision: { action: 'retry', feedback: 'retry B' },
+        hostB.decisions.submitRetry(streamId, {
+          action: 'retry',
+          feedback: 'retry B',
         }),
       ).toBe(true);
       await expect(planB).resolves.toEqual({ action: 'approve' });
