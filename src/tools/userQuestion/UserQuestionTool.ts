@@ -7,7 +7,6 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { UserQuestionSettlement } from '@agent/runtime/HostInteractions';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
@@ -34,16 +33,6 @@ const AskUserQuestionInputSchema = z.strictObject({
 });
 
 export type AskUserQuestionInput = z.infer<typeof AskUserQuestionInputSchema>;
-
-export async function handleUserQuestionAction(
-  payload: { requestId: string } & UserQuestionSettlement,
-): Promise<void> {
-  const { requestId, ...decision } = payload;
-  defaultSession().interactions.resolve(requestId, {
-    kind: 'userQuestion',
-    decision,
-  });
-}
 
 export class AskUserQuestionTool extends defineTool({
   name: 'ask_user_question',

@@ -47,7 +47,6 @@ function installTestPlatform(): Promise<void> {
         }
         return handler(request);
       },
-      resolve: () => false,
       cancel: () => undefined,
     });
   });

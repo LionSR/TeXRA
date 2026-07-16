@@ -3,6 +3,7 @@ import type { AgentEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   matchesCancelSelector,
+  type BashSettlement,
   type HostBashApprovalResult,
   type HostInteractionCancelSelector,
   type HostInteractions,
@@ -10,7 +11,9 @@ import {
   type PendingInteractionKind,
   type PlanApprovalResult,
   type ProposalResult,
+  type RetrySettlement,
   type RetryResult,
+  type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
@@ -26,9 +29,8 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 /**
  * Loosely-typed recording of host emissions. The recording host also encodes
- * typed `HostInteractions` requests/resolutions as legacy-style show/resolve
- * entries (including keys that no longer exist on the frozen production map),
- * so the vocabulary is a plain string.
+ * typed `HostInteractions` requests and test-owned decisions as legacy-style
+ * show/resolve entries, so the vocabulary is a plain string.
  */
 export type RecordedProgressEvent = {
   event: string;
@@ -37,6 +39,17 @@ export type RecordedProgressEvent = {
 
 export interface RecordingProgressSink {
   emit(event: string, payload: unknown): void;
+}
+
+export interface RecordingHostDecisions {
+  submitBash(requestId: string, decision: BashSettlement): boolean;
+  submitPlan(requestId: string, decision: PlanApprovalResult): boolean;
+  submitProposal(requestId: string, decision: ProposalResult): boolean;
+  submitRetry(requestId: string, decision: RetrySettlement): boolean;
+  submitUserQuestion(
+    requestId: string,
+    decision: UserQuestionSettlement,
+  ): boolean;
 }
 
 export function recordSessionEvents(
@@ -76,6 +89,7 @@ export function runEventsOfType<T extends AgentEvent['type']>(
 export function createRecordingHost(): {
   events: RecordedProgressEvent[];
   interactions: HostInteractions;
+  decisions: RecordingHostDecisions;
   host: AgentRuntimeHost & RecordingProgressSink;
 } {
   const events: RecordedProgressEvent[] = [];
@@ -113,6 +127,71 @@ export function createRecordingHost(): {
         },
       });
     }
+  };
+  const decisions: RecordingHostDecisions = {
+    submitBash(requestId, decision) {
+      const pending = pendingBashes.get(requestId);
+      if (!pending) return false;
+      pendingBashes.delete(requestId);
+      events.push({
+        event: 'resolveBashPermission',
+        payload: { requestId },
+      });
+      pending.settle({
+        accepted: decision.action === 'approve',
+        userMessage:
+          decision.action === 'reject' ? decision.feedback?.trim() : undefined,
+      });
+      return true;
+    },
+    submitPlan(requestId, decision) {
+      const pending = pendingPlans.get(requestId);
+      if (!pending) return false;
+      pendingPlans.delete(requestId);
+      events.push({
+        event: 'resolvePlanApproval',
+        payload: { approvalId: requestId },
+      });
+      pending.settle(decision);
+      return true;
+    },
+    submitProposal(requestId, decision) {
+      const pending = pendingProposals.get(requestId);
+      if (!pending) return false;
+      pendingProposals.delete(requestId);
+      events.push({
+        event: 'resolveAgentProposal',
+        payload: { proposalId: requestId },
+      });
+      pending.settle(decision);
+      return true;
+    },
+    submitRetry(requestId, decision) {
+      const pending = pendingRetries.get(requestId);
+      if (!pending) return false;
+      pendingRetries.delete(requestId);
+      events.push({
+        event: 'resolveRetryRequest',
+        payload: { streamId: requestId },
+      });
+      pending.settle(decision);
+      return true;
+    },
+    submitUserQuestion(requestId, decision) {
+      const pending = pendingUserQuestions.get(requestId);
+      if (!pending) return false;
+      pendingUserQuestions.delete(requestId);
+      events.push({
+        event: 'resolveUserQuestion',
+        payload: { requestId },
+      });
+      pending.settle(
+        decision.action === 'submit'
+          ? { submitted: true, answers: decision.answers }
+          : { submitted: false, feedback: decision.feedback },
+      );
+      return true;
+    },
   };
   const interactions: HostInteractions = {
     requestBashApproval: (request) => {
@@ -185,80 +264,6 @@ export function createRecordingHost(): {
         });
       });
     },
-    resolve: (requestId, settlement) => {
-      if (settlement.kind === 'bash') {
-        const pending = pendingBashes.get(requestId);
-        if (!pending) return false;
-        pendingBashes.delete(requestId);
-        events.push({
-          event: 'resolveBashPermission',
-          payload: { requestId },
-        });
-        pending.settle({
-          accepted: settlement.decision.action === 'approve',
-          userMessage:
-            settlement.decision.action === 'reject'
-              ? settlement.decision.feedback?.trim()
-              : undefined,
-        });
-        return true;
-      }
-      if (settlement.kind === 'plan') {
-        const pending = pendingPlans.get(requestId);
-        if (!pending) return false;
-        pendingPlans.delete(requestId);
-        events.push({
-          event: 'resolvePlanApproval',
-          payload: { approvalId: requestId },
-        });
-        pending.settle(settlement.decision);
-        return true;
-      }
-      if (settlement.kind === 'proposal') {
-        const pending = pendingProposals.get(requestId);
-        if (!pending) return false;
-        pendingProposals.delete(requestId);
-        events.push({
-          event: 'resolveAgentProposal',
-          payload: { proposalId: requestId },
-        });
-        pending.settle(settlement.decision);
-        return true;
-      }
-      if (settlement.kind === 'retry') {
-        const pending = pendingRetries.get(requestId);
-        if (!pending) return false;
-        pendingRetries.delete(requestId);
-        events.push({
-          event: 'resolveRetryRequest',
-          payload: { streamId: requestId },
-        });
-        pending.settle(settlement.decision);
-        return true;
-      }
-      if (settlement.kind === 'userQuestion') {
-        const pending = pendingUserQuestions.get(requestId);
-        if (!pending) return false;
-        pendingUserQuestions.delete(requestId);
-        events.push({
-          event: 'resolveUserQuestion',
-          payload: { requestId },
-        });
-        pending.settle(
-          settlement.decision.action === 'submit'
-            ? {
-                submitted: true,
-                answers: settlement.decision.answers,
-              }
-            : {
-                submitted: false,
-                feedback: settlement.decision.feedback,
-              },
-        );
-        return true;
-      }
-      return false;
-    },
     cancel: (selector = {}) => cancelWhere(selector),
     dispose: () => cancelWhere({}),
   };
@@ -320,6 +325,7 @@ export function createRecordingHost(): {
   } as AgentRuntimeHost & RecordingProgressSink;
   return {
     events,
+    decisions,
     interactions,
     host,
   };

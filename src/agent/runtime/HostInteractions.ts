@@ -149,23 +149,6 @@ export type UserQuestionSettlement =
       readonly answers?: never;
     };
 
-/** Exact host-to-adapter settlement vocabulary for every interaction kind. */
-export type HostInteractionSettlement = (
-  | { readonly kind: 'bash'; readonly decision: BashSettlement }
-  | { readonly kind: 'plan'; readonly decision: PlanApprovalResult }
-  | { readonly kind: 'proposal'; readonly decision: ProposalResult }
-  | { readonly kind: 'retry'; readonly decision: RetrySettlement }
-  | {
-      readonly kind: 'userQuestion';
-      readonly decision: UserQuestionSettlement;
-    }
-  | { readonly kind: 'externalInquiry'; readonly decision?: never }
-) & {
-  readonly action?: never;
-  readonly feedback?: never;
-  readonly value?: never;
-};
-
 export type PendingInteractionKind =
   | 'toolEdit'
   | 'bash'
@@ -177,41 +160,30 @@ export type PendingInteractionKind =
 
 export type SettledInteractionKind = keyof HostInteractionResultByKind;
 
-type SettlementFor<K extends SettledInteractionKind> = Extract<
-  HostInteractionSettlement,
-  { kind: K }
->;
-
-type CancellationSettlementFactories = {
-  [K in SettledInteractionKind]: (feedback?: string) => SettlementFor<K>;
+type CancellationResultFactories = {
+  [K in SettledInteractionKind]: (
+    feedback?: string,
+  ) => HostInteractionResultByKind[K];
 };
 
-const cancellationSettlementFactories: CancellationSettlementFactories = {
-  bash: (feedback?: string) => ({
-    kind: 'bash',
-    decision: { action: 'reject', feedback },
+const cancellationResultFactories: CancellationResultFactories = {
+  bash: (feedback) => ({
+    accepted: false,
+    timedOut: undefined,
+    userMessage: feedback?.trim(),
   }),
-  plan: (feedback?: string) => ({
-    kind: 'plan',
-    decision: { action: 'reject', feedback },
-  }),
-  proposal: (feedback?: string) => ({
-    kind: 'proposal',
-    decision: { action: 'reject', feedback },
-  }),
-  retry: () => ({ kind: 'retry', decision: { action: 'cancel' } }),
-  userQuestion: (feedback?: string) => ({
-    kind: 'userQuestion',
-    decision: { action: 'reject', feedback },
-  }),
+  plan: (feedback) => ({ action: 'reject', feedback }),
+  proposal: (feedback) => ({ action: 'reject', feedback }),
+  retry: () => ({ action: 'cancel' }),
+  userQuestion: (feedback) => ({ submitted: false, feedback }),
 };
 
 /** Typed cancellation result shared by every presenting host. */
-export function cancellationSettlementFor<K extends SettledInteractionKind>(
+export function cancellationResultFor<K extends SettledInteractionKind>(
   kind: K,
   feedback?: string,
-): SettlementFor<K> {
-  return cancellationSettlementFactories[kind](feedback);
+): HostInteractionResultByKind[K] {
+  return cancellationResultFactories[kind](feedback);
 }
 
 export type ApprovalBypassKind = 'bash' | 'toolEdit' | 'superYolo';
@@ -299,7 +271,6 @@ export interface HostInteractions {
     request: HostExternalInquiryRequest,
   ): Promise<HostExternalInquiryHandle> | undefined;
   setApprovalBypassState?(update: HostApprovalBypassStateUpdate): void;
-  resolve(requestId: string, settlement: HostInteractionSettlement): boolean;
   /** Settle pending requests matching the selector with their reject/cancel defaults. */
   cancel(selector?: HostInteractionCancelSelector): void;
   dispose?(): void;
@@ -440,13 +411,6 @@ export class SessionHostInteractions implements HostInteractions {
 
   setApprovalBypassState(update: HostApprovalBypassStateUpdate): void {
     this.activeAttachment?.interactions.setApprovalBypassState?.(update);
-  }
-
-  resolve(requestId: string, settlement: HostInteractionSettlement): boolean {
-    return (
-      this.activeAttachment?.interactions.resolve(requestId, settlement) ??
-      false
-    );
   }
 
   cancel(selector: HostInteractionCancelSelector = {}): void {
@@ -680,8 +644,6 @@ function createHostInteractionsForwarder(
     openExternalInquiry: (request) => target()?.openExternalInquiry?.(request),
     setApprovalBypassState: (update) =>
       target()?.setApprovalBypassState?.(update),
-    resolve: (requestId, result) =>
-      target()?.resolve(requestId, result) ?? false,
     cancel: (selector = {}) => {
       const interactions = target();
       if (!interactions) return;

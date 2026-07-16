@@ -1,14 +1,14 @@
 import { nanoid } from 'nanoid';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
-  cancellationSettlementFor,
+  cancellationResultFor,
   matchesCancelSelector,
+  type BashSettlement,
   type HostBashApprovalRequest,
   type HostBashApprovalResult,
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
   type HostInteractionResultByKind,
-  type HostInteractionSettlement,
   type HostInteractions,
   type HostPlanApprovalRequest,
   type HostRetryRequest,
@@ -16,6 +16,7 @@ import {
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
+  type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import {
   toBashApprovalResult,
@@ -23,6 +24,7 @@ import {
 } from '@agent/runtime/hostInteractionResultMappers';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
+import { assertNever } from '@utils/core';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import type {
   ToolEditApprovalRequest,
@@ -65,6 +67,14 @@ export interface DesktopHostInteractions extends HostInteractions {
     streamId: StreamTabId,
     initiatingProposalId: string,
   ): Promise<void>;
+  submitBashDecision(requestId: string, decision: BashSettlement): boolean;
+  submitPlanDecision(requestId: string, decision: PlanApprovalResult): boolean;
+  submitProposalDecision(requestId: string, decision: ProposalResult): boolean;
+  submitUserQuestionDecision(
+    requestId: string,
+    decision: UserQuestionSettlement,
+  ): boolean;
+  dismissExternalInquiry(requestId: string): void;
 }
 
 export function createDesktopHostInteractions(
@@ -182,41 +192,41 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
     return Promise.resolve({ threadId: request.threadId });
   }
 
-  resolve(requestId: string, settlement: HostInteractionSettlement): boolean {
-    switch (settlement.kind) {
-      case 'bash':
-        return this.resolvePending(
-          requestId,
-          'bash',
-          toBashApprovalResult(settlement.decision),
-          () => this.options.getApprovalHandlers().bash.resolve(requestId),
-        );
-      case 'plan':
-        return this.resolvePending(requestId, 'plan', settlement.decision, () =>
-          this.options.getApprovalHandlers().planApproval.resolve(requestId),
-        );
-      case 'proposal':
-        return this.resolvePending(
-          requestId,
-          'proposal',
-          settlement.decision,
-          () =>
-            this.options.getApprovalHandlers().agentProposal.resolve(requestId),
-        );
-      case 'retry':
-        return false;
-      case 'userQuestion':
-        return this.resolvePending(
-          requestId,
-          'userQuestion',
-          toUserQuestionResult(settlement.decision),
-          () =>
-            this.options.getApprovalHandlers().userQuestion.resolve(requestId),
-        );
-      case 'externalInquiry':
-        this.options.getApprovalHandlers().externalInquiry.resolve(requestId);
-        return true;
-    }
+  submitBashDecision(requestId: string, decision: BashSettlement): boolean {
+    return this.completePending(
+      requestId,
+      'bash',
+      toBashApprovalResult(decision),
+      () => this.options.getApprovalHandlers().bash.resolve(requestId),
+    );
+  }
+
+  submitPlanDecision(requestId: string, decision: PlanApprovalResult): boolean {
+    return this.completePending(requestId, 'plan', decision, () =>
+      this.options.getApprovalHandlers().planApproval.resolve(requestId),
+    );
+  }
+
+  submitProposalDecision(requestId: string, decision: ProposalResult): boolean {
+    return this.completePending(requestId, 'proposal', decision, () =>
+      this.options.getApprovalHandlers().agentProposal.resolve(requestId),
+    );
+  }
+
+  submitUserQuestionDecision(
+    requestId: string,
+    decision: UserQuestionSettlement,
+  ): boolean {
+    return this.completePending(
+      requestId,
+      'userQuestion',
+      toUserQuestionResult(decision),
+      () => this.options.getApprovalHandlers().userQuestion.resolve(requestId),
+    );
+  }
+
+  dismissExternalInquiry(requestId: string): void {
+    this.options.getApprovalHandlers().externalInquiry.resolve(requestId);
   }
 
   async approvePendingDelegatedWork(
@@ -231,15 +241,9 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
         continue;
       }
       if (request.kind === 'bash') {
-        this.resolve(requestId, {
-          kind: 'bash',
-          decision: { action: 'approve' },
-        });
+        this.submitBashDecision(requestId, { action: 'approve' });
       } else if (request.kind === 'proposal') {
-        this.resolve(requestId, {
-          kind: 'proposal',
-          decision: { action: 'approve' },
-        });
+        this.submitProposalDecision(requestId, { action: 'approve' });
       }
     }
     await this.options.getToolEditApprovals().approvePendingForStream(streamId);
@@ -292,10 +296,47 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
     request: AnyPendingDesktopInteraction,
     feedback?: string,
   ): void {
-    this.resolve(requestId, cancellationSettlementFor(request.kind, feedback));
+    switch (request.kind) {
+      case 'bash':
+        this.completePending(
+          requestId,
+          'bash',
+          cancellationResultFor('bash', feedback),
+          () => this.options.getApprovalHandlers().bash.resolve(requestId),
+        );
+        return;
+      case 'plan':
+        this.completePending(
+          requestId,
+          'plan',
+          cancellationResultFor('plan', feedback),
+          () =>
+            this.options.getApprovalHandlers().planApproval.resolve(requestId),
+        );
+        return;
+      case 'proposal':
+        this.completePending(
+          requestId,
+          'proposal',
+          cancellationResultFor('proposal', feedback),
+          () =>
+            this.options.getApprovalHandlers().agentProposal.resolve(requestId),
+        );
+        return;
+      case 'userQuestion':
+        this.completePending(
+          requestId,
+          'userQuestion',
+          cancellationResultFor('userQuestion', feedback),
+          () =>
+            this.options.getApprovalHandlers().userQuestion.resolve(requestId),
+        );
+        return;
+    }
+    assertNever(request.kind, 'Unhandled desktop interaction kind');
   }
 
-  private resolvePending<K extends PendingDesktopKind>(
+  private completePending<K extends PendingDesktopKind>(
     requestId: string,
     expectedKind: K,
     value: HostInteractionResultByKind[K],

@@ -5,7 +5,12 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import type { HostInteractionSettlement } from '@agent/runtime/HostInteractions';
+import type {
+  BashSettlement,
+  PlanApprovalResult,
+  ProposalResult,
+  UserQuestionSettlement,
+} from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 
@@ -38,7 +43,13 @@ interface DesktopHostInteractions {
     plan: { objective: string };
   }): Promise<unknown>;
   requestAgentProposal(request: unknown): Promise<unknown>;
-  resolve(requestId: string, settlement: HostInteractionSettlement): boolean;
+  submitBashDecision(requestId: string, decision: BashSettlement): boolean;
+  submitPlanDecision(requestId: string, decision: PlanApprovalResult): boolean;
+  submitProposalDecision(requestId: string, decision: ProposalResult): boolean;
+  submitUserQuestionDecision(
+    requestId: string,
+    decision: UserQuestionSettlement,
+  ): boolean;
   cancel(selector?: {
     streamId?: StreamTabId | null;
     kind?: string;
@@ -176,9 +187,8 @@ describe('createDesktopHostInteractions', () => {
     );
 
     expect(
-      interactions.resolve('proposal-current', {
-        kind: 'proposal',
-        decision: { action: 'approve' },
+      interactions.submitProposalDecision('proposal-current', {
+        action: 'approve',
       }),
     ).toBe(true);
     const streamBRequestId = (
@@ -188,9 +198,8 @@ describe('createDesktopHostInteractions', () => {
     )?.requestId;
     expect(streamBRequestId).toBeDefined();
     expect(
-      interactions.resolve(streamBRequestId!, {
-        kind: 'bash',
-        decision: { action: 'reject' },
+      interactions.submitBashDecision(streamBRequestId!, {
+        action: 'reject',
       }),
     ).toBe(true);
     await expect(current).resolves.toEqual({ action: 'approve' });
@@ -218,7 +227,7 @@ describe('createDesktopHostInteractions', () => {
     expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(request);
   });
 
-  it('rejects a resolution whose kind does not match the pending request', async () => {
+  it('rejects a plan decision for a pending bash request', async () => {
     const handlers = createHandlers();
     const { interactions, runtimeHost, sessionEvents } =
       await createInteractions(handlers);
@@ -229,21 +238,12 @@ describe('createDesktopHostInteractions', () => {
     });
     const requestId = firstShowRequestId(handlers.bash.show);
 
-    // A mismatched kind under the same requestId must not settle the
-    // pending bash approval as a plan action would — matches the extension
-    // host's discriminant check.
     expect(
-      interactions.resolve(requestId, {
-        kind: 'plan',
-        decision: { action: 'approve' },
-      }),
+      interactions.submitPlanDecision(requestId, { action: 'approve' }),
     ).toBe(false);
 
     expect(
-      interactions.resolve(requestId, {
-        kind: 'bash',
-        decision: { action: 'approve' },
-      }),
+      interactions.submitBashDecision(requestId, { action: 'approve' }),
     ).toBe(true);
     await expect(resultPromise).resolves.toEqual({ accepted: true });
     expect(runtimeHost.emit).toHaveBeenCalledWith(
@@ -344,10 +344,7 @@ describe('createDesktopHostInteractions', () => {
     const requestId = firstShowRequestId(handlers.bash.show);
 
     expect(
-      interactions.resolve(requestId, {
-        kind: 'bash',
-        decision: { action: 'timeout' },
-      }),
+      interactions.submitBashDecision(requestId, { action: 'timeout' }),
     ).toBe(true);
 
     await expect(resultPromise).resolves.toEqual({
@@ -369,13 +366,10 @@ describe('createDesktopHostInteractions', () => {
     });
 
     expect(
-      interactions.resolve('proposal-a', {
-        kind: 'proposal',
-        decision: {
-          action: 'approve',
-          model: 'openai:gpt-5',
-          agent: 'configured-agent',
-        },
+      interactions.submitProposalDecision('proposal-a', {
+        action: 'approve',
+        model: 'openai:gpt-5',
+        agent: 'configured-agent',
       }),
     ).toBe(true);
 

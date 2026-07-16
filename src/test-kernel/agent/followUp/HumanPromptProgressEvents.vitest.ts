@@ -47,7 +47,6 @@ function installTestPlatform(): Promise<void> {
         }
         return handler(request);
       },
-      resolve: () => false,
       cancel: () => undefined,
     });
   });
@@ -92,9 +91,8 @@ describe('human prompt progress events', () => {
       'showBashPermission',
     );
     expect(
-      explicit.host.interactions?.resolve(show.payload.requestId, {
-        kind: 'bash',
-        decision: { action: 'approve' },
+      explicit.decisions.submitBash(show.payload.requestId, {
+        action: 'approve',
       }),
     ).toBe(true);
 
@@ -150,13 +148,10 @@ describe('human prompt progress events', () => {
       'showUserQuestion',
     );
     expect(
-      explicit.host.interactions?.resolve(show.payload.requestId, {
-        kind: 'userQuestion',
-        decision: {
-          action: 'submit',
-          answers: {
-            'Which path should the agent take?': 'Run the build',
-          },
+      explicit.decisions.submitUserQuestion(show.payload.requestId, {
+        action: 'submit',
+        answers: {
+          'Which path should the agent take?': 'Run the build',
         },
       }),
     ).toBe(true);
@@ -249,9 +244,8 @@ describe('human prompt progress events', () => {
         'showBashPermission',
       );
       expect(
-        explicit.host.interactions?.resolve(show.payload.requestId, {
-          kind: 'bash',
-          decision: { action: 'approve' },
+        explicit.decisions.submitBash(show.payload.requestId, {
+          action: 'approve',
         }),
       ).toBe(true);
       await expect(approval).resolves.toMatchObject({ accepted: true });
