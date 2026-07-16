@@ -1,5 +1,8 @@
 import { AgentCategory } from '../schemas/agent';
 
+export const DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME =
+  'delegate_workflow_script' as const;
+
 /**
  * Tools that delegate work to sub-agents.
  *
@@ -10,6 +13,7 @@ import { AgentCategory } from '../schemas/agent';
  */
 export const DELEGATION_TOOLS: ReadonlySet<string> = new Set([
   'delegate_workflow',
+  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   'delegate_agent',
   'resume_agent',
   'propose_workflow',
@@ -29,6 +33,14 @@ export const DELEGATION_TOOL_CATEGORY: Readonly<Record<string, AgentCategory>> =
     delegate_agent: AgentCategory.ToolUse,
     propose_agent: AgentCategory.ToolUse,
   };
+
+/** Delegation tools whose descriptions receive live roster/model annotations. */
+export const DELEGATION_AVAILABILITY_CATEGORY: Readonly<
+  Record<string, AgentCategory>
+> = {
+  ...DELEGATION_TOOL_CATEGORY,
+  [DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME]: AgentCategory.Workflow,
+};
 
 /** True when any of the given tool names is a delegation tool. */
 export function hasDelegationTool(

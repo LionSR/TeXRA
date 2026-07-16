@@ -1097,6 +1097,34 @@ return 'incorrect success'`,
     });
   });
 
+  it('aborts guest execution and the active child from a parent signal', async () => {
+    const controller = new AbortController();
+    let childSignal: AbortSignal | undefined;
+    const run = runWorkflowScript({
+      script: `${META}return await agent('wait')`,
+      signal: controller.signal,
+      runAgent: (invocation) => {
+        childSignal = invocation.signal;
+        return new Promise((_resolve, reject) => {
+          invocation.signal.addEventListener(
+            'abort',
+            () => reject(invocation.signal.reason),
+            { once: true },
+          );
+        });
+      },
+    });
+    await vi.waitFor(() => expect(childSignal).toBeDefined());
+
+    controller.abort(new DOMException('parent stopped', 'AbortError'));
+
+    await expect(run).rejects.toMatchObject({
+      name: 'AbortError',
+      message: 'parent stopped',
+    });
+    expect(childSignal?.aborted).toBe(true);
+  });
+
   it('removes Intl so scripts cannot read the wall clock implicitly', async () => {
     await expect(
       runWorkflowScript({
