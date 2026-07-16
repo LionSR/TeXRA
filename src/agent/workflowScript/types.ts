@@ -74,6 +74,7 @@ export type WorkflowScriptEvent =
       type: 'agent:end';
       index: number;
       label: string;
+      phase?: string;
       cached: boolean;
       error?: string;
     };
