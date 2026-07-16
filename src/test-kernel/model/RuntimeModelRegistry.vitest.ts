@@ -126,7 +126,7 @@ describe('runtime model registry', () => {
         supportsReasoning: false,
         supportsReasoningEffort: false,
         supportsTokenCounting: true,
-        supportsVision: false,
+        supportsVision: true,
         supportsNativeWebSearch: false,
         supportsNativeCodeExecution: false,
       },
