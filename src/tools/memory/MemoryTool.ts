@@ -39,6 +39,7 @@ import {
   MAX_VIEW_LINES,
   MAX_PINNED_MEMORIES,
   DIRECTORY_LISTING_DEPTH,
+  MEMORY_DISPLAY_ROOT,
   shouldSkipEntry,
 } from './constants';
 import { displayToStoragePath, toDisplayPath } from './memoryUtils';
@@ -63,7 +64,12 @@ const MemoryToolInputSchema = z.strictObject({
     'pin',
     'unpin',
   ]),
-  path: z.string().nullish(),
+  path: z
+    .string()
+    .nullish()
+    .describe(
+      `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md). Required for every command except \`view\`, which defaults to the ${MEMORY_DISPLAY_ROOT} root directory listing when omitted.`,
+    ),
   file_text: z.string().nullish(),
   view_range: ViewRangeSchema.nullish(),
   old_str: z.string().nullish(),
@@ -115,6 +121,7 @@ export class MemoryTool extends defineTool({
   description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin).
 
 Paths must start with /memories. Use /memories to list files, /memories/file.md for specific files. "/" alone is invalid.
+\`view\` with no path defaults to the /memories root listing; all other commands require path.
 Directory listings are paginated — use offset/limit to page through results (default: offset 0, limit 100).
 
 Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
@@ -136,8 +143,11 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     switch (input.command) {
       case 'view':
+        // `path` defaults to the memory root so an omitted path lists
+        // /memories instead of erroring - the model's first call in a
+        // fresh session is reliably a bare `view` with no path.
         return this.view(
-          locate(input.path, 'path'),
+          locate(input.path ?? MEMORY_DISPLAY_ROOT, 'path'),
           input.view_range ?? undefined,
           input.offset ?? 0,
           input.limit ?? 100,
