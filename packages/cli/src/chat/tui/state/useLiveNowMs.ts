@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 // One shared interval for every live-elapsed display. StatusBar, the
-// subagent panel, and the child-control picker can all tick at once; with
+// subagent panel and process detail can tick at once; with
 // per-component intervals each would fire at its own phase, producing up to
 // one render burst per component per second. Subscribers of the shared
 // ticker fire in the same callback, so React batches them into one pass.

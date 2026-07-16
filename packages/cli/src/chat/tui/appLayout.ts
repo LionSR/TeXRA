@@ -150,14 +150,14 @@ export function allocateConversationBottomPanelRows({
   maxRows,
   processCount = 0,
   sessionCount,
-  sessionListFocused,
+  childListFocused,
   todosPlanContentRows,
   transcriptRows,
 }: {
   readonly maxRows: number;
   readonly processCount?: number;
   readonly sessionCount: number;
-  readonly sessionListFocused: boolean;
+  readonly childListFocused: boolean;
   readonly todosPlanContentRows: number;
   readonly transcriptRows: number;
 }): {
@@ -165,19 +165,34 @@ export function allocateConversationBottomPanelRows({
   readonly sessionPanelRows: number;
   readonly todosPlanRows: number;
 } {
-  const sessionPanelContentRows = sessionCount + processCount;
-  const minimumSessionRows = sessionCount > 1 ? 1 : 0;
+  const childListRowCount = sessionCount + processCount;
+  // The persistent child list owns one blank separator row above its Select.
+  const sessionPanelContentRows =
+    childListRowCount > 0 ? childListRowCount + 1 : 0;
+  const minimumSessionRows = childListRowCount > 0 ? 2 : 0;
   const availableTranscriptRows = Math.max(0, transcriptRows);
   let panelTranscriptLimit: number;
-  if (sessionListFocused) {
+  if (childListFocused) {
     panelTranscriptLimit = availableTranscriptRows;
   } else if (availableTranscriptRows === 0) {
     panelTranscriptLimit = 0;
   } else {
-    panelTranscriptLimit = Math.max(
-      minimumSessionRows,
-      Math.floor(availableTranscriptRows / 2),
-    );
+    const unfocusedLimit = Math.floor(availableTranscriptRows / 2);
+    panelTranscriptLimit =
+      availableTranscriptRows >= minimumSessionRows
+        ? Math.max(minimumSessionRows, unfocusedLimit)
+        : unfocusedLimit;
+  }
+  if (
+    sessionPanelContentRows > 0 &&
+    todosPlanContentRows === 0 &&
+    panelTranscriptLimit < minimumSessionRows
+  ) {
+    return {
+      bottomPanelRows: 0,
+      sessionPanelRows: 0,
+      todosPlanRows: 0,
+    };
   }
   const bottomPanelRows = Math.min(
     maxRows,
@@ -190,11 +205,12 @@ export function allocateConversationBottomPanelRows({
     rows: bottomPanelRows,
   });
   const sessionPanelRows =
-    (sessionCount > 1 || sessionListFocused) &&
-    sessionPanelContentRows > 0 &&
-    bottomPanelRows > 0
-      ? Math.max(1, allocated.subagentRows)
-      : allocated.subagentRows;
+    allocated.subagentRows > 0 &&
+    bottomPanelRows >= minimumSessionRows &&
+    (childListRowCount > 0 || childListFocused) &&
+    sessionPanelContentRows > 0
+      ? Math.max(minimumSessionRows, allocated.subagentRows)
+      : 0;
   return {
     bottomPanelRows,
     sessionPanelRows,

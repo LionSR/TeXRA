@@ -44,8 +44,7 @@ const escapeInterruptEnabled = {
 } satisfies EscapeActiveState;
 const escChordHidden = {
   shortcutModifierLabel: 'Esc',
-  subagentControlsAvailable: false,
-  taskControlsAvailable: false,
+  streamFocusAvailable: false,
 } satisfies MetaChordState;
 
 function ctrlCFixture({
@@ -102,6 +101,7 @@ function foregroundInput(
   return {
     activeFormOpen: false,
     pendingApproval: true,
+    taskDetailOpen: false,
     transcriptViewerOpen: false,
     ...overrides,
   };
@@ -155,17 +155,17 @@ describe('app interaction policy', () => {
       {
         inputDisabled: true,
         reverseSearchOpen: false,
-        sessionListFocused: false,
+        childListFocused: false,
       },
       {
         inputDisabled: false,
         reverseSearchOpen: true,
-        sessionListFocused: false,
+        childListFocused: false,
       },
       {
         inputDisabled: false,
         reverseSearchOpen: false,
-        sessionListFocused: true,
+        childListFocused: true,
       },
     ];
 
@@ -176,17 +176,16 @@ describe('app interaction policy', () => {
       appDraftDiscardActive({
         inputDisabled: false,
         reverseSearchOpen: false,
-        sessionListFocused: false,
+        childListFocused: false,
       }),
     ).toBe(true);
   });
 
   it('resolves exhaustive foreground row caps', () => {
     const surfaceCases = [
-      [{ childControlHasItems: false, kind: 'childControls' }, 6],
-      [{ childControlHasItems: true, kind: 'childControls' }, 12],
-      [{ childControlHasItems: false, kind: 'form' }, 18],
-      [{ childControlHasItems: false, kind: 'transcript' }, undefined],
+      [{ kind: 'taskDetail' }, 12],
+      [{ kind: 'form' }, 18],
+      [{ kind: 'transcript' }, undefined],
     ] satisfies readonly (readonly [ForegroundRowsInput, number | undefined])[];
     const expectedByKind = {
       plan: undefined,
@@ -205,7 +204,6 @@ describe('app interaction policy', () => {
       expect(
         foregroundMaxRowsForKind({
           approvalKind,
-          childControlHasItems: false,
           kind: 'approval',
         }),
       ).toBe(expectedByKind[approvalKind]);
@@ -241,14 +239,12 @@ describe('app interaction policy', () => {
 
   it('defers Escape interrupt whenever an Esc chord binding is visible', () => {
     const cases = [
-      // #7496: an in-flight WAITING child still advertises Esc+s and needs the defer window.
-      [{ ...escChordHidden, subagentControlsAvailable: true }, true],
-      [{ ...escChordHidden, taskControlsAvailable: true }, true],
+      [{ ...escChordHidden, streamFocusAvailable: true }, true],
       [
         {
           ...escChordHidden,
           shortcutModifierLabel: 'Alt',
-          subagentControlsAvailable: true,
+          streamFocusAvailable: true,
         },
         false,
       ],
@@ -302,7 +298,7 @@ describe('app interaction policy', () => {
 
   it('prioritizes foreground surfaces ahead of approvals', () => {
     const cases = [
-      [foregroundInput({ childControlMode: 'subagents' }), 'childControls'],
+      [foregroundInput({ taskDetailOpen: true }), 'taskDetail'],
       [foregroundInput({ transcriptViewerOpen: true }), 'transcript'],
       [foregroundInput({ activeFormOpen: true }), 'form'],
       [foregroundInput(), 'approval'],
@@ -330,14 +326,7 @@ describe('app interaction policy', () => {
 
   it('labels foreground escape actions from the owning surface', () => {
     const surfaceCases = [
-      [
-        { childControlEscapeAction: 'close', foregroundKind: 'childControls' },
-        'close',
-      ],
-      [
-        { childControlEscapeAction: 'back', foregroundKind: 'childControls' },
-        'back',
-      ],
+      [{ foregroundKind: 'taskDetail' }, 'back'],
       [{ foregroundKind: 'form' }, 'close'],
       [{ activeFormEscapeAction: 'cancel', foregroundKind: 'form' }, 'cancel'],
     ] satisfies readonly (readonly [ForegroundEscapeInput, string])[];
