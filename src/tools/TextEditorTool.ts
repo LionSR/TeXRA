@@ -350,8 +350,6 @@ export class TextEditorTool extends defineTool({
           `No replacement was performed. Multiple occurrences of old_str \`${oldStr}\` in lines ${lineNumbers.join(', ')}. Please ensure it is unique`,
       });
 
-      // Literal replacement (String.replace would interpret $$, $&, $', `$\``
-      // patterns and corrupt LaTeX/code); see editPrimitives.
       const newFileContent = replacement.content;
 
       const replacementLine = replacement.firstMatchLine;

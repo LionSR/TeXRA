@@ -128,6 +128,8 @@ export function replaceLiteralMatches({
   }
 
   return {
+    // Slice/split-based primitives insert replacement strings verbatim; unlike
+    // String.replace, dollar patterns in LaTeX or code are never interpreted.
     content:
       mode === 'all'
         ? replaceAllLiteral(content, search, replacement)

@@ -268,8 +268,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
         return this.readFile(
           executionId,
           rest.join('/'),
-          // Schema enforces length 2; cast since Zod infers number[]
-          input.view_range as [number, number] | undefined,
+          input.view_range ?? undefined,
         );
       case 'workspace-files':
         if (rest.length === 0) {
@@ -278,7 +277,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
         return this.readWorkspaceFile(
           executionId,
           rest.join('/'),
-          input.view_range as [number, number] | undefined,
+          input.view_range ?? undefined,
         );
     }
 

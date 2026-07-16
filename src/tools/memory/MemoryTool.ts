@@ -359,8 +359,6 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
     });
 
-    // Literal replacement (String.replace would interpret $$, $&, $', `$\``
-    // patterns and corrupt LaTeX/content); see editPrimitives.
     const updated = replacement.content;
     await this.writeMemoryFile(resolvedPath, updated, meta);
     recordToolFileRead(inputPath);
