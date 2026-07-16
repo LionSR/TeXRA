@@ -83,8 +83,8 @@ export interface BuildCliOrchestrationItemsInput {
 }
 
 export type CliModelAccessRoute = 'chatgpt' | 'included' | 'personal';
-export type CliAccountProvider = 'chatgpt' | 'texra';
-export type CliAccountOperation = 'sign-in' | 'switch' | 'sign-out';
+type CliAccountProvider = 'chatgpt' | 'texra';
+type CliAccountOperation = 'sign-in' | 'switch' | 'sign-out';
 
 export interface CliAccountStatus {
   readonly texraSignedIn: boolean;
@@ -318,7 +318,7 @@ function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
   };
 }
 
-export function modelAccessRouteLabel(route: CliModelAccessRoute): string {
+function modelAccessRouteLabel(route: CliModelAccessRoute): string {
   switch (route) {
     case 'chatgpt':
       return 'ChatGPT subscription';
