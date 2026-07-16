@@ -111,6 +111,7 @@ describe('logUtils', () => {
         authorization: `Bearer ${SECRET}`,
         password: 'correct horse battery staple',
         refreshToken: 'opaque-refresh-credential',
+        requestId: 'visible-request-id',
       },
     });
 
@@ -121,6 +122,7 @@ describe('logUtils', () => {
     expect(lines[1]).toContain('"authorization": "Bearer [redacted]"');
     expect(lines[1]).toContain('"password": "[redacted]"');
     expect(lines[1]).toContain('"refreshToken": "[redacted]"');
+    expect(lines[1]).toContain('"requestId": "visible-request-id"');
   });
 
   it('disposes a shared underlying sink exactly once', () => {

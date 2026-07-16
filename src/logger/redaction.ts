@@ -4,8 +4,9 @@ const REDACTED = '[redacted]';
 
 const SECRET_ASSIGNMENT_PATTERN =
   /\b([A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*)\s*[:=]\s*([^\s,;]+)/gi;
-const JSON_SECRET_PROPERTY_PATTERN =
-  /("(?:[^"\\]|\\.)*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD)(?:[^"\\]|\\.)*"\s*:\s*)"(?:[^"\\]|\\.)*"/gi;
+const JSON_STRING_PROPERTY_PATTERN =
+  /("((?:[^"\\]|\\.)*)"\s*:\s*)"(?:[^"\\]|\\.)*"/g;
+const SECRET_FIELD_NAME_PATTERN = /API[_-]?KEY|TOKEN|SECRET|PASSWORD/i;
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=_-]+/g;
 const OPENAI_COMPATIBLE_API_KEY_PATTERN = /\bsk-[A-Za-z0-9_-]{12,}\b/g;
 const GOOGLE_STANDARD_API_KEY_PATTERN = /\bAIza[A-Za-z0-9_-]{20,}\b/g;
@@ -93,8 +94,11 @@ export function redactSecrets(
 
   let redacted = text
     .replaceAll(
-      JSON_SECRET_PROPERTY_PATTERN,
-      (_match, property: string) => `${property}"${REDACTED}"`,
+      JSON_STRING_PROPERTY_PATTERN,
+      (match, property: string, name: string) =>
+        SECRET_FIELD_NAME_PATTERN.test(name)
+          ? `${property}"${REDACTED}"`
+          : match,
     )
     .replaceAll(
       SECRET_ASSIGNMENT_PATTERN,
