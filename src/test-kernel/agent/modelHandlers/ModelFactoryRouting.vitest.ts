@@ -237,6 +237,30 @@ describe('OpenAI model handler routing', () => {
     ).toBe('ModelHandlerOpenAI');
   });
 
+  it('preserves the GPT-5.6 Pro wire id when short names are preferred', async () => {
+    await initFakePlatform({
+      globalState: { 'texra.preferShortModelNames': true },
+    });
+
+    const handler = await createModelHandler(MODEL_CONFIGS.gpt56pro);
+    try {
+      expect(handler.config.fullName).toBe('gpt-5.6-sol');
+      expect(handler.capabilities.reasoningMode).toBe('pro');
+    } finally {
+      handler.dispose();
+    }
+  });
+
+  it('rejects GPT-5.6 Pro when OpenRouter routing is enabled', async () => {
+    await initFakePlatform({
+      globalState: { 'texra.useOpenRouter': true },
+    });
+
+    await expect(createModelHandler(MODEL_CONFIGS.gpt56pro)).rejects.toThrow(
+      /reasoning mode pro, which OpenRouter does not support/,
+    );
+  });
+
   it('tags created handlers with a minifier-safe compatibility key', async () => {
     await initFakePlatform();
 

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
+import {
+  isOpenRouterRoutingUnsupported,
+  shouldRouteModelThroughOpenRouter,
+} from '@model/openRouterRouting';
 
 describe('shouldRouteModelThroughOpenRouter', () => {
   it.each([
@@ -26,5 +29,35 @@ describe('shouldRouteModelThroughOpenRouter', () => {
     expect(shouldRouteModelThroughOpenRouter(config, useOpenRouter)).toBe(
       expected,
     );
+  });
+});
+
+describe('isOpenRouterRoutingUnsupported', () => {
+  const modeSelectedConfig = {
+    openRouterOnly: false,
+    requiresResponsesAPI: false,
+    capabilities: { reasoningMode: 'pro' as const },
+  };
+
+  it('rejects a route that would discard a selected reasoning mode', () => {
+    expect(isOpenRouterRoutingUnsupported(modeSelectedConfig, true)).toBe(true);
+  });
+
+  it('allows an explicitly direct model to preserve its mode', () => {
+    expect(
+      isOpenRouterRoutingUnsupported(
+        { ...modeSelectedConfig, forceDirectProvider: true },
+        true,
+      ),
+    ).toBe(false);
+  });
+
+  it('does not silently change access routes for a Responses API model', () => {
+    expect(
+      isOpenRouterRoutingUnsupported(
+        { ...modeSelectedConfig, requiresResponsesAPI: true },
+        true,
+      ),
+    ).toBe(true);
   });
 });

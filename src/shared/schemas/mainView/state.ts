@@ -58,6 +58,7 @@ const ModelAvailabilityKindSchema = z.enum([
   'copilot-access',
   'copilot-consent-required',
   'copilot-unavailable',
+  'provider-unavailable',
 ]);
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 

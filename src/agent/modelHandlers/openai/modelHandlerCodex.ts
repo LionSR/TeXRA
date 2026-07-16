@@ -107,8 +107,8 @@ export const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful assistant.';
  *    items out of `input` into `instructions` (matching Zed/Codex), deduping
  *    text already present, with {@link CODEX_DEFAULT_INSTRUCTIONS} as fallback.
  *  - clamp `reasoning.effort` above `medium` down to `medium`: with no
- *    background mode (see above), a `high`/`xhigh` reasoning turn runs fully
- *    synchronously over this connection and risks the client timing out
+ *    background mode (see above), a `high`/`xhigh`/`max` reasoning turn runs
+ *    fully synchronously over this connection and risks the client timing out
  *    before the backend responds.
  */
 export function rewriteCodexRequestBody(
@@ -127,7 +127,9 @@ export function rewriteCodexRequestBody(
     reasoning &&
     typeof reasoning === 'object' &&
     'effort' in reasoning &&
-    (reasoning.effort === 'high' || reasoning.effort === 'xhigh')
+    (reasoning.effort === 'high' ||
+      reasoning.effort === 'xhigh' ||
+      reasoning.effort === 'max')
   ) {
     rewritten.reasoning = { ...reasoning, effort: 'medium' };
   }

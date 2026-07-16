@@ -20,7 +20,10 @@ import {
   buildBasicModelOptionsData,
 } from './modelOptionsBasic';
 import { getVisibleModels } from './modelOptionsState';
-import { shouldRouteModelThroughOpenRouter } from './openRouterRouting';
+import {
+  isOpenRouterRoutingUnsupported,
+  shouldRouteModelThroughOpenRouter,
+} from './openRouterRouting';
 import {
   availableRuntimeModelIds,
   discoveredRuntimeModelConfigEntries,
@@ -118,6 +121,11 @@ const AVAILABILITY_STATUS_FIELDS: Record<
     available: false,
     requiresKey: false,
   },
+  'provider-unavailable': {
+    label: 'Unavailable through selected provider',
+    available: false,
+    requiresKey: false,
+  },
   'relay-quota-exhausted': {
     label: 'Relay quota exhausted',
     available: false,
@@ -207,6 +215,13 @@ async function resolveModelAvailability(
       case undefined:
         return availabilityStatus('copilot-unavailable');
     }
+  }
+
+  if (isOpenRouterRoutingUnsupported(config, ctx.useOpenRouter)) {
+    return {
+      ...availabilityStatus('provider-unavailable'),
+      label: 'Unavailable through OpenRouter',
+    };
   }
 
   // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
@@ -336,6 +351,10 @@ export async function getModelUnavailableReason(
 
   if (availability.kind === 'retired') {
     return `Model "${model}" is retired and no longer available from its provider. Choose an active model.`;
+  }
+
+  if (isOpenRouterRoutingUnsupported(config, ctx.useOpenRouter)) {
+    return `Model "${model}" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.`;
   }
 
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {

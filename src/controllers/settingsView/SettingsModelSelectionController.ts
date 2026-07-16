@@ -5,7 +5,10 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
+import {
+  hasConfigurableReasoningEffort,
+  LEVEL_TO_EFFORT,
+} from '@agent/modelHandlers/support/reasoningEffort';
 import { resolveEffectiveHelperModel } from '@agent/runtime/helperModelName';
 import { FREE_TIER, MAX_TIER } from '@auth/sharedConfig';
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -252,7 +255,7 @@ export class SettingsModelSelectionController {
 
 function supportsReasoningLevel(config: ModelConfig): boolean {
   return (
-    config.capabilities.supportsReasoningEffort ||
+    hasConfigurableReasoningEffort(config.capabilities) ||
     (config.provider === ModelProvider.DEEPSEEK &&
       config.capabilities.supportsReasoning)
   );

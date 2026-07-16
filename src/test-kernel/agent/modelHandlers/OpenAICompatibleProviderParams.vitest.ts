@@ -154,6 +154,38 @@ describe('OpenAI-compatible provider request params', () => {
     assert.equal(createCalls[0].thinking, undefined);
   });
 
+  it('uses the fixed Kimi K2.5 temperature during client-side compaction', async () => {
+    const handler = new ModelHandlerKimi(
+      buildConfig(ModelProvider.MOONSHOT, {
+        name: 'kimi25T',
+        fullName: 'kimi-k2.5',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    handler.requestCompaction();
+    (handler as any).getStreamingConfig = () => false;
+    (handler as any).estimateTokenCount = async () => 100;
+
+    const { client, createCalls } = createClientStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [
+        { role: 'user', content: 'first' },
+        { role: 'assistant', content: 'second' },
+        { role: 'user', content: 'third' },
+      ],
+      temperature: 0,
+    });
+
+    assert.equal(createCalls.length, 2);
+    assert.equal(createCalls[0].temperature, 1);
+  });
+
   it('pins Kimi K2.5 non-reasoning chat requests to temperature 0.6 and disables thinking (#7081)', async () => {
     const handler = new ModelHandlerKimi(
       buildConfig(ModelProvider.MOONSHOT, {
@@ -203,6 +235,75 @@ describe('OpenAI-compatible provider request params', () => {
     });
 
     assert.equal(createCalls[0].temperature, 1);
+    assert.equal(createCalls[0].thinking, undefined);
+  });
+
+  it('omits temperature and sends reasoning_effort max for Kimi K3', async () => {
+    // Moonshot fixes K3 sampling server-side (docs say omit temperature), and
+    // its reasoning_effort field accepts only 'max' — the shared OpenAI clamp
+    // would otherwise lower our MAX tier to 'xhigh', which Moonshot rejects.
+    const handler = new ModelHandlerKimi(
+      buildConfig(ModelProvider.MOONSHOT, {
+        name: 'kimi3',
+        fullName: 'kimi-k3',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MAX,
+          supportsVision: true,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    (handler as any).getStreamingConfig = () => false;
+    (handler as any).estimateTokenCount = async () => 100;
+
+    const { client, createCalls } = createClientStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'think' }],
+      temperature: 0,
+    });
+
+    assert.equal('temperature' in createCalls[0], false);
+    assert.equal(createCalls[0].reasoning_effort, 'max');
+    assert.equal(createCalls[0].thinking, undefined);
+  });
+
+  it('omits temperature and thinking from Kimi K3 compaction summaries', async () => {
+    const handler = new ModelHandlerKimi(
+      buildConfig(ModelProvider.MOONSHOT, {
+        name: 'kimi3',
+        fullName: 'kimi-k3',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MAX,
+          supportsVision: true,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    handler.requestCompaction();
+    (handler as any).getStreamingConfig = () => false;
+    (handler as any).estimateTokenCount = async () => 100;
+
+    const { client, createCalls } = createClientStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [
+        { role: 'user', content: 'first' },
+        { role: 'assistant', content: 'second' },
+        { role: 'user', content: 'third' },
+      ],
+      temperature: 0,
+    });
+
+    assert.equal(createCalls.length, 2);
+    assert.equal('temperature' in createCalls[0], false);
     assert.equal(createCalls[0].thinking, undefined);
   });
 

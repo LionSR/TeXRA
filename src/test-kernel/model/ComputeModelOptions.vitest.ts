@@ -222,6 +222,61 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(model.disabled).toBe(false);
   });
 
+  it('does not advertise GPT-5.6 Pro through ChatGPT subscription', async () => {
+    await installPlatform({
+      config: {
+        'texra.chatgptCodex.preferSubscription': true,
+      },
+      secrets: {
+        [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
+      },
+    });
+    const access = {
+      ...createModelOptionsAccess(
+        {
+          useIncludedAccess: false,
+          relayQuotaExceeded: false,
+          quotaAutoSwitched: false,
+        },
+        {},
+      ),
+      agentCategory: AgentCategory.ToolUse,
+    };
+
+    const [model] = await computeModelOptionsData(['gpt56pro'], access);
+
+    expect(MODEL_CONFIGS.gpt56pro.codexSubscription).not.toBe(true);
+    expect(model).toMatchObject({
+      availability: 'missing-key',
+      disabled: true,
+      requiresKey: true,
+    });
+  });
+
+  it('marks GPT-5.6 Pro unavailable through OpenRouter', async () => {
+    const access = {
+      ...createModelOptionsAccess({
+        useIncludedAccess: false,
+        relayQuotaExceeded: false,
+        quotaAutoSwitched: false,
+      }),
+      useOpenRouter: true,
+    };
+
+    const [model] = await computeModelOptionsData(['gpt56pro'], access);
+    const reason = await getModelUnavailableReason('gpt56pro', access);
+
+    expect(model).toMatchObject({
+      availability: 'provider-unavailable',
+      availabilityLabel: 'Unavailable through OpenRouter',
+      disabled: true,
+      requiresKey: false,
+    });
+    expect(reason).toBe(
+      'Model "gpt56pro" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.',
+    );
+  });
+
   it('enables eligible OpenAI models from ChatGPT sign-in without an API key', async () => {
     await installPlatform({
       config: {
