@@ -1,14 +1,16 @@
 import { nanoid } from 'nanoid';
+import {
+  cancelApprovalRequestHandlers,
+  type ApprovalRequestHandlerSet,
+} from '@controllers/progressView/backend/progressBackendUiConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   cancellationResultFor,
-  matchesCancelSelector,
   type BashSettlement,
   type HostBashApprovalRequest,
   type HostBashApprovalResult,
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
-  type HostInteractionResultByKind,
   type HostInteractions,
   type HostPlanApprovalRequest,
   type HostRetryRequest,
@@ -16,6 +18,7 @@ import {
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
+  type SettledInteractionKind,
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import {
@@ -24,36 +27,12 @@ import {
 } from '@agent/runtime/hostInteractionResultMappers';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
-import { assertNever } from '@utils/core';
-import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@platform/interfaces';
 
 import type { DesktopToolEditApprovalController } from './desktopToolEditApproval.js';
-
-type PendingDesktopKind = Exclude<keyof HostInteractionResultByKind, 'retry'>;
-
-interface PendingDesktopMetadataByKind {
-  readonly bash: { readonly streamId?: StreamTabId };
-  readonly plan: { readonly streamId: StreamTabId };
-  readonly proposal: { readonly streamId: StreamTabId };
-  readonly userQuestion: { readonly streamId?: StreamTabId };
-}
-
-type PendingDesktopRegistration<K extends PendingDesktopKind> = {
-  readonly kind: K;
-  readonly cancellationScope?: object;
-} & PendingDesktopMetadataByKind[K];
-
-type PendingDesktopInteraction<K extends PendingDesktopKind> =
-  PendingDesktopRegistration<K> & {
-    settle(result: HostInteractionResultByKind[K]): void;
-  };
-
-type AnyPendingDesktopInteraction =
-  PendingDesktopInteraction<PendingDesktopKind>;
 
 export interface DesktopHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;
@@ -77,6 +56,13 @@ export interface DesktopHostInteractions extends HostInteractions {
   dismissExternalInquiry(requestId: string): void;
 }
 
+const DESKTOP_PROGRESS_INTERACTION_KINDS = [
+  'bash',
+  'plan',
+  'proposal',
+  'userQuestion',
+] as const satisfies readonly SettledInteractionKind[];
+
 export function createDesktopHostInteractions(
   options: DesktopHostInteractionsOptions,
 ): DesktopHostInteractions {
@@ -84,11 +70,6 @@ export function createDesktopHostInteractions(
 }
 
 class DesktopHostInteractionsImpl implements DesktopHostInteractions {
-  private readonly pendingRequests = new Map<
-    string,
-    AnyPendingDesktopInteraction
-  >();
-
   constructor(private readonly options: DesktopHostInteractionsOptions) {}
 
   requestToolEditApproval(
@@ -114,50 +95,33 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
       allowBypass: true,
       streamId: streamId ?? '',
     };
-    return this.showPending(
-      requestId,
-      { kind: 'bash', streamId, cancellationScope: options?.cancellationScope },
-      () => {
-        this.revealStream(streamId);
-        this.options.getApprovalHandlers().bash.show(payload);
-      },
-    );
+    this.revealStream(streamId);
+    return this.options.getApprovalHandlers().bash.request(payload, {
+      cancellationScope: options?.cancellationScope,
+      cancellationResult: (cause) => cancellationResultFor('bash', cause),
+    });
   }
 
   requestPlanApproval(
     request: HostPlanApprovalRequest,
     options?: HostInteractionOptions,
   ): Promise<PlanApprovalResult> {
-    return this.showPending(
-      request.approvalId,
-      {
-        kind: 'plan',
-        streamId: request.streamId,
-        cancellationScope: options?.cancellationScope,
-      },
-      () => {
-        this.revealStream(request.streamId);
-        this.options.getApprovalHandlers().planApproval.show(request);
-      },
-    );
+    this.revealStream(request.streamId);
+    return this.options.getApprovalHandlers().planApproval.request(request, {
+      cancellationScope: options?.cancellationScope,
+      cancellationResult: (cause) => cancellationResultFor('plan', cause),
+    });
   }
 
   requestAgentProposal(
     request: AgentProposalPermission,
     options?: HostInteractionOptions,
   ): Promise<ProposalResult> {
-    return this.showPending(
-      request.proposalId,
-      {
-        kind: 'proposal',
-        streamId: request.streamId,
-        cancellationScope: options?.cancellationScope,
-      },
-      () => {
-        this.revealStream(request.streamId);
-        this.options.getApprovalHandlers().agentProposal.show(request);
-      },
-    );
+    this.revealStream(request.streamId);
+    return this.options.getApprovalHandlers().agentProposal.request(request, {
+      cancellationScope: options?.cancellationScope,
+      cancellationResult: (cause) => cancellationResultFor('proposal', cause),
+    });
   }
 
   requestRetry(_request: HostRetryRequest): Promise<RetryResult> {
@@ -169,18 +133,12 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
     options?: HostInteractionOptions,
   ): Promise<HostUserQuestionResult> {
     const streamId = request.streamId || undefined;
-    return this.showPending(
-      request.requestId,
-      {
-        kind: 'userQuestion',
-        streamId,
-        cancellationScope: options?.cancellationScope,
-      },
-      () => {
-        this.revealStream(streamId);
-        this.options.getApprovalHandlers().userQuestion.show(request);
-      },
-    );
+    this.revealStream(streamId);
+    return this.options.getApprovalHandlers().userQuestion.request(request, {
+      cancellationScope: options?.cancellationScope,
+      cancellationResult: (cause) =>
+        cancellationResultFor('userQuestion', cause),
+    });
   }
 
   openExternalInquiry(
@@ -193,59 +151,51 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   }
 
   submitBashDecision(requestId: string, decision: BashSettlement): boolean {
-    return this.completePending(
-      requestId,
-      'bash',
-      toBashApprovalResult(decision),
-      () => this.options.getApprovalHandlers().bash.resolve(requestId),
-    );
+    return this.options
+      .getApprovalHandlers()
+      .bash.complete(requestId, toBashApprovalResult(decision));
   }
 
   submitPlanDecision(requestId: string, decision: PlanApprovalResult): boolean {
-    return this.completePending(requestId, 'plan', decision, () =>
-      this.options.getApprovalHandlers().planApproval.resolve(requestId),
-    );
+    return this.options
+      .getApprovalHandlers()
+      .planApproval.complete(requestId, decision);
   }
 
   submitProposalDecision(requestId: string, decision: ProposalResult): boolean {
-    return this.completePending(requestId, 'proposal', decision, () =>
-      this.options.getApprovalHandlers().agentProposal.resolve(requestId),
-    );
+    return this.options
+      .getApprovalHandlers()
+      .agentProposal.complete(requestId, decision);
   }
 
   submitUserQuestionDecision(
     requestId: string,
     decision: UserQuestionSettlement,
   ): boolean {
-    return this.completePending(
-      requestId,
-      'userQuestion',
-      toUserQuestionResult(decision),
-      () => this.options.getApprovalHandlers().userQuestion.resolve(requestId),
-    );
+    return this.options
+      .getApprovalHandlers()
+      .userQuestion.complete(requestId, toUserQuestionResult(decision));
   }
 
   dismissExternalInquiry(requestId: string): void {
-    this.options.getApprovalHandlers().externalInquiry.resolve(requestId);
+    this.options.getApprovalHandlers().externalInquiry.dismiss(requestId);
   }
 
   async approvePendingDelegatedWork(
     streamId: StreamTabId,
     initiatingProposalId: string,
   ): Promise<void> {
-    for (const [requestId, request] of [...this.pendingRequests]) {
-      if (
-        request.streamId !== streamId ||
-        (request.kind === 'proposal' && requestId === initiatingProposalId)
-      ) {
-        continue;
-      }
-      if (request.kind === 'bash') {
-        this.submitBashDecision(requestId, { action: 'approve' });
-      } else if (request.kind === 'proposal') {
-        this.submitProposalDecision(requestId, { action: 'approve' });
-      }
-    }
+    const handlers = this.options.getApprovalHandlers();
+    handlers.bash.completeWhere(
+      (request) => request.streamId === streamId,
+      toBashApprovalResult({ action: 'approve' }),
+    );
+    handlers.agentProposal.completeWhere(
+      (request) =>
+        request.streamId === streamId &&
+        request.proposalId !== initiatingProposalId,
+      { action: 'approve' },
+    );
     await this.options.getToolEditApprovals().approvePendingForStream(streamId);
   }
 
@@ -253,101 +203,15 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
     if (selector.kind == null || selector.kind === 'toolEdit') {
       this.options.getToolEditApprovals().cancel(selector);
     }
-    for (const [requestId, request] of [...this.pendingRequests.entries()]) {
-      if (!matchesCancelSelector(request, selector)) continue;
-      this.rejectPending(requestId, request, selector.cause);
-    }
+    cancelApprovalRequestHandlers(
+      this.options.getApprovalHandlers(),
+      DESKTOP_PROGRESS_INTERACTION_KINDS,
+      selector,
+    );
   }
 
   dispose(): void {
     this.cancel({ cause: 'Desktop session disposed.' });
-  }
-
-  private showPending<K extends PendingDesktopKind>(
-    requestId: string,
-    entry: PendingDesktopRegistration<K>,
-    show: () => void,
-  ): Promise<HostInteractionResultByKind[K]> {
-    // Replacement cancellation: a request re-issued under a still-pending id
-    // rejects the stale prompt before the replacement is shown.
-    const replaced = this.pendingRequests.get(requestId);
-    if (replaced) {
-      this.rejectPending(requestId, replaced, 'Approval request was replaced.');
-    }
-    return new Promise<HostInteractionResultByKind[K]>((settle) => {
-      const interaction: PendingDesktopInteraction<K> = {
-        ...entry,
-        settle(result) {
-          settle(result);
-        },
-      };
-      this.pendingRequests.set(requestId, interaction);
-      try {
-        show();
-      } catch (error) {
-        this.pendingRequests.delete(requestId);
-        throw error;
-      }
-    });
-  }
-
-  private rejectPending(
-    requestId: string,
-    request: AnyPendingDesktopInteraction,
-    feedback?: string,
-  ): void {
-    switch (request.kind) {
-      case 'bash':
-        this.completePending(
-          requestId,
-          'bash',
-          cancellationResultFor('bash', feedback),
-          () => this.options.getApprovalHandlers().bash.resolve(requestId),
-        );
-        return;
-      case 'plan':
-        this.completePending(
-          requestId,
-          'plan',
-          cancellationResultFor('plan', feedback),
-          () =>
-            this.options.getApprovalHandlers().planApproval.resolve(requestId),
-        );
-        return;
-      case 'proposal':
-        this.completePending(
-          requestId,
-          'proposal',
-          cancellationResultFor('proposal', feedback),
-          () =>
-            this.options.getApprovalHandlers().agentProposal.resolve(requestId),
-        );
-        return;
-      case 'userQuestion':
-        this.completePending(
-          requestId,
-          'userQuestion',
-          cancellationResultFor('userQuestion', feedback),
-          () =>
-            this.options.getApprovalHandlers().userQuestion.resolve(requestId),
-        );
-        return;
-    }
-    assertNever(request.kind, 'Unhandled desktop interaction kind');
-  }
-
-  private completePending<K extends PendingDesktopKind>(
-    requestId: string,
-    expectedKind: K,
-    value: HostInteractionResultByKind[K],
-    resolveUi: () => void,
-  ): boolean {
-    const pending = this.pendingRequests.get(requestId);
-    if (!pending || pending.kind !== expectedKind) return false;
-    this.pendingRequests.delete(requestId);
-    pending.settle(value);
-    resolveUi();
-    return true;
   }
 
   // Interaction requests surface per-stream (pending badge on the stream
