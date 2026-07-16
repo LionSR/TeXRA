@@ -1,5 +1,6 @@
 // Local imports
 import type { AgentEvent } from '@agent/trace';
+import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   matchesCancelSelector,
@@ -74,6 +75,21 @@ export function sessionFactPayloads<T extends SessionFact['type']>(
     payloads.push(entry.event.payload);
   }
   return payloads;
+}
+
+/**
+ * The `ToolUseRunShared` baseline every wait/round node test starts from:
+ * no messages, no pending cycle skip, no persisted state slices yet.
+ */
+export function toolUseRunShared(
+  overrides: Partial<ToolUseRunShared> = {},
+): ToolUseRunShared {
+  return {
+    messages: [],
+    shouldSkipCycle: false,
+    stateSlices: null,
+    ...overrides,
+  };
 }
 
 export function runEventsOfType<T extends AgentEvent['type']>(

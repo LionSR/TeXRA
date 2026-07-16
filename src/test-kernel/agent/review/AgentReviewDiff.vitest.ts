@@ -14,6 +14,7 @@ import {
   collectReviewDiff,
   isPathInChangeSet,
   listBaseBranchCandidates,
+  type CollectReviewDiffOptions,
 } from '@agent/review/reviewDiff';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -93,25 +94,33 @@ describe('collectReviewDiff (real git repository)', () => {
     await rm(repo, { recursive: true, force: true });
   });
 
+  /** Runs `collectReviewDiff` against the fixture repo and unwraps a success. */
+  async function collectDiffOrFail(
+    options: Partial<CollectReviewDiffOptions> & { includeUntracked: boolean },
+  ) {
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeSubmodules: true,
+      ...options,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected collectReviewDiff to succeed');
+    return result.value;
+  }
+
   it('diffs a feature branch against main and includes untracked files', async () => {
     await git('checkout', '-b', 'feature');
     await writeFile(path.join(repo, 'paper.tex'), 'changed line\n');
     await writeFile(path.join(repo, 'scratch.txt'), 'untracked content\n');
 
-    const result = await collectReviewDiff({
-      cwd: repo,
-      includeUntracked: true,
-      includeSubmodules: true,
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.baseDescription).toBe('main branch (main)');
-    expect(result.value.diff).toContain('-original line');
-    expect(result.value.diff).toContain('+changed line');
-    expect(result.value.diff).toContain('+untracked content');
-    expect(result.value.changedFiles).toEqual(['paper.tex', 'scratch.txt']);
-    expect(result.value.truncated).toBe(false);
-    expect(await realpath(result.value.repoRoot)).toBe(await realpath(repo));
+    const value = await collectDiffOrFail({ includeUntracked: true });
+    expect(value.baseDescription).toBe('main branch (main)');
+    expect(value.diff).toContain('-original line');
+    expect(value.diff).toContain('+changed line');
+    expect(value.diff).toContain('+untracked content');
+    expect(value.changedFiles).toEqual(['paper.tex', 'scratch.txt']);
+    expect(value.truncated).toBe(false);
+    expect(await realpath(value.repoRoot)).toBe(await realpath(repo));
   });
 
   it('ignores inherited interactive git environment variables', async () => {
@@ -123,12 +132,7 @@ describe('collectReviewDiff (real git repository)', () => {
       await git('checkout', '-b', 'feature');
       await writeFile(path.join(repo, 'paper.tex'), 'changed line\n');
 
-      const result = await collectReviewDiff({
-        cwd: repo,
-        includeUntracked: false,
-        includeSubmodules: true,
-      });
-      expect(result.ok).toBe(true);
+      await collectDiffOrFail({ includeUntracked: false });
     } finally {
       if (previousPager === undefined) delete process.env.PAGER;
       else process.env.PAGER = previousPager;
@@ -145,19 +149,13 @@ describe('collectReviewDiff (real git repository)', () => {
       `start-of-big-file\n${'x'.repeat(300 * 1024)}\n`,
     );
 
-    const result = await collectReviewDiff({
-      cwd: repo,
-      includeUntracked: true,
-      includeSubmodules: true,
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.diff).toContain('+start-of-big-file');
+    const value = await collectDiffOrFail({ includeUntracked: true });
+    expect(value.diff).toContain('+start-of-big-file');
     // The 200 KB per-file prefix exceeds the overall diff cap, so the
     // global truncation applies and the result stays bounded.
-    expect(result.value.truncated).toBe(true);
-    expect(result.value.diff).toContain('[... diff truncated for review]');
-    expect(result.value.diff.length).toBeLessThan(200 * 1024);
+    expect(value.truncated).toBe(true);
+    expect(value.diff).toContain('[... diff truncated for review]');
+    expect(value.diff.length).toBeLessThan(200 * 1024);
   });
 
   it('falls back to the origin remote-tracking branch when no local main exists', async () => {
@@ -168,15 +166,9 @@ describe('collectReviewDiff (real git repository)', () => {
     await git('branch', '-D', 'main');
     await writeFile(path.join(repo, 'paper.tex'), 'changed line\n');
 
-    const result = await collectReviewDiff({
-      cwd: repo,
-      includeUntracked: false,
-      includeSubmodules: true,
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.baseDescription).toBe('main branch (origin/main)');
-    expect(result.value.diff).toContain('+changed line');
+    const value = await collectDiffOrFail({ includeUntracked: false });
+    expect(value.baseDescription).toBe('main branch (origin/main)');
+    expect(value.diff).toContain('+changed line');
   });
 
   it('resolves the repository root when run from a subdirectory', async () => {
@@ -184,60 +176,39 @@ describe('collectReviewDiff (real git repository)', () => {
     await mkdir(path.join(repo, 'sub'));
     await writeFile(path.join(repo, 'sub', 'note.txt'), 'untracked content\n');
 
-    const result = await collectReviewDiff({
+    const value = await collectDiffOrFail({
       cwd: path.join(repo, 'sub'),
       includeUntracked: true,
-      includeSubmodules: true,
     });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(await realpath(result.value.repoRoot)).toBe(await realpath(repo));
-    expect(result.value.changedFiles).toEqual(['sub/note.txt']);
+    expect(await realpath(value.repoRoot)).toBe(await realpath(repo));
+    expect(value.changedFiles).toEqual(['sub/note.txt']);
   });
 
   it('omits untracked files when disabled', async () => {
     await git('checkout', '-b', 'feature');
     await writeFile(path.join(repo, 'scratch.txt'), 'untracked content\n');
 
-    const result = await collectReviewDiff({
-      cwd: repo,
-      includeUntracked: false,
-      includeSubmodules: true,
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.diff).toBe('');
-    expect(result.value.changedFiles).toEqual([]);
+    const value = await collectDiffOrFail({ includeUntracked: false });
+    expect(value.diff).toBe('');
+    expect(value.changedFiles).toEqual([]);
   });
 
   it('reviews uncommitted changes when on the main branch', async () => {
     await writeFile(path.join(repo, 'paper.tex'), 'edited on main\n');
 
-    const result = await collectReviewDiff({
-      cwd: repo,
-      includeUntracked: false,
-      includeSubmodules: true,
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.baseDescription).toContain('uncommitted changes');
-    expect(result.value.diff).toContain('+edited on main');
+    const value = await collectDiffOrFail({ includeUntracked: false });
+    expect(value.baseDescription).toContain('uncommitted changes');
+    expect(value.diff).toContain('+edited on main');
   });
 
   it('reviews the latest commit when on main with a clean tree', async () => {
     await writeFile(path.join(repo, 'paper.tex'), 'committed on main\n');
     await git('commit', '-am', 'second');
 
-    const result = await collectReviewDiff({
-      cwd: repo,
-      includeUntracked: false,
-      includeSubmodules: true,
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.baseDescription).toContain('latest commit');
-    expect(result.value.diff).toContain('+committed on main');
-    expect(result.value.diff).toContain('-original line');
+    const value = await collectDiffOrFail({ includeUntracked: false });
+    expect(value.baseDescription).toContain('latest commit');
+    expect(value.diff).toContain('+committed on main');
+    expect(value.diff).toContain('-original line');
   });
 
   it('diffs against a chosen base branch (merge-base) from the picker', async () => {
@@ -251,20 +222,16 @@ describe('collectReviewDiff (real git repository)', () => {
     await git('checkout', '-b', 'feature');
     await writeFile(path.join(repo, 'paper.tex'), 'feature line\n');
 
-    const result = await collectReviewDiff({
-      cwd: repo,
+    const value = await collectDiffOrFail({
       includeUntracked: false,
-      includeSubmodules: true,
       baseBranch: 'develop',
     });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
     // Merge-base with develop is the initial commit, so develop's own work
     // is not part of the review — only the feature change is.
-    expect(result.value.baseDescription).toBe('branch develop');
-    expect(result.value.diff).toContain('+feature line');
-    expect(result.value.diff).not.toContain('develop work');
-    expect(result.value.changedFiles).toEqual(['paper.tex']);
+    expect(value.baseDescription).toBe('branch develop');
+    expect(value.diff).toContain('+feature line');
+    expect(value.diff).not.toContain('develop work');
+    expect(value.changedFiles).toEqual(['paper.tex']);
   });
 
   it('diffs against an explicitly chosen remote ref even on the matching local branch', async () => {
@@ -275,18 +242,14 @@ describe('collectReviewDiff (real git repository)', () => {
     await writeFile(path.join(repo, 'paper.tex'), 'second unpushed commit\n');
     await git('commit', '-am', 'second unpushed');
 
-    const result = await collectReviewDiff({
-      cwd: repo,
+    const value = await collectDiffOrFail({
       includeUntracked: false,
-      includeSubmodules: true,
       baseBranch: 'origin/main',
     });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.baseDescription).toBe('branch origin/main');
-    expect(result.value.diff).toContain('+first unpushed commit');
-    expect(result.value.diff).toContain('+second unpushed commit');
-    expect(result.value.changedFiles).toEqual(['notes.txt', 'paper.tex']);
+    expect(value.baseDescription).toBe('branch origin/main');
+    expect(value.diff).toContain('+first unpushed commit');
+    expect(value.diff).toContain('+second unpushed commit');
+    expect(value.changedFiles).toEqual(['notes.txt', 'paper.tex']);
   });
 
   it('fails clearly when the chosen base branch does not exist', async () => {
@@ -312,31 +275,21 @@ describe('collectReviewDiff (real git repository)', () => {
     await git('commit', '-am', 'second');
     await writeFile(path.join(repo, 'notes.txt'), 'dirty after commit\n');
 
-    const result = await collectReviewDiff({
-      cwd: repo,
+    const value = await collectDiffOrFail({
       includeUntracked: false,
-      includeSubmodules: true,
       baseRef: previousHead,
       baseDescription: 'previous commit on main',
     });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.baseRef).toBe(previousHead);
-    expect(result.value.baseDescription).toBe('previous commit on main');
-    expect(result.value.diff).toContain('+committed on main');
-    expect(result.value.diff).toContain('+dirty after commit');
-    expect(result.value.changedFiles).toEqual(['notes.txt', 'paper.tex']);
+    expect(value.baseRef).toBe(previousHead);
+    expect(value.baseDescription).toBe('previous commit on main');
+    expect(value.diff).toContain('+committed on main');
+    expect(value.diff).toContain('+dirty after commit');
+    expect(value.changedFiles).toEqual(['notes.txt', 'paper.tex']);
   });
 
   it('reports no changes on main with a clean tree and no parent commit', async () => {
-    const result = await collectReviewDiff({
-      cwd: repo,
-      includeUntracked: false,
-      includeSubmodules: true,
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.diff).toBe('');
+    const value = await collectDiffOrFail({ includeUntracked: false });
+    expect(value.diff).toBe('');
   });
 
   it('fails with a reason outside a git repository', async () => {
