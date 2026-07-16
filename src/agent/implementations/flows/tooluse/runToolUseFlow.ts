@@ -341,7 +341,10 @@ export async function runToolUseFlow<C = unknown>(
     interrupt(): void {
       onInterrupt?.();
       runSession.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-      if (inResumeStartupWindow) {
+      if (
+        inResumeStartupWindow ||
+        (input.isSubagent === true && input.takePendingFollowUps !== undefined)
+      ) {
         sessionLifecycle.interruptPreservingQueue();
       } else {
         sessionLifecycle.interrupt();

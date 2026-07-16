@@ -916,6 +916,56 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
+  it('preserves late input when an orphaned host-resumed subagent is cancelled mid-turn', async () => {
+    const executionId = 'abc-cancel-active-followup' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-cancel-active-followup' as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const session = createTestSession();
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        ...VALID_TOOL_USE_SHARED,
+        modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+    let flowContext: ToolUseSetupContext | undefined;
+    const abortError = new DOMException(
+      'This operation was aborted',
+      'AbortError',
+    );
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockImplementationOnce(async () => {
+        flowContext?.session.appendFollowUp({ text: 'late active-turn input' });
+        flowContext?.interrupt();
+        throw abortError;
+      });
+
+    try {
+      await expect(
+        runPersistedFlow(
+          executionId,
+          streamId,
+          snapshot,
+          (context) => {
+            flowContext = context;
+          },
+          session,
+          { takePendingFollowUps: () => [] },
+        ),
+      ).rejects.toBe(abortError);
+      expect(session.followUps.getAll(streamId)).toEqual([
+        'late active-turn input',
+      ]);
+    } finally {
+      runSpy.mockRestore();
+      session.followUps.release(streamId);
+    }
+  });
+
   it('hydrates a legacy-shaped flow record through the single boundary, then self-heals via its canonical fields', async () => {
     const executionId = 'abc140' as ExecutionId;
     const streamId = 'chat@gpt54#abc140' as StreamTabId;
