@@ -1,3 +1,4 @@
+// Shared imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
@@ -5,6 +6,7 @@ import {
   type StreamContentRenderPayload,
 } from '@shared/schemas';
 
+// Local imports
 import {
   updateParentStreamId,
   updateToolUseState,

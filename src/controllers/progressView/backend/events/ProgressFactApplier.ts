@@ -775,7 +775,11 @@ export class ProgressFactApplier {
 
     this.webviewBridge.syncStream(stream);
 
-    const kind = this.getStreamCategory(stream) ?? AgentCategory.Workflow;
+    const existingState = this.state.getStreamState(stream);
+    const kind =
+      this.getStreamCategory(stream) ??
+      existingState?.kind ??
+      AgentCategory.Workflow;
 
     const activeState = includeActiveState
       ? this.toActiveStreamContentSync(

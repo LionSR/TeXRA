@@ -222,6 +222,45 @@ describe('progress view stream-content projection', () => {
     expect(messages[0]).not.toHaveProperty('controls');
   });
 
+  it('preserves a provisional tool-use execution across metadata reset', async () => {
+    const state = await createLoadedState();
+    const { messages, updater, bridge } = createSyncCapture();
+    const handler = new ProgressFactApplier(
+      state,
+      updater,
+      bridge,
+      () => false,
+    );
+
+    state.updateStreamMetadata(stream, {
+      agentCategory: AgentCategory.ToolUse,
+    });
+    // Running-transition setup preserves the provisional kind in execution
+    // state while reset metadata awaits a canonical run config.
+    state.resetStreamMetadataForRun(stream);
+    state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
+    expect(state.getStreamMetadata(stream).agentCategory).toBeUndefined();
+    state.updateStreamState(stream, (prev) => ({
+      ...prev,
+      conversationProgress: { toolCallCount: 3 },
+      activeSubagents: [activeSubagent],
+    }));
+    messages.length = 0;
+
+    handler.syncStreamContent(stream, { includeActiveState: true });
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      action: 'render',
+      stream,
+      kind: AgentCategory.ToolUse,
+      activeState: {
+        conversationProgress: { toolCallCount: 3 },
+        badges: { activeSubagents: [activeSubagent] },
+      },
+    });
+  });
+
   it('projects clear without placeholder stream content', async () => {
     const state = await createLoadedState();
     const { messages, updater, bridge } = createSyncCapture();
