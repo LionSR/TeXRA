@@ -268,7 +268,7 @@ export class AIAgentsTab extends LitElement {
    * Read-only status summary derived from the same `toolDashboardItems`
    * signal the Tools tab uses to drive its actionable "Re-check" button.
    * This tab only reflects that shared state — the Tools tab owns the one
-   * control that re-runs the probe (see CLAUDE.md "Duplicate UI Controls").
+   * control that re-runs the probe (see AGENTS.md "UI anti-patterns" (Duplicate UI controls)).
    */
   private renderStatusSummary(
     items: readonly ToolDashboardItem[],

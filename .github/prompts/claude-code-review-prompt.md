@@ -20,7 +20,7 @@ configuration and storage correctness, and CI/toolchain hygiene. Do not run
 Conversely, flag pass-through layers this pull request newly introduces — wrapper
 functions that only forward to a single callee, single-use two-layer factories,
 trivial identity factories that just spread an object, and re-export shims — per
-CLAUDE.md's "Flattening Abstraction Layers" and "Discouraged Factory Patterns",
+AGENTS.md's "Flattening abstraction layers" and "Discouraged factory patterns",
 and recommend inlining them. Limit this to indirection the PR adds; respect
 load-bearing thin layers (dependency-injection seams, multi-caller DRY helpers,
 the prescribed PocketFlow `Node.exec() -> createFlow() -> flow.run()` shape),

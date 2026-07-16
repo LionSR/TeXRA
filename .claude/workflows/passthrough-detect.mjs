@@ -169,7 +169,7 @@ function buildPrompt(batch) {
     `Hunt for collapsible PASS-THROUGH / DELEGATION code in these ${files.length} files (batch "${name}"), focusing on code changed since the v0.38.5 tag (inspect with \`git diff v0.38.5..HEAD -- <file>\`, but you may flag a pass-through even if it predates the tag as long as it sits in one of these files):`,
     files.map((f) => `  - ${f}`).join('\n'),
     ``,
-    `## What counts as a pass-through (the repo's "Flattening Abstraction Layers" smell)`,
+    `## What counts as a pass-through (the repo's "Flattening abstraction layers" smell)`,
     `- method-passthrough: a class/object method whose body is essentially \`return this.inner.foo(...sameArgs)\` (or \`this.inner.foo(...)\` with no return value), adding no logic, validation, transform, or error handling.`,
     `- function-wrapper: a free function that only forwards to another function/helper with the same (or trivially reordered) args and returns its result. Includes a wrapper that only "creates state + runs a flow + returns its result".`,
     `- one-call-factory: a factory called from exactly ONE site that just constructs and returns an object/closure (the repo's discouraged-factory rule).`,
