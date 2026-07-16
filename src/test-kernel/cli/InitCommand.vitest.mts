@@ -4,6 +4,8 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+
 const mocks = vi.hoisted(() => ({
   getCliModelAccessList: vi.fn(),
   getVisibleAgents: vi.fn(),
@@ -104,24 +106,12 @@ describe('CLI init command', () => {
       ]);
     mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
     mocks.loadAgents.mockReset().mockResolvedValue(undefined);
-    stdoutSpy = vi
-      .spyOn(process.stdout, 'write')
-      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
-        stdout += String(chunk);
-        const cb = rest.find((arg) => typeof arg === 'function') as
-          ((err?: Error | null) => void) | undefined;
-        cb?.(null);
-        return true;
-      }) as unknown as ReturnType<typeof vi.spyOn>;
-    stderrSpy = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
-        stderr += String(chunk);
-        const cb = rest.find((arg) => typeof arg === 'function') as
-          ((err?: Error | null) => void) | undefined;
-        cb?.(null);
-        return true;
-      }) as unknown as ReturnType<typeof vi.spyOn>;
+    stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
+      stdout += chunk;
+    });
+    stderrSpy = spyOnStreamWrite(process.stderr, (chunk) => {
+      stderr += chunk;
+    });
   });
 
   afterEach(() => {

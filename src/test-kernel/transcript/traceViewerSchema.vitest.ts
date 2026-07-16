@@ -1,15 +1,10 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import * as os from 'node:os';
-import * as path from 'node:path';
-
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
 import { assembleTrace, StreamLogStore } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -31,21 +26,8 @@ import type { Platform } from '@platform/platform';
 
 const tempDirs: string[] = [];
 
-async function buildStoragePlatform(): Promise<Platform> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-trace-viewer-'));
-  tempDirs.push(tempDir);
-  const workspaceDir = path.join(tempDir, 'workspace');
-  const storageRoot = path.join(tempDir, 'storage');
-  return createFakePlatform(
-    { workspacePath: workspaceDir },
-    {
-      fs: nodeFilesystem,
-      workspace: createNodeWorkspace(() => workspaceDir),
-      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-      globalState: new MemoryStateStore(),
-      workspaceState: new MemoryStateStore(),
-    },
-  );
+function buildStoragePlatform(): Promise<Platform> {
+  return createTempDirPlatform('texra-trace-viewer-', tempDirs);
 }
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -73,11 +55,7 @@ describe('trace-viewer TraceDataSchema', () => {
   setupPlatform(buildStoragePlatform);
 
   afterEach(async () => {
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('accepts a real trace document produced by assembleTrace', async () => {

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -9,6 +9,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { installPlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 import {
   createExternalLocation,
   createWorkspaceLocation,
@@ -97,11 +98,7 @@ describe('LaTeXdiffService shadow output', () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('writes generated diff sources to the requested output directory', async () => {
