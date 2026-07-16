@@ -29,7 +29,6 @@ import {
   isChildStreamRemoved,
   resetChildStreamEntries,
 } from './childExecutions';
-import type { ChildControlMode } from './childControls';
 
 export type { ProcessOutputTail };
 
@@ -385,7 +384,8 @@ export const rootRunStreamId = ROOT_RUN_STREAM_ID;
 
 // Signals for the App-level foreground surfaces — the inline slash form, the
 // slash-command palette, reverse search, the transcript viewer, and the
-// child-control (subagents/tasks) picker. These are view-level toggles, so
+// foreground transcript and process-detail surfaces. These are view-level
+// toggles, so
 // per the CLAUDE.md TUI rule they live here as signal state rather than as
 // local `useState` in the components that render them.
 
@@ -419,7 +419,7 @@ export const reverseSearchOpen = REVERSE_SEARCH_OPEN;
 
 /** The stream whose full-output transcript the viewer is showing, or
  *  `undefined` when the viewer is closed. ctrl+t opens it on the active
- *  stream; the Subagents picker opens it on a chosen child so each subagent's
+ *  stream; the child list opens it on a chosen session so each subagent's
  *  transcript is independently browsable without disturbing the main
  *  scrollback. The viewer shows that one stream's tool output untruncated and
  *  scrollable; the finalized scrollback and live region only ever show a
@@ -427,16 +427,9 @@ export const reverseSearchOpen = REVERSE_SEARCH_OPEN;
 const TRANSCRIPT_VIEWER_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 export const transcriptViewerStreamId = TRANSCRIPT_VIEWER_STREAM_ID;
 
-/** Which child-control picker (subagents/tasks) App is showing in the
- *  foreground, or `undefined` when neither is open. */
-const CHILD_CONTROL_MODE: Signal.State<ChildControlMode | undefined> = signal<
-  ChildControlMode | undefined
->(undefined);
-export const childControlMode = CHILD_CONTROL_MODE;
-/** Status-bar verb for Escape while the child-control picker owns input;
- *  the picker reports this as it navigates between its list and detail view. */
-const CHILD_CONTROL_ESCAPE_ACTION = signal<string>('close');
-export const childControlEscapeAction = CHILD_CONTROL_ESCAPE_ACTION;
+/** Process whose captured output is open in TaskDetailView. */
+const TASK_DETAIL_EXECUTION_ID = signal<string | undefined>(undefined);
+export const taskDetailExecutionId = TASK_DETAIL_EXECUTION_ID;
 
 // ---------------------------------------------------------------------------
 // exitHintSlice
@@ -522,8 +515,7 @@ export function resetCliState(
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   transcriptViewerStreamId.set(undefined);
-  childControlMode.set(undefined);
-  childControlEscapeAction.set('close');
+  taskDetailExecutionId.set(undefined);
   pendingExitHint.set(false);
   pendingExitResumeId.set(undefined);
   for (const resetHook of RESET_HOOKS) resetHook();

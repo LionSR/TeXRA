@@ -1,4 +1,4 @@
-// Canonical ordering for the vertical session list.
+// Canonical ordering for the vertical child list.
 
 import { type StreamTabId } from '@shared/schemas';
 
@@ -9,7 +9,7 @@ import {
 import type { StreamSlice } from './cliState';
 
 /**
- * Ordered descendant stream ids for a session list: retained
+ * Ordered descendant stream ids for a child list: retained
  * children first (in retained order), then current-topology children not
  * already present. See `childExecutions.ts#focusOrderDescendants` for the
  * full ordering contract — this stays a thin wrapper so callers keep a

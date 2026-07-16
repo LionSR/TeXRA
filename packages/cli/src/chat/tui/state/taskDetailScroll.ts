@@ -39,7 +39,7 @@ function taskDetailOutputColumnCount(
     : Math.max(1, availableColumns - TASK_DETAIL_HORIZONTAL_CHROME_COLUMNS);
 }
 
-export function taskDetailWrappedRowCount(
+function taskDetailWrappedRowCount(
   line: string,
   outputColumns: number | undefined,
 ): number {

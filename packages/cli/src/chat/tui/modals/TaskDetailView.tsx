@@ -1,4 +1,4 @@
-// Task detail view for the CLI child execution controls.
+// Captured-output detail view for a background process.
 
 // Third-party imports
 import { useEffect, useState } from 'react';
@@ -6,14 +6,21 @@ import { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 // Local imports - shared schemas
-import type { StreamTabId } from '@shared/schemas';
+import type { ActiveChildInfo } from '@shared/schemas';
+import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
 // Local imports - CLI state and UI
-import { isJumpToBottomInput, isJumpToTopInput } from '../input/inputKeys';
 import {
-  childPickerKeyAction,
-  type ChildControlItem,
+  isEscapeInput,
+  isJumpToBottomInput,
+  isJumpToTopInput,
+} from '../input/inputKeys';
+import {
+  childElapsed,
+  liveChildExecutionElapsedKey,
+  processTailLines,
 } from '../state/childControls';
+import { childExecutionLabel } from '../state/childExecutions';
 import {
   jumpTaskDetailScrollState,
   moveTaskDetailScrollState,
@@ -31,6 +38,10 @@ import {
 import { KeyHints, type KeyHint } from '../ui/KeyHints';
 import { BorderedPanel } from '../ui/BorderedPanel';
 import { COLOR_HINT } from '../ui/colors';
+import { useLiveNowMs } from '../state/useLiveNowMs';
+import type { ProcessOutputTail } from '../state/cliState';
+
+type ProcessChildInfo = Extract<ActiveChildInfo, { kind: 'process' }>;
 
 export const TASK_DETAIL_LABEL_WIDTH = 13;
 const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
@@ -40,7 +51,7 @@ const MIN_COLUMNS_FOR_KILL_HINT = 44;
 // duplicate `TranscriptViewer`'s paging bindings but the arrow-key scroll
 // hint above already covers the same affordance more compactly. Only surface
 // them once there's room for the full hint row (scroll + page + top/bottom +
-// focus stream + kill + back) without crowding out the higher-priority ones.
+// kill + back) without crowding out the higher-priority ones.
 const MIN_COLUMNS_FOR_PAGE_JUMP_HINTS = 84;
 
 export function isUltraCompactTaskDetailRows(
@@ -54,12 +65,10 @@ export function isUltraCompactTaskDetailRows(
 
 export function taskDetailKeyHintsForColumns({
   availableColumns,
-  canFocusStream,
   canKill,
   showScrollHint,
 }: {
   readonly availableColumns?: number;
-  readonly canFocusStream: boolean;
   readonly canKill: boolean;
   readonly showScrollHint: boolean;
 }): readonly KeyHint[] {
@@ -75,9 +84,6 @@ export function taskDetailKeyHintsForColumns({
   ) {
     hints.push({ key: 'PgUp/PgDn', action: 'page' });
     hints.push({ key: 'g/G', action: 'top/bottom' });
-  }
-  if (canFocusStream) {
-    hints.push({ key: 'f', action: narrow ? 'focus' : 'focus stream' });
   }
   if (
     canKill &&
@@ -114,10 +120,6 @@ interface TaskDetailLayout {
   readonly showOutputLabel: boolean;
   readonly showTitle: boolean;
   readonly visibleLineCount: number;
-}
-
-export function taskDetailCommandLabel(kind: ChildControlItem['kind']): string {
-  return kind === 'process' ? 'Command' : 'Description';
 }
 
 export function computeTaskDetailLayout({
@@ -162,13 +164,11 @@ export function computeTaskDetailLayout({
 }
 
 function TaskOutput({
-  childStreamId,
   tailLines,
   truncateTailRows = false,
   visibleTail,
   visibleLineCount,
 }: {
-  readonly childStreamId: StreamTabId | undefined;
   readonly tailLines: readonly string[];
   readonly truncateTailRows?: boolean;
   readonly visibleTail: readonly string[];
@@ -191,44 +191,45 @@ function TaskOutput({
     );
   }
   if (visibleLineCount === 0) return null;
-  if (childStreamId) {
-    return (
-      <Text dimColor>Open the task stream to see its live transcript.</Text>
-    );
-  }
   return <Text dimColor>No output captured yet.</Text>;
 }
 
 export function TaskDetailView({
   availableColumns,
   availableRows,
-  item,
+  process,
+  tail,
   onBack,
-  onFocusStream,
   onKill,
 }: {
   readonly availableColumns?: number;
   readonly availableRows?: number;
-  readonly item: ChildControlItem;
+  readonly process: ProcessChildInfo;
+  readonly tail?: ProcessOutputTail;
   readonly onBack: () => void;
-  readonly onFocusStream: () => void;
   readonly onKill: () => void;
 }): React.JSX.Element {
-  const metaParts = [
-    item.kind === 'process' ? 'shell' : 'stream',
-    item.label,
-    item.statusLabel,
-    item.elapsed,
-  ].filter((part): part is string => Boolean(part));
+  const liveElapsedKey = liveChildExecutionElapsedKey([], [process]);
+  const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
+  const label = childExecutionLabel(process);
+  const statusLabel = formatStreamStatusLabel(process.status, {
+    style: 'cliCompact',
+    isChildStream: true,
+  });
+  const elapsed = childElapsed(process, nowMs);
+  const tailLines = processTailLines(tail);
+  const metaParts = ['shell', label, statusLabel, elapsed].filter(
+    (part): part is string => Boolean(part),
+  );
   const layout = computeTaskDetailLayout({
     availableRows,
-    hasTailLines: item.tailLines.length > 0,
+    hasTailLines: tailLines.length > 0,
     metaRows: metaParts.length,
   });
   const scrollableOutputRows = taskDetailScrollableOutputRowCountForColumns({
     availableColumns,
     compact: layout.compact,
-    tailLines: item.tailLines,
+    tailLines,
   });
   const maxOffset = taskDetailInitialScrollOffset(
     scrollableOutputRows,
@@ -237,17 +238,17 @@ export function TaskDetailView({
   const followOffset = taskDetailFollowTailScrollOffsetForColumns({
     availableColumns,
     compact: layout.compact,
-    tailLines: item.tailLines,
+    tailLines,
     visibleRowBudget: layout.visibleLineCount,
   });
   const scrollContext: TaskDetailScrollContext = {
     availableColumns,
     compact: layout.compact,
-    tailLines: item.tailLines,
+    tailLines,
   };
   const scrollContextKey = taskDetailScrollContextKey(scrollContext);
   const [scrollState, setScrollState] = useState<TaskDetailScrollState>(() => ({
-    executionId: item.executionId,
+    executionId: process.executionId,
     followsTail: true,
     offset: followOffset,
   }));
@@ -262,18 +263,17 @@ export function TaskDetailView({
     availableColumns,
     compact: layout.compact,
     offset,
-    tailLines: item.tailLines,
+    tailLines,
     visibleRowBudget: layout.visibleLineCount,
   });
   const truncateTailRows = layout.compact;
   const compactMeta = metaParts.join(' · ');
-  const commandLabel = taskDetailCommandLabel(item.kind);
+  const commandLabel = 'Command';
   const ultraCompact = isUltraCompactTaskDetailRows(availableRows);
   const showScrollHint = maxOffset > 0 && !ultraCompact;
   const hints = taskDetailKeyHintsForColumns({
     availableColumns,
-    canFocusStream: Boolean(item.childStreamId),
-    canKill: item.killable,
+    canKill: true,
     showScrollHint,
   });
 
@@ -281,27 +281,18 @@ export function TaskDetailView({
     setScrollState((current) =>
       syncTaskDetailScrollState(
         current,
-        item.executionId,
+        process.executionId,
         maxOffset,
         followOffset,
         scrollContext,
       ),
     );
-  }, [item.executionId, followOffset, maxOffset, scrollContextKey]);
+  }, [process.executionId, followOffset, maxOffset, scrollContextKey]);
 
   useInput((input, key) => {
-    const action = childPickerKeyAction({
-      input,
-      ctrl: key.ctrl,
-      escape: key.escape,
-      meta: key.meta,
-      upArrow: key.upArrow,
-      downArrow: key.downArrow,
-      return: key.return,
-    });
-    if (action.kind === 'close') onBack();
-    if (action.kind === 'kill' && item.killable) onKill();
-    if (action.kind === 'up') {
+    if (isEscapeInput(input, key)) onBack();
+    if (!key.ctrl && !key.meta && input.toLowerCase() === 'k') onKill();
+    if (key.upArrow) {
       setScrollState((current) =>
         moveTaskDetailScrollState(
           current,
@@ -312,7 +303,7 @@ export function TaskDetailView({
         ),
       );
     }
-    if (action.kind === 'down') {
+    if (key.downArrow) {
       setScrollState((current) =>
         moveTaskDetailScrollState(
           current,
@@ -369,14 +360,13 @@ export function TaskDetailView({
         ),
       );
     }
-    if (input.toLowerCase() === 'f' && item.childStreamId) onFocusStream();
   });
 
   if (ultraCompact) {
     return (
       <Box flexDirection="column" minWidth={0} width={availableColumns}>
         <Text bold color={COLOR_HINT} wrap="truncate-end">
-          {`Task details · ${commandLabel}: ${item.command}`}
+          {`Task details · ${commandLabel}: ${label}`}
         </Text>
         <KeyHints hints={hints} confirmCancel={false} />
       </Box>
@@ -397,10 +387,10 @@ export function TaskDetailView({
     >
       {layout.showExpandedMeta ? (
         <>
-          {metaLine('Type', item.kind === 'process' ? 'shell' : 'stream')}
-          {metaLine('Name', item.label)}
-          {metaLine('Status', item.statusLabel)}
-          {metaLine('Runtime', item.elapsed)}
+          {metaLine('Type', 'shell')}
+          {metaLine('Name', label)}
+          {metaLine('Status', statusLabel)}
+          {metaLine('Runtime', elapsed)}
         </>
       ) : (
         <Text
@@ -417,14 +407,13 @@ export function TaskDetailView({
           <Box width={TASK_DETAIL_LABEL_WIDTH}>
             <Text bold>{`${commandLabel}:`}</Text>
           </Box>
-          <Text wrap="truncate-end">{item.command}</Text>
+          <Text wrap="truncate-end">{label}</Text>
         </Box>
       ) : null}
       <Box flexDirection="column" marginTop={layout.compact ? 0 : 1}>
         {layout.showOutputLabel ? <Text bold>Output:</Text> : null}
         <TaskOutput
-          childStreamId={item.childStreamId}
-          tailLines={item.tailLines}
+          tailLines={tailLines}
           truncateTailRows={truncateTailRows}
           visibleTail={visibleTail}
           visibleLineCount={visibleLineCount}
