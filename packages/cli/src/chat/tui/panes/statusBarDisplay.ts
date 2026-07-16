@@ -91,9 +91,7 @@ export interface StatusBarDisplayInput {
   readonly activeProcesses: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
-  readonly taskControlsAvailable?: boolean;
   readonly agentSelectionAvailable?: boolean;
-  readonly subagentControlsAvailable: boolean;
   /** True when the current stream tree has selectable session rows. */
   readonly sessionNavigationAvailable: boolean;
   readonly model: string;
@@ -379,9 +377,7 @@ let lastBindingsKey: string | undefined;
 let lastBindingsText = '';
 
 function statusBarBindingsText(
-  taskControlsAvailable = true,
   agentSelectionAvailable = false,
-  subagentControlsAvailable: boolean,
   sessionNavigationAvailable: boolean,
   modifierLabel = defaultShortcutModifierLabel(),
   shiftEnterNewline = false,
@@ -390,9 +386,7 @@ function statusBarBindingsText(
   maxColumns?: number,
 ): string {
   const memoKey = [
-    taskControlsAvailable,
     agentSelectionAvailable,
-    subagentControlsAvailable,
     sessionNavigationAvailable,
     modifierLabel,
     shiftEnterNewline,
@@ -413,15 +407,6 @@ function statusBarBindingsText(
   const transcript = transcriptAvailable
     ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
     : undefined;
-  const tasks = taskControlsAvailable
-    ? keyHintText({ key: metaChordLabel(modifierLabel, 'p'), action: 'tasks' })
-    : undefined;
-  const subagents = subagentControlsAvailable
-    ? keyHintText({
-        key: metaChordLabel(modifierLabel, 's'),
-        action: 'subagents',
-      })
-    : undefined;
   const agent = agentSelectionAvailable
     ? keyHintText({ key: '/agent', action: 'agents' })
     : undefined;
@@ -434,10 +419,7 @@ function statusBarBindingsText(
   });
   const ctrlC = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const setupControlsOnly =
-    agentSelectionAvailable &&
-    !taskControlsAvailable &&
-    !subagentControlsAvailable &&
-    !sessionNavigationAvailable;
+    agentSelectionAvailable && !sessionNavigationAvailable;
   const candidates = [
     // Session navigation only applies when the current tree has selectable
     // rows; unrelated or not-yet-attached streams do not make Tab actionable.
@@ -445,8 +427,6 @@ function statusBarBindingsText(
       streamTabs,
       streamFocus,
       transcript,
-      tasks,
-      subagents,
       status,
       agent,
       model,
@@ -457,37 +437,10 @@ function statusBarBindingsText(
     setupControlsOnly &&
       statusBarBindingRow([transcript, agent, model, api, newline, ctrlC]),
     setupControlsOnly && statusBarBindingRow([agent, model, api, ctrlC]),
-    statusBarBindingRow([
-      streamTabs,
-      transcript,
-      tasks,
-      subagents,
-      agent,
-      status,
-      ctrlC,
-    ]),
-    statusBarBindingRow([
-      streamTabs,
-      transcript,
-      tasks,
-      subagents,
-      agent,
-      ctrlC,
-    ]),
-    (taskControlsAvailable ||
-      subagentControlsAvailable ||
-      agentSelectionAvailable) &&
-      statusBarBindingRow([streamTabs, tasks, subagents, agent, ctrlC]),
-    sessionNavigationAvailable &&
-      taskControlsAvailable &&
-      statusBarBindingRow([streamTabs, transcript, tasks, ctrlC]),
-    taskControlsAvailable && statusBarBindingRow([transcript, tasks, ctrlC]),
-    taskControlsAvailable && statusBarBindingRow([tasks, ctrlC]),
-    subagentControlsAvailable &&
-      statusBarBindingRow([streamTabs, transcript, subagents, ctrlC]),
-    subagentControlsAvailable &&
-      statusBarBindingRow([transcript, subagents, ctrlC]),
-    subagentControlsAvailable && statusBarBindingRow([subagents, ctrlC]),
+    statusBarBindingRow([streamTabs, transcript, agent, status, ctrlC]),
+    statusBarBindingRow([streamTabs, transcript, agent, ctrlC]),
+    (sessionNavigationAvailable || agentSelectionAvailable) &&
+      statusBarBindingRow([streamTabs, agent, ctrlC]),
     transcriptAvailable && statusBarBindingRow([streamTabs, transcript, ctrlC]),
     transcriptAvailable && statusBarBindingRow([transcript, ctrlC]),
   ];
@@ -708,9 +661,7 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
     );
   }
   return statusBarBindingsText(
-    input.taskControlsAvailable ?? true,
     input.agentSelectionAvailable ?? false,
-    input.subagentControlsAvailable,
     input.sessionNavigationAvailable,
     input.shortcutModifierLabel,
     input.shiftEnterNewline,

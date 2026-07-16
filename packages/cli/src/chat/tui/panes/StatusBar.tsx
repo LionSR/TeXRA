@@ -44,8 +44,6 @@ interface StatusBarProps {
   readonly sessionNavigationAvailable: boolean;
   readonly sessionListFocused?: boolean;
   readonly shortcutsActive?: boolean;
-  readonly subagentControlsAvailable: boolean;
-  readonly taskControlsAvailable: boolean;
   readonly transcriptAvailable?: boolean;
 }
 
@@ -183,9 +181,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     activeProcesses: statusSlice?.activeProcesses.length ?? 0,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
-    taskControlsAvailable: props.taskControlsAvailable,
     agentSelectionAvailable: props.agentSelectionAvailable,
-    subagentControlsAvailable: props.subagentControlsAvailable,
     sessionNavigationAvailable: props.sessionNavigationAvailable,
     model: accessTarget.model,
     modelAccess,

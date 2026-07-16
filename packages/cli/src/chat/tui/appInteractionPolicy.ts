@@ -9,10 +9,8 @@ import {
   approvalPayloadStreamId,
   type PendingApproval,
 } from './state/approvalQueue';
-import type { ChildControlMode } from './state/childControls';
 
-const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
-const EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS = 6;
+const TASK_DETAIL_FOREGROUND_MAX_ROWS = 12;
 const FORM_FOREGROUND_MAX_ROWS = 18;
 // Match form sizing for approval modals that already budget or scroll their
 // content. Natural-height approvals stay uncapped until they grow row budgets.
@@ -66,18 +64,13 @@ export function appEscapeInterruptActive({
 // unaffected: their Esc+key sequences arrive as one burst, resolved
 // synchronously by `metaChordInput`.
 export function shouldDeferEscapeInterruptForMetaChord({
+  sessionNavigationAvailable,
   shortcutModifierLabel,
-  subagentControlsAvailable,
-  taskControlsAvailable,
 }: {
+  readonly sessionNavigationAvailable: boolean;
   readonly shortcutModifierLabel: string;
-  readonly subagentControlsAvailable: boolean;
-  readonly taskControlsAvailable: boolean;
 }): boolean {
-  return (
-    shortcutModifierLabel === 'Esc' &&
-    (subagentControlsAvailable || taskControlsAvailable)
-  );
+  return shortcutModifierLabel === 'Esc' && sessionNavigationAvailable;
 }
 
 export interface EscapeInterruptState {
@@ -155,20 +148,17 @@ export type ForegroundSurfaceKind =
 
 export function foregroundSurfaceKind({
   activeFormOpen,
-  childControlMode,
   pendingApproval,
   taskDetailOpen = false,
   transcriptViewerOpen,
 }: {
   readonly activeFormOpen: boolean;
-  readonly childControlMode?: ChildControlMode;
   readonly pendingApproval: boolean;
   readonly taskDetailOpen?: boolean;
   readonly transcriptViewerOpen: boolean;
 }): ForegroundSurfaceKind | undefined {
   if (transcriptViewerOpen) return 'transcript';
   if (taskDetailOpen) return 'taskDetail';
-  if (childControlMode !== undefined) return 'childControls';
   if (activeFormOpen) return 'form';
   if (pendingApproval) return 'approval';
   return undefined;
@@ -189,12 +179,10 @@ export function approvalVisibleForActiveStream({
 export function foregroundEscapeAction({
   activeFormEscapeAction,
   approvalKind,
-  childControlEscapeAction,
   foregroundKind,
 }: {
   readonly activeFormEscapeAction?: string;
   readonly approvalKind?: ApprovalKind;
-  readonly childControlEscapeAction?: string;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
 }): string | undefined {
   switch (foregroundKind) {
@@ -202,8 +190,6 @@ export function foregroundEscapeAction({
       return undefined;
     case 'form':
       return activeFormEscapeAction ?? 'close';
-    case 'childControls':
-      return childControlEscapeAction ?? 'close';
     case 'taskDetail':
       return 'back';
     case 'transcript':
@@ -238,20 +224,14 @@ function approvalForegroundMaxRows(
 
 export function foregroundMaxRowsForKind({
   approvalKind,
-  childControlHasItems,
   kind,
 }: {
   readonly approvalKind?: ApprovalKind;
-  readonly childControlHasItems: boolean;
   readonly kind: ForegroundSurfaceKind | undefined;
 }): number | undefined {
   switch (kind) {
-    case 'childControls':
-      return childControlHasItems
-        ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
-        : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
     case 'taskDetail':
-      return CHILD_CONTROL_FOREGROUND_MAX_ROWS;
+      return TASK_DETAIL_FOREGROUND_MAX_ROWS;
     case 'form':
       return FORM_FOREGROUND_MAX_ROWS;
     case 'approval':

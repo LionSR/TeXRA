@@ -35,28 +35,6 @@ import type {
 
 const EMPTY_PROCESS_OUTPUT: ReadonlyMap<string, ProcessOutputTail> = new Map();
 
-export type ChildControlMode = 'subagents' | 'tasks';
-
-export const CHILD_CONTROL_MODE_COPY = {
-  subagents: {
-    emptyText: 'No active subagents.',
-    missingItemsText: 'has no subagents',
-    title: 'Subagents',
-  },
-  tasks: {
-    emptyText: 'No active tasks or sub-workflows.',
-    missingItemsText: 'has no tasks or sub-workflows',
-    title: 'Tasks and sub-workflows',
-  },
-} as const satisfies Record<
-  ChildControlMode,
-  {
-    readonly emptyText: string;
-    readonly missingItemsText: string;
-    readonly title: string;
-  }
->;
-
 export interface ChildControlItem {
   readonly executionId: string;
   readonly childStreamId?: StreamTabId;
@@ -77,16 +55,6 @@ export interface ChildControlStreamTarget {
   readonly streamId: StreamTabId | undefined;
 }
 
-interface ChildControlDisplayTarget extends ChildControlStreamTarget {
-  readonly streamLabel: string | undefined;
-  readonly streamScopeDetail: string | undefined;
-}
-
-export type ChildControlDisplayTargets = Record<
-  ChildControlMode,
-  ChildControlDisplayTarget
->;
-
 export interface PickerKeyInput {
   readonly input: string;
   readonly upArrow?: boolean;
@@ -101,7 +69,6 @@ export type PickerKeyAction =
   | { readonly kind: 'close' }
   | { readonly kind: 'down' }
   | { readonly kind: 'ignore' }
-  | { readonly kind: 'jump'; readonly index: number }
   | { readonly kind: 'kill' }
   | { readonly kind: 'select' }
   | { readonly kind: 'up' };
@@ -188,29 +155,6 @@ export function latestChildResponseSummary(
   return summary;
 }
 
-const TASK_DETAIL_TRANSCRIPT_COLUMNS = 120;
-
-function streamEntryTailLines(entry: ConversationEntry): readonly string[] {
-  if (entry.role === 'tool' || entry.role === 'process') {
-    return transcriptEntryLines(entry, TASK_DETAIL_TRANSCRIPT_COLUMNS);
-  }
-  return entry.text
-    .split('\n')
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0);
-}
-
-function streamTranscriptLines(
-  child: SubagentChildInfo,
-  streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'entries'>>,
-): readonly string[] {
-  const stream = streamsById.get(child.childStreamId);
-  if (!stream) return [];
-  return stream.entries.flatMap((entry) =>
-    streamEntryTailLines(entry).filter((line) => line.trim().length > 0),
-  );
-}
-
 /**
  * Build a picker/detail row for either a subagent or a process badge. The two
  * kinds share the same `ChildControlItem` output shape and most of the
@@ -257,7 +201,9 @@ function buildChildControlItem(
       statusLabel,
       elapsed,
       killable: ctx.killable,
-      tailLines: streamTranscriptLines(child, ctx.streamsById),
+      // Sessions never open TaskDetailView (Enter focuses them); their
+      // transcript lives in scrollback via focus.
+      tailLines: EMPTY_TAIL_LINES,
     };
   }
 
@@ -312,7 +258,6 @@ export function buildChildControlItems(
       'activeProcesses' | 'description' | 'entries' | 'processOutput' | 'status'
     >
   >,
-  mode: ChildControlMode,
   nowMs?: number,
 ): readonly ChildControlItem[] {
   const parentSlice = streams.get(parentStreamId);
@@ -335,10 +280,6 @@ export function buildChildControlItems(
       killable: activeKeys.has(childExecutionKey(child)),
     }),
   );
-  if (mode === 'subagents') {
-    return subagentItems;
-  }
-
   return [
     ...subagentItems,
     ...activeProcesses.map((child) =>
@@ -378,7 +319,6 @@ export function taskDetailItemForExecution({
     parentStreamId,
     childStreamEntries,
     streams,
-    'tasks',
     nowMs,
   ).find((item) => item.executionId === executionId);
 }
@@ -390,31 +330,22 @@ export function hasChildControlItems(
     StreamTabId,
     Pick<StreamSlice, 'activeProcesses' | 'status'>
   >,
-  mode: ChildControlMode,
 ): boolean {
   if (parentStreamId === undefined) return false;
-  if (mode === 'subagents') {
-    return (
-      visibleSubagentRows(parentStreamId, childStreamEntries, streams).length >
-      0
-    );
-  }
   return (
     visibleSubagentRows(parentStreamId, childStreamEntries, streams).length >
       0 || (streams.get(parentStreamId)?.activeProcesses.length ?? 0) > 0
   );
 }
 
-export function resolveChildControlStreamTarget({
+export function resolveChildExecutionPanelTarget({
   activeStreamId,
   childStreamEntries,
-  mode,
   parentStream,
   streams,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly childStreamEntries: ChildStreamEntries;
-  readonly mode: ChildControlMode;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): ChildControlStreamTarget {
@@ -423,7 +354,6 @@ export function resolveChildControlStreamTarget({
     activeStreamId,
     childStreamEntries,
     streams,
-    mode,
   );
   if (!activeStreamId || activeHasRows) {
     return {
@@ -438,7 +368,7 @@ export function resolveChildControlStreamTarget({
     parentStream,
     values: streams,
     canUseValue: (_slice, streamId) =>
-      hasChildControlItems(streamId, childStreamEntries, streams, mode),
+      hasChildControlItems(streamId, childStreamEntries, streams),
   });
   if (ancestor) {
     return {
@@ -453,91 +383,6 @@ export function resolveChildControlStreamTarget({
     hasItems: false,
     streamId: activeStreamId,
     slice: activeSlice,
-  };
-}
-
-function childControlFallbackDetail(
-  mode: ChildControlMode,
-  fallbackFromStreamLabel: string | undefined,
-  targetStreamLabel: string | undefined,
-): string | undefined {
-  if (!fallbackFromStreamLabel || !targetStreamLabel) return undefined;
-  return `${fallbackFromStreamLabel} ${CHILD_CONTROL_MODE_COPY[mode].missingItemsText}`;
-}
-
-function resolveChildControlDisplayTarget({
-  activeStreamId,
-  childStreamEntries,
-  mode,
-  parentStream,
-  streams,
-}: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly childStreamEntries: ChildStreamEntries;
-  readonly mode: ChildControlMode;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): ChildControlDisplayTarget {
-  const target = resolveChildControlStreamTarget({
-    activeStreamId,
-    childStreamEntries,
-    mode,
-    parentStream,
-    streams,
-  });
-  const streamLabel = target.streamId
-    ? streamDisplayLabel({
-        childStreamEntries,
-        parentStream,
-        streamId: target.streamId,
-        streams,
-      })
-    : undefined;
-  const fallbackFromStreamLabel = target.fallbackFromStreamId
-    ? streamDisplayLabel({
-        childStreamEntries,
-        parentStream,
-        streamId: target.fallbackFromStreamId,
-        streams,
-      })
-    : undefined;
-  return {
-    ...target,
-    streamLabel,
-    streamScopeDetail: childControlFallbackDetail(
-      mode,
-      fallbackFromStreamLabel,
-      streamLabel,
-    ),
-  };
-}
-
-export function resolveChildControlDisplayTargets({
-  activeStreamId,
-  childStreamEntries,
-  parentStream,
-  streams,
-}: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly childStreamEntries: ChildStreamEntries;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): ChildControlDisplayTargets {
-  return {
-    subagents: resolveChildControlDisplayTarget({
-      activeStreamId,
-      childStreamEntries,
-      mode: 'subagents',
-      parentStream,
-      streams,
-    }),
-    tasks: resolveChildControlDisplayTarget({
-      activeStreamId,
-      childStreamEntries,
-      mode: 'tasks',
-      parentStream,
-      streams,
-    }),
   };
 }
 
@@ -569,36 +414,12 @@ export function numericFocusTargetForActiveStream(init: {
   }).find((entry) => entry.shortcutIndex === shortcutIndex)?.id;
 }
 
-export type SubagentPickerSelection =
-  | { readonly kind: 'view'; readonly streamId: StreamTabId }
-  | { readonly kind: 'detail'; readonly executionId: string };
-
-/** What pressing Enter on a child-control row should do. In subagents mode a
- *  row backed by a child stream opens that subagent's transcript viewer
- *  (its independent history); everything else (tasks/processes, or a
- *  stream-less row) drops into the inline tail detail view. Pure so the
- *  picker's key handling stays unit-testable. */
-export function subagentPickerSelection(
-  mode: ChildControlMode,
-  item: Pick<ChildControlItem, 'childStreamId' | 'executionId'> | undefined,
-): SubagentPickerSelection | undefined {
-  if (!item) return undefined;
-  if (mode === 'subagents' && item.childStreamId) {
-    return { kind: 'view', streamId: item.childStreamId };
-  }
-  return { kind: 'detail', executionId: item.executionId };
-}
-
+/** TaskDetailView key handling, kept pure for unit tests. */
 export function childPickerKeyAction(key: PickerKeyInput): PickerKeyAction {
   if (isEscapeInput(key.input, key)) return { kind: 'close' };
   if (key.upArrow) return { kind: 'up' };
   if (key.downArrow) return { kind: 'down' };
   if (isPlainReturnInput(key.input, key)) return { kind: 'select' };
   if (key.input.toLowerCase() === 'k') return { kind: 'kill' };
-
-  const digit = Number(key.input);
-  if (Number.isInteger(digit) && digit >= 1 && digit <= 9) {
-    return { kind: 'jump', index: digit - 1 };
-  }
   return { kind: 'ignore' };
 }

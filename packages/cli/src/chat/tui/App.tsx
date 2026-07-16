@@ -32,7 +32,6 @@ import {
   type EscapeInterruptState,
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
-import { ChildControlPicker } from './modals/ChildControlPicker';
 import { TaskDetailView } from './modals/TaskDetailView';
 import { TranscriptViewer } from './modals/TranscriptViewer';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
@@ -50,7 +49,7 @@ import {
 } from './input/activeDraft';
 import {
   numericFocusTargetForActiveStream,
-  resolveChildControlDisplayTargets,
+  resolveChildExecutionPanelTarget,
   taskDetailItemForExecution,
 } from './state/childControls';
 import { buildSubagentListRows } from './state/subagentListRows';
@@ -59,8 +58,6 @@ import {
   rootRunStartAvailable as rootRunStartAvailableSignal,
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
-  childControlEscapeAction as childControlEscapeActionSignal,
-  childControlMode as childControlModeSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   taskDetailExecutionId as taskDetailExecutionIdSignal,
@@ -121,8 +118,6 @@ export function App(props: AppProps): React.JSX.Element {
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const transcriptViewerStreamId = useSignal(transcriptViewerStreamIdSignal);
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
-  const childControlMode = useSignal(childControlModeSignal);
-  const childControlEscapeAction = useSignal(childControlEscapeActionSignal);
   const [sessionListSelection, dispatchSessionListSelection] = useReducer(
     reduceSessionListSelection,
     INITIAL_SESSION_LIST_SELECTION,
@@ -141,20 +136,18 @@ export function App(props: AppProps): React.JSX.Element {
     activeStreamId,
     pending,
   });
-  const childControlTargets = resolveChildControlDisplayTargets({
+  const childExecutionPanelTarget = resolveChildExecutionPanelTarget({
     activeStreamId,
     childStreamEntries,
     parentStream,
     streams,
   });
-  const taskControlsAvailable = childControlTargets.tasks.hasItems;
-  const subagentControlsAvailable = childControlTargets.subagents.hasItems;
   const taskDetailItem =
     taskDetailExecutionId !== undefined
       ? taskDetailItemForExecution({
           childStreamEntries,
           executionId: taskDetailExecutionId,
-          parentStreamId: childControlTargets.tasks.streamId,
+          parentStreamId: childExecutionPanelTarget.streamId,
           streams,
         })
       : undefined;
@@ -170,14 +163,12 @@ export function App(props: AppProps): React.JSX.Element {
   const foregroundOpen =
     activeApprovalVisible ||
     activeForm !== undefined ||
-    childControlMode !== undefined ||
+    taskDetailExecutionId !== undefined ||
     transcriptViewerOpen;
   const childInputDisabledMessage = focusedChildInputDisabledMessage({
     activeStreamId,
     parentStream,
     status: activeStreamId ? streams.get(activeStreamId)?.status : undefined,
-    subagentControlsAvailable,
-    taskControlsAvailable,
   });
   const appInputDisabled = props.inputDisabled === true || foregroundOpen;
   const inputDisabled =
@@ -259,25 +250,14 @@ export function App(props: AppProps): React.JSX.Element {
   }, []);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
-    childControlMode,
     pendingApproval: activeApprovalVisible,
     taskDetailOpen: taskDetailExecutionId !== undefined,
     transcriptViewerOpen,
   });
   const approvalKind =
     foregroundKind === 'approval' ? pending?.payload.kind : undefined;
-  const childControlTarget =
-    childControlMode !== undefined
-      ? childControlTargets[childControlMode]
-      : undefined;
-  useEffect(() => {
-    if (childControlMode === undefined) {
-      childControlEscapeActionSignal.set('close');
-    }
-  }, [childControlMode]);
   const foregroundMaxRows = foregroundMaxRowsForKind({
     approvalKind,
-    childControlHasItems: childControlTarget?.hasItems ?? false,
     kind: foregroundKind,
   });
   function renderForegroundSurface(
@@ -329,33 +309,6 @@ export function App(props: AppProps): React.JSX.Element {
           />
         );
       }
-      case 'childControls': {
-        if (!childControlMode) return null;
-        const target = childControlTarget;
-        if (!target) return null;
-        return (
-          <ChildControlPicker
-            availableColumns={columns}
-            streamLabel={target.streamLabel}
-            activeStreamId={target.streamId}
-            availableRows={availableRows}
-            mode={childControlMode}
-            onClose={() => childControlModeSignal.set(undefined)}
-            onEscapeActionChange={(action) =>
-              childControlEscapeActionSignal.set(action)
-            }
-            onFocusStream={(streamId) => activeStreamIdSignal.set(streamId)}
-            onViewStream={(streamId) =>
-              transcriptViewerStreamIdSignal.set(streamId)
-            }
-            onKillExecution={props.onKillExecution}
-            childStreamEntries={childStreamEntries}
-            slice={target.slice}
-            streamScopeDetail={target.streamScopeDetail}
-            streams={streams}
-          />
-        );
-      }
       case 'form':
         return activeForm?.render(
           () => activeFormSignal.set(undefined),
@@ -394,14 +347,11 @@ export function App(props: AppProps): React.JSX.Element {
 
   const handleMetaShortcut = (value: string): boolean => {
     const lower = value.toLowerCase();
+    // Esc/Alt-S focuses the session list (Tab alias, kept for muscle
+    // memory from the retired picker chord).
     if (lower === 's') {
-      if (!subagentControlsAvailable) return false;
-      childControlModeSignal.set('subagents');
-      return true;
-    }
-    if (lower === 'p') {
-      if (!taskControlsAvailable) return false;
-      childControlModeSignal.set('tasks');
+      if (sessionViews.length === 0) return false;
+      dispatchSessionListSelection({ kind: 'focus' });
       return true;
     }
     const digit = digitFromMetaShortcut(value);
@@ -500,7 +450,7 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
-    // Esc/Alt chords: s → subagent controls, p → tasks, 1-9 → focus stream.
+    // Esc/Alt chords: s → focus session list, 1-9 → focus stream.
     const metaInput = metaChordInput(input, key);
     if (metaInput) {
       handleMetaShortcut(metaInput);
@@ -519,9 +469,8 @@ export function App(props: AppProps): React.JSX.Element {
     ) {
       if (
         shouldDeferEscapeInterruptForMetaChord({
+          sessionNavigationAvailable: sessionViews.length > 0,
           shortcutModifierLabel: defaultShortcutModifierLabel(),
-          subagentControlsAvailable,
-          taskControlsAvailable,
         })
       ) {
         scheduleEscapeInterrupt();
@@ -557,14 +506,11 @@ export function App(props: AppProps): React.JSX.Element {
               foregroundEscapeAction={foregroundEscapeAction({
                 activeFormEscapeAction: activeForm?.escapeAction,
                 approvalKind,
-                childControlEscapeAction,
                 foregroundKind,
               })}
               sessionNavigationAvailable={sessionViews.length > 0}
               shortcutsActive={focusShortcutsActive}
               sessionListFocused={sessionListFocused}
-              subagentControlsAvailable={subagentControlsAvailable}
-              taskControlsAvailable={taskControlsAvailable}
               transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
             />
           </>
@@ -583,12 +529,12 @@ export function App(props: AppProps): React.JSX.Element {
           sessionViews,
           selectedSessionId,
           streams,
-          childExecutionPanelTarget: childControlTargets.tasks,
+          childExecutionPanelTarget,
           subagentListRows: buildSubagentListRows({
             activeProcesses:
-              childControlTargets.tasks.slice?.activeProcesses ?? [],
+              childExecutionPanelTarget.slice?.activeProcesses ?? [],
             childStreamEntries,
-            parentStreamId: childControlTargets.tasks.streamId,
+            parentStreamId: childExecutionPanelTarget.streamId,
             sessions: sessionViews,
             streams,
           }),

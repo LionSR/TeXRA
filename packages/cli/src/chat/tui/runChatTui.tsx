@@ -232,7 +232,6 @@ function stoppedFocusedChildFollowUpMessage(streamId: StreamTabId): string {
   const parentStream = parentStreamSignal.get();
   const streams = streamsSignal.get();
   return focusedChildStoppedMessage({
-    childStreamEntries: childStreamEntriesSignal.get(),
     parentStream,
     streamId,
     streams,

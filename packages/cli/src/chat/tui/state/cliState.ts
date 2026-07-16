@@ -29,7 +29,6 @@ import {
   isChildStreamRemoved,
   resetChildStreamEntries,
 } from './childExecutions';
-import type { ChildControlMode } from './childControls';
 
 export type { ProcessOutputTail };
 
@@ -427,17 +426,6 @@ export const reverseSearchOpen = REVERSE_SEARCH_OPEN;
 const TRANSCRIPT_VIEWER_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 export const transcriptViewerStreamId = TRANSCRIPT_VIEWER_STREAM_ID;
 
-/** Which child-control picker (subagents/tasks) App is showing in the
- *  foreground, or `undefined` when neither is open. */
-const CHILD_CONTROL_MODE: Signal.State<ChildControlMode | undefined> = signal<
-  ChildControlMode | undefined
->(undefined);
-export const childControlMode = CHILD_CONTROL_MODE;
-/** Status-bar verb for Escape while the child-control picker owns input;
- *  the picker reports this as it navigates between its list and detail view. */
-const CHILD_CONTROL_ESCAPE_ACTION = signal<string>('close');
-export const childControlEscapeAction = CHILD_CONTROL_ESCAPE_ACTION;
-
 /** Execution id whose TaskDetailView App shows in the foreground, opened
  *  from the SubagentList; `undefined` when closed. */
 const TASK_DETAIL_EXECUTION_ID = signal<string | undefined>(undefined);
@@ -527,8 +515,6 @@ export function resetCliState(
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   transcriptViewerStreamId.set(undefined);
-  childControlMode.set(undefined);
-  childControlEscapeAction.set('close');
   taskDetailExecutionId.set(undefined);
   pendingExitHint.set(false);
   pendingExitResumeId.set(undefined);
