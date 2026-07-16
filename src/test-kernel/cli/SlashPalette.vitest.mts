@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   slashPaletteCommandLabelWidth,
+  slashPaletteOwnsArrows,
   slashPaletteEnterHintAction,
   slashPaletteWindow,
 } from '@cli/chat/tui/commands/SlashPalette';
@@ -59,6 +60,14 @@ describe('SlashPalette navigation', () => {
         itemCount: 15,
       }),
     ).toBe(14);
+  });
+
+  it('owns ↑/↓ only when there is a real choice to make', () => {
+    // With 0 or 1 matches the arrows stay with the text input for history
+    // recall — a fully typed command name must not block recalling drafts.
+    expect(slashPaletteOwnsArrows(0)).toBe(false);
+    expect(slashPaletteOwnsArrows(1)).toBe(false);
+    expect(slashPaletteOwnsArrows(2)).toBe(true);
   });
 
   it('describes what Enter does for the highlighted slash command', () => {
