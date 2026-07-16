@@ -165,6 +165,23 @@ describe('CLI tool renderer registry', () => {
     `);
   });
 
+  it('caps a single pathologically long output line instead of rendering it whole', () => {
+    const hugeLine = 'x'.repeat(50_000);
+    const entry = toolUse(
+      'bash',
+      { command: "rg -n --fixed-strings 'approved-plan' ~/.nvm" },
+      {
+        headerSummary: "rg -n --fixed-strings 'approved-plan' ~/.nvm",
+        outputText: hugeLine,
+      },
+    );
+
+    const lines = toolUseDisplayLines(entry);
+    expect(lines).toHaveLength(2);
+    expect(lines[1].length).toBeLessThan(2010);
+    expect(lines[1].endsWith('…')).toBe(true);
+  });
+
   it('keeps short bash output whole when elision would not reduce height', () => {
     const entry = toolUse(
       'bash',
