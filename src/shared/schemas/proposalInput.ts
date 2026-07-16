@@ -29,7 +29,7 @@ import { isObject } from '@utils/core';
 import { DEFAULT_AGENT_MODEL } from '../constants/providers';
 import { DELEGATION_TOOL_CATEGORY } from '../constants/delegationTools';
 import { AgentCategory } from './agent';
-import { migrateLegacyContextFileFields } from './fileFields';
+import { fileListFields, migrateLegacyContextFileFields } from './fileFields';
 import {
   ToolUseAgentProposalSchema,
   WorkflowAgentProposalSchema,
@@ -46,10 +46,7 @@ const LenientToolUseProposalSchema = ToolUseAgentProposalSchema.extend({
 
 const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
-  inputFiles: z.array(z.string()).prefault([]),
-  contextFiles: z.array(z.string()).prefault([]),
-  mediaFiles: z.array(z.string()).prefault([]),
-  outputFiles: z.array(z.string()).prefault([]),
+  ...fileListFields,
   // toolConfig is inherited from WorkflowAgentProposalSchema (via
   // WorkflowSpecificFieldsSchema) and already object-prefaulted — no override.
 });

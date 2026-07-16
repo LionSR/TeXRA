@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { AgentCategory, AgentSourceSchema } from './agent';
+import { requiredFileListFields } from './fileFields';
 import { ToolConfigSchema } from './toolConfig';
 
 export const BaseProposalFieldsSchema = z.object({
@@ -19,12 +20,7 @@ export const BaseProposalFieldsSchema = z.object({
   workingDirectory: z.string().nullish(),
 });
 
-const FileFieldsSchema = z.object({
-  inputFiles: z.array(z.string()),
-  contextFiles: z.array(z.string()),
-  mediaFiles: z.array(z.string()),
-  outputFiles: z.array(z.string()),
-});
+const FileFieldsSchema = z.object(requiredFileListFields);
 
 export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
   toolConfig: ToolConfigSchema,

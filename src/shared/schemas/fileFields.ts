@@ -82,12 +82,20 @@ export function migrateLegacyContextFileFields(input: unknown): unknown {
   return obj;
 }
 
-/** The four canonical `*Files` list fields shared by every file-fields schema. */
-const fileListFields = {
+/** The four canonical `*Files` list fields, defaulting to `[]` when absent. */
+export const fileListFields = {
   inputFiles: z.array(z.string()).prefault([]),
   contextFiles: z.array(z.string()).prefault([]),
   mediaFiles: z.array(z.string()).prefault([]),
   outputFiles: z.array(z.string()).prefault([]),
+};
+
+/** The same four `*Files` list fields, required (no default). */
+export const requiredFileListFields = {
+  inputFiles: z.array(z.string()),
+  contextFiles: z.array(z.string()),
+  mediaFiles: z.array(z.string()),
+  outputFiles: z.array(z.string()),
 };
 
 /**

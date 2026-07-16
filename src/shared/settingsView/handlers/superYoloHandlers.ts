@@ -6,8 +6,8 @@
  * host-specific (VS Code config-backed in the extension; absent in the
  * desktop build), so callers supply them.
  */
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { NumberVscodeSetting } from '@shared/schemas/profileViewMessages';
 import type { UpdateSuperYoloEnabledMessage } from '@shared/schemas/settingsViewMessages';
 
