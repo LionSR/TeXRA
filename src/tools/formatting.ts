@@ -1,3 +1,13 @@
+// Third-party imports
+import { z } from 'zod';
+
+/** Canonical 1-based inclusive line range for tool view_range fields. */
+export const ViewRangeSchema = z
+  .tuple([z.int().min(1), z.int().min(1)])
+  .refine(([start, end]) => end >= start, {
+    error: 'view_range[1] must be greater than or equal to view_range[0]',
+  });
+
 /** Maximum lines returned in a single file view before truncation. */
 export const READ_FILE_MAX_LINES = 2000;
 
