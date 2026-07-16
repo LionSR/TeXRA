@@ -2,6 +2,9 @@
 // relativeFS JSON, pasted images).
 
 import * as assert from 'node:assert';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import { promises as fs } from 'node:fs';
 import {
   afterAll,
   beforeAll,
@@ -11,18 +14,15 @@ import {
   it,
   vi,
 } from 'vitest';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { getMimeType } from '@utils/files';
-import * as path from 'node:path';
-import { isTexFile } from '@common/files/fileTypeUtils';
-import { FlexibleFS } from '@utils/files/flexibleFS';
-import { pathToLocation } from '@utils/files/taskRunStorage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import * as os from 'node:os';
-import { promises as fs } from 'node:fs';
 import { z } from 'zod';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { isTexFile } from '@common/files/fileTypeUtils';
+import { getMimeType } from '@utils/files';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { pathToLocation } from '@utils/files/taskRunStorage';
+import { FlexibleFS } from '@utils/files/flexibleFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { RelativeFS } from '@utils/files/relativeFS';
 import { pastedImageFileName } from '@utils/files/pastedImageUtils';
 

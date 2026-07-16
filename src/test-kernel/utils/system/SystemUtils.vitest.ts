@@ -7,13 +7,13 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { afterEach, describe, expect, it } from 'vitest';
-import { setupPlatform } from '@test/support/setupPlatform';
-import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
 import * as fs from 'node:fs/promises';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { afterEach, describe, expect, it } from 'vitest';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 import { BinaryResolverService } from '@utils/system/binaryResolver';
 

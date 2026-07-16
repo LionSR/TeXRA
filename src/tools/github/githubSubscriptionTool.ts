@@ -224,13 +224,17 @@ async function execSubscribe(
     const wasIssuePath = !knownPR;
     const annotationLevelDescription =
       ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
+    let summary: string;
+    if (!created) {
+      summary = `Already subscribed to ${prSlug}`;
+    } else if (wasIssuePath) {
+      summary = `Subscribed to ${prSlug} (was /issues/${target.issueNumber}; resolved to PR)`;
+    } else {
+      summary = `Subscribed to ${prSlug}`;
+    }
     return {
       status: 'executed',
-      summary: created
-        ? wasIssuePath
-          ? `Subscribed to ${prSlug} (was /issues/${target.issueNumber}; resolved to PR)`
-          : `Subscribed to ${prSlug}`
-        : `Already subscribed to ${prSlug}`,
+      summary,
       output: created
         ? `${prSlug} is a PR. ${prSubscriptionActivitySentence(annotationLevelDescription)} Auto-unsubscribes on close/merge.`
         : `Already subscribed to ${prSlug}. Inline check annotation filter is now ${annotationLevelDescription}.`,

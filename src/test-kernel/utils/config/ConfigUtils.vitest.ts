@@ -4,13 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { installPlatform } from '@test/support/setupPlatform';
 import * as logger from '@logger/logUtils';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 // ---------------------------------------------------------------------------

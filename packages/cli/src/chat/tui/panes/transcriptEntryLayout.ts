@@ -227,12 +227,14 @@ export function transcriptEntryLayout(
   const isInquiryContinuation =
     entry.role === 'user' && isInquiryContinuationText(entry.text);
   const marginTopRows = isInquiryContinuation ? 0 : base.marginTopRows;
-  const marginBottomRows =
-    entry.role === 'tool'
-      ? toolUseMarginBottomRows(entry.toolUse)
-      : isInquiryContinuation
-        ? 0
-        : base.marginBottomRows;
+  let marginBottomRows: number;
+  if (entry.role === 'tool') {
+    marginBottomRows = toolUseMarginBottomRows(entry.toolUse);
+  } else if (isInquiryContinuation) {
+    marginBottomRows = 0;
+  } else {
+    marginBottomRows = base.marginBottomRows;
+  }
   // The ctrl+t viewer is a full-width text projection with no Ink padding;
   // its lines still share role prefixes and wrapping rules with the layout.
   const columns = transcriptColumns(width, mode === 'viewer' ? 0 : inset);

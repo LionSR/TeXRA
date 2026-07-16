@@ -3,18 +3,18 @@
 // settings-view tab invariants).
 
 import { describe, expect, it } from 'vitest';
-import { planSummaryLine } from '@shared/schemas/workPlan';
-import {
-  parseClaudeAgentModel,
-  parseCodexApprovalPolicy,
-} from '@shared/schemas/agentCliSettings';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { MainViewInboundMessageSchema } from '@shared/schemas/mainView';
 import {
   SETTINGS_TAB_PANEL_NAMES,
   WebFetchPayloadSchema,
   WebSearchPayloadSchema,
 } from '@shared/schemas';
+import { planSummaryLine } from '@shared/schemas/workPlan';
+import {
+  parseClaudeAgentModel,
+  parseCodexApprovalPolicy,
+} from '@shared/schemas/agentCliSettings';
+import { MainViewInboundMessageSchema } from '@shared/schemas/mainView';
 
 // ---------------------------------------------------------------------------
 // WorkPlan

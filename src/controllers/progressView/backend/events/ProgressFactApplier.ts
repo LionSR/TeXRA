@@ -416,11 +416,16 @@ export class ProgressFactApplier {
   }
 
   public handleClearMissingOutputs(payload: ClearMissingOutputsPayload): void {
-    const targets: StreamTabId[] = payload.streamId
-      ? [payload.streamId]
-      : payload.streamConfig
-        ? this.state.snapshots.findWorkflowStreamsMatching(payload.streamConfig)
-        : [];
+    let targets: StreamTabId[];
+    if (payload.streamId) {
+      targets = [payload.streamId];
+    } else if (payload.streamConfig) {
+      targets = this.state.snapshots.findWorkflowStreamsMatching(
+        payload.streamConfig,
+      );
+    } else {
+      targets = [];
+    }
     for (const streamId of targets) {
       this.state.snapshots.clearMissingOutputs(streamId);
       this.sendIfActive(streamId, () =>

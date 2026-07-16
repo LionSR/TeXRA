@@ -344,11 +344,14 @@ export class ModelsTab extends LitElement {
     const unavailableCount = models.filter(
       (model) => model.availability === 'copilot-unavailable',
     ).length;
-    const status = consentModel
-      ? 'VS Code is ready to ask for your consent.'
-      : readyCount > 0
-        ? `${readyCount} ${pluralize(readyCount, 'Copilot model is', 'Copilot models are')} ready.`
-        : `${unavailableCount} ${pluralize(unavailableCount, 'Copilot model is', 'Copilot models are')} unavailable.`;
+    let status: string;
+    if (consentModel) {
+      status = 'VS Code is ready to ask for your consent.';
+    } else if (readyCount > 0) {
+      status = `${readyCount} ${pluralize(readyCount, 'Copilot model is', 'Copilot models are')} ready.`;
+    } else {
+      status = `${unavailableCount} ${pluralize(unavailableCount, 'Copilot model is', 'Copilot models are')} unavailable.`;
+    }
 
     return html`
       <section id="copilot-access" class="keyless-source">

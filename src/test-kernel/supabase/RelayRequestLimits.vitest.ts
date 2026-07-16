@@ -584,22 +584,22 @@ describe('relay free-tier request limits', () => {
     const client = {
       async rpc(name: string, args: Record<string, unknown>) {
         calls.push({ name, args });
-        return {
-          data:
-            name === 'relay_request_gate'
-              ? {
-                  allowed: true,
-                  slotId: args.p_slot_id,
-                  activeRequests: 1,
-                  concurrencyLimit: 2,
-                  requestsThisMinute: 1,
-                  rateLimitPerMinute: 20,
-                }
-              : name === 'relay_request_refresh'
-                ? { refreshed: true }
-                : {},
-          error: null,
-        };
+        let data: Record<string, unknown>;
+        if (name === 'relay_request_gate') {
+          data = {
+            allowed: true,
+            slotId: args.p_slot_id,
+            activeRequests: 1,
+            concurrencyLimit: 2,
+            requestsThisMinute: 1,
+            rateLimitPerMinute: 20,
+          };
+        } else if (name === 'relay_request_refresh') {
+          data = { refreshed: true };
+        } else {
+          data = {};
+        }
+        return { data, error: null };
       },
     };
 
@@ -626,22 +626,22 @@ describe('relay free-tier request limits', () => {
   it('rejects refreshes when the request slot is already gone', async () => {
     const client = {
       async rpc(name: string, args: Record<string, unknown>) {
-        return {
-          data:
-            name === 'relay_request_gate'
-              ? {
-                  allowed: true,
-                  slotId: args.p_slot_id,
-                  activeRequests: 1,
-                  concurrencyLimit: 2,
-                  requestsThisMinute: 1,
-                  rateLimitPerMinute: 20,
-                }
-              : name === 'relay_request_refresh'
-                ? { refreshed: false }
-                : {},
-          error: null,
-        };
+        let data: Record<string, unknown>;
+        if (name === 'relay_request_gate') {
+          data = {
+            allowed: true,
+            slotId: args.p_slot_id,
+            activeRequests: 1,
+            concurrencyLimit: 2,
+            requestsThisMinute: 1,
+            rateLimitPerMinute: 20,
+          };
+        } else if (name === 'relay_request_refresh') {
+          data = { refreshed: false };
+        } else {
+          data = {};
+        }
+        return { data, error: null };
       },
     };
 
@@ -739,22 +739,22 @@ describe('relay free-tier request limits', () => {
       const client = {
         async rpc(name: string, args: Record<string, unknown>) {
           calls.push(name);
-          return {
-            data:
-              name === 'relay_request_gate'
-                ? {
-                    allowed: true,
-                    slotId: args.p_slot_id,
-                    activeRequests: 1,
-                    concurrencyLimit: 2,
-                    requestsThisMinute: 1,
-                    rateLimitPerMinute: 20,
-                  }
-                : name === 'relay_request_refresh'
-                  ? { refreshed: false }
-                  : {},
-            error: null,
-          };
+          let data: Record<string, unknown>;
+          if (name === 'relay_request_gate') {
+            data = {
+              allowed: true,
+              slotId: args.p_slot_id,
+              activeRequests: 1,
+              concurrencyLimit: 2,
+              requestsThisMinute: 1,
+              rateLimitPerMinute: 20,
+            };
+          } else if (name === 'relay_request_refresh') {
+            data = { refreshed: false };
+          } else {
+            data = {};
+          }
+          return { data, error: null };
         },
       };
       const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {

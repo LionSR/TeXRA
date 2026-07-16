@@ -204,9 +204,17 @@ export function parseUsageData(raw: unknown): ParsedUsageData {
   const unparsedRuns = new Map<string, unknown>();
   if (raw === undefined) return { usage, unparsedRuns };
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    let rawKind: string;
+    if (raw === null) {
+      rawKind = 'null';
+    } else if (Array.isArray(raw)) {
+      rawKind = 'array';
+    } else {
+      rawKind = typeof raw;
+    }
     console.warn(
       `[streamData] usageStats.json is not a per-run object (got ` +
-        `${raw === null ? 'null' : Array.isArray(raw) ? 'array' : typeof raw}); ` +
+        `${rawKind}); ` +
         'ignoring for this read instead of silently zeroing usage.',
     );
     return { usage, unparsedRuns };

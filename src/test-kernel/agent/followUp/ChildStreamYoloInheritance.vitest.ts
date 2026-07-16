@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports
+import { currentSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import {
   cleanupAllApprovals,
@@ -17,7 +18,6 @@ import {
   setToolEditApprovalSessionBypass,
   toggleBashApprovalSessionBypass,
 } from '@tools/approval';
-import { currentSession } from '@agent/runtime/SessionHandle';
 
 import { createRecordingHost } from '../progressTestUtils';
 
