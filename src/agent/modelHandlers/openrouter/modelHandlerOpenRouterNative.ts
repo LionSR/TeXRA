@@ -240,7 +240,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     if (tools && tools.length > 0) {
-      request.tools = toOpenAITools(tools) as ChatRequest['tools'];
+      request.tools = toOpenAITools(tools);
       request.toolChoice = 'auto';
     }
 
