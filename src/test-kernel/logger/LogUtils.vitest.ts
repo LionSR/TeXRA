@@ -112,4 +112,16 @@ describe('logUtils', () => {
     expect(lines.join('\n')).not.toContain(SECRET);
     expect(lines[1]).toContain('"authorization": "Bearer [redacted]"');
   });
+
+  it('disposes a shared underlying sink exactly once', () => {
+    const dispose = vi.fn();
+    const sink = { appendLine: vi.fn(), dispose };
+    logger.setOutputChannelFactory(() => sink);
+
+    logger.initialize('shared');
+    logger.initialize('agent', true);
+    logger.setOutputChannelFactory(null);
+
+    expect(dispose).toHaveBeenCalledOnce();
+  });
 });
