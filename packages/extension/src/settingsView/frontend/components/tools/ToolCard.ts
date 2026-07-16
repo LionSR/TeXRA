@@ -6,6 +6,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -313,14 +314,17 @@ export class ToolCard extends LitElement {
             this.item.installCommand
               ? html`
                   <wa-button
+                    id="tool-install-btn-${this.item.id}"
                     appearance="filled"
                     variant="brand"
                     size="small"
                     @click=${() => this.runCommand('install')}
-                    title=${this.item.installCommand}
                   >
                     ${waIcon('terminal', { slot: 'start' })} Install in Terminal
                   </wa-button>
+                  <wa-tooltip for="tool-install-btn-${this.item.id}"
+                    >${this.item.installCommand}</wa-tooltip
+                  >
                 `
               : nothing
           }
@@ -328,14 +332,17 @@ export class ToolCard extends LitElement {
             this.item.authCommand
               ? html`
                   <wa-button
+                    id="tool-auth-btn-${this.item.id}"
                     appearance=${secondaryAppearance}
                     variant=${secondaryVariant}
                     size="small"
                     @click=${() => this.runCommand('auth')}
-                    title=${this.item.authCommand}
                   >
                     ${waIcon('right-to-bracket', { slot: 'start' })} Sign in
                   </wa-button>
+                  <wa-tooltip for="tool-auth-btn-${this.item.id}"
+                    >${this.item.authCommand}</wa-tooltip
+                  >
                 `
               : nothing
           }
@@ -437,16 +444,19 @@ export class ToolCard extends LitElement {
           this.item.tools.length > 0
             ? html`
                 <div class="tool-ids">
-                  ${this.item.tools.map(
-                    (tool) =>
-                      html`<wa-badge
+                  ${this.item.tools.map((tool, index) => {
+                    const badgeId = `tool-id-badge-${this.item.id}-${index}`;
+                    return html`<wa-badge
+                        id=${badgeId}
                         class="tool-id-tag"
                         variant="neutral"
                         appearance="filled"
-                        title=${tool.description ?? tool.name}
                         >${tool.name}</wa-badge
-                      >`,
-                  )}
+                      >
+                      <wa-tooltip for=${badgeId}
+                        >${tool.description ?? tool.name}</wa-tooltip
+                      >`;
+                  })}
                 </div>
               `
             : nothing

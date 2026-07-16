@@ -9,7 +9,7 @@ import { Box, Text, useInput } from 'ink';
 import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI state and UI
-import { clamp, clampIndex } from '@utils/core';
+import { clampIndex } from '@utils/core';
 
 import {
   CHILD_CONTROL_MODE_COPY,
@@ -27,8 +27,10 @@ import { COLOR_HINT } from '../ui/colors';
 import { POINTER } from '../ui/glyphs';
 import {
   nextWrappingHighlightIndex,
+  visibleSelectRange,
   SELECT_LABEL_MAX_COLS,
 } from '../ui/Select';
+import { computeSelectWindowSize } from '../forms/_shared/selectWindow';
 import { compactPickerOverflowText } from '../render/overflowText';
 import {
   activeSubagentsFor,
@@ -183,7 +185,7 @@ export function computePickerListLayout({
   readonly scopeLineCount: number;
 }): PickerListLayout {
   const rows = Math.max(0, availableRows ?? 18);
-  const fixedRows =
+  const chromeRows =
     2 + // border
     1 + // title
     Math.max(0, scopeLineCount) +
@@ -191,29 +193,22 @@ export function computePickerListLayout({
     Math.max(0, extraListRowCount) +
     Math.max(0, hintsMarginRows) +
     1; // hints row
-  const rowBudget = Math.max(1, rows - fixedRows);
-  const windowStart = (count: number): number => {
-    const lastStart = Math.max(0, itemCount - count);
-    return clamp(highlight - Math.floor(count / 2), 0, lastStart);
-  };
-  let visibleCount = Math.min(itemCount, rowBudget);
-  for (let i = 0; i < 2; i += 1) {
-    const start = windowStart(visibleCount);
-    const end = start + visibleCount;
-    const markerRows =
-      rowBudget >= 3 ? (start > 0 ? 1 : 0) + (end < itemCount ? 1 : 0) : 0;
-    visibleCount =
-      itemCount === 0 ? 0 : clamp(rowBudget - markerRows, 1, itemCount);
-  }
-  const start = windowStart(visibleCount);
-  const end = start + visibleCount;
-  const markerRowsAllowed = rowBudget >= visibleCount + 1;
+  const { maxVisibleItems, showOverflow } = computeSelectWindowSize({
+    availableRows: rows,
+    itemCount,
+    chromeRows,
+  });
+  const { start, end } = visibleSelectRange({
+    itemCount,
+    highlight,
+    maxVisibleItems,
+  });
   return {
     end,
-    hiddenAfter: markerRowsAllowed ? Math.max(0, itemCount - end) : 0,
-    hiddenBefore: markerRowsAllowed ? start : 0,
+    hiddenAfter: showOverflow ? Math.max(0, itemCount - end) : 0,
+    hiddenBefore: showOverflow ? start : 0,
     start,
-    visibleCount,
+    visibleCount: end - start,
   };
 }
 
