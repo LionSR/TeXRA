@@ -206,7 +206,7 @@ describe('SettingsProfileController', () => {
     );
   });
 
-  it('defaults reliability settings to DEFAULT_CORE_SETTINGS.model.retry (no drift from the catalog)', async () => {
+  it('defaults reliability settings to DEFAULT_CORE_SETTINGS.model.retry (no drift from the catalog)', () => {
     const { controller } = createController();
 
     const reliabilitySettings = controller.getReliabilitySettings();
