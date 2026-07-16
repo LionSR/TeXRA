@@ -53,35 +53,35 @@ export async function migrateLegacyVscodeStorage(
     info: (message: string) => logger.info('extension', message),
     warn: (message: string) => logger.warn('extension', message),
   };
-  // The merge helpers swallow per-entry I/O errors, but getStoragePath() /
-  // getGlobalStoragePath() do real disk I/O (mkdir, sidecar write) — a failure
-  // there must degrade to a warning, never break activation.
-  try {
-    if (context.storageUri) {
-      await mergeLegacyStorageBucket(
-        context.storageUri.fsPath,
-        storage.getStoragePath(),
-        {
-          mergePerChild: MERGE_PER_CHILD,
-          label: 'vscode-workspace-storage',
-          logger: migrationLogger,
-        },
+  async function migrateBucket(
+    sourcePath: string | undefined,
+    getTargetPath: () => string,
+    label: string,
+  ): Promise<void> {
+    if (!sourcePath) return;
+    try {
+      await mergeLegacyStorageBucket(sourcePath, getTargetPath(), {
+        mergePerChild: MERGE_PER_CHILD,
+        label,
+        logger: migrationLogger,
+      });
+    } catch (error) {
+      migrationLogger.warn(
+        `${label} migration failed; legacy data stays in place. Cause: ${toErrorMessage(error)}`,
       );
     }
-    if (context.globalStorageUri) {
-      await mergeLegacyStorageBucket(
-        context.globalStorageUri.fsPath,
-        storage.getGlobalStoragePath(),
-        {
-          mergePerChild: MERGE_PER_CHILD,
-          label: 'vscode-global-storage',
-          logger: migrationLogger,
-        },
-      );
-    }
-  } catch (error) {
-    migrationLogger.warn(
-      `Legacy storage migration failed; legacy data stays in place. Cause: ${toErrorMessage(error)}`,
-    );
   }
+
+  // Resolve and migrate each bucket independently: a workspace-root failure
+  // must not prevent an otherwise valid global migration, or vice versa.
+  await migrateBucket(
+    context.storageUri?.fsPath,
+    () => storage.getStoragePath(),
+    'vscode-workspace-storage',
+  );
+  await migrateBucket(
+    context.globalStorageUri?.fsPath,
+    () => storage.getGlobalStoragePath(),
+    'vscode-global-storage',
+  );
 }

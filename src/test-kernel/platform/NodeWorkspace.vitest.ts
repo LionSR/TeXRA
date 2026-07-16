@@ -1,5 +1,12 @@
 // Node imports
-import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -30,10 +37,13 @@ describe('Node workspace identity', () => {
     const link = join(root, 'link');
     await mkdir(target);
     await symlink(target, link, 'dir');
+    await writeFile(join(target, 'paper.tex'), 'content', 'utf8');
 
     const canonical = await realpath(link);
     expect(canonicalizeWorkspacePath(link)).toBe(canonical);
-    expect(createNodeWorkspace(() => link).getWorkspacePath()).toBe(canonical);
+    const workspace = createNodeWorkspace(() => link);
+    expect(workspace.getWorkspacePath()).toBe(canonical);
+    expect(workspace.asRelativePath(join(link, 'paper.tex'))).toBe('paper.tex');
   });
 
   it('keeps a resolved path when realpath is unavailable', () => {

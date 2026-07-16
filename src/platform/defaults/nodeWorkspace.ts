@@ -38,8 +38,9 @@ export function createNodeWorkspace(
     asRelativePath(filePath: string): string {
       const root = this.getWorkspacePath();
       if (!root) return filePath;
-      const relative = path.relative(root, filePath);
-      if (!isPathWithin(root, filePath)) {
+      const canonicalFilePath = canonicalizeWorkspacePath(filePath);
+      const relative = path.relative(root, canonicalFilePath);
+      if (!isPathWithin(root, canonicalFilePath)) {
         return filePath;
       }
       return normalizeFilePath(relative);

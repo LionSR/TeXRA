@@ -3,7 +3,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join, normalize, relative } from 'node:path';
 
+import * as logger from '@logger/logUtils';
 import { isPathWithin } from '@utils/core/pathCore';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 // Local imports - platform
@@ -170,7 +172,14 @@ function migrateLegacyWorkspaceStorage(
 
   if (currentPath === legacyPath) return;
   if (!existsSync(legacyPath) || existsSync(currentPath)) return;
-  renameSync(legacyPath, currentPath);
+  try {
+    renameSync(legacyPath, currentPath);
+  } catch (error) {
+    logger.warn(
+      'WorkspaceStorage',
+      `Could not migrate legacy workspace storage; continuing with the current storage directory. Cause: ${toErrorMessage(error)}`,
+    );
+  }
 }
 
 export class WorkspaceStorageProvider implements StorageProvider {

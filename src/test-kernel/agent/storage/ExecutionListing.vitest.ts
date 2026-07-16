@@ -66,6 +66,34 @@ describe('execution listing normalization', () => {
     ]);
   });
 
+  it('sees metadata replaced by another host after an earlier listing', async () => {
+    const id = 'fff666' as ExecutionId;
+    await writeExecution(
+      id,
+      '2026-07-15T12:00:00.000Z',
+      config('assistant'),
+      AgentCategory.ToolUse,
+    );
+    expect(await listExecutions()).toEqual([
+      expect.not.objectContaining({ description: expect.any(String) }),
+    ]);
+
+    await getExecutionStore(id).writeMeta({
+      timestamp: '2026-07-15T12:00:00.000Z',
+      category: AgentCategory.ToolUse,
+      description: 'Updated by another host',
+      terminalStatus: 'completed',
+    });
+
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({
+        id,
+        description: 'Updated by another host',
+        terminalStatus: 'completed',
+      }),
+    ]);
+  });
+
   it('uses the config as the canonical source for visible agent fields', async () => {
     const id = 'aaa111' as ExecutionId;
     const agentConfig = config('assistant');
