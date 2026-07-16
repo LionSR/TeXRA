@@ -426,6 +426,23 @@ export function createChatSessionController(
             lifecycleStarted = true;
           },
           onStreamResolved: (resolvedStreamId) => {
+            // Each chat round mints a fresh root StreamTabId (new
+            // executionId), so bash/tool-edit/super-YOLO bypass — which is
+            // keyed per stream — would otherwise reset every round even
+            // though the user is continuing the same conversation. Link the
+            // new round's stream to the previous one so bypass resolution
+            // (see `registerStreamParent`) falls through to whatever the
+            // prior round had, unless this round sets its own explicit value.
+            const previousRootStreamId = rootStreamId.get();
+            if (
+              previousRootStreamId &&
+              previousRootStreamId !== resolvedStreamId
+            ) {
+              defaultSession().approvals.registerStreamParent(
+                resolvedStreamId,
+                previousRootStreamId,
+              );
+            }
             session.streamId = resolvedStreamId;
             publishChatTuiRunState(session);
             rootStreamId.set(resolvedStreamId);
