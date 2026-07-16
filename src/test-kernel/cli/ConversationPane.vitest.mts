@@ -438,6 +438,26 @@ describe('CLI conversation transcript splitting', () => {
     );
   });
 
+  it('budgets live rich tool rows without reflowing their display lines', () => {
+    const base = toolEntry('t1', TOOL_USE_STATUS.COMPLETED);
+    const tool: ConversationEntry = {
+      ...base,
+      toolUse: {
+        ...base.toolUse,
+        input: { command: 'x'.repeat(80) },
+      },
+    };
+    const liveLayout = transcriptEntryLayout(tool, {
+      mode: 'live',
+      width: 20,
+    });
+
+    expect(liveLayout.lines).toHaveLength(2);
+    expect(selectTranscriptEntriesForViewport([tool], 20, 20).usedRows).toBe(
+      transcriptEntryLayoutRows(liveLayout),
+    );
+  });
+
   it('budgets live user prompt bands with their margin rows', () => {
     const user = entry('u1', 'user', 'why do you write as a latex?', true);
 
@@ -746,6 +766,47 @@ describe('CLI conversation transcript splitting', () => {
         width: 80,
       }).map((item) => item.id),
     ).toEqual(['session-header', 'p1']);
+  });
+
+  it('keeps full tool output as the conservative static-header budget', () => {
+    const tool = {
+      ...toolEntry(
+        't1',
+        TOOL_USE_STATUS.COMPLETED,
+        Array.from({ length: 20 }, (_, index) => `line ${index}`).join('\n'),
+      ),
+      finalized: true,
+    } satisfies ConversationEntry;
+    const renderedRows = transcriptEntryLayoutRows(
+      transcriptEntryLayout(tool, { mode: 'scrollback', width: 80 }),
+    );
+    const budgetRows = transcriptEntryLayoutRows(
+      transcriptEntryLayout(tool, {
+        mode: 'scrollback-budget',
+        width: 80,
+      }),
+    );
+    expect(budgetRows).toBeGreaterThan(renderedRows);
+
+    const withoutHeader = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [tool]),
+      meta: SESSION_META,
+      maxRows: 0,
+      width: 80,
+    });
+    expect(withoutHeader.map((item) => item.id)).toEqual(['t1']);
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: withoutHeader,
+        streams: streamsFromEntries(STREAM_ID, [tool]),
+        meta: SESSION_META,
+        maxRows: renderedRows + 4,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['t1']);
   });
 
   it('budgets user band margins before inserting compact static headers', () => {

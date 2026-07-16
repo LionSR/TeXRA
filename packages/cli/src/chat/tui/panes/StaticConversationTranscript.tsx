@@ -196,6 +196,7 @@ function staticTranscriptItemRowCount(
   }
   return transcriptEntryLayoutRows(
     transcriptEntryLayout(item.entry, {
+      mode: 'scrollback-budget',
       userBottomMarginRows: item.userBottomMarginRows,
       width,
     }),

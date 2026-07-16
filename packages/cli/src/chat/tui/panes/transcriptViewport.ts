@@ -30,19 +30,14 @@ function estimateLiveTranscriptEntryRows(
   entry: ConversationEntry,
   width?: number,
 ): number {
-  // Live assistant text streams as raw wrapped lines (no Markdown parse)
-  // and has no trailing margin row. Pre-slice to the same tail window
-  // LiveTranscriptEntry paints, then cap at LIVE_TAIL_ROWS — so a
-  // multi-MB reply never gets split in full just for an estimate that
-  // discards everything above the tail.
-  if (entry.role === 'assistant') {
-    return estimateEntryRows(() =>
-      transcriptEntryLayoutRows(
-        transcriptEntryLayout(entry, { mode: 'live', width }),
-      ),
-    );
-  }
-  return estimateTranscriptEntryRows(entry, width);
+  // Live mode captures the pending-pane paint contract: assistant text uses
+  // its capped raw tail, while rich tool/process rows keep one descriptor
+  // line per terminal row instead of being reflowed like plain projections.
+  return estimateEntryRows(() =>
+    transcriptEntryLayoutRows(
+      transcriptEntryLayout(entry, { mode: 'live', width }),
+    ),
+  );
 }
 
 export interface TranscriptEntrySelection {

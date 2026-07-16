@@ -21,7 +21,8 @@ const PROCESS_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 export const LIVE_TAIL_ROWS = 24;
 
 type TranscriptEntryRole = ConversationEntry['role'];
-type TranscriptEntryLayoutMode = 'bounded' | 'live' | 'scrollback' | 'viewer';
+type TranscriptEntryLayoutMode =
+  'bounded' | 'live' | 'scrollback' | 'scrollback-budget' | 'viewer';
 
 interface RoleGeometry {
   readonly firstPrefix: string;
@@ -156,7 +157,6 @@ function entryLines(
   columns: number,
   colorEnabled: boolean | undefined,
 ): readonly string[] {
-  const geometry = ROLE_GEOMETRY[entry.role];
   switch (entry.role) {
     case 'assistant':
       if (mode === 'live' || (mode === 'bounded' && !entry.finalized)) {
@@ -166,29 +166,35 @@ function entryLines(
           width: columns,
         });
       }
-      return mode === 'scrollback' || mode === 'bounded'
+      return mode === 'scrollback' ||
+        mode === 'scrollback-budget' ||
+        mode === 'bounded'
         ? renderAnsiMarkdown(entry.text, {
             width: columns,
             colorEnabled,
           }).split('\n')
         : wrapWithPrefix(entry.text, columns, '', '');
-    case 'tool':
-      return wrapDisplayLines(
-        toolUseDisplayLines(entry.toolUse, { elide: mode !== 'viewer' }),
-        columns,
-      );
-    case 'process':
-      return wrapDisplayLines(
-        completedProcessDisplayLines(entry.process),
-        columns,
-      );
-    default:
+    case 'tool': {
+      const lines = toolUseDisplayLines(entry.toolUse, {
+        elide: mode !== 'viewer' && mode !== 'scrollback-budget',
+      });
+      // The live rich renderer keeps each tool display line on one terminal
+      // row. Other modes paint the descriptor's text projection directly.
+      return mode === 'live' ? lines : wrapDisplayLines(lines, columns);
+    }
+    case 'process': {
+      const lines = completedProcessDisplayLines(entry.process);
+      return mode === 'live' ? lines : wrapDisplayLines(lines, columns);
+    }
+    default: {
+      const geometry = ROLE_GEOMETRY[entry.role];
       return wrapWithPrefix(
         entry.text,
         columns,
         geometry.firstPrefix,
         geometry.continuationPrefix,
       );
+    }
   }
 }
 
