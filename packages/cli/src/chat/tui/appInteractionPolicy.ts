@@ -9,20 +9,18 @@ import {
   approvalPayloadStreamId,
   type PendingApproval,
 } from './state/approvalQueue';
-import type { ChildControlMode } from './state/childControls';
 
-const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
-const EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS = 6;
+const TASK_DETAIL_FOREGROUND_MAX_ROWS = 12;
 const FORM_FOREGROUND_MAX_ROWS = 18;
 // Match form sizing for approval modals that already budget or scroll their
 // content. Natural-height approvals stay uncapped until they grow row budgets.
 const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 type ApprovalKind = PendingApproval['payload']['kind'];
 
-// A bare Esc and the second key of an `Esc s` / `Esc p` chord are two
+// A bare Esc and the second key of an `Esc 1..9` chord are two
 // separate keystrokes on terminals without true Meta-key detection (macOS
 // Terminal.app). 125ms was too tight for a deliberate but unhurried chord
-// (issue #7496: a ~400ms pause between Esc and `s` fired the bare-Esc
+// (issue #7496: a ~400ms pause after Esc fired the bare-Esc
 // interrupt and stopped a suspended WAITING subagent); widen to a
 // tmux-style chord window so a human-paced chord still resolves before we
 // commit to interrupting.
@@ -56,28 +54,18 @@ export function appEscapeInterruptActive({
   );
 }
 
-// The footer advertises `Esc s subagents` / `Esc p tasks` any time these
-// controls are available, regardless of which stream is currently focused
-// or whether it's still in-flight (e.g. WAITING). Bare Esc must therefore
-// give a chord a chance to resolve any time that binding is on screen —
-// gating on the focused child's own input-disabled state (as this used to)
-// left the WAITING-child case with no defer window at all, so a slow
-// `Esc s` fired an immediate interrupt instead. `Alt`-chord platforms are
-// unaffected: their Esc+key sequences arrive as one burst, resolved
-// synchronously by `metaChordInput`.
+// Bare Esc must give a numbered stream-focus chord a chance to resolve while
+// that binding is on screen. `Alt`-chord platforms are unaffected: their
+// Esc+key sequences arrive as one burst, resolved synchronously by
+// `metaChordInput`.
 export function shouldDeferEscapeInterruptForMetaChord({
   shortcutModifierLabel,
-  subagentControlsAvailable,
-  taskControlsAvailable,
+  streamFocusAvailable,
 }: {
   readonly shortcutModifierLabel: string;
-  readonly subagentControlsAvailable: boolean;
-  readonly taskControlsAvailable: boolean;
+  readonly streamFocusAvailable: boolean;
 }): boolean {
-  return (
-    shortcutModifierLabel === 'Esc' &&
-    (subagentControlsAvailable || taskControlsAvailable)
-  );
+  return shortcutModifierLabel === 'Esc' && streamFocusAvailable;
 }
 
 export interface EscapeInterruptState {
@@ -117,13 +105,13 @@ export interface AppCtrlCState {
 export function appDraftDiscardActive({
   inputDisabled,
   reverseSearchOpen,
-  sessionListFocused,
+  childListFocused,
 }: {
   readonly inputDisabled: boolean;
   readonly reverseSearchOpen: boolean;
-  readonly sessionListFocused: boolean;
+  readonly childListFocused: boolean;
 }): boolean {
-  return !inputDisabled && !reverseSearchOpen && !sessionListFocused;
+  return !inputDisabled && !reverseSearchOpen && !childListFocused;
 }
 
 /** Apply the root TUI's complete Ctrl+C policy from the latest composer state. */
@@ -151,21 +139,21 @@ export function digitFromMetaShortcut(value: string): number | undefined {
 }
 
 export type ForegroundSurfaceKind =
-  'transcript' | 'childControls' | 'form' | 'approval';
+  'transcript' | 'taskDetail' | 'form' | 'approval';
 
 export function foregroundSurfaceKind({
   activeFormOpen,
-  childControlMode,
   pendingApproval,
+  taskDetailOpen,
   transcriptViewerOpen,
 }: {
   readonly activeFormOpen: boolean;
-  readonly childControlMode?: ChildControlMode;
   readonly pendingApproval: boolean;
+  readonly taskDetailOpen: boolean;
   readonly transcriptViewerOpen: boolean;
 }): ForegroundSurfaceKind | undefined {
   if (transcriptViewerOpen) return 'transcript';
-  if (childControlMode !== undefined) return 'childControls';
+  if (taskDetailOpen) return 'taskDetail';
   if (activeFormOpen) return 'form';
   if (pendingApproval) return 'approval';
   return undefined;
@@ -186,12 +174,10 @@ export function approvalVisibleForActiveStream({
 export function foregroundEscapeAction({
   activeFormEscapeAction,
   approvalKind,
-  childControlEscapeAction,
   foregroundKind,
 }: {
   readonly activeFormEscapeAction?: string;
   readonly approvalKind?: ApprovalKind;
-  readonly childControlEscapeAction?: string;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
 }): string | undefined {
   switch (foregroundKind) {
@@ -199,8 +185,8 @@ export function foregroundEscapeAction({
       return undefined;
     case 'form':
       return activeFormEscapeAction ?? 'close';
-    case 'childControls':
-      return childControlEscapeAction ?? 'close';
+    case 'taskDetail':
+      return 'back';
     case 'transcript':
       return 'close';
     case 'approval':
@@ -233,18 +219,14 @@ function approvalForegroundMaxRows(
 
 export function foregroundMaxRowsForKind({
   approvalKind,
-  childControlHasItems,
   kind,
 }: {
   readonly approvalKind?: ApprovalKind;
-  readonly childControlHasItems: boolean;
   readonly kind: ForegroundSurfaceKind | undefined;
 }): number | undefined {
   switch (kind) {
-    case 'childControls':
-      return childControlHasItems
-        ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
-        : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
+    case 'taskDetail':
+      return TASK_DETAIL_FOREGROUND_MAX_ROWS;
     case 'form':
       return FORM_FOREGROUND_MAX_ROWS;
     case 'approval':

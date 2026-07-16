@@ -1,6 +1,6 @@
 // Stream-scoped display projection for CLI controls. The authoritative state
 // remains `StreamSlice` plus the child->parent edge map; this module owns the
-// derived labels and active tree order so tabs, headers, and pickers do not
+// derived labels and active tree order so tabs, headers, and lists do not
 // each rebuild them differently.
 
 // Local imports - shared schemas
@@ -154,24 +154,21 @@ export function streamViewForId(init: {
   };
 }
 
-interface OrderedStreamViewInput {
+interface StreamTreeViewInput {
   readonly activeStreamId: StreamTabId | undefined;
   readonly childStreamEntries: ChildStreamEntries;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly rootStreamId: StreamTabId | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
 
-function activeTreeRoot(init: OrderedStreamViewInput): StreamTabId | undefined {
-  return activeStreamParentOrSelfId(init) ?? init.streams.keys().next().value;
-}
-
-export function activeStreamTreeEntries(
-  init: OrderedStreamViewInput,
+export function streamTreeEntries(
+  init: StreamTreeViewInput,
 ): readonly ActiveStreamTreeEntry[] {
-  const root = activeTreeRoot(init);
+  const root = init.rootStreamId;
   if (!root) return [];
   // Newest-first: `orderedDescendantsFromTree` returns children oldest-first
-  // (retained order, then creation order), so the session list and its
+  // (retained order, then creation order), so the child list and its
   // Alt+1..9 shortcuts read top-to-bottom from most to least recently
   // started, keeping the row a user is most likely watching near the top.
   const ordered = orderedDescendantsFromTree({
@@ -190,10 +187,10 @@ export function activeStreamTreeEntries(
   return out;
 }
 
-export function activeStreamTreeViews(
-  init: OrderedStreamViewInput,
+export function streamTreeViews(
+  init: StreamTreeViewInput,
 ): readonly StreamView[] {
-  const ordered = activeStreamTreeEntries(init);
+  const ordered = streamTreeEntries(init);
   if (ordered.length < 2) return [];
   return ordered.map((entry) =>
     streamViewForId({

@@ -39,13 +39,15 @@ const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
+  readonly childListFocused?: boolean;
+  readonly childListSelectionKind?: 'stream' | 'process';
+  readonly childListSelectionKillable?: boolean;
+  readonly childNavigationAvailable: boolean;
   readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
-  readonly sessionNavigationAvailable: boolean;
-  readonly sessionListFocused?: boolean;
+  readonly foregroundInputActive?: boolean;
   readonly shortcutsActive?: boolean;
-  readonly subagentControlsAvailable: boolean;
-  readonly taskControlsAvailable: boolean;
+  readonly streamFocusAvailable: boolean;
   readonly transcriptAvailable?: boolean;
 }
 
@@ -183,10 +185,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     activeProcesses: statusSlice?.activeProcesses.length ?? 0,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
-    taskControlsAvailable: props.taskControlsAvailable,
     agentSelectionAvailable: props.agentSelectionAvailable,
-    subagentControlsAvailable: props.subagentControlsAvailable,
-    sessionNavigationAvailable: props.sessionNavigationAvailable,
+    childListFocused: props.childListFocused,
+    childListSelectionKind: props.childListSelectionKind,
+    childListSelectionKillable: props.childListSelectionKillable,
+    childNavigationAvailable: props.childNavigationAvailable,
+    streamFocusAvailable: props.streamFocusAvailable,
     model: accessTarget.model,
     modelAccess,
     transcriptMode: sessionMeta.transcriptMode,
@@ -197,8 +201,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     ctrlCAction: target.ctrlCAction,
     isChildStream: target.isChildStream,
     foregroundEscapeAction: props.foregroundEscapeAction,
+    foregroundInputActive: props.foregroundInputActive,
     shortcutsActive: props.shortcutsActive,
-    sessionListFocused: props.sessionListFocused,
   });
 
   return (

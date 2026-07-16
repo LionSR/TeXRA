@@ -1,8 +1,7 @@
 // Shared "... N previous / more rows" markers for scrollable modal bodies
 // (bash approvals, agent proposals, external inquiries), plus the shared
-// "+N earlier, +N more" inline overflow markers for row pickers (Select,
-// ChildControlPicker) where the indicator sits inline with the focused row
-// instead of on its own line.
+// "+N earlier, +N more" inline overflow markers for Select, where the
+// indicator sits inline with the focused row instead of on its own line.
 
 export function previousRowsText(count: number): string {
   return `... ${count} previous rows`;
@@ -60,20 +59,5 @@ export function selectVisibleInlineOverflowText({
   readonly visibleItemCount: number;
 }): string | undefined {
   if (visibleItemCount <= 0 || showOverflow) return undefined;
-  return inlineOverflowCountText(hiddenBefore, hiddenAfter);
-}
-
-/** ChildControlPicker's ultra-compact title suffix: the same "+N earlier,
- *  +N more" shape as Select, but derived from a flat index into the full
- *  list rather than an already-windowed hidden-before/after pair. */
-export function compactPickerOverflowText({
-  itemCount,
-  selectedIndex,
-}: {
-  readonly itemCount: number;
-  readonly selectedIndex: number;
-}): string | undefined {
-  const hiddenBefore = Math.max(0, selectedIndex);
-  const hiddenAfter = Math.max(0, itemCount - selectedIndex - 1);
   return inlineOverflowCountText(hiddenBefore, hiddenAfter);
 }

@@ -13,7 +13,7 @@ import {
 
 // Local imports - shared runtime
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import type { StreamTabId } from '@shared/schemas';
+import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 // Local imports - TUI surfaces and state
 import {
@@ -32,7 +32,7 @@ import {
   type EscapeInterruptState,
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
-import { ChildControlPicker } from './modals/ChildControlPicker';
+import { TaskDetailView } from './modals/TaskDetailView';
 import { TranscriptViewer } from './modals/TranscriptViewer';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
@@ -49,30 +49,35 @@ import {
 } from './input/activeDraft';
 import {
   numericFocusTargetForActiveStream,
-  resolveChildControlDisplayTargets,
+  resolveChildListTarget,
 } from './state/childControls';
 import {
   activeStreamId as activeStreamIdSignal,
   rootRunStartAvailable as rootRunStartAvailableSignal,
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
-  childControlEscapeAction as childControlEscapeActionSignal,
-  childControlMode as childControlModeSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
+  taskDetailExecutionId as taskDetailExecutionIdSignal,
   transcriptViewerStreamId as transcriptViewerStreamIdSignal,
   streams as streamsSignal,
 } from './state/cliState';
 import {
+  activeSubagentsFor,
   childStreamEntries as childStreamEntriesSignal,
   parentStream as parentStreamSignal,
 } from './state/childExecutions';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
 import {
-  INITIAL_SESSION_LIST_SELECTION,
-  reduceSessionListSelection,
-} from './state/sessionListSelection';
-import { activeStreamTreeViews, streamDisplayLabel } from './state/streamViews';
+  childListProcessId,
+  childListStreamId,
+  childProcessListValue,
+  childStreamListValue,
+  INITIAL_CHILD_LIST_SELECTION,
+  reduceChildListSelection,
+  type ChildListValue,
+} from './state/childListSelection';
+import { streamDisplayLabel, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
 import type { TranscriptViewportChange } from './state/transcriptViewportMode';
 import type { InputHistory } from './history/inputHistory';
@@ -83,6 +88,8 @@ interface InputEventEmitterLike {
   on(event: 'input', listener: (data: string) => void): void;
   off(event: 'input', listener: (data: string) => void): void;
 }
+
+type ProcessChildInfo = Extract<ActiveChildInfo, { kind: 'process' }>;
 
 export interface AppProps {
   readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
@@ -116,15 +123,15 @@ export function App(props: AppProps): React.JSX.Element {
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const transcriptViewerStreamId = useSignal(transcriptViewerStreamIdSignal);
+  const taskDetailExecutionId = useSignal(taskDetailExecutionIdSignal);
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
-  const childControlMode = useSignal(childControlModeSignal);
-  const childControlEscapeAction = useSignal(childControlEscapeActionSignal);
-  const [sessionListSelection, dispatchSessionListSelection] = useReducer(
-    reduceSessionListSelection,
-    INITIAL_SESSION_LIST_SELECTION,
+  const [childListSelection, dispatchChildListSelection] = useReducer(
+    reduceChildListSelection,
+    INITIAL_CHILD_LIST_SELECTION,
   );
-  const sessionListFocused = sessionListSelection.focused;
-  const selectedSessionId = sessionListSelection.selectedStreamId;
+  const childListActiveStreamRef = useRef(activeStreamId);
+  const childListFocused = childListSelection.focused;
+  const selectedChildValue = childListSelection.selectedValue;
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
@@ -136,31 +143,37 @@ export function App(props: AppProps): React.JSX.Element {
     activeStreamId,
     pending,
   });
-  const childControlTargets = resolveChildControlDisplayTargets({
+  const childListTarget = resolveChildListTarget({
     activeStreamId,
     childStreamEntries,
     parentStream,
     streams,
   });
-  const taskControlsAvailable = childControlTargets.tasks.hasItems;
-  const subagentControlsAvailable = childControlTargets.subagents.hasItems;
+  const activeProcesses = useMemo(
+    () =>
+      (childListTarget.slice?.activeProcesses ?? []).filter(
+        (process): process is ProcessChildInfo => process.kind === 'process',
+      ),
+    [childListTarget.slice?.activeProcesses],
+  );
 
   const stdin = useStdin();
   const foregroundOpen =
     activeApprovalVisible ||
     activeForm !== undefined ||
-    childControlMode !== undefined ||
+    taskDetailExecutionId !== undefined ||
     transcriptViewerOpen;
   const childInputDisabledMessage = focusedChildInputDisabledMessage({
     activeStreamId,
     parentStream,
     status: activeStreamId ? streams.get(activeStreamId)?.status : undefined,
-    subagentControlsAvailable,
-    taskControlsAvailable,
   });
-  const appInputDisabled = props.inputDisabled === true || foregroundOpen;
-  const inputDisabled =
-    appInputDisabled || childInputDisabledMessage !== undefined;
+  const appInputDisabled =
+    props.inputDisabled === true || foregroundOpen || childListFocused;
+  const inputDisabledMessage = childListFocused
+    ? 'Session selection active.'
+    : childInputDisabledMessage;
+  const inputDisabled = appInputDisabled || inputDisabledMessage !== undefined;
   const escapeInterruptStateRef = useRef<EscapeInterruptState>({
     inputDisabled: appInputDisabled,
     reverseSearchOpen,
@@ -209,53 +222,113 @@ export function App(props: AppProps): React.JSX.Element {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const sessionViews = useMemo(
     () =>
-      activeStreamTreeViews({
+      streamTreeViews({
         activeStreamId,
         childStreamEntries,
         parentStream,
+        rootStreamId: childListTarget.streamId,
         streams,
       }),
-    [activeStreamId, childStreamEntries, parentStream, streams],
+    [
+      activeStreamId,
+      childListTarget.streamId,
+      childStreamEntries,
+      parentStream,
+      streams,
+    ],
   );
+  const activeSubagentExecutionIds = useMemo(() => {
+    const executionIds = new Map<StreamTabId, string>();
+    const parentIds = new Set(
+      sessionViews
+        .map((session) => session.parentId)
+        .filter((parentId): parentId is StreamTabId => parentId !== undefined),
+    );
+    for (const parentId of parentIds) {
+      for (const child of activeSubagentsFor(
+        parentId,
+        childStreamEntries,
+        streams,
+      )) {
+        executionIds.set(child.childStreamId, child.executionId);
+      }
+    }
+    return executionIds;
+  }, [childStreamEntries, sessionViews, streams]);
+  const childListValues = useMemo<readonly ChildListValue[]>(
+    () => [
+      ...sessionViews.map((session) => childStreamListValue(session.id)),
+      ...activeProcesses.map((process) =>
+        childProcessListValue(process.executionId),
+      ),
+    ],
+    [activeProcesses, sessionViews],
+  );
+  const childListAvailable = childListValues.length > 0;
+  const selectedChildStreamId = childListStreamId(selectedChildValue);
+  const selectedChildProcessId = childListProcessId(selectedChildValue);
+  let selectedChildKind: 'stream' | 'process' | undefined;
+  if (selectedChildProcessId) selectedChildKind = 'process';
+  if (selectedChildStreamId) selectedChildKind = 'stream';
+  const selectedChildKillable = selectedChildProcessId
+    ? activeProcesses.some(
+        (process) => process.executionId === selectedChildProcessId,
+      )
+    : selectedChildStreamId !== undefined &&
+      activeSubagentExecutionIds.has(selectedChildStreamId);
+  const taskDetailProcess = taskDetailExecutionId
+    ? activeProcesses.find(
+        (process) => process.executionId === taskDetailExecutionId,
+      )
+    : undefined;
   useEffect(() => {
-    dispatchSessionListSelection({
+    dispatchChildListSelection({
       kind: 'reconcile',
       activeStreamId,
-      sessions: sessionViews,
+      values: childListValues,
     });
-  }, [activeStreamId, sessionViews]);
-  useEffect(() => {
-    if (sessionViews.length === 0 && sessionListFocused) {
-      dispatchSessionListSelection({ kind: 'blur' });
+  }, [activeStreamId, childListValues]);
+  // Stream focus can also move through lifecycle completion or a numeric
+  // accelerator. Align the selected row before the changed frame is painted;
+  // ordinary row reconciliation still preserves manual list selection.
+  useLayoutEffect(() => {
+    if (childListActiveStreamRef.current === activeStreamId) return;
+    childListActiveStreamRef.current = activeStreamId;
+    if (activeStreamId) {
+      dispatchChildListSelection({
+        kind: 'syncActiveStream',
+        streamId: activeStreamId,
+        values: childListValues,
+      });
     }
-  }, [sessionListFocused, sessionViews.length]);
-  const cancelSessionList = useCallback(() => {
-    dispatchSessionListSelection({ kind: 'blur' });
+  }, [activeStreamId, childListValues]);
+  useEffect(() => {
+    if (!childListAvailable && childListFocused) {
+      dispatchChildListSelection({ kind: 'blur' });
+    }
+  }, [childListAvailable, childListFocused]);
+  useEffect(() => {
+    if (taskDetailExecutionId && !taskDetailProcess) {
+      taskDetailExecutionIdSignal.set(undefined);
+    }
+  }, [taskDetailExecutionId, taskDetailProcess]);
+  const cancelChildList = useCallback(() => {
+    dispatchChildListSelection({ kind: 'blur' });
   }, []);
   const focusSession = useCallback((streamId: StreamTabId) => {
-    dispatchSessionListSelection({ kind: 'focusStream', streamId });
+    dispatchChildListSelection({ kind: 'focusStream', streamId });
     activeStreamIdSignal.set(streamId);
   }, []);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
-    childControlMode,
     pendingApproval: activeApprovalVisible,
+    taskDetailOpen: taskDetailProcess !== undefined,
     transcriptViewerOpen,
   });
   const approvalKind =
     foregroundKind === 'approval' ? pending?.payload.kind : undefined;
-  const childControlTarget =
-    childControlMode !== undefined
-      ? childControlTargets[childControlMode]
-      : undefined;
-  useEffect(() => {
-    if (childControlMode === undefined) {
-      childControlEscapeActionSignal.set('close');
-    }
-  }, [childControlMode]);
   const foregroundMaxRows = foregroundMaxRowsForKind({
     approvalKind,
-    childControlHasItems: childControlTarget?.hasItems ?? false,
     kind: foregroundKind,
   });
   function renderForegroundSurface(
@@ -282,30 +355,21 @@ export function App(props: AppProps): React.JSX.Element {
           />
         );
       }
-      case 'childControls': {
-        if (!childControlMode) return null;
-        const target = childControlTarget;
-        if (!target) return null;
+      case 'taskDetail': {
+        if (!taskDetailProcess) return null;
         return (
-          <ChildControlPicker
+          <TaskDetailView
             availableColumns={columns}
-            streamLabel={target.streamLabel}
-            activeStreamId={target.streamId}
             availableRows={availableRows}
-            mode={childControlMode}
-            onClose={() => childControlModeSignal.set(undefined)}
-            onEscapeActionChange={(action) =>
-              childControlEscapeActionSignal.set(action)
-            }
-            onFocusStream={(streamId) => activeStreamIdSignal.set(streamId)}
-            onViewStream={(streamId) =>
-              transcriptViewerStreamIdSignal.set(streamId)
-            }
-            onKillExecution={props.onKillExecution}
-            childStreamEntries={childStreamEntries}
-            slice={target.slice}
-            streamScopeDetail={target.streamScopeDetail}
-            streams={streams}
+            process={taskDetailProcess}
+            tail={childListTarget.slice?.processOutput.get(
+              taskDetailProcess.executionId,
+            )}
+            onBack={() => taskDetailExecutionIdSignal.set(undefined)}
+            onKill={() => {
+              props.onKillExecution(taskDetailProcess.executionId);
+              taskDetailExecutionIdSignal.set(undefined);
+            }}
           />
         );
       }
@@ -324,7 +388,7 @@ export function App(props: AppProps): React.JSX.Element {
   }
 
   const focusShortcutsActive =
-    !sessionListFocused &&
+    !childListFocused &&
     appFocusShortcutsActive({
       foregroundOpen,
       reverseSearchOpen,
@@ -346,17 +410,6 @@ export function App(props: AppProps): React.JSX.Element {
   }, []);
 
   const handleMetaShortcut = (value: string): boolean => {
-    const lower = value.toLowerCase();
-    if (lower === 's') {
-      if (!subagentControlsAvailable) return false;
-      childControlModeSignal.set('subagents');
-      return true;
-    }
-    if (lower === 'p') {
-      if (!taskControlsAvailable) return false;
-      childControlModeSignal.set('tasks');
-      return true;
-    }
     const digit = digitFromMetaShortcut(value);
     if (digit !== undefined) {
       const target = numericFocusTargetForActiveStream({
@@ -412,7 +465,7 @@ export function App(props: AppProps): React.JSX.Element {
           (appDraftDiscardActive({
             inputDisabled,
             reverseSearchOpen,
-            sessionListFocused,
+            childListFocused,
           }) &&
             (inputBarRef.current?.discardDraft() ?? false)),
         canStopActiveRun,
@@ -431,8 +484,8 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
-    if (sessionListFocused) {
-      if (key.tab) dispatchSessionListSelection({ kind: 'blur' });
+    if (childListFocused && !foregroundOpen) {
+      if (key.tab) dispatchChildListSelection({ kind: 'blur' });
       return;
     }
 
@@ -445,15 +498,16 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
-    // Tab transfers keyboard ownership from the input to the session list.
+    // Tab transfers keyboard ownership from the input to the child list.
     if (key.tab) {
-      if (sessionViews.length > 0) {
-        dispatchSessionListSelection({ kind: 'focus' });
+      const firstChildValue = childListValues.at(0);
+      if (firstChildValue) {
+        dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
       }
       return;
     }
 
-    // Esc/Alt chords: s → subagent controls, p → tasks, 1-9 → focus stream.
+    // Esc/Alt 1-9 focuses a stream directly in the persistent list order.
     const metaInput = metaChordInput(input, key);
     if (metaInput) {
       handleMetaShortcut(metaInput);
@@ -473,8 +527,7 @@ export function App(props: AppProps): React.JSX.Element {
       if (
         shouldDeferEscapeInterruptForMetaChord({
           shortcutModifierLabel: defaultShortcutModifierLabel(),
-          subagentControlsAvailable,
-          taskControlsAvailable,
+          streamFocusAvailable: sessionViews.length > 0,
         })
       ) {
         scheduleEscapeInterrupt();
@@ -499,10 +552,10 @@ export function App(props: AppProps): React.JSX.Element {
               controlRef={inputBarRef}
               onSubmit={props.onSubmit}
               collapseWhenDisabled={!inputBarVisible}
-              disabledMessage={childInputDisabledMessage}
+              disabledMessage={inputDisabledMessage}
               disabled={inputDisabled}
               history={props.history}
-              keyboardActive={!sessionListFocused}
+              keyboardActive={!childListFocused}
             />
             <StatusBar
               agentSelectionAvailable={agentSelectionAvailable}
@@ -510,14 +563,17 @@ export function App(props: AppProps): React.JSX.Element {
               foregroundEscapeAction={foregroundEscapeAction({
                 activeFormEscapeAction: activeForm?.escapeAction,
                 approvalKind,
-                childControlEscapeAction,
                 foregroundKind,
               })}
-              sessionNavigationAvailable={sessionViews.length > 0}
+              foregroundInputActive={
+                foregroundOpen || reverseSearchOpen || slashPaletteOpen
+              }
+              childListFocused={childListFocused}
+              childListSelectionKind={selectedChildKind}
+              childListSelectionKillable={selectedChildKillable}
+              childNavigationAvailable={childListAvailable}
               shortcutsActive={focusShortcutsActive}
-              sessionListFocused={sessionListFocused}
-              subagentControlsAvailable={subagentControlsAvailable}
-              taskControlsAvailable={taskControlsAvailable}
+              streamFocusAvailable={sessionViews.length > 0}
               transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
             />
           </>
@@ -532,17 +588,25 @@ export function App(props: AppProps): React.JSX.Element {
           reverseSearchOpen,
           rootStreamId,
           slashPaletteOpen,
-          sessionListFocused,
+          childListFocused,
           sessionViews,
-          selectedSessionId,
+          selectedChildValue,
           streams,
-          childExecutionPanelTarget: childControlTargets.tasks,
+          activeSubagentExecutionIds,
+          childListTarget,
           transcriptViewerStreamId,
         }}
-        onCancelSessionList={cancelSessionList}
+        onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
-        onSessionSelectionChange={(streamId) =>
-          dispatchSessionListSelection({ kind: 'highlight', streamId })
+        onKillExecution={props.onKillExecution}
+        onOpenProcessDetail={(executionId) =>
+          taskDetailExecutionIdSignal.set(executionId)
+        }
+        onViewStream={(streamId) =>
+          transcriptViewerStreamIdSignal.set(streamId)
+        }
+        onChildSelectionChange={(value) =>
+          dispatchChildListSelection({ kind: 'highlight', value })
         }
       />
     </ActiveDraftScope>

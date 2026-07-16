@@ -4,10 +4,7 @@ import {
   CHILD_STATUS_MARKER,
   childStatusColor,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
-import {
-  compactChildRowText,
-  subagentListRowAllocation,
-} from '@cli/chat/tui/panes/SubagentList';
+import { compactChildRowText } from '@cli/chat/tui/panes/SubagentList';
 import {
   nextSelectHighlightIndex,
   selectControlledHighlightIndex,
@@ -26,7 +23,7 @@ function session(id: string, active = false): StreamView {
   };
 }
 
-describe('CLI session list display model', () => {
+describe('CLI child list display model', () => {
   it('keeps status markers steady and status colors independent of focus', () => {
     expect(CHILD_STATUS_MARKER).toBe('● ');
     expect(childStatusColor(undefined)).toBe('green');
@@ -129,29 +126,5 @@ describe('CLI session list display model', () => {
     ).toBe(
       'latex build running · 19sec · main.tex: Proof sketch needs one missing reference',
     );
-  });
-
-  it('reserves constrained-list visibility for sessions and processes', () => {
-    expect(
-      subagentListRowAllocation({
-        maxRows: 3,
-        processCount: 4,
-        sessionCount: 4,
-      }),
-    ).toEqual({ sessionRows: 2, processRows: 1 });
-    expect(
-      subagentListRowAllocation({
-        maxRows: 1,
-        processCount: 4,
-        sessionCount: 4,
-      }),
-    ).toEqual({ sessionRows: 1, processRows: 0 });
-    expect(
-      subagentListRowAllocation({
-        maxRows: 2,
-        processCount: 4,
-        sessionCount: 0,
-      }),
-    ).toEqual({ sessionRows: 0, processRows: 2 });
   });
 });
