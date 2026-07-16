@@ -1096,12 +1096,13 @@ const SCENARIOS = [
   },
   {
     // The liveness row shows for the whole active run (not just hidden
-    // reasoning) with a ticking elapsed time; the harness pins the run's
-    // start 42s in the past so the elapsed suffix is deterministic.
+    // reasoning) with a ticking elapsed time. The run starts 42s in the past,
+    // but frame settlement may advance the displayed second.
     name: 'run-liveness-row',
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     frame: 'viewport',
-    expect: ['✻ Working', '42s', '◆ running'],
+    expect: ['✻ Working', '◆ running'],
+    expectPatterns: [/✻ Working\.{1,3}\s+(?:4[2-9]|[5-9]\d|\d{3,})s/],
   },
   {
     name: 'tools-form',
@@ -3720,6 +3721,7 @@ function expectedFrameTextVisible(scenario, frame) {
   const collapsedFrame = collapseFrameText(frame);
   return (
     (scenario.expect ?? []).every((text) => frame.includes(text)) &&
+    (scenario.expectPatterns ?? []).every((pattern) => pattern.test(frame)) &&
     (scenario.expectCollapsed ?? []).every((text) =>
       collapsedFrame.includes(text),
     )
@@ -4273,6 +4275,9 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
   const missingCollapsed = (scenario.expectCollapsed ?? []).filter(
     (t) => !collapsedFrame.includes(t),
   );
+  const missingPatterns = (scenario.expectPatterns ?? []).filter(
+    (pattern) => !pattern.test(frame),
+  );
   const present = (scenario.unexpect ?? []).filter((t) => frame.includes(t));
   const failures = [...checkpointFailures];
   if (!booted) failures.push('input prompt never rendered (boot timeout)');
@@ -4280,6 +4285,8 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     failures.push(`expected text missing: ${JSON.stringify(t)}`);
   for (const t of missingCollapsed)
     failures.push(`expected collapsed text missing: ${JSON.stringify(t)}`);
+  for (const pattern of missingPatterns)
+    failures.push(`expected pattern missing: ${pattern.toString()}`);
   for (const t of present)
     failures.push(`unexpected text present: ${JSON.stringify(t)}`);
   for (const check of scenario.maxOccurrences ?? []) {
