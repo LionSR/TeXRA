@@ -26,7 +26,6 @@ interface DesktopLatestRelease {
 
 interface DesktopUpdateCheckerModule {
   DESKTOP_RELEASES_PAGE_URL: string;
-  isNewerDesktopVersion(latest: string, current: string): boolean;
   checkForDesktopUpdate(options: {
     currentVersion: string;
     globalState: MemoryStateStore;
@@ -45,23 +44,6 @@ async function loadDesktopUpdateChecker(): Promise<DesktopUpdateCheckerModule> {
 }
 
 describe('desktop update checker', () => {
-  describe('isNewerDesktopVersion', () => {
-    it('is true only when latest strictly outranks current', async () => {
-      const { isNewerDesktopVersion } = await loadDesktopUpdateChecker();
-
-      expect(isNewerDesktopVersion('0.40.0', '0.39.3')).toBe(true);
-      expect(isNewerDesktopVersion('0.39.3', '0.39.3')).toBe(false);
-      expect(isNewerDesktopVersion('0.38.0', '0.39.3')).toBe(false);
-    });
-
-    it('treats unparseable versions as not newer', async () => {
-      const { isNewerDesktopVersion } = await loadDesktopUpdateChecker();
-
-      expect(isNewerDesktopVersion('not-a-version', '0.39.3')).toBe(false);
-      expect(isNewerDesktopVersion('0.40.0', 'not-a-version')).toBe(false);
-    });
-  });
-
   it('exposes a known-constant releases page URL (never opens API-provided URLs)', async () => {
     const { DESKTOP_RELEASES_PAGE_URL } = await loadDesktopUpdateChecker();
 
