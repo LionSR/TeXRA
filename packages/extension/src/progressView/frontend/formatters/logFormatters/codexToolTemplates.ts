@@ -12,6 +12,7 @@ import {
   CodexTodoToolInputSchema,
   CodexTurnToolInputSchema,
 } from '@shared/schemas/codex';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { formatDuration } from '@utils/core';
 
 // Local imports - Lit template utilities
@@ -33,7 +34,6 @@ import {
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 type RenderableSection = TemplateResult | typeof nothing | undefined | null;
 type BadgeData = { iconName: string; label: string };

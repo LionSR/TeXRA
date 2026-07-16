@@ -31,7 +31,6 @@ import {
   AGENT_DECORATORS,
   getAgentCategoryDecorator,
 } from '@shared/utils/icons';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -41,6 +40,7 @@ import { formatRelativeTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
+import { formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles } from './StreamTab.styles';
 import { streamTabsContainerStyles } from './StreamTabsContainer.styles';
