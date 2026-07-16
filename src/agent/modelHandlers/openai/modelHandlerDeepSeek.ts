@@ -2,7 +2,7 @@
 import { ReasoningEffort } from 'llm-zoo';
 
 // Local file imports
-import type { DeepSeekToolCall } from '@agent/types/IModelHandler';
+import type { DeepSeekToolCall } from '@agent/types/ModelHandlerContracts';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 // Type imports

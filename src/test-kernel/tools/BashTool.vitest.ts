@@ -48,7 +48,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import type { SdkToolCall } from '@agent/types/IModelHandler';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 
 // Internal imports
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';

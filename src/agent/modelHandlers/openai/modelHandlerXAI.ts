@@ -1,5 +1,5 @@
 // Third-party imports
-import type { ExtractResponseResult } from '@agent/types/IModelHandler';
+import type { ExtractResponseResult } from '@agent/types/ModelHandlerContracts';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 

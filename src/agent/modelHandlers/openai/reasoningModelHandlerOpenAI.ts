@@ -2,7 +2,7 @@
 import type {
   DeepSeekToolCall,
   OpenAIToolCall,
-} from '@agent/types/IModelHandler';
+} from '@agent/types/ModelHandlerContracts';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Type imports

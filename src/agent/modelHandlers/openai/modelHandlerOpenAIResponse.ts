@@ -25,7 +25,7 @@ import type {
   ExtractResponseResult,
   OpenAIResponseToolCall,
   TokenCountOptions,
-} from '@agent/types/IModelHandler';
+} from '@agent/types/ModelHandlerContracts';
 import {
   attachContextWindowError,
   buildErrorLogData,

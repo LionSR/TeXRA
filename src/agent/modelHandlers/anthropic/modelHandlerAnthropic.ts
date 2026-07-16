@@ -33,7 +33,7 @@ import type {
   ExtractResponseResult,
   AnthropicToolCall,
   TokenCountOptions,
-} from '@agent/types/IModelHandler';
+} from '@agent/types/ModelHandlerContracts';
 import {
   attachStreamDiagnostics,
   handleStreamingFailure,
