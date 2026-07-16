@@ -330,22 +330,32 @@ jobs:
     name: docs build
     needs: changes
     # Runs only for docs-only PRs (where the heavy validation jobs are
-    # skipped). The VitePress docs are a self-contained npm sub-project, so
-    # this mirrors docs-deploy.yml's install/build rather than the pnpm
-    # workspace.
-    if: needs.changes.outputs.code != 'true'
+    # skipped). Formatting still uses the root workspace's pinned Prettier;
+    # VitePress then builds from its self-contained npm sub-project.
+    if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: docs/package-lock.json
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install formatting dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Check formatting
+        run: pnpm run format:check
 
       - name: Install docs dependencies
         working-directory: docs

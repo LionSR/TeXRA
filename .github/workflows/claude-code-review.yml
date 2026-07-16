@@ -51,14 +51,24 @@ jobs:
 
     steps:
       # Consume the trigger label so a later `re-review` re-application fires
-      # a fresh run. Runs per matrix provider; the second delete 404s harmlessly.
+      # a fresh run. Fork PR tokens are read-only; their review jobs already
+      # skip because provider credentials are unavailable. Runs per matrix
+      # provider; the second delete 404s harmlessly.
       - name: Remove re-review label
-        if: github.event.action == 'labeled'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh pr edit "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" --remove-label re-review || true
+        if: github.event.action == 'labeled' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 're-review',
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
 
       - name: Check Claude review switch
         id: claude-switch

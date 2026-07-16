@@ -27,17 +27,27 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
       pull-requests: write
     steps:
       # Consume the trigger label so a later `re-review` re-application fires
-      # a fresh run.
+      # a fresh run. Fork PR tokens are read-only and their provider-key check
+      # below skips the review.
       - name: Remove re-review label
-        if: github.event.action == 'labeled'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh pr edit "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" --remove-label re-review || true
+        if: github.event.action == 'labeled' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 're-review',
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
 
       # Provider keys are unavailable to pull_request runs from forks; skip
       # gracefully instead of failing the agent when no key is configured.
