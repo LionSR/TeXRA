@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, watch, type FSWatcher } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname, join, resolve as resolvePath } from 'node:path';
@@ -13,6 +13,7 @@ import {
 } from 'electron';
 
 import { platform } from '@platform/platform';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
@@ -40,6 +41,8 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
+import { DEBOUNCE_OPTIONS_MS } from '@utils/config';
+import { debounce } from '@utils/core';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 import {
   checkToolInstalled,
@@ -905,6 +908,40 @@ function createWindow(options: {
     showErrorMessage: settingsUi.showErrorMessage,
     onError: settingsUi.onError,
   });
+  // Cross-host history refresh (#8625): the shared ~/.texra executions dir
+  // is written by the CLI and extension too, so the settings history list
+  // re-posts when any host adds, finishes, or deletes a run. heartbeat.json
+  // churn (touched every 10s per live run) is filtered; best-effort — a
+  // watch failure only means no live refresh, manual refresh still works.
+  const executionsDir = join(
+    platform().storage.getStoragePath(),
+    RUNS_STORAGE_DIR,
+  );
+  const debouncedHistoryRepost = debounce(async () => {
+    if (windowClosed) return;
+    await historySettingsController.postHistoryData();
+  }, DEBOUNCE_OPTIONS_MS);
+  let executionsWatcher: FSWatcher | undefined;
+  try {
+    mkdirSync(executionsDir, { recursive: true });
+    executionsWatcher = watch(
+      executionsDir,
+      { recursive: true },
+      (_event, filename) => {
+        // filename may be a Buffer (or null) per fs.watch's contract; the
+        // separator anchor avoids matching an unrelated *heartbeat.json name.
+        if (
+          filename != null &&
+          /(?:^|[\\/])heartbeat\.json$/.test(String(filename))
+        ) {
+          return;
+        }
+        void debouncedHistoryRepost();
+      },
+    );
+  } catch (error) {
+    reportAsyncError(error);
+  }
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     agentSettingsController,
@@ -1111,6 +1148,7 @@ function createWindow(options: {
   installDesktopMenu(shellActions);
   window.once('closed', () => {
     windowClosed = true;
+    executionsWatcher?.close();
     if (mainWindow === window) {
       mainWindow = null;
     }
