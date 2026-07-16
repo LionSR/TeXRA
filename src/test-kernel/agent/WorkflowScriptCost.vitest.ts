@@ -10,6 +10,7 @@ import {
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import {
   sumCompletedWorkflowJournalCost,
+  workflowJournalEntryCostIdentity,
   WorkflowJournalCostError,
 } from '@tools/delegation/workflowScriptRun';
 
@@ -22,8 +23,12 @@ const meta = `export const meta = {
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
-function entry(index: number, result: unknown): WorkflowJournalEntry {
-  return { index, key, result };
+function entry(
+  index: number,
+  result: unknown,
+  entryKey = key,
+): WorkflowJournalEntry {
+  return { index, key: entryKey, result };
 }
 
 function workflowResult(cost: number): unknown {
@@ -65,6 +70,20 @@ describe('workflow-script completed journal cost', () => {
     delete result.cost;
 
     expect(sumCompletedWorkflowJournalCost([entry(0, result)])).toBe(0);
+  });
+
+  it('counts live replacements when prior keys move to different indices', () => {
+    const prior = [
+      entry(2, workflowResult(1), 'aaaaaaaaaaaaaaaa'),
+      entry(3, workflowResult(0.8), 'bbbbbbbbbbbbbbbb'),
+    ];
+    const settledEntries = new Set(prior.map(workflowJournalEntryCostIdentity));
+    const retry = [
+      entry(2, workflowResult(0.85), 'bbbbbbbbbbbbbbbb'),
+      entry(3, workflowResult(1.05), 'aaaaaaaaaaaaaaaa'),
+    ];
+
+    expect(sumCompletedWorkflowJournalCost(retry, settledEntries)).toBe(1.9);
   });
 
   it.each([

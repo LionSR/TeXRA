@@ -27,6 +27,7 @@ import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
 import {
   runPersistedWorkflowScriptWithProgress,
   sumCompletedWorkflowJournalCost,
+  workflowJournalEntryCostIdentity,
 } from './workflowScriptRun';
 
 const WorkflowScriptToolInputSchema = z.strictObject({
@@ -96,7 +97,7 @@ Durable resume is content-keyed: re-running the identical script and args in thi
     // still validated so malformed entries fail closed.
     const settledEntries = new Set(
       (await readWorkflowScriptCheckpoint(store, checkpointId))?.journal.map(
-        (entry) => entry.index,
+        workflowJournalEntryCostIdentity,
       ),
     );
     let costSettled = false;
