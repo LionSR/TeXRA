@@ -15,6 +15,12 @@ export const WorkflowScriptMetaSchema = z.object({
   description: z.string().min(1),
   whenToUse: z.string().optional(),
   phases: z.array(WorkflowScriptPhaseSchema).optional(),
+  /** Whole-run wall clock, bounded; an explicit run option still wins. */
+  timeoutMs: z
+    .int()
+    .min(1_000)
+    .max(60 * 60 * 1000)
+    .optional(),
 });
 
 export type WorkflowScriptMeta = z.infer<typeof WorkflowScriptMetaSchema>;
