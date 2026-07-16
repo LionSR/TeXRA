@@ -36,9 +36,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api -X DELETE \
-            "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/re-review" \
-            || true
+          gh pr edit "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" --remove-label re-review || true
 
       # Provider keys are unavailable to pull_request runs from forks; skip
       # gracefully instead of failing the agent when no key is configured.
