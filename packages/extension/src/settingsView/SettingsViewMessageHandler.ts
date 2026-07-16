@@ -8,6 +8,8 @@
  * - AgentHandlers: agent selection, directories, and teams
  * - LatexSettingsHandlers: LaTeX tool detection and recommended settings
  */
+import * as path from 'node:path';
+
 import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
@@ -23,7 +25,10 @@ import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
 } from '@platform/languageModel';
-import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
+import {
+  resolveMemoryStoragePath,
+  RUNS_STORAGE_DIR,
+} from '@platform/defaults/workspaceStorage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -85,6 +90,8 @@ import {
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import { StorageFS } from '@utils/files';
+import { debounce } from '@utils/core';
+import { DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { hasExtension } from '@utils/core/pathCore';
 import {
   buildGitAuthorSettingsMessage,
@@ -153,6 +160,7 @@ export function planToolTerminalAction(input: {
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
+  private executionsWatcher: vscode.FileSystemWatcher | undefined;
   private readonly handlerRegistry: SettingsViewInboundHandlerRegistry;
 
   // Domain-specific handler delegates
@@ -278,6 +286,52 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       void this.withActiveWebview((w) => this.sendGoalList(w));
     });
     context.subscriptions.push({ dispose: unsubscribeGoals });
+
+    // Cross-host history refresh (#8625): the shared ~/.texra executions dir
+    // is written by the CLI and desktop too, so an open history tab re-lists
+    // when any host adds, finishes, or deletes a run. Re-registered on
+    // workspace-folder changes because the storage path follows the current
+    // workspace.
+    void this.registerExecutionsWatcher();
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        void this.registerExecutionsWatcher();
+      }),
+      { dispose: () => this.executionsWatcher?.dispose() },
+    );
+  }
+
+  /**
+   * Watch the shared executions directory (outside the workspace, hence the
+   * RelativePattern base) and re-send the history list to the active settings
+   * webview. heartbeat.json churn (touched every 10s per live run, #8652) is
+   * filtered out; the debounce coalesces launch/terminal write bursts.
+   */
+  private async registerExecutionsWatcher(): Promise<void> {
+    this.executionsWatcher?.dispose();
+    const executionsDir = path.join(
+      platform().storage.getStoragePath(),
+      RUNS_STORAGE_DIR,
+    );
+    // A watcher rooted at a not-yet-existing directory can silently never
+    // fire; the dir is cheap to create and always wanted.
+    await StorageFS.ensureDir(RUNS_STORAGE_DIR);
+    const refreshHistory = debounce(
+      () =>
+        this.withActiveWebview((w) => this.historyHandlers.sendHistoryData(w)),
+      DEBOUNCE_OPTIONS_MS,
+    );
+    const onExecutionsEvent = (uri: vscode.Uri) => {
+      if (uri.path.endsWith('/heartbeat.json')) return;
+      void refreshHistory();
+    };
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.file(executionsDir), '**'),
+    );
+    watcher.onDidCreate(onExecutionsEvent);
+    watcher.onDidChange(onExecutionsEvent);
+    watcher.onDidDelete(onExecutionsEvent);
+    this.executionsWatcher = watcher;
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
