@@ -294,6 +294,10 @@ export async function initializeElectronPlatform(
       },
       agentDirectories,
       getWorkspacePath: () => workspacePath,
+      getLegacyWorkspacePaths: () =>
+        legacyWorkspacePath && legacyWorkspacePath !== workspacePath
+          ? [legacyWorkspacePath]
+          : [],
     }),
   );
 

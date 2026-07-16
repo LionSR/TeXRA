@@ -13,14 +13,16 @@
 
 // Node imports
 import { constants, existsSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import {
   copyFile,
-  link,
+  cp,
   lstat,
   mkdir,
   readlink,
   readdir,
   rename,
+  rm,
   symlink,
   unlink,
 } from 'node:fs/promises';
@@ -56,12 +58,7 @@ async function moveEntryNoReplace(
 ): Promise<void> {
   const entry = await lstat(legacyPath);
   if (entry.isFile()) {
-    try {
-      await link(legacyPath, targetPath);
-    } catch (error) {
-      if (errorCodeOf(error) !== 'EXDEV') throw error;
-      await copyFile(legacyPath, targetPath, constants.COPYFILE_EXCL);
-    }
+    await copyFile(legacyPath, targetPath, constants.COPYFILE_EXCL);
     await unlink(legacyPath);
     return;
   }
@@ -73,7 +70,28 @@ async function moveEntryNoReplace(
 
   // Directory rename cannot replace a non-empty directory. It may replace an
   // empty directory created in the race window, which loses no user data.
-  await rename(legacyPath, targetPath);
+  try {
+    await rename(legacyPath, targetPath);
+  } catch (error) {
+    if (errorCodeOf(error) !== 'EXDEV') throw error;
+
+    // Copy into a private sibling on the target volume, then publish it with
+    // one rename. A failed or racing migration therefore exposes neither a
+    // partial directory nor an overwrite of an existing non-empty target.
+    const stagingPath = `${targetPath}.migrating-${randomUUID()}`;
+    try {
+      await cp(legacyPath, stagingPath, {
+        recursive: true,
+        errorOnExist: true,
+        force: false,
+        preserveTimestamps: true,
+      });
+      await rename(stagingPath, targetPath);
+      await rm(legacyPath, { recursive: true });
+    } finally {
+      await rm(stagingPath, { recursive: true, force: true });
+    }
+  }
 }
 
 export async function moveEntryIfAbsent(

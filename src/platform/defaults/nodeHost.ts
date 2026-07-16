@@ -65,6 +65,8 @@ export interface NodePlatformServices {
   readonly agentDirectories: AgentDirectoriesPort;
   /** Current workspace root, read lazily so the host can update it later. */
   readonly getWorkspacePath: () => string | undefined;
+  /** Previous workspace spellings consulted only by one-time migrations. */
+  readonly getLegacyWorkspacePaths?: () => readonly string[];
   /** Host-specific availability overrides merged over the no-op defaults. */
   readonly toolAvailability?: Partial<ToolAvailabilityHost>;
 }
@@ -98,7 +100,10 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
     globalState: services.globalState,
     workspaceState: services.workspaceState,
     fs: nodeFilesystem,
-    workspace: createNodeWorkspace(services.getWorkspacePath),
+    workspace: createNodeWorkspace(
+      services.getWorkspacePath,
+      services.getLegacyWorkspacePaths,
+    ),
     storage: services.storage,
     secrets: services.secrets,
     lifecycle: services.lifecycle,

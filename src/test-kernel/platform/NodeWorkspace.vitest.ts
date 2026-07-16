@@ -55,4 +55,25 @@ describe('Node workspace identity', () => {
       join(await realpath(tmpdir()), basename(missing)),
     );
   });
+
+  it('keeps a path through a child symlink relative to the workspace', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'texra-child-link-workspace-'));
+    const outside = await mkdtemp(join(tmpdir(), 'texra-child-link-target-'));
+    tempDirs.push(root, outside);
+    const link = join(root, 'linked');
+    await symlink(outside, link, 'dir');
+
+    const workspace = createNodeWorkspace(() => root);
+    expect(workspace.asRelativePath(join(link, 'new.tex'))).toBe(
+      'linked/new.tex',
+    );
+  });
+
+  it('exposes legacy workspace spellings only when supplied by the host', () => {
+    const workspace = createNodeWorkspace(
+      () => '/workspace/physical',
+      () => ['/workspace/link'],
+    );
+    expect(workspace.getLegacyWorkspacePaths?.()).toEqual(['/workspace/link']);
+  });
 });

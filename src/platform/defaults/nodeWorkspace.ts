@@ -43,6 +43,7 @@ export function canonicalizeWorkspacePath(workspacePath: string): string {
 
 export function createNodeWorkspace(
   getRoot: () => string | undefined = () => process.cwd(),
+  getLegacyRoots?: () => readonly string[],
 ): WorkspaceProvider {
   return {
     getWorkspacePath(): string | undefined {
@@ -50,9 +51,18 @@ export function createNodeWorkspace(
       return root ? canonicalizeWorkspacePath(root) : undefined;
     },
 
+    ...(getLegacyRoots && { getLegacyWorkspacePaths: getLegacyRoots }),
+
     asRelativePath(filePath: string): string {
-      const root = this.getWorkspacePath();
-      if (!root) return filePath;
+      const rawRoot = getRoot();
+      if (!rawRoot) return filePath;
+      const resolvedRoot = path.resolve(rawRoot);
+      const resolvedFilePath = path.resolve(filePath);
+      if (isPathWithin(resolvedRoot, resolvedFilePath)) {
+        return normalizeFilePath(path.relative(resolvedRoot, resolvedFilePath));
+      }
+
+      const root = canonicalizeWorkspacePath(rawRoot);
       const canonicalFilePath = canonicalizeWorkspacePath(filePath);
       const relative = path.relative(root, canonicalFilePath);
       if (!isPathWithin(root, canonicalFilePath)) {
