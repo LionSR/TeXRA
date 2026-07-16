@@ -59,7 +59,7 @@ The extension host is bundled with esbuild and the webviews with Vite (`compile:
 ## Coding style
 
 - TypeScript code in repo-root `src/` and `packages/*/src/` targets ES2022.
-- Use the provided ESLint configuration (`eslint.config.mjs`) and Prettier settings (`.prettierrc`). Run `npm run format` before committing.
+- Use the provided ESLint configuration (`eslint.config.mjs`) and Prettier settings (`.prettierrc`). Run `npm run format` before committing. `import/order` and `no-nested-ternary` are enforced at error level.
 - Prefer `const` and `let` over `var`.
 - Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
 - Use the path aliases defined in `tsconfig.json` (for example `@frontend/*`, `@common/*`, `@utils/*`) instead of long relative import chains.
@@ -78,7 +78,8 @@ The extension host is bundled with esbuild and the webviews with Vite (`compile:
 ### Directory organization
 
 This repository is a pnpm workspace. Repo-root `src/` contains shared core logic and host-neutral tests,
-`packages/extension/` contains the VS Code extension, and `packages/desktop/` contains the Electron shell.
+`packages/extension/` contains the VS Code extension, `packages/desktop/` the Electron shell, `packages/cli/`
+the `texra` terminal client, and `packages/trace-viewer/` the standalone trace-viewer web app.
 There is currently no `@texra/core` workspace package. Hosts import shared core through the repo-root path
 aliases until a future SDK surface is enforced with a build and import-boundary lint gate.
 
@@ -106,7 +107,7 @@ aliases until a future SDK surface is enforced with a build and import-boundary 
   - `utils/text/` - Text, string, and XML processing utilities — the single home for generic string helpers (validation, truncation, duration/token/percent formatting)
   - `utils/prompt/` - Prompt builder utilities
 - `packages/extension/src/commands/` - VS Code commands grouped by domain
-- `packages/extension/src/settingsView/` - Unified settings webview combining History, Memory, Models, Agents, Multi-Agent, LaTeX, and Tools tabs
+- `packages/extension/src/settingsView/` - Unified settings webview combining Memory, History, Models, Agents, Multi-Agent, Tools, AI Agents, Git, LaTeX, and Goal tabs
 - `packages/extension/src/progressView/` - Task tracking board webview
 - `packages/extension/src/webview/` - Main agent interaction webview
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
@@ -125,6 +126,14 @@ aliases until a future SDK surface is enforced with a build and import-boundary 
 ### Zod v4 Schema Patterns
 
 This project uses Zod v4. Follow these idiomatic patterns:
+
+**Schemas as the single source of truth**
+
+- Define schemas first, then derive TypeScript types using `z.infer<typeof Schema>`
+- Use schema composition (`.extend()`, `.pick()`) instead of duplicating field definitions
+- Avoid `z.custom<T>()` when a proper schema exists; prefer `z.discriminatedUnion()` for union types
+- Co-locate types with schemas in the same file for maintainability
+- Add compile-time assertions (using `satisfies`) when schemas must stay synchronized with external types
 
 **Type definitions**
 
@@ -228,6 +237,31 @@ See: https://platform.openai.com/docs/guides/structured-outputs
 **Design for the model's first call**
 
 Any parameter with an obvious default should be optional with that default applied at dispatch time (`.nullish()` plus a default when the tool runs), not required. A required parameter that models routinely omit is a tool bug, not a model error. When a description string enumerates dispatch behavior (for example, "every command except X"), verify it against the actual dispatch table whenever either changes; the two can drift independently. Evidence: the memory tool once required `path` for `view`, so every fresh session rendered an error card until the model retried; the fix's own description string then misdescribed `rename` until review caught it.
+
+**Backward compatibility with legacy formats**
+
+When evolving persisted or wire data formats:
+
+- Use `z.union()` with `.transform()` to handle multiple formats in one schema
+- Put the new format first in the union (Zod tries members in order)
+- The legacy member transforms into the canonical structure
+- Handle legacy at the entry point using `safeParse`, not scattered fallbacks in consumers
+- One canonical format for all downstream code; never branch on format version
+
+```typescript
+// Canonical format (new)
+const NewFormatSchema = z.object({ revised: OutputFileInfoSchema, ... });
+
+// Legacy format transforms to canonical
+const LegacyFormatSchema = z.object({ baseLabel: z.string(), ... })
+  .transform((e): NewFormat => ({ /* map to canonical */ }));
+
+// Single entry point handles both
+const EntrySchema = z.union([NewFormatSchema, LegacyFormatSchema]);
+
+// Usage: always returns canonical format
+const result = EntrySchema.safeParse(raw);
+```
 
 ### ES2023+ Patterns
 
@@ -397,12 +431,11 @@ See `docs/pocketflow/` for full framework documentation.
 - **Dropdown Menus**: Should close when clicking outside, not just on toggle
 - **CSS Organization**: Keep per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`
 
-### Source Organization
+### UI anti-patterns
 
-VS Code commands live under `packages/extension/src/commands/` and are grouped by domain. Key folders include
-`agent/` for agent lifecycle and merge commands, `housekeeping/` for cleanup and packaging, `latex/` for
-LaTeX document tasks, `settings/` for settings view commands, and `system/` for editor helpers along with
-XML/YAML utilities. This structure keeps each area focused and aligns with the design philosophy of deep modules.
+**Render-time workarounds.** Never compensate for data model problems at render time; renderers only transform and display. Signs of a broken data model: `Date.now()` or synthetic IDs generated during rendering, DOM queries to check whether data exists before rendering, deduplication logic comparing rendered content. Fix: store data once at the source with all metadata (timestamps, IDs). If a renderer needs to generate or deduplicate, the upstream code path is missing data.
+
+**Duplicate UI controls.** One home per user action. Do not surface the same action (a dispatched event, a config/state write, or a command) from two controls; competing controls confuse users and drift out of sync. Secondary surfaces show read-only status, never a second control. Legitimate exceptions: a global default versus a per-item override, or one action as a command plus a single UI button. Grep procedure and details: code-review checklist § 5.
 
 ## Design and refactoring
 
@@ -422,15 +455,87 @@ adding new code or refactoring existing modules:
 - When your refactoring include a large number of renames, use search tools to make sure you are not missing any files or paths where changes need to be made.
 - **Share instances via constructors**: When managers share state, pass the shared dependency through the constructor. This keeps state consistent and dependencies explicit.
 
+### Flattening abstraction layers
+
+When refactoring, eliminate unnecessary wrapper functions and indirection layers:
+
+**Anti-pattern (too many layers):**
+
+```
+Node.exec()
+  → wrapperFunction()
+    → coreFunction()
+      → createFlow()
+      → flow.run()
+```
+
+**Preferred (direct execution):**
+
+```
+Node.exec()
+  → createFlow()
+  → flow.run()
+```
+
+**Guidelines:**
+
+- Nodes should create and run flows directly in `exec()`, not delegate to wrapper functions
+- If a wrapper only creates state + runs flow + interprets results, inline it
+- Delete wrapper files entirely when they become unused (don't leave empty re-exports)
+- Update tests to use the underlying flow directly rather than through wrappers
+- Update imports to point to the source of truth (e.g., `CycleServices` not re-exporting files)
+
+### Discouraged factory patterns
+
+Avoid these patterns that add indirection without value:
+
+**Two-layer factories (called once):**
+
+```typescript
+// ❌ Anti-pattern: buildX only called from createX
+export function createContext(init) {
+  const services = buildServices(init);  // ← Extra layer
+  return { services, ... };
+}
+function buildServices(init) { ... }
+
+// ✅ Preferred: Inline if only called once
+export function createContext(init) {
+  const services = { ... };  // ← Direct
+  return { services, ... };
+}
+```
+
+**Trivial identity factories:**
+
+```typescript
+// ❌ Anti-pattern: Just spreads into new object
+function createOptions(options: Options): Options {
+  return { ...options };
+}
+
+// ✅ Preferred: Use object literal directly
+const options: Options = { ... };
+```
+
+**When factories ARE justified:**
+
+- Called from multiple locations (DRY)
+- Contain meaningful logic (validation, defaults, transforms)
+- Create class instances or complex objects
+- Need to capture closures with initialization context
+
+At review time this extends into the abstraction-cost guardrails (code-review checklist § 13): grep the caller count before approving any new shared helper (single-caller extractions are banned), and hold new ports/facades/template-methods to build-implies-delete-in-the-same-PR with net-LOC accounting.
+
 ## Code quality rules
 
-These rules were earned from a 2026-07 whole-repo simplification campaign, not derived top-down. Each one carries the evidence that motivated it, so a future reader can tell it was learned rather than theorized. They complement, and don't restate, the guardrails already documented in CLAUDE.md: "Discouraged Factory Patterns", "Render-Time Workarounds", "Flattening Abstraction Layers", the abstraction-cost guardrails, and the Zod-as-SSOT guidance above.
+These rules were earned from a 2026-07 whole-repo simplification campaign, not derived top-down. Each one carries the evidence that motivated it, so a future reader can tell it was learned rather than theorized. They complement, and don't restate, the guardrails documented in this file: "Flattening abstraction layers" and "Discouraged factory patterns" above, "UI anti-patterns", the abstraction-cost guardrails (code-review checklist § 13), and the Zod-as-SSOT guidance above.
 
-- **Exports are contracts; default to file-local.** A new export needs a consumer in the same PR. Across the 2026-07 campaign, five separate areas' main cleanup yield was deleting exports with zero outside consumers (20 in `src/tools` alone). Mechanical enforcement lives in the dead-export ratchet (being tightened in a separate PR); this is the principle behind it.
+- **Exports are contracts; default to file-local.** A new export needs a consumer in the same PR. Across the 2026-07 campaign, five separate areas' main cleanup yield was deleting exports with zero outside consumers (20 in `src/tools` alone). Mechanical enforcement lives in the dead-export ratchet (`npm run check:dead-code-ratchet`, per-symbol baseline in `config/ratchets/knip-baseline.json`; any unused export not in the baseline fails the check); this is the principle behind it.
 
 - **No convenience barrels.** A barrel/index re-export file exists only for a documented public surface (for example, the trace events SDK contract, which declares its surface in its own docstring). Everything else imports the file that defines the symbol directly — this includes model handlers (`src/agent/modelHandlers/`; see that directory's `README.md`), which have no barrel and no re-export shims. The campaign deleted dead barrels in `workflowScript/`, `storage/`, and `index/` that no caller actually used.
 
-- **Never hand out a shared mutable literal.** A module-level object that a function returns, or that crosses a module boundary, must be frozen (`as const` plus `Object.freeze`) or produced fresh by a factory that returns a new object each call; see CLAUDE.md's "Discouraged Factory Patterns" for when a factory is and isn't warranted. `Object.freeze` is shallow — for a literal with nested objects/arrays, or for a `Map`/`Set`, either deep-freeze it or use a factory, since a shallow freeze doesn't stop mutation of nested values or calls like `.set()`/`.add()`. A campaign consolidation once replaced fresh no-retry result literals with a single shared constant; the resulting aliasing behavior change was caught only by a follow-up factory rewrite and a `notStrictEqual` regression test.
+- **Never hand out a shared mutable literal.** A module-level object that a function returns, or that crosses a module boundary, must be frozen (`as const` plus `Object.freeze`) or produced fresh by a factory that returns a new object each call; see "Discouraged factory patterns" above for when a factory is and isn't warranted. `Object.freeze` is shallow — for a literal with nested objects/arrays, or for a `Map`/`Set`, either deep-freeze it or use a factory, since a shallow freeze doesn't stop mutation of nested values or calls like `.set()`/`.add()`. A campaign consolidation once replaced fresh no-retry result literals with a single shared constant; the resulting aliasing behavior change was caught only by a follow-up factory rewrite and a `notStrictEqual` regression test.
 
 - **Global registration requires a global consumer.** Register something globally (components, commands, providers) only when an external surface actually references it; consumers that are internal-only import locally instead. The docs theme once globally registered two components that no markdown page used.
 

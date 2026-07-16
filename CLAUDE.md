@@ -40,25 +40,19 @@ npm run format
 
 # Run the test suite (Vitest)
 npm test
+
+# Type check (builds don't; esbuild only strips types)
+npm run typecheck
+
+# Dead-export gate (fails on any unused export not in config/ratchets/knip-baseline.json)
+npm run check:dead-code-ratchet
 ```
 
 ### Builds and Type Checking
 
-All builds use esbuild (for the extension host) and Vite (for webviews); the legacy webpack pipeline has been removed, and `npm run compile` / `watch` / `package` are aliases for the `:fast` variants:
+All builds use esbuild (for the extension host) and Vite (for webviews); the legacy webpack pipeline has been removed, and `npm run compile` / `watch` / `package` are aliases for the `:fast` variants listed above.
 
-- `npm run compile:fast` - Development build
-- `npm run watch:fast` - Watch mode for development
-- `npm run package:fast` - Production build
-- `npm run build:fast` - Build VSIX extension file
-- `npm run build:initial` - Build desktop plus VSIX artifacts and verify both
-
-**Important:** These builds do NOT perform TypeScript type checking (esbuild only strips types). To verify there are no type errors, run:
-
-```bash
-npm run typecheck
-```
-
-Alternatively, use `npm run compile:safe` which runs type checking before building.
+**Important:** These builds do NOT perform TypeScript type checking (esbuild only strips types). Run `npm run typecheck`, or use the `:safe` variants (`compile:safe`, `package:safe`, `build:safe`) that type check before building. Build-system rationale and the full safe-script table: AGENTS.md "Build system: esbuild + Vite".
 
 ### Local CLI (`texra-local`)
 
@@ -82,7 +76,7 @@ The core of TeXRA is its agent architecture in repo-root `src/agent/`:
 
 - **`core/`** holds the host-agnostic domain model, organized by bounded concern: `definition/` (what an agent is), `state/` (run-state snapshots), `usage/` (usage value objects), `tools/` (tool contracts), and `flows/` (reusable cycle primitives). See `src/agent/core/README.md` for the module map and dependency rules.
 - **`implementations/flows/`** provides the PocketFlow-based flow implementations (`reflection`, `tooluse`, `agentCreator`)
-- **`modelHandlers/`** abstracts AI provider APIs (Anthropic, OpenAI, Google, OpenRouter)
+- **`modelHandlers/`** abstracts AI provider APIs (Anthropic, OpenAI and OpenAI-compatible families, Google, OpenRouter, VS Code LM). No barrel: import via the `@agent/modelHandlers/<provider>/<File>` alias, per that directory's `README.md`
 - Agents are configured via YAML files in `packages/extension/resources/agents/`
 
 Agent prompts handle single and multi-document output through one unified YAML per agent. Workflow edit prompts use the input filenames as the output filenames, and agents that generate new artifacts may declare `defaultOutputFiles` and refer to `OUTPUT_FILES`.
@@ -95,6 +89,7 @@ This repository is a pnpm workspace:
 - `packages/extension/` holds the VS Code extension entrypoint, commands, webviews, and packaged resources.
 - `packages/desktop/` holds the Electron desktop shell and adapters around the shared core.
 - `packages/cli/` holds the `texra` terminal client (Ink TUI plus headless `texra run` / `--print` modes).
+- `packages/trace-viewer/` holds the standalone trace-viewer web app (`@texra/trace-viewer`), built with Vite and bundled into host resources.
 - `src/hosts/` defines host capability ports used by both VS Code and Electron integrations.
 - `src/test-kernel/` contains Vitest suites for host-neutral and Electron-facing behavior.
 
@@ -123,6 +118,7 @@ Key directories in `src/`:
 - `skills/` - Skill schemas, loading, and runtime skill sources
 - `telemetry/` - Usage logging
 - `transcript/` - Stream logs, snapshots, and run transcript recording
+- `types/` - Ambient type declarations (`ambient.d.ts`)
 - `test-kernel/` - Vitest suites (run via `npm test`); shared fakes live in `test-kernel/support/`
 
 Key directories in `packages/extension/`:
@@ -161,136 +157,17 @@ Key documentation in `docs/`:
 - `system/` - Help, tests, XML/YAML utilities, editor commands
 - `tests/` - Test commands
 
-### Schema and Type Guidelines
+### Schemas (Zod v4)
 
-Use Zod schemas as the single source of truth for data structures:
+Zod schemas are the single source of truth for data structures: define the schema first, derive types with `z.infer`, compose with `.extend()`/`.pick()`, and prefer `z.discriminatedUnion()` over `z.custom<T>()`. Legacy data formats are normalized once at the entry point with a `z.union()` whose legacy member `.transform()`s into the one canonical format; downstream code never branches on format version. Full patterns (SSOT rules, the backward-compatibility union, `.prefault()`/`.catch()`/`.nullish()`, and tool-schema design): AGENTS.md "Zod v4 Schema Patterns".
 
-- **Define schemas first**, then derive TypeScript types using `z.infer<typeof Schema>`
-- **Use schema composition** (`.extend()`, `.pick()`) instead of duplicating field definitions
-- **Avoid `z.custom<T>()`** when a proper schema exists—prefer `z.discriminatedUnion()` for union types
-- **Co-locate types with schemas** in the same file for maintainability
-- **Add compile-time assertions** (using `satisfies`) when schemas must stay synchronized with external types
+### Abstraction discipline
 
-This project uses **Zod v4**. See AGENTS.md for idiomatic Zod v4 patterns including `.prefault()`, `.catch()`, and `.nullish()` for tool schemas.
+Collapse pass-through layers: nodes create and run flows directly in `exec()`; a wrapper that only creates state, runs a flow, and interprets results gets inlined; deleted wrappers leave no re-export shims behind. Factories are justified only by multiple callers, meaningful logic (validation, defaults, transforms), class construction, or captured initialization context; two-layer factories called once and identity factories that just spread into a new object are banned. At review time this extends into the **Abstraction-cost guardrails** (code-review checklist § 13): grep the caller count before approving any new shared helper (single-caller extractions are banned), and hold new ports/facades/template-methods to build-implies-delete-in-the-same-PR with net-LOC accounting. Full patterns with examples: AGENTS.md "Design and refactoring".
 
-### Backward Compatibility with Zod
+### UI anti-patterns
 
-When evolving data formats while maintaining backward compatibility:
-
-- **Use `z.union()` with `.transform()`** to handle multiple formats in one schema
-- **New format first** in the union (Zod tries in order)
-- **Legacy format transforms** into the canonical structure
-- **Handle legacy at entry point** using `safeParse`, not scattered fallbacks in consumers
-- **One canonical format** for all downstream code—no conditional handling based on format version
-
-Example pattern:
-
-```typescript
-// Canonical format (new)
-const NewFormatSchema = z.object({ revised: OutputFileInfoSchema, ... });
-
-// Legacy format transforms to canonical
-const LegacyFormatSchema = z.object({ baseLabel: z.string(), ... })
-  .transform((e): NewFormat => ({ /* map to canonical */ }));
-
-// Single entry point handles both
-const EntrySchema = z.union([NewFormatSchema, LegacyFormatSchema]);
-
-// Usage: always returns canonical format
-const result = EntrySchema.safeParse(raw);
-```
-
-### Flattening Abstraction Layers
-
-When refactoring, eliminate unnecessary wrapper functions and indirection layers:
-
-**Anti-pattern (too many layers):**
-
-```
-Node.exec()
-  → wrapperFunction()
-    → coreFunction()
-      → createFlow()
-      → flow.run()
-```
-
-**Preferred (direct execution):**
-
-```
-Node.exec()
-  → createFlow()
-  → flow.run()
-```
-
-**Guidelines:**
-
-- Nodes should create and run flows directly in `exec()`, not delegate to wrapper functions
-- If a wrapper only creates state + runs flow + interprets results, inline it
-- Delete wrapper files entirely when they become unused (don't leave empty re-exports)
-- Update tests to use the underlying flow directly rather than through wrappers
-- Update imports to point to the source of truth (e.g., `CycleServices` not re-exporting files)
-
-### Discouraged Factory Patterns
-
-Avoid these patterns that add indirection without value:
-
-**Two-layer factories (called once):**
-
-```typescript
-// ❌ Anti-pattern: buildX only called from createX
-export function createContext(init) {
-  const services = buildServices(init);  // ← Extra layer
-  return { services, ... };
-}
-function buildServices(init) { ... }
-
-// ✅ Preferred: Inline if only called once
-export function createContext(init) {
-  const services = { ... };  // ← Direct
-  return { services, ... };
-}
-```
-
-**Trivial identity factories:**
-
-```typescript
-// ❌ Anti-pattern: Just spreads into new object
-function createOptions(options: Options): Options {
-  return { ...options };
-}
-
-// ✅ Preferred: Use object literal directly
-const options: Options = { ... };
-```
-
-**When factories ARE justified:**
-
-- Called from multiple locations (DRY)
-- Contain meaningful logic (validation, defaults, transforms)
-- Create class instances or complex objects
-- Need to capture closures with initialization context
-
-At review time this extends into the **Abstraction-cost guardrails** (code-review checklist § 13): grep the caller count before approving any new shared helper (single-caller extractions are banned), and hold new ports/facades/template-methods to build-implies-delete-in-the-same-PR with net-LOC accounting.
-
-### Render-Time Workarounds (Anti-pattern)
-
-Never compensate for data model problems at render time. Renderers should only transform and display.
-
-**Signs of broken data model:**
-
-- `Date.now()` or synthetic IDs generated during rendering
-- DOM queries to check if data exists before rendering
-- Deduplication logic comparing rendered content
-
-**Fix:** Store data once at the source with all metadata (timestamps, IDs). If renderers need to generate or deduplicate, the upstream code path is missing data.
-
-### Duplicate UI Controls (Anti-pattern)
-
-One home per user action. Don't surface the same action (a dispatched event, a
-config/state write, or a command) from two controls; competing controls confuse
-users and drift out of sync. Secondary surfaces show read-only status, never a
-second control. Legit: a global default vs a per-item override, or one action as
-a command plus a single UI button. Grep and details: code-review checklist § 5.
+Two standing bans, detailed in AGENTS.md "UI anti-patterns": never compensate for data-model problems at render time (no `Date.now()`, synthetic IDs, or dedup logic in renderers; fix the upstream data), and one home per user action (never surface the same action from two controls; secondary surfaces show read-only status). Duplicate-control grep procedure: code-review checklist § 5.
 
 ### Terminal UI (CLI / Ink) discipline
 
@@ -320,7 +197,7 @@ mouse-scroll for finalized history, so don't reinvent them.
   belongs to that child's Static scrollback owner and Ctrl-T transcript viewer.
   Cap root panels (`BOTTOM_PANEL_MAX_ROWS`) so chrome never pushes the input
   off-screen. Don't park finalized content in the live region "for now."
-- **Stateless renderers.** Tool / diff / markdown components are props-in → JSX-out (the "Render-Time Workarounds" rule, applied to the TUI). No `Date.now()`, synthetic ids, or dedup at render time. Any view-level toggle (collapse/expand, focus) belongs in shared signal state (`state/cliState.ts`), not per-component local state.
+- **Stateless renderers.** Tool / diff / markdown components are props-in → JSX-out (the render-time workarounds ban from "UI anti-patterns", applied to the TUI). No `Date.now()`, synthetic ids, or dedup at render time. Any view-level toggle (collapse/expand, focus) belongs in shared signal state (`state/cliState.ts`), not per-component local state.
 - **Defer non-terminal content to the host.** The TUI does not render PDFs, LaTeX figures, or inline images (iTerm2 / Kitty / Sixel). Hand previews to the webview/desktop or the OS opener. The terminal is for chat, text, and diffs; rebuilding a document viewer in cells is out of scope.
 - **Capability-gate terminal features.** Negotiate support via the DA1-sentinel discovery (`state/terminalCapabilities.ts`) before emitting Kitty-keyboard, OSC color, bracketed-paste, or notification sequences. No "assume a modern terminal" feature use.
 - **Headless parity is sacred.** The TUI runs only on an interactive TTY. `texra run`, `--print/-p`, and `--output-format json|ndjson` must stay byte-identical — never let Ink rendering, ANSI chrome, or spinners leak into the piped / non-TTY path.
@@ -429,10 +306,8 @@ For good separation of concerns, testability, and platform independence, core bu
 **Patterns for keeping code platform-agnostic:**
 
 - Reach host services through `platform()` from `@platform/platform` (config, state, log, fs, workspace, storage, secrets) — never import `vscode` in agnostic zones.
-- Use `isFile()` / `isDirectory()` from `@utils/files/fsEntryType` instead of `vscode.FileType`
-- Use `isFileNotFoundError()` from `@common/errors` instead of `instanceof vscode.FileSystemError`
-- Return error results instead of calling `vscode.window.show*Message()` from business logic — let the caller (command layer) handle UI
 - Add typed `Platform` ports (like `toolAvailability.isVscodeExtensionInstalled`) for platform-specific capabilities needed in agnostic code
+- Helper substitutions for `vscode` types (`isFile`/`isDirectory`, `isFileNotFoundError`, numeric file types) and the push-UI-to-the-caller rule: AGENTS.md "Platform decoupling rules"
 - New run-scoped facts extend `AgentEvent` (trace), and session-scoped facts extend `SessionFact` — never a new `bus.emit` from a VS Code-free zone, and never a new subscribe surface. (Ruled in `docs/proposals/error-pipeline-and-ownership.md`. The direct `bus.emit` sites in `src/tools` that this rule once grandfathered have since been migrated to session-owned event-hub emission — see `SessionHandle.events` / `SessionEventHub` in `src/agent/runtime/` — so the exception no longer applies; a new direct `bus.emit` from a VS Code-free zone is a rule violation, not a grandfathered pattern.)
 
 ### Path Aliases
@@ -462,7 +337,7 @@ Common aliases (full list in `tsconfig.json`):
 
 ### New Model Provider
 
-1. Create handler in `src/agent/modelHandlers/`
+1. Create handler under `src/agent/modelHandlers/<provider>/` (no barrel; consumers import via the `@agent/modelHandlers/<provider>/<File>` alias)
 2. Register capabilities and pricing in `src/model/computeModelOptions.ts`
 
 ## Release Process
@@ -479,4 +354,4 @@ TeXRA ships three release tracks off the same commit, with identical user-facing
 4. **Desktop**: `.github/workflows/desktop-package.yml` is `workflow_dispatch`-only (not release-triggered) — build signed macOS/Linux/Windows installers and publish them to the public `texra-ai/texra-desktop-releases` repo by dispatching it with `run_desktop_installers`, `run_windows_desktop`, `require_desktop_signing`, and `publish_desktop_release_artifacts` all `true`.
 5. If this release changes `llm-zoo`, also update the exact pin in `supabase/functions/relay/deno.json` and refresh `supabase/functions/relay/deno.lock` (called out in the `version-bump.yml` PR body, but easy to miss since it isn't part of the automated bump).
 
-**Changelog guidelines**: Focus on user-visible changes. Never document intermediate bugs fixed within the same PR.
+**Changelog guidelines**: Focus on user-visible changes. Never document intermediate bugs fixed within the same PR. Full rules: AGENTS.md "Changelog Guidelines".

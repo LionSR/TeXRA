@@ -1,6 +1,6 @@
 # TeXRA Review Checklist
 
-Targeted greps + concrete fixes. Pair with the design rules in `CLAUDE.md` (Zod, Flattening Abstraction Layers, Discouraged Factory Patterns, Render-Time Workarounds, Separation of Concerns) — don't restate those; consult them when the diff lands in their territory.
+Targeted greps + concrete fixes. Pair with the design rules in `CLAUDE.md` (Schemas, Abstraction discipline, UI anti-patterns, Separation of Concerns) and their full patterns in `AGENTS.md` (Zod v4 Schema Patterns, Flattening abstraction layers, Discouraged factory patterns, UI anti-patterns) — don't restate those; consult them when the diff lands in their territory.
 
 ## 1. Platform decoupling (highest-signal)
 
@@ -17,7 +17,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of Concerns: VS Code Cou
 
 ## 2. Zod v4 schema correctness
 
-Design rules in `CLAUDE.md` → "Schema and Type Guidelines" / "Backward Compatibility with Zod" and `AGENTS.md` → "Zod v4 Schema Patterns". Greps for the diff:
+Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as the single source of truth" and "Backward compatibility with legacy formats"; summary in `CLAUDE.md` → "Schemas (Zod v4)"). Greps for the diff:
 
 - **Tool input schemas using `.optional()`** instead of `.nullish()` (breaks DeepSeek/Kimi/etc. structured output). At use sites, check for `=== undefined` (should be `== null`).
 - **Verbose old-style types**: `.string().int()`, `.string().uuid()`, `.string().datetime()`, `.nativeEnum`, `.passthrough()` → `.int()`, `.uuid()`, `.iso.datetime()`, `.enum()`, `.looseObject()`.
@@ -45,7 +45,7 @@ Design rules in `CLAUDE.md` → "Schema and Type Guidelines" / "Backward Compati
 
 ## 5. Webview / render-time
 
-`CLAUDE.md` → "Render-Time Workarounds" already lists the anti-patterns. Greps for the diff:
+`AGENTS.md` → "UI anti-patterns" already lists the anti-patterns. Greps for the diff:
 
 - **`Date.now()` or synthetic IDs inside render functions** → move ID/timestamp creation to the producer.
 - **Lit components mutating shared state** → dispatch events; let the manager handle (`StreamTabs`, `LogList`, `OutputFilesManager`, `WebviewUpdater`, `UsageStatsManager`).
@@ -53,7 +53,7 @@ Design rules in `CLAUDE.md` → "Schema and Type Guidelines" / "Backward Compati
 - **Webview providers/handlers not extending `BaseViewContentProvider` / `BaseViewMessageHandler`** (`src/common/webview/`).
 - **String literals for webview commands** → constants in `src/common/webview/commands.ts`.
 - **New shared module path referenced without updating `localResourceRoots`** → 401 at runtime.
-- **The same action exposed from two UI surfaces** → one home per action. Flag an `*Events.<name>(` creator dispatched from 2+ components, the same config/state/message key edited in 2+ tabs or views, or multiple UI controls wired to the same command/effect. Secondary surfaces show **read-only status**, not a second control. Legit: global default vs per-item override; a command plus a single UI button for one stable action. See `CLAUDE.md` → "Duplicate UI Controls".
+- **The same action exposed from two UI surfaces** → one home per action. Flag an `*Events.<name>(` creator dispatched from 2+ components, the same config/state/message key edited in 2+ tabs or views, or multiple UI controls wired to the same command/effect. Secondary surfaces show **read-only status**, not a second control. Legit: global default vs per-item override; a command plus a single UI button for one stable action. See `AGENTS.md` → "UI anti-patterns" (Duplicate UI controls).
 
 ## 6. Error handling and logging
 
@@ -72,8 +72,8 @@ Design rules in `CLAUDE.md` → "Schema and Type Guidelines" / "Backward Compati
 - **`npm test` invocations** added anywhere (scripts, CI, docs) → must not exist; downloads VS Code test env.
 - **Type-sensitive changes without mention of `npm run typecheck` / `compile:safe`** → `compile:fast`/`package:fast`/`build:fast` skip type checks.
 - **Long relative imports** (`../../../../`) where a path alias exists.
-- **Re-export shims** for renamed/removed code, "// removed" comments, `_unused` placeholder vars — delete cleanly per `CLAUDE.md` Flattening rules.
-- **Dead exports** (declared, no consumer). `grep -r "exportedSymbol" src/`.
+- **Re-export shims** for renamed/removed code, "// removed" comments, `_unused` placeholder vars — delete cleanly per `AGENTS.md` "Flattening abstraction layers".
+- **Dead exports** (declared, no consumer): `npm run check:dead-code-ratchet` fails on any new one; for a single symbol, `rg "exportedSymbol" src packages`.
 
 ## 9. Comments
 
@@ -114,7 +114,7 @@ Standing rules from the 2026-07 tech-debt re-calibration, which found that a run
 - **Build implies delete in the same PR.** A new port/facade/projector/strategy/template-method merges only if it deletes the path it replaces in that same PR. Deferral is allowed only with a ledger row **and** a concrete removal-trigger issue that is a merge-blocker for the next stage.
 - **No leapfrogging a migration.** A staged migration may not merge stage N+1 scaffolding while stage N's deletion issue is still open.
 - **Net-positive-LOC "reductions" need a reason.** Reject a PR titled `refactor:`/`simplify:`/`consolidate`/`dedupe`/`extract` that grows LoC unless it (a) deletes an old path, (b) collapses to a genuine ≥2-caller helper, or (c) trades LoC for a `CLAUDE.md`-mandated type-safety win (e.g. a discriminated union with `assertNever`). The PR body must state the actual `git diff --stat origin/main` net LoC and justify any positive number.
-- **No trivial-identity or single-caller extractions.** Grep the caller count before approving any new shared helper — one caller is not DRY. Extends `CLAUDE.md` → "Discouraged Factory Patterns".
+- **No trivial-identity or single-caller extractions.** Grep the caller count before approving any new shared helper — one caller is not DRY. Extends `AGENTS.md` → "Discouraged factory patterns".
 - **Don't reward activity.** A program/migration that opens more follow-up issues than it retires pauses further building until its tail closes.
 
 ## 14. Fewer-elements rulings (2026-07-07)
