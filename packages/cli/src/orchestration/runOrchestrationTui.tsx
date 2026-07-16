@@ -277,45 +277,62 @@ export function OrchestrationApp(
   const modelStepSubtitle = isPendingTeam
     ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
     : 'Model for the first message.';
-  const headerLines = modelAccessOpen
-    ? ['Model access', 'Choose how TeXRA should authenticate model calls.']
-    : resumeOpen
-      ? ['Resume', 'Choose a previous session to continue.']
-      : agentOpen
-        ? ['Agent', 'Choose one agent for this session.']
-        : teamOpen
-          ? ['Team', 'Choose a team for this session.']
-          : accountOpen
-            ? ['Account', 'Sign in, change account, or sign out.']
-            : pending
-              ? [
-                  `${modelStepTitle} · ${formatCliModelAccessRoute(props.apiMode)}`,
-                  modelStepSubtitle,
-                ]
-              : [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
+  let headerLines: readonly string[];
+  if (modelAccessOpen) {
+    headerLines = [
+      'Model access',
+      'Choose how TeXRA should authenticate model calls.',
+    ];
+  } else if (resumeOpen) {
+    headerLines = ['Resume', 'Choose a previous session to continue.'];
+  } else if (agentOpen) {
+    headerLines = ['Agent', 'Choose one agent for this session.'];
+  } else if (teamOpen) {
+    headerLines = ['Team', 'Choose a team for this session.'];
+  } else if (accountOpen) {
+    headerLines = ['Account', 'Sign in, change account, or sign out.'];
+  } else if (pending) {
+    headerLines = [
+      `${modelStepTitle} · ${formatCliModelAccessRoute(props.apiMode)}`,
+      modelStepSubtitle,
+    ];
+  } else {
+    headerLines = [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
+  }
+
+  let itemCount: number;
+  if (modelAccessOpen) {
+    itemCount = modelAccessItems.length;
+  } else if (resumeOpen) {
+    itemCount = props.resumeItems?.length ?? 0;
+  } else if (agentOpen) {
+    itemCount = agentItems.length;
+  } else if (teamOpen) {
+    itemCount = teamItems.length;
+  } else if (accountOpen) {
+    itemCount = props.accountItems?.length ?? 0;
+  } else if (pending) {
+    itemCount = modelItems.length;
+  } else {
+    itemCount = items.length;
+  }
+
+  let footerHints: readonly string[];
+  if (teamOpen) {
+    footerHints = orchestrationFooterHints(teamItems);
+  } else if (step.kind === 'launcher') {
+    footerHints = listFooterHints;
+  } else {
+    footerHints = [];
+  }
+
   const layout = orchestrationLauncherLayout({
     rows,
     columns,
-    itemCount: modelAccessOpen
-      ? modelAccessItems.length
-      : resumeOpen
-        ? (props.resumeItems?.length ?? 0)
-        : agentOpen
-          ? agentItems.length
-          : teamOpen
-            ? teamItems.length
-            : accountOpen
-              ? (props.accountItems?.length ?? 0)
-              : pending
-                ? modelItems.length
-                : items.length,
+    itemCount,
     headerLines,
     statusLines: step.kind === 'launcher' ? statusLines : [],
-    footerHints: teamOpen
-      ? orchestrationFooterHints(teamItems)
-      : step.kind === 'launcher'
-        ? listFooterHints
-        : [],
+    footerHints,
   });
 
   const finish = (action: CliOrchestrationAction): void => {
@@ -422,23 +439,30 @@ export function OrchestrationApp(
   }
 
   if (agentOpen || teamOpen || accountOpen) {
-    const picker = agentOpen
-      ? {
-          title: 'Agent',
-          subtitle: 'Choose one agent for this session.',
-          items: agentItems,
-        }
-      : teamOpen
-        ? {
-            title: 'Team',
-            subtitle: 'Choose a team for this session.',
-            items: teamItems,
-          }
-        : {
-            title: 'Account',
-            subtitle: 'Sign in, change account, or sign out.',
-            items: props.accountItems ?? [],
-          };
+    let picker: {
+      readonly title: string;
+      readonly subtitle: string;
+      readonly items: readonly CliOrchestrationItem[];
+    };
+    if (agentOpen) {
+      picker = {
+        title: 'Agent',
+        subtitle: 'Choose one agent for this session.',
+        items: agentItems,
+      };
+    } else if (teamOpen) {
+      picker = {
+        title: 'Team',
+        subtitle: 'Choose a team for this session.',
+        items: teamItems,
+      };
+    } else {
+      picker = {
+        title: 'Account',
+        subtitle: 'Sign in, change account, or sign out.',
+        items: props.accountItems ?? [],
+      };
+    }
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">

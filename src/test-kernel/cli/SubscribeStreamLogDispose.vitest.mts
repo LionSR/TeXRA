@@ -7,7 +7,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { StreamLogStore } from '@transcript';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { subscribeStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { streams, resetCliState } from '@cli/chat/tui/state/cliState';
@@ -17,6 +16,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type StreamTabId,
 } from '@shared/schemas';
+import type { StreamLogStore } from '@transcript';
 
 const streamA = 'stream-a' as StreamTabId;
 const streamB = 'stream-b' as StreamTabId;

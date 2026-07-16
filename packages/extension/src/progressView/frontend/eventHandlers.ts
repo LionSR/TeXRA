@@ -409,27 +409,29 @@ export function handlePermissionAction(
           initiatingProposalId: data.proposalId,
         });
       }
-      const message: ProgressViewInboundMessage =
-        decision.action === 'approve' || approveAllDelegatedWork
-          ? {
-              command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-              proposalId: data.proposalId,
-              action: 'approve',
-              ...(decision.model ? { model: decision.model } : {}),
-              ...(decision.agent ? { agent: decision.agent } : {}),
-            }
-          : decision.action === 'reject'
-            ? {
-                command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-                proposalId: data.proposalId,
-                action: 'reject',
-                ...(decision.feedback ? { feedback: decision.feedback } : {}),
-              }
-            : {
-                command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-                proposalId: data.proposalId,
-                action: 'setup',
-              };
+      let message: ProgressViewInboundMessage;
+      if (decision.action === 'approve' || approveAllDelegatedWork) {
+        message = {
+          command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+          proposalId: data.proposalId,
+          action: 'approve',
+          ...(decision.model ? { model: decision.model } : {}),
+          ...(decision.agent ? { agent: decision.agent } : {}),
+        };
+      } else if (decision.action === 'reject') {
+        message = {
+          command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+          proposalId: data.proposalId,
+          action: 'reject',
+          ...(decision.feedback ? { feedback: decision.feedback } : {}),
+        };
+      } else {
+        message = {
+          command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+          proposalId: data.proposalId,
+          action: 'setup',
+        };
+      }
       postPermissionMessage(message);
       // Optimistic removal — track resolved ID so late SHOW is a no-op
       const removed = removePrompt(

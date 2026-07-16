@@ -3,8 +3,8 @@
 
 import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
-import { mockGitHubClient } from '../support/githubClientMock';
 import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
+import { mockGitHubClient } from '../support/githubClientMock';
 
 // ---------------------------------------------------------------------------
 // PRPollingSourceAnnotationPages

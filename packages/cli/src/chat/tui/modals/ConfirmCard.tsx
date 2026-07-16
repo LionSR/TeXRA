@@ -10,6 +10,7 @@ import {
   confirmCardFeedbackHints,
   confirmCardKeyAction,
   confirmCardKeyHintsForWidth,
+  type ConfirmCardHintAction,
   type ConfirmCardRejectionMode,
 } from './ConfirmCardState';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '../ui/theme';
@@ -149,17 +150,20 @@ export function ConfirmCard({
         extraActions: mappedExtraActions,
         columns,
       });
-  const hints = feedbackMode
-    ? confirmCardFeedbackHints()
-    : compact
-      ? (compactHintLayout?.inlineHints ?? [])
-      : confirmCardKeyHintsForWidth({
-          approveLabel,
-          rejectLabel,
-          alwaysAllowLabel: alwaysAllow?.label,
-          extraActions: mappedExtraActions,
-          maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
-        });
+  let hints: readonly ConfirmCardHintAction[];
+  if (feedbackMode) {
+    hints = confirmCardFeedbackHints();
+  } else if (compact) {
+    hints = compactHintLayout?.inlineHints ?? [];
+  } else {
+    hints = confirmCardKeyHintsForWidth({
+      approveLabel,
+      rejectLabel,
+      alwaysAllowLabel: alwaysAllow?.label,
+      extraActions: mappedExtraActions,
+      maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
+    });
+  }
   const stackedCompactHints = compactHintLayout?.stackedHints ?? hints;
   const stackCompactHints = compact && (compactHintLayout?.stack ?? false);
 

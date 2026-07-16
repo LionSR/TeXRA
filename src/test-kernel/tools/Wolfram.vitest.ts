@@ -4,6 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 // Suites for src/tools/wolfram (WolframTool approval gating +
 // wolframScriptUtils argument handling).
 
+import { strict as assert } from 'node:assert';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { StreamTabId } from '@shared/schemas';
@@ -17,11 +18,10 @@ import {
   executeWolframCode,
   executeWolframScriptFile,
 } from '@tools/wolfram/wolframScriptUtils';
-import { createRecordingHost } from '../agent/progressTestUtils';
-import { waitForRecordedEvent } from '../support/asyncTestUtils';
-import { strict as assert } from 'node:assert';
 import * as toolUtils from '@utils/system/toolUtils';
 import * as execUtils from '@utils/system/execUtils';
+import { createRecordingHost } from '../agent/progressTestUtils';
+import { waitForRecordedEvent } from '../support/asyncTestUtils';
 
 // ---------------------------------------------------------------------------
 // Wolfram

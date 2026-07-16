@@ -8,9 +8,8 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import type { Platform } from '@platform/platform';
-
 import { createFakePlatform } from './FakePlatform';
+import type { Platform } from '@platform/platform';
 
 /**
  * Creates a node-backed `FakePlatform` rooted in a fresh temp directory

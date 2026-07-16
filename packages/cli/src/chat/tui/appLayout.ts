@@ -175,11 +175,17 @@ export function allocateConversationBottomPanelRows({
   const sessionPanelContentRows = sessionCount + processCount;
   const minimumSessionRows = sessionCount > 1 ? 1 : 0;
   const availableTranscriptRows = Math.max(0, transcriptRows);
-  const panelTranscriptLimit = sessionListFocused
-    ? availableTranscriptRows
-    : availableTranscriptRows === 0
-      ? 0
-      : Math.max(minimumSessionRows, Math.floor(availableTranscriptRows / 2));
+  let panelTranscriptLimit: number;
+  if (sessionListFocused) {
+    panelTranscriptLimit = availableTranscriptRows;
+  } else if (availableTranscriptRows === 0) {
+    panelTranscriptLimit = 0;
+  } else {
+    panelTranscriptLimit = Math.max(
+      minimumSessionRows,
+      Math.floor(availableTranscriptRows / 2),
+    );
+  }
   const bottomPanelRows = Math.min(
     maxRows,
     sessionPanelContentRows + todosPlanContentRows,

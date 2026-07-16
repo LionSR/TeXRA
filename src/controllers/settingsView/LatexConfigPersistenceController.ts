@@ -1,4 +1,5 @@
 // Local imports - state keys
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - shared constants
@@ -8,7 +9,6 @@ import {
 } from '@shared/constants/latex';
 
 // Local imports - shared schemas
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   LatexConfigValuesSchema,
   type LatexConfigValues,
