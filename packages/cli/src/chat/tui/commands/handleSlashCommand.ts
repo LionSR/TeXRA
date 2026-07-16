@@ -13,6 +13,7 @@ import { requestCliCompaction } from '../state/compactionRequest';
 import {
   activeStreamId as activeStreamIdSignal,
   sessionMeta,
+  streamAccessTarget,
   streams,
 } from '../state/cliState';
 import { chatTuiCanStartRootRun } from '../state/sessionRunState';
@@ -150,14 +151,18 @@ export async function handleTuiSlashCommand(
       const slice = activeStreamId
         ? streams.get().get(activeStreamId)
         : undefined;
-      // Mirror the status bar's `subscription` badge so the two never disagree.
-      const subscriptionActive = await isCodexSubscriptionActive(
+      const accessTarget = streamAccessTarget(
+        slice,
         meta.model || context.initialModel,
+      );
+      const subscriptionActive = await isCodexSubscriptionActive(
+        accessTarget.model,
+        accessTarget.category,
       );
       appendLocalAssistantTranscript(
         formatCliSessionStatus({
           agent: meta.agent || context.initialAgent,
-          model: meta.model || context.initialModel,
+          model: accessTarget.model,
           teamName: meta.teamName,
           // Read the session's own mode (which honors a --api-mode/env override)
           // so /status agrees with the header instead of re-reading the global.

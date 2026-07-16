@@ -153,6 +153,21 @@ export interface StreamSlice {
   readonly bypass: BypassState;
 }
 
+export interface StreamAccessTarget {
+  readonly model: string;
+  readonly category: AgentCategory | undefined;
+}
+
+/** Resolve the model and category from the same stream snapshot. */
+export function streamAccessTarget(
+  stream: Pick<StreamSlice, 'model' | 'category'> | undefined,
+  sessionModel: string,
+): StreamAccessTarget {
+  return stream?.model
+    ? { model: stream.model, category: stream.category }
+    : { model: sessionModel, category: undefined };
+}
+
 /**
  * Shared gate for the "model is thinking" indicators (the StatusBar segment
  * and the conversation pane's liveness row) so the two can never disagree:

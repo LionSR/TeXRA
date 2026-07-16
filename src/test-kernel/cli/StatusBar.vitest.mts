@@ -11,7 +11,11 @@ import {
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { KEY_HINT_SEPARATOR } from '@cli/chat/tui/ui/KeyHints';
-import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
+import {
+  NO_BYPASS,
+  streamAccessTarget,
+  type StreamSlice,
+} from '@cli/chat/tui/state/cliState';
 import { STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
@@ -45,6 +49,18 @@ function statusInput(
 }
 
 describe('CLI StatusBar display model', () => {
+  it('keeps a stream model and category paired for access resolution', () => {
+    expect(
+      streamAccessTarget({ model: 'gpt55', category: 'workflow' }, 'deepseekT'),
+    ).toEqual({ model: 'gpt55', category: 'workflow' });
+    expect(
+      streamAccessTarget(
+        { model: undefined, category: 'workflow' },
+        'deepseekT',
+      ),
+    ).toEqual({ model: 'deepseekT', category: undefined });
+  });
+
   it('previews queued follow-up messages without duplicating the count', () => {
     expect(queuedFollowUpsSummary([])).toBeUndefined();
     expect(queuedFollowUpsSummary(['Keep the proof under one page.'])).toBe(

@@ -163,19 +163,21 @@ function accessModeSegment({
   readonly subscriptionActive?: boolean;
   readonly usageRoute?: UsageRoute;
 }): StatusBarSegment {
-  let label: string;
-  switch (usageRoute) {
-    case 'chatgpt-subscription':
-      label = 'subscription';
-      break;
-    case 'relay':
-      label = 'included';
-      break;
-    case 'api-key':
-      label = 'personal';
-      break;
-    default:
-      label = subscriptionActive ? 'subscription' : apiMode;
+  let label = subscriptionActive ? 'subscription' : apiMode;
+  if (usageRoute !== undefined) {
+    switch (usageRoute) {
+      case 'chatgpt-subscription':
+        label = 'subscription';
+        break;
+      case 'relay':
+        label = 'included';
+        break;
+      case 'api-key':
+        label = 'personal';
+        break;
+      default:
+        usageRoute satisfies never;
+    }
   }
   return label === 'subscription'
     ? { text: label, color: COLOR_HINT, compactText: 'sub' }
