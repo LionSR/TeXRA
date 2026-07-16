@@ -30,14 +30,11 @@ import { useSignal } from '../state/useSignal';
 import { COLOR_HINT } from '../ui/colors';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
-  isInquiryContinuationText,
   isRenderableTranscriptEntry,
-  nextRenderableTranscriptEntry,
   userPromptAwaitsLiveContinuation,
 } from './transcriptEntries';
 import { TranscriptEntry } from './TranscriptEntry';
 import {
-  USER_ENTRY_MARGIN_BOTTOM_ROWS,
   transcriptColumns,
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
@@ -55,7 +52,6 @@ export type StaticTranscriptItem =
       readonly id: string;
       readonly kind: 'entry';
       readonly entry: ConversationEntry;
-      readonly userBottomMarginRows?: number;
     };
 
 interface StaticTranscriptState {
@@ -197,26 +193,9 @@ function staticTranscriptItemRowCount(
   return transcriptEntryLayoutRows(
     transcriptEntryLayout(item.entry, {
       mode: 'scrollback-budget',
-      userBottomMarginRows: item.userBottomMarginRows,
       width,
     }),
   );
-}
-
-function staticUserBottomMarginRows({
-  entry,
-  nextEntry,
-}: {
-  readonly entry: ConversationEntry;
-  readonly nextEntry: ConversationEntry | undefined;
-}): number | undefined {
-  const isUserBand =
-    entry.role === 'user' && !isInquiryContinuationText(entry.text);
-  if (!isUserBand) return undefined;
-  // Tool rows are the command execution part of the same turn; keep them
-  // attached to the prompt instead of printing a gap row.
-  if (nextEntry?.role === 'tool') return 0;
-  return USER_ENTRY_MARGIN_BOTTOM_ROWS;
 }
 
 export function appendStaticTranscriptItems({
@@ -298,15 +277,7 @@ export function appendStaticTranscriptItems({
     if (!entry.finalized) continue;
     if (seen.has(entry.id)) continue;
     nextItems ??= [...currentItems];
-    nextItems.push({
-      id: entry.id,
-      kind: 'entry',
-      entry,
-      userBottomMarginRows: staticUserBottomMarginRows({
-        entry,
-        nextEntry: nextRenderableTranscriptEntry(entries, index),
-      }),
-    });
+    nextItems.push({ id: entry.id, kind: 'entry', entry });
     seen.add(entry.id);
   }
   // Same reference when nothing was appended so the `setItems` functional
@@ -423,7 +394,6 @@ export function StaticConversationTranscript({
                 entry={item.entry}
                 width={normalizedWidth}
                 colorEnabled={colorEnabled}
-                userBottomMarginRows={item.userBottomMarginRows}
               />
             </EntryErrorBoundary>
           )}
