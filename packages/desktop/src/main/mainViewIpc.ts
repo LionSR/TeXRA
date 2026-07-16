@@ -20,6 +20,7 @@ import {
 } from './desktopViewStateIpc.js';
 import type { BrowserWindow } from 'electron';
 import type { DesktopProgressIpc } from './desktopProgressIpc.js';
+import type { DesktopPromptIpc } from './desktopPromptController.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
@@ -29,6 +30,7 @@ export interface DesktopMainViewIpcOptions {
   debugMode?: boolean;
   getTheme?: () => DesktopTheme;
   fileSelection: DesktopFileSelection;
+  prompt: DesktopPromptIpc;
   settings: DesktopSettingsIpc;
   progress: DesktopProgressIpc;
   onboarding: DesktopMessageHandler;
@@ -86,6 +88,7 @@ export function installDesktopMainViewIpc(
   messageHandlers = [
     startup,
     options.fileSelection,
+    options.prompt,
     options.settings,
     options.progress,
     options.onboarding,
@@ -99,6 +102,7 @@ export function installDesktopMainViewIpc(
     if (disposed) return;
     disposed = true;
     viewState.dispose();
+    options.prompt.dispose();
     bridge.dispose();
   }
   window.once('closed', dispose);
