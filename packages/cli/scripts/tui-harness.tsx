@@ -1403,11 +1403,19 @@ if (SHOW_CHILDREN) {
       [
         'harness-process-latexmk',
         {
-          stdout: [
-            'latexmk: applying rule pdflatex',
-            'chapter1.tex:47: Overfull hbox',
-            'main.tex: Proof sketch needs one missing reference',
-          ].join('\n'),
+          // Long/wide variants drive the TaskDetailView scroll scenarios the
+          // same way the retired subagent detail used the child transcript.
+          stdout: SHOW_LONG_CHILD_OUTPUT
+            ? Array.from({ length: 18 }, (_, index) =>
+                index === 0 && SHOW_WIDE_FIRST_CHILD_LINE
+                  ? `latexmk detail line 01 ${'wide output wraps '.repeat(10)}`
+                  : `latexmk detail line ${String(index + 1).padStart(2, '0')}${index === 17 ? ' final rerun not needed' : ''}`,
+              ).join('\n')
+            : [
+                'latexmk: applying rule pdflatex',
+                'chapter1.tex:47: Overfull hbox',
+                'main.tex: Proof sketch needs one missing reference',
+              ].join('\n'),
           stderr: '',
         },
       ],

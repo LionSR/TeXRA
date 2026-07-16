@@ -10,7 +10,7 @@
 //
 // This is intentionally small: a handful of scenarios that exercise the
 // transcript, queued follow-ups, a slash command, an approval modal, the
-// subagent panel + task picker, and the Ctrl-C exit path. It is NOT a general
+// subagent panel + task detail view, and the Ctrl-C exit path. It is NOT a general
 // terminal-automation framework.
 //
 // Run:  node scripts/validate-tui.mjs        (from packages/cli)
@@ -60,10 +60,8 @@ const shortcutModifierLabel = process.platform === 'darwin' ? 'Esc' : 'Alt';
 const metaChordLabel = (key) =>
   `${shortcutModifierLabel}${shortcutModifierLabel === 'Esc' ? ' ' : '-'}${key}`;
 const STOPPED_SUBAGENT_INPUT_MESSAGE_START =
-  'Subagent is no longer accepting follow-ups; press Tab to select a session';
-const STOPPED_SUBAGENT_PICKER_MESSAGE = `${metaChordLabel('s')} to choose another`;
-const STOPPED_SUBAGENT_TASKS_MESSAGE = `${metaChordLabel('p')} to review tasks.`;
-const STOPPED_SUBAGENT_INPUT_MESSAGE = `${STOPPED_SUBAGENT_INPUT_MESSAGE_START} or ${STOPPED_SUBAGENT_PICKER_MESSAGE}, or ${STOPPED_SUBAGENT_TASKS_MESSAGE}`;
+  'Subagent is no longer accepting follow-ups; press Tab or';
+const STOPPED_SUBAGENT_INPUT_MESSAGE = `${STOPPED_SUBAGENT_INPUT_MESSAGE_START} ${metaChordLabel('s')} to select a session.`;
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",
   'solutions = []',
@@ -2024,9 +2022,8 @@ const SCENARIOS = [
       'main.tex: Proof sketch',
       '3 sub',
       'Tab sessions',
-      'p tasks',
     ],
-    unexpect: ['Option-p tasks', 'Option-s subagents'],
+    unexpect: ['p tasks', 's subagents'],
   },
   // PTY ordering tests (issue #7972): the harness drives one child stream's
   // attachment/roster/edge/status/removal facts through the real
@@ -2346,9 +2343,8 @@ const SCENARIOS = [
       'reviewer error',
       '2 sub',
       'Tab sessions',
-      'p tasks',
     ],
-    unexpect: ['reviewer running', '3 sub'],
+    unexpect: ['reviewer running', '3 sub', 'p tasks'],
   },
   {
     name: 'subagents-with-todos-compact',
@@ -2362,15 +2358,8 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    expect: [
-      '+4 more',
-      '3 sub',
-      '1 proc',
-      'Tab sessions',
-      's subagents',
-      'p tasks',
-      'Ctrl-C stop',
-    ],
+    expect: ['+4 more', '3 sub', '1 proc', 'Tab sessions', 'Ctrl-C stop'],
+    unexpect: ['s subagents', 'p tasks'],
   },
   {
     name: 'subagents-with-todos-narrow-status',
@@ -2383,41 +2372,13 @@ const SCENARIOS = [
       HARNESS_TODOS: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: 'p tasks',
-    expect: ['Waiting for leanSolver', 'p tasks', 'Ctrl-C stop'],
-    unexpect: ['s subagents', 'Option-p tasks'],
-  },
-  {
-    name: 'subagent-picker',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 's'], // Esc/Alt-s
-    expect: [
-      'Subagents',
-      'Stream: main',
-      'strategy',
-      'strategy sub-workflow',
-      'leanSolver',
-      'reviewer',
-      'Enter view',
-      'f focus',
-      'Esc close',
-    ],
-    unexpect: ['Tasks and sub-workflows', 'latex build'],
-    maxBlankLinesBetween: [
-      {
-        from: 'entry-4 chat history line',
-        to: 'Subagents',
-        max: 1,
-      },
-    ],
+    expect: ['Waiting for leanSolver', 'Tab sessions', 'Ctrl-C stop'],
+    unexpect: ['s subagents', 'p tasks'],
   },
   {
+    // Esc/Alt-s is a Tab alias now: it focuses the persistent session list,
+    // and Enter on a session row focuses that stream (newest child first).
     name: 'subagent-focused-submit',
     cols: 120,
     env: {
@@ -2426,7 +2387,15 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 's', 'f', 'child follow-up on focused stream', '\r'],
+    keys: [
+      ESC + 's',
+      DOWN,
+      DOWN,
+      DOWN,
+      '\r',
+      'child follow-up on focused stream',
+      '\r',
+    ],
     frame: 'viewport',
     expect: [
       'strategy is checking the harness-child-strategy details',
@@ -2449,7 +2418,8 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, '\r'],
+    // Session rows read newest-first: main, reviewer, leanSolver, strategy.
+    keys: ['\t', DOWN, DOWN, DOWN, '\r'],
     expect: [
       'strategy is checking the harness-child-strategy details',
       '✓ ● strategy running',
@@ -2489,7 +2459,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, ESC, '\t'],
+    keys: ['\t', DOWN, DOWN, DOWN, ESC, '\t'],
     expect: ['›   ● strategy running', 'Tab input', 'Esc input'],
     unexpect: ['signal read during notification phase', 'ERROR'],
   },
@@ -2506,7 +2476,7 @@ const SCENARIOS = [
     keys: ['draft survives resize', '\t', DOWN],
     resizes: [{ cols: 44, rows: 5 }],
     keysAfterResize: [' and accepts input'],
-    expect: ['draft survives resize and accepts input', 'Esc p tasks'],
+    expect: ['draft survives resize and accepts input', 'Tab sessions'],
     unexpect: ['Enter focus', 'signal read during notification phase', 'ERROR'],
   },
   {
@@ -2547,7 +2517,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, '\r'],
+    keys: ['\t', DOWN, DOWN, DOWN, '\r'],
     expect: [
       'strategy detail line 15',
       'strategy detail line 18',
@@ -2574,7 +2544,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, '\r', DC4, 'g'],
+    keys: ['\t', DOWN, DOWN, DOWN, '\r', DC4, 'g'],
     expect: [
       'strategy\n› Please handle the harness-child-strategy sub-workflow.',
       'strategy detail line 01',
@@ -2597,7 +2567,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, '\r', '/status', '\r'],
+    keys: ['\t', DOWN, DOWN, DOWN, '\r', '/status', '\r'],
     frame: 'viewport',
     expect: ['strategy is checking the harness-child-strategy details'],
     expectPatterns: [RUNNING_STATUS_PATTERN],
@@ -2621,303 +2591,25 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 's', 'f', '\t', UP, '\r'],
+    // Focus the newest child (reviewer), then return to main via the list.
+    keys: ['\t', DOWN, '\r', '\t', UP, '\r'],
     expect: [
       'entry-1 chat history line',
       'entry-4 chat history line',
       '✓ ● main running',
     ],
-    unexpect: [
-      'Please handle the harness-child-strategy sub-workflow.',
-      'strategy is checking the harness-child-strategy details',
-    ],
+    unexpect: ['reviewer is checking the harness-child-review details'],
     maxOccurrences: [
       { text: 'entry-1 chat history line', max: 1 },
       { text: 'entry-4 chat history line', max: 1 },
+      // Appears once as the reviewer row's summary; the focused child's
+      // transcript copy must not leak into root scrollback on return.
+      { text: 'Please handle the harness-child-review sub-workflow.', max: 1 },
     ],
   },
   {
-    name: 'subagent-picker-enter-views-subagent',
-    frame: 'scrollback',
-    cols: 120,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 's', '\r'],
-    expect: [
-      'strategy',
-      'Please handle the harness-child-strategy sub-workflow.',
-      'strategy is checking the harness-child-strategy details',
-      'Esc close',
-    ],
-    unexpect: [
-      'entry-1 chat history line',
-      'entry-4 chat history line',
-      'Harness received:',
-    ],
-  },
-  {
-    name: 'nested-subagent-picker-enter-views-subagent',
-    frame: 'scrollback',
-    cols: 100,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_NESTED_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 's', 'f', ESC + 's', '\r'],
-    expect: [
-      'localChecker',
-      'Please handle the nested proof check sub-workflow.',
-      'localChecker is checking the nested proof check details',
-      'Esc close',
-    ],
-    unexpect: [
-      'entry-1 chat history line',
-      'entry-4 chat history line',
-      'Please handle the harness-child-strategy sub-workflow.',
-      'strategy is checking the harness-child-strategy details',
-    ],
-  },
-  {
-    name: 'nested-subagent-picker',
-    cols: 100,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_NESTED_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 's', 'f', ESC + 's'],
-    frame: 'viewport',
-    expect: [
-      'Subagents',
-      'Stream: strategy',
-      'localChecker',
-      'localChecker nested proof check',
-      'Enter view',
-      'f focus',
-      'Esc close',
-    ],
-    unexpect: ['Stream: main', '│   2. leanSolver', '│   3. reviewer'],
-  },
-  {
-    name: 'nested-task-picker',
-    cols: 100,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_NESTED_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 's', 'f', ESC + 'p'],
-    frame: 'viewport',
-    expect: [
-      'Tasks and sub-workflows',
-      'Stream: strategy',
-      'localChecker',
-      'proof audit',
-      'Enter view',
-      'Esc close',
-    ],
-    unexpect: [
-      'Stream: main',
-      'latex build',
-      '│   2. leanSolver',
-      '│   3. reviewer',
-    ],
-  },
-  {
-    name: 'task-picker',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 'p'], // Esc/Alt-p
-    expect: [
-      'Tasks and sub-workflows',
-      'Stream: main',
-      'Enter view',
-      'k kill',
-      'Esc close',
-    ],
-    maxBlankLinesBetween: [
-      {
-        from: 'entry-4 chat history line',
-        to: 'Tasks and sub-workflows',
-        max: 1,
-      },
-    ],
-  },
-  {
-    name: 'compact-subagent-picker',
-    rows: 10,
-    cols: 80,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 's'], // Esc/Alt-s
-    frame: 'viewport',
-    expect: [
-      'Subagents',
-      'Stream: main',
-      'strategy',
-      '+2 more',
-      'Enter view',
-      'f focus',
-      'Esc close',
-    ],
-    unexpect: ['Tasks and sub-workflows', 'strategy — +2 more'],
-    maxBlankLinesBetween: [
-      {
-        from: 'entry-4 chat history line',
-        to: 'Subagents',
-        max: 1,
-      },
-    ],
-  },
-  {
-    name: 'compact-task-picker',
-    rows: 10,
-    cols: 80,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 'p'], // Esc/Alt-p
-    frame: 'viewport',
-    expect: [
-      'Tasks and sub-workflows',
-      'Stream: main',
-      'strategy',
-      '+3 more',
-      'Enter view',
-      'k kill',
-      'Esc close',
-    ],
-    unexpect: ['Subagents', 'strategy — +3 more'],
-    maxBlankLinesBetween: [
-      {
-        from: 'entry-4 chat history line',
-        to: 'Tasks and sub-workflows',
-        max: 1,
-      },
-    ],
-  },
-  {
-    name: 'compact-task-picker-process-overflow',
-    rows: 10,
-    cols: 60,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 'p', DOWN, DOWN, DOWN], // Esc/Alt-p, select process row
-    frame: 'viewport',
-    expect: [
-      'Tasks and sub-workflows',
-      'latex build',
-      '+3 earlier',
-      'Enter view',
-      'Esc close',
-    ],
-    unexpect: ['Subagents', 'latex build — +3 earlier'],
-  },
-  {
-    name: 'task-subworkflow-detail',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 'p', '\r'],
-    expect: [
-      'Task details',
-      'stream · strategy',
-      'Description: strategy sub-workflow',
-      'Please handle the harness-child-strategy sub-workflow.',
-      'f focus stream',
-      'Esc back',
-    ],
-    unexpect: ['Command:  strategy sub-workflow'],
-  },
-  {
-    name: 'task-subworkflow-detail-long-output',
-    frame: 'scrollback',
-    rows: 12,
-    cols: 48,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-      HARNESS_LONG_CHILD_OUTPUT: '1',
-    },
-    bootExpect: 'TeXRA',
-    keys: [ESC + 'p', '\r'],
-    expect: [
-      'stream · strategy',
-      'strategy detail line 18 final contradiction',
-      'found',
-      'f focus',
-      'Esc back',
-    ],
-    unexpect: [
-      'Task details',
-      'Output:',
-      'strategy detail line 01',
-      'final contr…',
-    ],
-  },
-  {
-    name: 'task-subworkflow-detail-wide-line-scroll',
-    rows: 12,
-    cols: 48,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-      HARNESS_LONG_CHILD_OUTPUT: '1',
-      HARNESS_WIDE_FIRST_CHILD_LINE: '1',
-    },
-    bootExpect: 'TeXRA',
-    keys: [ESC + 'p', '\r', ...Array.from({ length: 22 }, () => UP)],
-    frame: 'viewport',
-    expect: [
-      'stream · strategy',
-      'Please handle the harness-child-strategy',
-      'sub-workflow.',
-      'strategy detail line 01',
-      'wide output wraps',
-      'f focus',
-      'Esc back',
-    ],
-    unexpect: [
-      'Task details',
-      'Output:',
-      'strategy detail line 18',
-      'final contr…',
-    ],
-  },
-  {
+    // Ported from the retired subagent-detail scroll scenarios: the same
+    // TaskDetailView budget/scroll behavior, exercised on a process detail.
     name: 'task-process-detail',
     frame: 'scrollback',
     env: {
@@ -2926,7 +2618,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
+    keys: ['\t', DOWN, DOWN, DOWN, DOWN, '\r'],
     expect: [
       'Task details',
       'shell · latex build',
@@ -2937,98 +2629,55 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'narrow-subagent-picker',
-    cols: 60,
-    rows: 18,
+    name: 'task-process-detail-long-output',
+    frame: 'scrollback',
+    rows: 12,
+    cols: 48,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 's'], // Esc/Alt-s
-    frame: 'viewport',
-    expect: [
-      'Subagents',
-      'Stream: main',
-      'strategy',
-      'strategy sub-workflow',
-      'Enter view',
-      'f focus',
-      'Esc close',
-    ],
-    unexpect: [
-      'k kill',
-      'strategy sub-wo…',
-      'sub-workfl\now',
-      '\n────╯',
-      'Esc cl…',
-    ],
-  },
-  {
-    name: 'narrow-subagent-picker-second',
-    cols: 60,
-    rows: 18,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 's', DOWN], // Esc/Alt-s, select second subagent
-    frame: 'viewport',
-    expect: [
-      'Subagents',
-      'Stream: main',
-      'leanSolver',
-      'leanSolver sub-workflow',
-      'Enter view',
-      'f focus',
-      'Esc close',
-    ],
-    unexpect: [
-      'k kill',
-      'leanSolver sub-wor…',
-      'sub-workfl\now',
-      '\n────╯',
-      'Esc cl…',
-    ],
-  },
-  {
-    name: 'narrow-task-picker',
-    cols: 60,
-    rows: 18,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 'p'], // Esc/Alt-p
-    frame: 'viewport',
-    expect: [
-      'Tasks and sub-workflows',
-      'Stream: main',
-      'strategy',
-      'Enter view',
-      'Esc close',
-    ],
-    unexpect: ['sub-workfl\now', '\n────╯', 'Esc cl…'],
-  },
-  {
-    name: 'tiny-subagent-picker',
-    cols: 40,
-    rows: 10,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
+      HARNESS_LONG_CHILD_OUTPUT: '1',
     },
     bootExpect: 'TeXRA',
-    keys: [ESC + 's'], // Esc/Alt-s
+    keys: ['\t', DOWN, DOWN, DOWN, DOWN, '\r'],
+    expect: [
+      'shell · latex build',
+      'latexmk detail line 18 final rerun not',
+      'needed',
+      'Esc back',
+    ],
+    unexpect: ['Output:', 'latexmk detail line 01', 'final rerun n…'],
+  },
+  {
+    name: 'task-process-detail-wide-line-scroll',
+    rows: 12,
+    cols: 48,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+      HARNESS_LONG_CHILD_OUTPUT: '1',
+      HARNESS_WIDE_FIRST_CHILD_LINE: '1',
+    },
+    bootExpect: 'TeXRA',
+    keys: [
+      '\t',
+      DOWN,
+      DOWN,
+      DOWN,
+      DOWN,
+      '\r',
+      ...Array.from({ length: 22 }, () => UP),
+    ],
     frame: 'viewport',
-    expect: ['strategy', 'Enter view', 'Esc close'],
-    unexpect: ['*    y*', 'dle)          r*'],
+    expect: [
+      'shell · latex build',
+      'latexmk detail line 01',
+      'wide output wraps',
+      'Esc back',
+    ],
+    unexpect: ['Output:', 'latexmk detail line 18', 'final rerun n…'],
   },
   {
     name: 'tiny-status-separators',
@@ -3047,49 +2696,6 @@ const SCENARIOS = [
     unexpect: ['◆running', 'personal3', '3 sub 1 proc'],
   },
   {
-    name: 'tiny-task-subworkflow-detail',
-    cols: 40,
-    rows: 10,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'TeXRA',
-    keys: [ESC + 'p', '\r'],
-    frame: 'viewport',
-    expect: [
-      'stream · strategy',
-      'harness-child-strategy details and',
-      'preparing a concise result.',
-      'f focus',
-      'Esc back',
-      'Ctrl-C stop',
-    ],
-    unexpect: ['│ ›', 'Task details', 'Output:', '*    y*', 'Ctrl…'],
-  },
-  {
-    name: 'tiny-task-subworkflow-detail-wrapped-scroll',
-    cols: 40,
-    rows: 10,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'TeXRA',
-    keys: [ESC + 'p', '\r', DOWN],
-    frame: 'viewport',
-    expect: [
-      'stream · strategy',
-      'harness-child-strategy',
-      'preparing a concise result.',
-      'f focus',
-      'Esc back',
-    ],
-    unexpect: ['│ ›', 'Task details', 'Output:', '*    y*'],
-  },
-  {
     name: 'tiny-task-process-detail',
     cols: 40,
     rows: 10,
@@ -3099,7 +2705,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'TeXRA',
-    keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
+    keys: ['\t', DOWN, DOWN, DOWN, DOWN, '\r'],
     frame: 'viewport',
     expect: [
       'shell · latex build',
@@ -3110,26 +2716,6 @@ const SCENARIOS = [
     unexpect: ['│ ›', 'Task details', 'Output:', '*    y*'],
   },
   {
-    name: 'tiny-task-subworkflow-detail-controls',
-    cols: 50,
-    rows: 8,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    keys: [ESC + 'p', '\r'],
-    frame: 'viewport',
-    expect: [
-      'stream · strategy',
-      'concise result.',
-      'f focus',
-      'k kill',
-      'Esc back',
-    ],
-    unexpect: ['Esc ba…'],
-  },
-  {
     name: 'tiny-task-process-detail-controls',
     cols: 50,
     rows: 8,
@@ -3138,13 +2724,15 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
+    keys: ['\t', DOWN, DOWN, DOWN, DOWN, '\r'],
     frame: 'viewport',
     expect: ['shell · latex build', 'reference', 'k kill', 'Esc back'],
     unexpect: ['Esc ba…'],
   },
   {
-    name: 'stopped-subagent-picker',
+    // The list's `k` kill (the picker's old job): kill fires once, the row
+    // degrades to a stopped session row, and the roster counters shrink.
+    name: 'subagent-list-kill',
     frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
@@ -3152,57 +2740,37 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 'p', 'k', ESC + 's'],
+    keys: ['\t', DOWN, DOWN, DOWN, 'k'],
     expect: [
-      'Subagents',
-      'Stream: main',
-      '› 1. strategy — stopped',
-      'Enter view',
-      'f focus',
-      'Esc close',
+      'Harness kill requested for harness-child-strategy.',
+      '● strategy stopped',
+      '2 sub',
     ],
-    unexpect: [
-      'k kill',
-      'Harness kill requested for harness-child-strategy.\n\nHarness kill requested for harness-child-strategy.',
+    unexpect: ['3 sub'],
+    maxOccurrences: [
+      { text: 'Harness kill requested for harness-child-strategy.', max: 1 },
     ],
   },
   {
-    name: 'stopped-task-picker',
-    frame: 'scrollback',
+    // Compact focused-list frame: the clipped list reports "+N more" on the
+    // focused row and child rows summarize the subagent's latest response.
+    name: 'compact-subagent-list-summary',
+    frame: 'viewport',
+    rows: 10,
+    cols: 100,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 'p', 'k', ESC + 'p'],
+    keys: ['\t', DOWN],
     expect: [
-      'Tasks and sub-workflows',
-      'Stream: main',
-      '› 1. strategy — stopped',
-      'Enter view',
-      'Esc close',
+      '›   ● reviewer running',
+      'Please handle the harness-child-review sub-workflow.',
+      '+3 more',
     ],
-    unexpect: ['k kill'],
-  },
-  {
-    name: 'stopped-task-subworkflow-detail',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: [ESC + 'p', 'k', ESC + 'p', '\r'],
-    expect: [
-      'Task details',
-      'stream · strategy · stopped',
-      'Please handle the harness-child-strategy sub-workflow.',
-      'f focus stream',
-      'Esc back',
-    ],
-    unexpect: ['k kill'],
+    unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
     name: 'focused-stopped-subagent',
@@ -3212,7 +2780,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 'p', 'k', ESC + 's', 'f'],
+    keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r'],
     frame: 'viewport',
     expect: [
       '› ✓ ● strategy stopped',
@@ -3226,7 +2794,10 @@ const SCENARIOS = [
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
   {
-    name: 'focused-stopped-subagent-esc-s-picker',
+    // A slow Esc-then-s chord on a focused stopped subagent focuses the
+    // session list (the retired picker's replacement) instead of firing the
+    // bare-Esc interrupt.
+    name: 'focused-stopped-subagent-esc-s-list',
     platforms: ['darwin'],
     env: {
       HARNESS_ENTRIES: '4',
@@ -3234,10 +2805,15 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 'p', 'k', ESC + 's', 'f', { input: ESC, delayMs: 40 }, 's'],
+    keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r', { input: ESC, delayMs: 40 }, 's'],
     frame: 'viewport',
-    expect: ['Subagents', 'strategy', '1. strategy — stopped', 'root active'],
-    unexpect: ['Tasks and sub-workflows', '2 sub 1 proc'],
+    expect: [
+      '› ✓ ● strategy stopped',
+      'Enter focus',
+      'Up/Down select',
+      'root active',
+    ],
+    unexpect: ['Harness interrupt requested.', '2 sub 1 proc'],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
   {
@@ -3250,13 +2826,15 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: [
-      ESC + 'p',
-      'k',
-      ESC + 's',
-      'f',
-      { input: ESC, delayMs: 40 },
       '\t',
       DOWN,
+      DOWN,
+      DOWN,
+      'k',
+      '\r',
+      { input: ESC, delayMs: 40 },
+      '\t',
+      UP,
       '\r',
     ],
     frame: 'viewport',
@@ -3280,7 +2858,16 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 'p', 'k', ESC + 's', 'f', 'can you still receive this?', '\r'],
+    keys: [
+      '\t',
+      DOWN,
+      DOWN,
+      DOWN,
+      'k',
+      '\r',
+      'can you still receive this?',
+      '\r',
+    ],
     frame: 'viewport',
     expect: [
       '› ✓ ● strategy stopped',
@@ -3297,40 +2884,24 @@ const SCENARIOS = [
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
   {
-    name: 'empty-task-shortcut-hidden',
-    env: {
-      HARNESS_ENTRIES: '4',
-    },
-    keys: [ESC + 'p'],
+    // Ancestor fallback: focusing a leaf child keeps the persistent panel on
+    // the nearest ancestor with rows, so its process rows stay reachable.
+    name: 'subagent-panel-parent-fallback',
     frame: 'viewport',
-    expect: ['entry-4 chat history line', '/status details', 'Ctrl-C exit'],
-    unexpect: [
-      'Option-p tasks',
-      'Alt-p tasks',
-      'Esc p tasks',
-      'Tasks and sub-workflows',
-      'No active tasks or sub-workflows.',
-      'Enter view',
-      'k kill',
-      'navigate',
-    ],
-  },
-  {
-    name: 'task-picker-parent-fallback',
-    frame: 'scrollback',
+    cols: 120,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [ESC + 's', 'f', ESC + 'p'],
+    keys: ['\t', DOWN, '\r'],
     expect: [
-      'Tasks and sub-workflows',
-      'Stream: main (strategy has no tasks or sub-workflows)',
-      'strategy',
+      'reviewer is checking the harness-child-review details',
+      '✓ ● reviewer running',
       'latex build',
     ],
+    unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
     name: 'todos',
