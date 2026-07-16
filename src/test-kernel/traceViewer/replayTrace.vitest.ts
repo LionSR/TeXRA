@@ -1,16 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import * as os from 'node:os';
-import * as path from 'node:path';
-
 import { create } from 'mutative';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
 import { assembleTrace, StreamLogStore } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -40,21 +35,8 @@ import type { TraceDocument } from '@transcript';
 
 const tempDirs: string[] = [];
 
-async function buildStoragePlatform(): Promise<Platform> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-replay-trace-'));
-  tempDirs.push(tempDir);
-  const workspaceDir = path.join(tempDir, 'workspace');
-  const storageRoot = path.join(tempDir, 'storage');
-  return createFakePlatform(
-    { workspacePath: workspaceDir },
-    {
-      fs: nodeFilesystem,
-      workspace: createNodeWorkspace(() => workspaceDir),
-      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-      globalState: new MemoryStateStore(),
-      workspaceState: new MemoryStateStore(),
-    },
-  );
+function buildStoragePlatform(): Promise<Platform> {
+  return createTempDirPlatform('texra-replay-trace-', tempDirs);
 }
 
 function createContext(initialState: ProgressState): {
@@ -88,9 +70,7 @@ function createContext(initialState: ProgressState): {
 setupPlatform(buildStoragePlatform);
 
 afterEach(async () => {
-  await Promise.all(
-    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
-  );
+  await cleanupTempDirs(tempDirs);
 });
 
 function legacyTrace(

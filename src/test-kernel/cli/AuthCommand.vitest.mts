@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+
 const mocks = vi.hoisted(() => ({
   getCliAuthProfile: vi.fn(),
   initCliPlatform: vi.fn(),
@@ -29,21 +31,6 @@ vi.mock('@cli/runtime/chatgptLogin', async (importOriginal) => {
 });
 
 const { runCli } = await import('@cli/commands/root');
-
-function spyOnStreamWrite(
-  stream: NodeJS.WriteStream,
-  append: (text: string) => void,
-): ReturnType<typeof vi.spyOn> {
-  return vi
-    .spyOn(stream, 'write')
-    .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
-      append(String(chunk));
-      const cb = rest.find((arg) => typeof arg === 'function') as
-        ((err?: Error | null) => void) | undefined;
-      cb?.(null);
-      return true;
-    }) as unknown as ReturnType<typeof vi.spyOn>;
-}
 
 describe('CLI auth command', () => {
   let stdout = '';

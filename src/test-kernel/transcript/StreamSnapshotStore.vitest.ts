@@ -1,18 +1,13 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import {
-  resolveRunStoragePath,
-  WorkspaceStorageProvider,
-} from '@platform/defaults/workspaceStorage';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
 import { getExecutionStore } from '@agent/storage';
@@ -36,21 +31,8 @@ import type { Platform } from '@platform/platform';
 
 const tempDirs: string[] = [];
 
-async function buildSnapshotPlatform(): Promise<Platform> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-snapshot-'));
-  tempDirs.push(tempDir);
-  const workspaceDir = path.join(tempDir, 'workspace');
-  const storageRoot = path.join(tempDir, 'storage');
-  return createFakePlatform(
-    { workspacePath: workspaceDir },
-    {
-      fs: nodeFilesystem,
-      workspace: createNodeWorkspace(() => workspaceDir),
-      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-      globalState: new MemoryStateStore(),
-      workspaceState: new MemoryStateStore(),
-    },
-  );
+function buildSnapshotPlatform(): Promise<Platform> {
+  return createTempDirPlatform('texra-snapshot-', tempDirs);
 }
 
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
@@ -144,11 +126,7 @@ describe('StreamSnapshotStore', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('persists todos/plan/usage from direct mutators and reassembles them on a fresh store', async () => {

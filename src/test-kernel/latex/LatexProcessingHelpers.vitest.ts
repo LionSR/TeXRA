@@ -5,7 +5,6 @@ import {
   mkdtemp,
   readlink,
   realpath,
-  rm,
   writeFile,
 } from 'node:fs/promises';
 import * as os from 'node:os';
@@ -21,6 +20,7 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace';
@@ -145,11 +145,7 @@ describe('DiffFileProcessor line formatting', () => {
 describe('LatexMediaManager PDF compilation', () => {
   afterEach(async () => {
     vi.clearAllMocks();
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('filters nullish compile results before adding media files', async () => {
@@ -271,11 +267,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('extractFiguresFromFiles reuses its resolved baseDir instead of re-resolving it in mirrorFigureDependencies', async () => {
