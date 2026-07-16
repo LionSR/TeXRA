@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -16,6 +16,19 @@ afterEach(async () => {
 });
 
 describe('nodeFileLocks', () => {
+  it('refreshes a lock while a long critical section is still held', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'texra-file-lock-refresh-'));
+    tempDirs.push(root);
+    const lockPath = join(root, 'executionLocks', 'a8644b');
+
+    await nodeFileLocks.runExclusive(lockPath, async () => {
+      const lockDirectory = `${lockPath}.lock`;
+      const initialMtime = (await stat(lockDirectory)).mtimeMs;
+      await sleep(2_500);
+      expect((await stat(lockDirectory)).mtimeMs).toBeGreaterThan(initialMtime);
+    });
+  });
+
   it('serializes independent callers using the same shared path', async () => {
     const root = await mkdtemp(join(tmpdir(), 'texra-file-lock-'));
     tempDirs.push(root);

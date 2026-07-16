@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   finalizeExecution: vi.fn(),
+  releaseOwnedExecutionLeaseBestEffort: vi.fn(),
 }));
 
 const tempDirs: string[] = [];
@@ -83,6 +84,8 @@ vi.mock('@agent/runtime/runAgent', () => ({
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   finalizeExecution: mocks.finalizeExecution,
+  releaseOwnedExecutionLeaseBestEffort:
+    mocks.releaseOwnedExecutionLeaseBestEffort,
 }));
 
 vi.mock('@cli/runtime/runtimeHost', () => ({
@@ -154,6 +157,7 @@ function stubRunExecutionDeps(): void {
     terminalStatusPersisted: true,
     flowRecord: 'deleted',
   });
+  mocks.releaseOwnedExecutionLeaseBestEffort.mockResolvedValue(undefined);
   mocks.runAgent.mockResolvedValue({
     category: 'toolUse',
     executionId: 'exec-1',
@@ -661,6 +665,7 @@ describe('executeCliRequest', () => {
       terminalStatus: EXECUTION_STATUS.INTERRUPTED,
       flowRecord: 'preserve',
     });
+    expect(mocks.releaseOwnedExecutionLeaseBestEffort).not.toHaveBeenCalled();
 
     resolveRun?.({
       category: 'toolUse',
