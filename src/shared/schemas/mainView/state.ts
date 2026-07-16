@@ -9,6 +9,7 @@ import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import {
   UIFileFieldsSchema,
   migrateLegacyContextFileFields,
+  requiredFileListFields,
 } from '../fileFields';
 import {
   DocumentFileTypeSchema,
@@ -183,12 +184,7 @@ const FileOptionsSchema = z.object({
 });
 export type FileOptions = z.infer<typeof FileOptionsSchema>;
 
-const MultiFilesSchema = z.object({
-  inputFiles: z.array(z.string()),
-  contextFiles: z.array(z.string()),
-  mediaFiles: z.array(z.string()),
-  outputFiles: z.array(z.string()),
-});
+const MultiFilesSchema = z.object(requiredFileListFields);
 export type MultiFiles = z.infer<typeof MultiFilesSchema>;
 
 // Enumerates the four `MultiFiles` keys (`inputFiles` / `contextFiles` /
