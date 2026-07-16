@@ -1,4 +1,1 @@
-export {
-  AskUserQuestionTool,
-  handleUserQuestionAction,
-} from './UserQuestionTool';
+export { AskUserQuestionTool } from './UserQuestionTool';

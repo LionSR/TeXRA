@@ -437,10 +437,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           );
         },
         settleProposal: (proposalId, result) => {
-          const resolved = this.interactions.resolve(proposalId, {
-            kind: 'proposal',
-            decision: result,
-          });
+          const resolved = this.interactions.submitProposalDecision(
+            proposalId,
+            result,
+          );
           if (!resolved) {
             this.logger.warn(
               this.channel,
@@ -528,7 +528,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           handleUserQuestionAction: (message) =>
             this.handleUserQuestionAction(message),
         },
-        externalInquiry: {},
+        externalInquiry: {
+          dismiss: (threadId) =>
+            this.interactions.dismissExternalInquiry(threadId),
+        },
       },
     });
   }
@@ -577,7 +580,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       isRetryPending: (stream, requestId) =>
         this.interactions.isRetryPending(stream, requestId),
       triggerRetry: (stream, requestId) =>
-        this.interactions.resolveRetry(stream, requestId, {
+        this.interactions.submitRetryDecision(stream, requestId, {
           action: 'retry',
         }),
     });
@@ -632,7 +635,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleRetryStreamRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST>,
   ): Promise<void> {
-    const resolved = this.interactions.resolveRetry(
+    const resolved = this.interactions.submitRetryDecision(
       data.stream,
       data.requestId,
       {
@@ -650,7 +653,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private handleCancelRetryRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST>,
   ): void {
-    this.interactions.resolveRetry(data.stream, data.requestId, {
+    this.interactions.submitRetryDecision(data.stream, data.requestId, {
       action: 'cancel',
     });
   }
@@ -658,25 +661,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private handleBashApprovalAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION>,
   ): void {
-    this.interactions.resolve(data.requestId, {
-      kind: 'bash',
-      decision:
-        data.action === 'approve'
-          ? { action: 'approve' }
-          : { action: 'reject', feedback: data.feedback },
-    });
+    this.interactions.submitBashDecision(
+      data.requestId,
+      data.action === 'approve'
+        ? { action: 'approve' }
+        : { action: 'reject', feedback: data.feedback },
+    );
   }
 
   private handleUserQuestionAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION>,
   ): void {
-    this.interactions.resolve(data.requestId, {
-      kind: 'userQuestion',
-      decision:
-        data.action === 'submit'
-          ? { action: 'submit', answers: data.answers }
-          : { action: data.action, feedback: data.feedback },
-    });
+    this.interactions.submitUserQuestionDecision(
+      data.requestId,
+      data.action === 'submit'
+        ? { action: 'submit', answers: data.answers }
+        : { action: data.action, feedback: data.feedback },
+    );
   }
 
   private async handleUseOwnApiKey(
@@ -804,7 +805,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       );
     if (!started) return;
 
-    this.interactions.resolveRetry(data.stream, data.requestId, {
+    this.interactions.submitRetryDecision(data.stream, data.requestId, {
       action: 'cancel',
     });
   }
@@ -886,13 +887,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION>,
   ): void {
     const { approvalId, action } = data;
-    this.interactions.resolve(approvalId, {
-      kind: 'plan',
-      decision:
-        action === 'reject'
-          ? { action: 'reject', feedback: data.feedback }
-          : { action },
-    });
+    this.interactions.submitPlanDecision(
+      approvalId,
+      action === 'reject'
+        ? { action: 'reject', feedback: data.feedback }
+        : { action },
+    );
   }
 
   // ============================================================

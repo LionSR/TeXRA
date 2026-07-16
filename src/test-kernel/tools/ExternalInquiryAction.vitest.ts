@@ -2,14 +2,9 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type {
-  HostInteractionSettlement,
-  HostInteractions,
-} from '@agent/runtime/HostInteractions';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 const storageMocks = vi.hoisted(() => ({
@@ -34,53 +29,46 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => storageMocks);
 vi.mock('@tools/inquiry/inquiryContinuation', () => continuationMocks);
 
 describe('handleExternalInquiryAction', () => {
-  let detach: (() => void) | undefined;
-  let resolve: ReturnType<
-    typeof vi.fn<
-      (requestId: string, settlement: HostInteractionSettlement) => boolean
-    >
-  >;
-
   beforeEach(() => {
     vi.clearAllMocks();
     storageMocks.recordAnswerForOpenTurn.mockResolvedValue(null);
     storageMocks.markDropped.mockResolvedValue(null);
-    resolve = vi.fn<
-      (requestId: string, settlement: HostInteractionSettlement) => boolean
-    >(() => true);
-    const interactions: HostInteractions = {
-      resolve,
-      cancel: () => {},
-    };
-    detach = defaultSession().useHostInteractions(interactions);
   });
 
-  afterEach(() => {
-    detach?.();
-    detach = undefined;
-  });
+  it('persists and continues submit actions', async () => {
+    const manifest = { status: 'answered' };
+    storageMocks.recordAnswerForOpenTurn.mockResolvedValue({ manifest });
 
-  it('resolves extension submit actions through the default session', async () => {
     await handleExternalInquiryAction({
       action: 'submit',
       threadId: 'thread-submit',
       answer: 'A proof follows by compactness.',
     });
 
-    expect(resolve).toHaveBeenCalledWith('thread-submit', {
-      kind: 'externalInquiry',
+    expect(storageMocks.recordAnswerForOpenTurn).toHaveBeenCalledWith({
+      threadId: 'thread-submit',
+      answer: 'A proof follows by compactness.',
+      sessionLinks: undefined,
     });
+    expect(
+      continuationMocks.injectContinuationForAnsweredThread,
+    ).toHaveBeenCalledWith('thread-submit', manifest, undefined);
   });
 
-  it('resolves extension drop actions through the default session', async () => {
+  it('persists and continues drop actions', async () => {
+    const manifest = { status: 'dropped' };
+    storageMocks.markDropped.mockResolvedValue(manifest);
+
     await handleExternalInquiryAction({
       action: 'drop',
       threadId: 'thread-drop',
-      feedback: 'The question is no longer needed.',
     });
 
-    expect(resolve).toHaveBeenCalledWith('thread-drop', {
-      kind: 'externalInquiry',
+    expect(storageMocks.markDropped).toHaveBeenCalledWith({
+      threadId: 'thread-drop',
     });
+    expect(
+      continuationMocks.injectContinuationForDroppedThread,
+    ).toHaveBeenCalledWith('thread-drop', manifest, undefined);
   });
 });

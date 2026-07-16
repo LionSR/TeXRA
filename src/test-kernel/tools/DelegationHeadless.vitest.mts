@@ -73,7 +73,6 @@ function runtimeHost(): AgentRuntimeHost {
   return {
     emit: vi.fn(),
     interactions: {
-      resolve: vi.fn(() => false),
       cancel: vi.fn(),
     } satisfies HostInteractions,
   };

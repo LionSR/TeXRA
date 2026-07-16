@@ -14,7 +14,10 @@ import {
   setDelegatedWorkApprovalBypasses,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
-import { handleExternalInquiryAction } from '@tools/inquiry';
+import {
+  continueExternalInquiryAction,
+  persistExternalInquiryAction,
+} from '@tools/inquiry';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 
 // Local imports - utilities
@@ -119,10 +122,12 @@ export interface ProgressViewApprovalCommandActions {
 
 export interface ProgressViewExternalInquiryCommandActions {
   /**
-   * Forwarded to the inquiry submit/drop settle path. Desktop scopes it to its
-   * window session; the extension omits it so the module default applies.
+   * Continuation owner. Desktop scopes it to its window session; the extension
+   * omits it so the module default applies.
    */
   session?: SessionHandle;
+  /** Remove the completed inquiry from progress presentation state. */
+  dismiss(threadId: string): void;
 }
 
 export interface ProgressViewCommandActions {
@@ -303,7 +308,9 @@ export function createProgressViewCommandHandlers(
         });
         return;
       }
-      await handleExternalInquiryAction(data, externalInquiry);
+      const transition = await persistExternalInquiryAction(data);
+      externalInquiry.dismiss(data.threadId);
+      await continueExternalInquiryAction(transition, externalInquiry);
     },
   } satisfies Partial<ProgressViewInboundHandlerRegistry>;
 }

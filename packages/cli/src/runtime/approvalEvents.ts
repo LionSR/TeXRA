@@ -12,7 +12,6 @@ export const CLI_DECISION_APPROVAL_EVENTS = [
 
 export const CLI_HUMAN_INPUT_APPROVAL_EVENTS = [
   'showExternalInquiry',
-  'showUserQuestion',
 ] as const satisfies readonly (keyof RuntimeInteractionEventPayloads)[];
 
 export const CLI_APPROVAL_EVENTS = [
@@ -26,7 +25,6 @@ export const CLI_APPROVAL_EVENT_KIND = {
   showAgentProposal: 'proposal',
   showRetryRequest: 'retry',
   showExternalInquiry: 'externalInquiry',
-  showUserQuestion: 'userQuestion',
 } as const satisfies Record<CliApprovalEvent, string>;
 
 export type CliDecisionApprovalEvent =

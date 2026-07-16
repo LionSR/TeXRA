@@ -66,9 +66,8 @@ describe('WolframTool approval', () => {
     });
 
     expect(
-      explicit.host.interactions?.resolve(show.payload.requestId, {
-        kind: 'bash',
-        decision: { action: 'approve' },
+      explicit.decisions.submitBash(show.payload.requestId, {
+        action: 'approve',
       }),
     ).toBe(true);
 
@@ -85,12 +84,9 @@ describe('WolframTool approval', () => {
 
     const { explicit, result, show } = await dispatchWolfram(streamId, '2+2');
     expect(
-      explicit.host.interactions?.resolve(show.payload.requestId, {
-        kind: 'bash',
-        decision: {
-          action: 'reject',
-          feedback: 'Use the requested node check instead.',
-        },
+      explicit.decisions.submitBash(show.payload.requestId, {
+        action: 'reject',
+        feedback: 'Use the requested node check instead.',
       }),
     ).toBe(true);
 
@@ -110,9 +106,8 @@ describe('WolframTool approval', () => {
       'Factor[n^7 - n]',
     );
     expect(
-      explicit.host.interactions?.resolve(show.payload.requestId, {
-        kind: 'bash',
-        decision: { action: 'reject' },
+      explicit.decisions.submitBash(show.payload.requestId, {
+        action: 'reject',
       }),
     ).toBe(true);
 
