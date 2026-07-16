@@ -142,6 +142,8 @@ interface ScrollableModalTextProps {
   readonly marginWhenSpacious?: boolean;
   /** Release ↑/↓ while another surface owns them (feedback input). */
   readonly scrollActive?: boolean;
+  /** Suppress the hint row where no row is budgeted for it (compact cards). */
+  readonly showScrollHints?: boolean;
   /** ↑/↓ hint verb, e.g. `scroll command`. */
   readonly scrollHint: string;
   readonly text: string;
@@ -178,6 +180,7 @@ export function ScrollableModalText(
   const { scrollOffset, scrollable } = useScrollableOffset({
     active: props.scrollActive !== false,
     maxScrollOffset,
+    resetKey: text,
     pageRows: scrollPageRows({
       compactRows: COMPACT_MODAL_TEXT_ROWS,
       maxDisplayLines: maxRows,
@@ -209,7 +212,10 @@ export function ScrollableModalText(
           </Text>
         ))}
       </Box>
-      {scrollable && maxRows > 1 ? (
+      {scrollable &&
+      maxRows > 1 &&
+      props.scrollActive !== false &&
+      props.showScrollHints !== false ? (
         <KeyHints
           confirmCancel={false}
           hints={[
