@@ -37,7 +37,12 @@ import { TranscriptViewer } from './modals/TranscriptViewer';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import { currentApproval } from './state/approvalQueue';
+import {
+  currentApproval,
+  pendingApprovalsByStream,
+  promoteApprovalsForStream,
+  ROOT_APPROVAL_STREAM_KEY,
+} from './state/approvalQueue';
 import {
   isEscapeInput,
   metaChordInput,
@@ -125,6 +130,7 @@ export function App(props: AppProps): React.JSX.Element {
   const transcriptViewerStreamId = useSignal(transcriptViewerStreamIdSignal);
   const taskDetailExecutionId = useSignal(taskDetailExecutionIdSignal);
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
+  const pendingByStream = useSignal(pendingApprovalsByStream);
   const [childListSelection, dispatchChildListSelection] = useReducer(
     reduceChildListSelection,
     INITIAL_CHILD_LIST_SELECTION,
@@ -237,6 +243,19 @@ export function App(props: AppProps): React.JSX.Element {
       streams,
     ],
   );
+  // Fold stream-less (session-wide) approvals onto the root/main row so no
+  // child row inherits them.
+  const pendingApprovalsForRows = useMemo(() => {
+    const rootKinds = pendingByStream.get(ROOT_APPROVAL_STREAM_KEY);
+    if (!rootKinds || rootStreamId === undefined) return pendingByStream;
+    const folded = new Map(pendingByStream);
+    folded.delete(ROOT_APPROVAL_STREAM_KEY);
+    folded.set(rootStreamId, [
+      ...(folded.get(rootStreamId) ?? []),
+      ...rootKinds,
+    ]);
+    return folded;
+  }, [pendingByStream, rootStreamId]);
   const activeSubagentExecutionIds = useMemo(() => {
     const executionIds = new Map<StreamTabId, string>();
     const parentIds = new Set(
@@ -318,6 +337,9 @@ export function App(props: AppProps): React.JSX.Element {
   const focusSession = useCallback((streamId: StreamTabId) => {
     dispatchChildListSelection({ kind: 'focusStream', streamId });
     activeStreamIdSignal.set(streamId);
+    // Jump-to-waiting: surface the focused stream's pending approval right
+    // away instead of leaving it queued behind other streams' items.
+    promoteApprovalsForStream(streamId);
   }, []);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
@@ -421,6 +443,7 @@ export function App(props: AppProps): React.JSX.Element {
       });
       if (!target) return false;
       activeStreamIdSignal.set(target);
+      promoteApprovalsForStream(target);
       return true;
     }
     return false;
@@ -594,6 +617,7 @@ export function App(props: AppProps): React.JSX.Element {
           streams,
           activeSubagentExecutionIds,
           childListTarget,
+          pendingApprovals: pendingApprovalsForRows,
           transcriptViewerStreamId,
         }}
         onCancelChildList={cancelChildList}

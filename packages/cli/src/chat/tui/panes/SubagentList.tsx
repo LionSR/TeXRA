@@ -30,7 +30,12 @@ import { useLiveNowMs } from '../state/useLiveNowMs';
 import { COLOR_HINT } from '../ui/colors';
 import { POINTER, TICK } from '../ui/glyphs';
 import { Select, visibleSelectRange } from '../ui/Select';
-import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
+import {
+  CHILD_STATUS_MARKER,
+  childStatusColor,
+  pendingApprovalRowSuffix,
+} from './SubagentListDisplay';
+import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { ProcessOutputTail } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
@@ -82,12 +87,14 @@ function SessionRow({
   focused,
   hiddenRowSummary,
   nowMs,
+  pendingKinds,
   session,
 }: {
   readonly active: boolean;
   readonly focused: boolean;
   readonly hiddenRowSummary: string | undefined;
   readonly nowMs: number;
+  readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
   readonly session: StreamView;
 }): React.JSX.Element {
   const status = session.slice?.status;
@@ -103,7 +110,9 @@ function SessionRow({
     },
     nowMs,
   );
-  // Significance order — truncate-end sheds elapsed first, then the round.
+  // Significance order — truncate-end sheds elapsed first, then the round,
+  // then the pending-approval kind.
+  const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
   const roundLabel = formatRoundStageLabel(session.slice?.roundStage);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
@@ -118,6 +127,7 @@ function SessionRow({
         <Text bold={active} wrap="truncate-end">
           {session.label}
           {statusLabel ? ` ${statusLabel}` : ''}
+          {approvalSuffix ? ` · ${approvalSuffix}` : ''}
           {roundLabel ? ` · ${roundLabel}` : ''}
           {elapsed ? ` · ${elapsed}` : ''}
         </Text>
@@ -166,6 +176,12 @@ export interface SubagentListProps {
   readonly onOpenProcessDetail?: (executionId: string) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   readonly onViewStream?: (streamId: StreamTabId) => void;
+  /** Pending approval kinds per stream id (see `pendingApprovalsByStream`,
+   *  root bucket already folded onto the root stream id by the caller). */
+  readonly pendingApprovals?: ReadonlyMap<
+    string,
+    readonly PendingApprovalKind[]
+  >;
   readonly selectedValue?: ChildListValue;
   readonly sessions?: readonly StreamView[];
   readonly activeProcesses?: readonly ActiveChildInfo[];
@@ -321,6 +337,7 @@ export function SubagentList(
                 focused={state.focused}
                 hiddenRowSummary={hiddenRowSummary || undefined}
                 nowMs={nowMs}
+                pendingKinds={props.pendingApprovals?.get(session.id)}
                 session={session}
               />
             );

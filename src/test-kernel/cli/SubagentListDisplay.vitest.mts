@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CHILD_STATUS_MARKER,
   childStatusColor,
+  pendingApprovalRowSuffix,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 import { compactChildRowText } from '@cli/chat/tui/panes/SubagentList';
 import {
@@ -35,6 +36,16 @@ describe('CLI child list display model', () => {
     expect(childStatusColor('stopped')).toBe('gray');
     expect(childStatusColor(STREAM_PHASE.CANCELLED)).toBe('gray');
     expect(childStatusColor(STREAM_PHASE.COMPLETED)).toBe('green');
+  });
+
+  it('summarizes what a row is waiting on from its pending approval kinds', () => {
+    expect(pendingApprovalRowSuffix(undefined)).toBeUndefined();
+    expect(pendingApprovalRowSuffix([])).toBeUndefined();
+    expect(pendingApprovalRowSuffix(['bash'])).toBe('bash');
+    expect(pendingApprovalRowSuffix(['externalInquiry'])).toBe('inquiry');
+    expect(pendingApprovalRowSuffix(['toolEdit', 'bash', 'userQuestion'])).toBe(
+      'edit +2',
+    );
   });
 
   it('moves selection through every session and wraps at the ends', () => {

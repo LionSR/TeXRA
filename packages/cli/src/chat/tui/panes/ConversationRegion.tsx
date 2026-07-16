@@ -35,6 +35,7 @@ import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
+import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { ChildListTarget } from '../state/childControls';
 import type { ChildListValue } from '../state/childListSelection';
 import type { StreamSlice } from '../state/cliState';
@@ -57,6 +58,10 @@ interface ConversationRegionSnapshot {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
   readonly childListTarget: ChildListTarget;
+  readonly pendingApprovals: ReadonlyMap<
+    string,
+    readonly PendingApprovalKind[]
+  >;
   readonly transcriptViewerStreamId: StreamTabId | undefined;
 }
 
@@ -257,6 +262,7 @@ export function ConversationRegion({
               onOpenProcessDetail={onOpenProcessDetail}
               onSelectionChange={onChildSelectionChange}
               onViewStream={onViewStream}
+              pendingApprovals={snapshot.pendingApprovals}
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
               activeProcesses={activeProcesses}

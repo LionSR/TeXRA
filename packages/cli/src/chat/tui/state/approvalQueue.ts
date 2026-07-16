@@ -69,13 +69,28 @@ export interface EnqueueApprovalOptions {
   readonly onPresent?: () => void;
 }
 
+export type PendingApprovalKind = ApprovalPayload['kind'];
+
+/** Grouping key for payloads that carry no stream id — they are session-wide
+ *  and belong to the root/main row, never a child row. */
+export const ROOT_APPROVAL_STREAM_KEY = '';
+
 const CURRENT = signal<PendingApproval | undefined>(undefined);
 const STATUS = signal<ApprovalQueueStatus>({ depth: 0, kind: 'approval' });
+const PENDING_BY_STREAM = signal<
+  ReadonlyMap<string, readonly PendingApprovalKind[]>
+>(new Map());
 
 export const currentApproval = CURRENT as Signal.State<
   PendingApproval | undefined
 >;
 export const approvalQueueStatus = STATUS as Signal.State<ApprovalQueueStatus>;
+/** Pending approval kinds grouped by their stream (FIFO order per stream);
+ *  stream-less payloads group under {@link ROOT_APPROVAL_STREAM_KEY}. Powers
+ *  the session list's per-row "waiting on what" suffix. */
+export const pendingApprovalsByStream = PENDING_BY_STREAM as Signal.State<
+  ReadonlyMap<string, readonly PendingApprovalKind[]>
+>;
 
 const clearListeners = new Set<() => void>();
 
@@ -83,6 +98,9 @@ interface ApprovalQueueItem {
   readonly payload: ApprovalPayload;
   readonly resolve: (decision: ApprovalDecision) => void;
   readonly onPresent?: () => void;
+  /** Set once the item has been foregrounded, so re-presentations after a
+   *  queue reorder cannot re-fire focus/notification side effects. */
+  presented?: boolean;
 }
 
 const pendingItems: ApprovalQueueItem[] = [];
@@ -96,11 +114,14 @@ function presentForeground(): void {
   const item = pendingItems[0];
   if (!item || CURRENT.get()) return;
 
-  try {
-    item.onPresent?.();
-  } catch {
-    // Presentation hooks update surrounding TUI state only; approval
-    // resolution must remain available even if focus activation fails.
+  if (!item.presented) {
+    item.presented = true;
+    try {
+      item.onPresent?.();
+    } catch {
+      // Presentation hooks update surrounding TUI state only; approval
+      // resolution must remain available even if focus activation fails.
+    }
   }
   if (pendingItems[0] !== item) return;
 
@@ -207,6 +228,39 @@ function syncApprovalStatus(): void {
         ? 'approval'
         : approvalQueueStatusKind(pendingApprovalPayloads()),
   });
+  const byStream = new Map<string, PendingApprovalKind[]>();
+  for (const item of pendingItems) {
+    const key =
+      approvalPayloadStreamId(item.payload) ?? ROOT_APPROVAL_STREAM_KEY;
+    const kinds = byStream.get(key);
+    if (kinds) kinds.push(item.payload.kind);
+    else byStream.set(key, [item.payload.kind]);
+  }
+  PENDING_BY_STREAM.set(byStream);
+}
+
+/**
+ * Stable-partition the queue so `streamId`'s pending items lead, then
+ * re-project the head. Settling matches by item identity, so a decision made
+ * against the previous projection still resolves the right item; nothing is
+ * settled, resolved, or (re-)notified by a promotion. Used by jump-to-waiting:
+ * focusing a session surfaces that session's approval immediately.
+ */
+export function promoteApprovalsForStream(streamId: StreamTabId): void {
+  if (pendingItems.length < 2) return;
+  const head = pendingItems[0];
+  if (head && approvalPayloadStreamId(head.payload) === streamId) return;
+  const promoted: ApprovalQueueItem[] = [];
+  const rest: ApprovalQueueItem[] = [];
+  for (const item of pendingItems) {
+    (approvalPayloadStreamId(item.payload) === streamId ? promoted : rest).push(
+      item,
+    );
+  }
+  if (promoted.length === 0) return;
+  pendingItems.splice(0, pendingItems.length, ...promoted, ...rest);
+  CURRENT.set(undefined);
+  presentForeground();
 }
 
 export function enqueueApproval(
