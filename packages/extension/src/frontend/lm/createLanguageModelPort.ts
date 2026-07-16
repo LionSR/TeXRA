@@ -107,13 +107,17 @@ function toVscodeMessage(
   }
 
   return vscode.LanguageModelChatMessage.User(
-    message.content.map((part) =>
-      part.kind === 'text'
-        ? new vscode.LanguageModelTextPart(part.text)
-        : new vscode.LanguageModelToolResultPart(part.callId, [
-            new vscode.LanguageModelTextPart(part.text),
-          ]),
-    ),
+    message.content.map((part) => {
+      if (part.kind === 'text') {
+        return new vscode.LanguageModelTextPart(part.text);
+      }
+      if (part.kind === 'data') {
+        return vscode.LanguageModelDataPart.image(part.data, part.mimeType);
+      }
+      return new vscode.LanguageModelToolResultPart(part.callId, [
+        new vscode.LanguageModelTextPart(part.text),
+      ]);
+    }),
   );
 }
 
