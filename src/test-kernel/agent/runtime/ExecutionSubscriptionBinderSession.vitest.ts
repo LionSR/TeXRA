@@ -26,12 +26,28 @@ import {
   AgentExecutionHandle,
   ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const streamId = 'stream:subscription-session' as StreamTabId;
 const childStreamId = 'child:subscription-session' as StreamTabId;
+
+/** Builds a toolUse `search` handle on the shared stream/child stream. */
+function createSearchHandle(
+  executionId: string,
+  runtimeHost: AgentRuntimeHost,
+): AgentExecutionHandle {
+  return new AgentExecutionHandle(
+    executionId,
+    streamId,
+    childStreamId,
+    'search',
+    'toolUse',
+    runtimeHost,
+  );
+}
 
 function createReleaseSource() {
   return {
@@ -70,14 +86,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       session,
     });
     const executionId = 'exec-subscription-session-test';
-    const handle = new AgentExecutionHandle(
-      executionId,
-      streamId,
-      childStreamId,
-      'search',
-      'toolUse',
-      explicit.host,
-    );
+    const handle = createSearchHandle(executionId, explicit.host);
 
     try {
       registry.track(handle);
@@ -130,14 +139,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
         session,
       });
       const executionId = `exec-subscription-${sendResult.status}-event-test`;
-      const handle = new AgentExecutionHandle(
-        executionId,
-        streamId,
-        childStreamId,
-        'search',
-        'toolUse',
-        explicit.host,
-      );
+      const handle = createSearchHandle(executionId, explicit.host);
       sendFollowUpMock.mockResolvedValueOnce(sendResult);
 
       try {
@@ -180,14 +182,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       logger: createLogger(),
     });
     const executionId = 'exec-subscription-current-session-test';
-    const handle = new AgentExecutionHandle(
-      executionId,
-      streamId,
-      childStreamId,
-      'search',
-      'toolUse',
-      explicit.host,
-    );
+    const handle = createSearchHandle(executionId, explicit.host);
 
     try {
       registry.track(handle);
@@ -233,14 +228,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       session,
     });
     const executionId = 'exec-subscription-rejection-test';
-    const handle = new AgentExecutionHandle(
-      executionId,
-      streamId,
-      childStreamId,
-      'search',
-      'toolUse',
-      explicit.host,
-    );
+    const handle = createSearchHandle(executionId, explicit.host);
     const unhandledRejection = vi.fn();
     sendFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));
 
