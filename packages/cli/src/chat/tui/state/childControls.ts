@@ -148,7 +148,45 @@ function streamDescription(
   return streamsById.get(child.childStreamId)?.description;
 }
 
-const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
+export const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
+
+// The panel re-renders on every stream-sync tick; entries arrays are replaced
+// wholesale on change, so one scan per entries version is enough. `has` (not
+// the value) discriminates a cached undefined from a miss.
+const childResponseSummaryCache = new WeakMap<
+  readonly ConversationEntry[],
+  string | undefined
+>();
+
+/**
+ * Latest thing the child "said": its final model response after the newest
+ * user instruction, falling back to that instruction while a turn is still
+ * running. Shared by the SubagentList rows (and formerly the picker).
+ */
+export function latestChildResponseSummary(
+  entries: readonly ConversationEntry[] | undefined,
+): string | undefined {
+  if (!entries) return undefined;
+  if (childResponseSummaryCache.has(entries)) {
+    return childResponseSummaryCache.get(entries);
+  }
+  const latestUserIndex = entries.findLastIndex(
+    (entry) => entry.role === 'user' && entry.text.trim(),
+  );
+  const latestInstruction =
+    latestUserIndex >= 0 ? entries[latestUserIndex]?.text : undefined;
+  const summary =
+    entries.findLast(
+      (entry, index) =>
+        index > latestUserIndex &&
+        entry.role === 'assistant' &&
+        entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
+        entry.finalized &&
+        entry.text.trim(),
+    )?.text ?? latestInstruction;
+  childResponseSummaryCache.set(entries, summary);
+  return summary;
+}
 
 const TASK_DETAIL_TRANSCRIPT_COLUMNS = 120;
 
@@ -200,22 +238,9 @@ function buildChildControlItem(
   const statusLabel = childStatusDescription(child.status);
 
   if (child.kind === 'subagent') {
-    const entries = ctx.streamsById.get(child.childStreamId)?.entries;
-    const latestUserIndex =
-      entries?.findLastIndex(
-        (entry) => entry.role === 'user' && entry.text.trim(),
-      ) ?? -1;
-    const latestInstruction =
-      latestUserIndex >= 0 ? entries?.[latestUserIndex]?.text : undefined;
-    const summary =
-      entries?.findLast(
-        (entry, index) =>
-          index > latestUserIndex &&
-          entry.role === 'assistant' &&
-          entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
-          entry.finalized &&
-          entry.text.trim(),
-      )?.text ?? latestInstruction;
+    const summary = latestChildResponseSummary(
+      ctx.streamsById.get(child.childStreamId)?.entries,
+    );
     return {
       executionId: child.executionId,
       childStreamId: child.childStreamId,
@@ -325,6 +350,37 @@ export function buildChildControlItems(
       }),
     ),
   ];
+}
+
+/** Resolve the SubagentList's Enter-on-process target: the detail item for
+ *  one execution id, or undefined once the process has exited. */
+export function taskDetailItemForExecution({
+  childStreamEntries,
+  executionId,
+  nowMs,
+  parentStreamId,
+  streams,
+}: {
+  readonly childStreamEntries: ChildStreamEntries;
+  readonly executionId: string;
+  readonly nowMs?: number;
+  readonly parentStreamId: StreamTabId | undefined;
+  readonly streams: ReadonlyMap<
+    StreamTabId,
+    Pick<
+      StreamSlice,
+      'activeProcesses' | 'description' | 'entries' | 'processOutput' | 'status'
+    >
+  >;
+}): ChildControlItem | undefined {
+  if (parentStreamId === undefined) return undefined;
+  return buildChildControlItems(
+    parentStreamId,
+    childStreamEntries,
+    streams,
+    'tasks',
+    nowMs,
+  ).find((item) => item.executionId === executionId);
 }
 
 export function hasChildControlItems(

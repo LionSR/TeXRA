@@ -151,20 +151,23 @@ export function digitFromMetaShortcut(value: string): number | undefined {
 }
 
 export type ForegroundSurfaceKind =
-  'transcript' | 'childControls' | 'form' | 'approval';
+  'transcript' | 'childControls' | 'taskDetail' | 'form' | 'approval';
 
 export function foregroundSurfaceKind({
   activeFormOpen,
   childControlMode,
   pendingApproval,
+  taskDetailOpen = false,
   transcriptViewerOpen,
 }: {
   readonly activeFormOpen: boolean;
   readonly childControlMode?: ChildControlMode;
   readonly pendingApproval: boolean;
+  readonly taskDetailOpen?: boolean;
   readonly transcriptViewerOpen: boolean;
 }): ForegroundSurfaceKind | undefined {
   if (transcriptViewerOpen) return 'transcript';
+  if (taskDetailOpen) return 'taskDetail';
   if (childControlMode !== undefined) return 'childControls';
   if (activeFormOpen) return 'form';
   if (pendingApproval) return 'approval';
@@ -201,6 +204,8 @@ export function foregroundEscapeAction({
       return activeFormEscapeAction ?? 'close';
     case 'childControls':
       return childControlEscapeAction ?? 'close';
+    case 'taskDetail':
+      return 'back';
     case 'transcript':
       return 'close';
     case 'approval':
@@ -245,6 +250,8 @@ export function foregroundMaxRowsForKind({
       return childControlHasItems
         ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
         : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
+    case 'taskDetail':
+      return CHILD_CONTROL_FOREGROUND_MAX_ROWS;
     case 'form':
       return FORM_FOREGROUND_MAX_ROWS;
     case 'approval':

@@ -36,6 +36,7 @@ import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { ChildControlStreamTarget } from '../state/childControls';
+import type { SubagentListRow } from '../state/subagentListRows';
 import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
@@ -55,6 +56,7 @@ interface ConversationRegionSnapshot {
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly childExecutionPanelTarget: ChildControlStreamTarget;
+  readonly subagentListRows: readonly SubagentListRow[];
   readonly transcriptViewerStreamId: StreamTabId | undefined;
 }
 
@@ -73,6 +75,8 @@ interface ConversationRegionProps {
   readonly snapshot: ConversationRegionSnapshot;
   readonly onCancelSessionList: () => void;
   readonly onFocusSession: (streamId: StreamTabId) => void;
+  readonly onKillExecution?: (executionId: string) => void;
+  readonly onOpenTaskDetail: (executionId: string) => void;
   readonly onSessionSelectionChange: (streamId: StreamTabId) => void;
 }
 
@@ -81,6 +85,8 @@ export function ConversationRegion({
   columns,
   onCancelSessionList,
   onFocusSession,
+  onKillExecution,
+  onOpenTaskDetail,
   onSessionSelectionChange,
   onTranscriptViewportChange,
   renderFooterChrome,
@@ -243,11 +249,12 @@ export function ConversationRegion({
               maxRows={subagentRows}
               onCancel={onCancelSessionList}
               onFocusStream={onFocusSession}
+              onKillExecution={onKillExecution}
+              onOpenTaskDetail={onOpenTaskDetail}
               onSelectionChange={onSessionSelectionChange}
-              selectedStreamId={snapshot.selectedSessionId}
-              sessions={snapshot.sessionViews}
-              activeProcesses={activeProcesses}
               processOutput={childExecutionPanelTarget.slice?.processOutput}
+              rows={snapshot.subagentListRows}
+              selectedStreamId={snapshot.selectedSessionId}
             />
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>

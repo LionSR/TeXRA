@@ -4,10 +4,8 @@ import {
   CHILD_STATUS_MARKER,
   childStatusColor,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
-import {
-  compactChildRowText,
-  subagentListRowAllocation,
-} from '@cli/chat/tui/panes/SubagentList';
+import { compactChildRowText } from '@cli/chat/tui/panes/SubagentList';
+import { buildSubagentListRows } from '@cli/chat/tui/state/subagentListRows';
 import {
   nextSelectHighlightIndex,
   selectControlledHighlightIndex,
@@ -131,27 +129,27 @@ describe('CLI session list display model', () => {
     );
   });
 
-  it('reserves constrained-list visibility for sessions and processes', () => {
-    expect(
-      subagentListRowAllocation({
-        maxRows: 3,
-        processCount: 4,
-        sessionCount: 4,
-      }),
-    ).toEqual({ sessionRows: 2, processRows: 1 });
-    expect(
-      subagentListRowAllocation({
-        maxRows: 1,
-        processCount: 4,
-        sessionCount: 4,
-      }),
-    ).toEqual({ sessionRows: 1, processRows: 0 });
-    expect(
-      subagentListRowAllocation({
-        maxRows: 2,
-        processCount: 4,
-        sessionCount: 0,
-      }),
-    ).toEqual({ sessionRows: 0, processRows: 2 });
+  it('merges sessions before processes into one selectable row list', () => {
+    const rows = buildSubagentListRows({
+      activeProcesses: [
+        {
+          executionId: 'exec-1',
+          kind: 'process',
+          agentName: 'latex build',
+          toolName: 'executions',
+        },
+      ],
+      childStreamEntries: new Map(),
+      parentStreamId: 'root' as StreamTabId,
+      sessions: [session('root', true), session('child')],
+      streams: new Map(),
+    });
+
+    expect(rows.map((row) => row.key)).toEqual([
+      'session:root',
+      'session:child',
+      'process:exec-1',
+    ]);
+    expect(rows.map((row) => row.killable)).toEqual([false, false, true]);
   });
 });

@@ -536,6 +536,7 @@ function sessionListBindingsText(
     [
       keyHintText({ key: 'Up/Down', action: 'select' }),
       keyHintText({ key: 'Enter', action: 'focus' }),
+      keyHintText({ key: 'k', action: 'kill' }),
       keyHintText({ key: 'Tab', action: 'input' }),
       keyHintText({ key: 'Esc', action: 'input' }),
       ctrlCBinding,

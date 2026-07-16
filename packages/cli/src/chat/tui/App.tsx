@@ -33,6 +33,7 @@ import {
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
+import { TaskDetailView } from './modals/TaskDetailView';
 import { TranscriptViewer } from './modals/TranscriptViewer';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
@@ -50,7 +51,9 @@ import {
 import {
   numericFocusTargetForActiveStream,
   resolveChildControlDisplayTargets,
+  taskDetailItemForExecution,
 } from './state/childControls';
+import { buildSubagentListRows } from './state/subagentListRows';
 import {
   activeStreamId as activeStreamIdSignal,
   rootRunStartAvailable as rootRunStartAvailableSignal,
@@ -60,6 +63,7 @@ import {
   childControlMode as childControlModeSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
+  taskDetailExecutionId as taskDetailExecutionIdSignal,
   transcriptViewerStreamId as transcriptViewerStreamIdSignal,
   streams as streamsSignal,
 } from './state/cliState';
@@ -125,6 +129,7 @@ export function App(props: AppProps): React.JSX.Element {
   );
   const sessionListFocused = sessionListSelection.focused;
   const selectedSessionId = sessionListSelection.selectedStreamId;
+  const taskDetailExecutionId = useSignal(taskDetailExecutionIdSignal);
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
@@ -144,6 +149,22 @@ export function App(props: AppProps): React.JSX.Element {
   });
   const taskControlsAvailable = childControlTargets.tasks.hasItems;
   const subagentControlsAvailable = childControlTargets.subagents.hasItems;
+  const taskDetailItem =
+    taskDetailExecutionId !== undefined
+      ? taskDetailItemForExecution({
+          childStreamEntries,
+          executionId: taskDetailExecutionId,
+          parentStreamId: childControlTargets.tasks.streamId,
+          streams,
+        })
+      : undefined;
+  useEffect(() => {
+    // The process can exit while its detail is open; fall back to the list.
+    if (taskDetailExecutionId !== undefined && taskDetailItem === undefined) {
+      taskDetailExecutionIdSignal.set(undefined);
+      dispatchSessionListSelection({ kind: 'focus' });
+    }
+  }, [taskDetailExecutionId, taskDetailItem]);
 
   const stdin = useStdin();
   const foregroundOpen =
@@ -240,6 +261,7 @@ export function App(props: AppProps): React.JSX.Element {
     activeFormOpen: activeForm !== undefined,
     childControlMode,
     pendingApproval: activeApprovalVisible,
+    taskDetailOpen: taskDetailExecutionId !== undefined,
     transcriptViewerOpen,
   });
   const approvalKind =
@@ -279,6 +301,31 @@ export function App(props: AppProps): React.JSX.Element {
               streams,
             })}
             width={transcriptWidth}
+          />
+        );
+      }
+      case 'taskDetail': {
+        if (!taskDetailItem) return null;
+        return (
+          <TaskDetailView
+            availableColumns={columns}
+            availableRows={availableRows}
+            item={taskDetailItem}
+            onBack={() => {
+              taskDetailExecutionIdSignal.set(undefined);
+              dispatchSessionListSelection({ kind: 'focus' });
+            }}
+            onFocusStream={() => {
+              if (taskDetailItem.childStreamId !== undefined) {
+                activeStreamIdSignal.set(taskDetailItem.childStreamId);
+              }
+              taskDetailExecutionIdSignal.set(undefined);
+            }}
+            onKill={() => {
+              props.onKillExecution?.(taskDetailItem.executionId);
+              taskDetailExecutionIdSignal.set(undefined);
+              dispatchSessionListSelection({ kind: 'focus' });
+            }}
           />
         );
       }
@@ -537,10 +584,22 @@ export function App(props: AppProps): React.JSX.Element {
           selectedSessionId,
           streams,
           childExecutionPanelTarget: childControlTargets.tasks,
+          subagentListRows: buildSubagentListRows({
+            activeProcesses:
+              childControlTargets.tasks.slice?.activeProcesses ?? [],
+            childStreamEntries,
+            parentStreamId: childControlTargets.tasks.streamId,
+            sessions: sessionViews,
+            streams,
+          }),
           transcriptViewerStreamId,
         }}
         onCancelSessionList={cancelSessionList}
         onFocusSession={focusSession}
+        onKillExecution={props.onKillExecution}
+        onOpenTaskDetail={(executionId) =>
+          taskDetailExecutionIdSignal.set(executionId)
+        }
         onSessionSelectionChange={(streamId) =>
           dispatchSessionListSelection({ kind: 'highlight', streamId })
         }

@@ -438,6 +438,11 @@ export const childControlMode = CHILD_CONTROL_MODE;
 const CHILD_CONTROL_ESCAPE_ACTION = signal<string>('close');
 export const childControlEscapeAction = CHILD_CONTROL_ESCAPE_ACTION;
 
+/** Execution id whose TaskDetailView App shows in the foreground, opened
+ *  from the SubagentList; `undefined` when closed. */
+const TASK_DETAIL_EXECUTION_ID = signal<string | undefined>(undefined);
+export const taskDetailExecutionId = TASK_DETAIL_EXECUTION_ID;
+
 // ---------------------------------------------------------------------------
 // exitHintSlice
 // ---------------------------------------------------------------------------
@@ -524,6 +529,7 @@ export function resetCliState(
   transcriptViewerStreamId.set(undefined);
   childControlMode.set(undefined);
   childControlEscapeAction.set('close');
+  taskDetailExecutionId.set(undefined);
   pendingExitHint.set(false);
   pendingExitResumeId.set(undefined);
   for (const resetHook of RESET_HOOKS) resetHook();
