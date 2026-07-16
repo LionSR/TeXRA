@@ -844,12 +844,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves a follow-up appended during setup when cancellation arrives during the recovery read (issue #8049 P2)', async () => {
-    // Regression: resumeQueuedToolUseSnapshot's setupSession re-appends its
-    // drained follow-up batch into the live session queue *before* the flow
-    // is interruptible. If an external cancellation then lands while the
-    // recovery read is pending -- this same "cancellation during read"
-    // window as the sibling test above -- the early return here reports
-    // CANCELLED with the resume record preserved, but previously
+    // Regression: once setup attaches the live flow context, a new follow-up
+    // can enter its session queue before the flow is interruptible. If an
+    // external cancellation then lands while the recovery read is pending --
+    // this same "cancellation during read" window as the sibling test above --
+    // the early return here reports CANCELLED with the resume record preserved,
+    // but previously
     // `ToolUseSessionLifecycle.interrupt()` unconditionally disposed the
     // queue (dropping the just-appended follow-up) and the finally below
     // unconditionally released it again, so neither the caller
@@ -868,7 +868,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     let flowContext: ToolUseSetupContext | undefined;
     const readSpy = vi.spyOn(store, 'read').mockImplementationOnce(async () => {
       // Cancellation arrives while the recovery read is pending -- after
-      // setupSession already appended the drained follow-up below.
+      // setup already appended the live follow-up below.
       flowContext?.interrupt();
       return undefined;
     });

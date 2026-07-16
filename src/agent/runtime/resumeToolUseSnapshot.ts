@@ -2,8 +2,8 @@
  * Host-neutral tool-use snapshot resume.
  *
  * Drives the shared queue dance (`resumeQueuedToolUseSnapshot`): acquire the
- * follow-up queue, flip the stream to RESUMING, replay drained follow-ups into
- * the rebuilt session, and on failure re-enqueue the follow-ups and settle the
+ * follow-up queue, flip the stream to RESUMING, hand drained follow-ups to the
+ * resumed wait cursor, and on failure re-enqueue the follow-ups and settle the
  * stream back to WAITING.
  *
  * Hosts stay thin adapters: they inject only what differs (`runtimeHost`, an
