@@ -10,9 +10,13 @@ import { clamp } from '@utils/core';
  * PgUp/PgDn while there is anything to scroll.
  */
 export function useScrollableOffset({
+  active = true,
   maxScrollOffset,
   pageRows,
 }: {
+  /** Release the key bindings while another surface owns ↑/↓ (e.g. a
+   *  feedback text input); the offset itself is retained. */
+  readonly active?: boolean;
   readonly maxScrollOffset: number;
   readonly pageRows: number;
 }): { scrollOffset: number; scrollable: boolean } {
@@ -34,7 +38,7 @@ export function useScrollableOffset({
       else if (key.pageDown) scrollBy(pageRows);
       else if (key.pageUp) scrollBy(-pageRows);
     },
-    { isActive: scrollable },
+    { isActive: scrollable && active },
   );
 
   return { scrollOffset, scrollable };
