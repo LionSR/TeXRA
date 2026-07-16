@@ -45,6 +45,23 @@ return concat(sections, { separator: '\n\n' });
   `AgentFinalResult` envelope — never the XML follow-up delivery string. It
   also verifies task-run inputs against persisted child lineage and result
   manifests before passing them to a later stage.
+- **Restart-safe checkpoints**: one strict, versioned execution-KV record per
+  tool call stores the script, arguments, and journal atomically. Successful
+  live calls are checkpointed before their results return to the script;
+  parallel writes and overlapping resumes are serialized, malformed state
+  fails loudly, and completed child manifests close the final crash-recovery
+  gap without repeating model work. Each stable child attempt records a
+  reservation before registration and a launch marker before model work, so a
+  failed registration can advance safely while an uncertain launched child is
+  never repeated. The parent records the complete attempt sequence, so deleting
+  an earlier child cannot hide a later completed result. A parent execution has
+  one active runtime owner; the execution KV store is durable state, not a
+  cross-process lock.
+- **Cost ownership**: child costs remain in the persisted typed results. The
+  future tool surface must aggregate the final journal at its tool-result
+  boundary, rather than mutating parent totals during child launch; this keeps
+  live execution, recovered manifests, and journal replay on one accounting
+  path.
 - **Sandbox**: a fresh QuickJS runtime and context per script, with a CPU
   interrupt deadline, 64 MB heap limit, 1 MB stack limit, dynamic code
   generation disabled, and no `require`/`process`. The WASM module is loaded
@@ -72,11 +89,14 @@ return concat(sections, { separator: '\n\n' });
   them (`new Date(timestamp)` stays usable). Resume relies on replaying the
   same call sequence: each `agent()` call is journaled by (call index,
   prompt/options hash), and a rerun with a prior journal replays matching
-  calls from cache, re-running only edited or new calls. Failed calls are
-  not journaled, so resume retries them. Caveat: `agent()` calls made from
+  calls from cache, re-running only edited or new calls. Failed and cancelled
+  calls are not journaled, so resume retries them. Caveat: `agent()` calls made from
   `pipeline()` stages beyond the first get indices in completion order,
   which varies run-to-run — the per-index key check keeps replay safe, but
-  multi-stage pipelines see lower resume cache-hit rates.
+  multi-stage pipelines see lower journal cache-hit rates. Durable child
+  identity instead uses the prompt/options hash, so a shifted journal index
+  does not repeat completed model work. Otherwise-identical calls must provide
+  distinct `id` options; ambiguous duplicates fail before launch.
 - **Budgets**: one concurrency semaphore (default 4) across all `agent()`
   calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
   `parallel()`/`pipeline()` call, and a wall-clock timeout. The cap and
@@ -96,5 +116,4 @@ return concat(sections, { separator: '\n\n' });
 - A `delegate_workflow_script` tool, which will invoke the existing production
   runner and task-run file hand-off. Domain-specific structures travel as JSON
   output files rather than per-call result schemas.
-- Journal persistence in the execution KV store and progress-event bridging
-  onto the existing stream tree.
+- Progress-event bridging onto the existing stream tree.

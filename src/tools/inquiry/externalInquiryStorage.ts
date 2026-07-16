@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 
-import { Mutex } from 'async-mutex';
 import { z } from 'zod';
 
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -21,6 +20,7 @@ import {
 import { ToolError } from '@shared/schemas/toolResult';
 import {
   isObject,
+  KeyedMutex,
   toNewestFirstByTimestamp,
   unique,
   hexId12,
@@ -261,29 +261,13 @@ export interface PersistedAnsweredTurn {
 // Per-thread write lock
 // ============================================================================
 
-const threadMutexes = new Map<string, Mutex>();
+const threadMutex = new KeyedMutex<string>();
 
-function getThreadMutex(threadId: string): Mutex {
-  let mutex = threadMutexes.get(threadId);
-  if (!mutex) {
-    mutex = new Mutex();
-    threadMutexes.set(threadId, mutex);
-  }
-  return mutex;
-}
-
-// Thread IDs are freshly minted per thread, so the Map would otherwise grow
-// without bound. Evict after each critical section once no waiters remain.
-async function withThreadLock<T>(
+function withThreadLock<T>(
   threadId: string,
-  fn: () => Promise<T>,
+  operation: () => Promise<T>,
 ): Promise<T> {
-  const mutex = getThreadMutex(threadId);
-  try {
-    return await mutex.runExclusive(fn);
-  } finally {
-    if (!mutex.isLocked()) threadMutexes.delete(threadId);
-  }
+  return threadMutex.runExclusive(threadId, operation);
 }
 
 // ============================================================================

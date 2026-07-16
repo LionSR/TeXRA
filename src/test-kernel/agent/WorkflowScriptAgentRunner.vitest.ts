@@ -5,9 +5,14 @@ import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
+import {
+  SubagentDurabilityError,
+  SubagentReconciliationError,
+} from '@tools/delegation/inBandSubagentExecution';
 
 const mocks = vi.hoisted(() => ({
   executeSubagentInBand: vi.fn(),
+  preparedOptions: [] as unknown[],
   requireVisibleAgent: vi.fn(),
   selectAvailableDelegationModel: vi.fn(),
   resolveChildRunOutput: vi.fn(),
@@ -15,9 +20,25 @@ const mocks = vi.hoisted(() => ({
   assertWorkflowFilesExist: vi.fn(),
 }));
 
-vi.mock('@tools/delegation/inBandSubagentExecution', () => ({
-  executeSubagentInBand: mocks.executeSubagentInBand,
-}));
+vi.mock('@tools/delegation/inBandSubagentExecution', () => {
+  class SubagentDurabilityError extends Error {
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options);
+      this.name = 'SubagentDurabilityError';
+    }
+  }
+  class SubagentReconciliationError extends SubagentDurabilityError {
+    constructor(message: string) {
+      super(message);
+      this.name = 'SubagentReconciliationError';
+    }
+  }
+  return {
+    executeStableSubagentInBand: mocks.executeSubagentInBand,
+    SubagentDurabilityError,
+    SubagentReconciliationError,
+  };
+});
 
 vi.mock('@tools/delegation/proposalFlow', () => ({
   requireVisibleAgent: mocks.requireVisibleAgent,
@@ -74,6 +95,7 @@ function invocation(
 ): WorkflowAgentInvocation {
   return {
     index: 0,
+    key: '0123456789abcdef',
     prompt: 'Draft the section.',
     options,
     signal: new AbortController().signal,
@@ -83,6 +105,7 @@ function invocation(
 describe('createWorkflowScriptAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.preparedOptions.length = 0;
     mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
       name,
       source: 'builtInWorkflow',
@@ -92,16 +115,20 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.selectAvailableDelegationModel.mockResolvedValue('child-model');
     mocks.assertWorkflowFilesExist.mockResolvedValue(undefined);
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
-    mocks.executeSubagentInBand.mockResolvedValue({
-      executionId: 'bbbbbb222222',
-      result,
+    mocks.executeSubagentInBand.mockImplementation(async (options) => {
+      mocks.preparedOptions.push(await options.prepare());
+      return { executionId: 'bbbbbb222222', result };
     });
   });
 
   it('uses delegation policy and executes a direct in-band child', async () => {
     const parent = parentContext();
     const call = invocation({ inputFiles: ['paper.tex'] });
-    const runner = createWorkflowScriptAgentRunner(parent, 'correct');
+    const runner = createWorkflowScriptAgentRunner(
+      parent,
+      'correct',
+      'tool-call-7',
+    );
 
     await expect(runner(call)).resolves.toBe(result);
     expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
@@ -120,6 +147,14 @@ describe('createWorkflowScriptAgentRunner', () => {
       agentCategory: 'workflow',
     });
     expect(mocks.executeSubagentInBand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionId: expect.stringMatching(/^[a-f0-9]{24}$/),
+        parentExecutionId,
+        signal: call.signal,
+        prepare: expect.any(Function),
+      }),
+    );
+    expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({
         agentName: 'correct',
         parentExecutionId,
@@ -156,7 +191,11 @@ describe('createWorkflowScriptAgentRunner', () => {
       relativePath: 'r1/draft.tex',
       executionId: 'bbbbbb222222',
     });
-    const runner = createWorkflowScriptAgentRunner(parentContext(), 'correct');
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      'correct',
+      'tool-call-7',
+    );
 
     await runner(
       invocation({
@@ -172,7 +211,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
       { label: 'Input file', files: ['notes.tex'] },
     ]);
-    expect(mocks.executeSubagentInBand).toHaveBeenCalledWith(
+    expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({
         agentName: 'merge',
         configPayload: expect.objectContaining({
@@ -188,14 +227,95 @@ describe('createWorkflowScriptAgentRunner', () => {
       kind: 'runStorage',
     });
     mocks.resolveChildRunOutput.mockResolvedValue(undefined);
-    const runner = createWorkflowScriptAgentRunner(parentContext(), 'correct');
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      'correct',
+      'tool-call-7',
+    );
 
     await runner(invocation({ inputFiles: [placeholder] }));
 
-    expect(mocks.executeSubagentInBand).toHaveBeenCalledWith(
+    expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({
         configPayload: expect.objectContaining({ inputFiles: [] }),
       }),
     );
+  });
+
+  it('uses one stable child id per workflow call identity', async () => {
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      'correct',
+      'tool-call-7',
+    );
+
+    await runner(invocation());
+    await runner(invocation());
+    await runner({ ...invocation(), index: 1 });
+    await runner({ ...invocation(), key: 'fedcba9876543210' });
+
+    const executionIds = mocks.executeSubagentInBand.mock.calls.map(
+      ([options]) => options.executionId,
+    );
+    expect(executionIds[0]).toBe(executionIds[1]);
+    expect(executionIds[2]).toBe(executionIds[0]);
+    expect(executionIds[3]).not.toBe(executionIds[0]);
+  });
+
+  it('rejects a cancelled child so the workflow journal can retry it', async () => {
+    mocks.executeSubagentInBand.mockResolvedValueOnce({
+      executionId: 'bbbbbb222222',
+      result: {
+        category: 'toolUse',
+        outcome: 'cancelled',
+        response: '',
+        files: [],
+        cost: 0,
+      },
+    });
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      'correct',
+      'tool-call-7',
+    );
+
+    await expect(runner(invocation())).rejects.toThrow(
+      'Workflow subagent ended with cancelled outcome.',
+    );
+  });
+
+  it('turns durable reconciliation failures into fatal workflow aborts', async () => {
+    mocks.executeSubagentInBand.mockRejectedValueOnce(
+      new SubagentReconciliationError('incomplete child state'),
+    );
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      'correct',
+      'tool-call-7',
+    );
+
+    await expect(runner(invocation())).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: 'incomplete child state',
+    });
+  });
+
+  it('turns manifest-write failures into fatal workflow aborts', async () => {
+    const durabilityError = new SubagentDurabilityError(
+      'result manifest unavailable',
+      { cause: new Error('storage offline') },
+    );
+    mocks.executeSubagentInBand.mockRejectedValueOnce(durabilityError);
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      'correct',
+      'tool-call-7',
+    );
+
+    await expect(runner(invocation())).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: 'result manifest unavailable',
+      cause: durabilityError,
+    });
   });
 });
