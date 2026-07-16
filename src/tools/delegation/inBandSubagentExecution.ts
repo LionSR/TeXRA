@@ -74,8 +74,6 @@ interface InBandSubagentExecutionBaseOptions {
 /** Options for the typed child API. Direct persisted parentage is required. */
 export interface InBandSubagentExecutionOptions extends InBandSubagentExecutionBaseOptions {
   readonly parentExecutionId: ExecutionId;
-  /** Stable logical-call identity for restart recovery; random when omitted. */
-  readonly executionId?: ExecutionId;
 }
 
 export interface StableInBandSubagentExecutionOptions {
@@ -84,9 +82,7 @@ export interface StableInBandSubagentExecutionOptions {
   readonly parentExecutionId: ExecutionId;
   readonly signal?: AbortSignal;
   /** Resolve mutable launch prerequisites only when no result can be recovered. */
-  readonly prepare: () => Promise<
-    Omit<InBandSubagentExecutionOptions, 'executionId'>
-  >;
+  readonly prepare: () => Promise<InBandSubagentExecutionOptions>;
 }
 
 /** Legacy delivery callers may still provide a bare one-shot run context. */
@@ -578,30 +574,6 @@ async function executeInBand(
   // Cancellation observed here rejects the caller without changing that record.
   options.signal?.throwIfAborted();
   return { executionId, flowResult, built, delivery };
-}
-
-/** Run a direct child and return the durable, XML-free result envelope. */
-export async function executeSubagentInBand(
-  options: InBandSubagentExecutionOptions,
-): Promise<InBandSubagentExecutionResult> {
-  if (options.executionId) {
-    const { executionId, ...launchOptions } = options;
-    return executeStableSubagentInBand({
-      executionId,
-      parentExecutionId: options.parentExecutionId,
-      signal: options.signal,
-      prepare: async () => launchOptions,
-    });
-  }
-  const completed = await executeInBand(
-    options,
-    'required-result',
-    generateExecutionId() as ExecutionId,
-  );
-  return {
-    executionId: completed.executionId,
-    result: completed.built.result,
-  };
 }
 
 /** Recover a logical child first; resolve launch-only state only when needed. */
