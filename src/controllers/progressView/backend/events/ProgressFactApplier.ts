@@ -111,7 +111,7 @@ type RunFactHandlers = {
   [K in RunFactType]: (
     streamId: StreamTabId,
     event: Extract<AgentEvent, { type: K }>,
-  ) => void;
+  ) => void | Promise<void>;
 };
 
 function getDefaultProgressStreamControls(): ProgressStreamControls {
@@ -128,117 +128,82 @@ export class ProgressFactApplier {
   private progressThrottleTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingProgressUpdates = new Map<StreamTabId, ConversationProgress>();
 
-  /** Run-fact dispatch table (see `RUN_FACT_EVENT_TYPES`); keys stay exhaustive. */
+  /**
+   * Run-fact dispatch table (see `RUN_FACT_EVENT_TYPES`); keys stay exhaustive.
+   * Handlers hold only their own logic and RETURN it — `handleRunFact` wraps
+   * each dispatch in `applyFact` once. Returning (rather than discarding) the
+   * call keeps async handlers' promises flowing to `applyFact`, so a rejection
+   * after an await is still logged instead of becoming an unhandled rejection.
+   */
   private readonly runFactHandlers: RunFactHandlers = {
     usage: (streamId, event) => {
       const payload = toUpdateStreamUsagePayload(event.data, streamId);
-      if (payload) {
-        this.applyFact('failed to handle usage fact', () =>
-          this.handleUpdateStreamUsage(payload),
-        );
-      }
+      if (payload) return this.handleUpdateStreamUsage(payload);
     },
-    'run.config': (_streamId, event) => {
-      this.applyFact('failed to handle run.config fact', () =>
-        this.handleSetTaskState({
-          streamId: event.streamId,
-          executionId: event.executionId,
-          taskState: agentConfigToTaskState(event.config),
-        }),
-      );
-    },
-    status: (_streamId, event) => {
-      this.applyFact('failed to handle status fact', () =>
-        this.setStreamStatus(
-          event.streamId,
-          event.phase,
-          event.previousPhase,
-          event.substate,
-        ),
-      );
-    },
-    updateTodos: (_streamId, event) => {
-      this.applyFact('failed to handle updateTodos fact', () =>
-        this.handleUpdateTodos(event),
-      );
-    },
-    updatePlan: (_streamId, event) => {
-      this.applyFact('failed to handle updatePlan fact', () =>
-        this.handleUpdatePlan(event),
-      );
-    },
-    addOutputFiles: (_streamId, event) => {
-      this.applyFact('failed to handle addOutputFiles fact', () =>
-        this.handleAddOutputFiles(event),
-      );
-    },
-    updateMissingOutputs: (_streamId, event) => {
-      this.applyFact('failed to handle updateMissingOutputs fact', () =>
-        this.handleUpdateMissingOutputs(event),
-      );
-    },
-    updateCompileFailures: (_streamId, event) => {
-      this.applyFact('failed to handle updateCompileFailures fact', () =>
-        this.handleUpdateCompileFailures(event),
-      );
-    },
+    'run.config': (_streamId, event) =>
+      this.handleSetTaskState({
+        streamId: event.streamId,
+        executionId: event.executionId,
+        taskState: agentConfigToTaskState(event.config),
+      }),
+    status: (_streamId, event) =>
+      this.setStreamStatus(
+        event.streamId,
+        event.phase,
+        event.previousPhase,
+        event.substate,
+      ),
+    updateTodos: (_streamId, event) => this.handleUpdateTodos(event),
+    updatePlan: (_streamId, event) => this.handleUpdatePlan(event),
+    addOutputFiles: (_streamId, event) => this.handleAddOutputFiles(event),
+    updateMissingOutputs: (_streamId, event) =>
+      this.handleUpdateMissingOutputs(event),
+    updateCompileFailures: (_streamId, event) =>
+      this.handleUpdateCompileFailures(event),
     goalPaused: () => {
       // No progress-view state change; listed only to keep the run-fact type
       // set exhaustive (it stays in the subscription filter for parity).
     },
-    'conversation.progress': (streamId, event) => {
-      this.applyFact('failed to handle conversation.progress fact', () =>
-        this.handleUpdateConversationProgress({
-          streamId,
-          progress: event.progress,
-        }),
-      );
-    },
+    'conversation.progress': (streamId, event) =>
+      this.handleUpdateConversationProgress({
+        streamId,
+        progress: event.progress,
+      }),
     'stage.start': (streamId, event) => {
       if (event.kind !== 'round') return;
-      this.applyFact('failed to handle stage.start fact', () =>
-        this.handleUpdateRoundStage({
-          streamId,
-          roundStage: {
-            index: event.index ?? 0,
-            ...(event.total !== undefined && event.total > 0
-              ? { total: event.total }
-              : {}),
-          },
-        }),
-      );
+      return this.handleUpdateRoundStage({
+        streamId,
+        roundStage: {
+          index: event.index ?? 0,
+          ...(event.total !== undefined && event.total > 0
+            ? { total: event.total }
+            : {}),
+        },
+      });
     },
     'child.activity': (_streamId, event) => {
       if (event.kind === 'subagents') {
-        this.applyFact('failed to handle subagent activity fact', () =>
-          this.updateActiveChildren(event.parentStreamId, {
-            activeField: 'activeSubagents',
-            countField: 'finishedSubagentCount',
-            next: [...event.children],
-          }),
-        );
-        return;
+        return this.updateActiveChildren(event.parentStreamId, {
+          activeField: 'activeSubagents',
+          countField: 'finishedSubagentCount',
+          next: [...event.children],
+        });
       }
       if (event.kind === 'processes') {
-        this.applyFact('failed to handle process activity fact', () =>
-          this.updateActiveChildren(event.parentStreamId, {
-            activeField: 'activeProcesses',
-            countField: 'finishedProcessCount',
-            next: [...event.processes],
-          }),
-        );
+        return this.updateActiveChildren(event.parentStreamId, {
+          activeField: 'activeProcesses',
+          countField: 'finishedProcessCount',
+          next: [...event.processes],
+        });
       }
     },
-    'process.output': (_streamId, event) => {
-      this.applyFact('failed to handle process.output fact', () =>
-        this.handleUpdateProcessOutput({
-          parentStreamId: event.parentStreamId,
-          executionId: event.executionId,
-          stdout: event.stdout,
-          stderr: event.stderr,
-        }),
-      );
-    },
+    'process.output': (_streamId, event) =>
+      this.handleUpdateProcessOutput({
+        parentStreamId: event.parentStreamId,
+        executionId: event.executionId,
+        stdout: event.stdout,
+        stderr: event.stderr,
+      }),
   };
 
   constructor(
@@ -296,58 +261,43 @@ export class ProgressFactApplier {
   }
 
   handleSessionFact(fact: SessionFact): void {
-    switch (fact.type) {
-      case 'goalStateChanged':
-        return;
-      case 'inquiryThreadUpdated':
-        this.applyFact('failed to handle inquiryThreadUpdated fact', () =>
-          this.handleInquiryThreadUpdated(fact.payload),
-        );
-        return;
-      case 'clearMissingOutputs':
-        this.applyFact('failed to handle clearMissingOutputs fact', () =>
-          this.handleClearMissingOutputs(fact.payload),
-        );
-        return;
-      case 'updateQueuedFollowUps':
-        this.applyFact('failed to handle updateQueuedFollowUps fact', () =>
-          this.handleUpdateQueuedFollowUps(fact.payload),
-        );
-        return;
-      case 'followUpSent':
-        return;
-      case 'setActiveStream':
-        this.applyFact('failed to handle setActiveStream fact', () =>
-          this.handleSetActiveStream(fact.payload),
-        );
-        return;
-      case 'updateStreamDescription':
-        this.applyFact('failed to handle updateStreamDescription fact', () =>
-          this.handleUpdateStreamDescription(fact.payload),
-        );
-        return;
-      case 'updateStreamStatus':
-        this.applyFact('failed to handle updateStreamStatus fact', () =>
-          this.setStreamStatus(
+    // Wrap once, and RETURN each case so async handlers' promises reach
+    // `applyFact` (a discarded promise would let a post-await rejection escape
+    // `withEventErrorHandling`'s thenable check as an unhandled rejection). The
+    // switch is inlined here rather than in a single-caller helper, mirroring
+    // `handleRunFact`'s inline table lookup. `assertNever` stays inside the
+    // wrapper — an unreachable exhaustiveness guard that would only ever be
+    // logged, never thrown, and the union is closed so it never fires.
+    this.applyFact(`failed to handle ${fact.type} fact`, () => {
+      switch (fact.type) {
+        case 'goalStateChanged':
+          return;
+        case 'inquiryThreadUpdated':
+          return this.handleInquiryThreadUpdated(fact.payload);
+        case 'clearMissingOutputs':
+          return this.handleClearMissingOutputs(fact.payload);
+        case 'updateQueuedFollowUps':
+          return this.handleUpdateQueuedFollowUps(fact.payload);
+        case 'followUpSent':
+          return;
+        case 'setActiveStream':
+          return this.handleSetActiveStream(fact.payload);
+        case 'updateStreamDescription':
+          return this.handleUpdateStreamDescription(fact.payload);
+        case 'updateStreamStatus':
+          return this.setStreamStatus(
             fact.payload.streamId,
             fact.payload.status,
             fact.payload.previousStatus,
             fact.payload.substate,
-          ),
-        );
-        return;
-      case 'setParentStream':
-        this.applyFact('failed to handle setParentStream fact', () =>
-          this.handleSetParentStream(fact.payload),
-        );
-        return;
-      case 'removeStream':
-        this.applyFact('failed to handle removeStream fact', () =>
-          this.deleteStream(fact.payload.streamId),
-        );
-        return;
-    }
-    assertNever(fact, 'Unhandled progress-view session fact');
+          );
+        case 'setParentStream':
+          return this.handleSetParentStream(fact.payload);
+        case 'removeStream':
+          return this.deleteStream(fact.payload.streamId);
+      }
+      assertNever(fact, 'Unhandled progress-view session fact');
+    });
   }
 
   handleRunFact(streamId: StreamTabId, event: AgentEvent): void {
@@ -357,10 +307,21 @@ export class ProgressFactApplier {
     const handlers = this.runFactHandlers as Partial<
       Record<
         AgentEvent['type'],
-        (streamId: StreamTabId, event: AgentEvent) => void
+        (streamId: StreamTabId, event: AgentEvent) => void | Promise<void>
       >
     >;
-    handlers[event.type]?.(streamId, event);
+    const handler = handlers[event.type];
+    if (!handler) return;
+    // Every type derives its context from `event.type`, except `child.activity`
+    // — the one fact whose failure context was historically keyed on
+    // `event.kind` (subagents vs processes), preserved so those failures stay
+    // distinguishable in logs.
+    let context = `failed to handle ${event.type} fact`;
+    if (event.type === 'child.activity') {
+      const activityKind = event.kind === 'subagents' ? 'subagent' : 'process';
+      context = `failed to handle ${activityKind} activity fact`;
+    }
+    this.applyFact(context, () => handler(streamId, event));
   }
 
   private applyFact(context: string, handle: () => void | Promise<void>): void {
