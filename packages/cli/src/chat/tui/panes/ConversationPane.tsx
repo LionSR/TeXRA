@@ -181,7 +181,7 @@ export function ConversationPane(
           width: props.width,
         }),
       )}
-      {showLiveness ? (
+      {livenessRows > 0 ? (
         <LivenessRow
           startedAtMs={slice?.runStartedAt}
           thinking={thinkingIndicatorVisible(slice)}
