@@ -44,7 +44,11 @@ import {
 } from '../htmlBuilders';
 import { registerProposalInput } from '../proposalInputStore';
 import { stringifyWithLanguage } from '../parseUtils';
-import { TOOL_LABEL_MAP, TRIVIAL_WRITE_OUTPUT } from '../constants';
+import {
+  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  TOOL_LABEL_MAP,
+  TRIVIAL_WRITE_OUTPUT,
+} from '../constants';
 
 import {
   buildBannerContent,
@@ -140,6 +144,7 @@ export function formatToolUseTemplate(
     isWriteTool && outputText.trim() === TRIVIAL_WRITE_OUTPUT;
   if (
     outputText &&
+    toolName !== DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME &&
     !toolName.startsWith('mcp:') &&
     toolDisplayKind(toolName) !== 'read' &&
     !isTrivialWriteOutput
@@ -191,9 +196,11 @@ export function formatToolUseTemplate(
   const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : undefined;
 
   // Delegation banner extras: setup link (shown in summary row)
-  const isDelegation = DELEGATION_TOOLS.has(toolName);
+  const isProposalBearingDelegation =
+    DELEGATION_TOOLS.has(toolName) &&
+    toolName !== DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME;
   const proposalId =
-    isDelegation && !isInProgress
+    isProposalBearingDelegation && !isInProgress
       ? registerProposalInput(input, toolName)
       : null;
 

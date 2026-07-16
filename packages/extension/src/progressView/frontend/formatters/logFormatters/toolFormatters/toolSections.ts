@@ -29,6 +29,7 @@ import {
   extractCodeOnlyInput,
 } from '@progressView/frontend/formatters/parseUtils';
 import {
+  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
@@ -329,6 +330,73 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
   return sections;
 }
 
+function omitWorkflowJournal(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(omitWorkflowJournal);
+  if (!isObject(value)) return value;
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, entry]) =>
+      key === 'journal' ? [] : [[key, omitWorkflowJournal(entry)] as const],
+    ),
+  );
+}
+
+function buildWorkflowScriptSections(
+  ctx: ToolSectionContext,
+): TemplateResult[] {
+  const { input, parsedOutput } = ctx;
+  if (!isObject(input)) {
+    return [
+      buildToolUseSection(
+        'Input:',
+        wrapInPre('Workflow script input is unavailable.'),
+      ),
+    ];
+  }
+
+  const sections: TemplateResult[] = [];
+  if (typeof input.agent === 'string') {
+    // prettier-ignore
+    sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${input.agent}</code>`));
+  }
+
+  if (typeof input.script === 'string') {
+    sections.push(
+      buildToolSection('Script:', input.script, {
+        language: 'javascript',
+        extraClass: 'tool-command-input',
+      }),
+    );
+  }
+
+  if (Object.hasOwn(input, 'args')) {
+    const args = input.args === undefined ? null : input.args;
+    sections.push(
+      buildToolSection('Args:', JSON.stringify(args, null, 2), {
+        language: 'json',
+      }),
+    );
+  }
+
+  const rawResult =
+    isObject(parsedOutput) && Object.hasOwn(parsedOutput, 'output')
+      ? parsedOutput.output
+      : parsedOutput;
+  const publicResult = omitWorkflowJournal(rawResult);
+  const { text: resultText, language: resultLanguage } =
+    stringifyWithLanguage(publicResult);
+  if (resultText) {
+    sections.push(
+      buildToolSection('Result:', resultText, {
+        language: resultLanguage,
+        extraClass: 'tool-output-full',
+      }),
+    );
+  }
+
+  return sections;
+}
+
 function buildSpecializedSections(ctx: ToolSectionContext): TemplateResult[] {
   const { toolName, input } = ctx;
   const content =
@@ -491,6 +559,10 @@ const TOOL_SECTION_BUILDERS: Array<{
   {
     match: (ctx) => ctx.toolName === 'accept_run_files' && isObject(ctx.input),
     build: buildAcceptRunFilesSections,
+  },
+  {
+    match: (ctx) => ctx.toolName === DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+    build: buildWorkflowScriptSections,
   },
   {
     match: (ctx) => DELEGATION_TOOLS.has(ctx.toolName) && isObject(ctx.input),

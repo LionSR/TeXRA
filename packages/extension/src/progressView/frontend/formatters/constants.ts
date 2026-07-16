@@ -120,6 +120,9 @@ export const DIFF_MARKER_THRESHOLD = 2;
 // Tool output patterns for filtering trivial responses
 export const TRIVIAL_WRITE_OUTPUT = 'written';
 
+/** Workflow-script delegation has a dedicated progress-view presentation. */
+export const DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME = 'delegate_workflow_script';
+
 /**
  * Friendly display labels for tool names that shouldn't be shown verbatim.
  */
@@ -193,6 +196,7 @@ export const TOOL_ICON_MAP: Record<string, string> = {
 
   // Workflow/delegation (includes legacy names for historical log entries)
   delegate_workflow: 'list-tree',
+  [DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME]: 'list-tree',
   delegate_agent: 'account',
   propose_workflow: 'list-tree',
   propose_agent: 'account',
