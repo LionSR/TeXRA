@@ -31,7 +31,7 @@ function createDialogCloseButton(
  * it keeps overlays owning only their content and behavior, and stops the
  * near-identical shells (and their `desktop-*` class families) from drifting.
  */
-export interface OverlayDialogOptions {
+interface OverlayDialogBaseOptions {
   appRoot: HTMLElement;
   /**
    * CSS class family. Derives `${prefix}-overlay` and `${prefix}-close`, plus
@@ -39,16 +39,26 @@ export interface OverlayDialogOptions {
    */
   prefix: string;
   ariaLabel: string;
-  closeLabel: string;
   /** The overlay's content element (iframe, diff view, settings-app). */
   content: HTMLElement;
   /** When set, wraps `content` in a titled `<section>` header shell. */
   title?: string;
-  /** Use Web Awesome's accessible header and built-in close control. */
-  nativeHeader?: boolean;
   /** Extra attributes to set on the dialog (e.g. `data-route-button`). */
   attributes?: Record<string, string>;
 }
+
+export type OverlayDialogOptions = OverlayDialogBaseOptions &
+  (
+    | {
+        /** Use Web Awesome's accessible header and built-in close control. */
+        nativeHeader: true;
+        closeLabel?: never;
+      }
+    | {
+        nativeHeader?: false;
+        closeLabel: string;
+      }
+  );
 
 export interface OverlayDialogHandle {
   dialog: WaDialog;

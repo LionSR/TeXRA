@@ -1,7 +1,9 @@
+// Third-party imports - Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
+// Local imports - desktop prompt UI
 import {
   buildDesktopPromptResultMessage,
   type DesktopPromptResultMessage,
@@ -9,6 +11,7 @@ import {
 } from '../desktopPromptMessages';
 import { createOverlayDialog } from './overlayDialog';
 
+// Third-party imports - Web Awesome component types
 import type WaButton from '@awesome.me/webawesome/dist/components/button/button.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
@@ -58,7 +61,6 @@ export function createDesktopPromptOverlay(
     appRoot: options.appRoot,
     prefix: 'desktop-prompt',
     ariaLabel: 'Enter a value',
-    closeLabel: 'Cancel prompt',
     nativeHeader: true,
     content: form,
   });

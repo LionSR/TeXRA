@@ -1,7 +1,10 @@
+// Third-party imports
 import { nanoid } from 'nanoid';
 
+// Local imports - host contracts
 import type { PromptInputOptions } from '@hosts/uiHosts';
 
+// Local imports - desktop IPC
 import {
   buildDesktopClosePromptMessage,
   buildDesktopShowPromptMessage,

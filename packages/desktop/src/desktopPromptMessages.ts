@@ -1,3 +1,4 @@
+// Third-party imports
 import { z } from 'zod';
 
 export const DESKTOP_PROMPT_COMMANDS = {
