@@ -37,7 +37,10 @@ import {
   CodexMcpToolOutputSchema,
   type CodexMcpToolOutput,
 } from '@shared/schemas/codex';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import {
+  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  DELEGATION_TOOLS,
+} from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
@@ -329,6 +332,58 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
   return sections;
 }
 
+function buildWorkflowScriptSections(
+  ctx: ToolSectionContext,
+): TemplateResult[] {
+  const { input, parsedOutput } = ctx;
+  if (!isObject(input)) {
+    return [
+      buildToolUseSection(
+        'Input:',
+        wrapInPre('Workflow script input is unavailable.'),
+      ),
+    ];
+  }
+
+  const sections: TemplateResult[] = [];
+  if (typeof input.agent === 'string') {
+    // prettier-ignore
+    sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${input.agent}</code>`));
+  }
+
+  if (typeof input.script === 'string') {
+    sections.push(
+      buildToolSection('Script:', input.script, {
+        language: 'javascript',
+        extraClass: 'tool-command-input',
+      }),
+    );
+  }
+
+  if (Object.hasOwn(input, 'args')) {
+    const args = input.args === undefined ? null : input.args;
+    sections.push(
+      buildToolSection('Args:', JSON.stringify(args, null, 2), {
+        language: 'json',
+      }),
+    );
+  }
+
+  const rawResult = isObject(parsedOutput) ? parsedOutput.output : parsedOutput;
+  const { text: resultText, language: resultLanguage } =
+    stringifyWithLanguage(rawResult);
+  if (resultText) {
+    sections.push(
+      buildToolSection('Result:', resultText, {
+        language: resultLanguage,
+        extraClass: 'tool-output-full',
+      }),
+    );
+  }
+
+  return sections;
+}
+
 function buildSpecializedSections(ctx: ToolSectionContext): TemplateResult[] {
   const { toolName, input } = ctx;
   const content =
@@ -491,6 +546,10 @@ const TOOL_SECTION_BUILDERS: Array<{
   {
     match: (ctx) => ctx.toolName === 'accept_run_files' && isObject(ctx.input),
     build: buildAcceptRunFilesSections,
+  },
+  {
+    match: (ctx) => ctx.toolName === DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+    build: buildWorkflowScriptSections,
   },
   {
     match: (ctx) => DELEGATION_TOOLS.has(ctx.toolName) && isObject(ctx.input),

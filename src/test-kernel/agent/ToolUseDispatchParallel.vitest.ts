@@ -90,7 +90,7 @@ function dispatchHarness(opts: HarnessOptions) {
   } as unknown as ToolUseRoundServices<unknown>;
   const node = new ToolUseDispatchNode<unknown>();
   node.setServices(services);
-  return { node, dispose: () => runTrace.dispose() };
+  return { node, trace: runTrace.trace, dispose: () => runTrace.dispose() };
 }
 
 /** prep() then the batch executor, mirroring Node's _run sequence. */
@@ -129,6 +129,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
 
   it('preserves the unwrapped root instruction across nested delegation', async () => {
     let observedInstruction: string | undefined;
+    let observedTrace: unknown;
     const inspectContext: ITool = {
       definition: {
         name: 'inspect_context',
@@ -136,11 +137,13 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         parameters: {},
       },
       async call(): Promise<ToolResult> {
-        observedInstruction = getCurrentToolCallContext()?.userInstruction;
+        const context = getCurrentToolCallContext();
+        observedInstruction = context?.userInstruction;
+        observedTrace = context?.trace;
         return { status: 'executed', output: 'ok' };
       },
     } as ITool;
-    const { node, dispose } = dispatchHarness({
+    const { node, trace, dispose } = dispatchHarness({
       tools: { inspect_context: inspectContext },
       rootUserInstruction: 'Do not use files or external tools.',
     });
@@ -152,6 +155,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         'Wrapped child instruction with prior handoff boilerplate.',
       );
       assert.equal(observedInstruction, 'Do not use files or external tools.');
+      assert.equal(observedTrace, trace);
     } finally {
       dispose();
     }

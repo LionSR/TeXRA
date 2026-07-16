@@ -59,6 +59,12 @@ recommended groups at the bottom are a good starting point.
 - `delegate_workflow` — delegate to a workflow agent for whole-document
   operations. Pass `agent`, `model`, `instruction`, `inputFiles`. Returns
   asynchronously via the follow-up queue.
+- `delegate_workflow_script` — advanced opt-in tool for a durable sequence of
+  workflow-agent calls with predetermined branching and fan-out. Pass a default
+  `agent`, the complete `script`, and optional JSON `args`. The script begins
+  with `export const meta = { name, description }` and can use `agent`, `phase`,
+  `log`, `parallel`, `pipeline`, and `concat`. It is intentionally absent from
+  the recommended orchestrator set.
 - `delegate_agent` — delegate to another tool-use agent. Pass `agent`,
   `model`, and `instruction` for a fresh run, or `execution_id` +
   `instruction` to resume a WAITING subagent.
