@@ -13,8 +13,8 @@ importers:
   .:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.3.210
-        version: 0.3.210(@anthropic-ai/sdk@0.111.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        specifier: ^0.3.211
+        version: 0.3.211(@anthropic-ai/sdk@0.111.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
         specifier: ^0.111.0
         version: 0.111.0(zod@4.4.3)
@@ -22,14 +22,14 @@ importers:
         specifier: ^3.10.0
         version: 3.10.0(@floating-ui/utils@0.2.11)(@types/node@22.19.17)(@types/react@19.2.17)
       '@cantoo/pdf-lib':
-        specifier: ^2.7.3
-        version: 2.7.3
+        specifier: ^2.7.4
+        version: 2.7.4
       '@fortawesome/free-solid-svg-icons':
-        specifier: ^7.3.0
-        version: 7.3.0
+        specifier: ^7.3.1
+        version: 7.3.1
       '@google/genai':
-        specifier: ^2.11.0
-        version: 2.11.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
+        specifier: ^2.12.0
+        version: 2.12.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
       '@jamesgopsill/crossref-client':
         specifier: ^1.1.0
         version: 1.1.0
@@ -55,14 +55,14 @@ importers:
         specifier: ^7.1.0
         version: 7.1.0
       '@openai/codex-sdk':
-        specifier: ^0.144.4
-        version: 0.144.4
+        specifier: ^0.144.5
+        version: 0.144.5
       '@openrouter/sdk':
-        specifier: ^0.13.55
-        version: 0.13.55
+        specifier: ^0.13.58
+        version: 0.13.58
       '@supabase/supabase-js':
-        specifier: 2.110.5
-        version: 2.110.5
+        specifier: 2.110.7
+        version: 2.110.7
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -115,8 +115,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
       fast-xml-parser:
-        specifier: ^5.10.0
-        version: 5.10.0
+        specifier: ^5.10.1
+        version: 5.10.1
       fastest-levenshtein:
         specifier: ^1.0.16
         version: 1.0.16
@@ -235,8 +235,8 @@ importers:
         specifier: ^2.7.5
         version: 2.7.5
       pretty-bytes:
-        specifier: ^7.1.0
-        version: 7.1.0
+        specifier: ^7.1.1
+        version: 7.1.1
       pretty-ms:
         specifier: ^9.3.0
         version: 9.3.0
@@ -507,14 +507,14 @@ importers:
   packages/desktop:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.3.210
-        version: 0.3.210(@anthropic-ai/sdk@0.111.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        specifier: ^0.3.211
+        version: 0.3.211(@anthropic-ai/sdk@0.111.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@fortawesome/free-solid-svg-icons':
-        specifier: ^7.3.0
-        version: 7.3.0
+        specifier: ^7.3.1
+        version: 7.3.1
       '@openai/codex-sdk':
-        specifier: ^0.144.4
-        version: 0.144.4
+        specifier: ^0.144.5
+        version: 0.144.5
       '@sentry/electron':
         specifier: ^7.15.0
         version: 7.15.0(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))
@@ -553,8 +553,8 @@ importers:
   packages/extension:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.3.210
-        version: 0.3.210(@anthropic-ai/sdk@0.111.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        specifier: ^0.3.211
+        version: 0.3.211(@anthropic-ai/sdk@0.111.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
         specifier: ^0.111.0
         version: 0.111.0(zod@4.4.3)
@@ -562,14 +562,14 @@ importers:
         specifier: ^3.10.0
         version: 3.10.0(@floating-ui/utils@0.2.11)(@types/node@22.19.17)(@types/react@19.2.17)
       '@cantoo/pdf-lib':
-        specifier: ^2.7.3
-        version: 2.7.3
+        specifier: ^2.7.4
+        version: 2.7.4
       '@fortawesome/free-solid-svg-icons':
-        specifier: ^7.3.0
-        version: 7.3.0
+        specifier: ^7.3.1
+        version: 7.3.1
       '@google/genai':
-        specifier: ^2.11.0
-        version: 2.11.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
+        specifier: ^2.12.0
+        version: 2.12.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
       '@jamesgopsill/crossref-client':
         specifier: ^1.1.0
         version: 1.1.0
@@ -586,14 +586,14 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
       '@openai/codex-sdk':
-        specifier: ^0.144.4
-        version: 0.144.4
+        specifier: ^0.144.5
+        version: 0.144.5
       '@openrouter/sdk':
-        specifier: ^0.13.55
-        version: 0.13.55
+        specifier: ^0.13.58
+        version: 0.13.58
       '@supabase/supabase-js':
-        specifier: 2.110.5
-        version: 2.110.5
+        specifier: 2.110.7
+        version: 2.110.7
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -622,8 +622,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
       fast-xml-parser:
-        specifier: ^5.10.0
-        version: 5.10.0
+        specifier: ^5.10.1
+        version: 5.10.1
       fs-extra:
         specifier: ^11.3.6
         version: 11.3.6
@@ -830,52 +830,52 @@ packages:
     resolution: {integrity: sha512-p+CMKJ93HFmLkjXKlXiVGlMQEuRb6H0MokBSwUsX+S6BRX8eV5naFZpQJFfJHjRZY0Hmnqy1/r6UWl3x+19zYA==}
     engines: {node: '>=18'}
 
-  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.210':
-    resolution: {integrity: sha512-twQYlDQvVf0ilWQuvwZ8RcglizPNZt9Xyi10IhxDQEGm7bmYFTB0OUAIVKsYMlL1vjI9ZLCdNyPovo9FCaiehw==}
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.211':
+    resolution: {integrity: sha512-Iwhm4kfcs20LdXffZ2RGRjj+BFdUOrT/JjhGtICjlGlBPlrLkkkAiHtGzqO9K36v5B/kSIHwOw9CM836kYYPHQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.210':
-    resolution: {integrity: sha512-QcBJIphqHbPJtV0f9UOU8KJPeDLKjgNmPUMQZCW/aVYs09b2rFGTp6x0QqJ6qGzDc0MDRa3gZre07TjklGES5g==}
+  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.211':
+    resolution: {integrity: sha512-sMBW1CLe2Hq4PwwvEbz9r8LxF84UErgB45TSf+iEa8M/EjYZCsXSoTRT0vKnN4TvrAN5mWoKgi39dkUxS9ybsA==}
     cpu: [x64]
     os: [darwin]
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.210':
-    resolution: {integrity: sha512-PSI9VzaYxhmkNdyiICknGRHA7xPARTXn8rHjhcOqGgMv2gRipxeFIBa/bZAhc+bG6rLFSG9P6S71c1n1hg630w==}
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.211':
+    resolution: {integrity: sha512-X1eg+lCwNH2VXyqLQR722dsDDtWPfUnz7OtnmPVoNMxcMexDlSLMMuvm5fNNi94kYT0pxmBdhIvudew145JuHg==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.210':
-    resolution: {integrity: sha512-jY+7Thi+XJREKOSPfW4zr95XNIInHOkzgZ7/jIL6I9v5YQlbmcaYiBjh/zXNDPnjwZHeZkbudsaiF8Lxfej6ww==}
+  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.211':
+    resolution: {integrity: sha512-orZm8p+BzVRZ7I8c5yD43hEZ5TvBZ+UbKTZTlvID00Y8HSn3M3rNX3sW4RUvNGF2e0eNMaXKysPyEHPEj3kqpg==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.210':
-    resolution: {integrity: sha512-OVlYOr3rZIQhue4cuwe/185Uw+eKhPpNSYk873QcI/39nEtGe51aKQvjccKxedEQedt9lDpBwv0hegyfw0/99w==}
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.211':
+    resolution: {integrity: sha512-cR12YFMVGSj38074OYkkjgwhYeblgVRK3Uw7ZXw3ZTOevjQLASPajVruFuDRW07ixxTa1ZWxqI3kSsIl71RXYA==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.210':
-    resolution: {integrity: sha512-uk+tVP0fJm9e2PTyW2ps1WSl3BrABcqTT6vhZVUMX0ccMFoAGEsIpBTyc5BjyFYLkCRWCK+i6GCT4+0MDiWnEQ==}
+  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.211':
+    resolution: {integrity: sha512-ohDS5EGKQvKiUUMtDNPjyWUDvaeIa+DlzUVjrZ8Y4hPtoWFpvOBtOFIYChJGpllwZ4YULS4H3gywVnLGB4do6Q==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.210':
-    resolution: {integrity: sha512-IHgcG7wx72AVV3UpJgnTIJYL1sbl9wjPUieEEBCzytwkLEhuRnN009dXxt6RGc3F9gOtmE4Dct7iFae3OPjvsA==}
+  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.211':
+    resolution: {integrity: sha512-AOIQRFO0YMDUCrG8W0NUWitBQQUB6fYdNW3SMcPPq3mXpYC/pCNURFyvRdrFm729xXkxDAP5OMLk9x2/IFrTmA==}
     cpu: [arm64]
     os: [win32]
 
-  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.210':
-    resolution: {integrity: sha512-FwhWDbNpbSJWHZ7e4Y62J1TEy1mUeDXbJ22RgSfh423UCFztGPhgUlz/YDEjFx30x/CDU7g9YsViqjGeN4PlAg==}
+  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.211':
+    resolution: {integrity: sha512-pwzNuJg2xRBsv3kSSVVhgLdGAFxd5DqPkQX5ZLrT4uBZDJ+QM4xWKZyN8ZoFLLzNl+u0/4U83Q1ZQ0NdG/9JsQ==}
     cpu: [x64]
     os: [win32]
 
-  '@anthropic-ai/claude-agent-sdk@0.3.210':
-    resolution: {integrity: sha512-siEV0CMN8N02wA3r1kUsiBc5Il1Qv2M761eFKq5q2vsAbsWSicjQI6mCVFj73tge4CuDy51oRSXz3CLrjtjSNA==}
+  '@anthropic-ai/claude-agent-sdk@0.3.211':
+    resolution: {integrity: sha512-JhbLu6o1v2g9fjqkO+LDNPWrE0bgd9UeRQQ41JBGouAgows3KyPPYgU2WU0q7M2onuwQxR5plGDpas01F+oaUA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.93.0'
@@ -1146,8 +1146,8 @@ packages:
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
 
-  '@cantoo/pdf-lib@2.7.3':
-    resolution: {integrity: sha512-We3chcXPcRxg48q6no4LojOmVHqexI0J+LPFOkKnenxU1OSMYGOIWlnanPuN1Au/pBNKRgj65UZJ0h68qBU2uw==}
+  '@cantoo/pdf-lib@2.7.4':
+    resolution: {integrity: sha512-tMet5mSJOESLAvSw/NnVoty2L7hHtWGtXt7CjxL4jeq1r3fg8lB7+sO0qKRyqR3kxeWfa8W5C5IuyNtHSVaTeQ==}
 
   '@clack/core@1.0.1':
     resolution: {integrity: sha512-WKeyK3NOBwDOzagPR5H08rFk9D/WuN705yEbuZvKqlkmoLM2woKtXb10OO2k1NoSU4SFG947i2/SCYh+2u5e4g==}
@@ -1489,16 +1489,16 @@ packages:
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
-  '@fortawesome/fontawesome-common-types@7.3.0':
-    resolution: {integrity: sha512-X/vND0Y1l9fVJ9O79UgtZnXSpz4aNF3bXlDxiJAEAm6kgeSftp9wjjBPgqzazJV8YlmxfRoeXNfSCJ48sf/Hhw==}
+  '@fortawesome/fontawesome-common-types@7.3.1':
+    resolution: {integrity: sha512-k0C0sdHmZtAo6dRDtd1Z/qcpyHbL0CKsjV8seMY/21xGhY5Wsv0XRmiI/xEEH4y2c9b1+jvgNs/3EqhV27yUEA==}
     engines: {node: '>=6'}
 
-  '@fortawesome/free-solid-svg-icons@7.3.0':
-    resolution: {integrity: sha512-YxI/CuwWeI3nPIoYU//vkDS+3ige/67DPZ6XwMATpYEFESzO9L8zfJOKllGRgIlpT/uebrZCcvAzp3peD7GmTw==}
+  '@fortawesome/free-solid-svg-icons@7.3.1':
+    resolution: {integrity: sha512-v0BLa0eqg7ubvVWeNSHVBs8fWH/GJicERZoJaxJ3FE/lj67VSqzoMg9pzfZVOfLMX10y0pGwQAuxoRVVH2patg==}
     engines: {node: '>=6'}
 
-  '@google/genai@2.11.0':
-    resolution: {integrity: sha512-d2Csf29vS0GfHc52H0MG25ccY4FKvvbDgqDlEovLrPLF8sPegWr/GGO+LMOy85/1SnX0iV0zDAW7R8SsvWg8Vg==}
+  '@google/genai@2.12.0':
+    resolution: {integrity: sha512-LUr972DZosqPUhf9Mb3CIVu/B99woD3QW6ZJV1T9aNgxaoimAZARmo+IyyDsxIL+zouFiYSdA4hzfEWXc9oNIQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -1773,8 +1773,8 @@ packages:
     resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
     engines: {node: '>= 20.19.0'}
 
-  '@nodable/entities@2.2.0':
-    resolution: {integrity: sha512-9uGyhaQavEUMC8AIddIjau4NsnsXhou+j5sBAGojCM1oxmQpVKTWR/9JxABD6UAv12vpIms55fPZKFQEhG6uBg==}
+  '@nodable/entities@3.0.0':
+    resolution: {integrity: sha512-8L9xFeTYKhm49xfIypoe2W5wV1m/3Z58kT+7kR9A8OyFxcPduI4VmxaUMQyKYrRjUoLLSXv6EKKID5Tvj9cUVw==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -1806,53 +1806,53 @@ packages:
   '@octokit/types@16.0.0':
     resolution: {integrity: sha512-sKq+9r1Mm4efXW1FCk7hFSeJo4QKreL/tTbR0rz/qx/r1Oa2VV83LTA/H/MuCOX7uCIJmQVRKBcbmWoySjAnSg==}
 
-  '@openai/codex-sdk@0.144.4':
-    resolution: {integrity: sha512-JtND4npLaM1jKlTJVGU3XaX7xqnRG62yusz13kPgialnfd0CBrjOgXFGSRojYcvWZSggQoEkZBVAGtoKE0y8sw==}
+  '@openai/codex-sdk@0.144.5':
+    resolution: {integrity: sha512-90wHPEGyk74On6gwQPNtw+wzuDJ2zYpiVADDxw43S1cWn3QbBh/21zFS2xlAWWCrdY0gE90yXfmmrzwdUDlBGw==}
     engines: {node: '>=18'}
 
-  '@openai/codex@0.144.4':
-    resolution: {integrity: sha512-DTHzYatlKq9dw55E0/HsbK4tRCEKabuJ10ybbqpsG8gVv/kvwEdg3Z4OI3cvLXKa21xkIa4lkGlZoO/HmqmFFw==}
+  '@openai/codex@0.144.5':
+    resolution: {integrity: sha512-jjB+K+OMv572mKhS+2QuLxWXDJNdpwbPenf+V+8bdq7wg4Scqt3cn6WEekD8wPqDVZqck0HSX17K9rD9kbDJQA==}
     engines: {node: '>=16'}
     hasBin: true
 
-  '@openai/codex@0.144.4-darwin-arm64':
-    resolution: {integrity: sha512-6J3g498cM2oA7vYIJhpuGJlnIi/M5JdYmjB5BZ1Of5HQ0ziIlplFSvH801oVy9J5TQFp642ODzOu/ZEokDUXsg==}
+  '@openai/codex@0.144.5-darwin-arm64':
+    resolution: {integrity: sha512-zcT6NfBCqLFt+BReNSETTZW6v6PdbH0dzNtm9j7l7mDGqwPbKZDGJdnpkBao2389I0ZacyIKgSZoI0vez1d4Dw==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [darwin]
 
-  '@openai/codex@0.144.4-darwin-x64':
-    resolution: {integrity: sha512-k1HC8gdbAy+VmMbekYkhM+r+QE2Xfgd67n1VSp94tjz7aXVKoalHcDkdKNM/uUQ8o2tvbiwhHSUftJF8Sm9/Lw==}
+  '@openai/codex@0.144.5-darwin-x64':
+    resolution: {integrity: sha512-//Mo0m1MwaoT6psu5xsmofXpKx4/0irIkeq10xJvk59+886EG355ibjA+ZmlRcKhE3bLjsKD7p81nTbAdRL/bw==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [darwin]
 
-  '@openai/codex@0.144.4-linux-arm64':
-    resolution: {integrity: sha512-OlKx65579OwIzech9Tt3OUH9+hFZfFrCBP1hL2MudnMIoNr1+cFZjB5YIj5MWMRoBD+K5W3wdBIpQSH855b5Sg==}
+  '@openai/codex@0.144.5-linux-arm64':
+    resolution: {integrity: sha512-zAHggxVwR2TBxKmybXY7ZMiB0G8DMonY2YPdwNNjwXcf+LOIqNGgswwNCDMbP/HEe6r8j+R9ZX/yYoo8f+n/RQ==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [linux]
 
-  '@openai/codex@0.144.4-linux-x64':
-    resolution: {integrity: sha512-2jxrmV6+/7eBNdg5uhhmOEPFu2o28eYY/ClLzWhSBHH8uo3f2KA1z9JQcVtwlbToW03nEPlEzYNYfCF1UBqsVQ==}
+  '@openai/codex@0.144.5-linux-x64':
+    resolution: {integrity: sha512-FalLJlBQGFdK8Gc3kj9sa/ekNdgkHhUawLaKkvy5CtB18JaP2YxtTP/Pe1pD2iBiq8mMUliRnafpF6AdBdQMbg==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [linux]
 
-  '@openai/codex@0.144.4-win32-arm64':
-    resolution: {integrity: sha512-CCgfI1smFhHZTIpTuBwDJwBr/AR40RTqaFxbBWVabu0RMeYDteRuPiDfdTlktf3C43Y1q10VZXhVGYtCokDg2w==}
+  '@openai/codex@0.144.5-win32-arm64':
+    resolution: {integrity: sha512-0Pj7iqjEOEvPQPO3kFfCy9vGX4BTu76ChFFZHr2eNNIfVc3FOENAv/X98u4L+iIUtDOK9DbqmfUudW3DPapshg==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [win32]
 
-  '@openai/codex@0.144.4-win32-x64':
-    resolution: {integrity: sha512-iL1ky0ERgdQJOKzom/Ms1fhpwkSmpsA9eVrzAqURFlYGS8z7JqwEgm33+nLGCsY7y25d8Xs/LJ91Oiqz3yXcUg==}
+  '@openai/codex@0.144.5-win32-x64':
+    resolution: {integrity: sha512-DnsSTlnnzleTxvLwIGnBitKInscxn2I7qASqosS8Fv+qysBygd+ZiBn/SQsRCgQ28PAlsNzmd3Gf3ZTecolAmg==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
 
-  '@openrouter/sdk@0.13.55':
-    resolution: {integrity: sha512-m7knLzfCJrrBfid01D64u+Xv5yrie8nWGpLLBEH7IQGKKX+MYGzfkMY0W5u7UUqtuZCKUB52F9hTlNXl3wJg9g==}
+  '@openrouter/sdk@0.13.58':
+    resolution: {integrity: sha512-GGCg3Ay3/9mtvNRIL+CDkbowDLsQoMRjbS2qHSLYA/MY1VXnQyJ6Om5+UMc1TgeJW9YRjWUr8drZZfrSomhRPw==}
 
   '@opentelemetry/api-logs@0.214.0':
     resolution: {integrity: sha512-40lSJeqYO8Uz2Yj7u94/SJWE/wONa7rmMKjI1ZcIjgf3MHNHv1OZUCrCETGuaRF62d5pQD1wKIW+L4lmSMTzZA==}
@@ -2442,31 +2442,31 @@ packages:
     peerDependencies:
       eslint: ^9.0.0 || ^10.0.0
 
-  '@supabase/auth-js@2.110.5':
-    resolution: {integrity: sha512-QSlI5CNeEefHP95/GbeMhNgr8aHEHiXFh8c1IWthYyI9ZzBwEigYzJFCw4Ff+GkL8OK9tArBmGGv6rpg5zLXSw==}
+  '@supabase/auth-js@2.110.7':
+    resolution: {integrity: sha512-M5Bpl4hCv6kHcOO/xM06Dyfg1mYLHljMkp1plhzG9IRZPc3czvyMsSN1XpL5+GKisOKM3lSN59zhpcm6sMVXfA==}
     engines: {node: '>=22.0.0'}
 
-  '@supabase/functions-js@2.110.5':
-    resolution: {integrity: sha512-nuQuoIoEGT8ukrwr6THlY5v50bSMJ2rqti1FFsGyDaC98POLmcFQVFFh23PVPhRsKWUxrFc0MpmEoHKa7CY4mg==}
+  '@supabase/functions-js@2.110.7':
+    resolution: {integrity: sha512-megYmexlYEoR/0qlsr4Snh9wtzAodO7MAri3NMevZrXzNvQRKlvmTcSBoKGLQEPDakgDZMqbMdf9DwoZz6qfoA==}
     engines: {node: '>=22.0.0'}
 
-  '@supabase/phoenix@0.4.4':
-    resolution: {integrity: sha512-Gt0pqoXuIqX/8dvG0OKp/wMCobXNH3klNbUPBNyOfN0YA1IswrM3HyWFMOPk1Jy+BRaIyDPcFx4jLBwHNmlyfQ==}
+  '@supabase/phoenix@0.4.5':
+    resolution: {integrity: sha512-aAn9H9ovVyeApKy11OWOrrOGq8DV68yWeH4ud2lN9fzn4aO8Zb5GLL9m1pUg9nLqIcT+ZDfAcsZe0E/nqdv2lw==}
 
-  '@supabase/postgrest-js@2.110.5':
-    resolution: {integrity: sha512-eObfgBjxLPzFakwMpUmsv8nuNPOhoDhzzN8cwvEvGkxkmuRIZcOCYH9+DRbpKnxh7tgsBZW+KWtaZI2j98b2/g==}
+  '@supabase/postgrest-js@2.110.7':
+    resolution: {integrity: sha512-ban6YV0djhVaqVYezlOARKLIuOBSvLLhyQVZjA2nxPrtswhxHCl1+gI4giFgI9ATQAaMNbUZb4JXiuL5lEA/5g==}
     engines: {node: '>=22.0.0'}
 
-  '@supabase/realtime-js@2.110.5':
-    resolution: {integrity: sha512-VtOZxw5jfrc37KgIfFdp9SOFJjtvJ0qU+gT8CPQjL7cqy4DJlaTXacw5aBBogLZksqAI0YN67qhlDaMKFwfOuw==}
+  '@supabase/realtime-js@2.110.7':
+    resolution: {integrity: sha512-AMtZjyFA2gsmjuxopPNS/sRznLQHG0Ht5x+ytTPTOh3vAcOTUlVRLx7gW4/CONNnbb3PKOkE+HmM35HOSbmomQ==}
     engines: {node: '>=22.0.0'}
 
-  '@supabase/storage-js@2.110.5':
-    resolution: {integrity: sha512-7GkOZlrYknVGVPyijoDbu5OXGvQ2oQ6dkU0juAkIMPZ9QgtmJ8IPrxe76zGSbmzbaC1GdKw7pqeXEi2HT67sbA==}
+  '@supabase/storage-js@2.110.7':
+    resolution: {integrity: sha512-2tcDE8cjEDy1uKxKavBpKQod1JdMV1jDXQag48TCa+kycmJOltc0yVabC0BUlhOwAl6WykXU2aOsH3ELMtZrmQ==}
     engines: {node: '>=22.0.0'}
 
-  '@supabase/supabase-js@2.110.5':
-    resolution: {integrity: sha512-cAO1Nm+CCogRNVXN93bBkh0vjOdLM5e6J9gB/cHV9Lqni/gEmN2HJFrnn4NI33GYIfmlh4Wbm6siH+XXRgpexA==}
+  '@supabase/supabase-js@2.110.7':
+    resolution: {integrity: sha512-AnfO3A230Shy6RMO7cya3Wl1OcXnABJrzH8vP+fY7/RFjhzcchB7DjKkkTIAntlwekD+GkSFzEvt2tC+D4Fp8w==}
     engines: {node: '>=22.0.0'}
 
   '@szmarczak/http-timer@4.0.6':
@@ -3888,8 +3888,8 @@ packages:
     resolution: {integrity: sha512-a6Qh1RMCNbSrU1+sAyAAZH3rTe+OaWJbNZIq0S+ifZciUUOQtlVxBJwoTUE2bYhysmG/RYyI5WJFIKdBahJdrQ==}
     hasBin: true
 
-  fast-xml-parser@5.10.0:
-    resolution: {integrity: sha512-SLhnTEqE5QpJHq/6zl9bsmImEP2adv+y6Wy+cJa7nVTRzQh1OZfCe9k29M5xN74LWnu0xa1zrUrq3KnOKl92Fg==}
+  fast-xml-parser@5.10.1:
+    resolution: {integrity: sha512-IEMIf7298kXuZSRFoGfMYrl7is8LpavODgbNz1cwIudv7KwVFnuU+UsMporfq6PD6aXSlawZlARiA3UywCTfMw==}
     hasBin: true
 
   fastest-levenshtein@1.0.16:
@@ -5268,8 +5268,8 @@ packages:
     engines: {node: '>=14'}
     hasBin: true
 
-  pretty-bytes@7.1.0:
-    resolution: {integrity: sha512-nODzvTiYVRGRqAOvE84Vk5JDPyyxsVk0/fbA/bq7RqlnhksGpset09XTxbpvLTIjoaF7K8Z8DG8yHtKGTPSYRw==}
+  pretty-bytes@7.1.1:
+    resolution: {integrity: sha512-X+vn9z8nOFZQlxOLmfJ0iKDdMD7jYTsTW12OAlCpdoE3Igik6L37pugIZi+N3usuyp5McfgKPWi12q3zvHLeGQ==}
     engines: {node: '>=20'}
 
   pretty-ms@9.3.0:
@@ -6286,6 +6286,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.21.1:
+    resolution: {integrity: sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   wsl-utils@0.1.0:
     resolution: {integrity: sha512-h3Fbisa2nKGPxCpm89Hk33lBLsnaGBvctQopaBSOW/uIs6FTe1ATyAnKFJrzVs9vpGdsTe73WF3V4lIsk4Gacw==}
     engines: {node: '>=18'}
@@ -6400,44 +6412,44 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 5.1.0
 
-  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.210':
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.211':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.210':
+  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.211':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.210':
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.211':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.210':
+  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.211':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.210':
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.211':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.210':
+  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.211':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.210':
+  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.211':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.210':
+  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.211':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.210(@anthropic-ai/sdk@0.111.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)':
+  '@anthropic-ai/claude-agent-sdk@0.3.211(@anthropic-ai/sdk@0.111.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.111.0(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
-      '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.210
-      '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.210
-      '@anthropic-ai/claude-agent-sdk-linux-arm64': 0.3.210
-      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': 0.3.210
-      '@anthropic-ai/claude-agent-sdk-linux-x64': 0.3.210
-      '@anthropic-ai/claude-agent-sdk-linux-x64-musl': 0.3.210
-      '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.210
-      '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.210
+      '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.211
+      '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.211
+      '@anthropic-ai/claude-agent-sdk-linux-arm64': 0.3.211
+      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': 0.3.211
+      '@anthropic-ai/claude-agent-sdk-linux-x64': 0.3.211
+      '@anthropic-ai/claude-agent-sdk-linux-x64-musl': 0.3.211
+      '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.211
+      '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.211
 
   '@anthropic-ai/sdk@0.111.0(zod@4.4.3)':
     dependencies:
@@ -6838,7 +6850,7 @@ snapshots:
     dependencies:
       css-tree: 3.2.1
 
-  '@cantoo/pdf-lib@2.7.3':
+  '@cantoo/pdf-lib@2.7.4':
     dependencies:
       '@pdf-lib/standard-fonts': 1.0.0
       '@pdf-lib/upng': 1.0.1
@@ -7163,18 +7175,18 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@fortawesome/fontawesome-common-types@7.3.0': {}
+  '@fortawesome/fontawesome-common-types@7.3.1': {}
 
-  '@fortawesome/free-solid-svg-icons@7.3.0':
+  '@fortawesome/free-solid-svg-icons@7.3.1':
     dependencies:
-      '@fortawesome/fontawesome-common-types': 7.3.0
+      '@fortawesome/fontawesome-common-types': 7.3.1
 
-  '@google/genai@2.11.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))':
+  '@google/genai@2.12.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))':
     dependencies:
       google-auth-library: 10.9.0
       p-retry: 4.6.2
       protobufjs: 7.6.5
-      ws: 8.21.0
+      ws: 8.21.1
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
     transitivePeerDependencies:
@@ -7489,7 +7501,7 @@ snapshots:
 
   '@noble/hashes@2.2.0': {}
 
-  '@nodable/entities@2.2.0': {}
+  '@nodable/entities@3.0.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -7527,38 +7539,38 @@ snapshots:
     dependencies:
       '@octokit/openapi-types': 27.0.0
 
-  '@openai/codex-sdk@0.144.4':
+  '@openai/codex-sdk@0.144.5':
     dependencies:
-      '@openai/codex': 0.144.4
+      '@openai/codex': 0.144.5
 
-  '@openai/codex@0.144.4':
+  '@openai/codex@0.144.5':
     optionalDependencies:
-      '@openai/codex-darwin-arm64': '@openai/codex@0.144.4-darwin-arm64'
-      '@openai/codex-darwin-x64': '@openai/codex@0.144.4-darwin-x64'
-      '@openai/codex-linux-arm64': '@openai/codex@0.144.4-linux-arm64'
-      '@openai/codex-linux-x64': '@openai/codex@0.144.4-linux-x64'
-      '@openai/codex-win32-arm64': '@openai/codex@0.144.4-win32-arm64'
-      '@openai/codex-win32-x64': '@openai/codex@0.144.4-win32-x64'
+      '@openai/codex-darwin-arm64': '@openai/codex@0.144.5-darwin-arm64'
+      '@openai/codex-darwin-x64': '@openai/codex@0.144.5-darwin-x64'
+      '@openai/codex-linux-arm64': '@openai/codex@0.144.5-linux-arm64'
+      '@openai/codex-linux-x64': '@openai/codex@0.144.5-linux-x64'
+      '@openai/codex-win32-arm64': '@openai/codex@0.144.5-win32-arm64'
+      '@openai/codex-win32-x64': '@openai/codex@0.144.5-win32-x64'
 
-  '@openai/codex@0.144.4-darwin-arm64':
+  '@openai/codex@0.144.5-darwin-arm64':
     optional: true
 
-  '@openai/codex@0.144.4-darwin-x64':
+  '@openai/codex@0.144.5-darwin-x64':
     optional: true
 
-  '@openai/codex@0.144.4-linux-arm64':
+  '@openai/codex@0.144.5-linux-arm64':
     optional: true
 
-  '@openai/codex@0.144.4-linux-x64':
+  '@openai/codex@0.144.5-linux-x64':
     optional: true
 
-  '@openai/codex@0.144.4-win32-arm64':
+  '@openai/codex@0.144.5-win32-arm64':
     optional: true
 
-  '@openai/codex@0.144.4-win32-x64':
+  '@openai/codex@0.144.5-win32-x64':
     optional: true
 
-  '@openrouter/sdk@0.13.55':
+  '@openrouter/sdk@0.13.58':
     dependencies:
       zod: 4.4.3
 
@@ -8031,37 +8043,37 @@ snapshots:
       estraverse: 5.3.0
       picomatch: 4.0.4
 
-  '@supabase/auth-js@2.110.5':
+  '@supabase/auth-js@2.110.7':
     dependencies:
       tslib: 2.8.1
 
-  '@supabase/functions-js@2.110.5':
+  '@supabase/functions-js@2.110.7':
     dependencies:
       tslib: 2.8.1
 
-  '@supabase/phoenix@0.4.4': {}
+  '@supabase/phoenix@0.4.5': {}
 
-  '@supabase/postgrest-js@2.110.5':
+  '@supabase/postgrest-js@2.110.7':
     dependencies:
       tslib: 2.8.1
 
-  '@supabase/realtime-js@2.110.5':
+  '@supabase/realtime-js@2.110.7':
     dependencies:
-      '@supabase/phoenix': 0.4.4
+      '@supabase/phoenix': 0.4.5
       tslib: 2.8.1
 
-  '@supabase/storage-js@2.110.5':
+  '@supabase/storage-js@2.110.7':
     dependencies:
       iceberg-js: 0.8.1
       tslib: 2.8.1
 
-  '@supabase/supabase-js@2.110.5':
+  '@supabase/supabase-js@2.110.7':
     dependencies:
-      '@supabase/auth-js': 2.110.5
-      '@supabase/functions-js': 2.110.5
-      '@supabase/postgrest-js': 2.110.5
-      '@supabase/realtime-js': 2.110.5
-      '@supabase/storage-js': 2.110.5
+      '@supabase/auth-js': 2.110.7
+      '@supabase/functions-js': 2.110.7
+      '@supabase/postgrest-js': 2.110.7
+      '@supabase/realtime-js': 2.110.7
+      '@supabase/storage-js': 2.110.7
 
   '@szmarczak/http-timer@4.0.6':
     dependencies:
@@ -9696,9 +9708,9 @@ snapshots:
     dependencies:
       strnum: 1.1.2
 
-  fast-xml-parser@5.10.0:
+  fast-xml-parser@5.10.1:
     dependencies:
-      '@nodable/entities': 2.2.0
+      '@nodable/entities': 3.0.0
       fast-xml-builder: 1.3.0
       is-unsafe: 2.0.0
       path-expression-matcher: 1.6.2
@@ -11068,7 +11080,7 @@ snapshots:
 
   prettier@3.9.5: {}
 
-  pretty-bytes@7.1.0: {}
+  pretty-bytes@7.1.1: {}
 
   pretty-ms@9.3.0:
     dependencies:
@@ -12099,6 +12111,8 @@ snapshots:
       signal-exit: 4.1.0
 
   ws@8.21.0: {}
+
+  ws@8.21.1: {}
 
   wsl-utils@0.1.0:
     dependencies:
