@@ -38,10 +38,7 @@ export class VscodeDiffViewHost implements DiffViewHost {
       .flatMap((group) => group.tabs)
       .filter((tab) => {
         const input = tab.input;
-        if (
-          typeof vscode.TabInputTextDiff !== 'undefined' &&
-          input instanceof vscode.TabInputTextDiff
-        ) {
+        if (input instanceof vscode.TabInputTextDiff) {
           // Require an exact pair match so we never close an unrelated diff
           // that merely shares one side, nor a tab whose sides are swapped.
           return (
@@ -49,10 +46,7 @@ export class VscodeDiffViewHost implements DiffViewHost {
             input.modified.toString() === proposedUri
           );
         }
-        if (
-          typeof vscode.TabInputText !== 'undefined' &&
-          input instanceof vscode.TabInputText
-        ) {
+        if (input instanceof vscode.TabInputText) {
           const uri = input.uri.toString();
           return uri === originalUri || uri === proposedUri;
         }

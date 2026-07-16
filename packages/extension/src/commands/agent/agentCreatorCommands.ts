@@ -87,10 +87,8 @@ async function loadCreatorConfig(
 }
 
 /**
- * Multi-select tool-group picker. Adds a persistent prompt hint (VS Code
- * 1.108+) and a "Select all / Clear" toggle button (VS Code 1.109+) on top
- * of the stateful multi-select. Older hosts (incl. Cursor 1.105) silently
- * ignore the unsupported properties and render a plain `canSelectMany` picker.
+ * Multi-select tool-group picker with a persistent prompt hint and a native
+ * "Select all / Clear" toggle button on top of the stateful multi-select.
  */
 async function pickToolGroups(
   agentName: string,
@@ -103,27 +101,24 @@ async function pickToolGroups(
   qp.items = items;
   const initiallySelected = items.filter((item) => item.picked);
   qp.selectedItems = initiallySelected;
-  if ('prompt' in qp) {
-    qp.prompt =
-      'Space / click to toggle. Pre-selected groups match your description.';
-  }
+  qp.prompt =
+    'Space / click to toggle. Pre-selected groups match your description.';
 
   let allSelected =
     initiallySelected.length > 0 && initiallySelected.length === items.length;
   const selectAllButton: vscode.QuickInputButton = {
     iconPath: new vscode.ThemeIcon('check-all'),
     tooltip: 'Select all / clear',
+    location: vscode.QuickInputButtonLocation?.Input,
   };
   let activeSelectAllButton: vscode.QuickInputButton | undefined;
   const refreshSelectAllButton = () => {
-    if ('buttons' in qp) {
-      const toggleButton: vscode.QuickInputButton = {
-        ...selectAllButton,
-        toggle: { checked: allSelected },
-      };
-      activeSelectAllButton = toggleButton;
-      qp.buttons = [toggleButton];
-    }
+    const toggleButton: vscode.QuickInputButton = {
+      ...selectAllButton,
+      toggle: { checked: allSelected },
+    };
+    activeSelectAllButton = toggleButton;
+    qp.buttons = [toggleButton];
   };
   refreshSelectAllButton();
   qp.onDidChangeSelection((selected) => {
