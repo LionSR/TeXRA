@@ -316,10 +316,11 @@ export class ProgressFactApplier {
     // — the one fact whose failure context was historically keyed on
     // `event.kind` (subagents vs processes), preserved so those failures stay
     // distinguishable in logs.
-    const context =
-      event.type === 'child.activity'
-        ? `failed to handle ${event.kind} activity fact`
-        : `failed to handle ${event.type} fact`;
+    let context = `failed to handle ${event.type} fact`;
+    if (event.type === 'child.activity') {
+      const activityKind = event.kind === 'subagents' ? 'subagent' : 'process';
+      context = `failed to handle ${activityKind} activity fact`;
+    }
     this.applyFact(context, () => handler(streamId, event));
   }
 
