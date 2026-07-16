@@ -34,6 +34,8 @@ export {
 } from './executionLifecycle';
 export {
   type ExecutionListingEntry,
+  type DeleteExecutionOptions,
+  type DeleteExecutionResult,
   listExecutions,
   deleteExecution,
   deleteAllExecutions,

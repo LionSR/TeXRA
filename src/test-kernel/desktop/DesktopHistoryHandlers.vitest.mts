@@ -9,6 +9,7 @@ import type { DesktopHistoryOptions } from '@desktop/main/desktopHistoryHandlers
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
 import { assertSupported } from '@shared/utils/dispatcher';
+import { StorageFS } from '@utils/files';
 
 // Local imports - desktop test support
 import {
@@ -60,10 +61,7 @@ type DesktopHistoryDependencies = ConstructorParameters<
 >[0];
 type DesktopHistoryCapabilities = Pick<
   DesktopHistoryOptions,
-  | 'resourcesPath'
-  | 'runExecution'
-  | 'restoreTaskState'
-  | 'getActiveExecutionIds'
+  'resourcesPath' | 'runExecution' | 'restoreTaskState'
 >;
 type DesktopHistoryActionOverrides = Partial<
   Omit<DesktopHistoryDependencies, keyof DesktopHistoryCapabilities>
@@ -115,6 +113,20 @@ function createHistoryActions(overrides: DesktopHistoryActionOverrides = {}) {
 
 async function writeHistoryConfig(): Promise<void> {
   await getExecutionStore(HISTORY_ID).writeConfig(HISTORY_CONFIG);
+}
+
+async function writeForeignLease(executionId: string): Promise<void> {
+  await StorageFS.ensureDir(`executionLeases/${executionId}`);
+  await StorageFS.writeAtomic(
+    `executionLeases/${executionId}/lease.json`,
+    JSON.stringify({
+      version: 1,
+      executionId,
+      ownerToken: '00000000-0000-4000-8000-000000000004',
+      acquiredAt: Date.now(),
+      heartbeatAt: Date.now(),
+    }),
+  );
 }
 
 describe('DesktopHistoryHandlers', () => {
@@ -173,10 +185,10 @@ describe('DesktopHistoryHandlers', () => {
 
   it('protects an active execution from deletion', async () => {
     await writeHistoryConfig();
+    await writeForeignLease(HISTORY_ID);
     const postToRenderer = vi.fn();
     const showInfoMessage = vi.fn(async () => undefined);
     const actions = createHistoryActions({
-      history: { getActiveExecutionIds: () => [HISTORY_ID] },
       postToRenderer,
       showInfoMessage,
     });
@@ -187,7 +199,7 @@ describe('DesktopHistoryHandlers', () => {
       HISTORY_CONFIG,
     );
     expect(showInfoMessage).toHaveBeenCalledWith(
-      'Cannot delete a running execution',
+      'Cannot delete an execution that is active in another TeXRA host',
     );
     expect(postToRenderer).not.toHaveBeenCalled();
   });
@@ -213,10 +225,12 @@ describe('DesktopHistoryHandlers', () => {
       getExecutionStore(activeHistoryId).writeConfig(HISTORY_CONFIG),
       getExecutionStore(inactiveHistoryId).writeConfig(HISTORY_CONFIG),
     ]);
+    await writeForeignLease(activeHistoryId);
     const postToRenderer = vi.fn();
+    const showInfoMessage = vi.fn(async () => undefined);
     const actions = createHistoryActions({
-      history: { getActiveExecutionIds: () => [activeHistoryId] },
       postToRenderer,
+      showInfoMessage,
     });
 
     await assertSupported(actions.clear)();
@@ -225,8 +239,12 @@ describe('DesktopHistoryHandlers', () => {
       HISTORY_CONFIG,
     );
     expect(await getExecutionStore(inactiveHistoryId).readConfig()).toBeNull();
+    expect(showInfoMessage).toHaveBeenCalledWith(
+      'Cleared stored history except for 1 active execution.',
+    );
     expect(postToRenderer).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
+      historyItems: [],
     });
   });
 

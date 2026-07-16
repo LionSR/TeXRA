@@ -26,7 +26,11 @@ import {
 } from '@controllers/progressView/backend/ProgressBackend';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import type { AgentEvent } from '@agent/trace';
-import { getExecutionStore } from '@agent/storage';
+import {
+  getExecutionStore,
+  type DeleteExecutionOptions,
+  type DeleteExecutionResult,
+} from '@agent/storage';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   type RunFactEventName,
@@ -154,6 +158,22 @@ async function createPersistentRecordingBackend(): Promise<
 async function writeExecutionConfig(executionId: ExecutionId): Promise<void> {
   await getExecutionStore(executionId).writeConfig(
     toolUseTaskState('search', 'deepseekproT').agentConfig,
+  );
+}
+
+async function writeForeignExecutionLease(
+  executionId: ExecutionId,
+): Promise<void> {
+  await StorageFS.ensureDir(`executionLeases/${executionId}`);
+  await StorageFS.writeAtomic(
+    `executionLeases/${executionId}/lease.json`,
+    JSON.stringify({
+      version: 1,
+      executionId,
+      ownerToken: '00000000-0000-4000-8000-000000000003',
+      acquiredAt: Date.now(),
+      heartbeatAt: Date.now(),
+    }),
   );
 }
 
@@ -1838,6 +1858,41 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('retains execution sidecars and goals for an externally active run', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const stream = 'tool@deepseek#a6966b' as StreamTabId;
+    const executionId = 'a6966b' as ExecutionId;
+
+    try {
+      await backend.state.snapshots.load([stream]);
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.setStreamTaskState(
+        stream,
+        toolUseTaskState('search', 'deepseekproT'),
+        executionId,
+      );
+      await writeExecutionConfig(executionId);
+      await backend.state.flush();
+      await GoalStore.start(stream, 'preserve the active execution');
+      await writeForeignExecutionLease(executionId);
+
+      await backend.state.clearStream(stream);
+
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+      expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
+      expect(GoalStore.getForStream(stream)).not.toBeNull();
+    } finally {
+      await StorageFS.delete(`executionLeases/${executionId}/lease.json`).catch(
+        () => {},
+      );
+      await GoalStore.forget(stream);
+      await getExecutionStore(executionId).clear();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('forgets goal entries when clearing never-registered streams', async () => {
     const stream = 'tool@deepseek#missing' as StreamTabId;
     const { backend, session } = createIsolatedRecordingBackend();
@@ -2025,7 +2080,10 @@ describe('ProgressBackend', () => {
 
     const { backend, session } = await createPersistentRecordingBackend();
     const stores = backend.state.stores as unknown as {
-      deleteExecution(executionId: ExecutionId): Promise<boolean>;
+      deleteExecution(
+        executionId: ExecutionId,
+        options?: DeleteExecutionOptions,
+      ): Promise<DeleteExecutionResult>;
     };
     const originalDeleteExecution = stores.deleteExecution.bind(
       backend.state.stores,
@@ -2033,11 +2091,12 @@ describe('ProgressBackend', () => {
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const deleteExecutionSpy = vi
       .spyOn(stores, 'deleteExecution')
-      .mockImplementation(async (executionId) => {
+      .mockImplementation(async (executionId, options) => {
         if (executionId === failingExecution) {
+          await options?.beforeDelete?.();
           throw new Error('locked execution dir');
         }
-        return originalDeleteExecution(executionId);
+        return originalDeleteExecution(executionId, options);
       });
 
     try {

@@ -25,6 +25,10 @@ import {
   type AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { hasPersistedParent } from '@agent/storage/executionLifecycle';
+import {
+  acquireResumedExecutionLease,
+  releaseOwnedExecutionLease,
+} from '@agent/storage/executionLease';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import {
   type RequestEnsureProgressViewPayload,
@@ -377,16 +381,22 @@ export async function executeAgent(
   }
 
   const { runtimeHost } = options;
-  const ctx = await buildAgentLaunchContext({
-    configPayload,
-    executionId,
-    runtimeHost,
-    onBeforeActivation: options.onStreamResolved,
-    enforceCategory: options.enforceCategory,
-    suppressErrorNotification: options.isSubagent,
-    session: options.session,
-    modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-  });
+  let ctx: AgentLaunchContext;
+  try {
+    ctx = await buildAgentLaunchContext({
+      configPayload,
+      executionId,
+      runtimeHost,
+      onBeforeActivation: options.onStreamResolved,
+      enforceCategory: options.enforceCategory,
+      suppressErrorNotification: options.isSubagent,
+      session: options.session,
+      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+    });
+  } catch (error) {
+    if (executionId) await releaseOwnedExecutionLease(executionId);
+    throw error;
+  }
   const runContextOptions = {
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
@@ -488,6 +498,9 @@ export async function resumeToolUseFromSnapshot(
   runtimeHost: AgentRuntimeHost,
   options: ResumeToolUseFromSnapshotOptions = {},
 ): Promise<AgentRuntimeFlowResult> {
+  const leaseAcquisition = await acquireResumedExecutionLease(
+    snapshot.executionId,
+  );
   const modelHandlerCompatibilityKey =
     snapshot.modelHandlerCompatibilityKey ??
     inferPersistedModelHandlerCompatibilityKey(
@@ -497,18 +510,27 @@ export async function resumeToolUseFromSnapshot(
   // Resolve persisted lineage before launch assembly activates the stream and
   // transfers its resources. Storage failures must propagate without leaving
   // an activated resume stream outside lifecycle cleanup.
-  const isSubagent = await hasPersistedParent(snapshot.executionId);
-  const ctx = await buildAgentLaunchContext({
-    configPayload: snapshot.agentConfig,
-    executionId: snapshot.executionId,
-    runtimeHost,
-    streamTabIdOverride: snapshot.streamId,
-    modelHandlerCompatibilityKey,
-    // resumeCommand surfaces its own warning toast on failure; skip the
-    // bus-level error to avoid double-notifying.
-    suppressErrorNotification: true,
-    session: options.session,
-  });
+  let isSubagent: boolean;
+  let ctx: AgentLaunchContext;
+  try {
+    isSubagent = await hasPersistedParent(snapshot.executionId);
+    ctx = await buildAgentLaunchContext({
+      configPayload: snapshot.agentConfig,
+      executionId: snapshot.executionId,
+      runtimeHost,
+      streamTabIdOverride: snapshot.streamId,
+      modelHandlerCompatibilityKey,
+      // resumeCommand surfaces its own warning toast on failure; skip the
+      // bus-level error to avoid double-notifying.
+      suppressErrorNotification: true,
+      session: options.session,
+    });
+  } catch (error) {
+    if (leaseAcquisition === 'acquired') {
+      await releaseOwnedExecutionLease(snapshot.executionId);
+    }
+    throw error;
+  }
   const runContextOptions = {
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,

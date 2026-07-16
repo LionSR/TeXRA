@@ -14,6 +14,11 @@ import { platform } from '@platform/platform';
 import { installPlatform } from '@test/support/setupPlatform';
 import type { FinalizeExecutionResult } from '@agent/storage';
 import { noopTrace, TraceEmitter } from '@agent/trace';
+import {
+  acquireResumedExecutionLease,
+  inspectExecutionLease,
+  releaseOwnedExecutionLease,
+} from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -483,6 +488,7 @@ describe('runFlowWithLifecycle', () => {
     );
     const onError = vi.fn();
     storageMocks.finalizeExecution.mockClear();
+    await acquireResumedExecutionLease(executionId);
 
     try {
       const result = await runFlowWithLifecycle(
@@ -507,7 +513,11 @@ describe('runFlowWithLifecycle', () => {
       expect(onError).not.toHaveBeenCalled();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
       expect(defaultSession().executions.getHandle(executionId)).toBeDefined();
+      await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
+        status: 'owned',
+      });
     } finally {
+      await releaseOwnedExecutionLease(executionId);
       defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }

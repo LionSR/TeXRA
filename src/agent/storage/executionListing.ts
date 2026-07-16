@@ -26,7 +26,10 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { getExecutionStore } from './ExecutionKVStore';
-import { getExecutionLiveness } from './executionLiveness';
+import {
+  inspectExecutionLease,
+  runWithInactiveExecutionLease,
+} from './executionLease';
 
 const CHANNEL = 'ExecutionListing';
 const INDEX_PATH = `${RUNS_STORAGE_DIR}/index.json`;
@@ -101,19 +104,12 @@ async function readDirOrEmpty(path: string): Promise<[string, number][]> {
 }
 
 /**
- * Select execution-id directories (hex UUID-like) from a scanned listing,
- * optionally excluding ids (e.g. active runs). A missing exclude set keeps all.
+ * Select execution-id directories (hex UUID-like) from a scanned listing.
  */
-function listExecutionDirs(
-  entries: [string, number][],
-  exclude?: ReadonlySet<string>,
-): ExecutionId[] {
+function listExecutionDirs(entries: [string, number][]): ExecutionId[] {
   return entries
     .filter(
-      ([name, type]) =>
-        isDirectory(type) &&
-        EXECUTION_ID_PATTERN.test(name) &&
-        !exclude?.has(name),
+      ([name, type]) => isDirectory(type) && EXECUTION_ID_PATTERN.test(name),
     )
     .map(([name]) => name as ExecutionId);
 }
@@ -203,72 +199,102 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
 }
 
 /**
- * Delete a single execution and its KV data. Returns true if the execution
- * existed and was removed, false if no such execution was present. The
- * `clear()` call silently no-ops on a missing directory, so we have to probe
- * existence ourselves before calling it — otherwise callers can't tell a real
- * delete apart from a no-op on a typo'd id.
+ * Delete a single execution and its KV data unless a fresh lease protects it.
+ * The structured result distinguishes deletion, absence, and active ownership.
  */
-export async function deleteExecution(
-  executionId: ExecutionId,
-): Promise<boolean> {
-  const existed = await StorageFS.exists(`${RUNS_STORAGE_DIR}/${executionId}`);
-  if (!existed) return false;
-  try {
-    await getExecutionStore(executionId).clear();
-    return true;
-  } catch (error) {
-    if (isFileNotFoundError(error)) return false;
-    throw error;
-  }
-}
+export type DeleteExecutionResult =
+  | { readonly status: 'deleted'; readonly executionId: ExecutionId }
+  | { readonly status: 'not-found'; readonly executionId: ExecutionId }
+  | {
+      readonly status: 'active';
+      readonly executionId: ExecutionId;
+      readonly heartbeatAt: number;
+    };
 
 export interface DeleteAllExecutionsResult {
-  /** Ids whose storage was cleared, for adjacent per-execution cleanup. */
   readonly deleted: ExecutionId[];
-  /** Ids skipped because they are live in some process (#8625). */
-  readonly skippedLive: ExecutionId[];
+  readonly notFound: ExecutionId[];
+  readonly active: ExecutionId[];
+  readonly failed: readonly {
+    readonly executionId: ExecutionId;
+    readonly message: string;
+  }[];
+}
+
+export interface DeleteExecutionOptions {
+  /** Work that must happen only after liveness is checked and before removal. */
+  readonly beforeDelete?: () => Promise<void>;
+}
+
+export async function deleteExecution(
+  executionId: ExecutionId,
+  options: DeleteExecutionOptions = {},
+): Promise<DeleteExecutionResult> {
+  const guarded = await runWithInactiveExecutionLease(
+    executionId,
+    async (): Promise<'deleted' | 'not-found'> => {
+      await options.beforeDelete?.();
+      const existed = await StorageFS.exists(
+        `${RUNS_STORAGE_DIR}/${executionId}`,
+      );
+      if (!existed) return 'not-found';
+      try {
+        await getExecutionStore(executionId).clear();
+        return 'deleted';
+      } catch (error) {
+        if (isFileNotFoundError(error)) return 'not-found';
+        throw error;
+      }
+    },
+  );
+  if (guarded.status === 'active') {
+    return { status: 'active', executionId, heartbeatAt: guarded.heartbeatAt };
+  }
+  return { status: guarded.value, executionId };
 }
 
 /**
- * Delete all executions, optionally excluding a set of IDs (e.g. this
- * process's active runs). Executions live in ANY process sharing the storage
- * root are skipped: liveness is checked per id at delete time, because a
- * batch-level scan goes stale against runs launched while the wipe is in
- * progress.
+ * Delete every unleased execution and report deleted, raced-away, and active
+ * execution IDs separately.
  */
-export async function deleteAllExecutions(
-  exclude?: ReadonlySet<string>,
-): Promise<DeleteAllExecutionsResult> {
+export async function deleteAllExecutions(): Promise<DeleteAllExecutionsResult> {
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
-  const executionDirs = listExecutionDirs(entries, exclude);
-
-  const deleted: ExecutionId[] = [];
-  const skippedLive: ExecutionId[] = [];
-  await pMap(
+  const executionDirs = listExecutionDirs(entries);
+  // Validate every present lease before the first irreversible deletion. A
+  // malformed record fails closed without leaving callers with partial work
+  // hidden behind an AggregateError.
+  await Promise.all(executionDirs.map(inspectExecutionLease));
+  const results = await pMap(
     executionDirs,
     async (id) => {
-      let live: boolean;
       try {
-        live = (await getExecutionLiveness(id)).live;
-      } catch {
-        // Fail safe for an irreversible operation: an unreadable heartbeat
-        // (EACCES, EIO) cannot prove the run is dead, so keep the execution.
-        live = true;
+        return await deleteExecution(id);
+      } catch (error) {
+        return {
+          status: 'failed' as const,
+          executionId: id,
+          message: toErrorMessage(error),
+        };
       }
-      if (live) {
-        skippedLive.push(id);
-        return;
-      }
-      await getExecutionStore(id).clear();
-      deleted.push(id);
     },
-    {
-      concurrency: EXECUTION_STORAGE_CONCURRENCY,
-      stopOnError: false,
-    },
+    { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
-  return { deleted, skippedLive };
+  return {
+    deleted: results.flatMap((result) =>
+      result.status === 'deleted' ? [result.executionId] : [],
+    ),
+    notFound: results.flatMap((result) =>
+      result.status === 'not-found' ? [result.executionId] : [],
+    ),
+    active: results.flatMap((result) =>
+      result.status === 'active' ? [result.executionId] : [],
+    ),
+    failed: results.flatMap((result) =>
+      result.status === 'failed'
+        ? [{ executionId: result.executionId, message: result.message }]
+        : [],
+    ),
+  };
 }
 
 // ============================================================================

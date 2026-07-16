@@ -28,7 +28,6 @@ export function createStubDesktopHistoryOptions(
     resourcesPath: repoPath('packages', 'extension', 'resources'),
     runExecution: noOp,
     restoreTaskState: async () => true,
-    getActiveExecutionIds: () => [],
     postToRenderer: () => undefined,
     openPath: noOp,
     showInfoMessage: noOp,

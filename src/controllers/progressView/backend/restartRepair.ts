@@ -4,6 +4,10 @@ import {
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
 } from '@agent/storage/executionLifecycle';
+import {
+  inspectExecutionLease as defaultInspectExecutionLease,
+  type ExecutionLeasePresence,
+} from '@agent/storage/executionLease';
 import type {
   StreamStatusEmitOptions,
   StreamStatusMachine,
@@ -47,6 +51,10 @@ export interface RestartRepairOptions {
     executionId: ExecutionId,
     outcome: RunOutcome,
   ) => Promise<void>;
+  /** Read cross-host liveness before mutating a persisted execution. */
+  inspectExecutionLease?: (
+    executionId: ExecutionId,
+  ) => Promise<ExecutionLeasePresence>;
   logger?: RestartRepairLogger;
   now?: number;
 }
@@ -222,6 +230,26 @@ export async function repairRestartedStreams(
     options.streamStatus,
     options.repairStreams,
   )) {
+    const executionId = options.executionIds.get(streamId);
+    if (executionId) {
+      try {
+        const lease = await (
+          options.inspectExecutionLease ?? defaultInspectExecutionLease
+        )(executionId);
+        if (lease.status === 'foreign') {
+          options.logger?.debug(
+            `Skipped restart repair for externally active execution ${executionId}`,
+          );
+          continue;
+        }
+      } catch (error) {
+        options.logger?.warn(
+          `Skipped restart repair for execution ${executionId} because its lease could not be validated`,
+          { data: error },
+        );
+        continue;
+      }
+    }
     const currentStatus = options.streamStatus.get(streamId);
     const isWaitingStream = options.waitingStreams.has(streamId);
 

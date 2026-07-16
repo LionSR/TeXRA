@@ -48,6 +48,38 @@ function createDurableFinalizer() {
 }
 
 describe('repairRestartedStreams', () => {
+  it('skips every repair mutation for a fresh foreign lease', async () => {
+    const streamId = 'stream-foreign-active' as StreamTabId;
+    const executionId = 'execution-foreign-active' as ExecutionId;
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, streamId);
+    const closeRunningGroups = vi.fn(async () => [] as StreamTabId[]);
+    const finalizeExecution = createDurableFinalizer();
+
+    const result = await repairRestartedStreams({
+      streamStatus,
+      waitingStreams: new Set(),
+      executionIds: new Map([[streamId, executionId]]),
+      closeRunningGroups,
+      finalizeExecution,
+      inspectExecutionLease: vi.fn(async () => ({
+        status: 'foreign' as const,
+        heartbeatAt: 123,
+      })),
+    });
+
+    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+    expect(result).toEqual({
+      waitingStreams: [],
+      failedStreams: [],
+      closedWaitingGroups: [],
+      closedFailedGroups: [],
+      terminalStatusUpdated: [],
+    });
+    expect(closeRunningGroups).not.toHaveBeenCalled();
+    expect(finalizeExecution).not.toHaveBeenCalled();
+  });
+
   it('repairs resumable running streams to WAITING with neutral group closure', async () => {
     const streamId = 'stream-waiting' as StreamTabId;
     const executionId = 'execution-waiting' as ExecutionId;
