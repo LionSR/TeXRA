@@ -43,6 +43,10 @@ interface MainViewIpcModule {
       debugMode?: boolean;
       getTheme?: () => 'dark' | 'light' | 'high-contrast';
       fileSelection: { handleMessage(message: { command: string }): boolean };
+      prompt: {
+        handleMessage(message: { command: string }): boolean;
+        dispose(): void;
+      };
       settings: { handleMessage(message: { command: string }): boolean };
       progress: { handleMessage(message: { command: string }): boolean };
       onboarding: { handleMessage(message: { command: string }): boolean };
@@ -194,6 +198,7 @@ function createMainViewCommandCapabilities() {
   return {
     executeAgent: vi.fn(async (_message: unknown) => {}),
     fileSelection: createUnhandledCapability(),
+    prompt: { ...createUnhandledCapability(), dispose: vi.fn() },
     settings: createUnhandledCapability(),
     progress: createUnhandledCapability(),
     onboarding: createUnhandledCapability(),
@@ -460,8 +465,10 @@ describe('desktop main-view IPC', () => {
     ipc.dispose();
     expect(nativeTheme.off).toHaveBeenCalledWith('updated', themeListener);
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
+    expect(capabilities.prompt.dispose).toHaveBeenCalledOnce();
     closedListeners.forEach((listener) => listener());
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
+    expect(capabilities.prompt.dispose).toHaveBeenCalledOnce();
   });
 
   it('uses desktop auth status when posting main-view startup login state', async () => {

@@ -62,7 +62,7 @@ import {
   type DesktopOnboardingIpc,
 } from './desktopOnboardingIpc.js';
 import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
-import { promptInRenderer } from './desktopPrompt.js';
+import { DesktopPromptController } from './desktopPromptController.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import { DefaultDesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
@@ -342,6 +342,16 @@ function createWindow(options: {
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
+  const promptController = new DesktopPromptController({
+    postToRenderer: (message) => {
+      const ipc = ipcRef.current;
+      if (!ipc || window.isDestroyed() || window.webContents.isDestroyed()) {
+        return false;
+      }
+      ipc.postToRenderer(message);
+      return true;
+    },
+  });
   const settingsIpcRef: {
     current?: ReturnType<typeof createDesktopSettingsIpc>;
   } = {};
@@ -701,7 +711,7 @@ function createWindow(options: {
       postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     },
     prompts: {
-      promptText: (input) => promptInRenderer(window, input),
+      promptText: (input) => promptController.request(input),
       chooseTeamAvailability: async ({ presetName, unavailableNames }) => {
         const result = await dialog.showMessageBox(window, {
           type: 'warning',
@@ -736,7 +746,7 @@ function createWindow(options: {
       },
       prompt: {
         input: (input) =>
-          promptInRenderer(window, {
+          promptController.request({
             title: input.title ?? input.prompt ?? 'Set API key',
             prompt: input.prompt ?? 'Enter API key',
             password: input.password,
@@ -851,7 +861,7 @@ function createWindow(options: {
       },
       prompt: {
         input: (input) =>
-          promptInRenderer(window, { ...input, password: true }),
+          promptController.request({ ...input, password: true }),
       },
       initialization: { initialize: options.initializeCrashReporting },
     });
@@ -1070,6 +1080,7 @@ function createWindow(options: {
     executeAgent: async (message) =>
       (await getAgentExecution()).handleExecute(message),
     fileSelection,
+    prompt: promptController,
     settings: settingsIpc,
     progress: progressIpc,
     onboarding: onboardingIpc,
