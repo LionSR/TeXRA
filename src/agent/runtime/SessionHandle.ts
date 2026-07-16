@@ -52,6 +52,7 @@ import {
   createSessionApprovals,
   type SessionApprovals,
 } from './streamApprovalQueue';
+import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -96,6 +97,7 @@ export class SessionHandle {
   readonly followUps: ToolUseFollowUpQueue;
   /** This session's trace-flush callbacks (drained on dispose / shutdown). */
   readonly flushers: Set<() => void>;
+  private readonly artifactFlushers = new Set<() => Promise<void>>();
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
@@ -150,6 +152,9 @@ export class SessionHandle {
     // shutdown drain (`flushPendingRunTraces()`) still reaches it.
     this.flushers = init.flushers ?? new Set<() => void>();
     this.hostChannel = init.hostChannel;
+    executions.attachRootExecutionLeaseRelease((executionId) =>
+      releaseExecutionLeaseAfterArtifacts(this, executionId),
+    );
     liveSessions.add(this);
   }
 
@@ -160,6 +165,40 @@ export class SessionHandle {
   /** Drain pending trace writes for this session's streams only. */
   flushPendingTraces(): void {
     for (const flush of [...this.flushers]) flush();
+  }
+
+  /** Register a session-owned durable writer such as a snapshot store. */
+  useArtifactFlusher(flush: () => Promise<void>): () => void {
+    this.artifactFlushers.add(flush);
+    return () => this.artifactFlushers.delete(flush);
+  }
+
+  /** Persist every buffered session artifact before execution ownership ends. */
+  async flushArtifacts(): Promise<void> {
+    const failures: unknown[] = [];
+    for (const flush of [...this.flushers]) {
+      try {
+        flush();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    const writers = [() => this.transcripts.flush(), ...this.artifactFlushers];
+    const results = await Promise.allSettled(
+      writers.map((flush) => Promise.resolve().then(flush)),
+    );
+    failures.push(
+      ...results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      ),
+    );
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+      throw new AggregateError(
+        failures,
+        'Multiple session artifact writers failed to flush',
+      );
+    }
   }
 
   /** Listeners for terminal run results in this session (the host channel). */
@@ -274,6 +313,7 @@ export class SessionHandle {
     // its bypass state before the interaction slot itself is torn down.
     this.approvals.rejectAndClearAll();
     this.interactions.dispose();
+    this.artifactFlushers.clear();
     this.resultListeners.clear();
   }
 

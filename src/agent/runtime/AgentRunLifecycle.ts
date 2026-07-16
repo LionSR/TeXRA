@@ -7,6 +7,10 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
+import {
+  markOwnedExecutionLeaseUndurable,
+  onOwnedExecutionLeaseLost,
+} from '@agent/storage/executionLease';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AGENT_ERROR_OUTCOME,
@@ -147,6 +151,7 @@ export async function finalizeRunTerminal(
         flowRecord: params.persistence.flowRecord,
       });
       if (finalization.status === 'failed') {
+        markOwnedExecutionLeaseUndurable(handle.executionId);
         logger.warn('Failed to finalize durable execution state', {
           data: {
             agentIdentifier: handle.agentName,
@@ -159,6 +164,7 @@ export async function finalizeRunTerminal(
       }
       terminalStatusPersisted = finalization.terminalStatusPersisted;
     } catch (error) {
+      markOwnedExecutionLeaseUndurable(handle.executionId);
       logger.warn('Execution finalizer rejected unexpectedly', {
         data: {
           agentIdentifier: handle.agentName,
@@ -323,6 +329,16 @@ export async function runFlowWithLifecycle(
   // missed the emitRunStart() `run.config` below and replays it from here (#8258).
   handle.initialRunFacts = { config: ctx.config };
   session.executions.track(handle);
+  let leaseLost = false;
+  let keepLeaseWatcher = false;
+  const stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
+    leaseLost = true;
+    handle.markExecutionLeaseLost();
+    logger.error('Execution lease was lost; interrupting the former owner', {
+      data: { executionId, streamId },
+    });
+    handle.interrupt();
+  });
   let flowRecordDisposition: FlowRecordDisposition | undefined;
   const lifecycleControl: FlowLifecycleControl = {
     setFlowRecordDisposition(disposition): void {
@@ -360,14 +376,16 @@ export async function runFlowWithLifecycle(
       isSubagent: options?.isSubagent ?? false,
       stage: ctx.parentStage,
       trace: ctx.logger,
-      persistence: {
-        kind: 'finalize',
-        // Tool-use flows report the exact recovery decision through the
-        // private lifecycle control. Other flows retain the historical policy.
-        flowRecord:
-          flowRecordDisposition ??
-          (arm.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve'),
-      },
+      persistence: leaseLost
+        ? { kind: 'skip' }
+        : {
+            kind: 'finalize',
+            // Tool-use flows report the exact recovery decision through the
+            // private lifecycle control. Other flows retain the historical policy.
+            flowRecord:
+              flowRecordDisposition ??
+              (arm.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve'),
+          },
       ...arm,
     });
   try {
@@ -386,6 +404,7 @@ export async function runFlowWithLifecycle(
       handle.closePendingInterruptWindow();
     }
     if (isWaitingFlowResult(result)) {
+      keepLeaseWatcher = true;
       logger.debug(`Task suspended with outcome: ${result.outcome}`);
       // The handle stays tracked (correct for resume) but the live tool-use
       // session and its interrupt handler are already gone by the time
@@ -535,6 +554,7 @@ export async function runFlowWithLifecycle(
 
     throw new AgentError(errorMsg, { cause: err });
   } finally {
+    if (!keepLeaseWatcher) stopWatchingLease();
     // Release long-lived resources (e.g., WebSocket connections, keepalive intervals)
     // to prevent leaks when handler instances are discarded after execution.
     ctx.modelHandler.dispose();

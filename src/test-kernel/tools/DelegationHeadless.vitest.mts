@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   isApprovalBypassedForStream: vi.fn(),
   isProposalBypassed: vi.fn(),
   registerExecution: vi.fn(),
+  releaseOwnedExecutionLease: vi.fn(),
   writeReport: vi.fn(),
   writeResultMeta: vi.fn(),
   computeModelOptionsData: vi.fn(),
@@ -57,8 +58,20 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 vi.mock('@agent/storage', () => ({
   getExecutionStore: mocks.getExecutionStore,
   registerExecution: mocks.registerExecution,
-  HEARTBEAT_INTERVAL_MS: 10_000,
-  touchExecutionHeartbeat: () => Promise.resolve(),
+  releaseOwnedExecutionLeaseBestEffort: mocks.releaseOwnedExecutionLease,
+}));
+
+vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
+  markOwnedExecutionLeaseUndurable: vi.fn(),
+  ownsExecutionLease: vi.fn(() => true),
+}));
+
+vi.mock('@agent/runtime/executionOwnership', () => ({
+  releaseExecutionLeaseAfterArtifacts: vi.fn(
+    async (_session: unknown, executionId: ExecutionId) =>
+      mocks.releaseOwnedExecutionLease(executionId),
+  ),
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
@@ -244,6 +257,7 @@ describe('headless delegation', () => {
     mocks.isProposalBypassed.mockReturnValue(true);
     mocks.isApprovalBypassedForStream.mockReturnValue(false);
     mocks.registerExecution.mockResolvedValue(undefined);
+    mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
     mocks.writeReport.mockResolvedValue(undefined);
     mocks.writeResultMeta.mockResolvedValue(undefined);
     const memoryStores = new Map<
@@ -328,6 +342,9 @@ describe('headless delegation', () => {
       wallTimeMs: expect.any(Number),
       result: result.result,
     });
+    expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.releaseOwnedExecutionLease.mock.invocationCallOrder[0],
+    );
   });
 
   it('recovers a completed stable child before resolving launch prerequisites', async () => {

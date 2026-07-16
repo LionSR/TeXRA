@@ -31,6 +31,7 @@ import {
   synchronizeAgentResultOutcome,
   writeTerminalStatus,
 } from '@agent/storage/executionLifecycle';
+import { inspectExecutionLease } from '@agent/storage/executionLease';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 const baseConfig = {
@@ -85,8 +86,9 @@ describe('execution lifecycle', () => {
   });
 
   it('pins the active workspace path when a config has no working directory', async () => {
+    const executionId = 'abc123' as ExecutionId;
     await registerExecution(
-      'abc123' as ExecutionId,
+      executionId,
       baseConfig,
       'chat',
       undefined,
@@ -96,6 +98,38 @@ describe('execution lifecycle', () => {
     expect(mocks.writeConfig).toHaveBeenCalledWith({
       ...baseConfig,
       workingDirectory: '/workspace/root',
+    });
+    await finalizeExecution({
+      executionId,
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      flowRecord: 'preserve',
+    });
+  });
+
+  it('rolls back lease ownership when fresh registration fails', async () => {
+    const executionId = 'abc124' as ExecutionId;
+    mocks.writeConfig.mockRejectedValueOnce(new Error('config write failed'));
+
+    await expect(
+      registerExecution(executionId, baseConfig, 'chat'),
+    ).rejects.toThrow('config write failed');
+
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'missing',
+    });
+  });
+
+  it('rolls back lease ownership when registration preparation throws', async () => {
+    const executionId = 'abc125' as ExecutionId;
+    mocks.getExecutionStore.mockImplementationOnce(() => {
+      throw new Error('store construction failed');
+    });
+
+    await expect(
+      registerExecution(executionId, baseConfig, 'chat'),
+    ).rejects.toThrow('store construction failed');
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'missing',
     });
   });
 

@@ -9,7 +9,12 @@ import {
   finalizeExecution,
   getExecutionStore,
   registerExecution,
+  releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage';
+import {
+  markOwnedExecutionLeaseUndurable,
+  onOwnedExecutionLeaseLost,
+} from '@agent/storage/executionLease';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   getCurrentToolContexts,
@@ -21,6 +26,7 @@ import {
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';
@@ -46,7 +52,6 @@ import {
 
 // Local imports - utils
 import { formatDuration, generateExecutionId } from '@utils/core';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { appendHead, appendTail } from '@utils/strings/appendTail';
 import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -247,8 +252,6 @@ export class BashTool extends defineTool({
   ): Promise<ToolResult> {
     const executionId = generateExecutionId();
 
-    await ensureRunDir(executionId);
-
     const preview = truncateWithEllipsis(command, 60);
 
     const syntheticConfig = AgentConfigSchema.parse({
@@ -265,15 +268,20 @@ export class BashTool extends defineTool({
       'process',
     );
 
-    const childStream = createChildStream(executionId, parentStreamId, {
-      streamPrefix: 'bash@tool',
-      streamCategory: AgentCategory.ToolUse,
-      agentName: 'bash',
-      description: command,
-      config: syntheticConfig,
-      toolName: 'bash',
-      runtimeHost,
-    });
+    let childStream: ReturnType<typeof createChildStream>;
+    try {
+      childStream = createChildStream(executionId, parentStreamId, {
+        streamPrefix: 'bash@tool',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'bash',
+        description: command,
+        config: syntheticConfig,
+        toolName: 'bash',
+        runtimeHost,
+      });
+    } catch (error) {
+      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
+    }
     const { childStreamId, logger } = childStream;
     let stdoutTail = '';
     let stderrTail = '';
@@ -287,6 +295,12 @@ export class BashTool extends defineTool({
     // unregisters after the process ends, possibly outside the ALS.
     const runSession = currentSession();
     const session = new BashBackgroundSession();
+    const stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
+      logger.error('Execution lease was lost; stopping background command', {
+        data: { executionId, childStreamId },
+      });
+      session.interrupt();
+    });
     const detachInterruptHandler =
       runSession.executions
         .getAgentHandleByStream(childStreamId)
@@ -355,6 +369,10 @@ export class BashTool extends defineTool({
         data: err,
       });
     };
+    const logDurabilityFailure = (action: string, err: unknown): void => {
+      markOwnedExecutionLeaseUndurable(executionId);
+      logBackgroundFailure(action, err);
+    };
 
     const enqueueParentFollowUp = async (
       text: string,
@@ -422,102 +440,114 @@ export class BashTool extends defineTool({
     };
 
     void (async () => {
-      const outcome = await promise.then(
-        (result) => ({ ok: true as const, result }),
-        (error: unknown) => ({ ok: false as const, error }),
-      );
-
-      if (outcome.ok) {
-        const { result } = outcome;
-        const wallTimeMs = Date.now() - startedAt;
-        const error = result.success
-          ? undefined
-          : new ToolError(
-              `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
-            );
-
-        // Only surface the head when the tail actually dropped earlier
-        // content — otherwise the tail already holds the full stream and a
-        // separate head block would just repeat it. When it did, also
-        // report how many characters sit in the gap between head and tail,
-        // mirroring the foreground `checkToolResultTextLimit` elision note.
-        const stdoutTruncated = stdoutTotalChars > stdoutTail.length;
-        const stderrTruncated = stderrTotalChars > stderrTail.length;
-        const msg = formatBashDelivery(
-          executionId,
-          command,
-          wallTimeMs,
-          result,
-          stdoutTail,
-          stderrTail,
-          stdoutTruncated ? stdoutHead : '',
-          stderrTruncated ? stderrHead : '',
-          stdoutTruncated
-            ? Math.max(
-                0,
-                stdoutTotalChars - stdoutHead.length - stdoutTail.length,
-              )
-            : 0,
-          stderrTruncated
-            ? Math.max(
-                0,
-                stderrTotalChars - stderrHead.length - stderrTail.length,
-              )
-            : 0,
+      try {
+        const outcome = await promise.then(
+          (result) => ({ ok: true as const, result }),
+          (error: unknown) => ({ ok: false as const, error }),
         );
 
-        const store = getExecutionStore(executionId);
-        try {
-          await store.writeResultMeta({
-            producer: 'backgroundBash',
-            exitCode: result.exitCode ?? (result.success ? 0 : 1),
-            wallTimeMs,
-            success: result.success,
-            timedOut: result.timedOut ?? false,
+        if (outcome.ok) {
+          const { result } = outcome;
+          const wallTimeMs = Date.now() - startedAt;
+          const error = result.success
+            ? undefined
+            : new ToolError(
+                `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
+              );
+
+          // Only surface the head when the tail actually dropped earlier
+          // content — otherwise the tail already holds the full stream and a
+          // separate head block would just repeat it. When it did, also
+          // report how many characters sit in the gap between head and tail,
+          // mirroring the foreground `checkToolResultTextLimit` elision note.
+          const stdoutTruncated = stdoutTotalChars > stdoutTail.length;
+          const stderrTruncated = stderrTotalChars > stderrTail.length;
+          const msg = formatBashDelivery(
+            executionId,
             command,
-          });
-        } catch (err: unknown) {
-          logBackgroundFailure('persist result metadata', err);
+            wallTimeMs,
+            result,
+            stdoutTail,
+            stderrTail,
+            stdoutTruncated ? stdoutHead : '',
+            stderrTruncated ? stderrHead : '',
+            stdoutTruncated
+              ? Math.max(
+                  0,
+                  stdoutTotalChars - stdoutHead.length - stdoutTail.length,
+                )
+              : 0,
+            stderrTruncated
+              ? Math.max(
+                  0,
+                  stderrTotalChars - stderrHead.length - stderrTail.length,
+                )
+              : 0,
+          );
+
+          const store = getExecutionStore(executionId);
+          try {
+            await store.writeResultMeta({
+              producer: 'backgroundBash',
+              exitCode: result.exitCode ?? (result.success ? 0 : 1),
+              wallTimeMs,
+              success: result.success,
+              timedOut: result.timedOut ?? false,
+              command,
+            });
+          } catch (err: unknown) {
+            logDurabilityFailure('persist result metadata', err);
+          }
+          try {
+            const finalization = await finalizeExecution({
+              executionId,
+              terminalStatus: backgroundBashTerminalStatus(result.success),
+              flowRecord: 'delete',
+            });
+            if (finalization.status === 'failed') throw finalization.error;
+          } catch (err: unknown) {
+            logDurabilityFailure('finalize execution', err);
+          }
+          try {
+            await store.writeReport(msg);
+          } catch (err: unknown) {
+            logDurabilityFailure('persist report', err);
+          }
+
+          await deliverAndFinalize(msg, { wallTimeMs, error, autoClose: true });
+          return;
         }
+
+        const { error } = outcome;
+        const msg = formatBashError(executionId, command, error);
         try {
           const finalization = await finalizeExecution({
             executionId,
-            terminalStatus: backgroundBashTerminalStatus(result.success),
+            terminalStatus: backgroundBashTerminalStatus(false),
             flowRecord: 'delete',
           });
           if (finalization.status === 'failed') throw finalization.error;
         } catch (err: unknown) {
-          logBackgroundFailure('finalize execution', err);
+          logDurabilityFailure('finalize execution', err);
         }
         try {
-          await store.writeReport(msg);
+          await getExecutionStore(executionId).writeReport(msg);
         } catch (err: unknown) {
-          logBackgroundFailure('persist report', err);
+          logDurabilityFailure('persist report', err);
         }
 
-        await deliverAndFinalize(msg, { wallTimeMs, error, autoClose: true });
-        return;
-      }
-
-      const { error } = outcome;
-      const msg = formatBashError(executionId, command, error);
-      try {
-        const finalization = await finalizeExecution({
-          executionId,
-          terminalStatus: backgroundBashTerminalStatus(false),
-          flowRecord: 'delete',
-        });
-        if (finalization.status === 'failed') throw finalization.error;
+        await deliverAndFinalize(msg, { error, autoClose: true });
       } catch (err: unknown) {
-        logBackgroundFailure('finalize execution', err);
+        logDurabilityFailure('complete', err);
+      } finally {
+        try {
+          await releaseExecutionLeaseAfterArtifacts(runSession, executionId);
+        } catch (err: unknown) {
+          logBackgroundFailure('persist final artifacts', err);
+        } finally {
+          stopWatchingLease();
+        }
       }
-      try {
-        await getExecutionStore(executionId).writeReport(msg);
-      } catch (err: unknown) {
-        logBackgroundFailure('persist report', err);
-      }
-
-      await deliverAndFinalize(msg, { error, autoClose: true });
     })();
 
     return {

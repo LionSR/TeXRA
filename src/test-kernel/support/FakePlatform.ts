@@ -521,6 +521,7 @@ export function createFakePlatform(
     ? options.workspacePath
     : '/workspace';
 
+  const lockTails = new Map<string, Promise<void>>();
   return {
     config: new FakeConfigProvider(options.config),
     globalState: new FakeStateStore(options.globalState),
@@ -531,6 +532,26 @@ export function createFakePlatform(
       options.storagePath,
       options.globalStoragePath,
     ),
+    fileLocks: {
+      async runExclusive<T>(
+        lockPath: string,
+        operation: () => Promise<T>,
+      ): Promise<T> {
+        const previous = lockTails.get(lockPath) ?? Promise.resolve();
+        let release: (() => void) | undefined;
+        const tail = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        lockTails.set(lockPath, tail);
+        await previous;
+        try {
+          return await operation();
+        } finally {
+          release?.();
+          if (lockTails.get(lockPath) === tail) lockTails.delete(lockPath);
+        }
+      },
+    },
     secrets: new FakeSecrets(options.secrets, options.secretsEnv),
     lifecycle: createLifecycleHost(),
     agentResume: { tryResumeStream: async () => false },

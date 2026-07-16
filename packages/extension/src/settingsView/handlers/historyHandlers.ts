@@ -22,22 +22,20 @@ import {
   getExecutionStore,
   deleteExecution,
   deleteAllExecutions,
-  describeHeartbeatOwner,
-  getExecutionLiveness,
 } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -101,26 +99,14 @@ export class HistoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT>,
   ): Promise<void> {
     try {
-      const activeIds = defaultSession().executions.getActiveIds();
-      if (activeIds.includes(data.historyId)) {
+      const result = await deleteExecution(data.historyId as ExecutionId);
+      if (result.status === 'active') {
         await vscode.window.showWarningMessage(
-          'Cannot delete a running execution',
+          'Cannot delete an execution that is active in TeXRA',
         );
         return;
       }
-      // The shared ~/.texra root means the run may be live in another host
-      // (CLI or desktop) this process's registry cannot see (#8625).
-      const liveness = await getExecutionLiveness(
-        data.historyId as ExecutionId,
-      );
-      if (liveness.live) {
-        await vscode.window.showWarningMessage(
-          `Cannot delete: this execution is running in ${describeHeartbeatOwner(liveness.ownerHost)}`,
-        );
-        return;
-      }
-      const deleted = await deleteExecution(data.historyId as ExecutionId);
-      if (deleted) {
+      if (result.status === 'deleted') {
         await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
       } else {
         await vscode.window.showWarningMessage(
@@ -138,17 +124,23 @@ export class HistoryHandlers {
 
   async handleClearHistory(): Promise<void> {
     try {
-      // deleteAllExecutions itself skips runs live in any host (#8625);
-      // this process's active ids are excluded up front as a cheap fast path.
-      await deleteAllExecutions(
-        new Set(defaultSession().executions.getActiveIds()),
-      );
-      await vscode.window.showInformationMessage('Agent history cleared');
-      await this.ctx.withActiveWebview(async (w) => {
-        await w.postMessage({
-          command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
+      const result = await deleteAllExecutions();
+      if (result.active.length === 0 && result.failed.length === 0) {
+        await vscode.window.showInformationMessage('Agent history cleared');
+        await this.ctx.withActiveWebview(async (w) => {
+          await w.postMessage({
+            command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
+          });
         });
-      });
+      } else {
+        await vscode.window.showInformationMessage(
+          formatExecutionHistoryRetention(
+            result.active.length,
+            result.failed.length,
+          ),
+        );
+        await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
+      }
     } catch (error) {
       await showLoggedErrorMessage(
         this.ctx.channel,

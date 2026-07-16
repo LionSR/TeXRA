@@ -19,12 +19,32 @@ const mocks = vi.hoisted(() => ({
   persistChildRunResultMeta: vi.fn(),
   enqueueChildRunFollowUp: vi.fn(),
   wakeChildRunFollowUp: vi.fn(),
+  leaseLossListener: undefined as (() => void) | undefined,
 }));
 
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   finalizeExecution: mocks.finalizeExecution,
   synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
+}));
+
+vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
+  markOwnedExecutionLeaseUndurable: vi.fn(),
+  onOwnedExecutionLeaseLost: vi.fn(
+    (_executionId: ExecutionId, listener: () => void) => {
+      mocks.leaseLossListener = listener;
+      return () => {
+        if (mocks.leaseLossListener === listener) {
+          mocks.leaseLossListener = undefined;
+        }
+      };
+    },
+  ),
+}));
+
+vi.mock('@agent/runtime/executionOwnership', () => ({
+  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
 }));
 
 vi.mock('@tools/childRunDelivery', () => ({
@@ -149,6 +169,7 @@ function createFakeStrategy(): FakeStrategyHandle {
 beforeEach(() => {
   session = defaultSession();
   vi.clearAllMocks();
+  mocks.leaseLossListener = undefined;
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
     terminalStatusPersisted: true,
@@ -174,6 +195,31 @@ afterEach(() => {
 });
 
 describe('childRunLoop E2E fixtures', () => {
+  it('interrupts an in-flight child when its execution lease is lost', async () => {
+    const childStreamId = uniqueStreamId('lease-loss');
+    const parentStreamId = 'parent' as StreamTabId;
+    const { strategy, rejectTurn } = createFakeStrategy();
+
+    startChildRunLoop({
+      childStreamId,
+      parentStreamId,
+      executionId: 'exec-lease-loss' as ExecutionId,
+      agentName: 'fake',
+      strategy,
+    });
+    await vi.waitFor(() => expect(mocks.leaseLossListener).toBeDefined());
+
+    mocks.leaseLossListener?.();
+    const abortError = new Error('Aborted');
+    abortError.name = 'AbortError';
+    await rejectTurn(1, abortError);
+
+    await vi.waitFor(() =>
+      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+    );
+    expect(mocks.enqueueChildRunFollowUp).not.toHaveBeenCalled();
+  });
+
   it('releases session ownership before delivering a failed turn', async () => {
     const childStreamId = uniqueStreamId('failed-turn-release');
     const parentStreamId = 'parent' as StreamTabId;

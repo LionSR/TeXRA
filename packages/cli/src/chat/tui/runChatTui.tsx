@@ -13,7 +13,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
-import { flushPendingRunTraces, StreamSnapshotStore } from '@transcript';
+import { StreamSnapshotStore } from '@transcript';
 import { platform, tryPlatform } from '@platform/platform';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -426,9 +426,14 @@ export async function runChat(
   // shared, host-agnostic snapshot store so a `texra resume` restores the full
   // display — the same streamData/{id}/* files the extension/desktop read.
   const snapshotStore = new StreamSnapshotStore();
+  const artifactSession = defaultSession();
   let detachSnapshotEvents: (() => void) | undefined =
-    snapshotStore.attachSessionEvents(defaultSession().events);
+    snapshotStore.attachSessionEvents(artifactSession.events);
+  let detachSnapshotFlusher: (() => void) | undefined =
+    artifactSession.useArtifactFlusher(() => snapshotStore.flush());
   const detachSnapshotPersistence = (): void => {
+    detachSnapshotFlusher?.();
+    detachSnapshotFlusher = undefined;
     detachSnapshotEvents?.();
     detachSnapshotEvents = undefined;
   };
@@ -904,12 +909,11 @@ export async function runChat(
   // Persistent flushes have bounded retries; an explicitly ephemeral session
   // has no disk work to drain.
   const drainPersistence = async (): Promise<void> => {
-    flushPendingRunTraces();
-    detachSnapshotPersistence();
-    await Promise.all([
-      defaultSession().transcripts.flush(),
-      snapshotStore.flush(),
-    ]);
+    try {
+      await artifactSession.flushArtifacts();
+    } finally {
+      detachSnapshotPersistence();
+    }
   };
   // These TUI exit paths call process.exit() directly, so bin/texra.ts's
   // `finally` (which runs platform shutdown) never fires. Run the same

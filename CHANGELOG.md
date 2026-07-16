@@ -21,6 +21,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Running sessions are protected across TeXRA apps** — clearing history or
+  progress in one app no longer removes or marks failed a session that is
+  still active in the CLI, desktop app, or VS Code extension.
 - **Application logs protect provider credentials by default** — extension and
   SDK-provided log destinations now redact recognizable secrets before writing
   them, while the local CLI terminal keeps its operator-readable output.

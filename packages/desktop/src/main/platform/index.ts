@@ -17,7 +17,6 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { StreamSnapshotStore } from '@transcript';
-import { setHeartbeatOwnerHost } from '@agent/storage';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { isFileNotFoundError } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
@@ -276,7 +275,6 @@ export async function initializeElectronPlatform(
       get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
     },
   });
-  setHeartbeatOwnerHost('desktop');
   initPlatform(
     createNodePlatform({
       configStores: {

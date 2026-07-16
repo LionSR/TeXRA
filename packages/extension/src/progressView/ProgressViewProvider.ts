@@ -8,7 +8,10 @@ import {
   replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
+import {
+  repairRestartedStreams,
+  RestartRepairRetryScheduler,
+} from '@controllers/progressView/backend/restartRepair';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
@@ -88,6 +91,7 @@ export class ProgressViewProvider
   private _panelJustDisposed = false;
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
   private readonly logger: AgentTrace;
+  private readonly restartRepairRetry = new RestartRepairRetryScheduler();
 
   private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
   private _mainViewProvider?: MainViewProvider;
@@ -402,15 +406,24 @@ export class ProgressViewProvider
   public async cleanupTasksAfterRestart(): Promise<void> {
     const executionIds = this.state.snapshots.getExecutionIdMap();
     const waitingStreams = await detectWaitingStreams(executionIds);
-    await repairRestartedStreams({
+    const repairStreams = new Set<StreamTabId>([
+      ...executionIds.keys(),
+      ...this.state.streamLogs.keys(),
+    ]);
+    const result = await repairRestartedStreams({
       streamStatus: this.state.streamStatus,
       waitingStreams,
       executionIds,
-      repairStreams: executionIds.keys(),
+      repairStreams,
       closeRunningGroups: (streamIds, status, now) =>
         this.state.endRunningTaskGroups(now, streamIds, status),
       statusEmitOptions: { trace: this.logger },
       logger: this.logger,
+    });
+    this.restartRepairRetry.schedule(result.nextLeaseCheckAt, () => {
+      void this.cleanupTasksAfterRestart().catch((error: unknown) => {
+        this.logger.warn('Failed delayed restart repair', { data: error });
+      });
     });
     this.syncFullView({ forceRebuild: true });
   }
@@ -584,6 +597,7 @@ export class ProgressViewProvider
 
   public override dispose(): void {
     this.disposePanelResources(true);
+    this.restartRepairRetry.dispose();
     this.backend.dispose();
     super.dispose();
   }

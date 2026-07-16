@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   finalizeExecution: vi.fn(),
+  releaseOwnedExecutionLeaseBestEffort: vi.fn(),
 }));
 
 const tempDirs: string[] = [];
@@ -83,6 +84,8 @@ vi.mock('@agent/runtime/runAgent', () => ({
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   finalizeExecution: mocks.finalizeExecution,
+  releaseOwnedExecutionLeaseBestEffort:
+    mocks.releaseOwnedExecutionLeaseBestEffort,
 }));
 
 vi.mock('@cli/runtime/runtimeHost', () => ({
@@ -154,6 +157,7 @@ function stubRunExecutionDeps(): void {
     terminalStatusPersisted: true,
     flowRecord: 'deleted',
   });
+  mocks.releaseOwnedExecutionLeaseBestEffort.mockResolvedValue(undefined);
   mocks.runAgent.mockResolvedValue({
     category: 'toolUse',
     executionId: 'exec-1',
@@ -520,48 +524,6 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
-  it('marks a non-AgentError rejection terminal before rethrowing it', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = baseRequest();
-    const error = new Error('disk full');
-    mocks.runAgent.mockRejectedValueOnce(error);
-
-    await expect(
-      executeCliRequest(request, cliContext(), { markErrorOnThrow: true }),
-    ).rejects.toBe(error);
-
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
-      executionId: 'exec-1',
-      terminalStatus: EXECUTION_STATUS.ERROR,
-      flowRecord: 'delete',
-    });
-    expect(mocks.close).toHaveBeenCalledTimes(1);
-  });
-
-  it('preserves an unexpected run error when terminal persistence also fails', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const error = new Error('workspace state unavailable');
-    const persistenceError = new Error('terminal metadata disk full');
-    mocks.runAgent.mockRejectedValueOnce(error);
-    mocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      error: persistenceError,
-      stage: 'terminal-status',
-      terminalStatusPersisted: false,
-    });
-
-    await expect(
-      executeCliRequest(baseRequest(), cliContext(), {
-        markErrorOnThrow: true,
-      }),
-    ).rejects.toBe(error);
-
-    expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
-      message:
-        'Failed to persist error status for execution exec-1: terminal metadata disk full',
-    });
-  });
-
   it('does not finalize a classified run failure a second time', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
@@ -572,29 +534,13 @@ describe('executeCliRequest', () => {
       },
     );
 
-    await expect(
-      executeCliRequest(request, cliContext(), { markErrorOnThrow: true }),
-    ).resolves.toEqual({ ok: false, exitCode: CliExitCode.AgentError });
+    await expect(executeCliRequest(request, cliContext())).resolves.toEqual({
+      ok: false,
+      exitCode: CliExitCode.AgentError,
+    });
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.close).toHaveBeenCalledTimes(1);
-  });
-
-  it('finalizes a classified launch failure before the lifecycle starts', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    mocks.runAgent.mockRejectedValueOnce(new AgentError('model not found'));
-
-    await expect(
-      executeCliRequest(baseRequest(), cliContext(), {
-        markErrorOnThrow: true,
-      }),
-    ).resolves.toEqual({ ok: false, exitCode: CliExitCode.AgentError });
-
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
-      executionId: 'exec-1',
-      terminalStatus: EXECUTION_STATUS.ERROR,
-      flowRecord: 'delete',
-    });
   });
 
   it('keeps a completed run terminal status when wrap cleanup fails after invoke succeeded (#7863)', async () => {
@@ -608,7 +554,6 @@ describe('executeCliRequest', () => {
 
     await expect(
       executeCliRequest(request, cliContext(), {
-        markErrorOnThrow: true,
         wrap: async (run) => {
           await run();
           throw cleanupError;
@@ -634,9 +579,7 @@ describe('executeCliRequest', () => {
       },
     );
 
-    const result = await executeCliRequest(request, cliContext(), {
-      markErrorOnThrow: true,
-    });
+    const result = await executeCliRequest(request, cliContext());
 
     expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
@@ -722,6 +665,7 @@ describe('executeCliRequest', () => {
       terminalStatus: EXECUTION_STATUS.INTERRUPTED,
       flowRecord: 'preserve',
     });
+    expect(mocks.releaseOwnedExecutionLeaseBestEffort).not.toHaveBeenCalled();
 
     resolveRun?.({
       category: 'toolUse',

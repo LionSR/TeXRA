@@ -26,7 +26,6 @@ import {
   refresh,
 } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
-import { getAllActiveExecutionIds } from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult } from '@hosts/uiHosts';
@@ -902,7 +901,6 @@ function createWindow(options: {
     },
     restoreTaskState: async (taskState) =>
       (await getAgentExecution()).progress.restoreTaskState(taskState),
-    getActiveExecutionIds: getAllActiveExecutionIds,
     openPath: settingsUi.openPath,
     showInfoMessage: settingsUi.showInfoMessage,
     showErrorMessage: settingsUi.showErrorMessage,
@@ -910,9 +908,8 @@ function createWindow(options: {
   });
   // Cross-host history refresh (#8625): the shared ~/.texra executions dir
   // is written by the CLI and extension too, so the settings history list
-  // re-posts when any host adds, finishes, or deletes a run. heartbeat.json
-  // churn (touched every 10s per live run) is filtered; best-effort — a
-  // watch failure only means no live refresh, manual refresh still works.
+  // re-posts when any host adds, finishes, or deletes a run. Best-effort: a
+  // watch failure only disables live refresh; manual refresh still works.
   const executionsDir = join(
     platform().storage.getStoragePath(),
     RUNS_STORAGE_DIR,
@@ -924,21 +921,9 @@ function createWindow(options: {
   let executionsWatcher: FSWatcher | undefined;
   try {
     mkdirSync(executionsDir, { recursive: true });
-    executionsWatcher = watch(
-      executionsDir,
-      { recursive: true },
-      (_event, filename) => {
-        // filename may be a Buffer (or null) per fs.watch's contract; the
-        // separator anchor avoids matching an unrelated *heartbeat.json name.
-        if (
-          filename != null &&
-          /(?:^|[\\/])heartbeat\.json$/.test(String(filename))
-        ) {
-          return;
-        }
-        void debouncedHistoryRepost();
-      },
-    );
+    executionsWatcher = watch(executionsDir, { recursive: true }, () => {
+      void debouncedHistoryRepost();
+    });
   } catch (error) {
     reportAsyncError(error);
   }

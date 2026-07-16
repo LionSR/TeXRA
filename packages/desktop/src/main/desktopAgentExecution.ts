@@ -23,6 +23,7 @@ import {
 } from '@controllers/progressView/backend/progressBackendUiConfig';
 import {
   repairRestartedStreams,
+  RestartRepairRetryScheduler,
   type RestartRepairResult,
 } from '@controllers/progressView/backend/restartRepair';
 import type { AgentTrace } from '@agent/trace';
@@ -77,6 +78,11 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import {
+  formatActiveStreamRetention,
+  formatStreamDeletionRetention,
+} from '@shared/copy/executionHistory';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   cleanupUnscopedApprovals,
@@ -198,6 +204,7 @@ export class DesktopProgressBridge {
   /** Desktop-local presentation effects not owned by the shared backend. */
   private readonly sessionProgress: DesktopSessionProgressBridge;
   private restartRepair: Promise<void> = Promise.resolve();
+  private readonly restartRepairRetry = new RestartRepairRetryScheduler();
   private startupStreamIds: ReadonlySet<StreamTabId> = new Set();
 
   readonly runtimeHost: AgentRuntimeHost;
@@ -632,6 +639,7 @@ export class DesktopProgressBridge {
   }
 
   dispose(): void {
+    this.restartRepairRetry.dispose();
     this.detachResultToast?.();
     this.executionRebinder.dispose();
     this.detachHostInteractions();
@@ -791,6 +799,13 @@ export class DesktopProgressBridge {
       logger: this.logger,
     });
     this.syncAfterRestartRepair(repairResult);
+    this.restartRepairRetry.schedule(repairResult.nextLeaseCheckAt, () => {
+      void this.repairOrphanedStreamsAfterRestart().catch((error: unknown) => {
+        this.logger.warn('Failed delayed restart repair', {
+          data: toLogData(error),
+        });
+      });
+    });
   }
 
   /**
@@ -962,6 +977,19 @@ export class DesktopProgressBridge {
   async deleteStream(streamId: StreamTabId): Promise<void> {
     if (!this.streamLogs.has(streamId)) return;
     const ownerSession = this.sessionForStream(streamId);
+    const ownedLocally =
+      ownerSession.executions.getAgentHandleByStream(streamId) !== undefined;
+    if (ownedLocally && isInFlightPhase(ownerSession.status.get(streamId))) {
+      this.stopStream(streamId);
+    }
+    if (ownedLocally) {
+      await this.state.waitForOwnedExecutionRelease(streamId);
+    }
+    const deleted = await this.state.clearStream(streamId);
+    if (!deleted) {
+      await this.options.host.showInfoMessage(formatActiveStreamRetention(1));
+      return;
+    }
     this.deletedStreams.add(streamId);
 
     // Releases approval state (pending approvals, bypass flags, pending
@@ -970,7 +998,6 @@ export class DesktopProgressBridge {
     releaseStreamResources(streamId, ownerSession);
     this.releaseApprovalsForStream(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
-    await this.state.clearStream(streamId);
     this.send({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
       stream: streamId,
@@ -980,11 +1007,28 @@ export class DesktopProgressBridge {
 
   async deleteAllStreams(): Promise<void> {
     const streamIds = new Set(this.streamLogs.keys());
+    const locallyOwnedStreams: StreamTabId[] = [];
+    for (const streamId of streamIds) {
+      const ownerSession = this.sessionForStream(streamId);
+      if (!ownerSession.executions.getAgentHandleByStream(streamId)) continue;
+      locallyOwnedStreams.push(streamId);
+      if (isInFlightPhase(ownerSession.status.get(streamId))) {
+        this.stopStream(streamId);
+      }
+    }
+    await Promise.all(
+      locallyOwnedStreams.map((streamId) =>
+        this.state.waitForOwnedExecutionRelease(streamId),
+      ),
+    );
+    const retained = await this.state.clearAll();
+    const retainedStreams = new Set([...retained.active, ...retained.failed]);
     // Approval cleanup (incl. retry/proposal/plan pending state) is scoped
     // to THIS window's streams via the per-stream helper. Approval state is
     // session-owned, so none of this can touch another window's pending
     // approvals or bypass flags.
     for (const streamId of streamIds) {
+      if (retainedStreams.has(streamId)) continue;
       this.deletedStreams.add(streamId);
       releaseStreamResources(streamId, this.sessionForStream(streamId));
     }
@@ -992,17 +1036,36 @@ export class DesktopProgressBridge {
     // empty streamId) — the per-stream loop skips them because they do not
     // equal any StreamTabId. Session-scoped, so a sibling window's streamless
     // approval is not rejected.
-    cleanupUnscopedApprovals(this.session);
+    if (retainedStreams.size === 0) cleanupUnscopedApprovals(this.session);
     // Child/subagent interaction requests may be session-owned without a local
     // desktop stream entry, so cancel the owning window's remaining pending
     // interactions after the visible per-stream sweep. This is session-scoped
     // and does not touch sibling windows.
-    this.session.interactions.cancel({ cause: 'All streams deleted.' });
-    await this.state.clearAll();
-    this.clearDesktopSessionMaps();
-    this.workflowFileActions.clearAllBackups();
-    this.send({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
+    if (retainedStreams.size === 0) {
+      this.session.interactions.cancel({ cause: 'All streams deleted.' });
+      this.clearDesktopSessionMaps();
+      this.workflowFileActions.clearAllBackups();
+      this.send({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
+    } else {
+      for (const streamId of streamIds) {
+        if (retainedStreams.has(streamId)) continue;
+        this.releaseApprovalsForStream(streamId);
+        this.workflowFileActions.clearStreamBackups(streamId);
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+          stream: streamId,
+        });
+      }
+    }
     this.updateStreamMetadata();
+    if (retainedStreams.size > 0) {
+      await this.options.host.showInfoMessage(
+        formatStreamDeletionRetention(
+          retained.active.size,
+          retained.failed.size,
+        ),
+      );
+    }
   }
 
   private syncStreamContent(streamId: StreamTabId | ''): void {

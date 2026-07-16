@@ -304,8 +304,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   /**
    * Watch the shared executions directory (outside the workspace, hence the
    * RelativePattern base) and re-send the history list to the active settings
-   * webview. heartbeat.json churn (touched every 10s per live run, #8652) is
-   * filtered out; the debounce coalesces launch/terminal write bursts.
+   * webview. The debounce coalesces launch and terminal write bursts.
    */
   private async registerExecutionsWatcher(): Promise<void> {
     this.executionsWatcher?.dispose();
@@ -321,8 +320,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.withActiveWebview((w) => this.historyHandlers.sendHistoryData(w)),
       DEBOUNCE_OPTIONS_MS,
     );
-    const onExecutionsEvent = (uri: vscode.Uri) => {
-      if (uri.path.endsWith('/heartbeat.json')) return;
+    const onExecutionsEvent = () => {
       void refreshHistory();
     };
     const watcher = vscode.workspace.createFileSystemWatcher(

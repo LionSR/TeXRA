@@ -6,12 +6,14 @@
  */
 
 import {
-  HEARTBEAT_INTERVAL_MS,
   finalizeExecution,
   synchronizeAgentResultOutcome,
-  touchExecutionHeartbeat,
 } from '@agent/storage';
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
+import {
+  completeOwnedExecutionLease,
+  markOwnedExecutionLeaseUndurable,
+} from '@agent/storage/executionLease';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
@@ -19,12 +21,12 @@ import {
   StreamStatusMachine,
   type StreamStatusEmitOptions,
 } from '@agent/runtime/StreamStatusService';
-import type { ExecutionId } from '@shared/schemas';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type ActiveChildInfo,
+  type ExecutionId,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
@@ -138,7 +140,6 @@ export type ManualCompactionRequestResult =
  */
 export class ExecutionRegistry {
   private readonly handles = new Map<string, ExecutionHandle>();
-  private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private readonly activeChildRunLoops = new Set<StreamTabId>();
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
   private readonly disposeStatusListener: () => void;
@@ -155,6 +156,8 @@ export class ExecutionRegistry {
    */
   private publishResult:
     ((event: ResultEvent, streamId: StreamTabId) => void) | undefined;
+  private releaseRootExecutionLease = (executionId: ExecutionId) =>
+    completeOwnedExecutionLease(executionId);
   // Persistent listeners stay attached across notifications (unlike one-shot
   // waiters in `changeCallbacks`). Used by the executions subscribe action.
   private readonly persistentListeners = new Map<
@@ -229,11 +232,17 @@ export class ExecutionRegistry {
     this.approvals = approvals;
   }
 
+  /** Bind the owning session's durable-artifact boundary to root release. */
+  attachRootExecutionLeaseRelease(
+    release: (executionId: ExecutionId) => Promise<void>,
+  ): void {
+    this.releaseRootExecutionLease = release;
+  }
+
   dispose(): void {
     this.disposeStatusListener();
     const executionIds = [...this.handles.keys()];
     this.handles.clear();
-    this.stopHeartbeatTimerIfIdle();
     this.activeChildRunLoops.clear();
     this.processOutput.dispose();
     for (const executionId of executionIds) {
@@ -261,14 +270,6 @@ export class ExecutionRegistry {
   /** Register an execution handle. */
   track(handle: ExecutionHandle): void {
     this.handles.set(handle.executionId, handle);
-    this.ensureHeartbeatTimer();
-    // Best-effort: a failed touch only shortens this run's cross-host delete
-    // protection (guards fail open to pre-#8625 behavior). The run itself
-    // writes the same executions/ tree constantly, so a persistent disk
-    // failure surfaces loudly through the run, not through this touch.
-    void touchExecutionHeartbeat(handle.executionId as ExecutionId).catch(
-      () => {},
-    );
     if (handle instanceof AgentExecutionHandle) {
       if (handle.isChildExecution) {
         this.emitChildActivity(handle.parentStreamId, 'subagents');
@@ -352,35 +353,8 @@ export class ExecutionRegistry {
     return true;
   }
 
-  /**
-   * One shared timer refreshes every active execution's on-disk heartbeat so
-   * other processes sharing the `~/.texra` root can tell these runs are live
-   * (#8625). Started on first track, stopped when the last handle untracks;
-   * unref'd so it never keeps a headless CLI process alive.
-   */
-  private ensureHeartbeatTimer(): void {
-    if (this.heartbeatTimer) return;
-    const timer = setInterval(() => {
-      for (const executionId of this.handles.keys()) {
-        // Best-effort, same rationale as the touch in track().
-        void touchExecutionHeartbeat(executionId as ExecutionId).catch(
-          () => {},
-        );
-      }
-    }, HEARTBEAT_INTERVAL_MS);
-    timer.unref?.();
-    this.heartbeatTimer = timer;
-  }
-
-  private stopHeartbeatTimerIfIdle(): void {
-    if (this.handles.size > 0 || !this.heartbeatTimer) return;
-    clearInterval(this.heartbeatTimer);
-    this.heartbeatTimer = undefined;
-  }
-
   private untrackHandle(handle: ExecutionHandle): void {
     this.handles.delete(handle.executionId);
-    this.stopHeartbeatTimerIfIdle();
     this.notifyRegistrationListeners(handle.executionId, undefined);
     this.notifyWaiters(handle.executionId);
     if (handle instanceof AgentExecutionHandle && handle.isChildExecution) {
@@ -963,6 +937,17 @@ export class ExecutionRegistry {
       category: handle.category,
       isSubagent: handle.isChildExecution,
     };
+    if (handle.executionLeaseLost) {
+      logger.warn('Discarding a stopped waiting execution after lease loss', {
+        data: { executionId: handle.executionId },
+      });
+      // Settle the in-memory result only: the former owner must not publish or
+      // persist a terminal event, but this promise must resolve on every exit.
+      handle.settleResult(cancelledResult);
+      this.untrackHandle(handle);
+      this.cancelStreamStatus(handle.childStreamId, handle);
+      return true;
+    }
     handle.trace?.emit(cancelledResult);
     this.publishResult?.(cancelledResult, handle.childStreamId);
     handle.settleResult(cancelledResult);
@@ -976,9 +961,11 @@ export class ExecutionRegistry {
     // untracks the suspended one below. Align the interim envelope only after
     // durable terminal metadata exists. A turn that does continue will replace
     // it with its own result.
-    void finalization
-      .then((result) => {
+    void (async () => {
+      try {
+        const result = await finalization;
         if (result.status === 'failed') {
+          markOwnedExecutionLeaseUndurable(handle.executionId);
           logger.warn('Failed to finalize stopped waiting execution', {
             data: {
               executionId: handle.executionId,
@@ -989,17 +976,28 @@ export class ExecutionRegistry {
           });
         }
         if (result.terminalStatusPersisted) {
-          void synchronizeAgentResultOutcome(
+          await synchronizeAgentResultOutcome(
             handle.executionId,
             RUN_OUTCOME.CANCELLED,
           );
         }
-      })
-      .catch((error: unknown) => {
+      } catch (error) {
+        markOwnedExecutionLeaseUndurable(handle.executionId);
         logger.warn('Waiting-execution finalizer rejected unexpectedly', {
           data: { executionId: handle.executionId, error },
         });
-      });
+      } finally {
+        if (!handle.isChildExecution) {
+          try {
+            await this.releaseRootExecutionLease(handle.executionId);
+          } catch (error) {
+            logger.warn('Waiting-execution artifact flush failed', {
+              data: { executionId: handle.executionId, error },
+            });
+          }
+        }
+      }
+    })();
     this.untrackHandle(handle);
     this.cancelStreamStatus(handle.childStreamId, handle);
     return true;

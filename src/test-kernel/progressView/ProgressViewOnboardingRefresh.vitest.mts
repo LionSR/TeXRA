@@ -87,8 +87,12 @@ function createProgressViewProvider(): ProgressViewProviderFake {
       streamLogs: new Map<StreamTabId, unknown>(),
       snapshots,
       pickValidActiveStream: vi.fn(() => ''),
-      clearStream: vi.fn(),
-      clearAll: vi.fn(),
+      waitForOwnedExecutionRelease: vi.fn(async () => undefined),
+      clearStream: vi.fn(async () => true),
+      clearAll: vi.fn(async () => ({
+        active: new Set<StreamTabId>(),
+        failed: new Set<StreamTabId>(),
+      })),
     },
     webviewUpdater: {
       updateGoalActive: vi.fn(),
@@ -286,7 +290,7 @@ describe('progress-view onboarding refresh wiring', () => {
     );
 
     expect(provider.state.clearAll).toHaveBeenCalledOnce();
-    expect(provider.webviewBridge.clearAll).toHaveBeenCalledOnce();
+    expect(provider.webviewBridge.clearAll).not.toHaveBeenCalled();
     expect(provider.syncFullView).toHaveBeenCalledWith({
       forceRebuild: true,
     });
