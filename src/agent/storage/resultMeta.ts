@@ -9,6 +9,7 @@ import {
 } from '@agent/runtime/AgentFinalResult';
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 import {
+  ExecutionIdSchema,
   RUN_OUTCOME,
   RunOutcomeSchema,
   type RunOutcome,
@@ -37,6 +38,8 @@ const CliWorkflowResultMetaSchema = z.strictObject({
 const SubagentResultMetaSchema = z.strictObject({
   producer: z.literal('subagent'),
   agentName: z.string(),
+  /** Durable lineage used to verify a recovered workflow child. */
+  parentExecutionId: ExecutionIdSchema.optional(),
   wallTimeMs: z.number().nonnegative(),
   result: AgentFinalResultSchema,
 });

@@ -45,6 +45,7 @@ export async function buildSubagentResult(
   options: {
     readonly startedAt: number;
     readonly workingDirectory?: string;
+    readonly parentExecutionId?: ExecutionId;
   },
 ): Promise<BuiltSubagentResult> {
   let diffInfos: Map<string, DiffFileInfo> | undefined;
@@ -81,7 +82,9 @@ export async function buildSubagentResult(
   });
   return {
     result: finalResult,
-    resultMeta: buildSubagentResultMeta(agentName, finalResult, wallTimeMs),
+    resultMeta: buildSubagentResultMeta(agentName, finalResult, wallTimeMs, {
+      parentExecutionId: options.parentExecutionId,
+    }),
     wallTimeMs,
   };
 }

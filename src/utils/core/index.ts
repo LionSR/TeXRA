@@ -29,6 +29,7 @@ export {
   formatWallTimeSeconds,
   serializeError,
 } from '../text/stringUtils';
+export { KeyedMutex } from './keyedMutex';
 
 // ---------------------------------------------------------------------------
 // typeGuards

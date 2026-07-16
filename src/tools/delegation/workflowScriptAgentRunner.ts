@@ -1,18 +1,34 @@
+// Local imports - agent runtime and shared utilities
 import { resolveChildRunOutput } from '@agent/storage';
-import type { WorkflowAgentRunner } from '@agent/workflowScript';
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import {
+  WorkflowRunAbortError,
+  type WorkflowAgentRunner,
+} from '@agent/workflowScript';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
+import { deriveExecutionId } from '@utils/core/idHash';
 import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/taskRunStorage';
 
-import { executeSubagentInBand } from './inBandSubagentExecution';
+// Local imports - delegation
+import {
+  executeStableSubagentInBand,
+  SubagentDurabilityError,
+} from './inBandSubagentExecution';
 import {
   requireVisibleAgent,
   selectAvailableDelegationModel,
 } from './proposalFlow';
 import { assertWorkflowFilesExist } from './workflowFileValidation';
+
+function workflowChildExecutionId(
+  parentExecutionId: LaunchRunContext['runScope']['executionId'],
+  checkpointId: string,
+  key: string,
+): LaunchRunContext['runScope']['executionId'] {
+  return deriveExecutionId({ checkpointId, key, parentExecutionId });
+}
 
 async function resolveInvocationInputFiles(
   parentExecutionId: LaunchRunContext['runScope']['executionId'],
@@ -42,57 +58,76 @@ async function resolveInvocationInputFiles(
 export function createWorkflowScriptAgentRunner(
   parent: LaunchRunContext,
   defaultAgentName: string,
+  checkpointId: string,
 ): WorkflowAgentRunner {
   const { runScope } = parent;
-  const recordSubagentCost =
-    getCurrentToolCallContext()?.hooks?.recordSubagentCost;
 
   return async (invocation) => {
-    const requestedAgent = invocation.options.agentName ?? defaultAgentName;
-    const agent = requireVisibleAgent(
-      AgentCategory.Workflow,
-      requestedAgent,
-      runScope.delegationAgentScope ?? undefined,
-    );
-    const [model, inputFiles] = await Promise.all([
-      selectAvailableDelegationModel({
-        parentModel: parent.model,
-        agentCategory: AgentCategory.Workflow,
-      }),
-      resolveInvocationInputFiles(
-        runScope.executionId,
-        invocation.options.inputFiles ?? [],
-      ),
-    ]);
-    const configPayload: AgentConfigPayload = {
-      agent: agent.name,
-      agentSource: agent.source,
-      agentCategory: AgentCategory.Workflow,
-      model,
-      instruction: invocation.prompt,
-      inputFiles,
-      ...(runScope.workingDirectory !== undefined && {
-        workingDirectory: runScope.workingDirectory,
-      }),
-      ...(runScope.delegationAgentScope && {
-        delegationAgentScope: runScope.delegationAgentScope,
-      }),
-    };
-
-    const { result } = await executeSubagentInBand({
-      configPayload,
-      agentName: agent.name,
-      parentExecutionId: runScope.executionId,
-      parentStreamId: runScope.streamId,
-      runtimeHost: runScope.runtimeHost,
-      session: runScope.session,
-      signal: invocation.signal,
-      approvalPromptsUnavailable: parent.approvalPromptsUnavailable,
-      runtimeUnavailableTools: parent.runtimeUnavailableTools,
-      ...(recordSubagentCost && {
-        onCost: (cost: number | undefined) => recordSubagentCost(cost ?? 0),
-      }),
-    });
-    return result;
+    try {
+      const { result } = await executeStableSubagentInBand({
+        executionId: workflowChildExecutionId(
+          runScope.executionId,
+          checkpointId,
+          invocation.key,
+        ),
+        parentExecutionId: runScope.executionId,
+        signal: invocation.signal,
+        prepare: async () => {
+          const requestedAgent =
+            invocation.options.agentName ?? defaultAgentName;
+          const agent = requireVisibleAgent(
+            AgentCategory.Workflow,
+            requestedAgent,
+            runScope.delegationAgentScope ?? undefined,
+          );
+          const [model, inputFiles] = await Promise.all([
+            selectAvailableDelegationModel({
+              parentModel: parent.model,
+              agentCategory: AgentCategory.Workflow,
+            }),
+            resolveInvocationInputFiles(
+              runScope.executionId,
+              invocation.options.inputFiles ?? [],
+            ),
+          ]);
+          const configPayload: AgentConfigPayload = {
+            agent: agent.name,
+            agentSource: agent.source,
+            agentCategory: AgentCategory.Workflow,
+            model,
+            instruction: invocation.prompt,
+            inputFiles,
+            ...(runScope.workingDirectory !== undefined && {
+              workingDirectory: runScope.workingDirectory,
+            }),
+            ...(runScope.delegationAgentScope && {
+              delegationAgentScope: runScope.delegationAgentScope,
+            }),
+          };
+          return {
+            configPayload,
+            agentName: agent.name,
+            parentExecutionId: runScope.executionId,
+            parentStreamId: runScope.streamId,
+            runtimeHost: runScope.runtimeHost,
+            session: runScope.session,
+            signal: invocation.signal,
+            approvalPromptsUnavailable: parent.approvalPromptsUnavailable,
+            runtimeUnavailableTools: parent.runtimeUnavailableTools,
+          };
+        },
+      });
+      if (result.outcome !== 'completed') {
+        throw new Error(
+          `Workflow subagent ended with ${result.outcome} outcome.`,
+        );
+      }
+      return result;
+    } catch (error) {
+      if (error instanceof SubagentDurabilityError) {
+        throw new WorkflowRunAbortError(error.message, { cause: error });
+      }
+      throw error;
+    }
   };
 }
