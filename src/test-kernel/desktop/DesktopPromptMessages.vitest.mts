@@ -27,6 +27,34 @@ describe('desktop prompt messages', () => {
     expect(DesktopShowPromptMessageSchema.parse(message)).toEqual(message);
   });
 
+  it('omits absent optional prompt fields', async () => {
+    const { buildDesktopShowPromptMessage } = await loadPromptMessages();
+    expect(
+      buildDesktopShowPromptMessage({
+        requestId: 'prompt-1',
+        title: 'Prompt',
+        prompt: 'Value',
+        inputType: 'text',
+        placeHolder: undefined,
+        value: undefined,
+      }),
+    ).toEqual({
+      command: 'desktop:showPrompt',
+      requestId: 'prompt-1',
+      title: 'Prompt',
+      prompt: 'Value',
+      inputType: 'text',
+    });
+  });
+
+  it('builds a strict prompt close command', async () => {
+    const { buildDesktopClosePromptMessage, DesktopClosePromptMessageSchema } =
+      await loadPromptMessages();
+    expect(
+      DesktopClosePromptMessageSchema.parse(buildDesktopClosePromptMessage()),
+    ).toEqual({ command: 'desktop:closePrompt' });
+  });
+
   it('rejects malformed input types and extra fields', async () => {
     const { DesktopShowPromptMessageSchema } = await loadPromptMessages();
     expect(

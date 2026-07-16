@@ -92,7 +92,10 @@ import {
   DesktopShowPdfMessageSchema,
   DesktopClosePdfMessageSchema,
 } from '../desktopPdfMessages';
-import { DesktopShowPromptMessageSchema } from '../desktopPromptMessages';
+import {
+  DesktopClosePromptMessageSchema,
+  DesktopShowPromptMessageSchema,
+} from '../desktopPromptMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
 import { getRendererPlatform } from './rendererPlatform';
@@ -694,6 +697,10 @@ window.addEventListener('message', (event) => {
   const promptParsed = DesktopShowPromptMessageSchema.safeParse(event.data);
   if (promptParsed.success) {
     promptOverlay.open(promptParsed.data);
+    return;
+  }
+  if (DesktopClosePromptMessageSchema.safeParse(event.data).success) {
+    promptOverlay.close();
     return;
   }
   // Progress view messages: dispatch directly into the shared messageDispatcher

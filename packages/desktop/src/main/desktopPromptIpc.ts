@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import type { PromptInputOptions } from '@hosts/uiHosts';
 
 import {
+  buildDesktopClosePromptMessage,
   buildDesktopShowPromptMessage,
   DESKTOP_PROMPT_COMMANDS,
   DesktopPromptResultMessageSchema,
@@ -86,6 +87,9 @@ export function createDesktopPromptIpc(
   }
 
   function cancelPending(): void {
+    if (active) {
+      renderer.postToRenderer(buildDesktopClosePromptMessage());
+    }
     active?.resolve(undefined);
     active = undefined;
     for (const pending of queue.splice(0)) pending.resolve(undefined);

@@ -51,6 +51,7 @@ describe('desktop prompt overlay', () => {
     expect((dialog as (HTMLElement & { label?: string }) | null)?.label).toBe(
       'Set API key',
     );
+    expect(dialog?.getAttribute('aria-label')).toBe('Set API key');
     expect(input.type).toBe('password');
     expect((input as typeof input & { label?: string }).label).toBe(
       'Enter OpenAI API key',
@@ -101,6 +102,34 @@ describe('desktop prompt overlay', () => {
     });
   });
 
+  it('closes the active prompt on a host cancellation request', async () => {
+    const { createDesktopPromptOverlay } = await loadPromptOverlay();
+    const appRoot = document.createElement('div');
+    document.body.append(appRoot);
+    const submit = vi.fn();
+    const controller = createDesktopPromptOverlay({ appRoot, submit });
+    controller.open({
+      command: 'desktop:showPrompt',
+      requestId: 'prompt-host-cancelled',
+      title: 'Set value',
+      prompt: 'Enter a value',
+      inputType: 'text',
+    });
+    await flushDialogTicks();
+
+    controller.close();
+    await flushDialogTicks();
+
+    const dialog = appRoot.querySelector<HTMLElement & { open: boolean }>(
+      'wa-dialog.desktop-prompt-overlay',
+    );
+    expect(dialog?.open).toBe(false);
+    expect(submit).toHaveBeenCalledWith({
+      command: 'desktop:promptResult',
+      requestId: 'prompt-host-cancelled',
+    });
+  });
+
   it('reports native dialog dismissal as cancellation', async () => {
     const { createDesktopPromptOverlay } = await loadPromptOverlay();
     const appRoot = document.createElement('div');
@@ -125,5 +154,45 @@ describe('desktop prompt overlay', () => {
       command: 'desktop:promptResult',
       requestId: 'prompt-dismissed',
     });
+  });
+
+  it('closes the current prompt before presenting its replacement', async () => {
+    const { createDesktopPromptOverlay } = await loadPromptOverlay();
+    const appRoot = document.createElement('div');
+    document.body.append(appRoot);
+    const submit = vi.fn();
+    const controller = createDesktopPromptOverlay({ appRoot, submit });
+    controller.open({
+      command: 'desktop:showPrompt',
+      requestId: 'prompt-old',
+      title: 'Old prompt',
+      prompt: 'Old value',
+      inputType: 'text',
+    });
+    await flushDialogTicks();
+
+    controller.open({
+      command: 'desktop:showPrompt',
+      requestId: 'prompt-new',
+      title: 'New prompt',
+      prompt: 'New value',
+      inputType: 'password',
+    });
+    await flushDialogTicks();
+
+    const dialog = appRoot.querySelector<HTMLElement & { open: boolean }>(
+      'wa-dialog.desktop-prompt-overlay',
+    );
+    const input = appRoot.querySelector<
+      HTMLElement & { label: string; type: string }
+    >('wa-input.desktop-prompt-input');
+    expect(submit).toHaveBeenCalledWith({
+      command: 'desktop:promptResult',
+      requestId: 'prompt-old',
+    });
+    expect(dialog?.open).toBe(true);
+    expect(dialog?.getAttribute('aria-label')).toBe('New prompt');
+    expect(input?.label).toBe('New value');
+    expect(input?.type).toBe('password');
   });
 });

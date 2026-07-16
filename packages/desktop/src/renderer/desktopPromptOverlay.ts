@@ -14,6 +14,7 @@ import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js'
 
 export interface DesktopPromptOverlayController {
   open(payload: DesktopShowPromptMessage): void;
+  close(): void;
 }
 
 interface DesktopPromptOverlayOptions {
@@ -64,6 +65,7 @@ export function createDesktopPromptOverlay(
   const dialog = shell.dialog;
   let activeRequestId: string | undefined;
   let settlement: PromptSettlement | undefined;
+  let pendingPrompt: DesktopShowPromptMessage | undefined;
 
   function beginSettlement(value: string | undefined, close: boolean): void {
     if (activeRequestId == null || settlement != null) return;
@@ -87,12 +89,17 @@ export function createDesktopPromptOverlay(
     options.submit(
       buildDesktopPromptResultMessage(completed.requestId, completed.value),
     );
+    if (pendingPrompt) {
+      const next = pendingPrompt;
+      pendingPrompt = undefined;
+      present(next);
+    }
   });
 
-  function open(payload: DesktopShowPromptMessage): void {
-    if (activeRequestId != null || settlement != null) return;
+  function present(payload: DesktopShowPromptMessage): void {
     activeRequestId = payload.requestId;
     dialog.label = payload.title;
+    dialog.setAttribute('aria-label', payload.title);
     input.type = payload.inputType;
     input.label = payload.prompt;
     input.placeholder = payload.placeHolder ?? '';
@@ -103,5 +110,19 @@ export function createDesktopPromptOverlay(
     });
   }
 
-  return { open };
+  function open(payload: DesktopShowPromptMessage): void {
+    if (activeRequestId == null && settlement == null) {
+      present(payload);
+      return;
+    }
+    pendingPrompt = payload;
+    beginSettlement(undefined, true);
+  }
+
+  function close(): void {
+    pendingPrompt = undefined;
+    beginSettlement(undefined, true);
+  }
+
+  return { open, close };
 }

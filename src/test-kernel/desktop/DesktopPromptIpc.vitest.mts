@@ -122,12 +122,13 @@ describe('desktop prompt IPC', () => {
 
     prompt.cancelPending();
     await expect(interrupted).resolves.toBeUndefined();
+    expect(messages[1]).toEqual({ command: 'desktop:closePrompt' });
 
     const recovered = prompt.input({ prompt: 'After reload' });
-    expect(messages).toHaveLength(2);
+    expect(messages).toHaveLength(3);
     prompt.handleMessage({
       command: 'desktop:promptResult',
-      requestId: String(messages[1]?.requestId),
+      requestId: String(messages[2]?.requestId),
       value: 'available',
     });
     await expect(recovered).resolves.toBe('available');
