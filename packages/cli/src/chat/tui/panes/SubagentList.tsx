@@ -176,7 +176,7 @@ export interface SubagentListProps {
   readonly onOpenProcessDetail?: (executionId: string) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   readonly onViewStream?: (streamId: StreamTabId) => void;
-  /** Pending approval kinds per stream id (see `pendingApprovalsByStream`,
+  /** Pending approval kinds per stream id (see `pendingApprovalSummaries`,
    *  root bucket already folded onto the root stream id by the caller). */
   readonly pendingApprovals?: ReadonlyMap<
     string,

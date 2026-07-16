@@ -71,25 +71,32 @@ export interface EnqueueApprovalOptions {
 
 export type PendingApprovalKind = ApprovalPayload['kind'];
 
-/** Grouping key for payloads that carry no stream id — they are session-wide
+/** Stream key for payloads that carry no stream id — they are session-wide
  *  and belong to the root/main row, never a child row. */
 export const ROOT_APPROVAL_STREAM_KEY = '';
 
+/** One queued approval as seen by list surfaces: its owning stream key and
+ *  payload kind, in global FIFO position. */
+export interface PendingApprovalSummary {
+  readonly streamKey: string;
+  readonly kind: PendingApprovalKind;
+}
+
 const CURRENT = signal<PendingApproval | undefined>(undefined);
 const STATUS = signal<ApprovalQueueStatus>({ depth: 0, kind: 'approval' });
-const PENDING_BY_STREAM = signal<
-  ReadonlyMap<string, readonly PendingApprovalKind[]>
->(new Map());
+const PENDING_SUMMARIES = signal<readonly PendingApprovalSummary[]>([]);
 
 export const currentApproval = CURRENT as Signal.State<
   PendingApproval | undefined
 >;
 export const approvalQueueStatus = STATUS as Signal.State<ApprovalQueueStatus>;
-/** Pending approval kinds grouped by their stream (FIFO order per stream);
- *  stream-less payloads group under {@link ROOT_APPROVAL_STREAM_KEY}. Powers
- *  the session list's per-row "waiting on what" suffix. */
-export const pendingApprovalsByStream = PENDING_BY_STREAM as Signal.State<
-  ReadonlyMap<string, readonly PendingApprovalKind[]>
+/** Every pending approval's stream key and kind, in global FIFO order;
+ *  stream-less payloads carry {@link ROOT_APPROVAL_STREAM_KEY}. Kept flat so
+ *  callers that fold buckets together (e.g. root row + session-wide) can
+ *  still order by first-to-present. Powers the session list's per-row
+ *  "waiting on what" suffix. */
+export const pendingApprovalSummaries = PENDING_SUMMARIES as Signal.State<
+  readonly PendingApprovalSummary[]
 >;
 
 const clearListeners = new Set<() => void>();
@@ -228,15 +235,13 @@ function syncApprovalStatus(): void {
         ? 'approval'
         : approvalQueueStatusKind(pendingApprovalPayloads()),
   });
-  const byStream = new Map<string, PendingApprovalKind[]>();
-  for (const item of pendingItems) {
-    const key =
-      approvalPayloadStreamId(item.payload) ?? ROOT_APPROVAL_STREAM_KEY;
-    const kinds = byStream.get(key);
-    if (kinds) kinds.push(item.payload.kind);
-    else byStream.set(key, [item.payload.kind]);
-  }
-  PENDING_BY_STREAM.set(byStream);
+  PENDING_SUMMARIES.set(
+    pendingItems.map((item) => ({
+      streamKey:
+        approvalPayloadStreamId(item.payload) ?? ROOT_APPROVAL_STREAM_KEY,
+      kind: item.payload.kind,
+    })),
+  );
 }
 
 /**
@@ -245,22 +250,33 @@ function syncApprovalStatus(): void {
  * against the previous projection still resolves the right item; nothing is
  * settled, resolved, or (re-)notified by a promotion. Used by jump-to-waiting:
  * focusing a session surfaces that session's approval immediately.
+ * `includeSessionWide` also promotes stream-less (session-wide) items — pass
+ * it when promoting the root stream, whose row those items fold onto.
  */
-export function promoteApprovalsForStream(streamId: StreamTabId): void {
+export function promoteApprovalsForStream(
+  streamId: StreamTabId,
+  options: { readonly includeSessionWide?: boolean } = {},
+): void {
   if (pendingItems.length < 2) return;
+  const matches = (item: ApprovalQueueItem): boolean => {
+    const itemStreamId = approvalPayloadStreamId(item.payload);
+    return (
+      itemStreamId === streamId ||
+      (options.includeSessionWide === true && itemStreamId === undefined)
+    );
+  };
   const head = pendingItems[0];
-  if (head && approvalPayloadStreamId(head.payload) === streamId) return;
+  if (head && matches(head)) return;
   const promoted: ApprovalQueueItem[] = [];
   const rest: ApprovalQueueItem[] = [];
   for (const item of pendingItems) {
-    (approvalPayloadStreamId(item.payload) === streamId ? promoted : rest).push(
-      item,
-    );
+    (matches(item) ? promoted : rest).push(item);
   }
   if (promoted.length === 0) return;
   pendingItems.splice(0, pendingItems.length, ...promoted, ...rest);
   CURRENT.set(undefined);
   presentForeground();
+  syncApprovalStatus();
 }
 
 export function enqueueApproval(

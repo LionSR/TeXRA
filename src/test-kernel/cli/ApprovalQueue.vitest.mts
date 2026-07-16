@@ -17,7 +17,7 @@ import {
   clearApprovalsWhere,
   currentApproval,
   enqueueApproval,
-  pendingApprovalsByStream,
+  pendingApprovalSummaries,
   promoteApprovalsForStream,
   ROOT_APPROVAL_STREAM_KEY,
   type ApprovalPayload,
@@ -297,24 +297,24 @@ describe('CLI approval queue', () => {
     await expect(untouchedResult).resolves.toEqual({ accepted: true });
   });
 
-  it('groups pending kinds by stream, folding stream-less payloads under the root key', async () => {
+  it('summarizes pending items in global FIFO order, keying stream-less payloads to the root', async () => {
     enqueueApproval(bashPayload('child-1'));
+    // Empty streamId is normalized to undefined by approvalPayloadStreamId,
+    // so session-wide payloads carry the root stream key — interleaved here
+    // to pin that consumers folding buckets still see first-to-present order.
+    enqueueApproval(bashPayload(''));
     enqueueApproval(externalInquiryPayload('child-1'));
     enqueueApproval(bashPayload('child-2'));
-    // Empty streamId is normalized to undefined by approvalPayloadStreamId,
-    // so session-wide payloads land in the root bucket.
-    enqueueApproval(bashPayload(''));
 
-    expect(pendingApprovalsByStream.get()).toEqual(
-      new Map([
-        ['child-1', ['bash', 'externalInquiry']],
-        ['child-2', ['bash']],
-        [ROOT_APPROVAL_STREAM_KEY, ['bash']],
-      ]),
-    );
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: 'child-1', kind: 'bash' },
+      { streamKey: ROOT_APPROVAL_STREAM_KEY, kind: 'bash' },
+      { streamKey: 'child-1', kind: 'externalInquiry' },
+      { streamKey: 'child-2', kind: 'bash' },
+    ]);
 
     clearApprovals();
-    expect(pendingApprovalsByStream.get()).toEqual(new Map());
+    expect(pendingApprovalSummaries.get()).toEqual([]);
   });
 
   it('promotes a stream to the head without settling, resolving, or re-presenting', async () => {
@@ -338,6 +338,13 @@ describe('CLI approval queue', () => {
     expect(approvalQueueStatus.get().depth).toBe(2);
     expect(presented).toEqual(['child-1', 'child-2']);
 
+    // The summaries reflect the promoted order, so per-row suffixes agree
+    // with what will present next.
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: 'child-2', kind: 'bash' },
+      { streamKey: 'child-1', kind: 'bash' },
+    ]);
+
     // Promoting an absent stream is a no-op.
     promoteApprovalsForStream('missing' as StreamTabId);
     expect(currentApproval.get()?.payload).toBe(second);
@@ -353,5 +360,42 @@ describe('CLI approval queue', () => {
 
     currentApproval.get()?.decide({ accepted: false });
     await expect(firstResult).resolves.toEqual({ accepted: false });
+  });
+
+  it('promotes session-wide items together with the root stream when asked', async () => {
+    const childItem = bashPayload('child-1');
+    const sessionWide = bashPayload('');
+    const rootItem = bashPayload('root');
+    const childResult = enqueueApproval(childItem);
+    const sessionWideResult = enqueueApproval(sessionWide);
+    const rootResult = enqueueApproval(rootItem);
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(childItem);
+    });
+
+    promoteApprovalsForStream('root' as StreamTabId, {
+      includeSessionWide: true,
+    });
+
+    // Session-wide and root items lead, preserving their relative order.
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: ROOT_APPROVAL_STREAM_KEY, kind: 'bash' },
+      { streamKey: 'root', kind: 'bash' },
+      { streamKey: 'child-1', kind: 'bash' },
+    ]);
+    expect(currentApproval.get()?.payload).toBe(sessionWide);
+
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(sessionWideResult).resolves.toEqual({ accepted: true });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(rootItem);
+    });
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(rootResult).resolves.toEqual({ accepted: true });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(childItem);
+    });
+    currentApproval.get()?.decide({ accepted: false });
+    await expect(childResult).resolves.toEqual({ accepted: false });
   });
 });
