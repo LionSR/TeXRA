@@ -47,8 +47,8 @@ export const ToolUseRow = memo(function ToolUseRow({
 
   const renderer = pickToolRenderer(toolUse);
   return renderer ? (
-    renderer.render(toolUse)
+    renderer.render(toolUse, width)
   ) : (
-    <UniversalToolRow toolUse={toolUse} />
+    <UniversalToolRow toolUse={toolUse} width={width} />
   );
 });
