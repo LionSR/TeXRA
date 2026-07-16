@@ -72,6 +72,9 @@ export function setHeartbeatOwnerHost(host: HeartbeatOwnerHost): void {
 export async function touchExecutionHeartbeat(
   executionId: ExecutionId,
 ): Promise<void> {
+  // The first touch runs concurrently with registerExecution's other launch
+  // writes and may beat the one that creates the execution directory.
+  await StorageFS.ensureDir(resolveRunStoragePath(executionId));
   await StorageFS.writeJson(heartbeatPath(executionId), {
     at: new Date().toISOString(),
     host: ownerHost,
