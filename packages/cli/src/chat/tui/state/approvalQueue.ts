@@ -265,17 +265,24 @@ export function promoteApprovalsForStream(
       (options.includeSessionWide === true && itemStreamId === undefined)
     );
   };
-  const head = pendingItems[0];
-  if (head && matches(head)) return;
   const promoted: ApprovalQueueItem[] = [];
   const rest: ApprovalQueueItem[] = [];
   for (const item of pendingItems) {
     (matches(item) ? promoted : rest).push(item);
   }
   if (promoted.length === 0) return;
-  pendingItems.splice(0, pendingItems.length, ...promoted, ...rest);
-  CURRENT.set(undefined);
-  presentForeground();
+  const next = [...promoted, ...rest];
+  // Already a contiguous prefix (a head-only check would miss matching items
+  // still parked behind other streams) — nothing to reorder.
+  if (next.every((item, index) => item === pendingItems[index])) return;
+  const headChanged = pendingItems[0] !== next[0];
+  pendingItems.splice(0, pendingItems.length, ...next);
+  // Only re-project when the head actually moved; the current projection's
+  // decide closure settles by item identity, so it stays valid either way.
+  if (headChanged) {
+    CURRENT.set(undefined);
+    presentForeground();
+  }
   syncApprovalStatus();
 }
 

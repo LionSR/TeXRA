@@ -349,10 +349,28 @@ describe('CLI approval queue', () => {
     promoteApprovalsForStream('missing' as StreamTabId);
     expect(currentApproval.get()?.payload).toBe(second);
 
-    // Settling the promoted head re-presents the demoted item — but its
-    // presentation side effects do not fire a second time.
+    // A matching head does not short-circuit gathering the stream's later
+    // items: with [child-2, child-1, child-2'] promoting child-2 pulls the
+    // trailing item up behind the head without re-projecting the foreground.
+    const third = bashPayload('child-2');
+    const thirdResult = enqueueApproval(third);
+    promoteApprovalsForStream('child-2' as StreamTabId);
+    expect(currentApproval.get()?.payload).toBe(second);
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: 'child-2', kind: 'bash' },
+      { streamKey: 'child-2', kind: 'bash' },
+      { streamKey: 'child-1', kind: 'bash' },
+    ]);
+    // Settling the promoted head presents the pulled-up item next; the
+    // demoted item re-presents last, but its presentation side effects do
+    // not fire a second time.
     currentApproval.get()?.decide({ accepted: true });
     await expect(secondResult).resolves.toEqual({ accepted: true });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(third);
+    });
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(thirdResult).resolves.toEqual({ accepted: true });
     await vi.waitFor(() => {
       expect(currentApproval.get()?.payload).toBe(first);
     });
