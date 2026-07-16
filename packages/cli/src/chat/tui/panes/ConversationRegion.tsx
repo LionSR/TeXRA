@@ -1,14 +1,13 @@
 // Conversation render boundary: static scrollback, live transcript, foreground
-// surfaces, tips, and queued follow-ups above the footer, with the compact
-// side panels below it.
+// surfaces, and queued follow-ups above the footer, with the compact side
+// panels below it.
 
 // Third-party imports
 import { Box } from 'ink';
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { type StreamTabId } from '@shared/schemas';
-import { isActivePhase } from '@shared/streams/streamStatus';
 import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
@@ -16,7 +15,6 @@ import {
   allocateConversationBottomPanelRows,
   allocateMiddleRows,
   PINNED_CHROME_ROWS,
-  shouldShowTipRow,
   shouldShowTodosPlanPanel,
   staticScrollbackTarget,
   staticTranscriptRowBudget,
@@ -35,7 +33,6 @@ import {
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
-import { TipRow } from './TipRow';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { ChildControlStreamTarget } from '../state/childControls';
@@ -62,7 +59,6 @@ interface ConversationRegionSnapshot {
 }
 
 interface ConversationRegionProps {
-  readonly agentSelectionAvailable: boolean;
   readonly colorEnabled?: boolean;
   readonly columns: number;
   readonly onTranscriptViewportChange?: (
@@ -72,9 +68,7 @@ interface ConversationRegionProps {
     availableRows: number,
     transcriptWidth: number,
   ) => ReactNode;
-  readonly renderFooterChrome: (
-    queuedFollowUpPanelVisible: boolean,
-  ) => ReactNode;
+  readonly renderFooterChrome: () => ReactNode;
   readonly rows: number;
   readonly snapshot: ConversationRegionSnapshot;
   readonly onCancelSessionList: () => void;
@@ -83,7 +77,6 @@ interface ConversationRegionProps {
 }
 
 export function ConversationRegion({
-  agentSelectionAvailable,
   colorEnabled,
   columns,
   onCancelSessionList,
@@ -95,7 +88,6 @@ export function ConversationRegion({
   rows,
   snapshot,
 }: ConversationRegionProps): React.JSX.Element {
-  const [tipHour] = useState(() => new Date().getHours());
   const transcriptViewerOpen = snapshot.transcriptViewerStreamId !== undefined;
   const foregroundOpen = snapshot.foregroundKind !== undefined;
   const inputBarVisible = !foregroundOpen;
@@ -125,7 +117,6 @@ export function ConversationRegion({
   const activeSlice = snapshot.activeStreamId
     ? snapshot.streams.get(snapshot.activeStreamId)
     : undefined;
-  const activeResponseRunning = isActivePhase(activeSlice?.status);
   const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
@@ -139,13 +130,6 @@ export function ConversationRegion({
     ? clamp(rows - footerRows, 0, requestedQueuedFollowUpPanelRows)
     : 0;
   const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
-  const tipRowVisible =
-    !scopedTranscript &&
-    !snapshot.sessionListFocused &&
-    shouldShowTipRow({
-      foregroundOpen,
-      hasQueuedFollowUps: queuedFollowUpPanelWanted,
-    });
   const staticTranscriptRows = scopedTranscript
     ? undefined
     : staticTranscriptRowBudget({
@@ -153,7 +137,6 @@ export function ConversationRegion({
         foregroundOpen,
         queuedFollowUpPanelRows,
         rows,
-        tipVisible: tipRowVisible,
       });
   const childExecutionPanelTarget = snapshot.childExecutionPanelTarget;
   const activeProcesses =
@@ -175,7 +158,6 @@ export function ConversationRegion({
     rows,
     slashPaletteOpen: snapshot.slashPaletteOpen,
     staticTranscriptRows: staticTranscriptRows ?? 0,
-    tipVisible: tipRowVisible,
   });
   // The subagent/todos panels live at the bottom of the same vertical column.
   // Reserve only as many rows as the panels actually need. Unfocused panels
@@ -244,13 +226,6 @@ export function ConversationRegion({
             </Box>
           ) : null}
         </Box>
-        {tipRowVisible ? (
-          <TipRow
-            agentSelectionAvailable={agentSelectionAvailable}
-            hour={tipHour}
-            responseRunning={activeResponseRunning}
-          />
-        ) : null}
         {queuedFollowUpPanelVisible ? (
           <QueuedFollowUpsPanel
             maxRows={queuedFollowUpPanelRows}
@@ -258,7 +233,7 @@ export function ConversationRegion({
             width={columns}
           />
         ) : null}
-        {renderFooterChrome(queuedFollowUpPanelVisible)}
+        {renderFooterChrome()}
         {bottomPanelBudget > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList

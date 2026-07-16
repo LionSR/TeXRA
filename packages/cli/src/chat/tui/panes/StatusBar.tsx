@@ -40,7 +40,6 @@ interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
   readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
-  readonly queuedFollowUpPreview?: boolean;
   readonly sessionNavigationAvailable: boolean;
   readonly sessionListFocused?: boolean;
   readonly shortcutsActive?: boolean;
@@ -169,7 +168,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     bypass: statusSlice?.bypass ?? NO_BYPASS,
     thinkingActive: statusSlice?.thinkingActive ?? false,
     queuedFollowUpMessages: statusSlice?.queuedFollowUpMessages ?? [],
-    queuedFollowUpPreview: props.queuedFollowUpPreview,
     usage: statusSlice?.usage,
     roundStage: statusSlice?.roundStage,
     activeSubagents:
@@ -203,7 +201,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
 
   return (
     <Box flexDirection="column">
-      <Box paddingX={1} justifyContent="space-between">
+      <Box paddingX={1}>
         <Box gap={1}>
           {display.left.map((segment, index) =>
             segment.badge ? (
@@ -225,11 +223,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
             ),
           )}
         </Box>
-        {display.right ? (
-          <Text dimColor wrap="truncate-end">
-            {display.right}
-          </Text>
-        ) : null}
       </Box>
       <Box paddingX={1}>
         <Text dimColor wrap="truncate-end">

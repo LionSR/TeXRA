@@ -17,7 +17,6 @@ const COMPACT_STATIC_TRANSCRIPT_MAX_ROWS = 14;
 const COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS = 2;
 
 export const PINNED_CHROME_ROWS = {
-  tip: 1,
   input: 3,
   status: 2,
 } as const;
@@ -28,21 +27,18 @@ function pinnedChromeRows({
   reverseSearchOpen,
   slashPaletteOpen,
   staticTranscriptRows = 0,
-  tipVisible = true,
 }: {
   readonly inputVisible?: boolean;
   readonly queuedFollowUpPanelRows?: number;
   readonly reverseSearchOpen: boolean;
   readonly slashPaletteOpen: boolean;
   readonly staticTranscriptRows?: number;
-  readonly tipVisible?: boolean;
 }): number {
   const baseRows =
     PINNED_CHROME_ROWS.status +
     (inputVisible ? PINNED_CHROME_ROWS.input : 0) +
     queuedFollowUpPanelRows +
-    staticTranscriptRows +
-    (tipVisible ? PINNED_CHROME_ROWS.tip : 0);
+    staticTranscriptRows;
   return (
     baseRows +
     (slashPaletteOpen ? SLASH_PALETTE_ROWS : 0) +
@@ -60,7 +56,6 @@ export function allocateMiddleRows({
   rows,
   slashPaletteOpen,
   staticTranscriptRows = 0,
-  tipVisible = true,
 }: {
   readonly foregroundMaxRows?: number;
   readonly foregroundOpen: boolean;
@@ -71,7 +66,6 @@ export function allocateMiddleRows({
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
   readonly staticTranscriptRows?: number;
-  readonly tipVisible?: boolean;
 }): {
   readonly foregroundRows: number;
   readonly transcriptRows: number;
@@ -85,7 +79,6 @@ export function allocateMiddleRows({
         reverseSearchOpen,
         slashPaletteOpen,
         staticTranscriptRows,
-        tipVisible,
       }),
   );
   if (!foregroundOpen) {
@@ -214,22 +207,16 @@ export function staticTranscriptRowBudget({
   foregroundOpen,
   queuedFollowUpPanelRows = 0,
   rows,
-  tipVisible = true,
 }: {
   readonly footerRows: number;
   readonly foregroundOpen: boolean;
   readonly queuedFollowUpPanelRows?: number;
   readonly rows: number;
-  readonly tipVisible?: boolean;
 }): number | undefined {
   if (foregroundOpen || rows > COMPACT_STATIC_TRANSCRIPT_MAX_ROWS) {
     return undefined;
   }
-  const optionalRows =
-    rows -
-    footerRows -
-    queuedFollowUpPanelRows -
-    (tipVisible ? PINNED_CHROME_ROWS.tip : 0);
+  const optionalRows = rows - footerRows - queuedFollowUpPanelRows;
   const liveTranscriptReserveRows = Math.min(
     COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS,
     Math.max(0, optionalRows),
@@ -265,16 +252,6 @@ export function staticScrollbackTarget({
     ownerKey: 'root',
     streamId: rootStreamId ?? activeStreamId,
   };
-}
-
-export function shouldShowTipRow({
-  foregroundOpen,
-  hasQueuedFollowUps = false,
-}: {
-  readonly foregroundOpen: boolean;
-  readonly hasQueuedFollowUps?: boolean;
-}): boolean {
-  return !foregroundOpen && !hasQueuedFollowUps;
 }
 
 export function shouldShowTodosPlanPanel({

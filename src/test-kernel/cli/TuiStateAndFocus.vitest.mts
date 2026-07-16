@@ -25,7 +25,6 @@ import {
   allocateConversationBottomPanelRows,
   allocateMiddleRows,
   allocateSidePanelRows,
-  shouldShowTipRow,
   shouldShowTodosPlanPanel,
   staticTranscriptRowBudget,
 } from '@cli/chat/tui/appLayout';
@@ -348,19 +347,10 @@ describe('CLI TUI row allocation', () => {
       reverseSearchOpen: false,
       rows: 24,
       slashPaletteOpen: false,
-      tipVisible: false,
     });
 
     expect(layout.transcriptRows).toBe(1);
     expect(layout.foregroundRows).toBe(18);
-  });
-
-  it('hides the normal chat tip row while foreground surfaces own input', () => {
-    expect(shouldShowTipRow({ foregroundOpen: false })).toBe(true);
-    expect(
-      shouldShowTipRow({ foregroundOpen: false, hasQueuedFollowUps: true }),
-    ).toBe(false);
-    expect(shouldShowTipRow({ foregroundOpen: true })).toBe(false);
   });
 
   it('returns disabled input rows to tiny foreground surfaces', () => {
@@ -370,7 +360,6 @@ describe('CLI TUI row allocation', () => {
       reverseSearchOpen: false,
       rows: 10,
       slashPaletteOpen: false,
-      tipVisible: false,
     });
 
     expect(layout.transcriptRows).toBe(1);
@@ -397,7 +386,6 @@ describe('CLI TUI row allocation', () => {
       reverseSearchOpen: false,
       rows: 24,
       slashPaletteOpen: false,
-      tipVisible: false,
     });
 
     expect(layout.transcriptRows).toBe(0);
@@ -412,7 +400,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: false,
     });
 
-    expect(layout.transcriptRows).toBe(18);
+    expect(layout.transcriptRows).toBe(19);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -423,7 +411,6 @@ describe('CLI TUI row allocation', () => {
       reverseSearchOpen: false,
       rows: 24,
       slashPaletteOpen: false,
-      tipVisible: false,
     });
 
     expect(layout.transcriptRows).toBe(16);
@@ -438,7 +425,6 @@ describe('CLI TUI row allocation', () => {
       rows: 10,
       slashPaletteOpen: false,
       staticTranscriptRows: 2,
-      tipVisible: false,
     });
 
     expect(layout.transcriptRows).toBe(0);
@@ -452,7 +438,6 @@ describe('CLI TUI row allocation', () => {
         foregroundOpen: false,
         queuedFollowUpPanelRows: 3,
         rows: 10,
-        tipVisible: false,
       }),
     ).toBe(0);
     expect(
@@ -461,7 +446,6 @@ describe('CLI TUI row allocation', () => {
         foregroundOpen: false,
         queuedFollowUpPanelRows: 3,
         rows: 14,
-        tipVisible: false,
       }),
     ).toBe(4);
     expect(
@@ -470,7 +454,6 @@ describe('CLI TUI row allocation', () => {
         foregroundOpen: false,
         queuedFollowUpPanelRows: 3,
         rows: 24,
-        tipVisible: false,
       }),
     ).toBeUndefined();
   });
@@ -481,7 +464,6 @@ describe('CLI TUI row allocation', () => {
       foregroundOpen: false,
       queuedFollowUpPanelRows: 3,
       rows: 14,
-      tipVisible: false,
     });
 
     expect(staticRows).toBe(4);
@@ -493,7 +475,6 @@ describe('CLI TUI row allocation', () => {
         rows: 14,
         slashPaletteOpen: false,
         staticTranscriptRows: staticRows,
-        tipVisible: false,
       }).transcriptRows,
     ).toBe(2);
   });
@@ -506,7 +487,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: false,
     });
 
-    expect(layout.transcriptRows).toBe(13);
+    expect(layout.transcriptRows).toBe(14);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -518,7 +499,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: true,
     });
 
-    expect(layout.transcriptRows).toBe(5);
+    expect(layout.transcriptRows).toBe(6);
     expect(layout.foregroundRows).toBe(0);
   });
 
