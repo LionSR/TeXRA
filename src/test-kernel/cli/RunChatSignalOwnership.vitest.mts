@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
   initInteractiveCliPlatform: vi.fn(),
   installTerminalRestoreOnExit: vi.fn(),
-  installTuiStdoutListenerLimit: vi.fn(),
   loadInputHistory: vi.fn(),
   maybeRunCliOnboarding: vi.fn(),
   onStreamStatusChange: vi.fn(),
@@ -132,7 +131,6 @@ vi.mock('@cli/chat/tui/render/noColorOutput', async (importOriginal) => {
     await importOriginal<typeof import('@cli/chat/tui/render/noColorOutput')>();
   return {
     ...actual,
-    installTuiStdoutListenerLimit: mocks.installTuiStdoutListenerLimit,
     tuiOutputStreamForColor: mocks.tuiOutputStreamForColor,
   };
 });
@@ -247,7 +245,6 @@ describe('runChat signal ownership wiring', () => {
       oscColorReports: false,
     });
     mocks.installTerminalRestoreOnExit.mockReturnValue(() => undefined);
-    mocks.installTuiStdoutListenerLimit.mockReturnValue(() => undefined);
     mocks.subscribeStreamLog.mockReturnValue(() => undefined);
     mocks.subscribeStreamStatus.mockReturnValue(() => undefined);
     mocks.onStreamStatusChange.mockReturnValue(() => undefined);
