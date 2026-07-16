@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveOnboardingFunnelState,
   planOnboardingFunnelTransition,
+  type OnboardingFunnelInputs,
+  type OnboardingFunnelState,
+  type OnboardingFunnelTransition,
 } from '@controllers/onboarding/onboardingFunnel';
 import {
   backfillFirstRunDone,
@@ -29,173 +32,105 @@ function fakeStateStore(initial: Record<string, unknown> = {}): StateStore {
 }
 
 describe('deriveOnboardingFunnelState', () => {
-  it('is needs-credential only without a credential and without a decline', () => {
-    expect(
-      deriveOnboardingFunnelState({
-        hasCredential: false,
-        declined: false,
-        firstRunDone: false,
-      }),
-    ).toBe('needs-credential');
-  });
-
-  it('a deliberate skip suppresses State 0', () => {
-    expect(
-      deriveOnboardingFunnelState({
-        hasCredential: false,
-        declined: true,
-        firstRunDone: false,
-      }),
-    ).toBe('done');
-  });
-
-  it('credential present + first run pending → setup owns the session', () => {
-    expect(
-      deriveOnboardingFunnelState({
-        hasCredential: true,
-        declined: false,
-        firstRunDone: false,
-      }),
-    ).toBe('setup');
-    // A stale declined flag never blocks State 1 once a credential exists.
-    expect(
-      deriveOnboardingFunnelState({
-        hasCredential: true,
-        declined: true,
-        firstRunDone: false,
-      }),
-    ).toBe('setup');
-  });
-
-  it('a completed first run means the normal product', () => {
-    expect(
-      deriveOnboardingFunnelState({
-        hasCredential: true,
-        declined: false,
-        firstRunDone: true,
-      }),
-    ).toBe('done');
-    expect(
-      deriveOnboardingFunnelState({
-        hasCredential: false,
-        declined: false,
-        firstRunDone: true,
-      }),
-    ).toBe('done');
+  it.each<[string, OnboardingFunnelInputs, OnboardingFunnelState]>([
+    [
+      'is needs-credential only without a credential and without a decline',
+      { hasCredential: false, declined: false, firstRunDone: false },
+      'needs-credential',
+    ],
+    [
+      'a deliberate skip suppresses State 0',
+      { hasCredential: false, declined: true, firstRunDone: false },
+      'done',
+    ],
+    [
+      'credential present + first run pending → setup owns the session',
+      { hasCredential: true, declined: false, firstRunDone: false },
+      'setup',
+    ],
+    [
+      'a stale declined flag never blocks State 1 once a credential exists',
+      { hasCredential: true, declined: true, firstRunDone: false },
+      'setup',
+    ],
+    [
+      'a completed first run with a credential means the normal product',
+      { hasCredential: true, declined: false, firstRunDone: true },
+      'done',
+    ],
+    [
+      'a completed first run without a credential means the normal product',
+      { hasCredential: false, declined: false, firstRunDone: true },
+      'done',
+    ],
+  ])('%s', (_name, inputs, expected) => {
+    expect(deriveOnboardingFunnelState(inputs)).toBe(expected);
   });
 });
 
 describe('planOnboardingFunnelTransition', () => {
-  it('in-session State 0 → 1: selects the setup agent but never auto-runs', () => {
-    expect(
-      planOnboardingFunnelTransition('needs-credential', {
-        hasCredential: true,
-        declined: false,
-        firstRunDone: false,
-      }),
-    ).toEqual({
-      state: 'setup',
-      selectSetupAgent: true,
-      clearDeclined: false,
-    });
-  });
-
-  it('plain activation in State 1 (previous undefined): selects but never auto-runs', () => {
-    expect(
-      planOnboardingFunnelTransition(undefined, {
-        hasCredential: true,
-        declined: false,
-        firstRunDone: false,
-      }),
-    ).toEqual({
-      state: 'setup',
-      selectSetupAgent: true,
-      clearDeclined: false,
-    });
-  });
-
-  it('a refresh already in State 1 never re-selects (user agent switches survive)', () => {
-    expect(
-      planOnboardingFunnelTransition('setup', {
-        hasCredential: true,
-        declined: false,
-        firstRunDone: false,
-      }),
-    ).toEqual({
-      state: 'setup',
-      selectSetupAgent: false,
-      clearDeclined: false,
-    });
-  });
-
-  it('skipped user who later configures a credential: re-enters State 1, clears the skip, no auto-run', () => {
-    expect(
-      planOnboardingFunnelTransition('done', {
-        hasCredential: true,
-        declined: true,
-        firstRunDone: false,
-      }),
-    ).toEqual({
-      state: 'setup',
-      selectSetupAgent: true,
-      clearDeclined: true,
-    });
-  });
-
-  it('first run already done: credential arrival lands in State 2 with no setup actions', () => {
-    expect(
-      planOnboardingFunnelTransition('needs-credential', {
-        hasCredential: true,
-        declined: false,
-        firstRunDone: true,
-      }),
-    ).toEqual({
-      state: 'done',
-      selectSetupAgent: false,
-      clearDeclined: false,
-    });
-  });
-
-  it('first run already done: missing credentials stay in State 2', () => {
-    expect(
-      planOnboardingFunnelTransition('needs-credential', {
-        hasCredential: false,
-        declined: false,
-        firstRunDone: true,
-      }),
-    ).toEqual({
-      state: 'done',
-      selectSetupAgent: false,
-      clearDeclined: false,
-    });
-  });
-
-  it('State 0 holds while no credential exists', () => {
-    expect(
-      planOnboardingFunnelTransition('needs-credential', {
-        hasCredential: false,
-        declined: false,
-        firstRunDone: false,
-      }),
-    ).toEqual({
-      state: 'needs-credential',
-      selectSetupAgent: false,
-      clearDeclined: false,
-    });
-  });
-
-  it('skip while in State 0: moves to done without setup actions', () => {
-    expect(
-      planOnboardingFunnelTransition('needs-credential', {
-        hasCredential: false,
-        declined: true,
-        firstRunDone: false,
-      }),
-    ).toEqual({
-      state: 'done',
-      selectSetupAgent: false,
-      clearDeclined: false,
-    });
+  it.each<
+    [
+      string,
+      OnboardingFunnelState | undefined,
+      OnboardingFunnelInputs,
+      OnboardingFunnelTransition,
+    ]
+  >([
+    [
+      'in-session State 0 → 1: selects the setup agent but never auto-runs',
+      'needs-credential',
+      { hasCredential: true, declined: false, firstRunDone: false },
+      { state: 'setup', selectSetupAgent: true, clearDeclined: false },
+    ],
+    [
+      'plain activation in State 1 (previous undefined): selects but never auto-runs',
+      undefined,
+      { hasCredential: true, declined: false, firstRunDone: false },
+      { state: 'setup', selectSetupAgent: true, clearDeclined: false },
+    ],
+    [
+      'a refresh already in State 1 never re-selects (user agent switches survive)',
+      'setup',
+      { hasCredential: true, declined: false, firstRunDone: false },
+      { state: 'setup', selectSetupAgent: false, clearDeclined: false },
+    ],
+    [
+      'skipped user who later configures a credential: re-enters State 1, clears the skip, no auto-run',
+      'done',
+      { hasCredential: true, declined: true, firstRunDone: false },
+      { state: 'setup', selectSetupAgent: true, clearDeclined: true },
+    ],
+    [
+      'first run already done: credential arrival lands in State 2 with no setup actions',
+      'needs-credential',
+      { hasCredential: true, declined: false, firstRunDone: true },
+      { state: 'done', selectSetupAgent: false, clearDeclined: false },
+    ],
+    [
+      'first run already done: missing credentials stay in State 2',
+      'needs-credential',
+      { hasCredential: false, declined: false, firstRunDone: true },
+      { state: 'done', selectSetupAgent: false, clearDeclined: false },
+    ],
+    [
+      'State 0 holds while no credential exists',
+      'needs-credential',
+      { hasCredential: false, declined: false, firstRunDone: false },
+      {
+        state: 'needs-credential',
+        selectSetupAgent: false,
+        clearDeclined: false,
+      },
+    ],
+    [
+      'skip while in State 0: moves to done without setup actions',
+      'needs-credential',
+      { hasCredential: false, declined: true, firstRunDone: false },
+      { state: 'done', selectSetupAgent: false, clearDeclined: false },
+    ],
+  ])('%s', (_name, previous, inputs, expected) => {
+    expect(planOnboardingFunnelTransition(previous, inputs)).toEqual(expected);
   });
 });
 
