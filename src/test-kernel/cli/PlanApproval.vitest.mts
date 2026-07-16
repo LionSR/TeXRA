@@ -65,6 +65,13 @@ describe('CLI plan approval layout', () => {
         goalEnabled: true,
         visibleBodyRows: 1,
       }),
+    ).toBe(false);
+    expect(
+      isPlanApprovalGoalActionVisible({
+        compact: true,
+        goalEnabled: true,
+        visibleBodyRows: 2,
+      }),
     ).toBe(true);
   });
 
