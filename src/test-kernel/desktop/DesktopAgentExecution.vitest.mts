@@ -1055,6 +1055,43 @@ describe('DesktopProgressBridge', () => {
     expect(bridgeStatus(bridge).get(streamId)).toBeUndefined();
   });
 
+  it('repairs only unmapped streams when waiting detection fails', async () => {
+    const unmappedStream = 'unmapped-stream' as StreamTabId;
+    const mappedStream = 'mapped-stream' as StreamTabId;
+    const executionId = 'ca110ad' as ExecutionId;
+    const detectionError = new Error('flow records unavailable');
+    const detectWaitingStreams = vi.fn(async () => {
+      throw detectionError;
+    });
+    const bridge = await createBridge([], {
+      canonicalStreamIds: [unmappedStream, mappedStream],
+      configureTranscripts: (store) => {
+        appendRunningGroup(store, unmappedStream);
+        appendRunningGroup(store, mappedStream);
+      },
+      configureProgressSnapshotStore: (store) => {
+        store.setTaskState(
+          mappedStream,
+          TaskStateSchema.parse(workflowTaskState()),
+          executionId,
+        );
+      },
+      detectWaitingStreams,
+    });
+
+    expect(detectWaitingStreams).toHaveBeenCalledOnce();
+    expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([mappedStream]);
+    expect(
+      bridge.streamLogs.get(unmappedStream)?.getRange(0).at(-1),
+    ).toMatchObject({
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: { status: RUN_OUTCOME.FAILED },
+    });
+    expect(
+      bridge.streamLogs.get(mappedStream)?.getRange(0).at(-1),
+    ).not.toMatchObject({ type: STREAM_LOG_ENTRY_TYPES.GROUP_END });
+  });
+
   it('waits for desktop startup repair before starting a run', async () => {
     let finishRepair!: (value: Set<StreamTabId>) => void;
     const repairGate = new Promise<Set<StreamTabId>>((resolve) => {

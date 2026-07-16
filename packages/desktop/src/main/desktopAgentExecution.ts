@@ -21,7 +21,10 @@ import {
   replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
+import {
+  repairRestartedStreams,
+  type RestartRepairResult,
+} from '@controllers/progressView/backend/restartRepair';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -776,18 +779,55 @@ export class DesktopProgressBridge {
         },
         logger: this.logger,
       });
-      if (
-        repairResult.waitingStreams.length > 0 ||
-        repairResult.failedStreams.length > 0 ||
-        repairResult.closedWaitingGroups.length > 0 ||
-        repairResult.closedFailedGroups.length > 0
-      ) {
-        this.syncFullView();
-      }
+      this.syncAfterRestartRepair(repairResult);
     } catch (error) {
-      this.logger.warn('Failed to repair desktop streams after restart', {
+      this.logger.warn('Failed to detect resumable desktop streams', {
         data: toLogData(error),
       });
+      await this.repairUnmappedUnfinishedStreams();
+    }
+  }
+
+  /**
+   * If flow-record detection is unavailable, only streams without an execution
+   * mapping are unambiguously crashed. Mapped streams may still be resumable,
+   * so leave them untouched for a later retry instead of guessing.
+   */
+  private async repairUnmappedUnfinishedStreams(): Promise<void> {
+    try {
+      const { allExecutionIds } = this.refreshActiveExecutionIds();
+      const repairStreams = this.streamLogs
+        .getUnfinishedStreamIds()
+        .filter((streamId) => !allExecutionIds.has(streamId));
+      if (repairStreams.length === 0) return;
+
+      const repairResult = await repairRestartedStreams({
+        streamStatus: this.session.status,
+        waitingStreams: new Set(),
+        executionIds: allExecutionIds,
+        repairStreams,
+        closeRunningGroups: (streamIds, status, now) =>
+          this.closeRunningTaskGroupsForStreams(streamIds, status, now),
+        statusEmitOptions: { trace: this.logger },
+        logger: this.logger,
+      });
+      this.syncAfterRestartRepair(repairResult);
+    } catch (error) {
+      this.logger.warn(
+        'Failed to repair unmapped desktop streams after waiting detection failed',
+        { data: toLogData(error) },
+      );
+    }
+  }
+
+  private syncAfterRestartRepair(result: RestartRepairResult): void {
+    if (
+      result.waitingStreams.length > 0 ||
+      result.failedStreams.length > 0 ||
+      result.closedWaitingGroups.length > 0 ||
+      result.closedFailedGroups.length > 0
+    ) {
+      this.syncFullView();
     }
   }
 
