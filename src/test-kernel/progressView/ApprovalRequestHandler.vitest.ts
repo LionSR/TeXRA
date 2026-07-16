@@ -23,6 +23,16 @@ const cancellationResult = (cause?: string): TestResult => ({
   cause,
 });
 
+class TestApprovalRequestHandler extends ApprovalRequestHandler<
+  TestRequest,
+  'requestId',
+  TestResult
+> {
+  stage(item: TestRequest): string {
+    return this.stagePresentationForReplay(item);
+  }
+}
+
 function createHandler(
   options: {
     canSend?: () => boolean;
@@ -32,11 +42,12 @@ function createHandler(
 ) {
   const sendShow = vi.fn(options.sendShow ?? (() => undefined));
   const sendDismiss = vi.fn(options.sendDismiss ?? (() => undefined));
-  const handler = new ApprovalRequestHandler<
-    TestRequest,
+  const handler = new TestApprovalRequestHandler(
     'requestId',
-    TestResult
-  >('requestId', sendShow, sendDismiss, options.canSend ?? (() => true));
+    sendShow,
+    sendDismiss,
+    options.canSend ?? (() => true),
+  );
   return { handler, sendDismiss, sendShow };
 }
 
@@ -135,6 +146,30 @@ describe('ApprovalRequestHandler', () => {
     handler.replay();
     expect(sendShow).not.toHaveBeenCalled();
     expect(sendDismiss).not.toHaveBeenCalled();
+  });
+
+  it('settles an interaction before staging its durable presentation', async () => {
+    const { handler, sendDismiss, sendShow } = createHandler();
+    const result = handler.request(request('same-id', 'stream-a', 'live'), {
+      cancellationResult,
+    });
+
+    expect(handler.stage(request('same-id', 'stream-a', 'durable'))).toBe(
+      'same-id',
+    );
+
+    await expect(result).resolves.toEqual({
+      action: 'cancel',
+      cause: 'Approval request was replaced.',
+    });
+    expect(handler.get('same-id')?.label).toBe('durable');
+    expect(sendDismiss).not.toHaveBeenCalled();
+    handler.replay();
+    expect(handler.get('same-id')?.label).toBe('durable');
+    expect(sendShow.mock.calls.map(([item]) => item.label)).toEqual([
+      'live',
+      'durable',
+    ]);
   });
 
   it('replays retained entries once to each newly ready target', async () => {

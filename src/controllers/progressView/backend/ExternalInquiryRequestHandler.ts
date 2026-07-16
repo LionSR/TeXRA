@@ -87,7 +87,7 @@ export class ExternalInquiryRequestHandler extends ApprovalRequestHandler<
           draft: getOpenTurnDraft(manifest),
           transcript: manifestToTranscript(manifest),
         };
-        this.setPending(
+        this.stagePresentationForReplay(
           manifest.turns.length > 1
             ? { ...basePermission, mode: 'followUp' }
             : { ...basePermission, mode: 'new' },

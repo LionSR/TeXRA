@@ -1,10 +1,13 @@
 import type { AgentTrace } from '@agent/trace';
-import type {
-  HostBashApprovalResult,
-  HostUserQuestionResult,
-  PlanApprovalResult,
-  ProposalResult,
-  RetryResult,
+import {
+  type HostBashApprovalResult,
+  matchesCancelSelector,
+  type HostInteractionCancelSelector,
+  type HostUserQuestionResult,
+  type PlanApprovalResult,
+  type ProposalResult,
+  type RetryResult,
+  type SettledInteractionKind,
 } from '@agent/runtime/HostInteractions';
 import type {
   AgentProposalPermission,
@@ -17,6 +20,7 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { assertNever } from '@utils/core';
 
 import { ApprovalRequestHandler } from './ApprovalRequestHandler';
 import { ExternalInquiryRequestHandler } from './ExternalInquiryRequestHandler';
@@ -56,6 +60,60 @@ export interface ApprovalRequestHandlerSet {
     'requestId',
     HostUserQuestionResult
   >;
+}
+
+function cancelHandler<
+  T extends { streamId: string },
+  K extends keyof T,
+  Result,
+>(
+  handler: ApprovalRequestHandler<T, K, Result>,
+  kind: SettledInteractionKind,
+  selector: HostInteractionCancelSelector,
+): number {
+  return handler.cancelWhere(
+    (item, cancellationScope) =>
+      matchesCancelSelector(
+        {
+          kind,
+          streamId: item.streamId || undefined,
+          cancellationScope,
+        },
+        selector,
+      ),
+    selector.cause,
+  );
+}
+
+/** Cancel the response-bearing progress interactions supported by one host. */
+export function cancelApprovalRequestHandlers(
+  handlers: ApprovalRequestHandlerSet,
+  kinds: readonly SettledInteractionKind[],
+  selector: HostInteractionCancelSelector,
+): number {
+  let cancelled = 0;
+  for (const kind of kinds) {
+    switch (kind) {
+      case 'bash':
+        cancelled += cancelHandler(handlers.bash, kind, selector);
+        break;
+      case 'plan':
+        cancelled += cancelHandler(handlers.planApproval, kind, selector);
+        break;
+      case 'proposal':
+        cancelled += cancelHandler(handlers.agentProposal, kind, selector);
+        break;
+      case 'retry':
+        cancelled += cancelHandler(handlers.retry, kind, selector);
+        break;
+      case 'userQuestion':
+        cancelled += cancelHandler(handlers.userQuestion, kind, selector);
+        break;
+      default:
+        assertNever(kind, 'Unhandled progress interaction kind');
+    }
+  }
+  return cancelled;
 }
 
 type ReplayableApprovalRequestHandlerSet = {
@@ -214,7 +272,7 @@ export interface ProgressBackendUiConfigParams {
  * pending-permissions guard) from a set of {@link ApprovalRequestHandler}s.
  *
  * The tool-edit callbacks delegate to their handler, so host differences live
- * entirely in how each handler is constructed (its show/resolve transport and
+ * entirely in how each handler is constructed (its show/dismiss transport and
  * `canSend` gate) — not in this wiring. The guard checks `hasPendingForStream`
  * across all handlers (see {@link APPROVAL_REQUEST_HANDLER_KEYS}), reusing the
  * handler's empty-streamId-blocks-all rule instead of re-deriving it per host.

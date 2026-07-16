@@ -1,9 +1,12 @@
 import { nanoid } from 'nanoid';
 
+import {
+  cancelApprovalRequestHandlers,
+  type ApprovalRequestHandlerSet,
+} from '@controllers/progressView/backend/progressBackendUiConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   cancellationResultFor,
-  matchesCancelSelector,
   type BashSettlement,
   type HostBashApprovalRequest,
   type HostBashApprovalResult,
@@ -17,6 +20,7 @@ import {
   type ProposalResult,
   type RetryResult,
   type RetrySettlement,
+  type SettledInteractionKind,
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import {
@@ -30,7 +34,6 @@ import {
   nativeRequestApproval,
 } from '@frontend/approval/nativeToolEditApproval';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
-import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
@@ -64,6 +67,14 @@ export interface ExtensionHostInteractions extends HostInteractions {
   dismissExternalInquiry(requestId: string): void;
 }
 
+const EXTENSION_PROGRESS_INTERACTION_KINDS = [
+  'bash',
+  'plan',
+  'proposal',
+  'retry',
+  'userQuestion',
+] as const satisfies readonly SettledInteractionKind[];
+
 export function createExtensionHostInteractions(
   options: ExtensionHostInteractionsOptions,
 ): ExtensionHostInteractions {
@@ -94,53 +105,10 @@ export function createExtensionHostInteractions(
     if (selector.kind == null || selector.kind === 'toolEdit') {
       cancelNativeToolEditApprovals(options.session, selector);
     }
-    handlers().bash.cancelWhere(
-      (item, cancellationScope) =>
-        matchesCancelSelector(
-          {
-            kind: 'bash',
-            streamId: item.streamId || undefined,
-            cancellationScope,
-          },
-          selector,
-        ),
-      selector.cause,
-    );
-    handlers().planApproval.cancelWhere(
-      (item, cancellationScope) =>
-        matchesCancelSelector(
-          { kind: 'plan', streamId: item.streamId, cancellationScope },
-          selector,
-        ),
-      selector.cause,
-    );
-    handlers().agentProposal.cancelWhere(
-      (item, cancellationScope) =>
-        matchesCancelSelector(
-          { kind: 'proposal', streamId: item.streamId, cancellationScope },
-          selector,
-        ),
-      selector.cause,
-    );
-    handlers().retry.cancelWhere(
-      (item, cancellationScope) =>
-        matchesCancelSelector(
-          { kind: 'retry', streamId: item.streamId, cancellationScope },
-          selector,
-        ),
-      selector.cause,
-    );
-    handlers().userQuestion.cancelWhere(
-      (item, cancellationScope) =>
-        matchesCancelSelector(
-          {
-            kind: 'userQuestion',
-            streamId: item.streamId || undefined,
-            cancellationScope,
-          },
-          selector,
-        ),
-      selector.cause,
+    cancelApprovalRequestHandlers(
+      handlers(),
+      EXTENSION_PROGRESS_INTERACTION_KINDS,
+      selector,
     );
   };
 

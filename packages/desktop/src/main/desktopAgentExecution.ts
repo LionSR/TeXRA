@@ -186,7 +186,7 @@ export class DesktopProgressBridge {
   private readonly agentProposalController: ProgressViewHost['agentProposalController'];
   private readonly workflowFileActions: ProgressViewHost['workflowFileActionsController'];
   /**
-   * Shown-but-unresolved approval prompts, one {@link ApprovalRequestHandler}
+   * Pending approval prompts, one {@link ApprovalRequestHandler}
    * per kind. These back the shared pending-permissions guard against view
    * switches and the pending-proposal lookup — the same host-agnostic
    * bookkeeping the extension uses, rather than a hand-rolled registry.
@@ -271,7 +271,7 @@ export class DesktopProgressBridge {
         unsupportedCommands(this.progressViewInboundHandlers),
       configureUi: ({ webviewUpdater }) => {
         // The desktop renderer is always attached (no sidebar/editor re-target),
-        // so every show/resolve reaches the webview.
+        // so every show/dismiss reaches the webview.
         const canSend = () => true;
         this.approvalHandlers = buildApprovalRequestHandlerSet({
           webviewUpdater,

@@ -85,10 +85,20 @@ export class ApprovalRequestHandler<
     });
   }
 
-  /** Replace pending presentation data without delivering until replay. */
-  protected setPending(item: T): string {
+  /** Stage presentation data for the next replay without delivering it now. */
+  protected stagePresentationForReplay(item: T): string {
     const id = this.idFor(item);
+    const existing = this.pending.get(id);
+    if (existing?.mode === 'interaction') {
+      this.completeEntry(
+        id,
+        existing,
+        existing.cancellationResult('Approval request was replaced.'),
+        false,
+      );
+    }
     this.pending.set(id, { mode: 'presentation', item });
+    this.delivered.delete(id);
     return id;
   }
 

@@ -1,8 +1,11 @@
 import { nanoid } from 'nanoid';
+import {
+  cancelApprovalRequestHandlers,
+  type ApprovalRequestHandlerSet,
+} from '@controllers/progressView/backend/progressBackendUiConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   cancellationResultFor,
-  matchesCancelSelector,
   type BashSettlement,
   type HostBashApprovalRequest,
   type HostBashApprovalResult,
@@ -15,6 +18,7 @@ import {
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
+  type SettledInteractionKind,
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import {
@@ -23,7 +27,6 @@ import {
 } from '@agent/runtime/hostInteractionResultMappers';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
-import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
@@ -52,6 +55,13 @@ export interface DesktopHostInteractions extends HostInteractions {
   ): boolean;
   dismissExternalInquiry(requestId: string): void;
 }
+
+const DESKTOP_PROGRESS_INTERACTION_KINDS = [
+  'bash',
+  'plan',
+  'proposal',
+  'userQuestion',
+] as const satisfies readonly SettledInteractionKind[];
 
 export function createDesktopHostInteractions(
   options: DesktopHostInteractionsOptions,
@@ -193,54 +203,10 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
     if (selector.kind == null || selector.kind === 'toolEdit') {
       this.options.getToolEditApprovals().cancel(selector);
     }
-    const handlers = this.options.getApprovalHandlers();
-    handlers.bash.cancelWhere(
-      (request, cancellationScope) =>
-        matchesCancelSelector(
-          {
-            kind: 'bash',
-            streamId: request.streamId || undefined,
-            cancellationScope,
-          },
-          selector,
-        ),
-      selector.cause,
-    );
-    handlers.planApproval.cancelWhere(
-      (request, cancellationScope) =>
-        matchesCancelSelector(
-          {
-            kind: 'plan',
-            streamId: request.streamId,
-            cancellationScope,
-          },
-          selector,
-        ),
-      selector.cause,
-    );
-    handlers.agentProposal.cancelWhere(
-      (request, cancellationScope) =>
-        matchesCancelSelector(
-          {
-            kind: 'proposal',
-            streamId: request.streamId,
-            cancellationScope,
-          },
-          selector,
-        ),
-      selector.cause,
-    );
-    handlers.userQuestion.cancelWhere(
-      (request, cancellationScope) =>
-        matchesCancelSelector(
-          {
-            kind: 'userQuestion',
-            streamId: request.streamId || undefined,
-            cancellationScope,
-          },
-          selector,
-        ),
-      selector.cause,
+    cancelApprovalRequestHandlers(
+      this.options.getApprovalHandlers(),
+      DESKTOP_PROGRESS_INTERACTION_KINDS,
+      selector,
     );
   }
 
