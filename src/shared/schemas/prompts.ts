@@ -198,29 +198,10 @@ export type UserQuestionPermission = z.infer<
 // Plan Approval
 // ============================================================================
 
-export const PLAN_APPROVAL_ACTIONS = [
-  'approve',
-  'reject',
-  'approve_and_goal',
-] as const;
-export type PlanApprovalAction = (typeof PLAN_APPROVAL_ACTIONS)[number];
+export type PlanApprovalAction = 'approve' | 'reject' | 'approve_and_goal';
 
-// Tool-edit and bash approval action sets live here (the schema layer) so the
-// IPC schema (progressView/inbound) and the runtime approval modules
-// (@tools/approval/*) share one definition. The schema layer has no @tools/
-// @agent imports, so the runtime modules import these without a cycle, and the
-// IPC schema never pulls runtime code into the renderer bundle.
-export const TOOL_EDIT_APPROVAL_ACTIONS = [
-  'approve',
-  'reject',
-  'openDiff',
-  'showLatexdiff',
-  'previewProposed',
-] as const;
 export type ToolEditApprovalAction =
-  (typeof TOOL_EDIT_APPROVAL_ACTIONS)[number];
-
-export const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
+  'approve' | 'reject' | 'openDiff' | 'showLatexdiff' | 'previewProposed';
 
 export const PlanApprovalPermissionSchema = z.strictObject({
   approvalId: z.string(),

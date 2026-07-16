@@ -21,13 +21,13 @@ import { codeBlockStyles } from '../styles/codeBlockStyles';
 import { buildCodeBlock } from '../formatters/htmlBuilders';
 
 // Local imports - base class
-import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import { BaseBypassApprovalPanel } from './BaseBypassApprovalPanel';
 
 // Local imports - styles
 import { bashRequestPanelStyles } from './BashRequestPanel.styles';
 
 @customElement('bash-request-panel')
-export class BashRequestPanel extends BaseFeedbackPanel<'bash'> {
+export class BashRequestPanel extends BaseBypassApprovalPanel<'bash'> {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -35,6 +35,8 @@ export class BashRequestPanel extends BaseFeedbackPanel<'bash'> {
     requestPanelSharedStyles,
     bashRequestPanelStyles,
   ];
+
+  protected readonly approvalDecision = { action: 'approve' } as const;
 
   override render(): TemplateResult {
     const data = this.permission.data;

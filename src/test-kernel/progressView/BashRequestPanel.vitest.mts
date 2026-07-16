@@ -46,19 +46,22 @@ function querySplitButton(element: BashRequestPanel): ApproveSplit | null {
   );
 }
 
-function recordPermissionActions(element: BashRequestPanel): string[] {
-  const actions: string[] = [];
+function recordPermissionActions(
+  element: BashRequestPanel,
+): Array<{ action: string }> {
+  const actions: Array<{ action: string }> = [];
   element.addEventListener('permission-action', (event) => {
-    actions.push((event as CustomEvent<{ action: string }>).detail.action);
+    actions.push(
+      (event as CustomEvent<{ decision: { action: string } }>).detail.decision,
+    );
   });
   return actions;
 }
 
 // Parity with ToolEditRequestPanel: the bash panel gets the Yolo affordance
-// entirely from shared BaseFeedbackPanel logic (`canBypass`, the `a` shortcut in
-// `handleKeyboardShortcut`, and the `<approve-split-button>` in
-// `renderApproveButton`), so these tests guard that the bash panel wires it up
-// — a base-class regression would not be caught by the tool-edit tests alone.
+// entirely from shared BaseBypassApprovalPanel logic, so these tests guard that
+// the bash panel wires it up — a base-class regression would not be caught by
+// the tool-edit tests alone.
 describe('bash-request-panel', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/BashRequestPanel'),
@@ -95,6 +98,6 @@ describe('bash-request-panel', () => {
     expect(split?.canBypass).toBe(true);
 
     expect(element.handleKeyboardShortcut('a')).toBe(true);
-    expect(actions).toEqual(['approveSession']);
+    expect(actions).toEqual([{ action: 'approveSession' }]);
   });
 });

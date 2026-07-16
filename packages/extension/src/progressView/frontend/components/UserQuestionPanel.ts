@@ -27,8 +27,6 @@ import type {
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - progress view events
-import { ProgressEvents } from '../events';
-
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
@@ -230,9 +228,6 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
   }
 
   private submitAnswers(): void {
-    // Bypasses the base class's emitAction chokepoint (dispatches
-    // permission-action directly), so the archived/read-only trace-viewer
-    // guard has to be repeated here.
     if (this.archived) return;
     const data = this.permission.data;
     const answers: UserQuestionAnswers = {};
@@ -250,13 +245,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
         : selected[0];
     }
 
-    this.dispatchEvent(
-      ProgressEvents.permissionAction({
-        permission: this.permission,
-        action: 'submit',
-        answers,
-      }),
-    );
+    this.emitAction({ action: 'submit', answers });
   }
 
   private hasAnyAnswer(data: UserQuestionPermission): boolean {

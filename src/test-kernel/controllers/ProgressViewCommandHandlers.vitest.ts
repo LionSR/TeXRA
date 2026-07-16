@@ -645,7 +645,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
         {
           command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
           proposalId: 'proposal-1',
-          action: 'setup',
+          action: 'approve',
           agent: 'review',
           model: 'deepseek',
         },
@@ -680,7 +680,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     expect(actions.approval.handleAgentProposalAction).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
       proposalId: 'proposal-1',
-      action: 'setup',
+      action: 'approve',
       agent: 'review',
       model: 'deepseek',
     });
@@ -768,6 +768,102 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     expect(
       actions.approval.onUnsupportedToolEditApproval,
     ).not.toHaveBeenCalled();
+  });
+});
+
+describe('permission action schemas', () => {
+  const tool = {
+    command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+    requestId: 'edit-1',
+  };
+  const bash = {
+    command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
+    requestId: 'bash-1',
+  };
+  const proposal = {
+    command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+    proposalId: 'proposal-1',
+  };
+  const plan = {
+    command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+    approvalId: 'plan-1',
+  };
+
+  it.each([
+    ['tool approve', { ...tool, action: 'approve' }, true],
+    ['tool reject', { ...tool, action: 'reject', feedback: 'No' }, true],
+    ['tool open diff', { ...tool, action: 'openDiff' }, true],
+    ['tool show latexdiff', { ...tool, action: 'showLatexdiff' }, true],
+    ['tool preview proposed', { ...tool, action: 'previewProposed' }, true],
+    [
+      'tool approve with feedback',
+      { ...tool, action: 'approve', feedback: 'x' },
+      false,
+    ],
+    [
+      'tool inspection with feedback',
+      { ...tool, action: 'openDiff', feedback: 'x' },
+      false,
+    ],
+    ['tool unknown field', { ...tool, action: 'approve', extra: true }, false],
+    ['bash approve', { ...bash, action: 'approve' }, true],
+    ['bash reject', { ...bash, action: 'reject', feedback: 'No' }, true],
+    ['bash tool action', { ...bash, action: 'openDiff' }, false],
+    [
+      'bash approve with feedback',
+      { ...bash, action: 'approve', feedback: 'x' },
+      false,
+    ],
+    ['bash unknown field', { ...bash, action: 'reject', extra: true }, false],
+    [
+      'proposal approve',
+      { ...proposal, action: 'approve', model: 'm', agent: 'a' },
+      true,
+    ],
+    [
+      'proposal reject',
+      { ...proposal, action: 'reject', feedback: 'No' },
+      true,
+    ],
+    ['proposal setup', { ...proposal, action: 'setup' }, true],
+    [
+      'proposal approve with feedback',
+      { ...proposal, action: 'approve', feedback: 'x' },
+      false,
+    ],
+    [
+      'proposal reject with model',
+      { ...proposal, action: 'reject', model: 'm' },
+      false,
+    ],
+    [
+      'proposal setup with agent',
+      { ...proposal, action: 'setup', agent: 'a' },
+      false,
+    ],
+    [
+      'proposal unknown field',
+      { ...proposal, action: 'setup', extra: true },
+      false,
+    ],
+    ['plan approve', { ...plan, action: 'approve' }, true],
+    ['plan approve and run', { ...plan, action: 'approve_and_goal' }, true],
+    ['plan reject', { ...plan, action: 'reject', feedback: 'No' }, true],
+    [
+      'plan approve with feedback',
+      { ...plan, action: 'approve', feedback: 'x' },
+      false,
+    ],
+    [
+      'plan run with feedback',
+      { ...plan, action: 'approve_and_goal', feedback: 'x' },
+      false,
+    ],
+    ['plan unknown field', { ...plan, action: 'reject', extra: true }, false],
+  ])('%s parses as %s', (_name, message, valid) => {
+    expect(ProgressViewInboundMessageSchema.safeParse(message).success).toBe(
+      valid,
+    );
   });
 });
 

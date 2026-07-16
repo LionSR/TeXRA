@@ -46,7 +46,6 @@ import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
-import { ProgressEvents } from '../events';
 import type { PermissionState } from '../permissionState';
 
 // ── Draft persistence ──
@@ -210,12 +209,6 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
       return;
     }
     this.writeDraft(ids, this.currentDraft(), { persist: true });
-  }
-
-  override handleKeyboardShortcut(key: string): boolean {
-    // Suppress the parent's 'y' → approve binding (invalid for external inquiry)
-    if (key === 'y') return false;
-    return super.handleKeyboardShortcut(key);
   }
 
   // ── Render ──
@@ -554,9 +547,6 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   }
 
   private handleSubmit(): void {
-    // Bypasses the base class's emitAction chokepoint (dispatches
-    // permission-action directly), so the archived/read-only trace-viewer
-    // guard has to be repeated here.
     if (this.archived) return;
     if (!this.hasAnswer) return;
     const answer = this.answerText.trim();
@@ -564,14 +554,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
 
     clearInquiryDraft(getRequestId(this.permission));
 
-    this.dispatchEvent(
-      ProgressEvents.permissionAction({
-        permission: this.permission,
-        action: INQUIRY_SUBMIT_ACTION,
-        answer,
-        sessionLinks: sessionLinks.length ? sessionLinks : undefined,
-      }),
-    );
+    this.emitAction({
+      action: INQUIRY_SUBMIT_ACTION,
+      answer,
+      ...(sessionLinks.length ? { sessionLinks } : {}),
+    });
   }
 }
 
