@@ -11,6 +11,7 @@ import {
   type ActiveChildInfo,
   type AgentCategory,
   type ConversationProgress,
+  type MessageType,
   type NormalizedToolUse,
   type Plan,
   type ProcessOutputTail,
@@ -46,8 +47,11 @@ export type { ProcessOutputTail };
 interface ConversationEntryBase {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */
   readonly id: string;
-  /** Concatenated text for `MODEL_RESPONSE` entries. Empty for tool rows. */
+  /** Rendered log text. Empty for tool and process rows. */
   readonly text: string;
+  /** Original shared log vocabulary. Role alone intentionally groups several
+   * display kinds and is not precise enough for semantic selection. */
+  readonly messageType?: MessageType;
   /** True while rendered assistant text is hiding an incomplete protocol block. */
   readonly pendingEmbeddedSubagentFollowup?: boolean;
   /** True once the stream transitions to `WAITING`/`COMPLETED`. */
