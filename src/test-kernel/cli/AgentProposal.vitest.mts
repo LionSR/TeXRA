@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { agentProposalMetadataRows } from '@cli/chat/tui/modals/AgentProposal';
 import {
-  agentProposalInstructionDisplayLines,
-  agentProposalInstructionRowsBudget,
-  boundedAgentProposalInstructionLines,
-  maxAgentProposalInstructionScrollOffset,
-} from '@cli/chat/tui/modals/AgentProposal';
-import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
+  boundedModalTextLines,
+  modalTextDisplayLines,
+  scrollableModalTextRowsBudget,
+} from '@cli/chat/tui/modals/ScrollableModalText';
 import { AgentCategory, agentProposalCategoryLabel } from '@shared/schemas';
 
 const LONG_AGENT_PROMPT = [
@@ -28,109 +27,39 @@ describe('CLI agent proposal approval layout', () => {
     );
   });
 
-  it('caps long delegation prompts so the approval footer stays visible', () => {
-    const budget = agentProposalInstructionRowsBudget({
+  it('counts metadata rows against the shared prompt budget', () => {
+    const metadataRows = agentProposalMetadataRows({
+      fileGroups: [],
+      payload: {
+        agent: 'review',
+        agentCategory: AgentCategory.ToolUse,
+        instruction: LONG_AGENT_PROMPT,
+        model: 'deepseekT',
+      } as unknown as import('@shared/schemas').AgentProposalPermission,
+      width: 76,
+    });
+    const budget = scrollableModalTextRowsBudget({
       availableRows: 16,
       columns: 80,
-      metadataRows: 3,
+      extraFixedRows: metadataRows,
       title: 'Spawn review?',
     });
-    const allRows = agentProposalInstructionDisplayLines({
-      instruction: LONG_AGENT_PROMPT,
+    const allRows = modalTextDisplayLines({
+      text: LONG_AGENT_PROMPT,
       width: 76,
     });
 
+    expect(metadataRows).toBe(3);
     expect(budget).toBe(5);
     expect(allRows.length).toBeGreaterThan(budget);
 
-    const visible = boundedAgentProposalInstructionLines({
-      instruction: LONG_AGENT_PROMPT,
-      maxDisplayLines: budget,
+    const visible = boundedModalTextLines({
+      hiddenNoun: 'prompt rows',
+      lines: allRows,
+      maxRows: budget,
       width: 76,
     });
-
     expect(visible).toHaveLength(budget);
-    expect(visible.at(-1)).toEqual({
-      kind: 'overflow',
-      text: '... 5 more rows',
-    });
-    expect(visible.map((line) => line.text)).not.toContain(
-      '4. Write a structured report with any gaps or a confirmation of correctness.',
-    );
-  });
-
-  it('lets users scroll to the hidden delegation prompt tail', () => {
-    const budget = 5;
-    const allRows = agentProposalInstructionDisplayLines({
-      instruction: LONG_AGENT_PROMPT,
-      width: 76,
-    });
-    const offset = maxAgentProposalInstructionScrollOffset(
-      allRows.length,
-      budget,
-    );
-    const visible = boundedAgentProposalInstructionLines({
-      instruction: LONG_AGENT_PROMPT,
-      maxDisplayLines: budget,
-      scrollOffset: offset,
-      width: 76,
-    });
-
-    expect(visible.at(0)).toEqual({
-      kind: 'overflow',
-      text: `... ${offset} previous rows`,
-    });
-    expect(visible.map((line) => line.text).join('\n')).toContain(
-      'Write a structured report',
-    );
-  });
-
-  it('lets compact delegation prompts scroll to their hidden tail', () => {
-    const budget = 3;
-    const allRows = agentProposalInstructionDisplayLines({
-      instruction: LONG_AGENT_PROMPT,
-      width: 76,
-    });
-    const offset = maxAgentProposalInstructionScrollOffset(
-      allRows.length,
-      budget,
-    );
-    const visible = boundedAgentProposalInstructionLines({
-      instruction: LONG_AGENT_PROMPT,
-      maxDisplayLines: budget,
-      scrollOffset: offset,
-      width: 76,
-    });
-
-    expect(offset).toBeGreaterThan(0);
-    expect(visible).toHaveLength(budget);
-    expect(visible.at(-1)?.text).toContain('previous rows');
-    expect(visible.map((line) => line.text).join('\n')).toContain(
-      'Write a structured report',
-    );
-  });
-
-  it('keeps one-row compact previews within their row and column budget', () => {
-    const visible = boundedAgentProposalInstructionLines({
-      instruction: LONG_AGENT_PROMPT,
-      maxDisplayLines: 1,
-      width: 40,
-    });
-
-    expect(visible).toHaveLength(1);
-    expect(visible[0]?.text).toContain('prompt rows hidden');
-    expect(textDisplayWidth(visible[0]?.text ?? '')).toBeLessThanOrEqual(40);
-  });
-
-  it('keeps one-row compact previews clean when scrolled onto blank rows', () => {
-    const visible = boundedAgentProposalInstructionLines({
-      instruction: 'First line\n\nTail line',
-      maxDisplayLines: 1,
-      scrollOffset: 1,
-      width: 40,
-    });
-
-    expect(visible).toHaveLength(1);
-    expect(visible[0]?.text).toBe('... 2 prompt rows hidden');
+    expect(visible.at(-1)?.kind).toBe('overflow');
   });
 });

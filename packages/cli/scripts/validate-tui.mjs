@@ -1821,10 +1821,14 @@ const SCENARIOS = [
       ].join('\n'),
     },
     bootExpect: '· Ctrl-C ',
+    // The plan body is bounded and scrollable; page down to bring the
+    // wrap-boundary continuation into view before asserting on it.
+    keys: [PAGE_DOWN],
     expect: [
       'Approve plan?',
       'Approve & run only auto-approves bash',
       'observations. Do not edit any files',
+      'scroll plan',
       'r approve & run',
       'y approve',
       'n reject',
