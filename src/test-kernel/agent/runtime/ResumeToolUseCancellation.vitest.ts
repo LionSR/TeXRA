@@ -2,11 +2,35 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  abandonOwnedExecutionLease: vi.fn(),
   buildAgentLaunchContext: vi.fn(),
   hasPersistedParent: vi.fn(),
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
+  acquireResumedExecutionLease: vi.fn(),
+  runWithOwnedExecutionLease: vi.fn(
+    async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
+      operation(),
+  ),
+  runWithExecutionLeaseWriteFence: vi.fn(
+    async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
+      operation(),
+  ),
+  releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
+  releaseOwnedExecutionLeaseBestEffort: vi.fn(),
+}));
+
+vi.mock('@agent/storage/executionLease', () => ({
+  abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
+  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
+  completeOwnedExecutionLease: mocks.releaseOwnedExecutionLeaseBestEffort,
+  runWithOwnedExecutionLease: mocks.runWithOwnedExecutionLease,
+  runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
+  releaseOwnedExecutionLeaseAfterFailure:
+    mocks.releaseOwnedExecutionLeaseAfterFailure,
+  releaseOwnedExecutionLeaseBestEffort:
+    mocks.releaseOwnedExecutionLeaseBestEffort,
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({
@@ -61,6 +85,11 @@ interface TestFlowContext {
 describe('resumeToolUseFromSnapshot cancellation handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
+      async (_executionId: ExecutionId, error: unknown) => error,
+    );
+    mocks.releaseOwnedExecutionLeaseBestEffort.mockResolvedValue(undefined);
   });
 
   it('resolves execution lineage before activating the resume stream', async () => {
@@ -79,6 +108,10 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
     );
 
     expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
+    expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledWith(
+      snapshot.executionId,
+      storageError,
+    );
   });
 
   it('interrupts at flow attachment before substantive work starts', async () => {
@@ -90,7 +123,7 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
       runScope: {
         executionId,
         streamId,
-        session: { status: {} },
+        session: { status: {}, flushArtifacts: vi.fn(async () => {}) },
       },
       config: { agent: 'test-agent', model: 'test-model' },
       attachedMemoryMisses: [],
@@ -163,6 +196,9 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
     });
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
+      executionId,
+    );
     expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
     expect(order).toEqual([
       'attach',

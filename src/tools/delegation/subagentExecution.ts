@@ -8,7 +8,10 @@
  */
 
 // Local imports - agent
-import { registerExecution } from '@agent/storage';
+import {
+  registerExecution,
+  releaseOwnedExecutionLeaseAfterFailure,
+} from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -200,28 +203,32 @@ export async function executeSubagent(
     onStreamResolved: inheritChildStreamApprovals,
   };
 
-  if (isToolUse) {
-    const { createNativeToolUseStrategy } =
-      await import('./nativeToolUseStrategy');
-    startChildRunLoop({
-      childStreamId,
-      parentStreamId: orchestratorStreamId,
-      executionId,
-      agentName,
-      strategy: createNativeToolUseStrategy(strategyParams),
-      recordCost: settleSubagentCost,
-    });
-  } else {
-    const { createNativeWorkflowStrategy } =
-      await import('./nativeWorkflowStrategy');
-    startChildRunLoop({
-      childStreamId,
-      parentStreamId: orchestratorStreamId,
-      executionId,
-      agentName,
-      strategy: createNativeWorkflowStrategy(strategyParams),
-      recordCost: settleSubagentCost,
-    });
+  try {
+    if (isToolUse) {
+      const { createNativeToolUseStrategy } =
+        await import('./nativeToolUseStrategy');
+      startChildRunLoop({
+        childStreamId,
+        parentStreamId: orchestratorStreamId,
+        executionId,
+        agentName,
+        strategy: createNativeToolUseStrategy(strategyParams),
+        recordCost: settleSubagentCost,
+      });
+    } else {
+      const { createNativeWorkflowStrategy } =
+        await import('./nativeWorkflowStrategy');
+      startChildRunLoop({
+        childStreamId,
+        parentStreamId: orchestratorStreamId,
+        executionId,
+        agentName,
+        strategy: createNativeWorkflowStrategy(strategyParams),
+        recordCost: settleSubagentCost,
+      });
+    }
+  } catch (error) {
+    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
   }
 
   const meta = options?.approvalMeta;

@@ -7,6 +7,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
+import type {
+  CliConfigExecuteOptions,
+  CliConfigExecuteResult,
+} from '@cli/runtime/runExecution';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 
@@ -101,6 +105,24 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
+function mockWorkflowExecution(
+  result: CliConfigExecuteResult<typeof AgentCategory.Workflow>,
+  once = false,
+): void {
+  const implementation = async (
+    _config: unknown,
+    _context: unknown,
+    options: {
+      readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
+    },
+  ) => {
+    if (result.ok) await options.openWorkflowOutput?.(result.result);
+    return result;
+  };
+  if (once) mocks.executeCliConfig.mockImplementationOnce(implementation);
+  else mocks.executeCliConfig.mockImplementation(implementation);
+}
+
 describe('CLI workflow run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -132,7 +154,7 @@ describe('CLI workflow run command', () => {
         }) => Promise<unknown>,
       ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
     );
-    mocks.executeCliConfig.mockResolvedValue({
+    mockWorkflowExecution({
       ok: true,
       executionId: 'exec-1',
       result: {
@@ -336,7 +358,7 @@ describe('CLI workflow run command', () => {
         originalPath: path.join(root, 'paper.tex'),
         added: null,
         removed: null,
-      };
+      } as const;
       const compileFailure = {
         round: 1,
         displayName: 'paper.tex',
@@ -346,18 +368,21 @@ describe('CLI workflow run command', () => {
       };
       await fs.mkdir(path.dirname(generated), { recursive: true });
       await fs.writeFile(generated, 'polished');
-      mocks.executeCliConfig.mockResolvedValueOnce({
-        ok: true,
-        executionId: 'exec-output',
-        result: {
-          category: AgentCategory.Workflow,
+      mockWorkflowExecution(
+        {
+          ok: true,
           executionId: 'exec-output',
-          streamId: 'stream-output',
-          outcome: RUN_OUTCOME.COMPLETED,
-          outputs: [outputSummary],
-          compileFailures: [compileFailure],
+          result: {
+            category: AgentCategory.Workflow,
+            executionId: 'exec-output',
+            streamId: 'stream-output',
+            outcome: RUN_OUTCOME.COMPLETED,
+            outputs: [outputSummary],
+            compileFailures: [compileFailure],
+          },
         },
-      });
+        true,
+      );
 
       const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
@@ -436,21 +461,24 @@ describe('CLI workflow run command', () => {
         originalPath: path.join(root, 'paper.tex'),
         added: null,
         removed: null,
-      };
+      } as const;
       await fs.mkdir(path.dirname(generated), { recursive: true });
       await fs.writeFile(generated, 'polished');
-      mocks.executeCliConfig.mockResolvedValueOnce({
-        ok: true,
-        executionId: 'exec-output-dir',
-        result: {
-          category: AgentCategory.Workflow,
+      mockWorkflowExecution(
+        {
+          ok: true,
           executionId: 'exec-output-dir',
-          streamId: 'stream-output-dir',
-          outcome: RUN_OUTCOME.COMPLETED,
-          outputs: [outputSummary],
-          compileFailures: [],
+          result: {
+            category: AgentCategory.Workflow,
+            executionId: 'exec-output-dir',
+            streamId: 'stream-output-dir',
+            outcome: RUN_OUTCOME.COMPLETED,
+            outputs: [outputSummary],
+            compileFailures: [],
+          },
         },
-      });
+        true,
+      );
 
       const { runWorkflowAgent } = await import('@cli/commands/workflow');
 
@@ -489,28 +517,31 @@ describe('CLI workflow run command', () => {
       const generated = path.join(root, 'run', 'r1', 'paper.tex');
       await fs.mkdir(path.dirname(generated), { recursive: true });
       await fs.writeFile(generated, 'polished');
-      mocks.executeCliConfig.mockResolvedValueOnce({
-        ok: true,
-        executionId: 'exec-output-meta-fail',
-        result: {
-          category: AgentCategory.Workflow,
+      mockWorkflowExecution(
+        {
+          ok: true,
           executionId: 'exec-output-meta-fail',
-          streamId: 'stream-output-meta-fail',
-          outcome: RUN_OUTCOME.COMPLETED,
-          outputs: [
-            {
-              round: 1,
-              relativePath: 'r1/paper.tex',
-              absolutePath: generated,
-              location: 'runStorage',
-              originalPath: path.join(root, 'paper.tex'),
-              added: null,
-              removed: null,
-            },
-          ],
-          compileFailures: [],
+          result: {
+            category: AgentCategory.Workflow,
+            executionId: 'exec-output-meta-fail',
+            streamId: 'stream-output-meta-fail',
+            outcome: RUN_OUTCOME.COMPLETED,
+            outputs: [
+              {
+                round: 1,
+                relativePath: 'r1/paper.tex',
+                absolutePath: generated,
+                location: 'runStorage',
+                originalPath: path.join(root, 'paper.tex'),
+                added: null,
+                removed: null,
+              },
+            ],
+            compileFailures: [],
+          },
         },
-      });
+        true,
+      );
       mocks.writeResultMeta.mockRejectedValueOnce(
         new Error('metadata disk full'),
       );
@@ -552,18 +583,21 @@ describe('CLI workflow run command', () => {
       added: null,
       removed: null,
     } as const;
-    mocks.executeCliConfig.mockResolvedValueOnce({
-      ok: true,
-      executionId: 'exec-copy-fail',
-      result: {
-        category: AgentCategory.Workflow,
+    mockWorkflowExecution(
+      {
+        ok: true,
         executionId: 'exec-copy-fail',
-        streamId: 'stream-copy-fail',
-        outcome: RUN_OUTCOME.COMPLETED,
-        outputs: [outputSummary],
-        compileFailures: [],
+        result: {
+          category: AgentCategory.Workflow,
+          executionId: 'exec-copy-fail',
+          streamId: 'stream-copy-fail',
+          outcome: RUN_OUTCOME.COMPLETED,
+          outputs: [outputSummary],
+          compileFailures: [],
+        },
       },
-    });
+      true,
+    );
 
     const { runWorkflowAgent } = await import('@cli/commands/workflow');
     const exitCode = await runWorkflowAgent(cliContext(), {
@@ -594,28 +628,31 @@ describe('CLI workflow run command', () => {
   });
 
   it('keeps a copy error primary when execution finalization also fails', async () => {
-    mocks.executeCliConfig.mockResolvedValueOnce({
-      ok: true,
-      executionId: 'exec-copy-fail',
-      result: {
-        category: AgentCategory.Workflow,
+    mockWorkflowExecution(
+      {
+        ok: true,
         executionId: 'exec-copy-fail',
-        streamId: 'stream-copy-fail',
-        outcome: RUN_OUTCOME.COMPLETED,
-        outputs: [
-          {
-            round: 1,
-            relativePath: 'r1/paper.tex',
-            absolutePath: '/missing/run/r1/paper.tex',
-            location: 'runStorage',
-            originalPath: '/workspace/paper.tex',
-            added: null,
-            removed: null,
-          },
-        ],
-        compileFailures: [],
+        result: {
+          category: AgentCategory.Workflow,
+          executionId: 'exec-copy-fail',
+          streamId: 'stream-copy-fail',
+          outcome: RUN_OUTCOME.COMPLETED,
+          outputs: [
+            {
+              round: 1,
+              relativePath: 'r1/paper.tex',
+              absolutePath: '/missing/run/r1/paper.tex',
+              location: 'runStorage',
+              originalPath: '/workspace/paper.tex',
+              added: null,
+              removed: null,
+            },
+          ],
+          compileFailures: [],
+        },
       },
-    });
+      true,
+    );
     mocks.finalizeExecution.mockResolvedValueOnce({
       status: 'failed',
       error: new Error('terminal metadata disk full'),
@@ -643,18 +680,21 @@ describe('CLI workflow run command', () => {
   });
 
   it('uses the resolved terminal outcome in the persisted envelope', async () => {
-    mocks.executeCliConfig.mockResolvedValueOnce({
-      ok: true,
-      executionId: 'exec-interrupted',
-      result: {
-        category: AgentCategory.Workflow,
+    mockWorkflowExecution(
+      {
+        ok: true,
         executionId: 'exec-interrupted',
-        streamId: 'stream-interrupted',
-        outcome: RUN_OUTCOME.CANCELLED,
-        outputs: [],
-        compileFailures: [],
+        result: {
+          category: AgentCategory.Workflow,
+          executionId: 'exec-interrupted',
+          streamId: 'stream-interrupted',
+          outcome: RUN_OUTCOME.CANCELLED,
+          outputs: [],
+          compileFailures: [],
+        },
       },
-    });
+      true,
+    );
 
     const { runWorkflowAgent } = await import('@cli/commands/workflow');
     const exitCode = await runWorkflowAgent(cliContext(), {

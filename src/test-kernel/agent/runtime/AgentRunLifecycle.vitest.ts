@@ -14,6 +14,11 @@ import { platform } from '@platform/platform';
 import { installPlatform } from '@test/support/setupPlatform';
 import type { FinalizeExecutionResult } from '@agent/storage';
 import { noopTrace, TraceEmitter } from '@agent/trace';
+import {
+  acquireResumedExecutionLease,
+  inspectExecutionLease,
+  releaseOwnedExecutionLease,
+} from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -47,6 +52,7 @@ import {
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentKey } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { StorageFS } from '@utils/files';
 
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
@@ -69,9 +75,8 @@ const channelTraceMocks = vi.hoisted(() => ({
 
 vi.mock('@agent/storage', () => ({
   finalizeExecution: storageMocks.finalizeExecution,
+  releaseOwnedExecutionLeaseBestEffort: vi.fn(async () => {}),
   synchronizeAgentResultOutcome: storageMocks.synchronizeAgentResultOutcome,
-  HEARTBEAT_INTERVAL_MS: 10_000,
-  touchExecutionHeartbeat: () => Promise.resolve(),
 }));
 
 vi.mock('@agent/trace', async (importOriginal) => {
@@ -201,6 +206,51 @@ function lifecycleFixture(
 }
 
 describe('runFlowWithLifecycle', () => {
+  it('interrupts and suppresses terminal persistence after lease takeover', async () => {
+    vi.useFakeTimers();
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-lease-takeover',
+    );
+    storageMocks.finalizeExecution.mockClear();
+    await acquireResumedExecutionLease(executionId);
+
+    try {
+      const result = await runFlowWithLifecycle(ctx, async (handle) => {
+        await StorageFS.ensureDir('executionLeases');
+        await StorageFS.writeAtomic(
+          `executionLeases/${executionId}.json`,
+          JSON.stringify({
+            version: 1,
+            executionId,
+            ownerToken: '00000000-0000-4000-8000-000000000099',
+            acquiredAt: Date.now(),
+            heartbeatAt: Date.now(),
+          }),
+        );
+        await vi.advanceTimersByTimeAsync(15_000);
+
+        expect(handle.executionLeaseLost).toBe(true);
+        expect(handle.hasPendingInterrupt).toBe(true);
+        return {
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId,
+          streamId,
+        };
+      });
+
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
+    } finally {
+      await releaseOwnedExecutionLease(executionId);
+      await StorageFS.delete(`executionLeases/${executionId}.json`).catch(
+        () => {},
+      );
+      clearStreamStatusForTest(streamStatus, streamId);
+      vi.useRealTimers();
+    }
+  });
+
   // A completed session marks first-run onboarding done, except for the
   // built-in setup agent, which must leave the flag untouched.
   const onboardingCases = [
@@ -483,6 +533,7 @@ describe('runFlowWithLifecycle', () => {
     );
     const onError = vi.fn();
     storageMocks.finalizeExecution.mockClear();
+    await acquireResumedExecutionLease(executionId);
 
     try {
       const result = await runFlowWithLifecycle(
@@ -507,7 +558,11 @@ describe('runFlowWithLifecycle', () => {
       expect(onError).not.toHaveBeenCalled();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
       expect(defaultSession().executions.getHandle(executionId)).toBeDefined();
+      await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
+        status: 'owned',
+      });
     } finally {
+      await releaseOwnedExecutionLease(executionId);
       defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }

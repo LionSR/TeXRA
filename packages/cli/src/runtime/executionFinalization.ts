@@ -1,4 +1,8 @@
-import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
+import {
+  finalizeExecution,
+  markOwnedExecutionLeaseUndurable,
+  type FinalizeExecutionInput,
+} from '@agent/storage';
 import type { ExecutionStatus } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -43,6 +47,7 @@ export async function finalizeCliExecution(
       flowRecord,
     });
   } catch (error) {
+    markOwnedExecutionLeaseUndurable(executionId);
     reportFailure(
       new Error(
         `Execution finalization failed unexpectedly for ${executionId}: ${toErrorMessage(error)}`,
@@ -52,6 +57,7 @@ export async function finalizeCliExecution(
     return;
   }
   if (result.status === 'durable') return;
+  markOwnedExecutionLeaseUndurable(executionId);
 
   const message = finalizationFailureMessage(
     result,

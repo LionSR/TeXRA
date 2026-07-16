@@ -81,7 +81,8 @@ export function getSessionDescriptionInstruction(
 /**
  * Generate and persist a session description from the user's instruction.
  *
- * Called fire-and-forget at the start of a tool-use session — never throws.
+ * Started concurrently at the beginning of a tool-use session and joined
+ * before execution ownership is released. Never throws.
  * Uses the configured helper model for a one-shot, non-streaming call.
  * On success, persists the description to execution metadata and emits
  * an `updateStreamDescription` event so the progress view can display it.

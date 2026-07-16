@@ -68,6 +68,7 @@ export class ProgressBackend {
   readonly factApplier: ProgressFactApplier;
   readonly interactionHandler: ProgressInteractionHandler;
   private readonly session: SessionHandle;
+  private readonly detachArtifactFlusher: () => void;
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
@@ -76,6 +77,9 @@ export class ProgressBackend {
       options.storage,
       options.snapshots,
       this.session,
+    );
+    this.detachArtifactFlusher = this.session.useArtifactFlusher(() =>
+      this.state.snapshots.flush(),
     );
     this.webviewUpdater = new WebviewUpdater(
       (message) => {
@@ -162,6 +166,7 @@ export class ProgressBackend {
 
   dispose(): void {
     this.disposed = true;
+    this.detachArtifactFlusher();
     this.webviewBridge.dispose();
   }
 }

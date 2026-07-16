@@ -39,7 +39,10 @@ export interface ProgressStreamLifecycleHarnessOptions {
   activeStream?: StreamTabId | '';
   taskStateStreams?: StreamTabId[];
   inFlightStreams?: StreamTabId[];
+  locallyOwnedStreams?: StreamTabId[];
   visibleStreams?: StreamTabId[];
+  protectedStreams?: StreamTabId[];
+  releaseProtectedOnWaitStreams?: StreamTabId[];
 }
 
 export interface ProgressStreamLifecycleHarness {
@@ -58,6 +61,11 @@ export function createProgressStreamLifecycleHarness(
   let activeStream = options.activeStream ?? streams[0] ?? '';
   const taskStateStreams = new Set(options.taskStateStreams ?? []);
   const inFlightStreams = new Set(options.inFlightStreams ?? []);
+  const locallyOwnedStreams = new Set(options.locallyOwnedStreams ?? []);
+  const protectedStreams = new Set(options.protectedStreams ?? []);
+  const releaseProtectedOnWaitStreams = new Set(
+    options.releaseProtectedOnWaitStreams ?? [],
+  );
   const recorder = new ControllerCallRecorder<StreamTabId>();
   const syncCalls: Array<{ forceRebuild: boolean }> = [];
   const state: ProgressStreamLifecycleState = {
@@ -69,22 +77,32 @@ export function createProgressStreamLifecycleHarness(
     hasTaskState: (stream) => taskStateStreams.has(stream),
     getStreamIds: () => streams,
     pickValidActiveStream: (availableStreams) => availableStreams[0] ?? '',
+    waitForOwnedExecutionRelease: async (stream) => {
+      recorder.record('waitForRelease', stream);
+      if (releaseProtectedOnWaitStreams.has(stream)) {
+        protectedStreams.delete(stream);
+      }
+    },
     clearStream: async (stream) => {
       recorder.record('clearStream', stream);
+      if (protectedStreams.has(stream)) return false;
       streams = streams.filter((candidate) => candidate !== stream);
       if (activeStream === stream) {
         activeStream = streams[0] ?? '';
       }
+      return true;
     },
     clearAll: async () => {
-      streams = [];
-      activeStream = '';
+      streams = streams.filter((stream) => protectedStreams.has(stream));
+      activeStream = streams[0] ?? '';
+      return { active: new Set(protectedStreams), failed: new Set() };
     },
   };
   const host: ProgressStreamLifecycleHost = {
     getVisibleStreamIds: () =>
       options.visibleStreams ?? streams.filter((stream) => stream !== 'hidden'),
     isStreamInFlight: (stream) => inFlightStreams.has(stream),
+    isStreamOwnedLocally: (stream) => locallyOwnedStreams.has(stream),
     stopStream: async (stream, stopOptions = {}) => {
       if (stopOptions.clearRetryRequest === true) {
         recorder.record('clearRetry', stream);
@@ -99,18 +117,23 @@ export function createProgressStreamLifecycleHarness(
       recorder.record('clearWebview', stream);
     },
     cleanupDeletedStreams: (streams) => {
-      recorder.record('cleanupAllApprovals', 'all');
       for (const stream of streams) {
+        recorder.record('cleanupApprovals', stream);
         recorder.record('clearRetry', stream);
         recorder.record('releaseFollowUp', stream);
+        recorder.record('clearBackups', stream);
+        recorder.record('clearWebview', stream);
       }
-      recorder.record('clearBackups', 'all');
-      recorder.record('clearAllWebview', 'all');
     },
     deleteRenderedStream: (stream) => recorder.record('deleteWebview', stream),
     rebuildRenderedStreams: (options) => syncCalls.push(options),
     activateStream: async (stream) =>
       recorder.record('setActiveStream', stream),
+    notifyDeletionRetained: async (activeCount, failedCount = 0) =>
+      recorder.record(
+        'retained',
+        `${activeCount}/${failedCount}` as StreamTabId,
+      ),
   };
 
   return {

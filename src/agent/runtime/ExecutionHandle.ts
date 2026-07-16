@@ -84,6 +84,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private acceptsPendingInterrupt = false;
   private pendingInterrupt = false;
   private waitingCleanups?: Set<() => void>;
+  private _executionLeaseLost = false;
 
   /** Stable tool name for UI identification (e.g. "bash", "codex"). */
   toolName?: string;
@@ -232,6 +233,14 @@ export class AgentExecutionHandle implements ExecutionHandle {
     if (!this.acceptsPendingInterrupt) return false;
     this.pendingInterrupt = true;
     return true;
+  }
+
+  markExecutionLeaseLost(): void {
+    this._executionLeaseLost = true;
+  }
+
+  get executionLeaseLost(): boolean {
+    return this._executionLeaseLost;
   }
 
   /**

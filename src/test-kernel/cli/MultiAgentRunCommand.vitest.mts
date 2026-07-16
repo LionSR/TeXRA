@@ -230,7 +230,6 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
       enforceCategory: true,
       registerExecution: true,
-      markErrorOnThrow: true,
       stopAfterCycle: true,
     });
     expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(

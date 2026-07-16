@@ -28,6 +28,7 @@ import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLsp
 
 // Local imports - platform
 import { JsonConfigProvider } from './jsonConfigProvider';
+import { nodeFileLocks } from './fileLocks';
 import { nodeFilesystem } from './nodeFilesystem';
 import { createNodeWorkspace } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
@@ -105,6 +106,7 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
       services.getLegacyWorkspacePaths,
     ),
     storage: services.storage,
+    fileLocks: nodeFileLocks,
     secrets: services.secrets,
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,

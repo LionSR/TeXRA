@@ -36,6 +36,7 @@ import {
   ResultMetaSchema,
   type ResultMeta,
 } from './resultMeta';
+import { runWithExecutionLeaseWriteFence } from './executionLease';
 
 // ============================================================================
 // Key constants (implementation detail — not exported)
@@ -52,8 +53,6 @@ const SINGLE_VALUE_KEYS = {
   CONVERSATION: 'conversation',
   WORKSPACE_FILES: 'workspace-files',
   RESULT_META: 'result-meta',
-  /** Cross-process liveness heartbeat; owned by executionLiveness.ts. */
-  HEARTBEAT: 'heartbeat',
 } as const;
 
 const KEYS = {
@@ -67,7 +66,7 @@ const RESERVED_KEY_NAMES = new Set<string>(Object.values(SINGLE_VALUE_KEYS));
 /**
  * True when `key` is one of ExecutionKVStore's reserved keys — a single-value
  * key (meta, config, report, todos, conversation, workspace-files,
- * result-meta, heartbeat) or a per-child record key (`child-{id}`). Exported so callers
+ * result-meta) or a per-child record key (`child-{id}`). Exported so callers
  * that walk an execution's storage directory (e.g.
  * `src/tools/executions/executionKvFiles.ts`) can recognize internal KV
  * entries without re-deriving this vocabulary themselves.
@@ -206,8 +205,22 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     super(resolveRunStoragePath(executionId), { throwOnErrors: true });
   }
 
+  override async write<T = unknown>(key: string, value: T): Promise<void> {
+    await runWithExecutionLeaseWriteFence(this.executionId, () =>
+      super.write(key, value),
+    );
+  }
+
+  override async delete(key: string): Promise<void> {
+    await runWithExecutionLeaseWriteFence(this.executionId, () =>
+      super.delete(key),
+    );
+  }
+
   async clear(): Promise<void> {
-    return this.deleteDir();
+    return runWithExecutionLeaseWriteFence(this.executionId, () =>
+      this.deleteDir(),
+    );
   }
 
   getExecutionId(): ExecutionId {

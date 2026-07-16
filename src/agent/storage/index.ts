@@ -34,21 +34,23 @@ export {
 } from './executionLifecycle';
 export {
   type ExecutionListingEntry,
+  type DeleteExecutionOptions,
+  type DeleteExecutionResult,
   listExecutions,
   deleteExecution,
   deleteAllExecutions,
   isUserVisibleExecution,
 } from './executionListing';
 export {
-  HEARTBEAT_INTERVAL_MS,
-  describeHeartbeatOwner,
-  getExecutionLiveness,
-  setHeartbeatOwnerHost,
-  touchExecutionHeartbeat,
-} from './executionLiveness';
-export {
   RESUMABILITY_CAUSE,
   deriveResumability,
   type ResumabilityDecision,
 } from './resumability';
 export { resolveChildRunOutput } from './childRunOutput';
+export {
+  acquireResumedExecutionLease,
+  abandonOwnedExecutionLease,
+  completeOwnedExecutionLease,
+  markOwnedExecutionLeaseUndurable,
+  releaseOwnedExecutionLeaseAfterFailure,
+} from './executionLease';

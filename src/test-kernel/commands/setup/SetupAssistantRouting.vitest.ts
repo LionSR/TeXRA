@@ -184,12 +184,8 @@ vi.mock('@agent/index', () => ({
   loadAgents: () => Promise.resolve(),
 }));
 
-vi.mock('@agent/storage', () => ({
-  registerExecution: () => Promise.resolve(),
-}));
-
-vi.mock('@agent/runtime/executeAgent', () => ({
-  executeAgent: () => Promise.resolve(),
+vi.mock('@agent/runtime/runAgent', () => ({
+  runAgent: () => Promise.resolve(),
 }));
 
 vi.mock('@frontend/agentRuntime/extensionAgentRuntimeHost', () => ({

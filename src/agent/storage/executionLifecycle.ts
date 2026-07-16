@@ -27,7 +27,10 @@ import {
   type ExecutionMetaInput,
   getExecutionStore,
 } from './ExecutionKVStore';
-import { touchExecutionHeartbeat } from './executionLiveness';
+import {
+  acquireFreshExecutionLease,
+  releaseOwnedExecutionLease,
+} from './executionLease';
 import { ResultMetaSchema } from './resultMeta';
 
 /**
@@ -122,36 +125,52 @@ export async function registerExecution(
   parentExecutionId?: ExecutionId,
   category?: string,
 ): Promise<void> {
-  // The heartbeat lands before every other launch write so a concurrent
-  // clear-all never observes a partially-written execution as dead (#8625):
-  // liveness reads a fresh heartbeat without meta as a launching run, and
-  // the registry's interval takes over refreshing it.
-  await touchExecutionHeartbeat(executionId);
-  const timestamp = new Date().toISOString();
-  const store = getExecutionStore(executionId);
-
-  const meta: ExecutionMetaInput = { timestamp, parentExecutionId };
-  if (category) meta.category = category;
-  const persistedConfig = normalizeWriterCategory(
-    pinExecutionWorkingDirectory(config),
-    agentName,
-  );
-
-  const writes: Promise<void>[] = [
-    store.writeConfig(persistedConfig),
-    store.writeMeta(meta),
-  ];
-
-  if (parentExecutionId) {
-    writes.push(
-      getExecutionStore(parentExecutionId).writeChild(executionId, {
-        agent: agentName,
-        timestamp,
-      }),
+  await acquireFreshExecutionLease(executionId);
+  try {
+    const timestamp = new Date().toISOString();
+    const store = getExecutionStore(executionId);
+    const meta: ExecutionMetaInput = { timestamp, parentExecutionId };
+    if (category) meta.category = category;
+    const persistedConfig = normalizeWriterCategory(
+      pinExecutionWorkingDirectory(config),
+      agentName,
     );
-  }
 
-  await Promise.all(writes);
+    const writes: Promise<void>[] = [
+      store.writeConfig(persistedConfig),
+      store.writeMeta(meta),
+    ];
+    if (parentExecutionId) {
+      writes.push(
+        getExecutionStore(parentExecutionId).writeChild(executionId, {
+          agent: agentName,
+          timestamp,
+        }),
+      );
+    }
+
+    const results = await Promise.allSettled(writes);
+    const errors = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) {
+      throw new AggregateError(
+        errors,
+        `Multiple execution registration writes failed for ${executionId}`,
+      );
+    }
+  } catch (error) {
+    try {
+      await releaseOwnedExecutionLease(executionId);
+    } catch (releaseError) {
+      throw new AggregateError(
+        [error, releaseError],
+        `Execution registration and lease rollback failed for ${executionId}`,
+      );
+    }
+    throw error;
+  }
 }
 
 /**

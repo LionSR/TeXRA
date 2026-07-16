@@ -15,12 +15,9 @@ import { UsageLogService } from '@telemetry/UsageLogService';
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
 import { StreamLogStore } from '@transcript';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
+import { nodeFileLocks } from '@platform/defaults/fileLocks';
 import { loadAgents } from '@agent/index';
-import {
-  clearStoreCache,
-  listExecutions,
-  setHeartbeatOwnerHost,
-} from '@agent/storage';
+import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import {
@@ -225,7 +222,6 @@ export async function activate(context: vscode.ExtensionContext) {
     workspacePath: () => workspace.getWorkspacePath(),
   });
   await migrateLegacyVscodeStorage(context, storage);
-  setHeartbeatOwnerHost('extension');
   initPlatform({
     config: new VscodeConfigProvider(),
     globalState: context.globalState,
@@ -233,6 +229,7 @@ export async function activate(context: vscode.ExtensionContext) {
     fs: new VscodeFileSystem(),
     workspace,
     storage,
+    fileLocks: nodeFileLocks,
     secrets: new VscodeSecrets(context),
     lifecycle,
     agentDirectories,
