@@ -9,7 +9,6 @@ import {
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { invalidateListingCache } from '@agent/storage/executionListing';
 import type { ExecutionId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
@@ -49,7 +48,22 @@ describe('execution listing normalization', () => {
 
   beforeEach(() => {
     clearStoreCache();
-    invalidateListingCache();
+  });
+
+  it('sees executions written by another host after an earlier listing', async () => {
+    expect(await listExecutions()).toEqual([]);
+
+    const id = 'eee555' as ExecutionId;
+    await writeExecution(
+      id,
+      '2026-07-15T11:00:00.000Z',
+      config('assistant'),
+      AgentCategory.ToolUse,
+    );
+
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({ id, kind: 'agent' }),
+    ]);
   });
 
   it('uses the config as the canonical source for visible agent fields', async () => {

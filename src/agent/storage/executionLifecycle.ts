@@ -1,10 +1,9 @@
 /**
  * Execution lifecycle operations.
  *
- * Business logic that orchestrates reads/writes across execution stores
- * and invalidates the listing cache. Separated from ExecutionKVStore to
- * keep the store a clean storage interface — no cross-store mutations,
- * no cache side effects, no error-swallowing policies.
+ * Business logic that orchestrates reads and writes across execution stores.
+ * Separated from ExecutionKVStore to keep the store a clean storage interface
+ * with no cross-store mutations or error-swallowing policies.
  */
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -28,7 +27,6 @@ import {
   type ExecutionMetaInput,
   getExecutionStore,
 } from './ExecutionKVStore';
-import { invalidateListingCache } from './executionListing';
 import { ResultMetaSchema } from './resultMeta';
 
 /**
@@ -99,7 +97,6 @@ function enqueueMetaUpdate(
       throw new Error(`Execution metadata not found for ${executionId}`);
     }
     await store.writeMeta({ ...existing, ...updater(existing) });
-    invalidateListingCache();
   });
   // Swallow errors in the chain so subsequent enqueued ops still run.
   const safe = next.catch(() => {});
@@ -115,7 +112,7 @@ function enqueueMetaUpdate(
 
 /**
  * Register a new execution: persist config, metadata, and parent linkage.
- * Awaits all writes before returning, then invalidates the listing cache.
+ * Awaits all writes before returning.
  */
 export async function registerExecution(
   executionId: ExecutionId,
@@ -149,7 +146,6 @@ export async function registerExecution(
   }
 
   await Promise.all(writes);
-  invalidateListingCache();
 }
 
 /**
