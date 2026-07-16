@@ -22,7 +22,7 @@ import { POINTER, TICK } from './glyphs';
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { selectVisibleInlineOverflowText } from '../render/overflowText';
 
-export const SELECT_LABEL_MAX_COLS = 24;
+const SELECT_LABEL_MAX_COLS = 24;
 
 export interface SelectItem<T> {
   readonly value: T;

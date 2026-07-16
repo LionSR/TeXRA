@@ -34,8 +34,8 @@ function statusInput(
     activeSubagents: 0,
     activeProcesses: 0,
     approvalDepth: 0,
-    subagentControlsAvailable: false,
-    sessionNavigationAvailable: false,
+    childNavigationAvailable: false,
+    streamFocusAvailable: false,
     model: 'deepseekT',
     modelAccess: 'personal',
     shortcutModifierLabel: 'Alt',
@@ -151,9 +151,9 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Shift-Enter newline');
     expect(display.bindings).toContain('Ctrl-C exit');
     expect(display.bindings).not.toContain('Ctrl-C stop');
-    expect(display.bindings).not.toContain('Alt-s subagents');
+    expect(display.bindings).not.toContain('Alt-s');
     // Stream-navigation hints stay hidden in a single-stream chat.
-    expect(display.bindings).not.toContain('Tab sessions');
+    expect(display.bindings).not.toContain('Tab children');
     expect(display.bindings).not.toContain('Alt-1..9 focus');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
   });
@@ -161,8 +161,8 @@ describe('CLI StatusBar display model', () => {
   it('renders bindings in the shared KeyHints hint format', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         transcriptAvailable: true,
       }),
     );
@@ -176,39 +176,60 @@ describe('CLI StatusBar display model', () => {
   it('advertises the transcript viewer when the focused stream has history', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         transcriptAvailable: true,
         width: 80,
       }),
     );
 
-    expect(display.bindings).toContain('Tab sessions');
+    expect(display.bindings).toContain('Tab children');
     expect(display.bindings).toContain('Ctrl-T transcript');
-    expect(display.bindings).toContain('Alt-s subagents');
+    expect(display.bindings).not.toContain('Alt-s subagents');
   });
 
-  it('advertises list-owned keys while the session list has focus', () => {
+  it('advertises list-owned keys while the child list has focus', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        sessionNavigationAvailable: true,
-        sessionListFocused: true,
-        width: 80,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
+        childListFocused: true,
+        childListSelectionKind: 'stream',
+        childListSelectionKillable: true,
+        width: 140,
       }),
     );
 
     expect(display.bindings).toContain('Up/Down select');
     expect(display.bindings).toContain('Enter focus');
+    expect(display.bindings).toContain('v transcript');
+    expect(display.bindings).toContain('k kill');
     expect(display.bindings).toContain('Tab input');
     expect(display.bindings).toContain('Esc input');
-    expect(display.bindings).not.toContain('Tab sessions');
+    expect(display.bindings).not.toContain('Tab children');
+  });
+
+  it('uses process-only actions for a selected process row', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        childListFocused: true,
+        childListSelectionKind: 'process',
+        childListSelectionKillable: true,
+        childNavigationAvailable: true,
+        width: 120,
+      }),
+    );
+
+    expect(display.bindings).toContain('Enter details');
+    expect(display.bindings).toContain('k kill');
+    expect(display.bindings).not.toContain('v transcript');
   });
 
   it('keeps the transcript shortcut in narrow stream views', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        taskControlsAvailable: false,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         transcriptAvailable: true,
         width: 60,
       }),
@@ -221,21 +242,20 @@ describe('CLI StatusBar display model', () => {
   it('prefers transcript over stream cycling when the bar is very narrow', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        taskControlsAvailable: false,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         transcriptAvailable: true,
         width: 42,
       }),
     );
 
-    expect(display.bindings).toBe('Ctrl-T transcript · Ctrl-C exit');
+    expect(display.bindings).toBe('Tab children · Ctrl-C exit');
   });
 
   it('advertises root agent selection while setup can still change it', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         agentSelectionAvailable: true,
-        taskControlsAvailable: false,
         model: 'gpt54',
         width: 80,
       }),
@@ -250,7 +270,6 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         agentSelectionAvailable: true,
-        taskControlsAvailable: false,
         model: 'gpt54',
         transcriptAvailable: true,
         width: 100,
@@ -265,7 +284,6 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         agentSelectionAvailable: true,
-        taskControlsAvailable: false,
         transcriptAvailable: true,
         width: 80,
       }),
@@ -276,21 +294,19 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
-  it('keeps child controls ahead of setup bindings after a root run completes', () => {
+  it('keeps child navigation ahead of setup bindings after a root run completes', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         agentSelectionAvailable: true,
-        taskControlsAvailable: true,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         transcriptAvailable: true,
         width: 80,
       }),
     );
 
-    expect(display.bindings).toContain('Tab sessions');
-    expect(display.bindings).toContain('Alt-p tasks');
-    expect(display.bindings).toContain('Alt-s subagents');
+    expect(display.bindings).toContain('Tab children');
+    expect(display.bindings).not.toContain('Alt-s subagents');
     expect(display.bindings).not.toContain('/model models');
     expect(display.bindings).not.toContain('/api api');
   });
@@ -299,7 +315,6 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         agentSelectionAvailable: true,
-        taskControlsAvailable: false,
         model: 'gpt54',
         width: 50,
       }),
@@ -311,12 +326,11 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('/api api');
   });
 
-  it('hides task shortcuts when no task rows exist', () => {
+  it('does not advertise deleted picker shortcuts', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 12_000,
-        taskControlsAvailable: false,
         modelAccess: 'included',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
@@ -326,29 +340,29 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('/status details');
     expect(display.bindings).toContain('Ctrl-C stop');
     expect(display.bindings).not.toContain('Option-p tasks');
+    expect(display.bindings).not.toContain('Option-s subagents');
   });
 
-  it('keeps subagent shortcuts grouped when task shortcuts are hidden', () => {
+  it('keeps child navigation grouped with stream focus', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 12_000,
         activeSubagents: 1,
-        taskControlsAvailable: false,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         modelAccess: 'included',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
       }),
     );
 
-    expect(display.bindings).not.toContain('Option-p tasks');
-    expect(display.bindings).toContain('Option-s subagents');
-    expect(display.bindings.indexOf('Option-s subagents')).toBeLessThan(
+    expect(display.bindings).toContain('Tab children');
+    expect(display.bindings).toContain('Option-1..9 focus');
+    expect(display.bindings.indexOf('Tab children')).toBeLessThan(
       display.bindings.indexOf('/status details'),
     );
-    expect(display.bindings.indexOf('Option-s subagents')).toBeLessThan(
+    expect(display.bindings.indexOf('Option-1..9 focus')).toBeLessThan(
       display.bindings.indexOf('Ctrl-C stop'),
     );
   });
@@ -358,9 +372,8 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         activeSubagents: 1,
-        taskControlsAvailable: false,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         modelAccess: 'included',
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop root',
@@ -370,7 +383,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).not.toContain('PgUp');
     expect(display.bindings).not.toContain('scroll');
-    expect(display.bindings).toContain('Tab sessions');
+    expect(display.bindings).toContain('Tab children');
     expect(display.bindings).toContain('Ctrl-C stop root');
   });
 
@@ -396,8 +409,8 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 2,
         activeProcesses: 1,
         approvalDepth: 3,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         modelAccess: 'included',
         ctrlCAction: 'stop',
       }),
@@ -414,10 +427,10 @@ describe('CLI StatusBar display model', () => {
       '1 proc',
       '3 approvals',
     ]);
-    expect(display.bindings).toContain('Alt-s subagents');
+    expect(display.bindings).not.toContain('Alt-s subagents');
     expect(display.bindings).toContain('Ctrl-C stop');
     // Stream-navigation hints appear once more than one stream is live.
-    expect(display.bindings).toContain('Tab sessions');
+    expect(display.bindings).toContain('Tab children');
     expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
@@ -549,8 +562,8 @@ describe('CLI StatusBar display model', () => {
         elapsedMs: 88_000,
         activeSubagents: 3,
         activeProcesses: 1,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         ctrlCAction: 'stop',
         transcriptAvailable: true,
         width: 60,
@@ -558,20 +571,20 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Tab sessions · Alt-p tasks · Alt-s subagents · Ctrl-C stop',
+      'Tab children · Ctrl-T transcript · Ctrl-C stop',
     );
     expect(display.bindings).toContain('Ctrl-C stop');
   });
 
-  it('prefers the task picker when one child-control shortcut fits', () => {
+  it('keeps the child list shortcut when the footer is narrow', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 88_000,
         activeSubagents: 3,
         activeProcesses: 1,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
         transcriptAvailable: true,
@@ -579,7 +592,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toBe('Option-p tasks · Ctrl-C stop');
+    expect(display.bindings).toBe('Tab children · Ctrl-C stop');
     expect(display.bindings).not.toContain('Option-s subagents');
   });
 
@@ -590,8 +603,8 @@ describe('CLI StatusBar display model', () => {
         elapsedMs: 75_000,
         activeSubagents: 3,
         activeProcesses: 1,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         ctrlCAction: 'stop',
         width: 34,
         shortcutsActive: false,
@@ -693,8 +706,8 @@ describe('CLI StatusBar display model', () => {
 
     const baseDisplayInput = statusInput({
       status: STREAM_PHASE.CANCELLED,
-      subagentControlsAvailable: true,
-      sessionNavigationAvailable: true,
+      childNavigationAvailable: true,
+      streamFocusAvailable: true,
       ctrlCAction: 'stop root',
     });
     const display = buildStatusBarDisplay(baseDisplayInput);
@@ -734,8 +747,8 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.WAITING,
         isChildStream: true,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         ctrlCAction: 'stop root',
       }),
     );
@@ -1038,9 +1051,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps status discoverable in narrow single-stream sessions', () => {
     const display = buildStatusBarDisplay(statusInput({ width: 50 }));
 
-    expect(display.bindings).toBe(
-      'Alt-p tasks · /status details · Ctrl-C exit',
-    );
+    expect(display.bindings).toBe('/status details · Ctrl-C exit');
   });
 
   it('hides inactive global bindings while a foreground panel owns input', () => {
@@ -1050,8 +1061,8 @@ describe('CLI StatusBar display model', () => {
         activeSubagents: 2,
         activeProcesses: 1,
         approvalDepth: 1,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         ctrlCAction: 'stop',
         shortcutsActive: false,
       }),
@@ -1098,8 +1109,8 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         activeSubagents: 3,
         activeProcesses: 1,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         ctrlCAction: 'stop',
         shortcutsActive: false,
         width: 40,
@@ -1115,8 +1126,8 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         activeSubagents: 3,
         activeProcesses: 1,
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         ctrlCAction: 'stop',
         shortcutsActive: false,
         width: 15,
@@ -1319,15 +1330,15 @@ describe('CLI StatusBar display model', () => {
   it('uses portable Esc labels for meta shortcuts on macOS', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        subagentControlsAvailable: true,
-        sessionNavigationAvailable: true,
+        childNavigationAvailable: true,
+        streamFocusAvailable: true,
         shortcutModifierLabel: defaultShortcutModifierLabel('darwin'),
       }),
     );
 
     expect(display.bindings).toContain('Esc 1..9 focus');
-    expect(display.bindings).toContain('Esc p tasks');
-    expect(display.bindings).toContain('Esc s subagents');
+    expect(display.bindings).not.toContain('Esc p tasks');
+    expect(display.bindings).not.toContain('Esc s subagents');
     expect(display.bindings).not.toContain('Option-p tasks');
   });
 });

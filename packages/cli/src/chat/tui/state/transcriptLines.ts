@@ -18,7 +18,7 @@ const entryLinesCache = new WeakMap<
   Map<number, readonly string[]>
 >();
 
-export function transcriptEntryLines(
+function transcriptEntryLines(
   entry: ConversationEntry,
   cols: number,
 ): readonly string[] {

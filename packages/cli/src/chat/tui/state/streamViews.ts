@@ -1,6 +1,6 @@
 // Stream-scoped display projection for CLI controls. The authoritative state
 // remains `StreamSlice` plus the child->parent edge map; this module owns the
-// derived labels and active tree order so tabs, headers, and pickers do not
+// derived labels and active tree order so tabs, headers, and lists do not
 // each rebuild them differently.
 
 // Local imports - shared schemas
@@ -171,7 +171,7 @@ export function activeStreamTreeEntries(
   const root = activeTreeRoot(init);
   if (!root) return [];
   // Newest-first: `orderedDescendantsFromTree` returns children oldest-first
-  // (retained order, then creation order), so the session list and its
+  // (retained order, then creation order), so the child list and its
   // Alt+1..9 shortcuts read top-to-bottom from most to least recently
   // started, keeping the row a user is most likely watching near the top.
   const ordered = orderedDescendantsFromTree({

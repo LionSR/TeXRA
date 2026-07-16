@@ -19,16 +19,6 @@ import {
 const shortcutModifierLabel = defaultShortcutModifierLabel();
 const alternateShortcutModifierLabel =
   shortcutModifierLabel === 'Esc' ? 'Alt' : 'Esc';
-const tasksShortcut = metaChordLabel(shortcutModifierLabel, 'p');
-const alternateTasksShortcut = metaChordLabel(
-  alternateShortcutModifierLabel,
-  'p',
-);
-const subagentsShortcut = metaChordLabel(shortcutModifierLabel, 's');
-const alternateSubagentsShortcut = metaChordLabel(
-  alternateShortcutModifierLabel,
-  's',
-);
 const focusShortcut = metaChordLabel(shortcutModifierLabel, '1..9');
 const alternateFocusShortcut = metaChordLabel(
   alternateShortcutModifierLabel,
@@ -69,15 +59,7 @@ export const chatCommand = withUsageSections(
         ['/goal', 'explain autonomous goal mode and approved-plan startup'],
         ['/login, /logout', 'sign in or out of ChatGPT or Researcher Access'],
         ['Ctrl-T', 'open the transcript viewer'],
-        ['Tab', 'cycle visible streams when subagents are active'],
-        [
-          tasksShortcut,
-          `open tasks and sub-workflows when available (${alternateTasksShortcut} when configured)`,
-        ],
-        [
-          subagentsShortcut,
-          `open subagents when available (${alternateSubagentsShortcut} when configured)`,
-        ],
+        ['Tab', 'select a visible child session or process'],
         [
           focusShortcut,
           `focus a visible stream by number (${alternateFocusShortcut} when configured)`,

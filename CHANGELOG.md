@@ -45,6 +45,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Child navigation now uses one persistent list** — press Tab to select
+  child sessions and background processes together, then use Enter to focus a
+  session or inspect process output. Finished sessions remain available, and a
+  completed focused child returns to its immediate parent.
 - **Clipped tool output keeps its visual status cues** — tool rows that exceed
   the available transcript space now retain their status, preview, and error
   styling.

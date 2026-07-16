@@ -91,11 +91,11 @@ export interface StatusBarDisplayInput {
   readonly activeProcesses: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
-  readonly taskControlsAvailable?: boolean;
   readonly agentSelectionAvailable?: boolean;
-  readonly subagentControlsAvailable: boolean;
-  /** True when the current stream tree has selectable session rows. */
-  readonly sessionNavigationAvailable: boolean;
+  /** True when the persistent child list has a session or process row. */
+  readonly childNavigationAvailable?: boolean;
+  /** True when Alt/Esc-1..9 has at least one stream target. */
+  readonly streamFocusAvailable?: boolean;
   readonly model: string;
   readonly modelAccess: CliModelAccessRoute;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
@@ -113,15 +113,17 @@ export interface StatusBarDisplayInput {
   /** True when `status` belongs to a focused child/subagent stream rather
    *  than the root session — see `statusBarStreamTarget`. */
   readonly isChildStream?: boolean;
-  /** False while a foreground surface (approval, picker, form, transcript,
+  /** False while a foreground surface (approval, detail, form, transcript,
    *  slash palette, or reverse search) owns input and global chat shortcuts are
    *  intentionally inactive. */
   readonly shortcutsActive?: boolean;
   /** Label for the foreground surface's Escape action while shortcutsActive is
    *  false. */
   readonly foregroundEscapeAction?: string;
-  /** True while the persistent session list, rather than the input, owns keys. */
-  readonly sessionListFocused?: boolean;
+  /** True while the persistent child list, rather than the input, owns keys. */
+  readonly childListFocused?: boolean;
+  readonly childListSelectionKind?: 'stream' | 'process';
+  readonly childListSelectionKillable?: boolean;
 }
 
 interface StatusBarDisplay {
@@ -379,10 +381,9 @@ let lastBindingsKey: string | undefined;
 let lastBindingsText = '';
 
 function statusBarBindingsText(
-  taskControlsAvailable = true,
   agentSelectionAvailable = false,
-  subagentControlsAvailable: boolean,
-  sessionNavigationAvailable: boolean,
+  childNavigationAvailable = false,
+  streamFocusAvailable = false,
   modifierLabel = defaultShortcutModifierLabel(),
   shiftEnterNewline = false,
   transcriptAvailable = false,
@@ -390,10 +391,9 @@ function statusBarBindingsText(
   maxColumns?: number,
 ): string {
   const memoKey = [
-    taskControlsAvailable,
     agentSelectionAvailable,
-    subagentControlsAvailable,
-    sessionNavigationAvailable,
+    childNavigationAvailable,
+    streamFocusAvailable,
     modifierLabel,
     shiftEnterNewline,
     transcriptAvailable,
@@ -401,10 +401,10 @@ function statusBarBindingsText(
     maxColumns,
   ].join('|');
   if (memoKey === lastBindingsKey) return lastBindingsText;
-  const streamTabs = sessionNavigationAvailable
-    ? keyHintText({ key: 'Tab', action: 'sessions' })
+  const childList = childNavigationAvailable
+    ? keyHintText({ key: 'Tab', action: 'children' })
     : undefined;
-  const streamFocus = sessionNavigationAvailable
+  const streamFocus = streamFocusAvailable
     ? keyHintText({
         key: metaChordLabel(modifierLabel, '1..9'),
         action: 'focus',
@@ -412,15 +412,6 @@ function statusBarBindingsText(
     : undefined;
   const transcript = transcriptAvailable
     ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
-    : undefined;
-  const tasks = taskControlsAvailable
-    ? keyHintText({ key: metaChordLabel(modifierLabel, 'p'), action: 'tasks' })
-    : undefined;
-  const subagents = subagentControlsAvailable
-    ? keyHintText({
-        key: metaChordLabel(modifierLabel, 's'),
-        action: 'subagents',
-      })
     : undefined;
   const agent = agentSelectionAvailable
     ? keyHintText({ key: '/agent', action: 'agents' })
@@ -434,19 +425,14 @@ function statusBarBindingsText(
   });
   const ctrlC = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const setupControlsOnly =
-    agentSelectionAvailable &&
-    !taskControlsAvailable &&
-    !subagentControlsAvailable &&
-    !sessionNavigationAvailable;
+    agentSelectionAvailable && !childNavigationAvailable;
   const candidates = [
-    // Session navigation only applies when the current tree has selectable
-    // rows; unrelated or not-yet-attached streams do not make Tab actionable.
+    // Child navigation only applies when the current tree has a visible row;
+    // unrelated or not-yet-attached streams do not make Tab actionable.
     statusBarBindingRow([
-      streamTabs,
+      childList,
       streamFocus,
       transcript,
-      tasks,
-      subagents,
       status,
       agent,
       model,
@@ -457,38 +443,13 @@ function statusBarBindingsText(
     setupControlsOnly &&
       statusBarBindingRow([transcript, agent, model, api, newline, ctrlC]),
     setupControlsOnly && statusBarBindingRow([agent, model, api, ctrlC]),
-    statusBarBindingRow([
-      streamTabs,
-      transcript,
-      tasks,
-      subagents,
-      agent,
-      status,
-      ctrlC,
-    ]),
-    statusBarBindingRow([
-      streamTabs,
-      transcript,
-      tasks,
-      subagents,
-      agent,
-      ctrlC,
-    ]),
-    (taskControlsAvailable ||
-      subagentControlsAvailable ||
-      agentSelectionAvailable) &&
-      statusBarBindingRow([streamTabs, tasks, subagents, agent, ctrlC]),
-    sessionNavigationAvailable &&
-      taskControlsAvailable &&
-      statusBarBindingRow([streamTabs, transcript, tasks, ctrlC]),
-    taskControlsAvailable && statusBarBindingRow([transcript, tasks, ctrlC]),
-    taskControlsAvailable && statusBarBindingRow([tasks, ctrlC]),
-    subagentControlsAvailable &&
-      statusBarBindingRow([streamTabs, transcript, subagents, ctrlC]),
-    subagentControlsAvailable &&
-      statusBarBindingRow([transcript, subagents, ctrlC]),
-    subagentControlsAvailable && statusBarBindingRow([subagents, ctrlC]),
-    transcriptAvailable && statusBarBindingRow([streamTabs, transcript, ctrlC]),
+    statusBarBindingRow([childList, transcript, agent, status, ctrlC]),
+    statusBarBindingRow([childList, transcript, agent, ctrlC]),
+    (childNavigationAvailable || agentSelectionAvailable) &&
+      statusBarBindingRow([childList, agent, ctrlC]),
+    childNavigationAvailable &&
+      statusBarBindingRow([childList, transcript, ctrlC]),
+    transcriptAvailable && statusBarBindingRow([childList, transcript, ctrlC]),
     transcriptAvailable && statusBarBindingRow([transcript, ctrlC]),
   ];
 
@@ -527,24 +488,46 @@ function foregroundBindingsText(
   return ctrlCBinding;
 }
 
-function sessionListBindingsText(
+function childListBindingsText(
   ctrlCAction: CtrlCAction,
+  selectionKind: 'stream' | 'process' | undefined,
+  selectionKillable: boolean,
   maxColumns?: number,
 ): string {
   const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
+  const enterBinding = keyHintText({
+    key: 'Enter',
+    action: selectionKind === 'process' ? 'details' : 'focus',
+  });
+  const transcriptBinding =
+    selectionKind === 'stream'
+      ? keyHintText({ key: 'v', action: 'transcript' })
+      : undefined;
+  const killBinding = selectionKillable
+    ? keyHintText({ key: 'k', action: 'kill' })
+    : undefined;
   const candidates = [
-    [
+    statusBarBindingRow([
       keyHintText({ key: 'Up/Down', action: 'select' }),
-      keyHintText({ key: 'Enter', action: 'focus' }),
+      enterBinding,
+      transcriptBinding,
+      killBinding,
       keyHintText({ key: 'Tab', action: 'input' }),
       keyHintText({ key: 'Esc', action: 'input' }),
       ctrlCBinding,
-    ].join(KEY_HINT_SEPARATOR),
-    [
+    ]),
+    statusBarBindingRow([
       keyHintText({ key: 'Up/Down', action: 'select' }),
-      keyHintText({ key: 'Enter', action: 'focus' }),
+      enterBinding,
+      keyHintText({ key: 'Tab', action: 'input' }),
+      keyHintText({ key: 'Esc', action: 'input' }),
       ctrlCBinding,
-    ].join(KEY_HINT_SEPARATOR),
+    ]),
+    statusBarBindingRow([
+      enterBinding,
+      keyHintText({ key: 'Esc', action: 'input' }),
+      ctrlCBinding,
+    ]),
     ctrlCBinding,
   ];
   return (
@@ -683,7 +666,7 @@ const BYPASS_BADGES: ReadonlyArray<{
 ];
 
 // Which text occupies the bindings row is a priority order, not a single
-// condition: an active pending-exit prompt always wins, then the session
+// condition: an active pending-exit prompt always wins, then the child
 // list, then any other foreground surface, and only then the normal chat
 // shortcuts.
 function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
@@ -696,8 +679,13 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   }
 
   const maxColumns = statusBarInnerWidth(input.width);
-  if (input.sessionListFocused) {
-    return sessionListBindingsText(input.ctrlCAction ?? 'exit', maxColumns);
+  if (input.childListFocused) {
+    return childListBindingsText(
+      input.ctrlCAction ?? 'exit',
+      input.childListSelectionKind,
+      input.childListSelectionKillable ?? false,
+      maxColumns,
+    );
   }
   if (input.shortcutsActive === false) {
     return foregroundBindingsText(
@@ -707,10 +695,9 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
     );
   }
   return statusBarBindingsText(
-    input.taskControlsAvailable ?? true,
     input.agentSelectionAvailable ?? false,
-    input.subagentControlsAvailable,
-    input.sessionNavigationAvailable,
+    input.childNavigationAvailable,
+    input.streamFocusAvailable,
     input.shortcutModifierLabel,
     input.shiftEnterNewline,
     input.transcriptAvailable,

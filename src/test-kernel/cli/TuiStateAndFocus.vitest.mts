@@ -29,7 +29,6 @@ import {
   staticTranscriptRowBudget,
 } from '@cli/chat/tui/appLayout';
 import { orderedDescendantsFromTree } from '@cli/chat/tui/state/focusCycle';
-import { hasChildControlItems } from '@cli/chat/tui/state/childControls';
 import { focusedChildInputDisabledMessage } from '@cli/chat/tui/state/focusedChildFollowUp';
 import {
   activeSubagentsFor,
@@ -182,22 +181,6 @@ describe('cliState Phase 4 fields', () => {
     }));
     patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
 
-    expect(
-      hasChildControlItems(
-        root,
-        childStreamEntries.get(),
-        streams.get(),
-        'tasks',
-      ),
-    ).toBe(true);
-    expect(
-      hasChildControlItems(
-        root,
-        childStreamEntries.get(),
-        streams.get(),
-        'subagents',
-      ),
-    ).toBe(true);
     expect(orderedSessionDescendants(root)[0]).toBe(child1);
 
     removeStream(child1);
@@ -219,23 +202,6 @@ describe('cliState Phase 4 fields', () => {
       visibleSubagentRows(root, childStreamEntries.get(), streams.get()),
     ).toEqual([]);
     expect(isChildStreamRemoved(child1)).toBe(true);
-    // Still true: the untouched process-1 counts as a task-mode item.
-    expect(
-      hasChildControlItems(
-        root,
-        childStreamEntries.get(),
-        streams.get(),
-        'tasks',
-      ),
-    ).toBe(true);
-    expect(
-      hasChildControlItems(
-        root,
-        childStreamEntries.get(),
-        streams.get(),
-        'subagents',
-      ),
-    ).toBe(false);
     expect(orderedSessionDescendants(root)[0]).toBeUndefined();
   });
 
@@ -551,19 +517,33 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({ subagentRows: 0, todosPlanRows: 1 });
   });
 
-  it('keeps sessions visible beside todos in a short terminal', () => {
+  it('hides the child list when its gap and content cannot both fit', () => {
     expect(
       allocateConversationBottomPanelRows({
         maxRows: 10,
         processCount: 0,
         sessionCount: 2,
-        sessionListFocused: false,
+        childListFocused: false,
         todosPlanContentRows: 5,
         transcriptRows: 1,
       }),
     ).toEqual({
-      bottomPanelRows: 1,
-      sessionPanelRows: 1,
+      bottomPanelRows: 0,
+      sessionPanelRows: 0,
+      todosPlanRows: 0,
+    });
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        processCount: 1,
+        sessionCount: 0,
+        childListFocused: true,
+        todosPlanContentRows: 0,
+        transcriptRows: 1,
+      }),
+    ).toEqual({
+      bottomPanelRows: 0,
+      sessionPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -573,13 +553,13 @@ describe('CLI TUI row allocation', () => {
       allocateConversationBottomPanelRows({
         maxRows: 10,
         sessionCount: 2,
-        sessionListFocused: false,
+        childListFocused: false,
         todosPlanContentRows: 0,
         transcriptRows: 6,
       }),
     ).toEqual({
-      bottomPanelRows: 2,
-      sessionPanelRows: 2,
+      bottomPanelRows: 3,
+      sessionPanelRows: 3,
       todosPlanRows: 0,
     });
   });
@@ -589,7 +569,7 @@ describe('CLI TUI row allocation', () => {
       allocateConversationBottomPanelRows({
         maxRows: 10,
         sessionCount: 2,
-        sessionListFocused: false,
+        childListFocused: false,
         todosPlanContentRows: 5,
         transcriptRows: 0,
       }),
@@ -1008,59 +988,10 @@ describe('CLI TUI row allocation', () => {
       focusedChildInputDisabledMessage({
         activeStreamId: child1,
         parentStream: parentStream.get(),
-        shortcutModifierLabel: 'Esc',
         status: STREAM_PHASE.COMPLETED,
-      }),
-    ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc s to choose another.',
-    );
-
-    expect(
-      focusedChildInputDisabledMessage({
-        activeStreamId: child1,
-        parentStream: parentStream.get(),
-        shortcutModifierLabel: 'Alt',
-        status: STREAM_PHASE.COMPLETED,
-      }),
-    ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to select a session or Alt-s to choose another.',
-    );
-
-    expect(
-      focusedChildInputDisabledMessage({
-        activeStreamId: child1,
-        parentStream: parentStream.get(),
-        shortcutModifierLabel: 'Esc',
-        status: STREAM_PHASE.COMPLETED,
-        subagentControlsAvailable: false,
       }),
     ).toBe(
       'Subagent is no longer accepting follow-ups; press Tab to select a session.',
-    );
-
-    expect(
-      focusedChildInputDisabledMessage({
-        activeStreamId: child1,
-        parentStream: parentStream.get(),
-        shortcutModifierLabel: 'Esc',
-        status: STREAM_PHASE.COMPLETED,
-        subagentControlsAvailable: false,
-        taskControlsAvailable: true,
-      }),
-    ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc p to review tasks.',
-    );
-
-    expect(
-      focusedChildInputDisabledMessage({
-        activeStreamId: child1,
-        parentStream: parentStream.get(),
-        shortcutModifierLabel: 'Esc',
-        status: STREAM_PHASE.COMPLETED,
-        taskControlsAvailable: true,
-      }),
-    ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc s to choose another, or Esc p to review tasks.',
     );
   });
 
@@ -1139,6 +1070,83 @@ describe('CLI TUI row allocation', () => {
         kind: 'reject',
         streamId: child1,
       });
+    } finally {
+      dispose();
+    }
+  });
+
+  it('returns a focused attached child to its immediate owner on lifecycle completion', () => {
+    const dispose = subscribeStreamStatus();
+    setParentStream(child1, root);
+    activeStreamId.set(child1);
+
+    try {
+      expect(
+        defaultSession().status.transition(
+          child1,
+          STREAM_PHASE.RUNNING,
+          'lifecycle',
+        ),
+      ).toBe(true);
+      expect(
+        defaultSession().status.transition(
+          child1,
+          STREAM_PHASE.COMPLETED,
+          'lifecycle',
+        ),
+      ).toBe(true);
+      expect(activeStreamId.get()).toBe(root);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not auto-return for WAITING, repair, unrelated, or detached status events', () => {
+    const dispose = subscribeStreamStatus();
+    const detachedChild = 'detached-child' as StreamTabId;
+    setParentStream(child1, root);
+
+    try {
+      defaultSession().status.transition(
+        child1,
+        STREAM_PHASE.RUNNING,
+        'lifecycle',
+      );
+      activeStreamId.set(child1);
+      defaultSession().status.transition(child1, STREAM_PHASE.WAITING, 'wait');
+      expect(activeStreamId.get()).toBe(child1);
+
+      defaultSession().status.transition(
+        child2,
+        STREAM_PHASE.RUNNING,
+        'lifecycle',
+      );
+      defaultSession().status.transition(
+        child2,
+        STREAM_PHASE.FAILED,
+        'lifecycle',
+      );
+      expect(activeStreamId.get()).toBe(child1);
+
+      defaultSession().status.transition(
+        child1,
+        STREAM_PHASE.FAILED,
+        'restart-repair',
+      );
+      expect(activeStreamId.get()).toBe(child1);
+
+      defaultSession().status.transition(
+        detachedChild,
+        STREAM_PHASE.RUNNING,
+        'lifecycle',
+      );
+      activeStreamId.set(detachedChild);
+      defaultSession().status.transition(
+        detachedChild,
+        STREAM_PHASE.COMPLETED,
+        'lifecycle',
+      );
+      expect(activeStreamId.get()).toBe(detachedChild);
     } finally {
       dispose();
     }

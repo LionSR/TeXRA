@@ -1,11 +1,11 @@
-// Interactive session list plus non-selectable active process rows.
+// Persistent heterogeneous child-session and process list.
 
 // Third-party imports
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - shared stream state
-import type { ActiveChildInfo } from '@shared/schemas';
+import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -16,19 +16,22 @@ import {
   processTailLines,
 } from '../state/childControls';
 import { childExecutionLabel } from '../state/childExecutions';
+import {
+  childListProcessId,
+  childListStreamId,
+  childProcessListValue,
+  childStreamListValue,
+  type ChildListValue,
+} from '../state/childListSelection';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { COLOR_HINT } from '../ui/colors';
 import { POINTER, TICK } from '../ui/glyphs';
-import { Select } from '../ui/Select';
+import { Select, visibleSelectRange } from '../ui/Select';
 import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
 import type { ProcessOutputTail } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
-interface ProcessRowProps {
-  readonly child: ActiveChildInfo;
-  readonly nowMs: number;
-  readonly tail?: ProcessOutputTail;
-}
+type ProcessChildInfo = Extract<ActiveChildInfo, { kind: 'process' }>;
 
 function childStatusLabel(status: string | undefined): string | undefined {
   return formatStreamStatusLabel(status, {
@@ -59,19 +62,29 @@ export function compactChildRowText({
     .join(' · ');
 }
 
+function HiddenRowSummary({
+  text,
+}: {
+  readonly text: string | undefined;
+}): React.JSX.Element | null {
+  return text ? (
+    <Box flexShrink={0}>
+      <Text dimColor>{` · ${text}`}</Text>
+    </Box>
+  ) : null;
+}
+
 function SessionRow({
   active,
   focused,
-  hiddenSessionCount,
+  hiddenRowSummary,
   nowMs,
-  processSummary,
   session,
 }: {
   readonly active: boolean;
   readonly focused: boolean;
-  readonly hiddenSessionCount: number;
+  readonly hiddenRowSummary: string | undefined;
   readonly nowMs: number;
-  readonly processSummary?: string;
   readonly session: StreamView;
 }): React.JSX.Element {
   const status = session.slice?.status;
@@ -103,98 +116,54 @@ function SessionRow({
           {elapsed ? ` · ${elapsed}` : ''}
         </Text>
       </Box>
-      {focused && (hiddenSessionCount > 0 || processSummary) ? (
-        <Box flexShrink={0}>
-          <Text dimColor>
-            {` · ${[
-              hiddenSessionCount > 0
-                ? `+${formatResultCount(hiddenSessionCount, 'session')}`
-                : undefined,
-              processSummary,
-            ]
-              .filter(Boolean)
-              .join(', ')}`}
-          </Text>
-        </Box>
-      ) : null}
+      {focused ? <HiddenRowSummary text={hiddenRowSummary} /> : null}
     </Box>
   );
 }
 
 function ProcessRow({
   child,
-  hiddenProcessCount = 0,
+  focused,
+  hiddenRowSummary,
   nowMs,
   tail,
-}: ProcessRowProps & {
-  readonly hiddenProcessCount?: number;
+}: {
+  readonly child: ProcessChildInfo;
+  readonly focused: boolean;
+  readonly hiddenRowSummary: string | undefined;
+  readonly nowMs: number;
+  readonly tail?: ProcessOutputTail;
 }): React.JSX.Element {
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
-      <Text>{'    '}</Text>
+      <Text color={focused ? COLOR_HINT : undefined}>
+        {focused ? POINTER : ' '}
+      </Text>
+      <Text>{'   '}</Text>
       <Text color={childStatusColor(child.status)}>{CHILD_STATUS_MARKER}</Text>
       <Box minWidth={0} flexShrink={1}>
         <Text wrap="truncate-end">
           {compactChildRowText({ child, nowMs, tail })}
         </Text>
       </Box>
-      {hiddenProcessCount > 0 ? (
-        <Box flexShrink={0}>
-          <Text
-            dimColor
-          >{` · +${formatResultCount(hiddenProcessCount, 'more process')}`}</Text>
-        </Box>
-      ) : null}
+      {focused ? <HiddenRowSummary text={hiddenRowSummary} /> : null}
     </Box>
   );
-}
-
-/**
- * Natural row count: one row per session and active process.
- */
-export function subagentListRowAllocation({
-  maxRows,
-  processCount,
-  sessionCount,
-}: {
-  readonly maxRows: number | undefined;
-  readonly processCount: number;
-  readonly sessionCount: number;
-}): {
-  readonly processRows: number;
-  readonly sessionRows: number;
-} {
-  if (maxRows === undefined) {
-    return { processRows: processCount, sessionRows: sessionCount };
-  }
-  const rows = Math.max(0, Math.floor(maxRows));
-  if (sessionCount === 0) {
-    return { processRows: Math.min(processCount, rows), sessionRows: 0 };
-  }
-
-  // A focused list must always retain a selectable session row. When there is
-  // another row, reserve it for process visibility before filling the
-  // remaining space with sessions.
-  const reservedProcessRows = processCount > 0 && rows > 1 ? 1 : 0;
-  const sessionRows = Math.min(
-    sessionCount,
-    Math.max(0, rows - reservedProcessRows),
-  );
-  return {
-    processRows: Math.min(processCount, rows - sessionRows),
-    sessionRows,
-  };
 }
 
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
   readonly onCancel?: () => void;
-  readonly onFocusStream?: (streamId: StreamView['id']) => void;
-  readonly onSelectionChange?: (streamId: StreamView['id']) => void;
-  readonly selectedStreamId?: StreamView['id'];
+  readonly onFocusStream?: (streamId: StreamTabId) => void;
+  readonly onKillExecution?: (executionId: string) => void;
+  readonly onOpenProcessDetail?: (executionId: string) => void;
+  readonly onSelectionChange?: (value: ChildListValue) => void;
+  readonly onViewStream?: (streamId: StreamTabId) => void;
+  readonly selectedValue?: ChildListValue;
   readonly sessions?: readonly StreamView[];
   readonly activeProcesses?: readonly ActiveChildInfo[];
+  readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
   readonly processOutput?: ReadonlyMap<string, ProcessOutputTail>;
 }
 
@@ -202,7 +171,13 @@ export function SubagentList(
   props: SubagentListProps = {},
 ): React.JSX.Element | null {
   const sessions = props.sessions ?? [];
-  const activeProcesses = props.activeProcesses ?? [];
+  const activeProcesses = useMemo(
+    () =>
+      (props.activeProcesses ?? []).filter(
+        (child): child is ProcessChildInfo => child.kind === 'process',
+      ),
+    [props.activeProcesses],
+  );
   const processOutput = props.processOutput;
   const liveElapsedKey = useMemo(() => {
     const liveSessionStarts = sessions
@@ -214,78 +189,148 @@ export function SubagentList(
         .join(':') || undefined
     );
   }, [activeProcesses, sessions]);
-  const sessionItems = useMemo(
-    () =>
-      sessions.map((session) => ({
+  const items = useMemo(
+    () => [
+      ...sessions.map((session) => ({
         label: session.label,
-        value: session.id,
+        value: childStreamListValue(session.id),
       })),
+      ...activeProcesses.map((process) => ({
+        label: childExecutionLabel(process),
+        value: childProcessListValue(process.executionId),
+      })),
+    ],
+    [activeProcesses, sessions],
+  );
+  const sessionsByValue = useMemo(
+    () =>
+      new Map(
+        sessions.map((session) => [childStreamListValue(session.id), session]),
+      ),
     [sessions],
   );
-  const sessionsById = useMemo(
-    () => new Map(sessions.map((session) => [session.id, session])),
-    [sessions],
+  const processesByValue = useMemo(
+    () =>
+      new Map(
+        activeProcesses.map((process) => [
+          childProcessListValue(process.executionId),
+          process,
+        ]),
+      ),
+    [activeProcesses],
   );
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
-
-  if (sessions.length === 0 && activeProcesses.length === 0) return null;
-  if (props.maxRows !== undefined && props.maxRows <= 0) return null;
-
-  const { processRows, sessionRows } = subagentListRowAllocation({
-    maxRows: props.maxRows,
-    processCount: activeProcesses.length,
-    sessionCount: sessions.length,
+  const contentRows =
+    props.maxRows === undefined ? undefined : Math.max(0, props.maxRows - 1);
+  const selectedIndex = Math.max(
+    0,
+    items.findIndex((item) => item.value === props.selectedValue),
+  );
+  const visibleRange = visibleSelectRange({
+    highlight: selectedIndex,
+    itemCount: items.length,
+    maxVisibleItems: contentRows,
   });
-  const visibleProcesses = activeProcesses.slice(0, processRows);
-  const hiddenProcessCount = activeProcesses.length - visibleProcesses.length;
-  const processSummary =
-    hiddenProcessCount > 0 && visibleProcesses.length === 0
+  const visibleValues = new Set(
+    items.slice(visibleRange.start, visibleRange.end).map((item) => item.value),
+  );
+  const hiddenSessionCount = sessions.filter(
+    (session) => !visibleValues.has(childStreamListValue(session.id)),
+  ).length;
+  const hiddenProcessCount = activeProcesses.filter(
+    (process) => !visibleValues.has(childProcessListValue(process.executionId)),
+  ).length;
+  const hiddenRowSummary = [
+    hiddenSessionCount > 0
+      ? `+${formatResultCount(hiddenSessionCount, 'session')}`
+      : undefined,
+    hiddenProcessCount > 0
       ? `+${formatResultCount(hiddenProcessCount, 'process')}`
-      : undefined;
+      : undefined,
+  ]
+    .filter((part): part is string => part !== undefined)
+    .join(', ');
+
+  useInput(
+    (input, key) => {
+      if (key.ctrl || key.meta) return;
+      const streamId = childListStreamId(props.selectedValue);
+      if (input.toLowerCase() === 'v' && streamId) {
+        props.onViewStream?.(streamId);
+        return;
+      }
+      if (input.toLowerCase() !== 'k') return;
+      const processId = childListProcessId(props.selectedValue);
+      let executionId: string | undefined;
+      if (processId && props.selectedValue) {
+        executionId = processesByValue.get(props.selectedValue)?.executionId;
+      } else if (streamId) {
+        executionId = props.activeSubagentExecutionIds?.get(streamId);
+      }
+      if (executionId) props.onKillExecution?.(executionId);
+    },
+    { isActive: props.keyboardActive ?? false },
+  );
+
+  if (items.length === 0) return null;
+  // The list is deliberately separated from the input/status chrome by one
+  // blank row. If the gap and one content row do not both fit, render nothing.
+  if (contentRows !== undefined && contentRows <= 0) return null;
+  const activeSession = sessions.find((session) => session.active);
+
   return (
     <Box
       flexDirection="column"
-      height={props.maxRows}
-      overflowY={props.maxRows === undefined ? undefined : 'hidden'}
+      height={contentRows}
+      marginTop={1}
+      overflowY={contentRows === undefined ? undefined : 'hidden'}
       paddingX={1}
     >
-      {sessions.length > 0 ? (
-        <Select
-          activeValue={sessions.find((session) => session.active)?.id}
-          highlightedValue={props.selectedStreamId}
-          hotkeys={false}
-          isActive={props.keyboardActive}
-          items={sessionItems}
-          maxVisibleItems={sessionRows}
-          onCancel={props.onCancel ?? (() => undefined)}
-          onHighlightChange={(streamId) => props.onSelectionChange?.(streamId)}
-          onSelect={(streamId) => props.onFocusStream?.(streamId)}
-          renderItem={(item, state) => {
-            const session = sessionsById.get(item.value);
-            return session ? (
+      <Select
+        activeValue={
+          activeSession ? childStreamListValue(activeSession.id) : undefined
+        }
+        highlightedValue={props.selectedValue}
+        hotkeys={false}
+        isActive={props.keyboardActive}
+        items={items}
+        maxVisibleItems={contentRows}
+        onCancel={props.onCancel ?? (() => undefined)}
+        onHighlightChange={(value) => props.onSelectionChange?.(value)}
+        onSelect={(value) => {
+          const streamId = childListStreamId(value);
+          if (streamId) {
+            props.onFocusStream?.(streamId);
+            return;
+          }
+          const executionId = childListProcessId(value);
+          if (executionId) props.onOpenProcessDetail?.(executionId);
+        }}
+        renderItem={(item, state) => {
+          const session = sessionsByValue.get(item.value);
+          if (session) {
+            return (
               <SessionRow
                 active={state.active}
                 focused={state.focused}
-                hiddenSessionCount={state.hiddenItemCount}
+                hiddenRowSummary={hiddenRowSummary || undefined}
                 nowMs={nowMs}
-                processSummary={processSummary}
                 session={session}
               />
-            ) : null;
-          }}
-        />
-      ) : null}
-      {visibleProcesses.map((child, index) => (
-        <ProcessRow
-          key={child.executionId}
-          child={child}
-          hiddenProcessCount={
-            index === visibleProcesses.length - 1 ? hiddenProcessCount : 0
+            );
           }
-          nowMs={nowMs}
-          tail={processOutput?.get(child.executionId)}
-        />
-      ))}
+          const process = processesByValue.get(item.value);
+          return process ? (
+            <ProcessRow
+              child={process}
+              focused={state.focused}
+              hiddenRowSummary={hiddenRowSummary || undefined}
+              nowMs={nowMs}
+              tail={processOutput?.get(process.executionId)}
+            />
+          ) : null;
+        }}
+      />
     </Box>
   );
 }
