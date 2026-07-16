@@ -1910,7 +1910,10 @@ describe('DesktopProgressBridge', () => {
         },
       }),
     );
-    const resumeToolUseFromSnapshot = vi.fn(async () => {});
+    const resumeToolUseFromSnapshot = vi.fn(async (...args: unknown[]) => {
+      const options = args[2] as { onFollowUpConsumed?: () => void };
+      options.onFollowUpConsumed?.();
+    });
     const messages: unknown[] = [];
     const bridge = await createBridge(messages, {
       retrieveSessionResumeData,
@@ -1948,7 +1951,9 @@ describe('DesktopProgressBridge', () => {
           parentStreamId,
         }),
         expect.objectContaining({ emit: expect.any(Function) }),
-        expect.objectContaining({ setupSession: expect.any(Function) }),
+        expect.objectContaining({
+          takePendingFollowUps: expect.any(Function),
+        }),
       );
       const [, , resumeOptions] = resumeToolUseFromSnapshot.mock
         .calls[0] as unknown as [
@@ -1956,25 +1961,16 @@ describe('DesktopProgressBridge', () => {
         unknown,
         {
           drainedFollowUps?: readonly { text: string; origin?: string }[];
-          setupSession(session: {
-            appendFollowUp(followUp: {
-              text: string;
-              mediaFiles?: readonly string[];
-              displayText?: string;
-              origin?: 'user' | 'subagent_result';
-            }): void;
-          }): void;
+          takePendingFollowUps(): readonly { text: string; origin?: string }[];
         },
       ];
       // The drained batch travels via the direct drainedFollowUps handoff (a
-      // subagent's WAITING cursor never reads the stream queue); setupSession
-      // replays only items that race in after the drain.
+      // subagent's WAITING cursor never reads the stream queue). The attachment
+      // drain closes the only race before later input can target the live flow.
       expect(resumeOptions.drainedFollowUps?.map((item) => item.text)).toEqual([
         'queued follow-up',
       ]);
-      const appendFollowUp = vi.fn();
-      resumeOptions.setupSession({ appendFollowUp });
-      expect(appendFollowUp).not.toHaveBeenCalled();
+      expect(resumeOptions.takePendingFollowUps()).toEqual([]);
     } finally {
       bridgeFollowUps(bridge).release('stream-1');
       bridgeStatus(bridge).clearStream('stream-1');

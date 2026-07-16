@@ -8,7 +8,6 @@ import {
   runToolUseFlow,
   type RunToolUseFlowResult,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
-import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
   runReflectionFlow,
@@ -462,8 +461,11 @@ export async function executeAgent(
 }
 
 export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
-  /** Initialize the rebuilt session immediately after its flow is attached. */
-  readonly setupSession?: (session: IToolUseSession) => void;
+  /**
+   * Take messages queued after the initial drain. The flow invokes this once
+   * after attaching its live context and before resuming the persisted cursor.
+   */
+  readonly takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
   /** Query caller-owned cancellation once the resumed flow is interruptible. */
   readonly isCancellationRequested?: () => boolean;
   /**
@@ -535,6 +537,7 @@ export async function resumeToolUseFromSnapshot(
             setting,
             resumeSnapshot: snapshot,
             drainedFollowUps: options.drainedFollowUps,
+            takePendingFollowUps: options.takePendingFollowUps,
             // A persisted parent marks this execution as a subagent. Without
             // this, the rebuilt system prompt would drop subagent-specific
             // instructions (e.g. the shared /memories protocol) that the fresh
@@ -551,7 +554,6 @@ export async function resumeToolUseFromSnapshot(
           undefined,
           (flowContext) => {
             handle.attachToolUseFlow(flowContext);
-            options.setupSession?.(flowContext.session);
             if (options.isCancellationRequested?.()) {
               flowContext.interrupt();
             }

@@ -1,5 +1,8 @@
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
+import type {
+  FollowUpQueueBatchItem,
+  FollowUpQueueInput,
+} from '@agent/followUp/FollowUpQueue';
 import type { AgentRuntimeFlowResult } from '@agent/runtime/AgentFlowResult';
 import {
   STREAM_PHASE,
@@ -58,7 +61,7 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
  * Hosts stay thin adapters: they supply only what differs (`session`,
  * `runtimeUnavailableTools`, an optional seed follow-up, and the `onError`
  * toast). Returns `true` when the resume completed and `false` when it failed
- * or was cancelled before the rebuilt session accepted its follow-ups.
+ * or returned before the resumed cursor consumed its follow-ups.
  */
 export async function resumeQueuedToolUseSnapshot(
   streamId: StreamTabId,
@@ -78,10 +81,13 @@ export async function resumeQueuedToolUseSnapshot(
 
   const seed = options.extraFollowUps ?? [];
   let followUps: readonly FollowUpQueueInput[] = seed;
-  let cancelledBeforeSessionSetup = false;
-  let resumeReturned = false;
+  let cancelledAtFlowAttachment = false;
+  let followUpsConsumed = false;
+  let followUpsRestored = false;
   let resumeError: { error: unknown } | undefined;
   const restoreFollowUps = (): void => {
+    if (followUpsRestored) return;
+    followUpsRestored = true;
     for (const item of followUps) {
       followUpsQueue.enqueue(streamId, item, { force: true });
     }
@@ -118,51 +124,42 @@ export async function resumeQueuedToolUseSnapshot(
       runtimeUnavailableTools: options.runtimeUnavailableTools,
       parentStreamId:
         options.parentStreamId ?? snapshot.parentStreamId ?? undefined,
-      onFollowUpConsumed: options.onFollowUpConsumed,
+      onFollowUpConsumed: () => {
+        followUpsConsumed = true;
+        options.onFollowUpConsumed?.();
+      },
       onProgress: options.onProgress,
       onRunError: options.onRunError,
       onRun: options.onRun,
       isCancellationRequested: options.isCancellationRequested,
-      drainedFollowUps: followUps.length
-        ? followUps.map((item) => ({
-            text: item.text,
-            displayText: item.displayText,
-            mediaFiles: item.mediaFiles,
-            origin: item.origin ?? ('user' as const),
-          }))
-        : undefined,
-      setupSession: (session) => {
-        // Items that raced into the queue after the initial drain go through
-        // the rebuilt session's queue: a root cursor drains them at its next
-        // suspension, a subagent leaves them for its next wake. They are
-        // tracked in `followUps` so a failed resume restores them too.
+      drainedFollowUps: followUps.map(toFollowUpBatchItem),
+      // The live context is attached before this second drain. Items arriving
+      // later therefore target that context directly; this callback owns the
+      // only queue gap between the initial drain and attachment.
+      takePendingFollowUps: () => {
         const raced = followUpsQueue.drainItems(streamId);
         followUps = [...followUps, ...raced];
         if (options.isCancellationRequested?.()) {
-          cancelledBeforeSessionSetup = true;
-          return;
+          cancelledAtFlowAttachment = true;
         }
-        for (const item of raced) {
-          session.appendFollowUp(item);
-        }
+        return raced.map(toFollowUpBatchItem);
       },
     });
-    resumeReturned = true;
-    if (cancelledBeforeSessionSetup) restoreFollowUps();
+    if (followUps.length > 0 && !followUpsConsumed) restoreFollowUps();
     options.onResult?.(result);
   } catch (error) {
     resumeError = { error };
-    // A rejected resume has not committed the drained batch's disposition,
-    // so a later resume must replay it. Once the resume returns, the flow has
-    // either consumed, disposed, or deliberately left the batch live; an
-    // observer failure must not enqueue it again.
-    if (!resumeReturned) restoreFollowUps();
+    // A rejection before the wait node acknowledges consumption must replay
+    // the drained batch. A callback failure after that acknowledgement must
+    // not enqueue the same user input again.
+    if (!followUpsConsumed) restoreFollowUps();
   } finally {
     // Early failures leave the stream RESUMING. Startup cancellation can
     // instead reach lifecycle terminalization before the queue owner regains
     // control. In both cases, restored input makes WAITING the durable state.
     if (
-      cancelledBeforeSessionSetup ||
+      cancelledAtFlowAttachment ||
+      followUpsRestored ||
       streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING
     ) {
       streamStatus.transitionToWaiting(streamId, 'wait', {
@@ -172,7 +169,7 @@ export async function resumeQueuedToolUseSnapshot(
   }
 
   if (!resumeError) {
-    return !cancelledBeforeSessionSetup;
+    return !cancelledAtFlowAttachment && !followUpsRestored;
   }
   try {
     await options.onError(resumeError.error);
@@ -181,4 +178,13 @@ export async function resumeQueuedToolUseSnapshot(
     // an unhandled rejection.
   }
   return false;
+}
+
+function toFollowUpBatchItem(item: FollowUpQueueInput): FollowUpQueueBatchItem {
+  return {
+    text: item.text,
+    displayText: item.displayText,
+    mediaFiles: item.mediaFiles,
+    origin: item.origin ?? 'user',
+  };
 }

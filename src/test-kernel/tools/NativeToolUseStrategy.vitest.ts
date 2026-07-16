@@ -10,7 +10,6 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent
-import { ToolUseSessionLifecycle } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import {
   isChildRunLoopActive,
   startChildRunLoop,
@@ -387,16 +386,6 @@ describe('NativeToolUseStrategy', () => {
       async (_snapshot, _host, options) => {
         if (mocks.resumeToolUseFromSnapshot.mock.calls.length > 1) {
           throw new Error('the same follow-up batch resumed more than once');
-        }
-        // This branch models the former queue-owning wrapper. Before the fix,
-        // NativeToolUseStrategy called that wrapper, which supplied
-        // setupSession and thereby put the child-loop batch back into this
-        // exact queue. Keeping the branch in the integration fixture makes a
-        // regression fail after two turns instead of spinning indefinitely.
-        if (options.setupSession) {
-          options.setupSession(
-            new ToolUseSessionLifecycle(childStreamId, session.followUps),
-          );
         }
         options.onRun?.(handle);
         session.status.transitionToWaiting(childStreamId, 'wait');
