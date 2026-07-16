@@ -1,5 +1,13 @@
 // Local imports - IPC
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import type {
+  MergeMessage,
+  CompareMessage,
+  LatexdiffMessage,
+  LatexdiffvcMessage,
+  PackMultipleMessage,
+  PackLatexdiffvcMessage,
+} from '@shared/schemas/mainView/inbound';
 
 // Local imports - utilities
 import { capitalize } from '@utils/text/stringUtils';
@@ -42,12 +50,7 @@ export interface PackCleanState {
   readonly agent: string;
 }
 
-export type PackCleanPayload = {
-  inputFile: string;
-  agent: string;
-  model: string;
-  inputFiles?: string[];
-};
+export type PackCleanPayload = Omit<PackMultipleMessage, 'command'>;
 
 export function planPackClean(
   state: PackCleanState,
@@ -102,10 +105,7 @@ export interface MergeState {
   readonly editedFile: string;
 }
 
-export type MergePayload = {
-  inputFile: string;
-  editedFile: string;
-};
+export type MergePayload = Omit<MergeMessage, 'command'>;
 
 export function planMerge(state: MergeState): ActionResult<MergePayload> {
   if (!state.primaryInput || !state.editedFile) {
@@ -135,10 +135,7 @@ export interface CompareState {
   readonly editedFile: string;
 }
 
-type ComparePayload = {
-  baseFile: string;
-  editedFile: string;
-};
+type ComparePayload = Omit<CompareMessage, 'command'>;
 
 export type CompareActionResult =
   CommandSuccess<ComparePayload> | ActionValidationError;
@@ -174,11 +171,7 @@ export interface LatexdiffState {
   readonly editedFile: string;
 }
 
-export type LatexdiffPayload = {
-  inputFile: string;
-  baseFile: string;
-  editedFile: string;
-};
+export type LatexdiffPayload = Omit<LatexdiffMessage, 'command'>;
 
 export function planLatexdiff(
   state: LatexdiffState,
@@ -205,11 +198,7 @@ export interface LatexdiffVCState {
   readonly commitHash: string;
 }
 
-export type LatexdiffVCPayload = {
-  inputFile: string;
-  baseFile: string;
-  commitHash: string;
-};
+export type LatexdiffVCPayload = Omit<LatexdiffvcMessage, 'command'>;
 
 export function planLatexdiffVC(
   state: LatexdiffVCState,
@@ -230,11 +219,12 @@ export function planLatexdiffVC(
 // LatexdiffVC Pack/Clean
 // ============================================================
 
-// Shares LatexdiffVCState's fields (inputFile, baseFile, commitHash).
-export type LatexdiffVCPackPayload = {
-  inputFile: string;
-  baseFile: string;
-  commitHash: string;
+// `clean` is nullish on the schema (an incoming message may omit it), but this
+// planner always supplies a concrete boolean, so narrow it back here.
+export type LatexdiffVCPackPayload = Omit<
+  PackLatexdiffvcMessage,
+  'command' | 'clean'
+> & {
   clean: boolean;
 };
 
