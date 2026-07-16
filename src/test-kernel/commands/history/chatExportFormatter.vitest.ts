@@ -8,7 +8,17 @@ import { describe, it } from 'vitest';
 import {
   formatChatAsLatex,
   formatChatAsMarkdown,
+  type ChatExportInput,
 } from '@agent/export/chatExportFormatter';
+
+/** A single-message ChatExportInput fixture wrapping the given content blocks. */
+function assistantChatInput(content: unknown[]): ChatExportInput {
+  return {
+    timestamp: '2026-01-01T00:00:00.000Z',
+    config: {},
+    messages: [{ role: 'assistant', content }],
+  };
+}
 
 describe('formatChatAsMarkdown', () => {
   it('preserves function tool calls in mixed tool_calls arrays', () => {
@@ -126,11 +136,7 @@ describe('formatChatAsMarkdown', () => {
   ])(
     'renders $shape web-fetch fields in Markdown and LaTeX exports',
     ({ block, url, title, content }) => {
-      const input = {
-        timestamp: '2026-01-01T00:00:00.000Z',
-        config: {},
-        messages: [{ role: 'assistant', content: [block] }],
-      };
+      const input = assistantChatInput([block]);
 
       const markdown = formatChatAsMarkdown(input);
       assert.ok(markdown.includes(`**URL:** ${url}`));
@@ -145,38 +151,31 @@ describe('formatChatAsMarkdown', () => {
   );
 
   it('sanitizes web tool URLs before rendering Markdown links', () => {
-    const markdown = formatChatAsMarkdown({
-      timestamp: '2026-01-01T00:00:00.000Z',
-      config: {},
-      messages: [
+    const markdown = formatChatAsMarkdown(
+      assistantChatInput([
         {
-          role: 'assistant',
+          type: 'web_search_tool_result',
           content: [
             {
-              type: 'web_search_tool_result',
-              content: [
-                {
-                  type: 'web_search_result',
-                  title: 'unsafe result',
-                  url: 'javascript:alert(1)',
-                },
-                {
-                  type: 'web_search_result',
-                  title: 'safe result',
-                  url: '  https://example.com/search?q=texra  ',
-                },
-              ],
+              type: 'web_search_result',
+              title: 'unsafe result',
+              url: 'javascript:alert(1)',
             },
             {
-              type: 'web_fetch_tool_result',
-              url: 'data:text/html,<script>alert(1)</script>',
-              title: 'unsafe fetch',
-              page_content: 'body',
+              type: 'web_search_result',
+              title: 'safe result',
+              url: '  https://example.com/search?q=texra  ',
             },
           ],
         },
-      ],
-    });
+        {
+          type: 'web_fetch_tool_result',
+          url: 'data:text/html,<script>alert(1)</script>',
+          title: 'unsafe fetch',
+          page_content: 'body',
+        },
+      ]),
+    );
 
     assert.match(markdown, /- unsafe result/);
     assert.match(
@@ -189,33 +188,26 @@ describe('formatChatAsMarkdown', () => {
   });
 
   it('escapes Markdown syntax in web tool titles before rendering Markdown links', () => {
-    const markdown = formatChatAsMarkdown({
-      timestamp: '2026-01-01T00:00:00.000Z',
-      config: {},
-      messages: [
+    const markdown = formatChatAsMarkdown(
+      assistantChatInput([
         {
-          role: 'assistant',
+          type: 'web_search_tool_result',
           content: [
             {
-              type: 'web_search_tool_result',
-              content: [
-                {
-                  type: 'web_search_result',
-                  title: 'safe ](javascript:alert(1)) [again',
-                  url: 'https://example.com/search',
-                },
-              ],
-            },
-            {
-              type: 'web_fetch_tool_result',
-              url: 'https://example.com/fetch',
-              title: '[pwn](javascript:alert(1))',
-              page_content: 'body',
+              type: 'web_search_result',
+              title: 'safe ](javascript:alert(1)) [again',
+              url: 'https://example.com/search',
             },
           ],
         },
-      ],
-    });
+        {
+          type: 'web_fetch_tool_result',
+          url: 'https://example.com/fetch',
+          title: '[pwn](javascript:alert(1))',
+          page_content: 'body',
+        },
+      ]),
+    );
 
     assert.ok(
       markdown.includes(
@@ -230,33 +222,20 @@ describe('formatChatAsMarkdown', () => {
 
   it('escapes allowed-scheme URLs before rendering Markdown URL containers', () => {
     const url = 'https://example.com/a) [pwn](javascript:alert(1))';
-    const markdown = formatChatAsMarkdown({
-      timestamp: '2026-01-01T00:00:00.000Z',
-      config: {},
-      messages: [
+    const markdown = formatChatAsMarkdown(
+      assistantChatInput([
         {
-          role: 'assistant',
-          content: [
-            {
-              type: 'web_search_tool_result',
-              content: [
-                {
-                  type: 'web_search_result',
-                  title: 'safe result',
-                  url,
-                },
-              ],
-            },
-            {
-              type: 'web_fetch_tool_result',
-              url,
-              title: 'safe fetch',
-              page_content: 'body',
-            },
-          ],
+          type: 'web_search_tool_result',
+          content: [{ type: 'web_search_result', title: 'safe result', url }],
         },
-      ],
-    });
+        {
+          type: 'web_fetch_tool_result',
+          url,
+          title: 'safe fetch',
+          page_content: 'body',
+        },
+      ]),
+    );
 
     assert.ok(
       markdown.includes(
@@ -273,27 +252,16 @@ describe('formatChatAsMarkdown', () => {
 
   it('escapes emphasis/code-span/heading characters in web tool titles', () => {
     const title = '`rm -rf /` *bold* _italic_ # Heading';
-    const markdown = formatChatAsMarkdown({
-      timestamp: '2026-01-01T00:00:00.000Z',
-      config: {},
-      messages: [
+    const markdown = formatChatAsMarkdown(
+      assistantChatInput([
         {
-          role: 'assistant',
+          type: 'web_search_tool_result',
           content: [
-            {
-              type: 'web_search_tool_result',
-              content: [
-                {
-                  type: 'web_search_result',
-                  title,
-                  url: 'https://example.com',
-                },
-              ],
-            },
+            { type: 'web_search_result', title, url: 'https://example.com' },
           ],
         },
-      ],
-    });
+      ]),
+    );
 
     assert.ok(
       markdown.includes('\\`rm -rf /\\` \\*bold\\* \\_italic\\_ \\# Heading'),
@@ -305,23 +273,16 @@ describe('formatChatAsMarkdown', () => {
     // Same escapeMarkdownText call as the web_search case above, but through
     // the web_fetch **Title:** container (markdownSpec.ts's second call site).
     const title = '`rm -rf /` *bold* _italic_ # Heading';
-    const markdown = formatChatAsMarkdown({
-      timestamp: '2026-01-01T00:00:00.000Z',
-      config: {},
-      messages: [
+    const markdown = formatChatAsMarkdown(
+      assistantChatInput([
         {
-          role: 'assistant',
-          content: [
-            {
-              type: 'web_fetch_tool_result',
-              url: 'https://example.com',
-              title,
-              page_content: 'body',
-            },
-          ],
+          type: 'web_fetch_tool_result',
+          url: 'https://example.com',
+          title,
+          page_content: 'body',
         },
-      ],
-    });
+      ]),
+    );
 
     assert.ok(
       markdown.includes(
@@ -333,21 +294,14 @@ describe('formatChatAsMarkdown', () => {
 
   it('preserves IPv6 host brackets in Markdown link destinations', () => {
     const url = 'http://[::1]:8080/path';
-    const markdown = formatChatAsMarkdown({
-      timestamp: '2026-01-01T00:00:00.000Z',
-      config: {},
-      messages: [
+    const markdown = formatChatAsMarkdown(
+      assistantChatInput([
         {
-          role: 'assistant',
-          content: [
-            {
-              type: 'web_search_tool_result',
-              content: [{ type: 'web_search_result', title: 'ipv6', url }],
-            },
-          ],
+          type: 'web_search_tool_result',
+          content: [{ type: 'web_search_result', title: 'ipv6', url }],
         },
-      ],
-    });
+      ]),
+    );
 
     assert.ok(
       markdown.includes('- [ipv6](http://[::1]:8080/path)'),
@@ -357,38 +311,29 @@ describe('formatChatAsMarkdown', () => {
 
   it('sanitizes web tool URLs before rendering LaTeX links', () => {
     const latex = formatChatAsLatex(
-      {
-        timestamp: '2026-01-01T00:00:00.000Z',
-        config: {},
-        messages: [
-          {
-            role: 'assistant',
-            content: [
-              {
-                type: 'web_search_tool_result',
-                content: [
-                  {
-                    type: 'web_search_result',
-                    title: 'unsafe result',
-                    url: 'vbscript:msgbox(1)',
-                  },
-                  {
-                    type: 'web_search_result',
-                    title: 'safe result',
-                    url: 'https://example.com/path#frag',
-                  },
-                ],
-              },
-              {
-                type: 'web_fetch_tool_result',
-                url: 'file:///etc/passwd',
-                title: 'unsafe fetch',
-                page_content: 'body',
-              },
-            ],
-          },
-        ],
-      },
+      assistantChatInput([
+        {
+          type: 'web_search_tool_result',
+          content: [
+            {
+              type: 'web_search_result',
+              title: 'unsafe result',
+              url: 'vbscript:msgbox(1)',
+            },
+            {
+              type: 'web_search_result',
+              title: 'safe result',
+              url: 'https://example.com/path#frag',
+            },
+          ],
+        },
+        {
+          type: 'web_fetch_tool_result',
+          url: 'file:///etc/passwd',
+          title: 'unsafe fetch',
+          page_content: 'body',
+        },
+      ]),
       '',
     );
 
@@ -405,33 +350,18 @@ describe('formatChatAsMarkdown', () => {
   it('escapes allowed-scheme URLs before rendering LaTeX URL commands', () => {
     const url = String.raw`https://e.test/}\input{/etc/passwd`;
     const latex = formatChatAsLatex(
-      {
-        timestamp: '2026-01-01T00:00:00.000Z',
-        config: {},
-        messages: [
-          {
-            role: 'assistant',
-            content: [
-              {
-                type: 'web_search_tool_result',
-                content: [
-                  {
-                    type: 'web_search_result',
-                    title: 'safe result',
-                    url,
-                  },
-                ],
-              },
-              {
-                type: 'web_fetch_tool_result',
-                url,
-                title: 'safe fetch',
-                page_content: 'body',
-              },
-            ],
-          },
-        ],
-      },
+      assistantChatInput([
+        {
+          type: 'web_search_tool_result',
+          content: [{ type: 'web_search_result', title: 'safe result', url }],
+        },
+        {
+          type: 'web_fetch_tool_result',
+          url,
+          title: 'safe fetch',
+          page_content: 'body',
+        },
+      ]),
       '',
     );
 
