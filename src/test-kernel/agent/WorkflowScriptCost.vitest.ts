@@ -10,6 +10,7 @@ import {
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import {
   sumCompletedWorkflowJournalCost,
+  workflowJournalEntryCostIdentity,
   WorkflowJournalCostError,
 } from '@tools/delegation/workflowScriptRun';
 
@@ -22,8 +23,12 @@ const meta = `export const meta = {
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
-function entry(index: number, result: unknown): WorkflowJournalEntry {
-  return { index, key, result };
+function entry(
+  index: number,
+  result: unknown,
+  entryKey = key,
+): WorkflowJournalEntry {
+  return { index, key: entryKey, result };
 }
 
 function workflowResult(cost: number): unknown {
@@ -65,6 +70,29 @@ describe('workflow-script completed journal cost', () => {
     delete result.cost;
 
     expect(sumCompletedWorkflowJournalCost([entry(0, result)])).toBe(0);
+  });
+
+  it('charges a live replacement but not stable recoveries moved to new indices', () => {
+    const priorA = entry(2, workflowResult(1), 'aaaaaaaaaaaaaaaa');
+    const priorB = entry(3, workflowResult(0.8), 'bbbbbbbbbbbbbbbb');
+    const priorReplaced = entry(4, workflowResult(0.6), 'dddddddddddddddd');
+    const recoveredAfterReorder = [
+      entry(priorA.index, priorB.result, priorB.key),
+      entry(priorB.index, priorA.result, priorA.key),
+    ];
+    const liveReplacement = entry(
+      priorReplaced.index,
+      workflowResult(0.45),
+      'cccccccccccccccc',
+    );
+    const retry = [...recoveredAfterReorder, liveReplacement];
+
+    expect(
+      sumCompletedWorkflowJournalCost(
+        retry,
+        new Set([workflowJournalEntryCostIdentity(liveReplacement)]),
+      ),
+    ).toBe(0.45);
   });
 
   it.each([

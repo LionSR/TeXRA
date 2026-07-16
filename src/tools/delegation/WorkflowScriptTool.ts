@@ -27,6 +27,7 @@ import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
 import {
   runPersistedWorkflowScriptWithProgress,
   sumCompletedWorkflowJournalCost,
+  workflowJournalEntryCostIdentity,
 } from './workflowScriptRun';
 
 const WorkflowScriptToolInputSchema = z.strictObject({
@@ -89,20 +90,15 @@ Durable resume is content-keyed: re-running the identical script and args in thi
     }
 
     const store = getExecutionStore(parent.runScope.executionId);
-    // Delta accounting across attempts: a checkpoint now outlives one tool
-    // call, and every attempt (including the failure path) settles cost, so
-    // re-settling replayed entries would double-bill the parent. Each attempt
-    // settles only the entries it journaled itself; the whole journal is
-    // still validated so malformed entries fail closed.
-    const settledEntries = new Set(
-      (await readWorkflowScriptCheckpoint(store, checkpointId))?.journal.map(
-        (entry) => entry.index,
-      ),
-    );
+    // The stable child runner's native cost callback fires only for work that
+    // executes in this attempt. Exact journal replays and stable-child
+    // recoveries do not fire it, even when completion-order changes move a
+    // recovered invocation key to another journal index.
+    const executedEntries = new Set<string>();
     let costSettled = false;
     const settleCost = (journal: readonly WorkflowJournalEntry[]): void => {
       if (costSettled) return;
-      const cost = sumCompletedWorkflowJournalCost(journal, settledEntries);
+      const cost = sumCompletedWorkflowJournalCost(journal, executedEntries);
       costSettled = true;
       callContext.hooks?.recordSubagentCost?.(cost);
     };
@@ -124,7 +120,8 @@ Durable resume is content-keyed: re-running the identical script and args in thi
           input.agent,
           checkpointId,
           {
-            onCost: (totalCostUsd) => {
+            onCost: (invocation, totalCostUsd) => {
+              executedEntries.add(workflowJournalEntryCostIdentity(invocation));
               liveCostUsd += totalCostUsd ?? 0;
             },
           },
