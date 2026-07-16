@@ -47,7 +47,6 @@ import type {
 import { isNonEmptyString } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
-import { computeUtilizationPercent } from '../support/contextUtilization';
 import { toDataUrl } from '../support/dataUrl';
 import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
 import { tagOpenAISdkError } from './openAISdkError';
@@ -78,11 +77,7 @@ import {
   BaseReasoningStreamAggregator,
   type StreamingAggregator,
 } from './BaseReasoningStreamAggregator';
-import {
-  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-  COMPACTION_SUMMARY_PREFIX,
-  COMPACTION_SYSTEM_PROMPT,
-} from '../contextManagementConstants';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 import type {
   ChatCompletion,
@@ -118,8 +113,6 @@ type ErrorWithRequestId = Error & { request_id?: string };
  * many tokens a given model actually supports.
  */
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
-
-// COMPACTION_SYSTEM_PROMPT imported from contextManagementConstants
 
 /**
  * OpenAI-specific handlers.
@@ -164,23 +157,10 @@ export class ModelHandlerOpenAI<
     compactedMessages: ChatCompletionMessageParam[];
     didCompact: boolean;
   }> {
-    const tokensBefore = this.lastKnownInputTokens;
-    const utilizationBefore = computeUtilizationPercent(
-      tokensBefore,
-      this.config.contextWindow,
-    );
-    this.logger.debug('Compacting conversation', {
-      data: {
-        inputTokens: tokensBefore,
-        utilizationPercent: utilizationBefore,
-        contextWindow: this.config.contextWindow,
-      },
-    });
-
     return this.runClientCompaction(
       messages,
-      tokensBefore,
-      async (conversationMessages) => {
+      this.lastKnownInputTokens,
+      async (conversationMessages, compactionSystemPrompt) => {
         // System-prompt-swap: send conversation messages as-is with a
         // summarization system prompt. Apply provider-specific normalization
         // (e.g. DeepSeek's convertContentToString, mergeConsecutiveRoles) so
@@ -192,6 +172,7 @@ export class ModelHandlerOpenAI<
 
         const summaryParams = this.buildCompactionSummaryParams(
           normalizedConversation,
+          compactionSystemPrompt,
         );
         const summaryResponse = await client.chat.completions.create(
           summaryParams,
@@ -205,7 +186,7 @@ export class ModelHandlerOpenAI<
       },
       (summary) => ({
         role: 'user',
-        content: `${COMPACTION_SUMMARY_PREFIX}${summary}`,
+        content: summary,
       }),
     );
   }
@@ -269,11 +250,12 @@ export class ModelHandlerOpenAI<
 
   protected buildCompactionSummaryParams(
     conversationMessages: ChatCompletionMessageParam[],
+    systemPrompt: string,
   ): ChatCompletionSummaryParams {
     const summaryParams: ChatCompletionSummaryParams = {
       model: this.config.fullName,
       messages: [
-        { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         ...conversationMessages,
       ],
       max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
@@ -609,46 +591,15 @@ export class ModelHandlerOpenAI<
       tools,
     } = options;
 
-    // Phase 0: COMPACT - Check if conversation should be compacted
-    let updatedMessages: ChatCompletionMessageParam[] | undefined;
-    let messagesToUse = rawMessages;
-
-    if (this.shouldCompactByInputTokens(this.lastKnownInputTokens)) {
-      const isManual = this.compactionRequested;
-      // Clear manual flag immediately when attempted — matches Anthropic and
-      // OpenAI Responses handlers. Prevents infinite retry on graceful failure.
-      this.compactionRequested = false;
-
-      const threshold = this.getCompactionThresholdPercent();
-      if (isManual) {
-        this.logger.debug('Compacting conversation (manually requested)', {
-          data: { inputTokens: this.lastKnownInputTokens },
-        });
-      } else {
-        this.logger.debug(
-          'Compacting conversation (token threshold exceeded)',
-          {
-            data: {
-              inputTokens: this.lastKnownInputTokens,
-              thresholdPercent: threshold,
-              thresholdTokens: Math.floor(
-                (threshold / 100) * this.config.contextWindow,
-              ),
-            },
-          },
-        );
-      }
-
-      const { compactedMessages, didCompact } = await this.compactConversation(
-        client,
+    // Phase 0: COMPACT - Apply the shared trigger before building the request.
+    const { compactedMessages, didCompact } =
+      await this.maybeCompactByInputTokens(
         rawMessages,
-        signal,
+        this.lastKnownInputTokens,
+        () => this.compactConversation(client, rawMessages, signal),
       );
-      if (didCompact) {
-        messagesToUse = compactedMessages;
-        updatedMessages = compactedMessages;
-      }
-    }
+    const messagesToUse = didCompact ? compactedMessages : rawMessages;
+    const updatedMessages = didCompact ? compactedMessages : undefined;
 
     // Apply message normalization if subclass specifies options
     const normOptions = this.getMessageNormalizationOptions();
