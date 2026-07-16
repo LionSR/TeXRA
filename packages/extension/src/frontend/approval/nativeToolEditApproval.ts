@@ -406,16 +406,10 @@ export async function nativeRequestApproval(
         }
         const wasClosed = event.closed.some((tab) => {
           const input = tab.input;
-          if (
-            typeof vscode.TabInputTextDiff !== 'undefined' &&
-            input instanceof vscode.TabInputTextDiff
-          ) {
+          if (input instanceof vscode.TabInputTextDiff) {
             return input.modified.toString() === proposedUriStr;
           }
-          if (
-            typeof vscode.TabInputText !== 'undefined' &&
-            input instanceof vscode.TabInputText
-          ) {
+          if (input instanceof vscode.TabInputText) {
             return input.uri.toString() === proposedUriStr;
           }
           return false;

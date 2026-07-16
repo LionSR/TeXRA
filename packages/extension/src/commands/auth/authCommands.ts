@@ -4,7 +4,6 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { showSettingsView } from '@commands/settings';
-import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import {
   showLoggedErrorMessage,
@@ -118,14 +117,15 @@ export async function signIn(): Promise<boolean> {
       return true;
     }
 
-    const selected = await showQuickPick<SignInOption>({
-      title: 'TeXRA Sign In',
-      placeholder: 'Choose a sign-in method',
-      // VS Code 1.108+: explain what signing in grants. Ignored on older hosts.
-      prompt:
-        'Sign in to access AI models, remote agents, and TeXRA Researcher features',
-      items: getSignInOptions(),
-    });
+    const selected = await vscode.window.showQuickPick<SignInOption>(
+      getSignInOptions(),
+      {
+        title: 'TeXRA Sign In',
+        placeHolder: 'Choose a sign-in method',
+        prompt:
+          'Sign in to access AI models, remote agents, and TeXRA Researcher features',
+      },
+    );
     if (!selected) return false;
 
     if (selected.method === 'email') {
