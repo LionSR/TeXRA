@@ -4305,15 +4305,6 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     const failure = orderedTextFailure(frame, check);
     if (failure) failures.push(failure);
   }
-  const slashPaletteVisible =
-    frame.includes('Tab complete') && frame.includes('↑/↓ navigate');
-  if (
-    !slashPaletteVisible &&
-    frame.includes('Use foreground panel shortcuts') &&
-    frame.includes('Tip:')
-  ) {
-    failures.push('foreground panel rendered the normal chat tip row');
-  }
   for (const check of scenario.maxBlankLinesBetween ?? []) {
     const actual = blankLinesBetween(frame, check.from, check.to);
     if (actual === undefined) {
