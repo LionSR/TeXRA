@@ -295,12 +295,17 @@ export class ExecutionRegistry {
   ): boolean {
     if (this.handles.get(handle.executionId) !== handle) return false;
     const previous = this.streamStatus.get(handle.childStreamId);
-    const cause =
-      status === STREAM_PHASE.WAITING
-        ? 'wait'
-        : status === STREAM_PHASE.RUNNING && previous === STREAM_PHASE.WAITING
-          ? 'resume'
-          : 'lifecycle';
+    let cause: 'wait' | 'resume' | 'lifecycle';
+    if (status === STREAM_PHASE.WAITING) {
+      cause = 'wait';
+    } else if (
+      status === STREAM_PHASE.RUNNING &&
+      previous === STREAM_PHASE.WAITING
+    ) {
+      cause = 'resume';
+    } else {
+      cause = 'lifecycle';
+    }
     return this.streamStatus.transition(
       handle.childStreamId,
       status,

@@ -4,25 +4,25 @@
  * rendering. Formerly one file per concern under `dispatch/`.
  */
 import {
-  GLOBAL_ARGS,
-  GLOBAL_BOOL_FLAGS,
-  GLOBAL_VALUE_FLAGS,
-  HEADLESS_ONLY_GLOBAL_ARG_NAMES,
-} from './globalArgs';
-import {
   type ArgDef,
   type ArgsDef,
   type CommandDef,
   type CommandMeta,
   renderUsage,
 } from 'citty';
+import stripAnsi from 'strip-ansi';
+import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
+import { readCliAmbientState } from '@cli/runtime/cliContext';
 import {
   editDistance,
   typoSuggestionThreshold,
 } from '@utils/text/editDistance';
-import stripAnsi from 'strip-ansi';
-import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
-import { readCliAmbientState } from '@cli/runtime/cliContext';
+import {
+  GLOBAL_ARGS,
+  GLOBAL_BOOL_FLAGS,
+  GLOBAL_VALUE_FLAGS,
+  HEADLESS_ONLY_GLOBAL_ARG_NAMES,
+} from './globalArgs';
 
 // ---------------------------------------------------------------------------
 // cliError

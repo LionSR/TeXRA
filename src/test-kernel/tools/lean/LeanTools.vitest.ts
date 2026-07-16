@@ -2,20 +2,20 @@
 // resolution, external-tool status, lake command mutex). The LSP adapter,
 // server registry, and JSON-RPC connection keep their own suites.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { extractHoverText } from '@tools/lean/leanTypes';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { defaultResolveWorkspaceRoot } from '@tools/lean/direct/directLspAdapter';
+import { performance } from 'node:perf_hooks';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { findExternalToolDef } from '@tools/externalToolDefs';
+import { defaultResolveWorkspaceRoot } from '@tools/lean/direct/directLspAdapter';
 import {
   clearLeanServerRegistry,
   registerLeanServer,
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
-import { performance } from 'node:perf_hooks';
+import { extractHoverText } from '@tools/lean/leanTypes';
 import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
 
 // ---------------------------------------------------------------------------

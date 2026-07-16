@@ -303,12 +303,15 @@ export function textInputDisplayWindow({
     cursorRow === undefined
       ? 0
       : clampCursor(sourceCursor - cursorRow.start, cursorRowTextLength);
-  const ellipsisCursorColumn =
-    clipped && startRow > 0 && displayCursorRow === 0
-      ? firstRowEllipsisRemovedPrefixCodeUnits > 0
+  let ellipsisCursorColumn: number;
+  if (clipped && startRow > 0 && displayCursorRow === 0) {
+    ellipsisCursorColumn =
+      firstRowEllipsisRemovedPrefixCodeUnits > 0
         ? Math.max(1, cursorColumn - firstRowEllipsisRemovedPrefixCodeUnits + 1)
-        : cursorColumn + 1
-      : cursorColumn;
+        : cursorColumn + 1;
+  } else {
+    ellipsisCursorColumn = cursorColumn;
+  }
   const cursorPrefixLength = rowTexts
     .slice(0, displayCursorRow)
     .reduce((sum, row) => sum + row.length + 1, 0);

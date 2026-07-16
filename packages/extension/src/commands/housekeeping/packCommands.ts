@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports
-import type { FileOpResult } from '@shared/schemas/opResults';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import {
   parseWithErrorDisplay,
@@ -16,6 +15,7 @@ import {
   runPackRunDir,
 } from '@housekeeping';
 import * as logger from '@logger/logUtils';
+import type { FileOpResult } from '@shared/schemas/opResults';
 import { WorkspaceFS } from '@utils/files';
 import {
   FileOpParamsSchema,

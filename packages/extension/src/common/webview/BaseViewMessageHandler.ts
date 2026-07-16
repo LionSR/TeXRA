@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 
 // Local imports - common
 import * as logger from '@logger/logUtils';
+import { COMMON_COMMANDS } from '@shared/ipc';
 import {
   UnsupportedCommandError,
   type DispatcherFn,
@@ -11,7 +12,6 @@ import {
 } from '@shared/utils/dispatcher';
 
 // Local file imports
-import { COMMON_COMMANDS } from '@shared/ipc';
 
 type CommandMessage = { command: string };
 

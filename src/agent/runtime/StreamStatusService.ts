@@ -113,11 +113,14 @@ export class StreamStatusMachine {
     const previousState = this.phases.get(stream);
     const from = previousState?.phase;
     const fromReservation = this.reservations.has(stream);
-    const tableFrom = fromReservation
-      ? to === STREAM_PHASE.RUNNING
-        ? undefined
-        : STREAM_PHASE.RUNNING
-      : from;
+    let tableFrom: StreamPhase | undefined;
+    if (!fromReservation) {
+      tableFrom = from;
+    } else if (to === STREAM_PHASE.RUNNING) {
+      tableFrom = undefined;
+    } else {
+      tableFrom = STREAM_PHASE.RUNNING;
+    }
     if (!canTransitionStreamPhase(tableFrom, to, cause)) return false;
 
     this.reservations.delete(stream);

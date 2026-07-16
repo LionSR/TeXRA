@@ -118,14 +118,17 @@ function formatToolResultMarker(
   options: ConversationFormatOptions,
 ): string {
   const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
-  const inner = Array.isArray(content)
-    ? content
-        .map((block) => formatConversationBlock(block, options))
-        .join('\n')
-        .trim()
-    : typeof content === 'string'
-      ? content
-      : stringifyConversationValue(content);
+  let inner: string;
+  if (Array.isArray(content)) {
+    inner = content
+      .map((block) => formatConversationBlock(block, options))
+      .join('\n')
+      .trim();
+  } else if (typeof content === 'string') {
+    inner = content;
+  } else {
+    inner = stringifyConversationValue(content);
+  }
   return `[tool_result: ${truncate(inner, options.toolBlockLimit, marker)}]`;
 }
 

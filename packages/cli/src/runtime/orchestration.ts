@@ -318,16 +318,20 @@ function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
 export function buildModelAccessItems(
   status: CliModelAccessStatus,
 ): CliModelAccessItem[] {
+  let chatGptDescription: string;
+  if (status.active === 'chatgpt') {
+    chatGptDescription = `On · ${status.chatGptAccountLabel ?? 'your account'}`;
+  } else if (status.chatGptSignedIn) {
+    chatGptDescription = `Off · ${status.chatGptAccountLabel ?? 'your account'}`;
+  } else {
+    chatGptDescription = 'Sign in with ChatGPT Plus/Pro/Team';
+  }
+
   return [
     {
       value: 'chatgpt',
       label: 'Prefer ChatGPT subscription',
-      description:
-        status.active === 'chatgpt'
-          ? `On · ${status.chatGptAccountLabel ?? 'your account'}`
-          : status.chatGptSignedIn
-            ? `Off · ${status.chatGptAccountLabel ?? 'your account'}`
-            : 'Sign in with ChatGPT Plus/Pro/Team',
+      description: chatGptDescription,
     },
     {
       value: 'included',
