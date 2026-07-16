@@ -15,6 +15,7 @@ import {
   isBashApprovalBypassedForStream,
   proposalApprovals,
   setBashApprovalSessionBypass,
+  setDelegatedWorkApprovalBypasses,
   setToolEditApprovalSessionBypass,
   toggleBashApprovalSessionBypass,
 } from '@tools/approval';
@@ -169,6 +170,25 @@ describe('child subagent stream approval inheritance', () => {
     cleanupApprovalsForStream(parent);
 
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
+  });
+
+  it('super-YOLO on an inheriting child pins its own edit bypass', () => {
+    // `setDelegatedWorkApprovalBypasses` must write the child's own explicit
+    // tool-edit entry even when `isBypassed` already reports true via
+    // ancestry — otherwise the grant silently evaporates when the parent
+    // later re-gates its own edits while the child's proposal/bash stay on.
+    const { host } = createRecordingHost();
+    const parent = 'stream:parent-pin' as StreamTabId;
+    const child = 'stream:child-pin' as StreamTabId;
+    setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
+    inheritApprovalBypassesOnChildStream(child, parent);
+    expect(isApprovalBypassedForStream(child)).toBe(true);
+
+    setDelegatedWorkApprovalBypasses(child, true, host);
+    setToolEditApprovalSessionBypass(parent, false, host, { silent: true });
+
+    expect(isApprovalBypassedForStream(child)).toBe(true);
+    expect(isApprovalBypassedForStream(parent)).toBe(false);
   });
 
   it('does not let delegation ancestry also grant super-YOLO proposal bypass', () => {
