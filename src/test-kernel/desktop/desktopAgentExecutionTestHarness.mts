@@ -1,5 +1,5 @@
 // Third-party imports
-import { onTestFinished, vi } from 'vitest';
+import { onTestFinished } from 'vitest';
 
 // Local imports - desktop types
 import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';

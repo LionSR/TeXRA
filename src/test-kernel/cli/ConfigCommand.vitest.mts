@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { InvalidAgentTeamError } from '@agent/index';
 
 const mocks = vi.hoisted(() => ({
@@ -65,22 +66,8 @@ describe('CLI config command', () => {
       toolUseAgentKeys: [],
       unresolvedNames: [],
     });
-    stdoutSpy = vi
-      .spyOn(process.stdout, 'write')
-      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
-        const callback = rest.find((arg) => typeof arg === 'function') as
-          ((error?: Error | null) => void) | undefined;
-        callback?.(null);
-        return true;
-      }) as unknown as ReturnType<typeof vi.spyOn>;
-    stderrSpy = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
-        const callback = rest.find((arg) => typeof arg === 'function') as
-          ((error?: Error | null) => void) | undefined;
-        callback?.(null);
-        return true;
-      }) as unknown as ReturnType<typeof vi.spyOn>;
+    stdoutSpy = spyOnStreamWrite(process.stdout);
+    stderrSpy = spyOnStreamWrite(process.stderr);
   });
 
   afterEach(() => {

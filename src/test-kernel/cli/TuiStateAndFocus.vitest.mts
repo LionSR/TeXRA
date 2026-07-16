@@ -86,7 +86,6 @@ import {
   moveLocalTranscriptToStream,
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
-import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -1989,13 +1988,6 @@ describe('CLI transcript state', () => {
 });
 
 describe('subscribeRuntimeHost.updateActiveProcesses', () => {
-  function makeHost(): CliRuntimeHost {
-    return {
-      emit: () => {},
-      close: async () => {},
-    } as unknown as CliRuntimeHost;
-  }
-
   const runningProcessA: ActiveChildInfo = {
     kind: 'process',
     executionId: 'exec-a',

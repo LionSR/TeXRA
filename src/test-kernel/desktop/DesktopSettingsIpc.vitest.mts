@@ -1,5 +1,4 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
