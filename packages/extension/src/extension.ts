@@ -14,6 +14,7 @@ import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
 import { StreamLogStore } from '@transcript';
+import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
@@ -83,10 +84,7 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
 import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
-import {
-  createSharedStorageProvider,
-  migrateLegacyVscodeStorage,
-} from '@frontend/vscode/sharedStorageRoot';
+import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
@@ -181,7 +179,9 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     return;
   }
-  const workspaceRoot = workspaceFolders[0].uri.fsPath;
+  const workspace = new VscodeWorkspace();
+  const workspaceRoot = workspace.getWorkspacePath();
+  if (!workspaceRoot) return;
 
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
@@ -217,14 +217,16 @@ export async function activate(context: vscode.ExtensionContext) {
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622). Legacy `storageUri` data must finish moving before initPlatform()
   // makes the shared root reachable to readers.
-  const storage = createSharedStorageProvider();
+  const storage = createNodeStorageProvider({
+    workspacePath: () => workspace.getWorkspacePath(),
+  });
   await migrateLegacyVscodeStorage(context, storage);
   initPlatform({
     config: new VscodeConfigProvider(),
     globalState: context.globalState,
     workspaceState: workspaceSM,
     fs: new VscodeFileSystem(),
-    workspace: new VscodeWorkspace(),
+    workspace,
     storage,
     secrets: new VscodeSecrets(context),
     lifecycle,

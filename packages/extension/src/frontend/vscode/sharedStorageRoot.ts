@@ -9,16 +9,11 @@
  * the storage port moves — Memento state, secrets, and `.vscode/settings.json`
  * config stay VS Code-native.
  */
-// Node imports
-import { realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 // VS Code imports
 import * as vscode from 'vscode';
 
 // Local imports - platform
 import { mergeLegacyStorageBucket } from '@platform/defaults/legacyDataMigration';
-import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import {
   LEGACY_RUNS_STORAGE_DIR,
   MEMORY_STORAGE_DIR,
@@ -28,41 +23,8 @@ import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - frontend
-import { VscodeWorkspace } from './vscodeWorkspace';
-
 // Type imports
 import type { StorageProvider } from '@platform/interfaces';
-
-const vscodeWorkspace = new VscodeWorkspace();
-
-/**
- * Workspace identity string hashed into the `~/.texra/workspace-storage`
- * bucket id. It must be byte-identical to what the CLI hashes for the same
- * folder (`realpath(process.cwd())`, falling back to the raw path — see
- * `cliContext.ts`), or the hosts land in different buckets: canonicalize
- * symlinks the same way, and normalize the Windows drive letter that VS
- * Code's `Uri.fsPath` lower-cases while Node reports it upper-case.
- */
-export function sharedStorageWorkspacePath(): string | undefined {
-  const fsPath = vscodeWorkspace.getWorkspacePath();
-  if (!fsPath) return undefined;
-  let canonical = resolve(fsPath);
-  try {
-    canonical = realpathSync(canonical);
-  } catch {
-    // Keep the resolved path — mirrors the CLI's realpath fallback.
-  }
-  return /^[a-z]:/.test(canonical)
-    ? `${canonical.charAt(0).toUpperCase()}${canonical.slice(1)}`
-    : canonical;
-}
-
-export function createSharedStorageProvider(): StorageProvider {
-  return createNodeStorageProvider({
-    workspacePath: sharedStorageWorkspacePath,
-  });
-}
 
 /**
  * Collections merged one child at a time when the shared bucket already holds

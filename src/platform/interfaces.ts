@@ -139,7 +139,7 @@ export interface FileSystemProvider {
  * Platform workspace provider interface.
  */
 export interface WorkspaceProvider {
-  /** The workspace root path, or undefined if none is open. */
+  /** The canonical physical workspace root, or undefined if none is open. */
   getWorkspacePath(): string | undefined;
 
   /**

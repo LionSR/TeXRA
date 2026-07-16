@@ -1,0 +1,43 @@
+// Node imports
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+
+// Third-party imports
+import { afterEach, describe, expect, it } from 'vitest';
+
+// Local imports - platform
+import {
+  canonicalizeWorkspacePath,
+  createNodeWorkspace,
+} from '@platform/defaults/nodeWorkspace';
+
+describe('Node workspace identity', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      tempDirs
+        .splice(0)
+        .map((path) => rm(path, { recursive: true, force: true })),
+    );
+  });
+
+  it('uses the physical directory for a symlinked workspace', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'texra-node-workspace-'));
+    tempDirs.push(root);
+    const target = join(root, 'target');
+    const link = join(root, 'link');
+    await mkdir(target);
+    await symlink(target, link, 'dir');
+
+    const canonical = await realpath(link);
+    expect(canonicalizeWorkspacePath(link)).toBe(canonical);
+    expect(createNodeWorkspace(() => link).getWorkspacePath()).toBe(canonical);
+  });
+
+  it('keeps a resolved path when realpath is unavailable', () => {
+    const missing = join(tmpdir(), `texra-missing-${Date.now()}`);
+    expect(canonicalizeWorkspacePath(missing)).toBe(resolve(missing));
+  });
+});
