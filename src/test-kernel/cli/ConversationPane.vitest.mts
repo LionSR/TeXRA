@@ -468,6 +468,27 @@ describe('CLI conversation transcript splitting', () => {
     );
   });
 
+  it('keeps bounded rich display rows unwrapped', () => {
+    const baseTool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'x'.repeat(40));
+    const baseProcess = processEntry('p1');
+    const process: ConversationEntry = {
+      ...baseProcess,
+      process: {
+        ...baseProcess.process,
+        tailLines: ['y'.repeat(40)],
+      },
+    };
+
+    for (const item of [baseTool, process]) {
+      const live = transcriptEntryLayout(item, { mode: 'live', width: 20 });
+      const bounded = boundedTranscriptEntryLayout(
+        transcriptEntryLayout(item, { mode: 'bounded', width: 20 }),
+        10,
+      );
+      expect(bounded.lines).toEqual(live.lines);
+    }
+  });
+
   it('budgets live user prompt bands with their margin rows', () => {
     const user = entry('u1', 'user', 'why do you write as a latex?', true);
 

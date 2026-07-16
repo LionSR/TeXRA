@@ -182,13 +182,17 @@ function entryLines(
       const lines = toolUseDisplayLines(entry.toolUse, {
         elide: mode !== 'viewer' && mode !== 'scrollback-budget',
       });
-      // The live rich renderer keeps each tool display line on one terminal
-      // row. Other modes paint the descriptor's text projection directly.
-      return mode === 'live' ? lines : wrapDisplayLines(lines, columns);
+      // Rich rows and their bounded fallback keep each display line on one
+      // terminal row. Other modes paint the wrapped text projection directly.
+      return mode === 'live' || mode === 'bounded'
+        ? lines
+        : wrapDisplayLines(lines, columns);
     }
     case 'process': {
       const lines = completedProcessDisplayLines(entry.process);
-      return mode === 'live' ? lines : wrapDisplayLines(lines, columns);
+      return mode === 'live' || mode === 'bounded'
+        ? lines
+        : wrapDisplayLines(lines, columns);
     }
     default: {
       const geometry = ROLE_GEOMETRY[entry.role];
