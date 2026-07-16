@@ -72,18 +72,27 @@ describe('workflow-script completed journal cost', () => {
     expect(sumCompletedWorkflowJournalCost([entry(0, result)])).toBe(0);
   });
 
-  it('counts live replacements when prior keys move to different indices', () => {
-    const prior = [
-      entry(2, workflowResult(1), 'aaaaaaaaaaaaaaaa'),
-      entry(3, workflowResult(0.8), 'bbbbbbbbbbbbbbbb'),
+  it('charges a live replacement but not stable recoveries moved to new indices', () => {
+    const priorA = entry(2, workflowResult(1), 'aaaaaaaaaaaaaaaa');
+    const priorB = entry(3, workflowResult(0.8), 'bbbbbbbbbbbbbbbb');
+    const priorReplaced = entry(4, workflowResult(0.6), 'dddddddddddddddd');
+    const recoveredAfterReorder = [
+      entry(priorA.index, priorB.result, priorB.key),
+      entry(priorB.index, priorA.result, priorA.key),
     ];
-    const settledEntries = new Set(prior.map(workflowJournalEntryCostIdentity));
-    const retry = [
-      entry(2, workflowResult(0.85), 'bbbbbbbbbbbbbbbb'),
-      entry(3, workflowResult(1.05), 'aaaaaaaaaaaaaaaa'),
-    ];
+    const liveReplacement = entry(
+      priorReplaced.index,
+      workflowResult(0.45),
+      'cccccccccccccccc',
+    );
+    const retry = [...recoveredAfterReorder, liveReplacement];
 
-    expect(sumCompletedWorkflowJournalCost(retry, settledEntries)).toBe(1.9);
+    expect(
+      sumCompletedWorkflowJournalCost(
+        retry,
+        new Set([workflowJournalEntryCostIdentity(liveReplacement)]),
+      ),
+    ).toBe(0.45);
   });
 
   it.each([

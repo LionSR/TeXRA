@@ -45,13 +45,12 @@ export function workflowJournalEntryCostIdentity(
 
 /**
  * Sum completed logical-call cost; failed and cancelled attempts are not
- * journaled. Every entry is validated, but entries in `excludeEntries`
- * (journaled by a prior attempt, whose cost that attempt already settled)
- * do not count toward the total.
+ * journaled. Every entry is validated; when `executedEntries` is supplied,
+ * only entries whose native child cost callback fired count toward the total.
  */
 export function sumCompletedWorkflowJournalCost(
   journal: readonly WorkflowJournalEntry[],
-  excludeEntries: ReadonlySet<string> = new Set(),
+  executedEntries?: ReadonlySet<string>,
 ): number {
   let total = 0;
   for (const entry of journal) {
@@ -61,7 +60,10 @@ export function sumCompletedWorkflowJournalCost(
         cause: result.error,
       });
     }
-    if (!excludeEntries.has(workflowJournalEntryCostIdentity(entry))) {
+    if (
+      executedEntries === undefined ||
+      executedEntries.has(workflowJournalEntryCostIdentity(entry))
+    ) {
       total += result.data.cost;
     }
   }

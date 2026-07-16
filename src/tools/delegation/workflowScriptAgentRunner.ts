@@ -2,6 +2,7 @@
 import { resolveChildRunOutput } from '@agent/storage';
 import {
   WorkflowRunAbortError,
+  type WorkflowAgentInvocation,
   type WorkflowAgentRunner,
 } from '@agent/workflowScript';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
@@ -62,7 +63,10 @@ export function createWorkflowScriptAgentRunner(
   checkpointId: string,
   hooks?: {
     /** Fires per live child on success and failure with its total cost. */
-    readonly onCost?: (totalCostUsd: number | undefined) => void;
+    readonly onCost?: (
+      invocation: WorkflowAgentInvocation,
+      totalCostUsd: number | undefined,
+    ) => void;
   },
 ): WorkflowAgentRunner {
   const { runScope } = parent;
@@ -130,7 +134,7 @@ export function createWorkflowScriptAgentRunner(
                 runScope.session,
               );
             },
-            onCost: hooks?.onCost,
+            onCost: (totalCostUsd) => hooks?.onCost?.(invocation, totalCostUsd),
           };
         },
       });
