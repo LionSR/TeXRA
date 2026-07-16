@@ -14,6 +14,7 @@ import {
   type StreamSubstate,
   type StreamTabId,
   type TokenUsageStats,
+  type UsageRoute,
 } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { isActivePhase } from '@shared/streams/streamStatus';
@@ -145,13 +146,40 @@ function effectiveContextWindow(
 ): number | undefined {
   if (usage.usageRoute === 'chatgpt-subscription') {
     const config = getRuntimeModelConfig(model);
-    const capped = config
+    return config
       ? resolveProviderCapabilities({ model: config, useOpenRouter: false })
           ?.contextWindow
       : undefined;
-    if (capped) return capped;
   }
   return MODEL_CONFIGS[model]?.contextWindow;
+}
+
+function accessModeSegment({
+  apiMode,
+  subscriptionActive,
+  usageRoute,
+}: {
+  readonly apiMode: string;
+  readonly subscriptionActive?: boolean;
+  readonly usageRoute?: UsageRoute;
+}): StatusBarSegment {
+  let label: string;
+  switch (usageRoute) {
+    case 'chatgpt-subscription':
+      label = 'subscription';
+      break;
+    case 'relay':
+      label = 'included';
+      break;
+    case 'api-key':
+      label = 'personal';
+      break;
+    default:
+      label = subscriptionActive ? 'subscription' : apiMode;
+  }
+  return label === 'subscription'
+    ? { text: label, color: COLOR_HINT, compactText: 'sub' }
+    : { text: label, color: 'dim' };
 }
 
 function formatUsage(
@@ -838,9 +866,11 @@ export function buildStatusBarDisplay(
   if (rootActive) left.push(rootActive);
 
   left.push(
-    input.subscriptionActive
-      ? { text: 'subscription', color: COLOR_HINT, compactText: 'sub' }
-      : { text: input.apiMode, color: 'dim' },
+    accessModeSegment({
+      apiMode: input.apiMode,
+      subscriptionActive: input.subscriptionActive,
+      usageRoute: input.usage?.usageRoute,
+    }),
   );
   const policy = approvalPolicySegment(input.approvalPolicy);
   if (policy) left.push(policy);

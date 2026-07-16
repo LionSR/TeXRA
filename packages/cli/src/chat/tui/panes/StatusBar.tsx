@@ -80,12 +80,14 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     streams,
   });
   const statusSlice = target.displaySlice;
+  const selectedModel = statusSlice?.model ?? sessionMeta.model;
+  const selectedCategory = statusSlice?.category;
 
-  // Whether the active model is currently routing through the ChatGPT
-  // subscription (preference + eligibility + signed in). Kept in polled state
-  // rather than read on every render: the poll re-reads the preference so an
-  // external config change is reflected within the interval, and an in-process
-  // `/subscription` toggle bumps `codexPreferenceVersion` to refresh at once.
+  // Whether the selected stream's model/category would currently route through
+  // the ChatGPT subscription (preference + eligibility + signed in). The
+  // completed usage snapshot supersedes this prospective value in the display.
+  // Polling re-reads external config changes; an in-process `/subscription`
+  // toggle also bumps `codexPreferenceVersion` for an immediate refresh.
   const codexPreferenceVersion = useSignal(codexPreferenceVersionSignal);
   const [subscriptionActive, setSubscriptionActive] = useState(false);
 
@@ -95,7 +97,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     const refresh = (): void => {
       if (inFlight) return; // Skip if the previous read has not resolved.
       inFlight = true;
-      void isCodexSubscriptionActive(sessionMeta.model)
+      void isCodexSubscriptionActive(selectedModel, selectedCategory)
         .then((active) => {
           if (!cancelled) setSubscriptionActive(active);
         })
@@ -113,7 +115,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       cancelled = true;
       clearInterval(refreshTimer);
     };
-  }, [sessionMeta.model, codexPreferenceVersion]);
+  }, [codexPreferenceVersion, selectedCategory, selectedModel]);
 
   const runStartedAt = isActivePhase(statusSlice?.status)
     ? statusSlice?.runStartedAt
@@ -148,7 +150,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     agentSelectionAvailable: props.agentSelectionAvailable,
     subagentControlsAvailable: props.subagentControlsAvailable,
     sessionNavigationAvailable: props.sessionNavigationAvailable,
-    model: sessionMeta.model,
+    model: selectedModel,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
     transcriptMode: sessionMeta.transcriptMode,
     subscriptionActive,

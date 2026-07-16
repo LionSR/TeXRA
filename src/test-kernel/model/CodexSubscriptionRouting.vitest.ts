@@ -96,6 +96,12 @@ describe('ChatGPT subscription model routing', () => {
         undefined,
       ),
     ).toBeNull();
+    await expect(
+      isCodexSubscriptionActive('gpt55', AgentCategory.Workflow),
+    ).resolves.toBe(false);
+    await expect(
+      isCodexSubscriptionActive('gpt55', AgentCategory.ToolUse),
+    ).resolves.toBe(true);
   });
 
   it('reports eligible models inactive while signed out', async () => {
