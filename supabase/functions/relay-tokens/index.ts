@@ -20,10 +20,11 @@
  */
 
 import { Hono, type Context as HonoContext } from '@hono/hono';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { randomBase64Url } from '../_shared/crypto.ts';
+import { createEdgeClient } from '../_shared/edgeClients.ts';
 import { RELAY_CI_TOKEN_PREFIX, sha256Hex } from '../_shared/relayCiToken.ts';
 import { versionedJsonResponse } from '../_shared/responses.ts';
 
@@ -49,12 +50,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-const adminSupabase =
-  supabaseUrl && supabaseServiceKey
-    ? createClient<any>(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-    : null;
+const adminSupabase = createEdgeClient(supabaseUrl, supabaseServiceKey);
 
 // =============================================================================
 // Hono App
