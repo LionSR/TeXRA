@@ -2,6 +2,7 @@ import { writeSync } from 'node:fs';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
   installTerminalRestoreOnExit,
   setTerminalTitle,
@@ -17,6 +18,19 @@ vi.mock('node:fs', async (importOriginal) => ({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // `writeSync` is a vi.fn() created inside the vi.mock() factory above, not
+  // a vi.spyOn() wrapping a real implementation — restoreAllMocks() has no
+  // "original" to restore it to and leaves its call history untouched, so
+  // clear it explicitly or a later test's `not.toHaveBeenCalled()` sees an
+  // earlier test's call.
+  vi.mocked(writeSync).mockClear();
+  terminalCapabilities.set({
+    kittyKeyboard: false,
+    graphemeClusters: false,
+    bracketedPaste: false,
+    oscColorReports: false,
+    discovered: false,
+  });
 });
 
 describe('terminalTitleText', () => {
@@ -38,10 +52,32 @@ describe('terminalTitleText', () => {
 });
 
 describe('setTerminalTitle', () => {
-  it('writes an OSC 0 title sequence for the project folder', () => {
+  it('writes an OSC 0 title sequence on an OSC-capable terminal', () => {
+    terminalCapabilities.set({
+      kittyKeyboard: false,
+      graphemeClusters: false,
+      bracketedPaste: false,
+      oscColorReports: true,
+      discovered: true,
+    });
+
     setTerminalTitle('/Users/ray/projects/coauthor');
 
     expect(writeSync).toHaveBeenCalledWith(1, '\x1b]0;TeXRA — coauthor\x07');
+  });
+
+  it('leaves the title alone on a terminal that never acknowledged OSC support', () => {
+    terminalCapabilities.set({
+      kittyKeyboard: false,
+      graphemeClusters: false,
+      bracketedPaste: false,
+      oscColorReports: false,
+      discovered: true,
+    });
+
+    setTerminalTitle('/Users/ray/projects/coauthor');
+
+    expect(writeSync).not.toHaveBeenCalled();
   });
 });
 
