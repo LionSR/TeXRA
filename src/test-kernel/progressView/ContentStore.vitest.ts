@@ -57,4 +57,29 @@ describe('createContentStore', () => {
 
     expect(store.get(id)).toBeUndefined();
   });
+
+  it('resolves object values re-registered as structurally-equal-but-distinct references to the same ID and content', () => {
+    // Mirrors proposalInputStore's usage: each call passes a freshly parsed
+    // object, so the write-guard's reference-equality check always re-sets
+    // rather than skipping — verify that still resolves correctly.
+    interface Proposal {
+      readonly title: string;
+      readonly steps: readonly string[];
+    }
+    const store = createContentStore<Proposal>({
+      max: 10,
+      prefix: 'proposal',
+      serialize: (proposal) => JSON.stringify(proposal),
+    });
+
+    const first: Proposal = { title: 'demo', steps: ['a', 'b'] };
+    const second: Proposal = { title: 'demo', steps: ['a', 'b'] };
+    expect(first).not.toBe(second);
+
+    const id1 = store.register(first);
+    const id2 = store.register(second);
+
+    expect(id1).toBe(id2);
+    expect(store.get(id1)).toEqual({ title: 'demo', steps: ['a', 'b'] });
+  });
 });
