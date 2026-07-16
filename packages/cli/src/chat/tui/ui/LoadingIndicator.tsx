@@ -1,7 +1,7 @@
 // Shared "work in progress" row for async transient states (list-form data
 // fetches, /api status loading). Animated off the shared 1 Hz ticker
-// (useLiveNowMs) — the same pattern ConversationPane's `ThinkingRow` uses for
-// the hidden-reasoning liveness row — instead of an autonomous per-component
+// (useLiveNowMs) — the same pattern ConversationPane's `LivenessRow` uses for
+// the active-run liveness row — instead of an autonomous per-component
 // interval. Replaces `@inkjs/ui`'s `<Spinner>`, whose own ~80ms `setInterval`
 // (driven by `cli-spinners`) runs completely outside the shared clock: the
 // exact per-component-interval anti-pattern the shared clock exists to avoid.
