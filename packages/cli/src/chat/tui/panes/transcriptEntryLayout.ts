@@ -179,14 +179,15 @@ function entryLines(
           }).split('\n')
         : wrapWithPrefix(entry.text, columns, '', '');
     case 'tool': {
+      const richProjection =
+        mode === 'live' || mode === 'bounded' || mode === 'scrollback-budget';
       const lines = toolUseDisplayLines(entry.toolUse, {
         elide: mode !== 'viewer' && mode !== 'scrollback-budget',
+        ...(richProjection ? { width: columns } : {}),
       });
       // Rich rows and their bounded fallback keep each display line on one
       // terminal row. Other modes paint the wrapped text projection directly.
-      return mode === 'live' || mode === 'bounded'
-        ? lines
-        : wrapDisplayLines(lines, columns);
+      return richProjection ? lines : wrapDisplayLines(lines, columns);
     }
     case 'process': {
       const lines = completedProcessDisplayLines(entry.process);
@@ -221,9 +222,7 @@ export function transcriptEntryLayout(
   } = {},
 ): TranscriptEntryLayout {
   const base = ROLE_GEOMETRY[entry.role];
-  // The bounded tool fallback historically uses a one-column Ink gutter; the
-  // rich unbounded tool renderer owns its own per-line indentation.
-  const inset = entry.role === 'tool' && mode === 'bounded' ? 2 : base.inset;
+  const inset = base.inset;
   const isInquiryContinuation =
     entry.role === 'user' && isInquiryContinuationText(entry.text);
   const marginTopRows = isInquiryContinuation ? 0 : base.marginTopRows;
