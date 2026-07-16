@@ -17,7 +17,7 @@ import {
 
 /** Optional lifecycle callbacks a tool call may be given, grouped since they
  *  vary together by call site rather than independently. */
-export interface ToolCallHooks {
+interface ToolCallHooks {
   /** Called by tools with approval flows to trigger in-progress log after approval. */
   onExecutionReady?: () => void;
   /** Called by tools to push partial output for live streaming to the UI. */
