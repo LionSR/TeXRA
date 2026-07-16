@@ -116,9 +116,9 @@ async function writeHistoryConfig(): Promise<void> {
 }
 
 async function writeForeignLease(executionId: string): Promise<void> {
-  await StorageFS.ensureDir(`executionLeases/${executionId}`);
+  await StorageFS.ensureDir('executionLeases');
   await StorageFS.writeAtomic(
-    `executionLeases/${executionId}/lease.json`,
+    `executionLeases/${executionId}.json`,
     JSON.stringify({
       version: 1,
       executionId,
@@ -199,7 +199,7 @@ describe('DesktopHistoryHandlers', () => {
       HISTORY_CONFIG,
     );
     expect(showInfoMessage).toHaveBeenCalledWith(
-      'Cannot delete an execution that is active in another TeXRA host',
+      'Cannot delete an execution that is active in TeXRA',
     );
     expect(postToRenderer).not.toHaveBeenCalled();
   });

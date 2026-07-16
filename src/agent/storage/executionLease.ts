@@ -15,7 +15,6 @@ import { StorageFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ExecutionLease';
-const LEASE_FILE_NAME = 'lease.json';
 const LOCK_STALE_MS = 10_000;
 const LOCK_RETRIES = {
   retries: 8,
@@ -25,8 +24,8 @@ const LOCK_RETRIES = {
   randomize: true,
 } as const;
 
-/** A host that misses four heartbeats is no longer considered live. */
-export const EXECUTION_LEASE_STALE_MS = 60_000;
+/** A host that misses eight heartbeats is no longer considered live. */
+export const EXECUTION_LEASE_STALE_MS = 120_000;
 const EXECUTION_LEASE_HEARTBEAT_MS = 15_000;
 
 const LeaseExecutionIdSchema = z
@@ -53,7 +52,6 @@ interface OwnedExecutionLease {
   readonly executionId: ExecutionId;
   readonly ownerToken: string;
   readonly storageRoot: string;
-  readonly timer: ReturnType<typeof setInterval>;
 }
 
 export type ExecutionLeasePresence =
@@ -67,12 +65,13 @@ export class ExecutionLeaseActiveError extends Error {
     readonly executionId: ExecutionId,
     readonly heartbeatAt: number,
   ) {
-    super(`Execution ${executionId} is active in another TeXRA host.`);
+    super(`Execution ${executionId} is active in TeXRA.`);
     this.name = 'ExecutionLeaseActiveError';
   }
 }
 
 const ownedLeases = new Map<string, OwnedExecutionLease>();
+let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
 function storageRoot(): string {
   return platform().storage.getStoragePath();
@@ -82,16 +81,17 @@ function ownershipKey(root: string, executionId: ExecutionId): string {
   return `${root}\0${executionId}`;
 }
 
-function leaseDirectory(executionId: ExecutionId): string {
+function leaseRelativePath(executionId: ExecutionId): string {
   const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
-  return `${WORKSPACE_STORAGE_LAYOUT.executionLeases}/${safeExecutionId}`;
+  return `${WORKSPACE_STORAGE_LAYOUT.executionLeases}/${safeExecutionId}.json`;
 }
 
 function leasePath(root: string, executionId: ExecutionId): string {
-  return path.join(root, leaseDirectory(executionId), LEASE_FILE_NAME);
+  return path.join(root, leaseRelativePath(executionId));
 }
 
-function coordinationDirectory(root: string, executionId: ExecutionId): string {
+function coordinationPath(root: string, executionId: ExecutionId): string {
+  const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
   const storageKey = createHash('sha256')
     .update(root)
     .digest('hex')
@@ -100,7 +100,7 @@ function coordinationDirectory(root: string, executionId: ExecutionId): string {
     tmpdir(),
     'texra-execution-lease-locks',
     storageKey,
-    executionId,
+    safeExecutionId,
   );
 }
 
@@ -141,11 +141,12 @@ async function withLeaseLock<T>(
   operation: () => Promise<T>,
   root: string = storageRoot(),
 ): Promise<T> {
-  const relativeDirectory = leaseDirectory(executionId);
-  await StorageFS.ensureDir(path.join(root, relativeDirectory));
-  const absoluteDirectory = coordinationDirectory(root, executionId);
-  await mkdir(absoluteDirectory, { recursive: true });
-  const release = await lock(absoluteDirectory, {
+  await StorageFS.ensureDir(
+    path.join(root, WORKSPACE_STORAGE_LAYOUT.executionLeases),
+  );
+  const coordinationFile = coordinationPath(root, executionId);
+  await mkdir(path.dirname(coordinationFile), { recursive: true });
+  const release = await lock(coordinationFile, {
     realpath: false,
     stale: LOCK_STALE_MS,
     retries: LOCK_RETRIES,
@@ -162,9 +163,12 @@ function isFresh(record: ExecutionLeaseRecord, now: number): boolean {
 }
 
 function forgetOwnedLease(lease: OwnedExecutionLease): void {
-  clearInterval(lease.timer);
   const key = ownershipKey(lease.storageRoot, lease.executionId);
   if (ownedLeases.get(key) === lease) ownedLeases.delete(key);
+  if (ownedLeases.size === 0 && heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = undefined;
+  }
 }
 
 async function heartbeat(lease: OwnedExecutionLease): Promise<void> {
@@ -190,23 +194,26 @@ function rememberOwnership(
   ownerToken: string,
   root: string,
 ): void {
-  const timer = setInterval(() => {
-    void heartbeat(lease).catch((error: unknown) => {
-      logger.warn(
-        CHANNEL,
-        `Failed to heartbeat execution ${executionId}: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-    });
-  }, EXECUTION_LEASE_HEARTBEAT_MS);
-  timer.unref();
   const lease: OwnedExecutionLease = {
     executionId,
     ownerToken,
     storageRoot: root,
-    timer,
   };
   ownedLeases.set(ownershipKey(root, executionId), lease);
+  if (!heartbeatTimer) {
+    heartbeatTimer = setInterval(() => {
+      for (const owned of ownedLeases.values()) {
+        void heartbeat(owned).catch((error: unknown) => {
+          logger.warn(
+            CHANNEL,
+            `Failed to heartbeat execution ${owned.executionId}: ${toErrorMessage(error)}`,
+            { data: error },
+          );
+        });
+      }
+    }, EXECUTION_LEASE_HEARTBEAT_MS);
+    heartbeatTimer.unref();
+  }
 }
 
 async function acquireExecutionLease(
@@ -266,11 +273,15 @@ export function acquireResumedExecutionLease(
 export async function releaseOwnedExecutionLease(
   executionId: ExecutionId,
 ): Promise<void> {
-  const root = storageRoot();
-  const key = ownershipKey(root, executionId);
-  const ownership = ownedLeases.get(key);
-  if (!ownership) return;
+  const ownerships = [...ownedLeases.values()].filter(
+    (lease) => lease.executionId === executionId,
+  );
+  await Promise.all(ownerships.map(releaseOwnership));
+}
 
+async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
+  const root = ownership.storageRoot;
+  const { executionId } = ownership;
   try {
     await withLeaseLock(
       executionId,

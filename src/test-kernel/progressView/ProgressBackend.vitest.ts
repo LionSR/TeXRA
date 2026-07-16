@@ -164,9 +164,9 @@ async function writeExecutionConfig(executionId: ExecutionId): Promise<void> {
 async function writeForeignExecutionLease(
   executionId: ExecutionId,
 ): Promise<void> {
-  await StorageFS.ensureDir(`executionLeases/${executionId}`);
+  await StorageFS.ensureDir('executionLeases');
   await StorageFS.writeAtomic(
-    `executionLeases/${executionId}/lease.json`,
+    `executionLeases/${executionId}.json`,
     JSON.stringify({
       version: 1,
       executionId,
@@ -1882,7 +1882,7 @@ describe('ProgressBackend', () => {
       expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
       expect(GoalStore.getForStream(stream)).not.toBeNull();
     } finally {
-      await StorageFS.delete(`executionLeases/${executionId}/lease.json`).catch(
+      await StorageFS.delete(`executionLeases/${executionId}.json`).catch(
         () => {},
       );
       await GoalStore.forget(stream);

@@ -23,7 +23,7 @@ import { StorageFS } from '@utils/files';
 const ownedExecutionIds = new Set<ExecutionId>();
 
 function leasePath(executionId: ExecutionId): string {
-  return `executionLeases/${executionId}/lease.json`;
+  return `executionLeases/${executionId}.json`;
 }
 
 async function writeForeignLease(
@@ -31,7 +31,7 @@ async function writeForeignLease(
   heartbeatAt: number,
   ownerToken = '00000000-0000-4000-8000-000000000001',
 ): Promise<void> {
-  await StorageFS.ensureDir(`executionLeases/${executionId}`);
+  await StorageFS.ensureDir('executionLeases');
   await StorageFS.writeAtomic(
     leasePath(executionId),
     JSON.stringify({
@@ -97,7 +97,7 @@ describe('cross-process execution leases', () => {
   it('fails closed when present lease state is malformed', async () => {
     const executionId = 'c8644c' as ExecutionId;
     await writeExecution(executionId);
-    await StorageFS.ensureDir(`executionLeases/${executionId}`);
+    await StorageFS.ensureDir('executionLeases');
     await StorageFS.writeAtomic(leasePath(executionId), '{"version":1}');
 
     await expect(deleteExecution(executionId)).rejects.toThrow(

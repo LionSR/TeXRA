@@ -20,6 +20,15 @@ vi.mock('@agent/storage/ExecutionKVStore', () => ({
   getExecutionStore: vi.fn(() => ({ clear: mocks.clear })),
 }));
 
+vi.mock('@agent/storage/executionLease', () => ({
+  runWithExecutionDeletionGuard: vi.fn(
+    async (_executionId: ExecutionId, operation: () => Promise<unknown>) => ({
+      status: 'performed',
+      value: await operation(),
+    }),
+  ),
+}));
+
 // Imported after vi.mock so the mocked ExecutionKVStore is in place.
 // eslint-disable-next-line import/order
 import { deleteExecution } from '@agent/storage/executionListing';
@@ -30,13 +39,16 @@ beforeEach(() => {
 });
 
 describe('deleteExecution', () => {
-  it('returns false without calling clear when the execution directory is missing', async () => {
+  it('reports not-found without calling clear when the execution directory is missing', async () => {
     mocks.exists.mockResolvedValue(false);
     mocks.clear.mockResolvedValue(undefined);
 
-    await expect(deleteExecution('deadbeef0000' as ExecutionId)).resolves.toBe(
-      false,
-    );
+    await expect(
+      deleteExecution('deadbeef0000' as ExecutionId),
+    ).resolves.toEqual({
+      status: 'not-found',
+      executionId: 'deadbeef0000',
+    });
 
     // The probe asked about the right path.
     expect(mocks.exists).toHaveBeenCalledWith('executions/deadbeef0000');
@@ -45,13 +57,16 @@ describe('deleteExecution', () => {
     expect(mocks.clear).not.toHaveBeenCalled();
   });
 
-  it('returns true and clears storage when the execution directory exists', async () => {
+  it('reports deletion and clears storage when the execution directory exists', async () => {
     mocks.exists.mockResolvedValue(true);
     mocks.clear.mockResolvedValue(undefined);
 
-    await expect(deleteExecution('a73039a36ec9' as ExecutionId)).resolves.toBe(
-      true,
-    );
+    await expect(
+      deleteExecution('a73039a36ec9' as ExecutionId),
+    ).resolves.toEqual({
+      status: 'deleted',
+      executionId: 'a73039a36ec9',
+    });
     expect(mocks.clear).toHaveBeenCalledTimes(1);
   });
 });
