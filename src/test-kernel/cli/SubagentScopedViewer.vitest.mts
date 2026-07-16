@@ -1,43 +1,120 @@
 import { describe, expect, it } from 'vitest';
 
+import { buildChildStreamEntries } from '@test/support/childStreamEntries';
+import { taskDetailItemForExecution } from '@cli/chat/tui/state/childControls';
 import {
-  subagentPickerSelection,
-  type ChildControlItem,
-} from '@cli/chat/tui/state/childControls';
+  buildSubagentListRows,
+  subagentListRowStreamId,
+} from '@cli/chat/tui/state/subagentListRows';
+import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
+import type { StreamView } from '@cli/chat/tui/state/streamViews';
+import type { StreamTabId } from '@shared/schemas';
 
-function row(
-  over: Partial<Pick<ChildControlItem, 'childStreamId' | 'executionId'>> = {},
-): Pick<ChildControlItem, 'childStreamId' | 'executionId'> {
+function slice(overrides: Partial<StreamSlice> = {}): StreamSlice {
   return {
-    executionId: 'exec-1',
-    childStreamId: 'reviewer@opus#exec-1',
-    ...over,
+    streamId: 'root',
+    category: undefined,
+    status: undefined,
+    runStartedAt: undefined,
+    description: undefined,
+    thinkingActive: false,
+    usage: undefined,
+    cumulativeUsage: undefined,
+    conversation: undefined,
+    entries: [],
+    queuedFollowUps: 0,
+    queuedFollowUpMessages: [],
+    activeProcesses: [],
+    todos: [],
+    plan: null,
+    processOutput: new Map(),
+    bypass: NO_BYPASS,
+    ...overrides,
   };
 }
 
-describe('subagentPickerSelection (Enter behavior in the child-control picker)', () => {
-  it('opens the transcript viewer for a subagent row backed by a stream', () => {
-    expect(subagentPickerSelection('subagents', row())).toEqual({
-      kind: 'view',
-      streamId: 'reviewer@opus#exec-1',
+function session(id: string): StreamView {
+  return { id, label: id, active: false } as StreamView;
+}
+
+describe('SubagentList Enter targets (the picker replacement)', () => {
+  it('routes Enter on a session row to stream focus, never a detail view', () => {
+    const rows = buildSubagentListRows({
+      activeProcesses: [],
+      childStreamEntries: new Map(),
+      parentStreamId: 'root' as StreamTabId,
+      sessions: [session('root'), session('reviewer@opus#exec-1')],
+      streams: new Map(),
     });
+
+    expect(rows.map(subagentListRowStreamId)).toEqual([
+      'root',
+      'reviewer@opus#exec-1',
+    ]);
   });
 
-  it('falls back to the inline detail view when a subagent row has no stream', () => {
+  it('routes Enter on a process row to its inline task detail item', () => {
+    const parent = slice({
+      activeProcesses: [
+        {
+          kind: 'process',
+          executionId: 'proc-1',
+          agentName: 'latexmk',
+          status: 'running',
+        },
+      ],
+      processOutput: new Map([['proc-1', { stdout: 'built pdf', stderr: '' }]]),
+    });
+    const streams = new Map<StreamTabId, StreamSlice>([['root', parent]]);
+    const rows = buildSubagentListRows({
+      activeProcesses: parent.activeProcesses,
+      childStreamEntries: new Map(),
+      parentStreamId: 'root' as StreamTabId,
+      sessions: [],
+      streams,
+    });
+
+    // Process rows carry no stream to focus — Enter opens TaskDetailView.
+    expect(rows.map(subagentListRowStreamId)).toEqual([undefined]);
     expect(
-      subagentPickerSelection('subagents', row({ childStreamId: undefined })),
-    ).toEqual({ kind: 'detail', executionId: 'exec-1' });
-  });
-
-  it('keeps tasks mode on the inline detail view even with a stream', () => {
-    expect(subagentPickerSelection('tasks', row())).toEqual({
-      kind: 'detail',
-      executionId: 'exec-1',
+      taskDetailItemForExecution({
+        childStreamEntries: buildChildStreamEntries({
+          parentStreamId: 'root' as StreamTabId,
+        }),
+        executionId: 'proc-1',
+        parentStreamId: 'root' as StreamTabId,
+        streams,
+      }),
+    ).toMatchObject({
+      executionId: 'proc-1',
+      kind: 'process',
+      label: 'latexmk',
+      tailLines: ['built pdf'],
     });
   });
 
-  it('returns undefined when there is no highlighted row', () => {
-    expect(subagentPickerSelection('subagents', undefined)).toBeUndefined();
-    expect(subagentPickerSelection('tasks', undefined)).toBeUndefined();
+  it('resolves no detail item once the process has exited', () => {
+    const streams = new Map<StreamTabId, StreamSlice>([['root', slice()]]);
+
+    expect(
+      taskDetailItemForExecution({
+        childStreamEntries: buildChildStreamEntries({
+          parentStreamId: 'root' as StreamTabId,
+        }),
+        executionId: 'proc-1',
+        parentStreamId: 'root' as StreamTabId,
+        streams,
+      }),
+    ).toBeUndefined();
+    expect(
+      taskDetailItemForExecution({
+        childStreamEntries: buildChildStreamEntries({
+          parentStreamId: 'root' as StreamTabId,
+        }),
+        executionId: 'proc-1',
+        parentStreamId: undefined,
+        streams,
+      }),
+    ).toBeUndefined();
   });
 });

@@ -183,20 +183,7 @@ describe('cliState Phase 4 fields', () => {
     patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
 
     expect(
-      hasChildControlItems(
-        root,
-        childStreamEntries.get(),
-        streams.get(),
-        'tasks',
-      ),
-    ).toBe(true);
-    expect(
-      hasChildControlItems(
-        root,
-        childStreamEntries.get(),
-        streams.get(),
-        'subagents',
-      ),
+      hasChildControlItems(root, childStreamEntries.get(), streams.get()),
     ).toBe(true);
     expect(orderedSessionDescendants(root)[0]).toBe(child1);
 
@@ -219,23 +206,11 @@ describe('cliState Phase 4 fields', () => {
       visibleSubagentRows(root, childStreamEntries.get(), streams.get()),
     ).toEqual([]);
     expect(isChildStreamRemoved(child1)).toBe(true);
-    // Still true: the untouched process-1 counts as a task-mode item.
+    // Still true: the untouched process-1 keeps the panel populated even
+    // though no subagent rows remain (asserted empty above).
     expect(
-      hasChildControlItems(
-        root,
-        childStreamEntries.get(),
-        streams.get(),
-        'tasks',
-      ),
+      hasChildControlItems(root, childStreamEntries.get(), streams.get()),
     ).toBe(true);
-    expect(
-      hasChildControlItems(
-        root,
-        childStreamEntries.get(),
-        streams.get(),
-        'subagents',
-      ),
-    ).toBe(false);
     expect(orderedSessionDescendants(root)[0]).toBeUndefined();
   });
 
@@ -1016,7 +991,7 @@ describe('CLI TUI row allocation', () => {
         status: STREAM_PHASE.COMPLETED,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc s to choose another.',
+      'Subagent is no longer accepting follow-ups; press Tab or Esc s to select a session.',
     );
 
     expect(
@@ -1027,44 +1002,7 @@ describe('CLI TUI row allocation', () => {
         status: STREAM_PHASE.COMPLETED,
       }),
     ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to select a session or Alt-s to choose another.',
-    );
-
-    expect(
-      focusedChildInputDisabledMessage({
-        activeStreamId: child1,
-        parentStream: parentStream.get(),
-        shortcutModifierLabel: 'Esc',
-        status: STREAM_PHASE.COMPLETED,
-        subagentControlsAvailable: false,
-      }),
-    ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to select a session.',
-    );
-
-    expect(
-      focusedChildInputDisabledMessage({
-        activeStreamId: child1,
-        parentStream: parentStream.get(),
-        shortcutModifierLabel: 'Esc',
-        status: STREAM_PHASE.COMPLETED,
-        subagentControlsAvailable: false,
-        taskControlsAvailable: true,
-      }),
-    ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc p to review tasks.',
-    );
-
-    expect(
-      focusedChildInputDisabledMessage({
-        activeStreamId: child1,
-        parentStream: parentStream.get(),
-        shortcutModifierLabel: 'Esc',
-        status: STREAM_PHASE.COMPLETED,
-        taskControlsAvailable: true,
-      }),
-    ).toBe(
-      'Subagent is no longer accepting follow-ups; press Tab to select a session or Esc s to choose another, or Esc p to review tasks.',
+      'Subagent is no longer accepting follow-ups; press Tab or Alt-s to select a session.',
     );
   });
 

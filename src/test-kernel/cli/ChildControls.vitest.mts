@@ -7,14 +7,6 @@ import {
   type ChildStreamEntryRow,
 } from '@test/support/childStreamEntries';
 import {
-  computePickerListLayout,
-  emptyPickerText,
-  isUltraCompactPickerRows,
-  pickerTitle,
-} from '@cli/chat/tui/modals/ChildControlPicker';
-import { pickerKeyHintsForColumns } from '@cli/chat/tui/modals/childControlPickerHints';
-import { compactPickerOverflowText } from '@cli/chat/tui/render/overflowText';
-import {
   computeTaskDetailLayout,
   isUltraCompactTaskDetailRows,
   TASK_DETAIL_LABEL_WIDTH,
@@ -38,10 +30,10 @@ import {
   childElapsed,
   childPickerKeyAction,
   hasChildControlItems,
+  latestChildResponseSummary,
   liveChildExecutionElapsedKey,
   numericFocusTargetForActiveStream,
-  resolveChildControlDisplayTargets,
-  resolveChildControlStreamTarget,
+  resolveChildExecutionPanelTarget,
 } from '@cli/chat/tui/state/childControls';
 import {
   activeSubagentsFor,
@@ -56,36 +48,10 @@ import {
 } from '@cli/chat/tui/state/cliState';
 
 // Local imports - shared schemas
-import {
-  MESSAGE_TYPES,
-  STREAM_PHASE,
-  TOOL_USE_STATUS,
-  type NormalizedToolUse,
-  type StreamTabId,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 
 function tail(stdout: string, stderr = ''): ProcessOutputTail {
   return { stdout, stderr };
-}
-
-function toolUse(
-  toolName: string,
-  input: unknown,
-  overrides: Partial<NormalizedToolUse> = {},
-): NormalizedToolUse {
-  return {
-    parsed: {},
-    toolName,
-    errorText: '',
-    outputText: '',
-    userInstructionText: '',
-    input,
-    isError: false,
-    isUserFeedback: false,
-    headerSummary: '',
-    status: TOOL_USE_STATUS.COMPLETED,
-    ...overrides,
-  };
 }
 
 function slice(
@@ -283,7 +249,7 @@ describe('CLI child execution controls', () => {
     ).toBe('child-b');
   });
 
-  it('builds subagent and process picker items with stable labels and tails', () => {
+  it('builds subagent and process rows with stable labels and tails', () => {
     const parentSlice = slice({
       activeProcesses: [
         {
@@ -321,9 +287,7 @@ describe('CLI child execution controls', () => {
       ],
     });
 
-    expect(
-      buildChildControlItems('root', entries, streams, 'subagents'),
-    ).toMatchObject([
+    expect(buildChildControlItems('root', entries, streams)).toMatchObject([
       {
         executionId: 'agent-2',
         childStreamId: 'child-b',
@@ -342,28 +306,8 @@ describe('CLI child execution controls', () => {
         command: 'critic',
         description: 'running · 12s',
         killable: true,
+        // Sessions never open TaskDetailView, so subagent rows carry no tail.
         tailLines: [],
-      },
-    ]);
-    expect(
-      buildChildControlItems('root', entries, streams, 'tasks'),
-    ).toMatchObject([
-      {
-        executionId: 'agent-2',
-        childStreamId: 'child-b',
-        kind: 'subagent',
-        label: 'reviewer',
-        command: 'reviewer',
-        description: 'stopped · 20s',
-        killable: false,
-      },
-      {
-        executionId: 'agent-1',
-        childStreamId: 'child-a',
-        kind: 'subagent',
-        label: 'critic',
-        command: 'critic',
-        killable: true,
       },
       {
         executionId: 'proc-1',
@@ -377,7 +321,7 @@ describe('CLI child execution controls', () => {
     ]);
   });
 
-  it('shows the subagent own final response as the picker summary', () => {
+  it('shows the subagent own final response as the row summary', () => {
     const { entries, streams } = childFixture('root', {
       activeOnly: [
         {
@@ -415,15 +359,17 @@ describe('CLI child execution controls', () => {
       ]),
     });
 
-    expect(
-      buildChildControlItems('root', entries, streams, 'subagents'),
-    ).toMatchObject([
+    expect(buildChildControlItems('root', entries, streams)).toMatchObject([
       {
         executionId: 'agent-1',
         description:
           'waiting for you · 20s · Tightened the opening paragraph and fixed two typos.',
       },
     ]);
+    // The same derivation is exported directly for the SubagentList rows.
+    expect(latestChildResponseSummary(streams.get('child-a')?.entries)).toBe(
+      'Tightened the opening paragraph and fixed two typos.',
+    );
   });
 
   it('falls back to the first user instruction when no final response exists yet', () => {
@@ -464,12 +410,7 @@ describe('CLI child execution controls', () => {
       ]),
     });
 
-    const [item] = buildChildControlItems(
-      'root',
-      entries,
-      streams,
-      'subagents',
-    );
+    const [item] = buildChildControlItems('root', entries, streams);
     expect(item?.description).toBe(
       `running · 3s · Review the introduction for clarity and tone. ${'x'.repeat(53)}…`,
     );
@@ -541,9 +482,7 @@ describe('CLI child execution controls', () => {
       ]),
     });
 
-    expect(
-      buildChildControlItems('root', entries, streams, 'subagents'),
-    ).toMatchObject([
+    expect(buildChildControlItems('root', entries, streams)).toMatchObject([
       {
         description: 'running · Now check the conclusion.',
       },
@@ -602,9 +541,7 @@ describe('CLI child execution controls', () => {
       ]),
     });
 
-    expect(
-      buildChildControlItems('root', entries, streams, 'subagents'),
-    ).toMatchObject([
+    expect(buildChildControlItems('root', entries, streams)).toMatchObject([
       {
         description:
           'waiting for you · The conclusion follows from the stated assumptions.',
@@ -641,12 +578,17 @@ describe('CLI child execution controls', () => {
     });
 
     expect(
-      buildChildControlItems('root', entries, streams, 'subagents', 62_000),
+      buildChildControlItems('root', entries, streams, 62_000),
     ).toMatchObject([
       {
         executionId: 'agent-1',
         description: 'running · 1m 1s',
         elapsed: '1m 1s',
+      },
+      {
+        // Non-running process: startedAt is ignored, the roster elapsed wins.
+        executionId: 'proc-1',
+        elapsed: '1s',
       },
     ]);
     expect(childElapsed(parentSlice.activeProcesses[0], 62_000)).toBe('1s');
@@ -658,7 +600,7 @@ describe('CLI child execution controls', () => {
     ).toBe('2h 5m');
   });
 
-  it('uses CLI-facing labels in picker descriptions', () => {
+  it('uses CLI-facing labels in row descriptions', () => {
     const parentSlice = slice({
       activeProcesses: [
         {
@@ -685,18 +627,7 @@ describe('CLI child execution controls', () => {
       ],
     });
 
-    expect(
-      buildChildControlItems('root', entries, streams, 'subagents'),
-    ).toMatchObject([
-      {
-        executionId: 'agent-1',
-        description: 'waiting for you · 20s',
-        statusLabel: 'waiting for you',
-      },
-    ]);
-    expect(
-      buildChildControlItems('root', entries, streams, 'tasks'),
-    ).toMatchObject([
+    expect(buildChildControlItems('root', entries, streams)).toMatchObject([
       {
         executionId: 'agent-1',
         description: 'waiting for you · 20s',
@@ -825,81 +756,14 @@ describe('CLI child execution controls', () => {
       ]),
     });
 
-    expect(
-      buildChildControlItems('root', entries, streams, 'tasks'),
-    ).toMatchObject([
+    expect(buildChildControlItems('root', entries, streams)).toMatchObject([
       {
         executionId: 'agent-1',
         label: 'bash',
         command: 'timeout 1800 texra run paper',
-        tailLines: ['line one', 'line two'],
-      },
-    ]);
-  });
-
-  it('includes tool and process transcript rows in task details', () => {
-    const { entries, streams } = childFixture('root', {
-      activeOnly: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'bash',
-          childStreamId: 'child-a',
-          status: 'completed',
-        },
-      ],
-      extraStreams: new Map([
-        [
-          'child-a',
-          slice({
-            streamId: 'child-a',
-            status: 'completed',
-            entries: [
-              {
-                id: 'tool-1',
-                role: 'tool',
-                text: '',
-                finalized: true,
-                toolUse: toolUse(
-                  'bash',
-                  { command: 'pnpm test' },
-                  {
-                    headerSummary: 'pnpm test',
-                    outputText: 'ok\nsecond line',
-                  },
-                ),
-              },
-              {
-                id: 'process-1',
-                role: 'process',
-                text: '',
-                finalized: true,
-                process: {
-                  executionId: 'proc-1',
-                  title: 'latexmk',
-                  status: 'completed',
-                  isError: false,
-                  tailLines: ['built pdf'],
-                },
-              },
-            ],
-          }),
-        ],
-      ]),
-    });
-
-    expect(
-      buildChildControlItems('root', entries, streams, 'tasks'),
-    ).toMatchObject([
-      {
-        executionId: 'agent-1',
-        tailLines: [
-          '● bash (pnpm test)',
-          '⎿ ok',
-          '  second line',
-          'latexmk · completed',
-          '⎿ built pdf',
-        ],
+        // Subagent transcripts are read by focusing the session, never
+        // flattened into a detail tail.
+        tailLines: [],
       },
     ]);
   });
@@ -925,9 +789,7 @@ describe('CLI child execution controls', () => {
       ],
     });
 
-    expect(
-      buildChildControlItems('root', entries, streams, 'subagents'),
-    ).toMatchObject([
+    expect(buildChildControlItems('root', entries, streams)).toMatchObject([
       {
         executionId: 'agent-1',
         childStreamId: 'child-a',
@@ -982,7 +844,7 @@ describe('CLI child execution controls', () => {
         status: 'running',
       },
     ]);
-    expect(hasChildControlItems('root', entries, streams, 'tasks')).toBe(true);
+    expect(hasChildControlItems('root', entries, streams)).toBe(true);
   });
 
   it('keeps stopped subagents in their retained task order', () => {
@@ -1006,9 +868,7 @@ describe('CLI child execution controls', () => {
       ],
     });
 
-    expect(
-      buildChildControlItems('root', entries, streams, 'tasks'),
-    ).toMatchObject([
+    expect(buildChildControlItems('root', entries, streams)).toMatchObject([
       {
         kind: 'subagent',
         executionId: 'agent-1',
@@ -1042,7 +902,7 @@ describe('CLI child execution controls', () => {
       ],
     });
 
-    expect(hasChildControlItems('root', entries, streams, 'tasks')).toBe(true);
+    expect(hasChildControlItems('root', entries, streams)).toBe(true);
   });
 
   it('falls back to the parent subagent list when the focused child is a leaf', () => {
@@ -1057,10 +917,9 @@ describe('CLI child execution controls', () => {
         },
       ],
     });
-    const target = resolveChildControlStreamTarget({
+    const target = resolveChildExecutionPanelTarget({
       activeStreamId: 'review-stream',
       childStreamEntries: entries,
-      mode: 'subagents',
       parentStream: new Map([['review-stream', 'main']]),
       streams,
     });
@@ -1068,9 +927,7 @@ describe('CLI child execution controls', () => {
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('review-stream');
     expect(target.hasItems).toBe(true);
-    expect(
-      buildChildControlItems('main', entries, streams, 'subagents'),
-    ).toMatchObject([
+    expect(buildChildControlItems('main', entries, streams)).toMatchObject([
       {
         executionId: 'agent-1',
         childStreamId: 'review-stream',
@@ -1112,42 +969,6 @@ describe('CLI child execution controls', () => {
     ).toBe('review');
   });
 
-  it('resolves child-control display targets with labels and availability', () => {
-    const { entries, streams } = childFixture('main', {
-      activeOnly: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'review',
-          childStreamId: 'review-stream',
-          status: 'running',
-        },
-      ],
-    });
-    const parentStream = new Map([['review-stream', 'main']] as const);
-    const targets = resolveChildControlDisplayTargets({
-      activeStreamId: 'review-stream',
-      childStreamEntries: entries,
-      parentStream,
-      streams,
-    });
-
-    expect(targets.subagents).toMatchObject({
-      streamId: 'main',
-      fallbackFromStreamId: 'review-stream',
-      hasItems: true,
-      streamLabel: 'main',
-      streamScopeDetail: 'review has no subagents',
-    });
-    expect(targets.tasks).toMatchObject({
-      streamId: 'main',
-      fallbackFromStreamId: 'review-stream',
-      hasItems: true,
-      streamLabel: 'main',
-      streamScopeDetail: 'review has no tasks or sub-workflows',
-    });
-  });
-
   it('keeps subagent controls on the focused child when it has descendants', () => {
     const { entries, streams } = childFixture('review-stream', {
       activeOnly: [
@@ -1160,10 +981,9 @@ describe('CLI child execution controls', () => {
         },
       ],
     });
-    const target = resolveChildControlStreamTarget({
+    const target = resolveChildExecutionPanelTarget({
       activeStreamId: 'review-stream',
       childStreamEntries: entries,
-      mode: 'subagents',
       parentStream: new Map([['review-stream', 'main']]),
       streams,
     });
@@ -1171,7 +991,7 @@ describe('CLI child execution controls', () => {
     expect(target.streamId).toBe('review-stream');
     expect(target.hasItems).toBe(true);
     expect(
-      buildChildControlItems('review-stream', entries, streams, 'subagents'),
+      buildChildControlItems('review-stream', entries, streams),
     ).toMatchObject([
       {
         executionId: 'agent-2',
@@ -1184,10 +1004,9 @@ describe('CLI child execution controls', () => {
 
   it('keeps a leaf child selected when the parent has no visible subagents', () => {
     const child = slice({ streamId: 'review-stream' });
-    const target = resolveChildControlStreamTarget({
+    const target = resolveChildExecutionPanelTarget({
       activeStreamId: 'review-stream',
       childStreamEntries: new Map(),
-      mode: 'subagents',
       parentStream: new Map([['review-stream', 'main']]),
       streams: new Map([
         ['main', slice({ streamId: 'main' })],
@@ -1217,10 +1036,9 @@ describe('CLI child execution controls', () => {
       ['review-stream', slice({ streamId: 'review-stream' })],
       ['detail-stream', slice({ streamId: 'detail-stream' })],
     ]);
-    const target = resolveChildControlStreamTarget({
+    const target = resolveChildExecutionPanelTarget({
       activeStreamId: 'detail-stream',
       childStreamEntries: entries,
-      mode: 'subagents',
       parentStream: new Map([
         ['review-stream', 'main'],
         ['detail-stream', 'review-stream'],
@@ -1231,48 +1049,7 @@ describe('CLI child execution controls', () => {
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('detail-stream');
     expect(target.hasItems).toBe(true);
-    expect(
-      buildChildControlItems('main', entries, streams, 'subagents'),
-    ).toMatchObject([
-      {
-        executionId: 'agent-1',
-        childStreamId: 'review-stream',
-        kind: 'subagent',
-        label: 'review',
-      },
-    ]);
-  });
-
-  it('falls back to the parent task list when the focused child is a leaf', () => {
-    const { entries, streams: mainFixtureStreams } = childFixture('main', {
-      activeOnly: [
-        {
-          kind: 'subagent',
-          executionId: 'agent-1',
-          agentName: 'review',
-          childStreamId: 'review-stream',
-          status: 'running',
-        },
-      ],
-    });
-    const streams = new Map([
-      ...mainFixtureStreams,
-      ['review-stream', slice({ streamId: 'review-stream' })],
-    ]);
-    const target = resolveChildControlStreamTarget({
-      activeStreamId: 'review-stream',
-      childStreamEntries: entries,
-      mode: 'tasks',
-      parentStream: new Map([['review-stream', 'main']]),
-      streams,
-    });
-
-    expect(target.streamId).toBe('main');
-    expect(target.fallbackFromStreamId).toBe('review-stream');
-    expect(target.hasItems).toBe(true);
-    expect(
-      buildChildControlItems('main', entries, streams, 'tasks'),
-    ).toMatchObject([
+    expect(buildChildControlItems('main', entries, streams)).toMatchObject([
       {
         executionId: 'agent-1',
         childStreamId: 'review-stream',
@@ -1295,10 +1072,9 @@ describe('CLI child execution controls', () => {
         },
       ],
     });
-    const target = resolveChildControlStreamTarget({
+    const target = resolveChildExecutionPanelTarget({
       activeStreamId: 'review-stream',
       childStreamEntries: entries,
-      mode: 'tasks',
       parentStream: new Map([['review-stream', 'main']]),
       streams,
     });
@@ -1306,9 +1082,7 @@ describe('CLI child execution controls', () => {
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('review-stream');
     expect(target.hasItems).toBe(true);
-    expect(
-      buildChildControlItems('main', entries, streams, 'tasks'),
-    ).toMatchObject([
+    expect(buildChildControlItems('main', entries, streams)).toMatchObject([
       {
         executionId: 'agent-1',
         childStreamId: 'review-stream',
@@ -1344,10 +1118,9 @@ describe('CLI child execution controls', () => {
       ],
     });
     const streams = new Map([...mainFixtureStreams, ['review-stream', child]]);
-    const target = resolveChildControlStreamTarget({
+    const target = resolveChildExecutionPanelTarget({
       activeStreamId: 'review-stream',
       childStreamEntries: entries,
-      mode: 'tasks',
       parentStream: new Map([['review-stream', 'main']]),
       streams,
     });
@@ -1356,7 +1129,7 @@ describe('CLI child execution controls', () => {
     expect(target.slice).toBe(child);
     expect(target.hasItems).toBe(true);
     expect(
-      buildChildControlItems('review-stream', entries, streams, 'tasks'),
+      buildChildControlItems('review-stream', entries, streams),
     ).toMatchObject([
       {
         executionId: 'proc-1',
@@ -1366,7 +1139,7 @@ describe('CLI child execution controls', () => {
     ]);
   });
 
-  it('keeps picker key handling independent of Ink rendering', () => {
+  it('keeps task detail key handling independent of Ink rendering', () => {
     expect(childPickerKeyAction({ input: '', escape: true })).toEqual({
       kind: 'close',
     });
@@ -1380,59 +1153,8 @@ describe('CLI child execution controls', () => {
       kind: 'select',
     });
     expect(childPickerKeyAction({ input: 'k' })).toEqual({ kind: 'kill' });
-    expect(childPickerKeyAction({ input: '3' })).toEqual({
-      kind: 'jump',
-      index: 2,
-    });
-  });
-
-  it('advertises only applicable keys for child pickers', () => {
-    expect(pickerKeyHintsForColumns('tasks', 0)).toEqual([
-      { key: 'Esc', action: 'close' },
-    ]);
-    expect(pickerKeyHintsForColumns('tasks', 1)).toEqual([
-      { key: '↑/↓', action: 'navigate' },
-      { key: 'Enter', action: 'view' },
-      { key: 'k', action: 'kill' },
-      { key: 'Esc', action: 'close' },
-    ]);
-    expect(pickerKeyHintsForColumns('tasks', 3)).toContainEqual({
-      key: '1-9',
-      action: 'jump',
-    });
-    expect(pickerKeyHintsForColumns('subagents', 1)).toContainEqual({
-      key: 'Enter',
-      action: 'view',
-    });
-    expect(pickerKeyHintsForColumns('subagents', 1)).toContainEqual({
-      key: 'f',
-      action: 'focus',
-    });
-    expect(pickerKeyHintsForColumns('subagents', 1, false)).not.toContainEqual({
-      key: 'k',
-      action: 'kill',
-    });
-  });
-
-  it('keeps Esc close readable in narrow child picker hints', () => {
-    expect(pickerKeyHintsForColumns('subagents', 3, true, 60)).toEqual([
-      { key: '↑/↓', action: 'nav' },
-      { key: '1-9', action: 'jump' },
-      { key: 'Enter', action: 'view' },
-      { key: 'f', action: 'focus' },
-      { key: 'Esc', action: 'close' },
-    ]);
-    expect(pickerKeyHintsForColumns('tasks', 3, true, 50)).toEqual([
-      { key: '↑/↓', action: 'nav' },
-      { key: 'Enter', action: 'view' },
-      { key: 'k', action: 'kill' },
-      { key: 'Esc', action: 'close' },
-    ]);
-    expect(pickerKeyHintsForColumns('tasks', 3, true, 40)).toEqual([
-      { key: '↑/↓', action: 'nav' },
-      { key: 'Enter', action: 'view' },
-      { key: 'Esc', action: 'close' },
-    ]);
+    // Digit jumps retired with the picker; Alt/Esc-1..9 focuses streams now.
+    expect(childPickerKeyAction({ input: '3' })).toEqual({ kind: 'ignore' });
   });
 
   it('keeps Esc back readable in narrow task detail hints', () => {
@@ -1610,46 +1332,9 @@ describe('CLI child execution controls', () => {
     ).toEqual(['mnop']);
   });
 
-  it('labels the task picker as a combined task and sub-workflow view', () => {
-    expect(pickerTitle('subagents')).toBe('Subagents');
-    expect(pickerTitle('tasks')).toBe('Tasks and sub-workflows');
-    expect(emptyPickerText('subagents')).toBe('No active subagents.');
-    expect(emptyPickerText('tasks')).toBe('No active tasks or sub-workflows.');
-  });
-
-  it('switches child pickers to ultra-compact rendering before bordered content clips', () => {
-    expect(isUltraCompactPickerRows(3)).toBe(true);
-    expect(isUltraCompactPickerRows(4)).toBe(true);
-    expect(isUltraCompactPickerRows(5)).toBe(true);
-    expect(isUltraCompactPickerRows(6)).toBe(true);
-    expect(isUltraCompactPickerRows(7)).toBe(false);
-    expect(isUltraCompactPickerRows(undefined)).toBe(false);
+  it('switches task detail to ultra-compact rendering before bordered content clips', () => {
     expect(isUltraCompactTaskDetailRows(4)).toBe(true);
     expect(isUltraCompactTaskDetailRows(5)).toBe(false);
-    expect(
-      compactPickerOverflowText({
-        itemCount: 3,
-        selectedIndex: 0,
-      }),
-    ).toBe('+2 more');
-    expect(
-      compactPickerOverflowText({
-        itemCount: 3,
-        selectedIndex: 2,
-      }),
-    ).toBe('+2 earlier');
-    expect(
-      compactPickerOverflowText({
-        itemCount: 5,
-        selectedIndex: 2,
-      }),
-    ).toBe('+2 earlier, +2 more');
-    expect(
-      compactPickerOverflowText({
-        itemCount: 1,
-        selectedIndex: 0,
-      }),
-    ).toBeUndefined();
   });
 
   it('labels task detail metadata by execution type', () => {
@@ -2076,56 +1761,5 @@ describe('CLI child execution controls', () => {
         visibleRowBudget,
       }),
     ).toEqual(['target marker']);
-  });
-
-  it('keeps the highlighted picker item inside the visible window', () => {
-    expect(
-      computePickerListLayout({
-        availableRows: 12,
-        highlight: 8,
-        itemCount: 12,
-        scopeLineCount: 1,
-      }),
-    ).toMatchObject({
-      hiddenAfter: 2,
-      hiddenBefore: 7,
-      start: 7,
-      visibleCount: 3,
-    });
-  });
-
-  it('reserves extra list rows while allowing dense picker spacing', () => {
-    expect(
-      computePickerListLayout({
-        availableRows: 10,
-        extraListRowCount: 1,
-        hintsMarginRows: 0,
-        highlight: 0,
-        itemCount: 3,
-        listMarginRows: 0,
-        scopeLineCount: 1,
-      }),
-    ).toMatchObject({
-      hiddenAfter: 0,
-      hiddenBefore: 0,
-      start: 0,
-      visibleCount: 3,
-    });
-  });
-
-  it('keeps empty picker windows empty', () => {
-    expect(
-      computePickerListLayout({
-        availableRows: 10,
-        highlight: 0,
-        itemCount: 0,
-        scopeLineCount: 1,
-      }),
-    ).toMatchObject({
-      hiddenAfter: 0,
-      hiddenBefore: 0,
-      start: 0,
-      visibleCount: 0,
-    });
   });
 });
