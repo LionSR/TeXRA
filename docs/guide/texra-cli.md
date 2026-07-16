@@ -82,7 +82,13 @@ With `--output`, TeXRA also copies the final artifact to the requested
 filesystem destination. JSON and NDJSON output keep `outputs[]` as the
 run-storage source of truth (`relativePath`, `absolutePath`, and `location`),
 include `runDirectory`, include `copiedOutput` or `copiedOutputs` when a
-filesystem copy was written, and report `terminalStatus` for the completed run.
+filesystem copy was written, and report the completed run's canonical
+`outcome`.
+
+For final run result objects, `status`, `terminalStatus`, and `endGroupStatus`
+are deprecated compatibility fields. They remain available through v0.40 and
+will be removed in v0.41; use `outcome` instead. This removal does not apply to
+status fields on streamed NDJSON progress records.
 
 ## Authentication
 

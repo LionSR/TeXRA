@@ -22,6 +22,14 @@ All notable changes to this project will be documented in this file.
 
 ### CLI
 
+#### Breaking Changes
+
+- **Structured run results are moving to one outcome field** — scripts reading
+  final result objects from `--output-format json` or `ndjson` should use
+  `outcome`. The legacy `status`, `terminalStatus`, and `endGroupStatus` fields
+  remain available through v0.40 and will be removed in v0.41. Status fields on
+  streamed progress records are unaffected.
+
 #### Bug Fixes
 
 - **The chat transcript breathes and shows run activity** — a blank line now
