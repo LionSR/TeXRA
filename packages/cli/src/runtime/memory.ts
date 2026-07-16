@@ -1,12 +1,9 @@
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import type { MemoryViewItem } from '@shared/schemas';
+import { formatBytes } from '@shared/utils/string';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
-import {
-  displayToStoragePath,
-  formatSize,
-  toDisplayPath,
-} from '@tools/memory/memoryUtils';
+import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { filterNotNullish, normalizeFilePath } from '@utils/core';
 import {
   formatLocaleTimestamp,
@@ -30,7 +27,7 @@ function formatModifiedDate(value: string): string {
 export function cliMemoryItemDescription(item: MemoryViewItem): string {
   const parts = [
     item.pinned ? 'pinned' : undefined,
-    formatSize(item.size),
+    formatBytes(item.size),
     formatModifiedDate(item.mtime),
     item.modifiedBy ? `by ${item.modifiedBy}` : undefined,
   ].filter(filterNotNullish);

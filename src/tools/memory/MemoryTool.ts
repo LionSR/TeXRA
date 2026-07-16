@@ -12,7 +12,7 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { debug } from '@logger/logUtils';
-import { formatRelativeTime } from '@shared/utils/string';
+import { formatBytes, formatRelativeTime } from '@shared/utils/string';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -43,7 +43,7 @@ import {
   DIRECTORY_LISTING_DEPTH,
   shouldSkipEntry,
 } from './constants';
-import { toDisplayPath, formatSize, displayToStoragePath } from './memoryUtils';
+import { displayToStoragePath, toDisplayPath } from './memoryUtils';
 import {
   parseFrontmatter,
   buildFile,
@@ -554,7 +554,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
             );
           }
         }
-        return `${formatSize(entry.size)}\t${age}\t${by}\t${display}`;
+        return `${formatBytes(entry.size)}\t${age}\t${by}\t${display}`;
       }),
     );
   }
