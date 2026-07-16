@@ -3,9 +3,14 @@
 # action + scripts, which now live in texra-ai/texra-action.)
 name: TeXRA Code Review
 
+# Reviews run once when a PR opens (or leaves draft), not on every push:
+# per-push `synchronize` reviews doubled API spend and re-reviewed stale
+# heads that were about to be pushed over. To request a fresh review after
+# addressing feedback, add the `re-review` label (the workflow removes it so
+# it can be re-applied).
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    types: [opened, ready_for_review, labeled]
 
 concurrency:
   group: texra-review-${{ github.event.pull_request.number }}
@@ -13,12 +18,25 @@ concurrency:
 
 jobs:
   review:
-    if: ${{ vars.TEXRA_REVIEW_ENABLED != 'false' }}
+    if: |
+      vars.TEXRA_REVIEW_ENABLED != 'false' &&
+      (github.event.action != 'labeled' || github.event.label.name == 're-review')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
     steps:
+      # Consume the trigger label so a later `re-review` re-application fires
+      # a fresh run.
+      - name: Remove re-review label
+        if: github.event.action == 'labeled'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X DELETE \
+            "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/re-review" \
+            || true
+
       # Provider keys are unavailable to pull_request runs from forks; skip
       # gracefully instead of failing the agent when no key is configured.
       - name: Check provider key

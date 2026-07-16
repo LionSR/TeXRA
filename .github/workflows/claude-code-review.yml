@@ -2,9 +2,14 @@
 # ci-sync-source: shared bot automation, prompts externalized under .github/prompts
 name: Claude Code Review
 
+# Reviews run once when a PR opens (or leaves draft), not on every push:
+# per-push `synchronize` reviews doubled API spend and re-reviewed stale
+# heads that were about to be pushed over. To request a fresh review after
+# addressing feedback, add the `re-review` label (the workflow removes it so
+# it can be re-applied).
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    types: [opened, ready_for_review, labeled]
 
 concurrency:
   group: claude-review-${{ github.event.pull_request.number }}
@@ -20,7 +25,9 @@ jobs:
     # Repository variable kill switch:
     #   CLAUDE_REVIEW_ENABLED=false disables Claude-powered PR review.
     #   unset or any other value preserves the default enabled behavior.
-    if: vars.CLAUDE_REVIEW_ENABLED != 'false'
+    if: |
+      vars.CLAUDE_REVIEW_ENABLED != 'false' &&
+      (github.event.action != 'labeled' || github.event.label.name == 're-review')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -40,6 +47,17 @@ jobs:
         Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*),Bash(git diff:*),Bash(git log:*),mcp__github_inline_comment__create_inline_comment,mcp__github__*
 
     steps:
+      # Consume the trigger label so a later `re-review` re-application fires
+      # a fresh run. Runs per matrix provider; the second delete 404s harmlessly.
+      - name: Remove re-review label
+        if: github.event.action == 'labeled'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X DELETE \
+            "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/re-review" \
+            || true
+
       - name: Check Claude review switch
         id: claude-switch
         env:
@@ -135,6 +153,6 @@ jobs:
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: '⏳ Claude quota exhausted or rate limit reached. Code review will be retried on the next push.\n\n(If this persists, please check the [Claude Code action logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}))'
+                body: '⏳ Claude quota exhausted or rate limit reached. Add the `re-review` label to retry the review.\n\n(If this persists, please check the [Claude Code action logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}))'
               });
             }

@@ -18,6 +18,14 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
+# Validation is split into parallel jobs (checks / test shards / build) so PR
+# wall-time is bounded by the slowest job, not the sum of a serial chain. Each
+# job repeats the cheap cached setup (~30s) to buy that parallelism.
+#
+# The nightly `schedule` run exists only for the runtime-validation timing
+# job; every push to main already runs full validation, so the heavy jobs are
+# gated off `schedule` rather than re-validating an unchanged tree nightly
+# (the macOS webview smoke bills at 10x Linux rates).
 jobs:
   changes:
     name: detect changes
@@ -57,17 +65,15 @@ jobs:
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
 
-  validate:
-    name: validate (linux)
+  checks:
+    name: static checks (linux)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
-    # OS-independent checks (typecheck/lint/tests/compile) and the
-    # Linux-only artifacts (CLI TUI frames, extension VSIX) live here and run
-    # once, on Linux. The macOS-specific Electron webview smoke is a separate
-    # `webview-smoke` job so the expensive macOS runner (~10x Linux billing)
-    # never re-runs platform-independent work it would only duplicate.
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    # Typecheck, lint, formatting, and the cheap invariant scripts — everything
+    # that needs neither the test runner nor a build. Runs in parallel with the
+    # kernel-test shards and the build job.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -97,6 +103,13 @@ jobs:
       - name: Validate CLI React Compiler
         run: pnpm --filter @texra-ai/cli smoke:react-compiler
 
+      # Formatting gates here instead of via an auto-committing workflow: the
+      # pre-commit prettier hook keeps local commits formatted, and a bot
+      # `style: format` push would cancel and re-trigger every PR workflow
+      # (including both AI reviews).
+      - name: Check formatting
+        run: pnpm run format:check
+
       - name: Type check
         run: pnpm run typecheck
 
@@ -122,8 +135,68 @@ jobs:
       - name: Check tsconfig paths are in sync with the root
         run: pnpm run check:tsconfig-paths
 
+  test:
+    name: kernel tests (linux, shard ${{ matrix.shard }}/2)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      # Run both shards to completion so a red run reports every failure at
+      # once instead of hiding the other shard's results.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # --maxWorkers=2 saturates the 2-vCPU hosted runner (see #8039); the
+      # shards exist because a single runner can't go wider than that.
       - name: Kernel tests
-        run: pnpm run test --maxWorkers=2
+        run: pnpm run test --maxWorkers=2 --shard=${{ matrix.shard }}/2
+
+  build:
+    name: build artifacts (linux)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Validate CLI TUI smoke frames
         run: |
@@ -144,9 +217,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Compile
-        run: pnpm run compile
-
+      # No separate dev-mode `pnpm run compile` step: build:fast starts with
+      # clean:dist and rebuilds esbuild + Vite output in production mode, so a
+      # preceding dev compile is discarded work.
       # Desktop app packaging is intentionally not part of PR CI. Keep this
       # check scoped to the VS Code extension package.
       - name: Build extension VSIX package
@@ -166,13 +239,13 @@ jobs:
   webview-smoke:
     name: webview smoke (macOS)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
     # macOS-only because the smoke renders the packaged webviews in Electron on
     # the macOS runner. It needs just the Vite webview bundles
     # (packages/extension/dist/*/bundle.js) — not the esbuild extension-host
-    # compile, typecheck, lint, or kernel tests, which the `validate` job
-    # already covers on Linux. Keeping this job lean avoids paying macOS rates
-    # to re-run platform-independent checks.
+    # compile, typecheck, lint, or kernel tests, which the Linux jobs already
+    # cover. Keeping this job lean avoids paying macOS rates (10x Linux) to
+    # re-run platform-independent checks.
     runs-on: macos-latest
     timeout-minutes: 20
 
@@ -212,8 +285,9 @@ jobs:
 
   runtime-validation:
     name: runtime validation (linux)
-    needs: changes
-    if: github.event_name != 'pull_request' && needs.changes.outputs.code == 'true'
+    # Runs on push to main, the nightly schedule (whose whole purpose is this
+    # timing run), merge groups, and manual dispatch; never on PRs.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -255,9 +329,10 @@ jobs:
   docs-check:
     name: docs build
     needs: changes
-    # Runs only for docs-only PRs (where the heavy validate job is skipped).
-    # The VitePress docs are a self-contained npm sub-project, so this mirrors
-    # docs-deploy.yml's install/build rather than the pnpm workspace.
+    # Runs only for docs-only PRs (where the heavy validation jobs are
+    # skipped). The VitePress docs are a self-contained npm sub-project, so
+    # this mirrors docs-deploy.yml's install/build rather than the pnpm
+    # workspace.
     if: needs.changes.outputs.code != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -285,7 +360,9 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - changes
-      - validate
+      - checks
+      - test
+      - build
       - webview-smoke
       - runtime-validation
       - docs-check
@@ -294,26 +371,31 @@ jobs:
     steps:
       - name: Require validation jobs success
         run: |
-          # On code PRs the validate + webview-smoke jobs gate; on docs-only PRs
-          # they are skipped and the lightweight docs build gates instead —
-          # require whichever ran.
-          if [ '${{ needs.validate.result }}' != 'success' ] && [ '${{ needs.validate.result }}' != 'skipped' ]; then
-            echo 'Validation result: ${{ needs.validate.result }}'
-            exit 1
-          fi
-          if [ '${{ needs.webview-smoke.result }}' != 'success' ] && [ '${{ needs.webview-smoke.result }}' != 'skipped' ]; then
-            echo 'Webview smoke result: ${{ needs.webview-smoke.result }}'
-            exit 1
-          fi
-          if [ '${{ needs.runtime-validation.result }}' != 'success' ] && [ '${{ needs.runtime-validation.result }}' != 'skipped' ]; then
-            echo 'Runtime validation result: ${{ needs.runtime-validation.result }}'
-            exit 1
-          fi
-          if [ '${{ needs.docs-check.result }}' != 'success' ] && [ '${{ needs.docs-check.result }}' != 'skipped' ]; then
-            echo 'Docs build result: ${{ needs.docs-check.result }}'
-            exit 1
-          fi
-          if [ '${{ needs.validate.result }}' = 'skipped' ] && [ '${{ needs.docs-check.result }}' != 'success' ]; then
+          # On code PRs the checks/test/build/webview-smoke jobs gate; on
+          # docs-only PRs they are skipped and the lightweight docs build gates
+          # instead; on the nightly schedule only runtime-validation runs.
+          # Require whichever ran.
+          for result in \
+            'checks:${{ needs.checks.result }}' \
+            'test:${{ needs.test.result }}' \
+            'build:${{ needs.build.result }}' \
+            'webview-smoke:${{ needs.webview-smoke.result }}' \
+            'runtime-validation:${{ needs.runtime-validation.result }}' \
+            'docs-check:${{ needs.docs-check.result }}'; do
+            name="${result%%:*}"
+            value="${result#*:}"
+            if [ "$value" != 'success' ] && [ "$value" != 'skipped' ]; then
+              echo "${name} result: ${value}"
+              exit 1
+            fi
+          done
+          # Docs-only PRs skip the heavy jobs, so the docs build must have
+          # actually succeeded (not merely been skipped). Scoped to
+          # pull_request: on the nightly schedule both sides are skipped by
+          # design.
+          if [ '${{ github.event_name }}' = 'pull_request' ] && \
+             [ '${{ needs.checks.result }}' = 'skipped' ] && \
+             [ '${{ needs.docs-check.result }}' != 'success' ]; then
             echo 'Docs-only PR but docs build did not succeed: ${{ needs.docs-check.result }}'
             exit 1
           fi

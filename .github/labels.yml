@@ -107,3 +107,7 @@
 - name: 'tracking'
   color: '8a2be2'
   description: 'Umbrella issue with sub-issue children'
+
+- name: 're-review'
+  color: '0e8a16'
+  description: 'Request a fresh AI review of this PR (consumed by the review workflows)'
