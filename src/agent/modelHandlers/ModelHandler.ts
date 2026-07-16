@@ -737,23 +737,12 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Validates reasoning effort based on provider-specific support
-   * @param effort The reasoning effort level to validate
-   * @returns Valid reasoning effort string for the current provider
+   * Normalizes a reasoning-effort value for the concrete handler.
+   * Provider handlers override this hook when their API supports a narrower
+   * vocabulary.
    */
   protected validateReasoningEffort(effort: string): string {
-    if (this.config.provider !== ModelProvider.XAI) return effort;
-    // Current Grok reasoning models (grok-4.3 / grok-4.5) document
-    // low/medium/high (docs.x.ai reasoning guide); xhigh only exists on the
-    // multi-agent variant where it means agent count, so clamp it to high.
-    if (effort === 'low' || effort === 'medium' || effort === 'high') {
-      return effort;
-    }
-
-    this.logger.warn(
-      `xAI models only support 'low', 'medium', or 'high' reasoning effort. Converting '${effort}' to 'high'.`,
-    );
-    return 'high';
+    return effort;
   }
 
   /**
