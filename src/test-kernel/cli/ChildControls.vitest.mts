@@ -449,6 +449,12 @@ describe('CLI child execution controls', () => {
                 text: `Review the introduction for clarity and tone. ${'x'.repeat(100)}`,
                 finalized: true,
               },
+              {
+                id: 'entry-2',
+                role: 'assistant',
+                text: 'Still drafting a response',
+                finalized: false,
+              },
             ],
           }),
         ],
