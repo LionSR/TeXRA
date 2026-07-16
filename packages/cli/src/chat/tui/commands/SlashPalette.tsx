@@ -96,6 +96,15 @@ export function slashPaletteWindow({
   };
 }
 
+/**
+ * The palette owns ↑/↓ only while it presents a real choice. With a single
+ * match (e.g. a fully typed command name) the arrows must keep doing input
+ * history recall in the text input, which shares the same keystrokes.
+ */
+export function slashPaletteOwnsArrows(matchCount: number): boolean {
+  return matchCount > 1;
+}
+
 export function slashPaletteEnterHintAction(
   command: SlashCommand | undefined,
 ): string {
@@ -139,20 +148,11 @@ export function SlashPalette(
         props.onCancel();
         return;
       }
-      if (key.upArrow) {
+      if (key.upArrow || key.downArrow) {
+        if (!slashPaletteOwnsArrows(matchCount)) return;
         setHighlight((h) =>
           nextWrappingHighlightIndex({
-            direction: -1,
-            highlight: h,
-            itemCount: matchCount,
-          }),
-        );
-        return;
-      }
-      if (key.downArrow) {
-        setHighlight((h) =>
-          nextWrappingHighlightIndex({
-            direction: 1,
+            direction: key.upArrow ? -1 : 1,
             highlight: h,
             itemCount: matchCount,
           }),
@@ -214,7 +214,9 @@ export function SlashPalette(
       <Box marginTop={1}>
         <KeyHints
           hints={[
-            { key: '↑/↓', action: 'navigate' },
+            ...(slashPaletteOwnsArrows(matchCount)
+              ? [{ key: '↑/↓', action: 'navigate' }]
+              : []),
             {
               key: 'Enter',
               action: slashPaletteEnterHintAction(highlightedCommand),
