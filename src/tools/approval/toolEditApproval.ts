@@ -507,47 +507,29 @@ export async function requestAndWriteApprovedEdit(request: {
 }
 
 /**
- * Link a freshly resolved child subagent stream to its parent for bash-bypass
- * resolution, independent of any tool-edit auto-approval.
+ * Link a freshly resolved child subagent stream to its parent for bash and
+ * tool-edit bypass resolution.
  *
- * A child delegated by a parent that auto-runs bash should auto-run bash too —
- * and should keep doing so even if the parent's bash bypass is toggled on
- * *after* the child stream already started, since this registers a live
- * ancestry link rather than copying the parent's bypass value once at child
- * creation (see `registerStreamParent`). If the parent's bash is still gated
- * the child stays gated too — fresh streams default to gated either way.
- * Kept separate from the tool-edit YOLO flag to respect the CLI's distinct
- * AUTO-BASH / AUTO-APPROVE grants: a parent with AUTO-BASH but edits still
- * gated still propagates bash.
+ * A child delegated by a parent that auto-runs bash or auto-approves edits
+ * should do the same — and should keep following the parent when either
+ * bypass is toggled *after* the child stream already started, since this
+ * registers live ancestry links rather than copying the parent's values once
+ * at child creation (see `registerStreamParent`). Ancestry is tracked per
+ * bypass kind, so the CLI's distinct AUTO-BASH / AUTO-APPROVE grants are
+ * respected: a parent with AUTO-BASH but edits still gated propagates only
+ * bash, and fresh streams default to gated either way. Delegation-proposal
+ * (super-YOLO) bypass is deliberately NOT linked — a child's own delegations
+ * still prompt unless granted on the child explicitly.
  */
-export function inheritBashBypassOnChildStream(
+export function inheritApprovalBypassesOnChildStream(
   childStreamId: StreamTabId,
   parentStreamId?: StreamTabId,
   session: SessionHandle = currentSession(),
 ): void {
   if (parentStreamId) {
-    // Scoped to 'bash' only — ancestry is tracked per bypass kind, so this
-    // cannot also let the child inherit tool-edit or super-YOLO bypass from
-    // the parent. Those are granted separately and explicitly (see
-    // `enableYoloOnChildStream`) when a delegation asks for them.
     session.approvals.registerStreamParent(childStreamId, parentStreamId, [
       'bash',
+      'toolEdit',
     ]);
   }
-}
-
-/**
- * Enable tool-edit auto-approval on a freshly resolved child subagent stream.
- *
- * Used by DelegationTools when the parent is auto-approving edits / delegated
- * tasks. Silent because it fires before the child stream is activated; the
- * subsequent SYNC_STREAM_CONTENT carries the tool-edit / super-YOLO bypass.
- * Bash bypass is handled separately by `inheritBashBypassOnChildStream` so it
- * follows the parent regardless of the tool-edit flag.
- */
-export function enableYoloOnChildStream(
-  childStreamId: StreamTabId,
-  session: SessionHandle = currentSession(),
-): void {
-  session.approvals.toolEdit.bypass.setBypass(childStreamId, true);
 }

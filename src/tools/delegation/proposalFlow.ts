@@ -25,10 +25,7 @@ import {
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
-import {
-  isApprovalBypassedForStream,
-  proposalApprovals,
-} from '@tools/approval';
+import { proposalApprovals } from '@tools/approval';
 import {
   availableModelNamesFromOptions,
   selectDelegationModelFromAvailableNames,
@@ -158,8 +155,10 @@ export async function proposeAndExecute(
   streamId: StreamTabId,
 ): Promise<ToolResult> {
   if (proposalApprovals().isBypassed(streamId)) {
+    // No explicit edit grant for the child: super-YOLO always couples the
+    // parent's tool-edit + bash bypass on (setDelegatedWorkApprovalBypasses),
+    // so the child's live ancestry links already resolve to auto-approve.
     return executeSubagent(proposal, agentName, streamId, {
-      enableYoloOnChild: true,
       approvalMeta: { autoApproved: true },
     });
   }
@@ -238,7 +237,6 @@ export async function proposeAndExecute(
   };
   const effectiveAgentName = resolvedAgentOverride?.name ?? agentName;
   return executeSubagent(effective, effectiveAgentName, streamId, {
-    enableYoloOnChild: isApprovalBypassedForStream(streamId),
     approvalMeta: {
       autoApproved: false,
       ...(modelOverride && {

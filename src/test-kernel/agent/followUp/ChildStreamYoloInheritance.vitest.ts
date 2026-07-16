@@ -10,10 +10,10 @@ import type { StreamTabId } from '@shared/schemas';
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
-  enableYoloOnChildStream,
-  inheritBashBypassOnChildStream,
+  inheritApprovalBypassesOnChildStream,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
+  proposalApprovals,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
   toggleBashApprovalSessionBypass,
@@ -34,43 +34,48 @@ describe('child subagent stream approval inheritance', () => {
     // Sanity: the parent bypass round-trips through the public barrel.
     expect(isBashApprovalBypassedForStream(parent)).toBe(true);
 
-    inheritBashBypassOnChildStream(child, parent);
+    inheritApprovalBypassesOnChildStream(child, parent);
 
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
   });
 
-  it('leaves the child gated when the parent still prompts for bash', () => {
-    const parent = 'stream:parent-no-bash' as StreamTabId;
-    const child = 'stream:child-no-bash' as StreamTabId;
+  it('mirrors the parent tool-edit bypass onto the child stream', () => {
+    const { host } = createRecordingHost();
+    const parent = 'stream:parent-edit' as StreamTabId;
+    const child = 'stream:child-edit' as StreamTabId;
+    setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
 
-    inheritBashBypassOnChildStream(child, parent);
+    inheritApprovalBypassesOnChildStream(child, parent);
+
+    expect(isApprovalBypassedForStream(child)).toBe(true);
+    // Edit-YOLO inheritance must not drag bash along — kinds stay per-graph.
+    expect(isBashApprovalBypassedForStream(child)).toBe(false);
+  });
+
+  it('leaves the child gated when the parent still prompts', () => {
+    const parent = 'stream:parent-no-bypass' as StreamTabId;
+    const child = 'stream:child-no-bypass' as StreamTabId;
+
+    inheritApprovalBypassesOnChildStream(child, parent);
 
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
+    expect(isApprovalBypassedForStream(child)).toBe(false);
   });
 
   it('mirrors bash independently of tool-edit YOLO (CLI AUTO-BASH, no AUTO-APPROVE)', () => {
     // The bug this guards against: a parent with bash auto-approved but edits
-    // still gated must still propagate bash to the child, even though the child
-    // does not get tool-edit YOLO.
+    // still gated must propagate bash to the child without also granting the
+    // child tool-edit YOLO.
     const { host } = createRecordingHost();
     const parent = 'stream:parent-bash-only' as StreamTabId;
     const child = 'stream:child-bash-only' as StreamTabId;
     setBashApprovalSessionBypass(parent, true, host, { silent: true });
 
-    inheritBashBypassOnChildStream(child, parent);
+    inheritApprovalBypassesOnChildStream(child, parent);
 
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
-    // No edit-YOLO was applied, so tool-edit stays gated on the child.
+    // The parent's edits are gated, so the child's stay gated too.
     expect(isApprovalBypassedForStream(child)).toBe(false);
-  });
-
-  it('enables tool-edit YOLO on the child without touching bash', () => {
-    const child = 'stream:child-edit' as StreamTabId;
-
-    enableYoloOnChildStream(child);
-
-    expect(isApprovalBypassedForStream(child)).toBe(true);
-    expect(isBashApprovalBypassedForStream(child)).toBe(false);
   });
 
   it('picks up a parent bash bypass toggled after the child stream already started', () => {
@@ -82,12 +87,34 @@ describe('child subagent stream approval inheritance', () => {
     const parent = 'stream:parent-late-toggle' as StreamTabId;
     const child = 'stream:child-late-toggle' as StreamTabId;
 
-    inheritBashBypassOnChildStream(child, parent);
+    inheritApprovalBypassesOnChildStream(child, parent);
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
 
     setBashApprovalSessionBypass(parent, true, host, { silent: true });
 
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
+  });
+
+  it('picks up a parent edit-YOLO toggled after the child stream already started', () => {
+    // The extension's one shield couples edit + bash bypass; flipping it on
+    // while delegated children are already running must reach their edits
+    // exactly like it reaches their bash. Tool-edit inheritance used to be a
+    // one-shot grant at delegation launch, so a mid-run toggle left children
+    // prompting for every edit.
+    const { host } = createRecordingHost();
+    const parent = 'stream:parent-late-edit' as StreamTabId;
+    const child = 'stream:child-late-edit' as StreamTabId;
+
+    inheritApprovalBypassesOnChildStream(child, parent);
+    expect(isApprovalBypassedForStream(child)).toBe(false);
+
+    setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
+    expect(isApprovalBypassedForStream(child)).toBe(true);
+
+    // And back off: the child follows the parent's current state, not a
+    // snapshot taken at delegation time.
+    setToolEditApprovalSessionBypass(parent, false, host, { silent: true });
+    expect(isApprovalBypassedForStream(child)).toBe(false);
   });
 
   it('lets a conversation round inherit bypass from the previous round via the session-level ancestry link', () => {
@@ -118,7 +145,7 @@ describe('child subagent stream approval inheritance', () => {
     const parent = 'stream:parent-toggle' as StreamTabId;
     const child = 'stream:child-toggle' as StreamTabId;
     setBashApprovalSessionBypass(parent, true, host, { silent: true });
-    inheritBashBypassOnChildStream(child, parent);
+    inheritApprovalBypassesOnChildStream(child, parent);
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
 
     const first = toggleBashApprovalSessionBypass(child, host);
@@ -136,7 +163,7 @@ describe('child subagent stream approval inheritance', () => {
     const parent = 'stream:parent-torn-down' as StreamTabId;
     const child = 'stream:child-survives-parent' as StreamTabId;
     setBashApprovalSessionBypass(parent, true, host, { silent: true });
-    inheritBashBypassOnChildStream(child, parent);
+    inheritApprovalBypassesOnChildStream(child, parent);
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
 
     cleanupApprovalsForStream(parent);
@@ -144,19 +171,33 @@ describe('child subagent stream approval inheritance', () => {
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
   });
 
-  it('does not let bash ancestry also grant tool-edit or proposal bypass', () => {
+  it('does not let delegation ancestry also grant super-YOLO proposal bypass', () => {
+    // Delegation links bash + tool-edit only. Proposal (super-YOLO) bypass is
+    // deliberately unlinked, so a child's own delegations still prompt unless
+    // granted on the child explicitly.
+    const { host } = createRecordingHost();
+    const parent = 'stream:parent-super-yolo' as StreamTabId;
+    const child = 'stream:child-no-proposal' as StreamTabId;
+    proposalApprovals().setBypass(parent, true, host);
+
+    inheritApprovalBypassesOnChildStream(child, parent);
+
+    expect(proposalApprovals().isBypassed(parent)).toBe(true);
+    expect(proposalApprovals().isBypassed(child)).toBe(false);
+  });
+
+  it('keeps ancestry graphs independent per bypass kind', () => {
     // Ancestry used to be one shared graph for all three bypass kinds, so
     // linking a child for bash inheritance silently let it inherit tool-edit
-    // YOLO too whenever the parent had it on — even without
-    // `enableYoloOnChild`. Each kind must have its own independent ancestry
-    // graph.
+    // YOLO too whenever the parent had it on. Each kind must resolve through
+    // its own graph: a bash-only link must not leak tool-edit bypass.
     const { host } = createRecordingHost();
     const parent = 'stream:parent-toolEdit-on' as StreamTabId;
     const child = 'stream:child-bash-only-ancestry' as StreamTabId;
     setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
     setBashApprovalSessionBypass(parent, true, host, { silent: true });
 
-    inheritBashBypassOnChildStream(child, parent);
+    currentSession().approvals.registerStreamParent(child, parent, ['bash']);
 
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
     // No ancestry link was registered for 'toolEdit', so the child stays

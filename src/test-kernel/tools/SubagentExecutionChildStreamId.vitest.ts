@@ -49,8 +49,7 @@ vi.mock('@agent/followUp/ToolFileInteractionContext', () => ({
 }));
 
 vi.mock('@tools/approval', () => ({
-  enableYoloOnChildStream: vi.fn(),
-  inheritBashBypassOnChildStream: vi.fn(),
+  inheritApprovalBypassesOnChildStream: vi.fn(),
 }));
 
 import { executeSubagent } from '@tools/delegation/subagentExecution';

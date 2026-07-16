@@ -234,13 +234,14 @@ export interface SessionApprovals {
    * parent's bypass state whenever the child has no explicit value of its
    * own. Ancestry is tracked separately per kind — linking `bash` does NOT
    * also let the child inherit `toolEdit` or `proposal` bypass — so a
-   * delegation that only wants bash to follow the parent can't accidentally
-   * grant tool-edit or super-YOLO auto-approval too.
+   * delegation that only wants some kinds to follow the parent can't
+   * accidentally grant super-YOLO auto-approval too.
    *
    * Used for delegated subagent streams (parent = the orchestrator stream,
-   * `kinds: ['bash']` — tool-edit YOLO is granted separately and explicitly
-   * via `enableYoloOnChildStream` when a delegation asks for it) and, in the
-   * CLI, successive conversation rounds (parent = the previous round's root
+   * `kinds: ['bash', 'toolEdit']` — each kind follows the parent's own bypass
+   * live, while `proposal` stays unlinked so a child's own delegations still
+   * prompt; see `inheritApprovalBypassesOnChildStream`) and, in the CLI,
+   * successive conversation rounds (parent = the previous round's root
    * stream, all kinds — a CLI round should carry forward whichever bypasses
    * were on) — both mint a fresh `StreamTabId` that would otherwise start
    * every bypass kind ungated.

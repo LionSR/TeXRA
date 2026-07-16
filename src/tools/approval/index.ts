@@ -13,10 +13,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 
-export {
-  enableYoloOnChildStream,
-  inheritBashBypassOnChildStream,
-} from './toolEditApproval';
+export { inheritApprovalBypassesOnChildStream } from './toolEditApproval';
 
 /**
  * Clean up all approval state for a deleted stream in the owning session.

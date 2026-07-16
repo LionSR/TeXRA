@@ -12,8 +12,9 @@ import type { StreamTabId } from '@shared/schemas/identifiers';
  * it pauses or ends so manual follow-up turns prompt normally again.
  *
  * Subagents inherit the parent stream's bypass through the existing
- * delegation wiring (`inheritBashBypassOnChildStream`), so no child-stream
- * handling is needed here.
+ * delegation wiring (`inheritApprovalBypassesOnChildStream`), so no
+ * child-stream handling is needed here — per-kind ancestry means a goal
+ * parent with bash bypassed but edits gated propagates exactly that split.
  *
  * The approval modules are imported lazily: this file sits in the host-neutral
  * agent-loop import graph (via ToolUseWaitNode), and pulling the approval
