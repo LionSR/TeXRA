@@ -57,7 +57,7 @@ export interface DesktopGitHost {
   getRecentCommits(): Promise<DesktopGitCommitsResult>;
 }
 
-export interface DesktopGitCommitsResult {
+interface DesktopGitCommitsResult {
   commits: string[];
   isGitRepo: boolean;
 }

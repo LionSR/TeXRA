@@ -10,7 +10,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { buildDesktopShowPdfMessage } from '../desktopPdfMessages.js';
 
-export interface DesktopShellAdapter {
+interface DesktopShellAdapter {
   openExternal(url: string): Promise<void>;
   openPath(filePath: string): Promise<string>;
 }
