@@ -150,8 +150,14 @@ export function ConversationPane(
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
   // The liveness row is budgeted like any other live content: it takes one
   // row off the entry viewport so the pane's explicit height never exceeds
-  // maxRows (an overflow would leak live rows into scrollback).
-  const livenessRows = showLiveness ? 1 : 0;
+  // maxRows (an overflow would leak live rows into scrollback). Content
+  // outranks it: when a foreground panel squeezes the pane to a single row,
+  // pending entries keep that row and the StatusBar's running/elapsed
+  // segment carries liveness alone.
+  const livenessRows =
+    showLiveness && (maxRows > MIN_PENDING_ROWS || displayEntries.length === 0)
+      ? 1
+      : 0;
   const visibleEntries = selectTranscriptEntriesForViewport(
     displayEntries,
     maxRows - livenessRows,
