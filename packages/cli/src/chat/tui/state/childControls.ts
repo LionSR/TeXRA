@@ -2,6 +2,7 @@
 
 // Local imports - shared schemas
 import {
+  MESSAGE_TYPES,
   STREAM_PHASE,
   type ActiveChildInfo,
   type StreamTabId,
@@ -200,13 +201,21 @@ function buildChildControlItem(
 
   if (child.kind === 'subagent') {
     const entries = ctx.streamsById.get(child.childStreamId)?.entries;
+    const latestUserIndex =
+      entries?.findLastIndex(
+        (entry) => entry.role === 'user' && entry.text.trim(),
+      ) ?? -1;
+    const latestInstruction =
+      latestUserIndex >= 0 ? entries?.[latestUserIndex]?.text : undefined;
     const summary =
       entries?.findLast(
-        (entry) =>
-          entry.role === 'assistant' && entry.finalized && entry.text.trim(),
-      )?.text ??
-      entries?.find((entry) => entry.role === 'user' && entry.text.trim())
-        ?.text;
+        (entry, index) =>
+          index > latestUserIndex &&
+          entry.role === 'assistant' &&
+          entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
+          entry.finalized &&
+          entry.text.trim(),
+      )?.text ?? latestInstruction;
     return {
       executionId: child.executionId,
       childStreamId: child.childStreamId,
