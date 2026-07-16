@@ -21,7 +21,6 @@ import {
   type ActiveChildInfo,
   type AgentCategoryFilter,
   type ConversationProgress,
-  type ContextStateData,
   type ExecutionId,
   type RoundStage,
   type StreamTabId,
@@ -60,7 +59,6 @@ export interface ProgressStreamMetadata {
 /** Ephemeral session state per stream (not persisted). */
 interface StreamSessionState {
   metadata: ProgressStreamMetadata;
-  contextState: ContextStateData | null;
 }
 
 /** Active stream identifier, or empty string when no stream is selected. */
@@ -230,7 +228,6 @@ export class ProgressViewState {
             creationTimestamp ??
             Date.now(),
         },
-        contextState: null,
       };
       this._sessionState.set(stream, state);
     }
@@ -330,10 +327,6 @@ export class ProgressViewState {
   }
 
   // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).
-
-  getContextState(stream: StreamTabId): ContextStateData | undefined {
-    return this._sessionState.get(stream)?.contextState ?? undefined;
-  }
 
   // -- Ephemeral execution state ----------------------------------------------
 

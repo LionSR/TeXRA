@@ -1658,6 +1658,7 @@ describe('ProgressBackend', () => {
       ).toMatchObject({
         stream: 'workflow-existing',
         action: 'render',
+        kind: AgentCategory.Workflow,
       });
     } finally {
       backend.dispose();
@@ -1720,7 +1721,7 @@ describe('ProgressBackend', () => {
       expect(sync).toMatchObject({
         stream,
         action: 'render',
-        agentCategory: AgentCategory.ToolUse,
+        kind: AgentCategory.ToolUse,
       });
     } finally {
       backend.dispose();

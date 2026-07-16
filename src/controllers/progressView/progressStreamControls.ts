@@ -1,6 +1,5 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
-import { isGoalInFlight } from '@shared/schemas/goal';
 import {
   isApprovalBypassedForStream,
   proposalApprovals,
@@ -13,13 +12,17 @@ export function getProgressStreamControls(
   session?: SessionHandle,
 ): ProgressStreamControls {
   const goal = GoalStore.getForStream(streamId);
-  const goalActive = isGoalInFlight(goal);
-  return {
+  const bypasses = {
     toolEditBypass: isApprovalBypassedForStream(streamId, session),
     superYoloBypass: proposalApprovals(session).isBypassed(streamId),
-    goalActive,
-    ...(goalActive && goal
-      ? { goalStatus: goal.status, goalObjective: goal.objective }
-      : {}),
+  };
+  if (!goal) {
+    return { ...bypasses, goalActive: false };
+  }
+  return {
+    ...bypasses,
+    goalActive: true,
+    goalStatus: goal.status,
+    goalObjective: goal.objective,
   };
 }

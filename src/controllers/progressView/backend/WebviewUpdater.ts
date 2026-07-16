@@ -39,23 +39,6 @@ export type ProgressViewMessageSender = (
 ) => void;
 
 /**
- * Extra content to include with log updates.
- * All fields are optional to support incremental updates.
- *
- * NOTE: Status/todos/instruction are sent as separate messages rather than
- * batched here. This ensures critical UI feedback (status) isn't blocked by
- * potentially large log payloads and provides fault isolation.
- */
-export type LogContentExtras = Pick<
-  SyncStreamContentPayload,
-  | 'workflowFiles'
-  | 'workflowMissingOutputs'
-  | 'workflowCompileFailures'
-  | 'runUsage'
-  | 'contextState'
->;
-
-/**
  * Manages webview updates for the progress view.
  * Provides a clean interface for updating different parts of the webview
  * without coupling business logic to DOM operations.
@@ -383,10 +366,7 @@ export class WebviewUpdater {
     });
   }
 
-  /**
-   * Send a single batched content sync message combining logs, todos, follow-ups,
-   * and instruction. Used on tab switch to replace 4 separate messages with 1.
-   */
+  /** Sends one complete, kind-specific content snapshot for a stream tab. */
   sendSyncStreamContent(payload: SyncStreamContentPayload): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
