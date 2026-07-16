@@ -3,11 +3,13 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type { TokenCountOptions } from '@agent/types/ModelHandlerContracts';
 import type { ToolDefinition } from '@model';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 // Type imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type OpenAI from 'openai';
 
 /**
  * Moonshot API `fullName`s shared by more than one TeXRA registry entry — a
@@ -75,6 +77,9 @@ const FIXED_TEMPERATURE_BY_FULLNAME: ReadonlyMap<string, FixedTemperatureRule> =
 const KimiTokenEstimateResponseSchema = z.object({
   data: z.object({ total_tokens: z.number() }),
 });
+
+const KIMI_TOKEN_ESTIMATE_TIMEOUT_MS = 20_000; // 20 s
+const KIMI_TOKEN_ESTIMATE_RETRIES = 2;
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -170,38 +175,28 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
    * Estimates token count using Kimi's native token counting API.
    * This provides accurate token counts for Moonshot models.
    *
+   * The OpenAI-compatible client owns transient retry policy (408, 409, 429,
+   * 5xx, network failures, and Retry-After) and applies the timeout per
+   * attempt. The owning run's signal cancels requests and retry delays.
+   *
    * @param messages The messages to count tokens for.
+   * @param options Cancellation signal for the owning run.
    * @returns Promise resolving to the total token count.
    * @see https://platform.moonshot.cn/docs/api/tokenization
    */
   override async estimateTokenCount(
     messages: ChatCompletionMessageParam[],
+    options?: TokenCountOptions<OpenAI>,
   ): Promise<number> {
-    const apiKey = await this.getApiKey();
-    const baseUrl = this.getBaseUrl() ?? 'https://api.moonshot.ai/v1';
-
-    const response = await fetch(`${baseUrl}/tokenizers/estimate-token-count`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: this.config.fullName,
-        messages,
-      }),
+    const client = options?.client ?? (await this.getClient());
+    const raw = await client.post<unknown>('/tokenizers/estimate-token-count', {
+      body: { model: this.config.fullName, messages },
+      maxRetries: KIMI_TOKEN_ESTIMATE_RETRIES,
+      timeout: KIMI_TOKEN_ESTIMATE_TIMEOUT_MS,
+      signal: options?.signal,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Kimi token estimation failed (${response.status}): ${errorText}`,
-      );
-    }
-
-    const parsed = KimiTokenEstimateResponseSchema.safeParse(
-      await response.json().catch(() => null),
-    );
+    const parsed = KimiTokenEstimateResponseSchema.safeParse(raw);
     if (!parsed.success) {
       throw new Error(
         `Kimi token estimation returned an unexpected response shape: ${z.prettifyError(parsed.error)}`,
