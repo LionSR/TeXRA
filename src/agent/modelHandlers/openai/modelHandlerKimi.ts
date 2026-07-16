@@ -1,14 +1,10 @@
 import { z } from 'zod';
-import ky from 'ky';
-import { AbortError } from 'p-retry';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { TokenCountOptions } from '@agent/types/ModelHandlerContracts';
 import type { ToolDefinition } from '@model';
-import { joinAbortSignal, retryTransientFetch } from '@tools/timeouts';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 // Type imports
@@ -179,11 +175,9 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
    * Estimates token count using Kimi's native token counting API.
    * This provides accurate token counts for Moonshot models.
    *
-   * Retries transient failures (timeouts, 5xx, 429 rate limits, dropped
-   * connections) with jittered backoff via {@link retryTransientFetch} — the
-   * same pattern every other network-boundary call in this codebase uses —
-   * and joins `options.signal` so an interrupted run aborts an in-flight
-   * request instead of waiting out the timeout.
+   * The OpenAI-compatible client owns transient retry policy (408, 409, 429,
+   * 5xx, network failures, and Retry-After) and applies the timeout per
+   * attempt. The owning run's signal cancels requests and retry delays.
    *
    * @param messages The messages to count tokens for.
    * @param options Cancellation signal for the owning run.
@@ -194,44 +188,20 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     messages: ChatCompletionMessageParam[],
     options?: TokenCountOptions<OpenAI>,
   ): Promise<number> {
-    const apiKey = await this.getApiKey();
-    const baseUrl = this.getBaseUrl() ?? 'https://api.moonshot.ai/v1';
+    const client = options?.client ?? (await this.getClient());
+    const raw = await client.post<unknown>('/tokenizers/estimate-token-count', {
+      body: { model: this.config.fullName, messages },
+      maxRetries: KIMI_TOKEN_ESTIMATE_RETRIES,
+      timeout: KIMI_TOKEN_ESTIMATE_TIMEOUT_MS,
+      signal: options?.signal,
+    });
 
-    return retryTransientFetch(
-      async () => {
-        const raw = await ky
-          .post(`${baseUrl}/tokenizers/estimate-token-count`, {
-            headers: { Authorization: `Bearer ${apiKey}` },
-            json: { model: this.config.fullName, messages },
-            timeout: false,
-            signal: joinAbortSignal(
-              KIMI_TOKEN_ESTIMATE_TIMEOUT_MS,
-              options?.signal,
-            ),
-            retry: 0,
-          })
-          .json<unknown>();
-
-        const parsed = KimiTokenEstimateResponseSchema.safeParse(raw);
-        if (!parsed.success) {
-          throw new AbortError(
-            new Error(
-              `Kimi token estimation returned an unexpected response shape: ${z.prettifyError(parsed.error)}`,
-            ),
-          );
-        }
-        return parsed.data.data.total_tokens;
-      },
-      {
-        retries: KIMI_TOKEN_ESTIMATE_RETRIES,
-        minTimeout: 1000,
-        cancelSignal: options?.signal,
-        onFailedAttempt: ({ error, retriesLeft }) => {
-          this.logger.debug(
-            `Kimi token estimation failed (${retriesLeft} retries left): ${toErrorMessage(error)}`,
-          );
-        },
-      },
-    );
+    const parsed = KimiTokenEstimateResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new Error(
+        `Kimi token estimation returned an unexpected response shape: ${z.prettifyError(parsed.error)}`,
+      );
+    }
+    return parsed.data.data.total_tokens;
   }
 }

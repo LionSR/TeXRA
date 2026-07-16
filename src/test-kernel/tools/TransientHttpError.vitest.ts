@@ -54,7 +54,8 @@ describe('isTransientHttpError', () => {
     ).toBe(false);
   });
 
-  it('treats rate limits and 5xx server errors as transient', () => {
+  it('treats request timeouts, rate limits, and 5xx errors as transient', () => {
+    expect(isTransientHttpError(kyErrorWithStatus(408))).toBe(true);
     expect(isTransientHttpError(kyErrorWithStatus(429))).toBe(true);
     expect(isTransientHttpError(kyErrorWithStatus(500))).toBe(true);
     expect(isTransientHttpError(kyErrorWithStatus(503))).toBe(true);
