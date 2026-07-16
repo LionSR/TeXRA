@@ -1,12 +1,12 @@
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
-  formatCliApiMode,
   parseCliApiMode,
   setCliApiMode,
   type CliApiMode,
 } from '@cli/runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
+import { formatCliModelAccessRouteInline } from '@cli/runtime/modelAccessRoute';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
@@ -80,7 +80,7 @@ export async function applyCliApiModeSelection(
     }
     appendLocalAssistantTranscript(
       [
-        `API mode set to ${formatCliApiMode(apiMode)}.`,
+        `API mode set to ${formatCliModelAccessRouteInline(apiMode)}.`,
         ...(modelNotice ? [modelNotice] : []),
       ].join('\n'),
     );

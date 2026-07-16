@@ -2,7 +2,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
-import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
+import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
@@ -16,6 +16,7 @@ import {
   rootRunPending as rootRunPendingSignal,
   rootRunStreamId as rootRunStreamIdSignal,
   sessionMeta as sessionMetaSignal,
+  streamAccessTarget,
   streams as streamsSignal,
   NO_BYPASS,
 } from '../state/cliState';
@@ -80,27 +81,65 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     streams,
   });
   const statusSlice = target.displaySlice;
+  const accessTarget = streamAccessTarget(statusSlice, sessionMeta);
 
-  // Whether the active model is currently routing through the ChatGPT
-  // subscription (preference + eligibility + signed in). Kept in polled state
-  // rather than read on every render: the poll re-reads the preference so an
-  // external config change is reflected within the interval, and an in-process
-  // `/subscription` toggle bumps `codexPreferenceVersion` to refresh at once.
+  // Whether the selected stream's model/category would currently route through
+  // the ChatGPT subscription (preference + eligibility + signed in). The
+  // completed usage snapshot supersedes this prospective value in the display.
+  // Polling re-reads external config changes; an in-process `/subscription`
+  // toggle also bumps `codexPreferenceVersion` for an immediate refresh.
   const codexPreferenceVersion = useSignal(codexPreferenceVersionSignal);
-  const [subscriptionActive, setSubscriptionActive] = useState(false);
+  const [subscriptionResolution, setSubscriptionResolution] = useState<{
+    readonly model: string;
+    readonly category: typeof accessTarget.category;
+    readonly preferenceVersion: number;
+    readonly active: boolean;
+  }>();
+  const subscriptionActive =
+    subscriptionResolution?.model === accessTarget.model &&
+    subscriptionResolution.category === accessTarget.category &&
+    subscriptionResolution.preferenceVersion === codexPreferenceVersion
+      ? subscriptionResolution.active
+      : false;
+  const modelAccess = resolveCliModelAccessRoute({
+    apiMode: sessionMeta.apiMode,
+    subscriptionActive,
+    usageRoute: statusSlice?.usage?.usageRoute,
+  });
 
   useEffect(() => {
+    const agentCategory = accessTarget.category;
+    if (agentCategory === undefined) {
+      setSubscriptionResolution({
+        ...accessTarget,
+        preferenceVersion: codexPreferenceVersion,
+        active: false,
+      });
+      return;
+    }
     let cancelled = false;
     let inFlight = false;
     const refresh = (): void => {
       if (inFlight) return; // Skip if the previous read has not resolved.
       inFlight = true;
-      void isCodexSubscriptionActive(sessionMeta.model)
+      void isCodexSubscriptionActive(accessTarget.model, agentCategory)
         .then((active) => {
-          if (!cancelled) setSubscriptionActive(active);
+          if (!cancelled) {
+            setSubscriptionResolution({
+              ...accessTarget,
+              preferenceVersion: codexPreferenceVersion,
+              active,
+            });
+          }
         })
         .catch(() => {
-          if (!cancelled) setSubscriptionActive(false);
+          if (!cancelled) {
+            setSubscriptionResolution({
+              ...accessTarget,
+              preferenceVersion: codexPreferenceVersion,
+              active: false,
+            });
+          }
         })
         .finally(() => {
           inFlight = false;
@@ -113,7 +152,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       cancelled = true;
       clearInterval(refreshTimer);
     };
-  }, [sessionMeta.model, codexPreferenceVersion]);
+  }, [accessTarget.category, accessTarget.model, codexPreferenceVersion]);
 
   const runStartedAt = isActivePhase(statusSlice?.status)
     ? statusSlice?.runStartedAt
@@ -148,10 +187,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     agentSelectionAvailable: props.agentSelectionAvailable,
     subagentControlsAvailable: props.subagentControlsAvailable,
     sessionNavigationAvailable: props.sessionNavigationAvailable,
-    model: sessionMeta.model,
-    apiMode: shortCliApiMode(sessionMeta.apiMode),
+    model: accessTarget.model,
+    modelAccess,
     transcriptMode: sessionMeta.transcriptMode,
-    subscriptionActive,
     approvalPolicy: sessionMeta.approvalPolicy,
     shiftEnterNewline: caps.kittyKeyboard,
     transcriptAvailable: props.transcriptAvailable,

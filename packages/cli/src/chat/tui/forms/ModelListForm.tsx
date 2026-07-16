@@ -14,7 +14,8 @@ import {
   type CliNoRunnableModelsMessageOptions,
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/modelAccess';
-import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import type { AgentCategory } from '@shared/schemas/agent';
 import { Select, selectIndexForHotkeyInput } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
@@ -158,7 +159,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   if (isCompactFormRows(props.availableRows) && items.length > 0) {
     return (
       <FormFrame
-        title={`/model · ${formatCliApiMode(props.apiMode)}`}
+        title={`/model · ${formatCliModelAccessRoute(props.apiMode)}`}
         showCloseHint={false}
       >
         <Text dimColor>Available models</Text>
@@ -217,7 +218,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
 
   return (
     <FormFrame
-      title={`/model · ${formatCliApiMode(props.apiMode)}`}
+      title={`/model · ${formatCliModelAccessRoute(props.apiMode)}`}
       showCloseHint={false}
     >
       <Text dimColor>{description}</Text>
