@@ -21,11 +21,7 @@ import {
   type AgentEntry,
 } from '@agent/index';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  agentKeyOf,
-  type AgentCategory,
-  type AgentSource,
-} from '@shared/schemas/agent';
+import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';
