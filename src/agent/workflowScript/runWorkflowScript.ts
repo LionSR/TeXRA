@@ -398,6 +398,9 @@ export async function runWorkflowScript(
   }
 
   const argsJson = serializeBridgeValue(options.args, 'Workflow args');
+  const abortFromParent = () => runAbort.abort(options.signal?.reason);
+  options.signal?.addEventListener('abort', abortFromParent, { once: true });
+  if (options.signal?.aborted) abortFromParent();
 
   let result: unknown;
   let scriptFailure: { readonly error: unknown } | undefined;
@@ -433,12 +436,14 @@ export async function runWorkflowScript(
       {
         timeoutMs,
         filename: `${meta.name}.workflow.js`,
+        signal: options.signal,
         onTimeout: () => runAbort.abort(),
       },
     );
   } catch (error) {
     scriptFailure = { error };
   } finally {
+    options.signal?.removeEventListener('abort', abortFromParent);
     // Abort unconditionally once the sandbox returns. This stops in-flight
     // work the script abandoned and makes agentPrimitive reject any late call.
     runAbort.abort();

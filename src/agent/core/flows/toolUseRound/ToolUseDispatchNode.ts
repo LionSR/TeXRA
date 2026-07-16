@@ -11,9 +11,10 @@ import {
   type ExtractedToolAttachments,
 } from '@agent/core/tools/toolAttachmentExtraction';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
+import type { FileLocation } from '@shared/schemas';
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 
 // Local imports - logging
-import type { FileLocation } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { isNonEmptyString, createSemaphore } from '@utils/core';
@@ -36,6 +37,7 @@ const SLOW_TOOLS = new Set([
   'web_fetch',
   'web_search',
   'executions',
+  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
 ]);
 
 /** Tools that defer in-progress logging until after approval. */
@@ -367,6 +369,7 @@ export class ToolUseDispatchNode<C> extends Node<
         {
           tracker: options.workspace.interactions,
           workPlanState: options.workspace.workPlan,
+          trace: options.logger,
           userInstruction:
             options.config.rootUserInstruction ?? this._currentUserInstruction,
           toolCallId: call.callId,

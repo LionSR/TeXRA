@@ -17,7 +17,10 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 // Local imports - shared utilities
 import type { LogMessageData } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import {
+  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  DELEGATION_TOOL_CATEGORY,
+} from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { isObject } from '@utils/core';
@@ -44,11 +47,7 @@ import {
 } from '../htmlBuilders';
 import { registerProposalInput } from '../proposalInputStore';
 import { stringifyWithLanguage } from '../parseUtils';
-import {
-  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
-  TOOL_LABEL_MAP,
-  TRIVIAL_WRITE_OUTPUT,
-} from '../constants';
+import { TOOL_LABEL_MAP, TRIVIAL_WRITE_OUTPUT } from '../constants';
 
 import {
   buildBannerContent,
@@ -196,9 +195,10 @@ export function formatToolUseTemplate(
   const timerTemplate = isInProgress ? html`<tool-timer .startTime=${timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : undefined;
 
   // Delegation banner extras: setup link (shown in summary row)
-  const isProposalBearingDelegation =
-    DELEGATION_TOOLS.has(toolName) &&
-    toolName !== DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME;
+  const isProposalBearingDelegation = Object.hasOwn(
+    DELEGATION_TOOL_CATEGORY,
+    toolName,
+  );
   const proposalId =
     isProposalBearingDelegation && !isInProgress
       ? registerProposalInput(input, toolName)

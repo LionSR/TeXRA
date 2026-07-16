@@ -29,7 +29,6 @@ import {
   extractCodeOnlyInput,
 } from '@progressView/frontend/formatters/parseUtils';
 import {
-  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
@@ -38,7 +37,10 @@ import {
   CodexMcpToolOutputSchema,
   type CodexMcpToolOutput,
 } from '@shared/schemas/codex';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import {
+  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  DELEGATION_TOOLS,
+} from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
@@ -330,17 +332,6 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
   return sections;
 }
 
-function omitWorkflowJournal(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(omitWorkflowJournal);
-  if (!isObject(value)) return value;
-
-  return Object.fromEntries(
-    Object.entries(value).flatMap(([key, entry]) =>
-      key === 'journal' ? [] : [[key, omitWorkflowJournal(entry)] as const],
-    ),
-  );
-}
-
 function buildWorkflowScriptSections(
   ctx: ToolSectionContext,
 ): TemplateResult[] {
@@ -378,13 +369,9 @@ function buildWorkflowScriptSections(
     );
   }
 
-  const rawResult =
-    isObject(parsedOutput) && Object.hasOwn(parsedOutput, 'output')
-      ? parsedOutput.output
-      : parsedOutput;
-  const publicResult = omitWorkflowJournal(rawResult);
+  const rawResult = isObject(parsedOutput) ? parsedOutput.output : parsedOutput;
   const { text: resultText, language: resultLanguage } =
-    stringifyWithLanguage(publicResult);
+    stringifyWithLanguage(rawResult);
   if (resultText) {
     sections.push(
       buildToolSection('Result:', resultText, {

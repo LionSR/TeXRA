@@ -16,6 +16,7 @@ import {
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { buildUserVarPassthrough } from '@agent/utils/userVars';
 import * as logger from '@logger/logUtils';
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
@@ -133,6 +134,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
     description: 'Delegate tasks to other agents and manage executions',
     tools: [
       'delegate_workflow',
+      DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
       'delegate_agent',
       'executions',
       'accept_run_files',

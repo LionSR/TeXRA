@@ -85,6 +85,8 @@ export interface WorkflowScriptRunOptions {
   /** Exposed verbatim to the script as the global `args`. */
   args?: unknown;
   runAgent: WorkflowAgentRunner;
+  /** Parent cancellation signal; aborts guest execution and active agents. */
+  signal?: AbortSignal;
   /** Max concurrently running agent() calls. Default 4. */
   concurrency?: number;
   /** Journal from a prior run; per-index key matches return cached results. */

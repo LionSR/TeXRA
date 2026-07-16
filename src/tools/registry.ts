@@ -9,6 +9,7 @@ import {
 } from '@model/ToolDefinition';
 
 // Local imports - shared tools
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 
 // Local imports - tools
@@ -56,6 +57,7 @@ import {
   LeanLoogleTool,
 } from './lean';
 import { WorkflowAgentTool, DelegateAgentTool } from './DelegationTools';
+import { WorkflowScriptTool } from './delegation/WorkflowScriptTool';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ExternalInquiryTool } from './inquiry';
@@ -129,6 +131,7 @@ function createDefaultTools() {
     codex: new CodexTool(),
     [CLAUDE_AGENT_NAME]: new ClaudeAgentTool(),
     delegate_workflow: new WorkflowAgentTool(),
+    [DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME]: new WorkflowScriptTool(),
     delegate_agent: new DelegateAgentTool(),
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),

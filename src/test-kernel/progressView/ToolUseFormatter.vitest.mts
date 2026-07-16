@@ -25,8 +25,10 @@ describe('tool-use formatter', () => {
   phases: [{ title: 'Collect' }, { title: 'Compare' }],
 };
 
-const papers = await parallel(args.paperIds, async (paperId) =>
-  agent(\`Read and assess \${paperId}\`, { label: paperId }),
+const papers = await parallel(
+  args.paperIds.map((paperId) => () =>
+    agent(\`Read and assess \${paperId}\`, { label: paperId }),
+  ),
 );
 return { papers, question: args.question };`;
     const message: LogMessageData = {
@@ -46,9 +48,10 @@ return { papers, question: args.question };`;
           },
         },
         output: {
-          result: { compared: 2 },
-          agentCalls: 2,
-          journal: [{ index: 0, key: 'private-key', result: 'private-result' }],
+          status: 'executed',
+          summary:
+            "Completed workflow script 'Literature synthesis' (2 agent calls)",
+          output: JSON.stringify({ compared: 2 }),
         },
       },
     };
@@ -77,9 +80,8 @@ return { papers, question: args.question };`;
     expect(argsBlock?.querySelector('code')?.textContent).toContain(
       '"question": "Which assumptions differ?"',
     );
-    expect(container.textContent).toContain('compared: 2');
+    expect(container.textContent).toContain('"compared":2');
     expect(container.textContent).not.toContain('journal');
-    expect(container.textContent).not.toContain('private-key');
     expect(container.querySelector('.proposal-banner-setup')).toBeNull();
   });
 
