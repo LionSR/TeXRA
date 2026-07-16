@@ -22,6 +22,3 @@ export const EDIT_DIFF_PADDING = 6;
 
 /** Columns of side padding in the status bar row. */
 export const STATUS_BAR_HORIZONTAL_PADDING = 2;
-
-/** Minimum column gap between the left status group and the right preview. */
-export const STATUS_BAR_RIGHT_PREVIEW_GAP = 2;
