@@ -28,6 +28,7 @@ import {
   dispatchProgressViewOutbound,
   MainViewMessageSchema,
   ProgressViewOutboundMessageSchema,
+  SyncStreamContentMessageSchema,
   type ProgressViewOutboundHandlerRegistry,
 } from '@shared/schemas';
 import {
@@ -37,21 +38,100 @@ import {
   unsupported,
 } from '@shared/utils/dispatcher';
 
-/** Every command in the real outbound schema, including nested unions (UPDATE_PERMISSION). */
+interface DiscriminatedSchemaNode {
+  shape?: { command: { value: string } };
+  options?: readonly DiscriminatedSchemaNode[];
+}
+
+function collectCommands(
+  schema: DiscriminatedSchemaNode,
+  commands: Set<string>,
+): void {
+  if (schema.shape) commands.add(schema.shape.command.value);
+  for (const option of schema.options ?? []) {
+    collectCommands(option, commands);
+  }
+}
+
+/** Every command in the real outbound schema, including nested unions. */
 function outboundCommands(): string[] {
   const commands = new Set<string>();
-  for (const opt of ProgressViewOutboundMessageSchema.options as Array<{
-    shape?: { command: { value: string } };
-    options?: Array<{ shape: { command: { value: string } } }>;
-  }>) {
-    if (opt.shape) {
-      commands.add(opt.shape.command.value);
-    } else if (opt.options) {
-      for (const sub of opt.options) commands.add(sub.shape.command.value);
-    }
-  }
+  collectCommands(
+    ProgressViewOutboundMessageSchema as unknown as DiscriminatedSchemaNode,
+    commands,
+  );
   return [...commands];
 }
+
+describe('SyncStreamContentMessageSchema', () => {
+  const workflow = {
+    command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+    action: 'render',
+    stream: 'workflow-stream',
+    kind: 'workflow',
+    runUsage: {},
+    outputs: { files: {}, missing: {}, compileFailures: {} },
+    activeState: {
+      conversationProgress: { toolCallCount: 0 },
+      roundStage: null,
+      badges: {
+        activeSubagents: [],
+        finishedSubagentCount: 0,
+        activeProcesses: [],
+        finishedProcessCount: 0,
+      },
+      parentStreamId: null,
+    },
+  } as const;
+  const toolUse = {
+    command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+    action: 'render',
+    stream: 'tool-stream',
+    kind: 'toolUse',
+    runUsage: {},
+    workPlan: { todos: [], plan: null, queuedFollowUps: [] },
+    controls: {
+      toolEditBypass: false,
+      superYoloBypass: false,
+      goal: { active: false },
+    },
+  } as const;
+
+  it.each([
+    { command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT, action: 'clear' },
+    workflow,
+    toolUse,
+  ])('accepts an exact transport variant', (message) => {
+    expect(SyncStreamContentMessageSchema.safeParse(message).success).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    {
+      command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+      action: 'clear',
+      stream: '',
+    },
+    { ...workflow, workPlan: toolUse.workPlan },
+    { ...toolUse, outputs: workflow.outputs },
+    {
+      ...workflow,
+      activeState: { conversationProgress: { toolCallCount: 1 } },
+    },
+    {
+      ...toolUse,
+      controls: {
+        ...toolUse.controls,
+        goal: { active: true },
+      },
+    },
+  ])('rejects a contradictory transport state', (message) => {
+    expect(SyncStreamContentMessageSchema.safeParse(message).success).toBe(
+      false,
+    );
+  });
+});
 
 function createSpyContext(initialState: ProgressState = createInitialState()): {
   ctx: MessageHandlerContext;
