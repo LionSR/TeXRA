@@ -50,10 +50,10 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
  * extension and the desktop bridge wrap around `resumeToolUseFromSnapshot`:
  *
  *   acquire the follow-up queue → flip the stream to RESUMING → drain the
- *   queued follow-ups and notify the UI → resume, re-appending the drained
- *   items into the rebuilt session → on failure, re-enqueue the follow-ups
- *   (force) and re-notify → always return the stream to WAITING if the resume
- *   never reached the run lifecycle.
+ *   queued follow-ups and notify the UI → resume, handing the drained batch
+ *   to the flow's WAITING cursor via `drainedFollowUps` → on failure,
+ *   re-enqueue the follow-ups (force) and re-notify → always return the
+ *   stream to WAITING if the resume never reached the run lifecycle.
  *
  * Hosts stay thin adapters: they supply only what differs (`session`,
  * `runtimeUnavailableTools`, an optional seed follow-up, and the `onError`
@@ -106,6 +106,12 @@ export async function resumeQueuedToolUseSnapshot(
       },
     });
 
+    // The drained batch must reach the resumed flow through the direct
+    // `drainedFollowUps` handoff, not `appendFollowUp`: a subagent's WAITING
+    // cursor suspends again before ever reading the stream queue (see
+    // `ToolUseWaitNode` — only its child-run loop's queue wait consumes it),
+    // so re-queued items would sit unconsumed until the next wake. A root
+    // cursor accepts either route; the handoff works for both.
     const result = await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
       session: options.session,
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
@@ -117,13 +123,26 @@ export async function resumeQueuedToolUseSnapshot(
       onRunError: options.onRunError,
       onRun: options.onRun,
       isCancellationRequested: options.isCancellationRequested,
+      drainedFollowUps: followUps.length
+        ? followUps.map((item) => ({
+            text: item.text,
+            displayText: item.displayText,
+            mediaFiles: item.mediaFiles,
+            origin: item.origin ?? ('user' as const),
+          }))
+        : undefined,
       setupSession: (session) => {
-        followUps = [...followUps, ...followUpsQueue.drainItems(streamId)];
+        // Items that raced into the queue after the initial drain go through
+        // the rebuilt session's queue: a root cursor drains them at its next
+        // suspension, a subagent leaves them for its next wake. They are
+        // tracked in `followUps` so a failed resume restores them too.
+        const raced = followUpsQueue.drainItems(streamId);
+        followUps = [...followUps, ...raced];
         if (options.isCancellationRequested?.()) {
           cancelledBeforeSessionSetup = true;
           return;
         }
-        for (const item of followUps) {
+        for (const item of raced) {
           session.appendFollowUp(item);
         }
       },
