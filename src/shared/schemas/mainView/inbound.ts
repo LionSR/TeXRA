@@ -286,10 +286,13 @@ const latexdiffvcOperationFields = {
   clean: z.boolean().nullish(),
 };
 
-const PackLatexdiffvcMessageSchema = z.object({
+export const PackLatexdiffvcMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC),
   ...latexdiffvcOperationFields,
 });
+export type PackLatexdiffvcMessage = z.infer<
+  typeof PackLatexdiffvcMessageSchema
+>;
 
 const CleanLatexdiffvcMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC),
@@ -329,11 +332,12 @@ const CleanSingleMessageSchema = z.object({
   ...singleOperationFields,
 });
 
-const PackMultipleMessageSchema = z.object({
+export const PackMultipleMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.PACK_MULTIPLE),
   ...singleOperationFields,
   inputFiles: z.array(z.string()).optional(),
 });
+export type PackMultipleMessage = z.infer<typeof PackMultipleMessageSchema>;
 
 const CleanMultipleMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE),
