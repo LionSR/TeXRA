@@ -22,9 +22,20 @@ class FakeStdout extends EventEmitter {
   readonly columns = 100;
   readonly rows = 24;
   output = '';
+  readonly firstWrite: Promise<void>;
+  private resolveFirstWrite: (() => void) | undefined;
+
+  constructor() {
+    super();
+    this.firstWrite = new Promise((resolve) => {
+      this.resolveFirstWrite = resolve;
+    });
+  }
 
   write(chunk: string): boolean {
     this.output += chunk;
+    this.resolveFirstWrite?.();
+    this.resolveFirstWrite = undefined;
     return true;
   }
 
@@ -91,7 +102,8 @@ describe('CLI child list interaction', () => {
     );
 
     try {
-      await waitFor(() => stdout.output.includes('latexmk'));
+      await stdout.firstWrite;
+      expect(stdout.output).toContain('latexmk');
       expect(stdout.output).not.toContain(POINTER);
     } finally {
       instance.unmount();
