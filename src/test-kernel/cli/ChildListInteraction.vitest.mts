@@ -22,20 +22,9 @@ class FakeStdout extends EventEmitter {
   readonly columns = 100;
   readonly rows = 24;
   output = '';
-  readonly firstWrite: Promise<void>;
-  private resolveFirstWrite: (() => void) | undefined;
-
-  constructor() {
-    super();
-    this.firstWrite = new Promise((resolve) => {
-      this.resolveFirstWrite = resolve;
-    });
-  }
 
   write(chunk: string): boolean {
     this.output += chunk;
-    this.resolveFirstWrite?.();
-    this.resolveFirstWrite = undefined;
     return true;
   }
 
@@ -81,8 +70,7 @@ describe('CLI child list interaction', () => {
   it('renders no process highlight before the list receives a selection', async () => {
     const ink = (await import(cliRequire.resolve('ink'))) as any;
     const React = ((await import(cliRequire.resolve('react'))) as any).default;
-    const stdout = new FakeStdout();
-    const instance = ink.render(
+    const output = ink.renderToString(
       React.createElement(SubagentList, {
         activeProcesses: [
           {
@@ -95,19 +83,11 @@ describe('CLI child list interaction', () => {
         keyboardActive: false,
         maxRows: 3,
       }),
-      {
-        stdout,
-        patchConsole: false,
-      },
+      { columns: 100 },
     );
 
-    try {
-      await stdout.firstWrite;
-      expect(stdout.output).toContain('latexmk');
-      expect(stdout.output).not.toContain(POINTER);
-    } finally {
-      instance.unmount();
-    }
+    expect(output).toContain('latexmk');
+    expect(output).not.toContain(POINTER);
   });
 
   it('views and kills only the selected active session, then focuses it', async () => {
