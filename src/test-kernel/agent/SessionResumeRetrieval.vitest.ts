@@ -136,6 +136,7 @@ async function runPersistedFlow(
   options: {
     readonly isSubagent?: boolean;
     readonly onIdle?: () => void;
+    readonly takePendingFollowUps?: RunToolUseFlowInput['takePendingFollowUps'];
     readonly onFlowRecordDisposition?: (
       disposition: 'preserve' | 'delete',
     ) => void;
@@ -178,6 +179,7 @@ async function runPersistedFlow(
           ...(snapshot !== undefined && { resumeSnapshot: snapshot }),
           isSubagent: options.isSubagent ?? true,
           onIdle: options.onIdle,
+          takePendingFollowUps: options.takePendingFollowUps,
           onFlowRecordDisposition: options.onFlowRecordDisposition,
           toolInjections: new ToolInjectionRegistry(),
         },
@@ -531,6 +533,25 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         },
       },
     );
+  });
+
+  it('offers queue ownership again after a resumed subagent parks', async () => {
+    const executionId = 'abc-flow-post-park-owner' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-post-park-owner' as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const takePendingFollowUps = vi.fn(() => []);
+
+    const result = await runPersistedFlow(
+      executionId,
+      streamId,
+      snapshot,
+      undefined,
+      undefined,
+      { takePendingFollowUps },
+    );
+
+    expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+    expect(takePendingFollowUps).toHaveBeenCalledTimes(2);
   });
 
   it('releases follow-ups while preserving the record after a persistence read failure', async () => {
