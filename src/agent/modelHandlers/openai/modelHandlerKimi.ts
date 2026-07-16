@@ -1,13 +1,19 @@
 import { z } from 'zod';
+import ky from 'ky';
+import { AbortError } from 'p-retry';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type { TokenCountOptions } from '@agent/types/ModelHandlerContracts';
 import type { ToolDefinition } from '@model';
+import { joinAbortSignal, retryTransientFetch } from '@tools/timeouts';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 // Type imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type OpenAI from 'openai';
 
 /**
  * Moonshot API `fullName`s shared by more than one TeXRA registry entry — a
@@ -76,6 +82,9 @@ const KimiTokenEstimateResponseSchema = z.object({
   data: z.object({ total_tokens: z.number() }),
 });
 
+const KIMI_TOKEN_ESTIMATE_TIMEOUT_MS = 20_000; // 20 s
+const KIMI_TOKEN_ESTIMATE_RETRIES = 2;
+
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
  * Kimi K2 Thinking models return reasoning_content automatically when streaming.
@@ -103,7 +112,8 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
   protected override readonly convertContentToStringUnlessVision = true;
 
   protected override getThinkingParameter():
-    { type: 'enabled' | 'disabled' } | undefined {
+    | { type: 'enabled' | 'disabled' }
+    | undefined {
     // See AMBIGUOUS_THINKING_DEFAULT_FULLNAMES: these wire names default to
     // thinking-enabled on the Moonshot API, so the non-reasoning registry
     // entry must explicitly turn it off.
@@ -170,43 +180,59 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
    * Estimates token count using Kimi's native token counting API.
    * This provides accurate token counts for Moonshot models.
    *
+   * Retries transient failures (timeouts, 5xx, 429 rate limits, dropped
+   * connections) with jittered backoff via {@link retryTransientFetch} — the
+   * same pattern every other network-boundary call in this codebase uses —
+   * and joins `options.signal` so an interrupted run aborts an in-flight
+   * request instead of waiting out the timeout.
+   *
    * @param messages The messages to count tokens for.
+   * @param options Cancellation signal for the owning run.
    * @returns Promise resolving to the total token count.
    * @see https://platform.moonshot.cn/docs/api/tokenization
    */
   override async estimateTokenCount(
     messages: ChatCompletionMessageParam[],
+    options?: TokenCountOptions<OpenAI>,
   ): Promise<number> {
     const apiKey = await this.getApiKey();
     const baseUrl = this.getBaseUrl() ?? 'https://api.moonshot.ai/v1';
 
-    const response = await fetch(`${baseUrl}/tokenizers/estimate-token-count`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+    return retryTransientFetch(
+      async () => {
+        const raw = await ky
+          .post(`${baseUrl}/tokenizers/estimate-token-count`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+            json: { model: this.config.fullName, messages },
+            timeout: false,
+            signal: joinAbortSignal(
+              KIMI_TOKEN_ESTIMATE_TIMEOUT_MS,
+              options?.signal,
+            ),
+            retry: 0,
+          })
+          .json<unknown>();
+
+        const parsed = KimiTokenEstimateResponseSchema.safeParse(raw);
+        if (!parsed.success) {
+          throw new AbortError(
+            new Error(
+              `Kimi token estimation returned an unexpected response shape: ${z.prettifyError(parsed.error)}`,
+            ),
+          );
+        }
+        return parsed.data.data.total_tokens;
       },
-      body: JSON.stringify({
-        model: this.config.fullName,
-        messages,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Kimi token estimation failed (${response.status}): ${errorText}`,
-      );
-    }
-
-    const parsed = KimiTokenEstimateResponseSchema.safeParse(
-      await response.json().catch(() => null),
+      {
+        retries: KIMI_TOKEN_ESTIMATE_RETRIES,
+        minTimeout: 1000,
+        cancelSignal: options?.signal,
+        onFailedAttempt: ({ error, retriesLeft }) => {
+          this.logger.debug(
+            `Kimi token estimation failed (${retriesLeft} retries left): ${toErrorMessage(error)}`,
+          );
+        },
+      },
     );
-    if (!parsed.success) {
-      throw new Error(
-        `Kimi token estimation returned an unexpected response shape: ${z.prettifyError(parsed.error)}`,
-      );
-    }
-    return parsed.data.data.total_tokens;
   }
 }
