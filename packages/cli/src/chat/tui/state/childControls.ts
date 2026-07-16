@@ -12,6 +12,7 @@ import { formatCompactDuration } from '@utils/core';
 
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
+import { truncateSummaryToWidth } from '../render/terminalText';
 import {
   activeSubagentsFor,
   childExecutionKey,
@@ -146,6 +147,8 @@ function streamDescription(
   return streamsById.get(child.childStreamId)?.description;
 }
 
+const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
+
 const TASK_DETAIL_TRANSCRIPT_COLUMNS = 120;
 
 function streamEntryTailLines(entry: ConversationEntry): readonly string[] {
@@ -196,13 +199,27 @@ function buildChildControlItem(
   const statusLabel = childStatusDescription(child.status);
 
   if (child.kind === 'subagent') {
+    const entries = ctx.streamsById.get(child.childStreamId)?.entries;
+    const summary =
+      entries?.findLast(
+        (entry) =>
+          entry.role === 'assistant' && entry.finalized && entry.text.trim(),
+      )?.text ??
+      entries?.find((entry) => entry.role === 'user' && entry.text.trim())
+        ?.text;
     return {
       executionId: child.executionId,
       childStreamId: child.childStreamId,
       kind: 'subagent',
       label,
       command: streamDescription(child, ctx.streamsById) ?? label,
-      description: compactParts([statusLabel, elapsed ?? undefined]),
+      description: compactParts([
+        statusLabel,
+        elapsed ?? undefined,
+        summary
+          ? truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)
+          : undefined,
+      ]),
       statusLabel,
       elapsed,
       killable: ctx.killable,
