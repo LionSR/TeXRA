@@ -434,10 +434,10 @@ export class DesktopProgressBridge {
           this.approvalHandlers.agentProposal.get(proposalId),
         restoreTaskState: async (taskState) => this.restoreTaskState(taskState),
         settleProposal: (proposalId, result) => {
-          const resolved = this.session.interactions.resolve(proposalId, {
-            kind: 'proposal',
-            decision: result,
-          });
+          const resolved = this.hostInteractions.submitProposalDecision(
+            proposalId,
+            result,
+          );
           if (!resolved) {
             this.logger.warn(
               `No pending desktop host interaction found for proposal: ${proposalId}`,
@@ -504,35 +504,34 @@ export class DesktopProgressBridge {
           handleToolEditApprovalAction: (message) =>
             this.toolEditApprovals.handleAction(message),
           handleBashApprovalAction: (message) =>
-            void this.session.interactions.resolve(message.requestId, {
-              kind: 'bash',
-              decision:
-                message.action === 'approve'
-                  ? { action: 'approve' }
-                  : { action: 'reject', feedback: message.feedback },
-            }),
+            void this.hostInteractions.submitBashDecision(
+              message.requestId,
+              message.action === 'approve'
+                ? { action: 'approve' }
+                : { action: 'reject', feedback: message.feedback },
+            ),
           handlePlanApprovalAction: (message) => {
-            this.session.interactions.resolve(message.approvalId, {
-              kind: 'plan',
-              decision:
-                message.action === 'reject'
-                  ? { action: 'reject', feedback: message.feedback }
-                  : { action: message.action },
-            });
+            this.hostInteractions.submitPlanDecision(
+              message.approvalId,
+              message.action === 'reject'
+                ? { action: 'reject', feedback: message.feedback }
+                : { action: message.action },
+            );
           },
           handleUserQuestionAction: (message) => {
-            this.session.interactions.resolve(message.requestId, {
-              kind: 'userQuestion',
-              decision:
-                message.action === 'submit'
-                  ? { action: 'submit', answers: message.answers }
-                  : { action: message.action, feedback: message.feedback },
-            });
+            this.hostInteractions.submitUserQuestionDecision(
+              message.requestId,
+              message.action === 'submit'
+                ? { action: 'submit', answers: message.answers }
+                : { action: message.action, feedback: message.feedback },
+            );
             return undefined;
           },
         },
         externalInquiry: {
           session: this.session,
+          dismiss: (threadId) =>
+            this.hostInteractions.dismissExternalInquiry(threadId),
         },
       },
     });

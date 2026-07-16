@@ -52,8 +52,12 @@ function createHostInteractions(
   return {
     approvePendingDelegatedWork: vi.fn(async () => undefined),
     isRetryPending: vi.fn(() => false),
-    resolveRetry: vi.fn(() => false),
-    resolve: vi.fn(() => false),
+    submitBashDecision: vi.fn(() => false),
+    submitPlanDecision: vi.fn(() => false),
+    submitProposalDecision: vi.fn(() => false),
+    submitRetryDecision: vi.fn(() => false),
+    submitUserQuestionDecision: vi.fn(() => false),
+    dismissExternalInquiry: vi.fn(),
     cancel: vi.fn(),
     ...overrides,
   };
@@ -290,7 +294,7 @@ describe('progress-view onboarding refresh wiring', () => {
 
   it('routes retry request actions through host interactions', async () => {
     const interactions = createHostInteractions({
-      resolveRetry: vi.fn(() => true),
+      submitRetryDecision: vi.fn(() => true),
     });
     const directHandler = createMessageHandler(
       createProgressViewProvider(),
@@ -317,7 +321,7 @@ describe('progress-view onboarding refresh wiring', () => {
       createWebviewView(),
     );
 
-    expect(interactions.resolveRetry).toHaveBeenCalledWith(
+    expect(interactions.submitRetryDecision).toHaveBeenCalledWith(
       'stream-a',
       'retry-a',
       {
@@ -325,7 +329,7 @@ describe('progress-view onboarding refresh wiring', () => {
         feedback: 'try the other branch',
       },
     );
-    expect(interactions.resolveRetry).toHaveBeenCalledWith(
+    expect(interactions.submitRetryDecision).toHaveBeenCalledWith(
       'stream-a',
       'retry-a',
       {
@@ -342,7 +346,7 @@ describe('progress-view onboarding refresh wiring', () => {
       provider,
       context,
       prompt,
-      createHostInteractions({ resolveRetry: vi.fn(() => false) }),
+      createHostInteractions({ submitRetryDecision: vi.fn(() => false) }),
     );
 
     await handler.handleMessage(
@@ -362,7 +366,7 @@ describe('progress-view onboarding refresh wiring', () => {
 
   it('routes agent proposal actions through host interactions', async () => {
     const interactions = createHostInteractions({
-      resolve: vi.fn(() => true),
+      submitProposalDecision: vi.fn(() => true),
     });
     const handler = createMessageHandler(
       createProgressViewProvider(),
@@ -382,19 +386,19 @@ describe('progress-view onboarding refresh wiring', () => {
       createWebviewView(),
     );
 
-    expect(interactions.resolve).toHaveBeenCalledWith('proposal-a', {
-      kind: 'proposal',
-      decision: {
+    expect(interactions.submitProposalDecision).toHaveBeenCalledWith(
+      'proposal-a',
+      {
         action: 'approve',
         model: 'gemini31p',
         agent: 'critic',
       },
-    });
+    );
   });
 
   it('routes plan approval actions through host interactions', async () => {
     const interactions = createHostInteractions({
-      resolve: vi.fn(() => true),
+      submitPlanDecision: vi.fn(() => true),
     });
     const handler = createMessageHandler(
       createProgressViewProvider(),
@@ -413,12 +417,9 @@ describe('progress-view onboarding refresh wiring', () => {
       createWebviewView(),
     );
 
-    expect(interactions.resolve).toHaveBeenCalledWith('plan-a', {
-      kind: 'plan',
-      decision: {
-        action: 'reject',
-        feedback: 'state the invariant first',
-      },
+    expect(interactions.submitPlanDecision).toHaveBeenCalledWith('plan-a', {
+      action: 'reject',
+      feedback: 'state the invariant first',
     });
   });
 

@@ -64,7 +64,7 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
     const sessionA = createTestSession();
     const sessionB = createTestSession();
     const cancelA = vi.fn();
-    sessionA.useHostInteractions({ resolve: () => false, cancel: cancelA });
+    sessionA.useHostInteractions({ cancel: cancelA });
     const settled = new Set<string>();
 
     try {

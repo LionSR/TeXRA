@@ -1,5 +1,6 @@
 import { structuredPatch } from 'diff';
 
+import type { HostUserQuestionRequest } from '@agent/runtime/HostInteractions';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import {
   agentProposalCategoryLabel,
@@ -209,7 +210,7 @@ export function formatToolEditApprovalSummary(
 }
 
 export function formatUserQuestionPrompt(
-  payload: RuntimeInteractionEventPayloads['showUserQuestion'],
+  payload: HostUserQuestionRequest,
 ): string {
   return payload.questions
     .map((question, index) => {

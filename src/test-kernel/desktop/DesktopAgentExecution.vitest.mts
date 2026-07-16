@@ -19,6 +19,7 @@ import {
   TaskStateSchema,
   type WorkflowTaskState,
 } from '@agent/core/state/TaskState';
+import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -67,6 +68,12 @@ type Bridge = {
 };
 
 type TestableBridge = Bridge & {
+  hostInteractions: {
+    submitPlanDecision(
+      requestId: string,
+      decision: PlanApprovalResult,
+    ): boolean;
+  };
   runtimeHost: {
     interactions?: {
       requestPlanApproval?: (request: {
@@ -3226,11 +3233,10 @@ describe('DesktopProgressBridge', () => {
         ),
       ).toEqual([]);
 
-      // B's session port cannot settle A's pending approval...
+      // B's response port cannot settle A's pending approval...
       expect(
-        windowB.session.interactions.resolve(approvalId, {
-          kind: 'plan',
-          decision: { action: 'approve' },
+        windowB.bridge.hostInteractions.submitPlanDecision(approvalId, {
+          action: 'approve',
         }),
       ).toBe(false);
       // ...neither can B's inbound plan-approval handler...
@@ -3573,9 +3579,8 @@ describe('DesktopProgressBridge', () => {
 
         // Window B resolves the retained run's pending interaction.
         expect(
-          bridgeB.session.interactions.resolve('plan-rebound', {
-            kind: 'plan',
-            decision: { action: 'approve' },
+          bridgeB.hostInteractions.submitPlanDecision('plan-rebound', {
+            action: 'approve',
           }),
         ).toBe(true);
         await expect(planPromise).resolves.toEqual({ action: 'approve' });
@@ -3700,10 +3705,10 @@ describe('DesktopProgressBridge', () => {
           );
         });
         expect(
-          bridgeC.session.interactions.resolve('plan-second-window-close', {
-            kind: 'plan',
-            decision: { action: 'approve' },
-          }),
+          bridgeC.hostInteractions.submitPlanDecision(
+            'plan-second-window-close',
+            { action: 'approve' },
+          ),
         ).toBe(true);
         await expect(approval).resolves.toEqual({ action: 'approve' });
       } finally {
@@ -3797,9 +3802,8 @@ describe('DesktopProgressBridge', () => {
 
         for (const approvalId of ['plan-before-close', 'plan-while-closed']) {
           expect(
-            bridgeB.session.interactions.resolve(approvalId, {
-              kind: 'plan',
-              decision: { action: 'approve' },
+            bridgeB.hostInteractions.submitPlanDecision(approvalId, {
+              action: 'approve',
             }),
           ).toBe(true);
         }
