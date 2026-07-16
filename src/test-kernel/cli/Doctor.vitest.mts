@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import stripAnsi from 'strip-ansi';
 
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
   buildDoctorReport,
   doctorExitCode,
@@ -72,15 +73,9 @@ function captureDoctorStdout(
   report: DoctorReport,
 ): string {
   let stdout = '';
-  const stdoutSpy = vi
-    .spyOn(process.stdout, 'write')
-    .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
-      stdout += String(chunk);
-      const cb = rest.find((arg) => typeof arg === 'function') as
-        ((error?: Error | null) => void) | undefined;
-      cb?.(null);
-      return true;
-    }) as unknown as ReturnType<typeof vi.spyOn>;
+  const stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
+    stdout += chunk;
+  });
 
   try {
     writeDoctorReport(writeContext, report);
