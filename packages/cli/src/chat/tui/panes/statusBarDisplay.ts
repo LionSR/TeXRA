@@ -210,7 +210,7 @@ function roundSegment(
         text: formatRoundStageLabel(roundStage),
         // Keep round visibility on narrow terminals: degrade to the bare
         // current-round label instead of dropping the planned total's context.
-        compactText: `r${roundStage.index + 1}`,
+        compactText: formatRoundStageLabel({ index: roundStage.index }),
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.round,
       }
