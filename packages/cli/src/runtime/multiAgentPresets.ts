@@ -9,12 +9,12 @@ import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { agentKeyOf } from '@shared/schemas/agent';
-import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import {
   AGENT_MODE_PRESETS,
   parseAgentModePresets,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
+import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import { implicitDefaultToolUseAgents } from './defaultAgents';
 
 type CliMultiAgentPresetSource = 'built-in' | 'custom';

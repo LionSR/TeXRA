@@ -2,7 +2,6 @@
 // status display, stream-meta reducer).
 
 import { describe, expect, it } from 'vitest';
-import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
   type ActiveChildInfo,
   AgentCategory,
@@ -10,6 +9,7 @@ import {
   STREAM_STATUS,
   STREAM_SUBSTATE,
 } from '@shared/schemas';
+import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import {
   formatStreamStatusLabel,
