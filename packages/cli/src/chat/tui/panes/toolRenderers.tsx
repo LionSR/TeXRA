@@ -101,6 +101,8 @@ export interface ToolRenderer {
   readonly key: string;
   matches(toolUse: NormalizedToolUse): boolean;
   render(toolUse: NormalizedToolUse): React.JSX.Element;
+  /** Text geometry for budgeting and plain projections. Keep one line for
+   *  every visually distinct row emitted by `render`. */
   displayLines(
     toolUse: NormalizedToolUse,
     options?: DisplayLineOptions,
