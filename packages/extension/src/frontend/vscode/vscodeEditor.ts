@@ -32,6 +32,31 @@ export function lineToRange(
 }
 
 /**
+ * Show `existingEditor`'s document if one is already open for `uri`,
+ * otherwise open and show `uri` fresh. Shared by `openFileInEditor` and
+ * `ensureFileOpen`, whose only difference is whether an already-open,
+ * already-focused editor can be reused without another `showTextDocument`
+ * call.
+ */
+async function showDocument(
+  uri: vscode.Uri,
+  existingEditor: vscode.TextEditor | undefined,
+  preserveFocus: boolean,
+): Promise<vscode.TextEditor> {
+  if (existingEditor) {
+    return vscode.window.showTextDocument(existingEditor.document, {
+      viewColumn: existingEditor.viewColumn,
+      preserveFocus,
+    });
+  }
+  const document = await vscode.workspace.openTextDocument(uri);
+  return vscode.window.showTextDocument(document, {
+    preview: false,
+    preserveFocus,
+  });
+}
+
+/**
  * Open a file in VS Code editor, optionally positioning cursor at a line.
  * Reuses existing editor if file is already open.
  */
@@ -46,19 +71,7 @@ export async function openFileInEditor(
       (e) => e.document.uri.fsPath === uri.fsPath,
     );
 
-    let editor: vscode.TextEditor;
-    if (existingEditor) {
-      editor = await vscode.window.showTextDocument(existingEditor.document, {
-        viewColumn: existingEditor.viewColumn,
-        preserveFocus,
-      });
-    } else {
-      const document = await vscode.workspace.openTextDocument(uri);
-      editor = await vscode.window.showTextDocument(document, {
-        preview: false,
-        preserveFocus,
-      });
-    }
+    const editor = await showDocument(uri, existingEditor, preserveFocus);
 
     if (line !== undefined) {
       const position = new vscode.Position(
@@ -93,21 +106,10 @@ export async function ensureFileOpen(
     );
     const preserveFocus = options.preserveFocus ?? !existingEditor;
 
-    let editor: vscode.TextEditor;
-    if (existingEditor && preserveFocus) {
-      editor = existingEditor;
-    } else if (existingEditor) {
-      editor = await vscode.window.showTextDocument(existingEditor.document, {
-        viewColumn: existingEditor.viewColumn,
-        preserveFocus,
-      });
-    } else {
-      const document = await vscode.workspace.openTextDocument(uri);
-      editor = await vscode.window.showTextDocument(document, {
-        preview: false,
-        preserveFocus,
-      });
-    }
+    const editor =
+      existingEditor && preserveFocus
+        ? existingEditor
+        : await showDocument(uri, existingEditor, preserveFocus);
 
     if (options.save && editor.document.isDirty) {
       await editor.document.save();
