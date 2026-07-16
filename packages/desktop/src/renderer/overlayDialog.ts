@@ -15,7 +15,7 @@ function createDialogCloseButton(
   const close = document.createElement('wa-button');
   close.classList.add(className);
   close.setAttribute('appearance', 'plain');
-  close.setAttribute('size', 's');
+  close.setAttribute('size', 'small');
   close.setAttribute('aria-label', label);
   close.setAttribute('title', label);
   render(waIcon('xmark'), close);
