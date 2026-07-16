@@ -34,19 +34,22 @@ const CLEAR_VISIBLE_SCREEN = '\x1b[2J\x1b[H';
 const OSC_TITLE_TERMINATOR = '\x07';
 
 /** Directory names can contain characters that would prematurely terminate
- *  the OSC string (a stray BEL/ESC); strip C0 controls so a weird folder
- *  name can't inject terminal escape sequences into the title. */
+ *  the OSC string (a stray BEL/ESC) or that some terminals in 8-bit mode
+ *  still interpret as escape-sequence introducers (the C1 range, e.g. 0x9d
+ *  as an 8-bit OSC); strip both C0 and C1 controls so a weird folder name
+ *  can't inject terminal escape sequences into the title. */
 function sanitizeTitleSegment(text: string): string {
-  // eslint-disable-next-line no-control-regex -- stripping C0 controls
-  return text.replaceAll(/[\x00-\x1f\x7f]/g, '');
+  // eslint-disable-next-line no-control-regex -- stripping C0/C1 controls
+  return text.replaceAll(/[\x00-\x1f\x7f-\x9f]/g, '');
 }
 
 /**
  * "TeXRA" alone when the cwd has no meaningful basename (e.g. filesystem
- * root), else "TeXRA — <project folder>" so a user running several sessions
- * across different projects — the common case here — can tell tabs apart
- * at a glance instead of every tab reading the launcher binary's own name
- * (e.g. a local dev symlink like `texra-local`).
+ * root, where `path.basename` returns `''`), else "TeXRA — <project folder>"
+ * so a user running several sessions across different projects — the common
+ * case here — can tell tabs apart at a glance instead of every tab reading
+ * the launcher binary's own name (e.g. a local dev symlink like
+ * `texra-local`).
  */
 export function terminalTitleText(cwd: string): string {
   const project = sanitizeTitleSegment(basename(cwd));

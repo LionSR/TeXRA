@@ -10,7 +10,10 @@ import {
   tuiInputModeRestoreSequence,
 } from '@cli/chat/tui/terminalCleanup';
 
-vi.mock('node:fs', () => ({ writeSync: vi.fn() }));
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal()),
+  writeSync: vi.fn(),
+}));
 
 afterEach(() => {
   vi.restoreAllMocks();
