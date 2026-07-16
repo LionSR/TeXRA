@@ -32,6 +32,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **A calmer footer with one home per hint** — the rotating tip line is gone
+  (its shortcuts live in the status bar and `/help`), and queued follow-ups
+  preview only in their dedicated panel instead of also scrolling through the
+  status bar, freeing a transcript row and ending duplicate displays.
 - **The chat transcript breathes and shows run activity** — a blank line now
   always follows your message, and while the agent runs, an animated indicator
   with elapsed time makes clear it is still working — not just while the model

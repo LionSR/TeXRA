@@ -19,17 +19,14 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import {
-  clamp,
   filterNotNullish,
   formatCompactDuration,
   formatCompactTokenCount,
 } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import { numberedFollowUpPreview } from '../render/followUpPreview';
 import {
   textDisplayWidth,
   truncateSummaryToWidth,
@@ -38,10 +35,7 @@ import { formatCliStatusLabel } from '../sessionStatus';
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '../ui/colors';
 import { STATUS_DIAMOND } from '../ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '../ui/KeyHints';
-import {
-  STATUS_BAR_HORIZONTAL_PADDING,
-  STATUS_BAR_RIGHT_PREVIEW_GAP,
-} from '../ui/theme';
+import { STATUS_BAR_HORIZONTAL_PADDING } from '../ui/theme';
 import { formatResumeCommand } from '../state/resumeHint';
 import {
   thinkingIndicatorVisible,
@@ -86,7 +80,6 @@ export interface StatusBarDisplayInput {
   readonly bypass: BypassState;
   readonly thinkingActive?: boolean;
   readonly queuedFollowUpMessages: readonly string[];
-  readonly queuedFollowUpPreview?: boolean;
   readonly usage: TokenUsageStats | undefined;
   readonly roundStage: RoundStage | undefined;
   readonly activeSubagents: number;
@@ -109,8 +102,7 @@ export interface StatusBarDisplayInput {
   readonly shiftEnterNewline?: boolean;
   /** True when the focused stream has transcript entries. */
   readonly transcriptAvailable?: boolean;
-  /** Terminal width in columns. Used to keep right-side previews from
-   *  colliding with durable left-side status segments. */
+  /** Terminal width in columns. */
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
   /** True when `status` belongs to a focused child/subagent stream rather
@@ -129,7 +121,6 @@ export interface StatusBarDisplayInput {
 
 interface StatusBarDisplay {
   readonly left: readonly StatusBarSegment[];
-  readonly right?: string;
   readonly bindings: string;
 }
 
@@ -213,12 +204,7 @@ function roundSegment(
     : undefined;
 }
 
-const QUEUED_FOLLOW_UP_PREVIEW_LENGTH = 48;
-const QUEUED_FOLLOW_UP_PREVIEW_ITEMS = 2;
-const QUEUED_FOLLOW_UP_MIN_ITEM_PREVIEW = 8;
-const QUEUED_FOLLOW_UP_SEPARATOR = ' · ';
 const PENDING_EXIT_HINT_TEXT = 'Press Ctrl-C again to exit';
-const STATUS_BAR_MIN_RIGHT_PREVIEW = 12;
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeProcess: 10,
@@ -232,49 +218,6 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   elapsed: 70,
   thinking: 75,
 } as const;
-
-function queuedFollowUpsListSummary(
-  messages: readonly string[],
-  maxColumns: number,
-): string | undefined {
-  const previewItems = messages.slice(0, QUEUED_FOLLOW_UP_PREVIEW_ITEMS);
-  const overflowCount = messages.length - previewItems.length;
-  const overflowMarker =
-    overflowCount > 0 ? `+${overflowCount} more` : undefined;
-  const separatorColumns =
-    Math.max(0, previewItems.length - 1 + (overflowMarker ? 1 : 0)) *
-    textDisplayWidth(QUEUED_FOLLOW_UP_SEPARATOR);
-  const overflowColumns = overflowMarker ? textDisplayWidth(overflowMarker) : 0;
-  const itemColumns = Math.floor(
-    (maxColumns - separatorColumns - overflowColumns) / previewItems.length,
-  );
-  if (itemColumns < QUEUED_FOLLOW_UP_MIN_ITEM_PREVIEW) return undefined;
-
-  const previewParts = previewItems.map((message, index) =>
-    numberedFollowUpPreview(message, index, itemColumns),
-  );
-  if (overflowMarker) previewParts.push(overflowMarker);
-  return previewParts.join(QUEUED_FOLLOW_UP_SEPARATOR);
-}
-
-export function queuedFollowUpsSummary(
-  messages: readonly string[],
-  maxColumns?: number,
-): string | undefined {
-  if (messages.length === 0) return undefined;
-  const previewLength =
-    maxColumns === undefined
-      ? QUEUED_FOLLOW_UP_PREVIEW_LENGTH
-      : clamp(maxColumns, 0, QUEUED_FOLLOW_UP_PREVIEW_LENGTH);
-  if (previewLength < STATUS_BAR_MIN_RIGHT_PREVIEW) return undefined;
-  if (messages.length > 1) {
-    return queuedFollowUpsListSummary(messages, previewLength);
-  }
-  return truncateSummaryToWidth(
-    summarizeFollowupMessage(messages[0] ?? ''),
-    previewLength,
-  );
-}
 
 function queuedFollowUpsCountSegment(
   messages: readonly string[],
@@ -354,20 +297,6 @@ function fitPendingExitStatusBarLeftSegments(
   }
 
   return fitted;
-}
-
-function rightStatusBudget(
-  segments: readonly StatusBarSegment[],
-  width: number | undefined,
-): number | undefined {
-  const innerWidth = statusBarInnerWidth(width);
-  if (innerWidth === undefined) return undefined;
-  return Math.max(
-    0,
-    innerWidth -
-      statusBarSegmentsWidth(segments) -
-      STATUS_BAR_RIGHT_PREVIEW_GAP,
-  );
 }
 
 function fitStatusBarLeftSegments(
@@ -888,19 +817,9 @@ export function buildStatusBarDisplay(
   const fittedLeft = input.pendingExitHint
     ? fitPendingExitStatusBarLeftSegments(left, input.width)
     : fitStatusBarLeftSegments(left, input.width);
-  const queuedCountVisible =
-    queued === undefined || fittedLeft.includes(queued);
-  const queuedPreviewVisible =
-    input.queuedFollowUpPreview !== false && queuedCountVisible;
 
   return {
     left: fittedLeft,
-    right: queuedPreviewVisible
-      ? queuedFollowUpsSummary(
-          input.queuedFollowUpMessages,
-          rightStatusBudget(fittedLeft, input.width),
-        )
-      : undefined,
     bindings: resolveStatusBarBindings(input),
   };
 }

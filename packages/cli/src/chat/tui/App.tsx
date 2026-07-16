@@ -490,11 +490,10 @@ export function App(props: AppProps): React.JSX.Element {
       registry={activeDraftRegistry}
     >
       <ConversationRegion
-        agentSelectionAvailable={agentSelectionAvailable}
         colorEnabled={props.colorEnabled}
         columns={columns}
         onTranscriptViewportChange={props.onTranscriptViewportChange}
-        renderFooterChrome={(queuedFollowUpPanelVisible) => (
+        renderFooterChrome={() => (
           <>
             <InputBar
               controlRef={inputBarRef}
@@ -514,7 +513,6 @@ export function App(props: AppProps): React.JSX.Element {
                 childControlEscapeAction,
                 foregroundKind,
               })}
-              queuedFollowUpPreview={!queuedFollowUpPanelVisible}
               sessionNavigationAvailable={sessionViews.length > 0}
               shortcutsActive={focusShortcutsActive}
               sessionListFocused={sessionListFocused}

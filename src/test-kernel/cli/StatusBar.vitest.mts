@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildStatusBarDisplay,
   ctrlCActionForFocus,
-  queuedFollowUpsSummary,
   statusBarSegmentText,
   statusBarStreamTarget,
   type StatusBarDisplayInput,
@@ -65,63 +64,6 @@ describe('CLI StatusBar display model', () => {
     expect(
       streamAccessTarget({ model: undefined, category: undefined }, session),
     ).toEqual({ model: 'deepseekT', category: undefined });
-  });
-
-  it('previews queued follow-up messages without duplicating the count', () => {
-    expect(queuedFollowUpsSummary([])).toBeUndefined();
-    expect(queuedFollowUpsSummary(['Keep the proof under one page.'])).toBe(
-      'Keep the proof under one page.',
-    );
-    expect(
-      queuedFollowUpsSummary([
-        'Keep the proof under one page.',
-        'Also mention the finite monoid argument.',
-      ]),
-    ).toBe('1. Keep the proof und… · 2. Also mention the f…');
-  });
-
-  it('summarizes queued subagent follow-up XML in the status preview', () => {
-    expect(queuedFollowUpsSummary([COMPLETED_REVIEW_FOLLOWUP], 80)).toBe(
-      '✓ review completed All good <ok>',
-    );
-
-    const progressSummary = queuedFollowUpsSummary(
-      [PROGRESS_REVIEW_FOLLOWUP],
-      80,
-    );
-    expect(progressSummary).toBe(
-      '⟳ review · todos · 6 done, 0 active, 0 pending',
-    );
-    expect(progressSummary).not.toContain('<subagent-progress');
-
-    const listSummary = queuedFollowUpsSummary([
-      PROGRESS_REVIEW_FOLLOWUP,
-      'Check the edge case.',
-    ]);
-    expect(listSummary).toContain('1. ⟳ review');
-    expect(listSummary).not.toContain('<orchestrator-followup>');
-    expect(listSummary).not.toContain('<subagent-progress');
-  });
-
-  it('marks hidden queued follow-up previews', () => {
-    expect(queuedFollowUpsSummary(['first', 'second', 'third'])).toBe(
-      '1. first · 2. second · +1 more',
-    );
-  });
-
-  it('hides queued follow-up previews when the right side has no safe width', () => {
-    expect(queuedFollowUpsSummary(['Keep the proof under one page.'], 20)).toBe(
-      'Keep the proof unde…',
-    );
-    expect(
-      queuedFollowUpsSummary(['Keep the proof under one page.'], 11),
-    ).toBeUndefined();
-  });
-
-  it('truncates queued follow-up previews by display columns', () => {
-    expect(queuedFollowUpsSummary(['請補充一個單調有界證明。'], 20)).toBe(
-      '請補充一個單調有界…',
-    );
   });
 
   it('uses clear compact labels for API access mode', () => {
@@ -195,7 +137,6 @@ describe('CLI StatusBar display model', () => {
       'queued 1',
     ]);
     expect(display.left.at(-1)).toMatchObject({ color: 'yellow' });
-    expect(display.right).toBe('Keep the proof under one page.');
   });
 
   it('keeps idle state compact and omits static agent/model names', () => {
@@ -206,7 +147,6 @@ describe('CLI StatusBar display model', () => {
       'idle',
       PERSONAL_API_MODE_LABEL,
     ]);
-    expect(display.right).toBeUndefined();
     expect(display.bindings).toContain('/api api');
     expect(display.bindings).toContain('/model models');
     expect(display.bindings).not.toContain('/agent agents');
@@ -479,9 +419,6 @@ describe('CLI StatusBar display model', () => {
       '1 proc',
       '3 approvals',
     ]);
-    expect(display.right).toBe(
-      '1. Keep the proof und… · 2. Also mention the f…',
-    );
     expect(display.bindings).toContain('Alt-s subagents');
     expect(display.bindings).toContain('Ctrl-C stop');
     // Stream-navigation hints appear once more than one stream is live.
@@ -715,22 +652,6 @@ describe('CLI StatusBar display model', () => {
       '1m 15s',
       PERSONAL_API_MODE_LABEL,
     ]);
-    expect(display.right).toBeUndefined();
-  });
-
-  it('can hide queued follow-up previews while keeping the durable count', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        status: STREAM_PHASE.RUNNING,
-        queuedFollowUpMessages: ['Keep the proof under one page.'],
-        queuedFollowUpPreview: false,
-        ctrlCAction: 'stop',
-        width: 80,
-      }),
-    );
-
-    expect(display.left.map(statusBarSegmentText)).toContain('queued 1');
-    expect(display.right).toBeUndefined();
   });
 
   it('scopes Ctrl-C stop to the root when focus is on a child stream', () => {
@@ -1281,20 +1202,6 @@ describe('CLI StatusBar display model', () => {
       badge: true,
       badgeColor: 'yellow',
     });
-  });
-
-  it('budgets queued follow-up previews with rendered badge padding', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        status: STREAM_PHASE.RUNNING,
-        bypass: { bash: false, superYolo: true, toolEdit: true },
-        queuedFollowUpMessages: ['Keep the proof under one page.'],
-        width: 65,
-      }),
-    );
-
-    expect(display.right).toBe('Keep the proof…');
-    expect(display.bindings).toContain('Ctrl-C exit');
   });
 
   it('shows the resume command while exit confirmation is armed', () => {
