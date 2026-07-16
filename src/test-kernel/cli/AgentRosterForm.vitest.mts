@@ -1,13 +1,20 @@
+import { createRequire } from 'node:module';
+
 import { describe, expect, it } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
 import {
+  AgentRosterForm,
   agentRosterSelectWindow,
   buildChatDefaultAgentItems,
   selectedAgentKeys,
   setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
 import { formatCliAgentRoster } from '@cli/runtime/agentRoster';
+
+const cliRequire = createRequire(
+  new URL('../../../packages/cli/package.json', import.meta.url),
+);
 
 const agents: AgentEntry[] = [
   {
@@ -27,6 +34,16 @@ const agents: AgentEntry[] = [
 ];
 
 describe('AgentRosterForm', () => {
+  it('renders loading through the shared Ink indicator', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const output = ink.renderToString(
+      React.createElement(AgentRosterForm, { onClose: () => undefined }),
+    );
+
+    expect(output).toMatch(/[|/\\-]\s+Loading agent roster\.\.\./);
+  });
+
   it('offers chat defaults only from the effective tool-use roster', () => {
     expect(
       buildChatDefaultAgentItems(agents, ['builtInToolUse:assistant']),

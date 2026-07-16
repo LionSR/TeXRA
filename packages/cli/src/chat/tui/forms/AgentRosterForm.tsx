@@ -22,9 +22,11 @@ import {
 } from '@shared/schemas/agentPresets';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
+import { COLOR_ERROR, COLOR_WARNING } from '../ui/colors';
+import { TICK } from '../ui/glyphs';
 import { KeyHints } from '../ui/KeyHints';
 import { Select, type SelectItem } from '../ui/Select';
-import { FormFrame } from './_shared/FormFrame';
+import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   type SelectWindowSize,
@@ -133,7 +135,7 @@ async function loadRosterData(): Promise<AgentRosterData> {
 
 export function AgentRosterForm(
   props: AgentRosterFormProps,
-): React.JSX.Element {
+): React.JSX.Element | null {
   const [mode, setMode] = useState<AgentRosterFormMode>('overview');
   const [data, setData] = useState<AgentRosterData>();
   const [error, setError] = useState<string>();
@@ -165,11 +167,12 @@ export function AgentRosterForm(
   };
 
   if (!data) {
-    return (
-      <FormFrame title="/config · Agents">
-        <Text>{error ?? 'Loading agent roster...'}</Text>
-      </FormFrame>
-    );
+    return renderAsyncListFormTransient({
+      loading: error === undefined,
+      error,
+      title: '/config · Agents',
+      loadingLabel: 'Loading agent roster...',
+    });
   }
 
   const frame = (
@@ -183,9 +186,9 @@ export function AgentRosterForm(
     });
     return (
       <FormFrame title="/config · Agents" showCloseHint={false}>
-        {error ? <Text color="red">{error}</Text> : null}
+        {error ? <Text color={COLOR_ERROR}>{error}</Text> : null}
         {data.record.missingTeamId ? (
-          <Text color="yellow">
+          <Text color={COLOR_WARNING}>
             Team "{data.record.missingTeamId}" is unavailable; showing all
             agents.
           </Text>
@@ -342,7 +345,7 @@ export function AgentRosterForm(
   return frame(
     agents.map((agent) => ({
       value: agentKeyOf(agent),
-      label: `${selected.has(agentKeyOf(agent)) ? '✓ ' : ''}${agent.name}`,
+      label: `${selected.has(agentKeyOf(agent)) ? `${TICK} ` : ''}${agent.name}`,
       description: agent.description,
     })),
     (value) => {
