@@ -17,11 +17,11 @@ import * as vscode from 'vscode';
 
 // Local imports - platform
 import { mergeLegacyStorageBucket } from '@platform/defaults/legacyDataMigration';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import {
   LEGACY_RUNS_STORAGE_DIR,
+  MEMORY_STORAGE_DIR,
   RUNS_STORAGE_DIR,
-  WorkspaceStorageProvider,
 } from '@platform/defaults/workspaceStorage';
 import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
 import * as logger from '@logger/logUtils';
@@ -47,21 +47,22 @@ export function sharedStorageWorkspacePath(): string | undefined {
 }
 
 export function createSharedStorageProvider(): StorageProvider {
-  return new WorkspaceStorageProvider(
-    DEFAULT_NODE_STORAGE_ROOT,
-    sharedStorageWorkspacePath,
-  );
+  return createNodeStorageProvider({
+    workspacePath: sharedStorageWorkspacePath,
+  });
 }
 
 /**
- * Id-keyed collections whose children (globally unique execution/stream ids)
- * merge one at a time when the shared bucket already holds runs written by
- * the CLI or desktop; everything else moves only if absent, never clobbering.
+ * Collections merged one child at a time when the shared bucket already holds
+ * data written by the CLI or desktop: run/stream directories are keyed by
+ * globally unique ids, and memory files merge safely too because children are
+ * never overwritten. Everything else moves only if absent, never clobbering.
  */
 const MERGE_PER_CHILD = [
   RUNS_STORAGE_DIR,
   LEGACY_RUNS_STORAGE_DIR,
   STREAM_DATA_DIR,
+  MEMORY_STORAGE_DIR,
 ] as const;
 
 /**
