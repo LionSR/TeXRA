@@ -20,12 +20,19 @@ import type { ChatUsage } from '@openrouter/sdk/models';
 /** Pricing inputs the handler supplies from its `config`/`capabilities`. */
 type OpenRouterPricingConfig = StandardPricingConfig;
 
-/** Computes cost based on token usage and model pricing. */
+/**
+ * Prefer OpenRouter's billed cost for credit-backed requests. BYOK cost is
+ * split between OpenRouter credits and the upstream provider account, so keep
+ * the existing static full-inference estimate for that route.
+ */
 export function computeOpenRouterPrice(
   responseUsage: ChatUsage | null,
   config: OpenRouterPricingConfig,
 ): number {
   if (!responseUsage) return 0;
+  if (responseUsage.isByok !== true && responseUsage.cost != null) {
+    return responseUsage.cost;
+  }
 
   return computeStandardPrice(
     {
