@@ -111,6 +111,88 @@ describe('ModelHandlerOpenRouterNative system prompt placement', () => {
   );
 });
 
+describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
+  function createSendStub() {
+    const sendCalls: any[] = [];
+    return {
+      sendCalls,
+      client: {
+        chat: {
+          send: async ({ chatRequest }: { chatRequest: any }) => {
+            sendCalls.push(chatRequest);
+            return {
+              choices: [
+                {
+                  message: { role: 'assistant', content: 'ok' },
+                  finishReason: 'stop',
+                },
+              ],
+              usage: { promptTokens: 100, completionTokens: 10 },
+            };
+          },
+        },
+      },
+    };
+  }
+
+  function createLoggerStub() {
+    return {
+      debug: () => undefined,
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => undefined,
+    };
+  }
+
+  it('omits temperature for Kimi K3 routed through OpenRouter', async () => {
+    // Same rule as the direct Moonshot path: K3 fixes sampling server-side
+    // and requires requests to omit temperature. OpenRouter forwards to the
+    // same backend, so the field must not survive this route either.
+    const handler = new ModelHandlerOpenRouterNative(
+      buildConfig({
+        name: 'kimi3',
+        fullName: 'kimi-k3',
+        openrouterFullName: 'moonshotai/kimi-k3',
+        provider: ModelProvider.MOONSHOT,
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MAX,
+        },
+      }),
+    );
+    (handler as any).setLogger(createLoggerStub());
+    (handler as any).getStreamingConfig = () => false;
+
+    const { client, sendCalls } = createSendStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'think' }],
+      temperature: 0,
+    });
+
+    assert.equal('temperature' in sendCalls[0], false);
+  });
+
+  it('keeps the caller temperature outside Moonshot', async () => {
+    const handler = new ModelHandlerOpenRouterNative(
+      buildConfig({ fullName: 'kimi-k3', provider: ModelProvider.OPENAI }),
+    );
+    (handler as any).setLogger(createLoggerStub());
+    (handler as any).getStreamingConfig = () => false;
+
+    const { client, sendCalls } = createSendStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'hi' }],
+      temperature: 0.3,
+    });
+
+    assert.equal(sendCalls[0].temperature, 0.3);
+  });
+});
+
 describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
   it('does not allow overrides for a fixed max-effort model', () => {
     const handler = new ModelHandlerOpenRouterNative(
@@ -140,6 +222,22 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
         },
       }),
     );
+
+    assert.equal(handler.supportsReasoningLevelOverride, true);
+  });
+
+  it('keeps the declared override range after an effective max selection', () => {
+    const handler = new ModelHandlerOpenRouterNative(
+      buildConfig({
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.XHIGH,
+        },
+      }),
+    );
+    handler.capabilities.reasoningEffort = ReasoningEffort.MAX;
 
     assert.equal(handler.supportsReasoningLevelOverride, true);
   });

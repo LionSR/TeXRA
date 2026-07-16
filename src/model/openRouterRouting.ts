@@ -10,14 +10,22 @@ export interface OpenRouterRoutingConfig {
   capabilities?: Pick<ModelConfig['capabilities'], 'reasoningMode'>;
 }
 
+function isOpenRouterAccessSelected(
+  config: OpenRouterRoutingConfig,
+  useOpenRouter: boolean,
+): boolean {
+  return (
+    !config.forceDirectProvider && (config.openRouterOnly || useOpenRouter)
+  );
+}
+
 /** Whether the requested OpenRouter route would discard required model semantics. */
 export function isOpenRouterRoutingUnsupported(
   config: OpenRouterRoutingConfig,
   useOpenRouter: boolean,
 ): boolean {
-  if (config.forceDirectProvider) return false;
   return (
-    (config.openRouterOnly || useOpenRouter) &&
+    isOpenRouterAccessSelected(config, useOpenRouter) &&
     config.capabilities?.reasoningMode !== undefined
   );
 }
@@ -40,7 +48,6 @@ export function shouldRouteModelThroughOpenRouter(
   config: OpenRouterRoutingConfig,
   useOpenRouter: boolean,
 ): boolean {
-  if (config.forceDirectProvider) return false;
   if (config.requiresResponsesAPI) return false;
-  return config.openRouterOnly || useOpenRouter;
+  return isOpenRouterAccessSelected(config, useOpenRouter);
 }

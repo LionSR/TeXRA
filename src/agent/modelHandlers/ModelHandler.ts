@@ -641,9 +641,9 @@ export abstract class ModelHandler<
    */
   get supportsReasoningLevelOverride(): boolean {
     return (
-      hasConfigurableReasoningEffort(this.capabilities) ||
+      hasConfigurableReasoningEffort(this.config.capabilities) ||
       (this.config.provider === ModelProvider.DEEPSEEK &&
-        this.capabilities.supportsReasoning)
+        this.config.capabilities.supportsReasoning)
     );
   }
 

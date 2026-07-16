@@ -38,6 +38,7 @@ import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 import { toDataUrl } from '../support/dataUrl';
 import { getDeclaredMaxReasoningEffort } from '../support/reasoningEffort';
+import { resolveMoonshotRequestParameters } from '../support/moonshotRequestParameters';
 import {
   computeOpenRouterPrice,
   normalizeOpenRouterUsage,
@@ -210,7 +211,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       model: this.config.openrouterFullName,
       messages: messagesToUse,
       maxTokens: this.getEffectiveMaxOutputTokens(),
-      temperature,
+      ...this.samplingTemperature(temperature),
     };
 
     // Reasoning configuration:
@@ -324,6 +325,28 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     return { response, updatedMessages };
   }
 
+  /**
+   * Temperature request params for this model. Moonshot fixes sampling for
+   * some Kimi families regardless of the caller's choice (Kimi K3 requires
+   * omitting the field entirely), and OpenRouter forwards to the same
+   * Moonshot backends — so this route applies the same fixed-temperature
+   * rules as the direct ModelHandlerKimi path. Returns an empty object when
+   * the request must omit `temperature`.
+   */
+  private samplingTemperature(requested: number | undefined): {
+    temperature?: number;
+  } {
+    const fixed =
+      this.config.provider === ModelProvider.MOONSHOT
+        ? resolveMoonshotRequestParameters(
+            this.config.fullName,
+            this.capabilities.supportsReasoning,
+          )
+        : undefined;
+    const value = fixed ? fixed.temperature : requested;
+    return value !== undefined ? { temperature: value } : {};
+  }
+
   // ---------------------------------------------------------------------------
   // Compaction
   // ---------------------------------------------------------------------------
@@ -337,6 +360,13 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       messages,
       this.lastKnownInputTokens,
       async (conversationMessages, compactionSystemPrompt) => {
+        const moonshotParameters =
+          this.config.provider === ModelProvider.MOONSHOT
+            ? resolveMoonshotRequestParameters(
+                this.config.fullName,
+                this.capabilities.supportsReasoning,
+              )
+            : undefined;
         const summaryRequest: ChatRequest & { stream: false } = {
           model: this.config.openrouterFullName,
           messages: [
@@ -347,10 +377,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
             ...conversationMessages,
           ],
           maxTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-          temperature: 0,
+          ...this.samplingTemperature(0),
           stream: false,
           // Minimize reasoning for summarization — use lowest valid effort
-          ...(this.capabilities.supportsReasoningEffort
+          ...(this.capabilities.supportsReasoningEffort &&
+          !moonshotParameters?.disableThinkingInCompactionSummary
             ? { reasoning: { effort: 'low' } }
             : {}),
         };

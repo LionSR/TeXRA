@@ -5,6 +5,7 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { TokenCountOptions } from '@agent/types/ModelHandlerContracts';
 import type { ToolDefinition } from '@model';
+import { resolveMoonshotRequestParameters } from '../support/moonshotRequestParameters';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 // Type imports
@@ -41,52 +42,6 @@ const AMBIGUOUS_THINKING_DEFAULT_FULLNAMES: ReadonlySet<string> = (() => {
   return ambiguous;
 })();
 
-interface FixedTemperatureRule {
-  /**
-   * Resolve the temperature Moonshot requires for this model family.
-   * `undefined` means the request must omit `temperature` entirely
-   * (Moonshot fixes sampling server-side and documents omitting the field).
-   */
-  readonly temperature: (supportsReasoning: boolean) => number | undefined;
-  /** Whether compaction-summary calls must also drop `thinking` entirely. */
-  readonly disableThinkingInCompactionSummary?: boolean;
-}
-
-/**
- * Fixed sampling temperature required by specific Moonshot API `fullName`s.
- * Moonshot's API pins (or silently degrades) sampling for these families
- * regardless of the caller-requested temperature; fullNames not listed here
- * pass the requested temperature through unchanged. This is genuine
- * per-model API knowledge that has no equivalent llm-zoo capability flag
- * today, so it stays a small explicit table rather than a derived rule —
- * adding a new fixed-temperature model is one new entry here, not a new
- * `fullName === '...'` branch scattered through the handler body.
- */
-const FIXED_TEMPERATURE_BY_FULLNAME: ReadonlyMap<string, FixedTemperatureRule> =
-  new Map<string, FixedTemperatureRule>([
-    [
-      'kimi-k2.5',
-      {
-        temperature: (supportsReasoning: boolean) =>
-          supportsReasoning ? 1 : 0.6,
-      },
-    ],
-    [
-      'kimi-k2.7-code',
-      { temperature: () => 1, disableThinkingInCompactionSummary: true },
-    ],
-    // kimi-k3 fixes temperature=1.0 server-side and its docs say to omit the
-    // field from requests (alongside top_p/n/penalties, which TeXRA never
-    // sends to Moonshot anyway).
-    [
-      'kimi-k3',
-      {
-        temperature: () => undefined,
-        disableThinkingInCompactionSummary: true,
-      },
-    ],
-  ]);
-
 /** Response from Kimi's token estimation API */
 const KimiTokenEstimateResponseSchema = z.object({
   data: z.object({ total_tokens: z.number() }),
@@ -103,8 +58,7 @@ const KIMI_TOKEN_ESTIMATE_RETRIES = 2;
  * reasoning and non-reasoning registry entry and default to thinking
  * enabled on the wire; see {@link AMBIGUOUS_THINKING_DEFAULT_FULLNAMES} for
  * how the non-reasoning entry gets it explicitly disabled, and
- * {@link FIXED_TEMPERATURE_BY_FULLNAME} for families requiring a pinned
- * sampling temperature.
+ * the shared Moonshot request rules for families requiring fixed sampling.
  *
  * Supports thinking mode with tool calls. When thinking mode is enabled:
  * - The model outputs reasoning_content along with tool_calls
@@ -152,11 +106,12 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     endTag?: string,
     tools?: ToolDefinition[],
   ) {
-    const fixedTemperature = FIXED_TEMPERATURE_BY_FULLNAME.get(
+    const requestParameters = resolveMoonshotRequestParameters(
       this.config.fullName,
+      this.capabilities.supportsReasoning,
     );
-    const temperature = fixedTemperature
-      ? fixedTemperature.temperature(this.capabilities.supportsReasoning)
+    const temperature = requestParameters
+      ? requestParameters.temperature
       : _temperature;
     return super.buildChatBaseParams(
       messages,
@@ -175,19 +130,17 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
       conversationMessages,
       systemPrompt,
     );
-    const fixedTemperature = FIXED_TEMPERATURE_BY_FULLNAME.get(
+    const requestParameters = resolveMoonshotRequestParameters(
       this.config.fullName,
+      this.capabilities.supportsReasoning,
     );
-    if (fixedTemperature) {
-      const temperature = fixedTemperature.temperature(
-        this.capabilities.supportsReasoning,
-      );
-      if (temperature === undefined) {
+    if (requestParameters) {
+      if (requestParameters.temperature === undefined) {
         delete params.temperature;
       } else {
-        params.temperature = temperature;
+        params.temperature = requestParameters.temperature;
       }
-      if (fixedTemperature.disableThinkingInCompactionSummary) {
+      if (requestParameters.disableThinkingInCompactionSummary) {
         delete params.thinking;
       }
     }
