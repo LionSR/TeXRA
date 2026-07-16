@@ -24,12 +24,6 @@ const {
   commandKeybindings,
 } = require('../out/src/shared/commands/catalog.js');
 
-function parseArgs() {
-  return {
-    check: process.argv.includes('--check'),
-  };
-}
-
 function getConfigurationSections(packageJson) {
   const configuration = packageJson.contributes?.configuration;
   if (!Array.isArray(configuration)) {
@@ -42,7 +36,7 @@ function normalizeLineEndings(text) {
   return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 }
 
-const { check } = parseArgs();
+const check = process.argv.includes('--check');
 const packageText = await readFile(packagePath, 'utf8');
 const packageJson = JSON.parse(packageText);
 // Spread preserves each key's existing position in `contributes`; only the
