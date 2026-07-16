@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -71,22 +72,6 @@ type CapturedSettingsFixtureOverrides = Omit<
   'postToRenderer'
 >;
 
-class MemoryStateStore implements StateStore {
-  readonly values = new Map<string, unknown>();
-
-  get<T>(key: string, defaultValue?: T): T {
-    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-    } else {
-      this.values.set(key, value);
-    }
-  }
-}
-
 class MemoryConfigStore {
   readonly values = new Map<string, unknown>();
   // Only recorded when a call site passes an explicit target -- do not
@@ -139,8 +124,8 @@ let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIp
 
 function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const {
-    globalState = new MemoryStateStore(),
-    workspaceState = new MemoryStateStore(),
+    globalState = new FakeStateStore(),
+    workspaceState = new FakeStateStore(),
     config = new MemoryConfigStore(),
     ui,
     ...settingsOverrides
@@ -224,12 +209,10 @@ describe('desktop settings IPC', () => {
   });
 
   it('applies Git author settings on creation and posts only for settings readiness', async () => {
-    const workspaceState = new MemoryStateStore();
-    workspaceState.values.set(WorkspaceStateKey.GIT_AUTHOR_NAME, 'TeXRA Bot');
-    workspaceState.values.set(
-      WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-      'bot@example.com',
-    );
+    const workspaceState = new FakeStateStore({
+      [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'TeXRA Bot',
+      [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: 'bot@example.com',
+    });
 
     const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
@@ -334,7 +317,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('round-trips Git author writes through workspace state and refreshes the renderer', async () => {
-    const workspaceState = new MemoryStateStore();
+    const workspaceState = new FakeStateStore();
 
     const { settings, posted } = createCapturedSettingsFixture({
       workspaceState,
@@ -348,7 +331,7 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await Promise.resolve();
 
-    expect(workspaceState.values.get(WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(
+    expect(workspaceState.get(WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(
       'Desktop TeXRA',
     );
     expect(posted.at(-1)).toMatchObject({
@@ -363,9 +346,7 @@ describe('desktop settings IPC', () => {
       }),
     ).toBe(true);
     await Promise.resolve();
-    expect(workspaceState.values.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(
-      false,
-    );
+    expect(workspaceState.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(false);
     expect(getGitAuthorEnv()).toEqual({});
 
     expect(
@@ -375,9 +356,9 @@ describe('desktop settings IPC', () => {
       }),
     ).toBe(true);
     await Promise.resolve();
-    expect(
-      workspaceState.values.get(WorkspaceStateKey.GIT_WORKTREE_SUPPORT),
-    ).toBe(true);
+    expect(workspaceState.get(WorkspaceStateKey.GIT_WORKTREE_SUPPORT)).toBe(
+      true,
+    );
     expect(isWorktreeSupportEnabled()).toBe(true);
   });
 
@@ -555,8 +536,8 @@ describe('desktop settings IPC', () => {
 
   it('delegates profile and ChatGPT commands to the credential controller', async () => {
     const state = {
-      globalState: new MemoryStateStore(),
-      workspaceState: new MemoryStateStore(),
+      globalState: new FakeStateStore(),
+      workspaceState: new FakeStateStore(),
     };
     const setProviderKey = vi.fn(async () => undefined);
     const signIn = vi.fn(async () => undefined);
@@ -609,17 +590,12 @@ describe('desktop settings IPC', () => {
   });
 
   it('persists model settings through global state', async () => {
-    const workspaceState = new MemoryStateStore();
-    const globalState = new MemoryStateStore();
-    globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
-      'gpt55',
-      'sonnet46T',
-    ]);
-    globalState.values.set(
-      GlobalStateKey.MODEL_LIST_VERSION,
-      MODEL_LIST_VERSION,
-    );
-    globalState.values.set(GlobalStateKey.HELPER_MODEL, 'gpt55');
+    const workspaceState = new FakeStateStore();
+    const globalState = new FakeStateStore({
+      [GlobalStateKey.ENABLED_MODELS]: ['gpt55', 'sonnet46T'],
+      [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,
+      [GlobalStateKey.HELPER_MODEL]: 'gpt55',
+    });
 
     const errors: unknown[] = [];
     const postMainModelOptionsData = vi.fn(async () => undefined);
@@ -645,12 +621,10 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
+    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
       'sonnet46T',
     ]);
-    expect(globalState.values.get(GlobalStateKey.HELPER_MODEL)).toBe(
-      'sonnet46T',
-    );
+    expect(globalState.get(GlobalStateKey.HELPER_MODEL)).toBe('sonnet46T');
     expect(errors).toEqual([]);
     expect(
       posted.findLast(
@@ -671,9 +645,7 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(
-      globalState.values.get(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
-    ).toBe(true);
+    expect(globalState.get(GlobalStateKey.PREFER_SHORT_MODEL_NAMES)).toBe(true);
     expect(posted.at(-1)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       preferShortModelNames: true,
@@ -681,11 +653,9 @@ describe('desktop settings IPC', () => {
   });
 
   it('delegates domain startup and posts approval settings on readiness', async () => {
-    const workspaceState = new MemoryStateStore();
-    workspaceState.values.set(
-      WorkspaceStateKey.CODEX_SANDBOX_MODE,
-      'danger-full-access',
-    );
+    const workspaceState = new FakeStateStore({
+      [WorkspaceStateKey.CODEX_SANDBOX_MODE]: 'danger-full-access',
+    });
     const config = new MemoryConfigStore();
     config.values.set('texra.toolUse.requireBashApproval', false);
     const agentSettingsController = createStubDesktopAgentSettingsController();
@@ -781,8 +751,8 @@ describe('desktop settings IPC', () => {
   it('does not delay unrelated startup settings behind model-list refresh', async () => {
     const modelListRefresh = createDeferred();
     const state = {
-      globalState: new MemoryStateStore(),
-      workspaceState: new MemoryStateStore(),
+      globalState: new FakeStateStore(),
+      workspaceState: new FakeStateStore(),
     };
     const credentialSettingsController =
       createStubDesktopCredentialSettingsController(state, {
@@ -835,8 +805,8 @@ describe('desktop settings IPC', () => {
 
   it('refreshes credentials before conditionally refreshing the agent catalog', async () => {
     const state = {
-      globalState: new MemoryStateStore(),
-      workspaceState: new MemoryStateStore(),
+      globalState: new FakeStateStore(),
+      workspaceState: new FakeStateStore(),
     };
     const events: string[] = [];
     const refreshAuthDependentData = vi.fn(async () => {
@@ -872,7 +842,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('handles desktop memory toggle messages', async () => {
-    const globalState = new MemoryStateStore();
+    const globalState = new FakeStateStore();
 
     const { settings, posted } = createCapturedSettingsFixture({
       globalState,
@@ -886,7 +856,7 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(globalState.values.get(GlobalStateKey.MEMORY_ENABLED)).toBe(false);
+    expect(globalState.get(GlobalStateKey.MEMORY_ENABLED)).toBe(false);
     expect(posted.at(-1)).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
       enabled: false,
