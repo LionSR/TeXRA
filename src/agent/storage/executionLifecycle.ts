@@ -27,6 +27,7 @@ import {
   type ExecutionMetaInput,
   getExecutionStore,
 } from './ExecutionKVStore';
+import { touchExecutionHeartbeat } from './executionLiveness';
 import { ResultMetaSchema } from './resultMeta';
 
 /**
@@ -121,6 +122,11 @@ export async function registerExecution(
   parentExecutionId?: ExecutionId,
   category?: string,
 ): Promise<void> {
+  // The heartbeat lands before every other launch write so a concurrent
+  // clear-all never observes a partially-written execution as dead (#8625):
+  // liveness reads a fresh heartbeat without meta as a launching run, and
+  // the registry's interval takes over refreshing it.
+  await touchExecutionHeartbeat(executionId);
   const timestamp = new Date().toISOString();
   const store = getExecutionStore(executionId);
 

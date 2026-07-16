@@ -52,6 +52,8 @@ const SINGLE_VALUE_KEYS = {
   CONVERSATION: 'conversation',
   WORKSPACE_FILES: 'workspace-files',
   RESULT_META: 'result-meta',
+  /** Cross-process liveness heartbeat; owned by executionLiveness.ts. */
+  HEARTBEAT: 'heartbeat',
 } as const;
 
 const KEYS = {
@@ -65,7 +67,7 @@ const RESERVED_KEY_NAMES = new Set<string>(Object.values(SINGLE_VALUE_KEYS));
 /**
  * True when `key` is one of ExecutionKVStore's reserved keys — a single-value
  * key (meta, config, report, todos, conversation, workspace-files,
- * result-meta) or a per-child record key (`child-{id}`). Exported so callers
+ * result-meta, heartbeat) or a per-child record key (`child-{id}`). Exported so callers
  * that walk an execution's storage directory (e.g.
  * `src/tools/executions/executionKvFiles.ts`) can recognize internal KV
  * entries without re-deriving this vocabulary themselves.

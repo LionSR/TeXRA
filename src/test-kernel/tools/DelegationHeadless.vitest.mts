@@ -57,6 +57,8 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 vi.mock('@agent/storage', () => ({
   getExecutionStore: mocks.getExecutionStore,
   registerExecution: mocks.registerExecution,
+  HEARTBEAT_INTERVAL_MS: 10_000,
+  touchExecutionHeartbeat: () => Promise.resolve(),
 }));
 
 vi.mock('@model/computeModelOptions', () => ({

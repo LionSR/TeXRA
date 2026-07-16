@@ -40,6 +40,13 @@ export {
   isUserVisibleExecution,
 } from './executionListing';
 export {
+  HEARTBEAT_INTERVAL_MS,
+  describeHeartbeatOwner,
+  getExecutionLiveness,
+  setHeartbeatOwnerHost,
+  touchExecutionHeartbeat,
+} from './executionLiveness';
+export {
   RESUMABILITY_CAUSE,
   deriveResumability,
   type ResumabilityDecision,

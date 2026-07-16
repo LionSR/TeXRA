@@ -42,6 +42,8 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 
 vi.mock('@agent/storage', () => ({
   finalizeExecution: mocks.finalizeExecution,
+  HEARTBEAT_INTERVAL_MS: 10_000,
+  touchExecutionHeartbeat: () => Promise.resolve(),
   getExecutionStore: vi.fn(() => ({ readConfig: mocks.readConfig })),
   synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
 }));
