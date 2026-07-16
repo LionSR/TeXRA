@@ -68,11 +68,7 @@ import {
   BackgroundPoller,
   type BackgroundPollStats,
 } from '../support/BackgroundPoller';
-import {
-  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-  COMPACTION_SUMMARY_PREFIX,
-  COMPACTION_SYSTEM_PROMPT,
-} from '../contextManagementConstants';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import { tagGoogleSdkError } from './googleSdkError';
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
@@ -1446,26 +1442,20 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // pre-compaction interaction under the old id, so chaining onto it would
     // double the context. After compaction the next round full-resends the
     // compacted transcript and re-establishes a fresh chain.
-    if (
-      stateful &&
-      this.shouldCompactByInputTokens(this.lastKnownInputTokens)
-    ) {
-      const isManual = this.compactionRequested;
-      // Clear the manual flag immediately when attempted (matches OpenAI /
-      // Anthropic), so a graceful compaction failure can't loop.
-      this.compactionRequested = false;
-      this.logger.debug(
-        isManual
-          ? `Compacting conversation (manually requested, ${this.lastKnownInputTokens} input tokens)`
-          : `Compacting conversation (${this.lastKnownInputTokens} input tokens exceed threshold)`,
-      );
-      const { compactedMessages, didCompact } = await this.compactConversation(
-        client,
-        messages,
-        this.lastKnownInputTokens,
-        systemPrompt,
-        signal,
-      );
+    if (stateful) {
+      const { compactedMessages, didCompact } =
+        await this.maybeCompactByInputTokens(
+          messages,
+          this.lastKnownInputTokens,
+          () =>
+            this.compactConversation(
+              client,
+              messages,
+              this.lastKnownInputTokens,
+              systemPrompt,
+              signal,
+            ),
+        );
       if (didCompact) {
         this.compactionResult = { compactedMessages };
         this.invalidateChain();
@@ -1818,10 +1808,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return this.runClientCompaction(
       messages,
       tokensBefore,
-      async (conversationMessages) => {
+      async (conversationMessages, compactionSystemPrompt) => {
         const transcript = this.stepsToTextTranscript(conversationMessages);
         const contents = [
-          createUserContent(`${COMPACTION_SYSTEM_PROMPT}\n\n${transcript}`),
+          createUserContent(`${compactionSystemPrompt}\n\n${transcript}`),
         ];
         const summary = await client.models.generateContent({
           model: this.config.fullName,
@@ -1842,7 +1832,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       },
       (summary): Step => ({
         type: 'user_input',
-        content: [this.textContent(`${COMPACTION_SUMMARY_PREFIX}${summary}`)],
+        content: [this.textContent(summary)],
       }),
     );
   }
