@@ -1,6 +1,11 @@
 import { writeSync } from 'node:fs';
+import { basename } from 'node:path';
 
 import { kittyFlags } from 'ink';
+
+import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
+
+import { terminalCapabilities } from './state/terminalCapabilities';
 
 // Undo exactly the input/display modes the TUI turns on: mouse tracking
 // (1000/1003/1006), the kitty keyboard stack (<u), bracketed paste (2004), and
@@ -30,6 +35,29 @@ const REARM_INPUT_MODES = '\x1b[?2004h\x1b[?25l';
 // `<Static>` transcript lines persist in the primary-buffer scrollback.
 const CLEAR_SCREEN_AND_SCROLLBACK = '\x1b[2J\x1b[3J\x1b[H';
 const CLEAR_VISIBLE_SCREEN = '\x1b[2J\x1b[H';
+// Directory names can contain characters that would prematurely terminate
+// the OSC string (a stray BEL/ESC) or that some terminals in 8-bit mode
+// still interpret as escape-sequence introducers (the C1 range, e.g. 0x9d
+// as an 8-bit OSC); strip both C0 and C1 controls so a weird folder name
+// can't inject terminal escape sequences into the title.
+// eslint-disable-next-line no-control-regex -- stripping C0/C1 controls
+const TITLE_INVALID_CHARS = /[\x00-\x1f\x7f-\x9f]/g;
+
+/**
+ * "TeXRA" alone when the cwd has no meaningful basename (e.g. filesystem
+ * root, where `path.basename` returns `''`), else "TeXRA — <project folder>"
+ * so a user running several sessions across different projects — the common
+ * case here — can tell tabs apart at a glance instead of every tab reading
+ * the launcher binary's own name (e.g. a local dev symlink like
+ * `texra-local`).
+ */
+export function terminalTitleText(cwd: string): string {
+  const project = sanitizePathSegment(basename(cwd), {
+    invalidCharPattern: TITLE_INVALID_CHARS,
+    replacement: '',
+  });
+  return project ? `TeXRA — ${project}` : 'TeXRA';
+}
 
 export interface CleanupTerminalModesOptions {
   readonly clearItermProgress?: boolean;
@@ -101,5 +129,23 @@ export function clearTerminalVisibleScreen(): void {
     writeSync(1, CLEAR_VISIBLE_SCREEN);
   } catch {
     // The terminal may have been closed mid-clear; nothing to do.
+  }
+}
+
+/**
+ * Set the terminal tab/window title via OSC 0. Gated on the same
+ * `oscColorReports` capability the notifier uses for OSC 9/99 (see
+ * `notifications/terminalNotifier.ts`): a terminal that didn't acknowledge
+ * OSC support during DA1 discovery may garble an OSC sequence it doesn't
+ * recognize rather than silently ignore it, and a title has no BEL-style
+ * degrade to fall back to, so the safe move on an ungated terminal is to
+ * leave the title alone entirely.
+ */
+export function setTerminalTitle(cwd: string): void {
+  if (!terminalCapabilities.get().oscColorReports) return;
+  try {
+    writeSync(1, `\x1b]0;${terminalTitleText(cwd)}\x07`);
+  } catch {
+    // The tab title is cosmetic; a write failure here isn't actionable.
   }
 }
