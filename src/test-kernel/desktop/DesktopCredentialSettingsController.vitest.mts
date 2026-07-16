@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports - tests
-import { FakeConfigProvider } from '@test/support/FakePlatform';
+import {
+  FakeConfigProvider,
+  FakeSecrets,
+  FakeStateStore,
+} from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 
 // Local imports - authentication and models
@@ -16,10 +20,6 @@ import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 // Local imports - shared
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-
-// Local imports - platform
-import type { StateStore } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
 
 const codexMocks = vi.hoisted(() => ({
   getStatus: vi.fn(async () => ({
@@ -59,52 +59,6 @@ vi.mock('@model/computeModelOptions', async (importOriginal) => ({
   invalidateModelOptionsCache: modelMocks.invalidate,
 }));
 
-class MemoryStateStore implements StateStore {
-  readonly values = new Map<string, unknown>();
-
-  get<T>(key: string, defaultValue?: T): T {
-    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-    } else {
-      this.values.set(key, value);
-    }
-  }
-}
-
-class MemorySecrets implements PlatformSecrets {
-  readonly values = new Map<string, string>();
-  readonly deleted: string[] = [];
-
-  async get(key: string): Promise<string | undefined> {
-    return this.values.get(key);
-  }
-
-  async getStored(key: string): Promise<string | undefined> {
-    return this.values.get(key);
-  }
-
-  async set(key: string, value: string): Promise<void> {
-    this.values.set(key, value);
-  }
-
-  async delete(key: string): Promise<void> {
-    this.deleted.push(key);
-    this.values.delete(key);
-  }
-
-  async listStoredKeys(): Promise<readonly string[]> {
-    return [...this.values.keys()];
-  }
-
-  getEnv(): string | undefined {
-    return undefined;
-  }
-}
-
 type ControllerOptions = ConstructorParameters<
   typeof DefaultDesktopCredentialSettingsController
 >[0];
@@ -113,8 +67,8 @@ async function createFixture(
   overrides: Partial<ControllerOptions> = {},
 ): Promise<{
   controller: DefaultDesktopCredentialSettingsController;
-  globalState: MemoryStateStore;
-  secrets: MemorySecrets;
+  globalState: FakeStateStore;
+  secrets: FakeSecrets;
   posted: unknown[];
   events: string[];
   confirms: string[];
@@ -126,13 +80,13 @@ async function createFixture(
   setUseIncludedModelAccess: ReturnType<typeof vi.fn>;
 }> {
   const globalState =
-    (overrides.globalState as MemoryStateStore | undefined) ??
-    new MemoryStateStore();
+    (overrides.globalState as FakeStateStore | undefined) ??
+    new FakeStateStore();
   const workspaceState =
-    (overrides.workspaceState as MemoryStateStore | undefined) ??
-    new MemoryStateStore();
+    (overrides.workspaceState as FakeStateStore | undefined) ??
+    new FakeStateStore();
   const secrets =
-    (overrides.secrets as MemorySecrets | undefined) ?? new MemorySecrets();
+    (overrides.secrets as FakeSecrets | undefined) ?? new FakeSecrets();
   const posted: unknown[] = [];
   const events: string[] = [];
   const confirms: string[] = [];
@@ -253,10 +207,10 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   });
 
   it('preserves a provider key when removal is cancelled', async () => {
-    const secrets = new MemorySecrets();
-    const confirms: string[] = [];
     const secretName = apiKeySecretName('openai');
-    secrets.values.set(secretName, 'sk-test');
+    const secrets = new FakeSecrets({ [secretName]: 'sk-test' });
+    const deleteSpy = vi.spyOn(secrets, 'delete');
+    const confirms: string[] = [];
     const fixture = await createFixture({
       secrets,
       prompt: {
@@ -275,7 +229,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(confirms).toEqual([
       'Remove the OpenAI API key? This cannot be undone.',
     ]);
-    expect(secrets.deleted).toEqual([]);
+    expect(deleteSpy).not.toHaveBeenCalled();
     expect(await secrets.get(secretName)).toBe('sk-test');
     expect(fixture.onCredentialChanged).not.toHaveBeenCalled();
   });
@@ -288,7 +242,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       '  sk-test  ',
     );
 
-    expect(fixture.secrets.values.get('apiKey.google')).toBe('sk-test');
+    expect(await fixture.secrets.get('apiKey.google')).toBe('sk-test');
     expect(fixture.infos).toEqual(['Google API key has been set']);
     expect(
       fixture.posted.findLast(
@@ -309,10 +263,10 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   });
 
   it('uses the shared key prompt and removes a confirmed key', async () => {
-    const secrets = new MemorySecrets();
-    const confirms: string[] = [];
     const secretName = apiKeySecretName('openai');
-    secrets.values.set(secretName, 'old-key');
+    const secrets = new FakeSecrets({ [secretName]: 'old-key' });
+    const deleteSpy = vi.spyOn(secrets, 'delete');
+    const confirms: string[] = [];
     const fixture = await createFixture({
       secrets,
       prompt: {
@@ -333,7 +287,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     await requireAction(fixture.controller.profileActions.removeProviderKey)(
       'openai',
     );
-    expect(secrets.deleted).toEqual([secretName]);
+    expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
     expect(await secrets.get(secretName)).toBeUndefined();
     expect(confirms).toEqual([
       'Remove the OpenAI API key? This cannot be undone.',
@@ -341,8 +295,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   });
 
   it('persists included access and clears OpenRouter before refreshing', async () => {
-    const globalState = new MemoryStateStore();
-    globalState.values.set(GlobalStateKey.USE_OPENROUTER, true);
+    const globalState = new FakeStateStore({
+      [GlobalStateKey.USE_OPENROUTER]: true,
+    });
     const fixture = await createFixture({ globalState });
 
     await requireAction(fixture.controller.profileActions.setApiAccessMode)(
@@ -350,7 +305,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     );
 
     expect(fixture.setUseIncludedModelAccess).toHaveBeenCalledWith(true);
-    expect(globalState.values.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
+    expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
     expect(fixture.events).toEqual([
       'access:true',
       `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
@@ -490,9 +445,10 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   });
 
   it('awaits the production model-list migration before model data', async () => {
-    const globalState = new MemoryStateStore();
-    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 12);
-    globalState.values.set(GlobalStateKey.ENABLED_MODELS, ['custom-model']);
+    const globalState = new FakeStateStore({
+      [GlobalStateKey.MODEL_LIST_VERSION]: 12,
+      [GlobalStateKey.ENABLED_MODELS]: ['custom-model'],
+    });
     const fixture = await createFixture({
       globalState,
       modelListRefresh: refreshDesktopModelListStateIfNeeded({ globalState }),
@@ -500,25 +456,23 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
     await fixture.controller.prepareModelSelectionData();
 
-    expect(globalState.values.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
+    expect(globalState.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
       MODEL_LIST_VERSION,
     );
     const activeDefaults = DEFAULT_MODELS.filter(
       (model) => !(MODEL_CONFIGS[model]?.deprecated ?? false),
     );
-    expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
+    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
       'custom-model',
       ...activeDefaults,
     ]);
   });
 
   it('removes retired models from a recent persisted model list', async () => {
-    const globalState = new MemoryStateStore();
-    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 20);
-    globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
-      'custom-model',
-      'haiku3',
-    ]);
+    const globalState = new FakeStateStore({
+      [GlobalStateKey.MODEL_LIST_VERSION]: 20,
+      [GlobalStateKey.ENABLED_MODELS]: ['custom-model', 'haiku3'],
+    });
     const fixture = await createFixture({
       globalState,
       modelListRefresh: refreshDesktopModelListStateIfNeeded({ globalState }),
@@ -531,7 +485,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
         !(MODEL_CONFIGS[model]?.deprecated ?? false) &&
         !(MODEL_CONFIGS[model]?.retired ?? false),
     );
-    expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
+    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
       'custom-model',
       ...activeDefaults,
     ]);

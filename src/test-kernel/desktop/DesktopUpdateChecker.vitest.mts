@@ -1,24 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-class MemoryStateStore {
-  readonly values = new Map<string, unknown>();
-
-  get<T>(key: string, defaultValue?: T): T {
-    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-    } else {
-      this.values.set(key, value);
-    }
-  }
-}
 
 interface DesktopLatestRelease {
   version: string;
@@ -28,7 +13,7 @@ interface DesktopUpdateCheckerModule {
   DESKTOP_RELEASES_PAGE_URL: string;
   checkForDesktopUpdate(options: {
     currentVersion: string;
-    globalState: MemoryStateStore;
+    globalState: FakeStateStore;
     isPackaged: boolean;
     notify: (release: DesktopLatestRelease) => Promise<void> | void;
     now?: () => number;
@@ -59,7 +44,7 @@ describe('desktop update checker', () => {
 
     it('skips entirely for unpackaged (dev) runs', async () => {
       const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new MemoryStateStore();
+      const globalState = new FakeStateStore();
       let fetchCalls = 0;
       let notifyCalls = 0;
 
@@ -82,7 +67,7 @@ describe('desktop update checker', () => {
 
     it('skips entirely when TEXRA_NO_UPDATE_CHECK is set', async () => {
       const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new MemoryStateStore();
+      const globalState = new FakeStateStore();
       let fetchCalls = 0;
 
       await checkForDesktopUpdate({
@@ -102,7 +87,7 @@ describe('desktop update checker', () => {
 
     it('notifies once when a newer release is found, and persists the notified version', async () => {
       const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new MemoryStateStore();
+      const globalState = new FakeStateStore();
       const notified: DesktopLatestRelease[] = [];
 
       await checkForDesktopUpdate({
@@ -118,7 +103,7 @@ describe('desktop update checker', () => {
 
       expect(notified).toEqual([release]);
       expect(
-        globalState.values.get(
+        globalState.get(
           GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
         ),
       ).toBe('0.40.0');
@@ -126,7 +111,7 @@ describe('desktop update checker', () => {
 
     it('does not notify when the latest release is not newer', async () => {
       const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new MemoryStateStore();
+      const globalState = new FakeStateStore();
       let notifyCalls = 0;
 
       await checkForDesktopUpdate({
@@ -145,7 +130,7 @@ describe('desktop update checker', () => {
 
     it('throttles repeated checks within the same day', async () => {
       const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new MemoryStateStore();
+      const globalState = new FakeStateStore();
       let fetchCalls = 0;
       // A realistic epoch timestamp: on the very first check ever,
       // `lastCheckedAt` defaults to 0, and this must be far enough past that
@@ -182,7 +167,7 @@ describe('desktop update checker', () => {
 
     it('does not re-notify for a release version already notified', async () => {
       const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new MemoryStateStore();
+      const globalState = new FakeStateStore();
       let notifyCalls = 0;
       let nowMs = Date.UTC(2026, 0, 1);
 
@@ -211,7 +196,7 @@ describe('desktop update checker', () => {
 
     it('does not persist the throttle stamp on a failed fetch, so the next launch retries', async () => {
       const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new MemoryStateStore();
+      const globalState = new FakeStateStore();
       let fetchCalls = 0;
       const nowMs = Date.UTC(2026, 0, 1);
 
@@ -230,9 +215,7 @@ describe('desktop update checker', () => {
 
       expect(fetchCalls).toBe(1);
       expect(
-        globalState.values.get(
-          GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-        ),
+        globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
       ).toBeUndefined();
 
       // Immediately "relaunching" (same day) must retry rather than being
@@ -252,15 +235,13 @@ describe('desktop update checker', () => {
 
       expect(fetchCalls).toBe(2);
       expect(
-        globalState.values.get(
-          GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-        ),
+        globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
       ).toBe(nowMs + 1000);
     });
 
     it('does not persist the throttle stamp when notification fails', async () => {
       const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new MemoryStateStore();
+      const globalState = new FakeStateStore();
       const nowMs = Date.UTC(2026, 0, 1);
       let notifyCalls = 0;
 
@@ -282,9 +263,7 @@ describe('desktop update checker', () => {
         }),
       ).rejects.toThrow('dialog failed');
       expect(
-        globalState.values.get(
-          GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-        ),
+        globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
       ).toBeUndefined();
 
       await run(() => {
@@ -292,15 +271,13 @@ describe('desktop update checker', () => {
       });
       expect(notifyCalls).toBe(2);
       expect(
-        globalState.values.get(
-          GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-        ),
+        globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
       ).toBe(nowMs);
     });
 
     it('coalesces concurrent checks into one fetch and notification', async () => {
       const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new MemoryStateStore();
+      const globalState = new FakeStateStore();
       let fetchCalls = 0;
       let firstNotifyCalls = 0;
       let secondNotifyCalls = 0;
